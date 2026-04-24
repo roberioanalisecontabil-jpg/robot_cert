@@ -14,7 +14,7 @@ create table if not exists public.users (
 insert into public.users (email, password_hash, full_name, role)
 values (
   'admin@certguard.com', 
-  '$2b$12$6uXyYq06/8Xv.qZ.W6X9Se7gXGv9.zN1E3fF5Z5S5h5h5h5h5h5h5', -- Hash de 'admin123'
+  '$2b$12$bEdFrM4wU2ZhkfYp7F93Jupt9iW6NF6YJvQX2nXYMXfbNM9fLG0S.', -- Hash real de 'admin123'
   'Administrador Padrão', 
   'admin'
 )
