@@ -8,10 +8,11 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
-from app import config
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from app import auth, config
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
@@ -22,13 +23,39 @@ from app.settings_state import (
     save_settings,
     save_snapshot,
     supabase_configured,
-    _supabase
 )
-from app.auth import (
-    Token, UserCreate, verify_password, get_password_hash, create_access_token,
-    get_user_from_db, create_user_in_db, SECRET_KEY, ALGORITHM
-)
-from jose import jwt, JWTError
+
+security = HTTPBearer()
+
+async def require_auth(
+    auth_creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> auth.TokenData:
+    """
+    Dependência híbrida:
+    1. Se houver Token JWT (Navegador), valida o usuário.
+    2. Se houver X-API-Key (Agente Windows), valida a chave estática.
+    """
+    # 1. Tentar JWT
+    if auth_creds:
+        token_data = auth.decode_access_token(auth_creds.credentials)
+        if token_data:
+            return token_data
+    
+    # 2. Tentar API Key (para o Agente)
+    if x_api_key and config.API_KEY and x_api_key == config.API_KEY:
+        return auth.TokenData(email="agent@internal", role="agent")
+
+    raise HTTPException(
+        status_code=401, 
+        detail="Não autorizado. Faça login ou forneça uma chave de API válida.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+    if token.role != "admin":
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    return token
 
 logger = logging.getLogger(__name__)
 
@@ -38,42 +65,7 @@ templates = Jinja2Templates(directory=str(ROOT / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login", auto_error=False)
-
-async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("email")
-        role: str = payload.get("role")
-        if email is None:
-            return None
-        return {"email": email, "role": role}
-    except JWTError:
-        return None
-
-async def require_api_key(
-    request: Request,
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-    current_user: Optional[dict] = Depends(get_current_user)
-) -> None:
-    # 1. Tenta validar se há uma sessão JWT válida
-    if current_user is not None:
-        return
-
-    # 2. Se não houver JWT, valida se há API_KEY e se confere com o arquivo .env
-    if config.API_KEY and x_api_key == config.API_KEY:
-        return
-        
-    # Se ambos falharem, ou se API_KEY não for enviada e não tiver JWT:
-    if config.API_KEY:
-         raise HTTPException(status_code=401, detail="X-API-Key ou Token ausente/inválida.")
-
-def require_admin(current_user: Optional[dict] = Depends(get_current_user)):
-    if not current_user or current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Apenas administradores podem realizar esta ação.")
-    return current_user
+# As funções require_api_key foram removidas em favor do require_auth híbrido.
 
 
 def _response_from_rows(
@@ -145,17 +137,94 @@ class EnqueueCommandBody(BaseModel):
 def painel(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="index.html")
 
+
+@app.get("/configuracao", response_class=HTMLResponse)
+def pagina_configuracao(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="configuracao.html")
+
+
 @app.get("/login", response_class=HTMLResponse)
 def pagina_login(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="login.html")
+
 
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_usuarios(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="usuarios.html")
 
-@app.get("/configuracao", response_class=HTMLResponse)
-def pagina_configuracao(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="configuracao.html")
+
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/login")
+def login(body: LoginBody) -> dict:
+    client = supabase_configured() and load_settings() # trigger client init
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        # Fallback local se o Supabase não estiver configurado
+        if body.email == "admin@certguard.com" and body.password == "admin123":
+             token = auth.create_access_token({"sub": body.email, "role": "admin"})
+             return {"access_token": token, "token_type": "bearer"}
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado para login.")
+
+    try:
+        r = sb.table("users").select("*").eq("email", body.email).limit(1).execute()
+        user = r.data[0] if r.data else None
+        if not user or not auth.verify_password(body.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
+        
+        token = auth.create_access_token({"sub": user["email"], "role": user["role"]})
+        return {"access_token": token, "token_type": "bearer", "role": user["role"]}
+    except Exception as e:
+        logger.exception("Erro no login")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/users", dependencies=[Depends(require_admin)])
+def list_users() -> List[dict]:
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb: return []
+    r = sb.table("users").select("id, email, full_name, role, created_at").execute()
+    return r.data
+
+
+class UserCreateBody(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: str = "user"
+
+
+@app.post("/api/users", dependencies=[Depends(require_admin)])
+def create_user(body: UserCreateBody) -> dict:
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb: raise HTTPException(status_code=503)
+    
+    hash_pw = auth.get_password_hash(body.password)
+    try:
+        sb.table("users").insert({
+            "email": body.email,
+            "password_hash": hash_pw,
+            "full_name": body.full_name,
+            "role": body.role
+        }).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/users/{user_id}", dependencies=[Depends(require_admin)])
+def delete_user(user_id: str) -> dict:
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb: raise HTTPException(status_code=503)
+    sb.table("users").delete().eq("id", user_id).execute()
+    return {"ok": True}
 
 
 @app.get("/api/health")
@@ -183,13 +252,13 @@ def _settings_dict(s: PortalSettings) -> dict:
     }
 
 
-@app.get("/api/settings", dependencies=[Depends(require_api_key)])
+@app.get("/api/settings", dependencies=[Depends(require_auth)])
 def get_settings() -> dict:
     s = load_settings()
     return _settings_dict(s)
 
 
-@app.put("/api/settings", dependencies=[Depends(require_api_key)])
+@app.put("/api/settings", dependencies=[Depends(require_auth)])
 def put_settings(body: SettingsBody) -> dict:
     s = PortalSettings(
         source_folder=body.source_folder.strip(),
@@ -200,7 +269,7 @@ def put_settings(body: SettingsBody) -> dict:
     return _settings_dict(s)
 
 
-@app.post("/api/agent/commands", dependencies=[Depends(require_api_key)])
+@app.post("/api/agent/commands", dependencies=[Depends(require_auth)])
 def enqueue_agent_command(body: EnqueueCommandBody) -> dict:
     """
     Enfileira um comando para o agente Windows (poll em GET /api/agent/next).
@@ -213,7 +282,7 @@ def enqueue_agent_command(body: EnqueueCommandBody) -> dict:
     return {"ok": True, "id": cid, "command": body.command.strip()}
 
 
-@app.get("/api/agent/next", dependencies=[Depends(require_api_key)])
+@app.get("/api/agent/next", dependencies=[Depends(require_auth)])
 def agent_next_command(
     machine_id: str = Query("default", description="ID da máquina do agente"),
 ) -> dict:
@@ -226,13 +295,13 @@ def agent_next_command(
     return {"command": q.command, "id": q.id, "machine_id": q.machine_id}
 
 
-@app.get("/api/agent/queue", dependencies=[Depends(require_api_key)])
+@app.get("/api/agent/queue", dependencies=[Depends(require_auth)])
 def agent_queue_list() -> dict:
     """Lista comandos ainda pendentes (monitorização no portal)."""
     return {"pendentes": list_pending(), "comandos_validos": sorted(COMMANDS)}
 
 
-@app.get("/api/certificados", dependencies=[Depends(require_api_key)])
+@app.get("/api/certificados", dependencies=[Depends(require_auth)])
 def listar_certificados(
     fonte: str = Query(
         "auto",
@@ -273,7 +342,7 @@ def listar_certificados(
         ) from e
 
 
-@app.post("/api/ingest", dependencies=[Depends(require_api_key)])
+@app.post("/api/ingest", dependencies=[Depends(require_auth)])
 def ingest(body: IngestBody) -> dict:
     """
     Recebe o resultado de um scan feito no Windows (agente em segundo plano).
@@ -291,54 +360,8 @@ def ingest(body: IngestBody) -> dict:
         "grava_em": "supabase" if supabase_configured() else "arquivo local (data/last_ingest.json)",
     }
 
-# ----------------- ROTAS DE USUÁRIO -----------------
 
-@app.post("/api/login", response_model=Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    client = _supabase()
-    if not client:
-        raise HTTPException(status_code=500, detail="Supabase não configurado.")
-    user = get_user_from_db(client, form_data.username) # OAuth2 form usa "username" que para nós será o e-mail
-    if not user or not verify_password(form_data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Email ou senha incorretos", headers={"WWW-Authenticate": "Bearer"})
-    access_token = create_access_token(data={"email": user["email"], "role": user["role"]})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.get("/api/users", dependencies=[Depends(require_api_key), Depends(require_admin)])
-def list_users():
-    client = _supabase()
-    if not client:
-        raise HTTPException(status_code=500, detail="Supabase não configurado.")
-    r = client.table("users").select("id, email, role, created_at").execute()
-    return r.data
-
-@app.post("/api/users", dependencies=[Depends(require_api_key), Depends(require_admin)])
-def create_user(user: UserCreate):
-    client = _supabase()
-    if not client:
-        raise HTTPException(status_code=500, detail="Supabase não configurado.")
-    # Verifica se já existe
-    exist = get_user_from_db(client, user.email)
-    if exist:
-        raise HTTPException(status_code=400, detail="Email já cadastrado.")
-    novo = create_user_in_db(client, user)
-    if not novo:
-        raise HTTPException(status_code=500, detail="Falha ao criar usuário no banco.")
-    return {"message": "Usuário criado com sucesso", "email": novo["email"]}
-
-@app.delete("/api/users/{user_id}", dependencies=[Depends(require_api_key), Depends(require_admin)])
-def delete_user(user_id: str):
-    client = _supabase()
-    if not client:
-        raise HTTPException(status_code=500, detail="Supabase não configurado.")
-    try:
-        client.table("users").delete().eq("id", user_id).execute()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/mover-vencidos", dependencies=[Depends(require_api_key)])
+@app.post("/api/mover-vencidos", dependencies=[Depends(require_auth)])
 def mover_vencidos() -> JSONResponse:
     """
     Só move arquivos no **mesmo** sistema de ficheiros que corre o API (servidor acessa as pastas).
