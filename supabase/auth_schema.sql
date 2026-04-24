@@ -18,7 +18,7 @@ values (
   'Administrador Padrão', 
   'admin'
 )
-on conflict (email) do nothing;
+on conflict (email) do update set password_hash = excluded.password_hash;
 
 -- 3. Índices para performance
 create index if not exists users_email_idx on public.users (email);
