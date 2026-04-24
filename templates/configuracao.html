@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Configuração — Certificados PFX</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="wrap wrap--wide">
+      <nav class="top-nav" aria-label="Navegação principal">
+        <a href="/">Painel</a>
+        <a class="active" href="/configuracao" aria-current="page">Configuração</a>
+      </nav>
+
+      <header class="page-header">
+        <h1>Configuração</h1>
+        <p>
+          Tudo o que o servidor, o <strong>agente Windows</strong> e o <strong>browser</strong> precisam para
+          listar, mover e receber leituras remotas. A configuração é gravada no projeto (e opcionalmente no
+          Supabase).
+        </p>
+      </header>
+
+      <section class="doc-block path-state-block" aria-label="Estado e caminhos">
+        <h2>Estado do servidor e caminhos</h2>
+        <p class="hint path-summary-sub">
+          Indicadores de ligação e pastas usadas na leitura local; a <strong>fonte dos dados</strong> do painel
+          aplica-se ao carregar a tabela em <a href="/">Painel</a>.
+        </p>
+        <div>
+          <span class="tag" id="tag-supabase">Supabase: …</span>
+          <span class="tag tag-muted" id="tag-api-key" title="Só indica se o .env exige chave">Chave: …</span>
+        </div>
+        <div class="paths path-summary path-summary--compact" style="margin-top: 1rem">
+          <h3 class="path-summary-title">Caminhos (referência)</h3>
+          <p class="hint path-summary-sub">Valores guardados; edite abaixo em “Pastas no Windows”.</p>
+          <div class="path-line">
+            <span class="path-label">Origem guardada</span>
+            <code class="path-value" id="disp-raw-source">—</code>
+          </div>
+          <div class="path-line">
+            <span class="path-label">Pasta vencidos guardada</span>
+            <code class="path-value" id="disp-raw-expired">—</code>
+          </div>
+          <h3 class="path-summary-title path-effective">Leitura local (efetivo)</h3>
+          <div class="path-line">
+            <span class="path-label">Origem</span>
+            <code class="path-value path-emph" id="disp-source">—</code>
+          </div>
+          <div class="path-line">
+            <span class="path-label">Destino vencidos</span>
+            <code class="path-value path-emph" id="disp-expired">—</code>
+          </div>
+        </div>
+        <div class="paths path-from-table" style="margin-top: 0.5rem">
+          <h3 class="path-summary-title">Última leitura (conforme fonte abaixo)</h3>
+          <p class="hint path-summary-sub">Reflete o último pedido a <code>/api/certificados</code> (mesma opção do painel).</p>
+          <div class="path-line">
+            <span class="path-label">Origem desta tabela</span>
+            <code class="path-value" id="disp-table-source">—</code>
+          </div>
+          <div class="path-line">
+            <span class="path-label">Vencidos (referência do snapshot)</span>
+            <code class="path-value" id="disp-table-expired">—</code>
+          </div>
+        </div>
+        <div class="row-inline" style="margin-top: 0.75rem">
+          <label for="sel-fonte">Fonte dos dados (tabela do painel)</label>
+          <select id="sel-fonte" aria-describedby="fonte-hint">
+            <option value="auto">Automático (agente, se houver; senão disco do servidor)</option>
+            <option value="remoto">Só remoto (última ingestão)</option>
+            <option value="local">Só local (disco do servidor)</option>
+          </select>
+        </div>
+        <p id="fonte-hint" class="hint">Guardado neste browser. O painel usa a mesma opção ao carregar a tabela.</p>
+        <p id="path-sync-msg" class="hint"></p>
+        <p id="panel-auth-hint" class="hint hint-warn" style="display: none"></p>
+        <p class="hint">
+          <a href="/">Abrir o painel</a> e clicar em “Atualizar tabela” depois de alterar a fonte ou as pastas.
+        </p>
+      </section>
+
+      <div class="config-grid">
+        <div class="config-main">
+          <section class="doc-block" id="passo-1">
+            <h2>1. Chave API (segurança)</h2>
+            <p>
+              Se o ficheiro <code>.env</code> do FastAPI tiver a variável <code>API_KEY=...</code>, todas as
+              rotas <code>/api/...</code> exigem o cabeçalho <code>X-API-Key</code> com o <strong>mesmo</strong>
+              valor. O <strong>agente</strong> usa <code>CERT_ROBOT_API_KEY</code> no <code>.env</code> (mesmo
+              texto). Aqui o valor fica <strong>apenas no seu browser</strong> (localStorage), nunca no servidor.
+            </p>
+            <div class="panel panel--nested">
+              <h3>Campo e guardar</h3>
+              <div class="row">
+                <label for="api-key">Chave API</label>
+                <input type="password" id="api-key" class="path-input" autocomplete="off" placeholder="Igual a API_KEY do servidor" />
+                <button type="button" id="btn-save-key">Guardar chave</button>
+              </div>
+              <p id="auth-hint" class="hint"></p>
+            </div>
+          </section>
+
+          <section class="doc-block" id="passo-2">
+            <h2>2. Pastas no Windows (origem e destino)</h2>
+            <p>
+              Estes caminhos são a referência que o <code>GET /api/settings</code> devolve. O
+              <strong>agente</strong> lê o endpoint e procura ficheiros <code>.pfx</code> na pasta de
+              <strong>origem</strong>; os vencidos podem ser movidos para a pasta de
+              <strong>vencidos</strong>. Use caminhos <strong>absolutos</strong> (ex. <code>C:\Certs</code>).
+            </p>
+            <ul class="doc-list">
+              <li>Se deixar vazio, o servidor aplica o padrão de <code>CERT_SOURCE_DIR</code> / <code>CERT_EXPIRED_DIR</code> do <code>.env</code> (útil se o API correr no mesmo PC).</li>
+              <li>Com <strong>Supabase</strong> ligado, estes campos vão para a tabela; sem Supabase, guardam em <code>data/portal_settings.json</code>.</li>
+            </ul>
+            <div class="panel panel--nested">
+              <h3>Valores e ID da máquina</h3>
+              <div class="row">
+                <label for="inp-source">Pasta de origem (.pfx)</label>
+                <input type="text" id="inp-source" class="path-input" />
+              </div>
+              <div class="row">
+                <label for="inp-exp">Pasta vencidos (destino)</label>
+                <input type="text" id="inp-exp" class="path-input" />
+              </div>
+              <div class="row">
+                <label for="inp-machine">ID da máquina</label>
+                <input type="text" id="inp-machine" class="path-input" placeholder="ex.: default ou o nome do PC" />
+              </div>
+              <p class="hint">O ID identifica a máquina nas ingestões e nos <strong>comandos remotos</strong> (abaixo). Deve coincidir com o que o agente envia.</p>
+              <button type="button" id="btn-save-cfg">Guardar configuração</button>
+              <p id="cfg-msg" class="hint"></p>
+            </div>
+          </section>
+
+          <section class="doc-block" id="passo-3">
+            <h2>3. Comandos remotos (fila no agente)</h2>
+            <p>
+              Pode <strong>enfileirar</strong> ações. O <code>run_agent.py</code>, em cada ciclo, chama
+              <code>GET /api/agent/next?machine_id=...</code> e, se houver fila, executa: por exemplo, mover
+              vencidos <em>no disco do Windows onde o agente corre</em> (não no servidor, se forem máquinas
+              diferentes). Use o mesmo <strong>ID da máquina</strong> que na secção anterior; <code>*</code>
+              aplica a qualquer agente.
+            </p>
+            <p class="hint">Desative o questionário com <code>POLL_COMMANDS=0</code> no <code>.env</code> do agente.</p>
+            <div class="panel panel--nested">
+              <h3>Enfileirar</h3>
+              <div class="row">
+                <label for="cmd-machine-id">Máquina (ID alvo)</label>
+                <input type="text" id="cmd-machine-id" class="path-input" placeholder="default" />
+              </div>
+              <div class="toolbar">
+                <button type="button" id="cmd-mover" title="Executado no Windows pelo agente">Mover vencidos (remoto)</button>
+                <button type="button" id="cmd-rescan" title="Novo scan + ingest no próximo ciclo">Forçar leitura (rescan)</button>
+                <button type="button" id="cmd-ping" title="Testa a fila (mensagem no terminal do agente)">Ping (teste)</button>
+                <button type="button" id="cmd-refresh-q">Listar pendentes</button>
+              </div>
+              <p id="cmd-msg" class="hint"></p>
+              <pre id="cmd-queue" class="cmd-pre" style="display: none" aria-label="Fila de comandos pendentes"></pre>
+            </div>
+          </section>
+        </div>
+
+        <aside class="config-side">
+          <div class="side-card">
+            <h3>Agente no Windows</h3>
+            <p class="side-text">
+              Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code>,
+              <code>CERT_ROBOT_API_KEY</code> (se houver) e, se ainda faltar no portal, <code>AGENT_SOURCE</code> e
+              <code>AGENT_EXPIRED</code>.
+            </p>
+            <p class="side-text"><code>python agent\run_agent.py</code> — ou agende no Agendador de Tarefas.</p>
+            <a class="side-link" href="/">Voltar ao painel</a>
+          </div>
+          <div class="side-card">
+            <h3>Supabase (opcional)</h3>
+            <p class="side-text">Para guardar config e snapshots em cloud: defina <code>SUPABASE_URL</code> e <code>SUPABASE_SERVICE_KEY</code> (só no servidor) e execute o <code>supabase/schema.sql</code> no projecto.</p>
+          </div>
+          <div class="side-card">
+            <h3>Nome dos ficheiros</h3>
+            <p class="side-text">Padrão: <code>Meu Nome certificado senha aMinhaSenha.pfx</code> — a palavra <strong>senha</strong> (com espaços) separa o nome lógico da palavra-passe do PKCS#12.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script src="/static/ui-common.js"></script>
+    <script>
+      function syncSelectFonteFromStorage() {
+        const sf = document.getElementById("sel-fonte");
+        if (!sf) return;
+        const v = getDataFonte();
+        if (["auto", "remoto", "local"].indexOf(v) >= 0) sf.value = v;
+      }
+
+      async function syncPathsFromApi() {
+        const emptyHint = "(não definida — padrão do .env / servidor)";
+        const warn = document.getElementById("panel-auth-hint");
+        let r;
+        try {
+          r = await fetch("/api/settings", { headers: getHeaders() });
+        } catch (e) {
+          warn.textContent = "Não foi possível carregar as pastas. Confira a chave API (acima) e o endereço do servidor.";
+          warn.style.display = "block";
+          return;
+        }
+        if (r.status === 401) {
+          warn.innerHTML =
+            'A API exige chave. Cole o mesmo valor de <code>API_KEY</code> (no .env) no campo <strong>Chave API</strong> (secção 1) e clique em Guardar chave.';
+          warn.style.display = "block";
+          return;
+        }
+        if (!r.ok) {
+          warn.textContent = "Erro " + r.status + " ao carregar /api/settings.";
+          warn.style.display = "block";
+          return;
+        }
+        warn.style.display = "none";
+        const s = await r.json();
+        document.getElementById("disp-raw-source").textContent = s.source_folder ? s.source_folder : emptyHint;
+        document.getElementById("disp-raw-expired").textContent = s.expired_folder ? s.expired_folder : emptyHint;
+        document.getElementById("disp-source").textContent = s.effective_source;
+        document.getElementById("disp-expired").textContent = s.effective_expired;
+      }
+
+      async function syncTableFromCertificados() {
+        const tSrc = document.getElementById("disp-table-source");
+        const tExp = document.getElementById("disp-table-expired");
+        const pathMsg = document.getElementById("path-sync-msg");
+        if (!tSrc || !tExp) return;
+        pathMsg.textContent = "A alinhar com a API…";
+        const f = getDataFonte();
+        try {
+          const r = await fetch("/api/certificados?fonte=" + encodeURIComponent(f), { headers: getHeaders() });
+          if (r.status === 401) {
+            tSrc.textContent = "—";
+            tExp.textContent = "—";
+            pathMsg.textContent = "401: defina a chave acima e guarde.";
+            return;
+          }
+          if (r.status === 404) {
+            tSrc.textContent = "—";
+            tExp.textContent = "—";
+            pathMsg.textContent = "Ainda sem dados remotos para esta fonte (normal se não houver agente a enviar leituras).";
+            return;
+          }
+          if (!r.ok) {
+            tSrc.textContent = "—";
+            tExp.textContent = "—";
+            pathMsg.textContent = "Erro " + r.status + " em /api/certificados.";
+            return;
+          }
+          const d = await r.json();
+          tSrc.textContent = d.source_dir || "—";
+          tExp.textContent = d.expired_dir || "—";
+          pathMsg.textContent =
+            "Fonte usada: " + (d.data_source || f) + (d.machine_id ? " | máquina: " + d.machine_id : "") + ".";
+        } catch (e) {
+          tSrc.textContent = "—";
+          tExp.textContent = "—";
+          pathMsg.textContent = "Erro: " + e;
+        }
+      }
+
+      async function loadSettingsToForm() {
+        const st = document.getElementById("cfg-msg");
+        st.textContent = "A carregar…";
+        try {
+          const r = await fetch("/api/settings", { headers: getHeaders() });
+          if (r.status === 401) {
+            st.textContent = "401: a chave acima tem de ser igual a API_KEY no .env do servidor.";
+            return;
+          }
+          if (!r.ok) {
+            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
+            return;
+          }
+          const s = await r.json();
+          document.getElementById("inp-source").value = s.source_folder || "";
+          document.getElementById("inp-exp").value = s.expired_folder || "";
+          const midG = s.machine_id || "default";
+          document.getElementById("inp-machine").value = midG;
+          const cmi = document.getElementById("cmd-machine-id");
+          if (cmi) cmi.value = midG;
+          st.textContent = "";
+        } catch (e) {
+          st.textContent = "Erro: " + e;
+        }
+      }
+
+      document.getElementById("btn-save-key").addEventListener("click", () => {
+        guardarChaveNoStorage();
+        document.getElementById("auth-hint").textContent = "Chave armazenada no browser (não é enviada para a pasta do projeto, só o cabeçalho em cada pedido).";
+        loadSettingsToForm();
+        syncPathsFromApi();
+        syncTableFromCertificados();
+      });
+
+      document.getElementById("btn-save-cfg").addEventListener("click", async () => {
+        const st = document.getElementById("cfg-msg");
+        st.textContent = "A guardar…";
+        try {
+          const body = {
+            source_folder: document.getElementById("inp-source").value,
+            expired_folder: document.getElementById("inp-exp").value,
+            machine_id: document.getElementById("inp-machine").value || "default",
+          };
+          const r = await fetch("/api/settings", {
+            method: "PUT",
+            headers: getHeaders(true),
+            body: JSON.stringify(body),
+          });
+          if (r.status === 401) {
+            st.textContent = "401: chave incompatível com API_KEY.";
+            return;
+          }
+          if (!r.ok) {
+            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
+            return;
+          }
+          const elKey = document.getElementById("api-key");
+          if (elKey && elKey.value.trim()) localStorage.setItem(KEY_STORAGE, elKey.value.trim());
+          const j = await r.json();
+          st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
+          await loadSettingsToForm();
+          await syncPathsFromApi();
+          await syncTableFromCertificados();
+        } catch (e) {
+          st.textContent = "Falha: " + e;
+        }
+      });
+
+      async function enqueueRemoteCommand(cmd) {
+        const st = document.getElementById("cmd-msg");
+        st.textContent = "A enfileirar…";
+        try {
+          const cmi = document.getElementById("cmd-machine-id");
+          const mid = cmi && cmi.value.trim() ? cmi.value.trim() : "default";
+          const r = await fetch("/api/agent/commands", {
+            method: "POST",
+            headers: getHeaders(true),
+            body: JSON.stringify({ machine_id: mid, command: cmd }),
+          });
+          if (r.status === 401) {
+            st.textContent = "401: guarde a chave acima ou confirme a API_KEY.";
+            return;
+          }
+          if (!r.ok) {
+            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
+            return;
+          }
+          const j = await r.json();
+          st.textContent = "Enfileirado: " + (j.command || cmd) + " (id " + (j.id || "—") + ").";
+          await refreshCommandQueue();
+        } catch (e) {
+          st.textContent = "Erro: " + e;
+        }
+      }
+
+      async function refreshCommandQueue() {
+        const pre = document.getElementById("cmd-queue");
+        try {
+          const r = await fetch("/api/agent/queue", { headers: getHeaders() });
+          if (r.status === 401 || !r.ok) return;
+          const j = await r.json();
+          const p = j.pendentes || [];
+          if (p.length) {
+            pre.style.display = "block";
+            pre.textContent = JSON.stringify(p, null, 2);
+          } else {
+            pre.style.display = "none";
+            pre.textContent = "";
+          }
+        } catch (_e) {}
+      }
+
+      document.getElementById("cmd-mover").addEventListener("click", () => enqueueRemoteCommand("mover_vencidos"));
+      document.getElementById("cmd-rescan").addEventListener("click", () => enqueueRemoteCommand("rescan"));
+      document.getElementById("cmd-ping").addEventListener("click", () => enqueueRemoteCommand("ping"));
+      document.getElementById("cmd-refresh-q").addEventListener("click", refreshCommandQueue);
+
+      document.getElementById("sel-fonte").addEventListener("change", () => {
+        setDataFonte(document.getElementById("sel-fonte").value);
+        document.getElementById("path-sync-msg").textContent =
+          "Opção guardada. Atualize a tabela no painel, ou deixe esta página alinhar os campos “última leitura” abaixo.";
+        syncTableFromCertificados();
+      });
+
+      (async function init() {
+        syncSelectFonteFromStorage();
+        const h = await health();
+        const tagS = document.getElementById("tag-supabase");
+        if (tagS) tagS.textContent = "Supabase: " + (h.supabase ? "ligado" : "não usado (ficheiro local no servidor)");
+        const tagK = document.getElementById("tag-api-key");
+        if (tagK) tagK.textContent = h.api_key_required ? "Chave: obrigatória no .env" : "Chave: opcional (sem API_KEY)";
+        const ah = document.getElementById("auth-hint");
+        if (h.api_key_required) {
+          ah.textContent =
+            "O servidor exige chave. Cole o mesmo valor de API_KEY (definido no .env) e clique em Guardar chave.";
+        }
+        await loadSettingsToForm();
+        await syncPathsFromApi();
+        await syncTableFromCertificados();
+        await refreshCommandQueue();
+      })();
+    </script>
+  </body>
+</html>

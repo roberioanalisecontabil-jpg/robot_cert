@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Certificados PFX — Painel</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <nav class="top-nav" aria-label="Navegação principal">
+        <a class="active" href="/" aria-current="page">Painel</a>
+        <a href="/configuracao">Configuração</a>
+      </nav>
+
+      <header class="page-header">
+        <h1>Certificados PFX</h1>
+        <p>
+          Resumo e lista. Pastas, chave API, <strong>fonte dos dados</strong> (local/remoto) e o agente estão em
+          <a href="/configuracao">Configuração</a>.
+        </p>
+      </header>
+
+      <div class="toolbar toolbar--painel">
+        <div class="toolbar__actions">
+          <button type="button" id="btn-refresh">Atualizar tabela</button>
+          <button type="button" id="btn-move" class="danger" title="Apenas se o processo do API tiver acesso às pastas no disco.">
+            Mover vencidos (neste servidor)
+          </button>
+        </div>
+        <p id="status-msg" class="status-line"></p>
+        <p class="hint" id="data-hint"></p>
+        <p id="panel-hint" class="hint" style="display: none"></p>
+      </div>
+
+      <div class="grid" id="summary">
+        <div class="card ok">
+          <div class="n" id="n-ok">0</div>
+          <div class="l">Dentro do prazo</div>
+        </div>
+        <div class="card expired">
+          <div class="n" id="n-exp">0</div>
+          <div class="l">Vencidos</div>
+        </div>
+        <div class="card bad">
+          <div class="n" id="n-bad">0</div>
+          <div class="l">Fora do padrão (nome)</div>
+        </div>
+        <div class="card err">
+          <div class="n" id="n-err">0</div>
+          <div class="l">Erro ao abrir</div>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Nome (titular)</th>
+              <th>Emissão (UTC)</th>
+              <th>Vencimento (UTC)</th>
+              <th>CNPJ / CPF</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <section class="doc-callout" aria-label="Explicação breve">
+        <h2 class="doc-callout-title">Sobre o nome e o documento</h2>
+        <p>
+          O <strong>nome</strong> e o <strong>CNPJ ou CPF</strong> vêm do campo <em>Common Name (CN)</em> do
+          certificado (formato comum: <code>NOME:00000000000199</code>). Emissão e vencimento são as datas
+          reais do X.509. O ficheiro <code>.pfx</code> tem de se chamar
+          <code>«apresentação» senha «senha do PFX».pfx</code> para abrir. Consulte
+          <a href="/configuracao">Configuração</a> para pastas e agente.
+        </p>
+      </section>
+    </div>
+
+    <script src="/static/ui-common.js"></script>
+    <script>
+      const fonte = () => getDataFonte();
+
+      const fmt = (iso) => {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+      };
+
+      const badge = (s) => {
+        const m = {
+          ok: ["badge-ok", "OK"],
+          expirado: ["badge-expired", "Vencido"],
+          fora_do_padrao: ["badge-bad", "Fora do padrão"],
+          erro: ["badge-err", "Erro"],
+        }[s] || ["", s];
+        return '<span class="badge ' + m[0] + '">' + m[1] + "</span>";
+      };
+
+      function setMoveButton(d) {
+        const btn = document.getElementById("btn-move");
+        const remoto = d.data_source === "remoto";
+        btn.disabled = remoto;
+        btn.title = remoto
+          ? "Dados remotos: o movimento de ficheiros tem de ser feito no PC do agente (comando remoto) ou com o API a correr aí."
+          : "Move ficheiros vencidos no disco a que o servidor acede.";
+      }
+
+      function esc(s) {
+        if (!s) return "";
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      async function carregarTabela() {
+        const st = document.getElementById("status-msg");
+        const ph = document.getElementById("panel-hint");
+        ph.style.display = "none";
+        st.textContent = "A carregar…";
+        try {
+          const f = fonte();
+          const r = await fetch("/api/certificados?fonte=" + encodeURIComponent(f), { headers: getHeaders() });
+          if (r.status === 401) {
+            st.textContent = "401: defina a chave em Configuração.";
+            return;
+          }
+          if (r.status === 404) {
+            st.textContent = "Fonte “remoto”: ainda sem dados. Use “local”/“auto” em Configuração ou o agente no Windows.";
+            return;
+          }
+          if (!r.ok) {
+            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
+            return;
+          }
+          let d;
+          try {
+            d = await r.json();
+          } catch (jsonErr) {
+            st.textContent = "Resposta inválida. Confirme o endereço do API. " + jsonErr;
+            return;
+          }
+          st.textContent = "Atualizado: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
+          document.getElementById("data-hint").textContent =
+            "Fonte: " + (d.data_source || "—") + (d.machine_id ? " | máquina: " + d.machine_id : "");
+          setMoveButton(d);
+          const items = d.itens || [];
+          let ok = 0,
+            ex = 0,
+            bad = 0,
+            err = 0;
+          for (const it of items) {
+            if (it.status === "ok") ok++;
+            else if (it.status === "expirado") ex++;
+            else if (it.status === "fora_do_padrao") bad++;
+            else if (it.status === "erro") err++;
+          }
+          document.getElementById("n-ok").textContent = ok;
+          document.getElementById("n-exp").textContent = ex;
+          document.getElementById("n-bad").textContent = bad;
+          document.getElementById("n-err").textContent = err;
+          const colTipo = (it) => {
+            const lbl = it.documento_tipo_label || (it.documento_tipo ? String(it.documento_tipo).toUpperCase() : "");
+            if (lbl) {
+              const f = it.documento_formatado || it.documento_numero || "";
+              return (
+                "<span class='doc-type-label'>" +
+                esc(lbl) +
+                "</span>" +
+                (f ? "<br><span class='doc-type-num'>" + esc(f) + "</span>" : "")
+              );
+            }
+            if (it.error_message) return "<span class='error-cell'>" + esc(it.error_message) + "</span>";
+            return "—";
+          };
+
+          const tb = document.getElementById("tbody");
+          tb.innerHTML = items
+            .map(
+              (it) =>
+                "<tr><td>" +
+                badge(it.status) +
+                "</td><td>" +
+                esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
+                "</td><td>" +
+                fmt(it.not_before) +
+                "</td><td>" +
+                fmt(it.not_after) +
+                "</td><td class='td-doc'>" +
+                colTipo(it) +
+                "</td></tr>"
+            )
+            .join("");
+        } catch (e) {
+          st.textContent = "Erro: " + e;
+        }
+      }
+
+      document.getElementById("btn-refresh").addEventListener("click", carregarTabela);
+      document.getElementById("btn-move").addEventListener("click", async () => {
+        if (!confirm("Mover ficheiros vencidos nas pastas a que ESTE processo de servidor acede?")) return;
+        const st = document.getElementById("status-msg");
+        st.textContent = "A mover…";
+        try {
+          const r = await fetch("/api/mover-vencidos", { method: "POST", headers: getHeaders() });
+          if (r.status === 401) {
+            st.textContent = "401: chave em Configuração.";
+            return;
+          }
+          if (!r.ok) {
+            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
+            return;
+          }
+          const d = await r.json();
+          st.textContent =
+            "Movidos: " + (d.total_movidos != null ? d.total_movidos : 0) + (d.erros && d.erros.length ? " (ver resposta API)" : "");
+          await carregarTabela();
+        } catch (e) {
+          st.textContent = "Erro: " + e;
+        }
+      });
+
+      window.addEventListener("storage", (ev) => {
+        if (ev.key === "cert_robot_data_fonte" || ev.key === KEY_STORAGE) {
+          const ph = document.getElementById("panel-hint");
+          if (ev.key === "cert_robot_data_fonte") {
+            ph.textContent = "A fonte dos dados foi alterada noutro separador. Clique em “Atualizar tabela” para refletir.";
+            ph.style.display = "block";
+          }
+        }
+      });
+
+      (async function init() {
+        await carregarTabela();
+      })();
+    </script>
+  </body>
+</html>
