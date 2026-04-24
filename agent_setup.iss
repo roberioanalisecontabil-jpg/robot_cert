@@ -28,7 +28,7 @@ Name: "{autodesktop}\CertGuard Agent"; Filename: "{app}\CertGuard_Agent.exe"; Ta
 
 [Run]
 Filename: "{app}\CertGuard_Agent.exe"; Description: "Iniciar CertGuard Agent"; Flags: nowait postinstall skipifsilent
-Filename: "{cmd}"; Parameters: "/C schtasks /Create /TN ""CertGuard Agent"" /SC ONSTART /RU ""SYSTEM"" /TR """"""{app}\CertGuard_Agent.exe"""""" /F"; Flags: runhidden; Tasks: autostart
+Filename: "{cmd}"; Parameters: "/C schtasks /Create /TN ""CertGuard Agent"" /SC ONLOGON /TR """"""{app}\CertGuard_Agent.exe"""""" /F"; Flags: runhidden; Tasks: autostart
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C schtasks /Delete /TN ""CertGuard Agent"" /F"; Flags: runhidden; RunOnceId: "DeleteCertGuardTask"

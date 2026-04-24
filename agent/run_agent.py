@@ -1,18 +1,4 @@
-"""
-Agente Windows: lê a configuração publicada na API, escaneia a pasta local e envia o snapshot.
-Execute em segundo plano (Agendador de Tarefas) com o mesmo Python onde está o projeto.
-
-Variáveis de ambiente (ficheiro .env ao lado deste script ou do projeto):
-
-  CERT_ROBOT_BASE_URL  — URL do FastAPI (padrão: http://127.0.0.1:8020, para não colidir com a 8000)
-  CERT_ROBOT_API_KEY   — Igual a API_KEY no servidor; omita se o servidor não usar chave
-  AGENT_SOURCE         — (opcional) se o portal tiver source vazio, usa este caminho
-  AGENT_EXPIRED        — (opcional) idem para pasta de vencidos
-  MACHINE_ID           — (opcional) id da máquina; senão vindo do portal
-  INTERVAL_SEC         — (opcional) segundos entre ciclos, padrão 300
-  MOVER_VENCIDOS       — (opcional) 1 = após o scan, move vencidos localmente
-  POLL_COMMANDS        — (opcional) 0 = não pergunta /api/agent/next; padrão 1
-"""
+"""Agente Windows em background com tray, logs e notificações."""
 
 from __future__ import annotations
 
@@ -21,11 +7,15 @@ import sys
 import time
 import threading
 import json
+import logging
 from argparse import ArgumentParser
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 import httpx
+import pystray
 from dotenv import load_dotenv
+from PIL import Image, ImageDraw
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -46,6 +36,28 @@ from app.cert_scanner import (  # noqa: E402
 # Porta padrão do monitor cert_robot (evita conflito com outro serviço em 8000)
 DEFAULT_ROBOT_API_PORT = 8020
 DEFAULT_ROBOT_BASE = f"http://127.0.0.1:{DEFAULT_ROBOT_API_PORT}"
+LOGGER = logging.getLogger("certguard_agent")
+
+
+def _app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return ROOT
+
+
+def _setup_logging() -> Path:
+    app_dir = _app_dir()
+    app_dir.mkdir(parents=True, exist_ok=True)
+    log_file = app_dir / "agent.log"
+    handler = RotatingFileHandler(log_file, maxBytes=2_000_000, backupCount=5, encoding="utf-8")
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    handler.setFormatter(formatter)
+    LOGGER.setLevel(logging.INFO)
+    LOGGER.handlers.clear()
+    LOGGER.addHandler(handler)
+    LOGGER.addHandler(logging.StreamHandler(sys.stdout))
+    LOGGER.propagate = False
+    return log_file
 
 
 def _load_local_agent_config() -> dict:
@@ -85,9 +97,10 @@ def _resolve_paths(s: dict, local_cfg: dict) -> tuple[Path, Path]:
     return Path(raw_src), Path(raw_exp)
 
 class CertEventHandler(FileSystemEventHandler):
-    def __init__(self, trigger_event: threading.Event):
+    def __init__(self, trigger_event: threading.Event, ignored_dir: Path | None):
         super().__init__()
         self.trigger_event = trigger_event
+        self.ignored_dir = ignored_dir.resolve() if ignored_dir else None
 
     def on_created(self, event):
         self._check(event)
@@ -101,8 +114,14 @@ class CertEventHandler(FileSystemEventHandler):
     def _check(self, event):
         if event.is_directory:
             return
-        p = event.src_path.lower()
-        if p.endswith(".pfx") or p.endswith(".p12"):
+        p = Path(event.src_path)
+        if self.ignored_dir:
+            try:
+                p.resolve().relative_to(self.ignored_dir)
+                return
+            except ValueError:
+                pass
+        if p.suffix.lower() in (".pfx", ".p12"):
             self.trigger_event.set()
 
 
@@ -116,9 +135,11 @@ def _machine_id(s: dict, local_cfg: dict) -> str:
 
 
 def main() -> None:
+    log_file = _setup_logging()
     local_cfg = _load_local_agent_config()
     parser = ArgumentParser(description="Agente de certificados PFX (Windows).")
     parser.add_argument("--once", action="store_true", help="Executa um ciclo e termina")
+    parser.add_argument("--no-tray", action="store_true", help="Executa sem ícone de bandeja")
     parser.add_argument(
         "--mover",
         action="store_true",
@@ -156,60 +177,100 @@ def main() -> None:
         mover_local in ("1", "true", "True", "yes")
     )
 
-    print(f"Conectando a: {base}", file=sys.stderr)
+    LOGGER.info("Conectando a: %s", base)
 
     trigger_event = threading.Event()
     observer = None
     current_watch_path = None
     last_full_scan_time = 0.0
+    connected = False
+    quit_event = threading.Event()
+    tray_ref: dict[str, pystray.Icon | None] = {"icon": None}
+
+    def _notify(title: str, message: str) -> None:
+        icon = tray_ref.get("icon")
+        if icon:
+            try:
+                icon.notify(message, title=title)
+            except Exception:
+                LOGGER.exception("Falha ao exibir notificação")
+
+    def _create_icon_image() -> Image.Image:
+        img = Image.new("RGB", (64, 64), color=(33, 150, 243))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle((10, 10, 54, 54), outline=(255, 255, 255), width=3)
+        draw.rectangle((18, 18, 46, 46), fill=(255, 255, 255))
+        return img
+
+    def _quit_action(icon: pystray.Icon, _item) -> None:
+        LOGGER.info("Encerrando agente por ação do usuário.")
+        quit_event.set()
+        trigger_event.set()
+        icon.stop()
+
+    def _rescan_action(_icon: pystray.Icon, _item) -> None:
+        LOGGER.info("Rescan manual solicitado pelo menu da bandeja.")
+        trigger_event.set()
+
+    def _start_tray() -> None:
+        if args.no_tray or args.once:
+            return
+        menu = pystray.Menu(
+            pystray.MenuItem("Forçar leitura agora", _rescan_action),
+            pystray.MenuItem("Sair", _quit_action),
+        )
+        icon = pystray.Icon("CertGuard Agent", _create_icon_image(), "CertGuard Agent", menu)
+        tray_ref["icon"] = icon
+        t = threading.Thread(target=icon.run, daemon=True)
+        t.start()
 
     def _headers() -> dict:
         h: dict = {"Content-Type": "application/json"}
         if api_key:
             h["X-API-Key"] = api_key
         return h
+    _start_tray()
+    LOGGER.info("Logs em: %s", log_file)
+
     with httpx.Client(timeout=60.0) as client:
-        while True:
+        while not quit_event.is_set():
             try:
                 r = client.get(f"{base}/api/settings", headers=_headers())
             except httpx.ConnectError as e:
-                print(
-                    "Não deu para ligar ao API. Ligue o servidor (porta padrão deste projeto: "
-                    f"{DEFAULT_ROBOT_API_PORT}): "
-                    f"python -m uvicorn app.main:app --host 127.0.0.1 --port {DEFAULT_ROBOT_API_PORT}",
-                    file=sys.stderr,
-                )
-                print(e, file=sys.stderr)
+                if connected:
+                    _notify("CertGuard Agent", "Conexão perdida com o portal.")
+                connected = False
+                LOGGER.error("Falha de conexão com API: %s", e)
                 if args.once:
                     raise SystemExit(1) from e
                 time.sleep(interval)
                 continue
             if r.status_code == 401:
-                print(
-                    "401: o servidor exige chave. Defina CERT_ROBOT_API_KEY no .env "
-                    "com o mesmo valor de API_KEY do servidor.",
-                    file=sys.stderr,
-                )
+                connected = False
+                _notify("CertGuard Agent", "Erro 401: configure a chave API no agente.")
+                LOGGER.error("401: servidor exige chave API correta.")
                 if args.once:
                     raise SystemExit(1)
                 time.sleep(interval)
                 continue
             if r.status_code == 404:
-                print(
-                    "404 em /api/settings: ajuste CERT_ROBOT_BASE_URL (URL do uvicorn cert_robot) "
-                    f"e confirme: python -m uvicorn app.main:app --host 127.0.0.1 --port {DEFAULT_ROBOT_API_PORT}",
-                    file=sys.stderr,
-                )
+                connected = False
+                _notify("CertGuard Agent", "Erro 404: URL do portal inválida no agente.")
+                LOGGER.error("404 em /api/settings. Verifique CERT_ROBOT_BASE_URL.")
                 if args.once:
                     raise SystemExit(1)
                 time.sleep(interval)
                 continue
             r.raise_for_status()
+            if not connected:
+                _notify("CertGuard Agent", "Conexão estabelecida com o portal.")
+                LOGGER.info("Conexão com portal estabelecida.")
+            connected = True
             s = r.json()
             try:
                 src, exp = _resolve_paths(s, local_cfg)
             except Exception as e:  # noqa: BLE001
-                print("Aguardando configuração:", e, file=sys.stderr)
+                LOGGER.warning("Aguardando configuração: %s", e)
                 if observer:
                     observer.stop()
                     observer.join()
@@ -221,21 +282,22 @@ def main() -> None:
                 continue
 
             if not src.is_dir():
-                print("Pasta inexistente ou inacessível:", src, file=sys.stderr)
+                LOGGER.error("Pasta inexistente ou inacessível: %s", src)
                 if args.once:
                     raise SystemExit(1)
                 time.sleep(10)
                 continue
             exp.mkdir(parents=True, exist_ok=True)
+            exclude_dirs = [exp] if str(exp.resolve()).startswith(str(src.resolve())) else []
 
             if current_watch_path != str(src):
                 if observer:
                     observer.stop()
                     observer.join()
-                print(f"Iniciando monitoramento em tempo real (Watchdog) na pasta: {src}", file=sys.stderr)
+                LOGGER.info("Iniciando monitoramento Watchdog na pasta %s (recursivo).", src)
                 observer = Observer()
-                event_handler = CertEventHandler(trigger_event)
-                observer.schedule(event_handler, str(src), recursive=False)
+                event_handler = CertEventHandler(trigger_event, exp if exclude_dirs else None)
+                observer.schedule(event_handler, str(src), recursive=True)
                 observer.start()
                 current_watch_path = str(src)
                 trigger_event.set()
@@ -269,36 +331,28 @@ def main() -> None:
                                 try:
                                     move_to_expired(c, exp)
                                 except OSError as ex:
-                                    print("Comando mover_vencidos:", c.file_name, ex, file=sys.stderr)
-                            print(
-                                "Comando remoto mover_vencidos executado; id:",
-                                j.get("id"),
-                                file=sys.stderr,
-                            )
+                                    LOGGER.error("Comando mover_vencidos (%s): %s", c.file_name, ex)
+                            LOGGER.info("Comando remoto mover_vencidos executado (id %s).", j.get("id"))
                         elif cmd == "rescan":
-                            print(
-                                "Comando remoto: rescan; forçando novo ciclo; máquina",
-                                mid,
-                                file=sys.stderr,
-                            )
+                            LOGGER.info("Comando remoto: rescan; máquina %s.", mid)
                             trigger_event.set()
                         elif cmd == "ping":
-                            print("Comando remoto: ping; máquina", mid, file=sys.stderr)
+                            LOGGER.info("Comando remoto: ping; máquina %s.", mid)
                 except httpx.HTTPError as e:
-                    print("Aviso: /api/agent/next", e, file=sys.stderr)
+                    LOGGER.warning("Aviso em /api/agent/next: %s", e)
 
             now = time.time()
             if trigger_event.is_set() or (now - last_full_scan_time > interval):
                 if trigger_event.is_set():
                     time.sleep(2)  # Debounce de 2s para o Windows terminar cópias
                     trigger_event.clear()
-                    print("Mudança detectada (ou forçada). Processando...", file=sys.stderr)
+                    LOGGER.info("Mudança detectada (ou forçada). Processando...")
                 else:
-                    print("Executando ciclo periódico programado...", file=sys.stderr)
+                    LOGGER.info("Executando ciclo periódico programado...")
                 
                 last_full_scan_time = time.time()
                 
-                itens = scan_folder(src)
+                itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
                 if mover:
                     for c in itens:
                         if c.status != CertStatus.EXPIRED:
@@ -306,8 +360,8 @@ def main() -> None:
                         try:
                             move_to_expired(c, exp)
                         except OSError as ex:
-                            print("Falha ao mover", c.file_name, ex, file=sys.stderr)
-                    itens = scan_folder(src)
+                            LOGGER.error("Falha ao mover %s: %s", c.file_name, ex)
+                    itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
 
                 payload = {
                     "machine_id": mid,
@@ -318,14 +372,17 @@ def main() -> None:
                 try:
                     p = client.post(f"{base}/api/ingest", headers=_headers(), json=payload)
                     p.raise_for_status()
-                    print("Enviado:", p.json().get("itens_recebidos"), "itens; máquina:", payload["machine_id"])
-                except httpx.HTTPStatusError as e:
-                    print(
-                        f"Erro HTTP ao enviar snapshot: {e.response.status_code}",
-                        file=sys.stderr,
+                    LOGGER.info(
+                        "Enviado: %s itens; máquina: %s",
+                        p.json().get("itens_recebidos"),
+                        payload["machine_id"],
                     )
+                except httpx.HTTPStatusError as e:
+                    LOGGER.error("Erro HTTP ao enviar snapshot: %s", e.response.status_code)
+                    _notify("CertGuard Agent", f"Erro HTTP ao enviar snapshot: {e.response.status_code}")
                 except httpx.HTTPError as e:
-                    print("Erro de conexão ao enviar snapshot:", e, file=sys.stderr)
+                    LOGGER.error("Erro de conexão ao enviar snapshot: %s", e)
+                    _notify("CertGuard Agent", "Erro de conexão ao enviar snapshot.")
 
             if args.once:
                 if observer:
@@ -334,6 +391,15 @@ def main() -> None:
                 break
             
             trigger_event.wait(timeout=10.0)
+
+    if observer:
+        observer.stop()
+        observer.join()
+    if tray_ref.get("icon"):
+        try:
+            tray_ref["icon"].stop()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from cryptography.hazmat.primitives.serialization import pkcs12
 
@@ -126,15 +126,31 @@ def _load_pfx_info(file_path: Path, password: str) -> tuple:
     return nb, na, subj
 
 
-def scan_folder(source_dir: Path) -> List[CertInfo]:
+def _is_under(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def scan_folder(
+    source_dir: Path,
+    recursive: bool = True,
+    exclude_dirs: Optional[Iterable[Path]] = None,
+) -> List[CertInfo]:
     source_dir = Path(source_dir)
     if not source_dir.is_dir():
         return []
 
     results: List[CertInfo] = []
     now = _now_utc()
+    excludes = [Path(p).resolve() for p in (exclude_dirs or [])]
 
-    for p in sorted(source_dir.iterdir()):
+    scan_iter = source_dir.rglob("*") if recursive else source_dir.iterdir()
+    for p in sorted(scan_iter):
+        if any(_is_under(p, ex) for ex in excludes):
+            continue
         if not p.is_file():
             continue
         if p.suffix.lower() not in (".pfx", ".p12"):
