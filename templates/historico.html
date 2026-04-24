@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Histórico — CertGuard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h2>CertGuard</h2>
+        <span>Monitor de Certificados</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+        </svg>
+        Dashboard
+      </a>
+      <a href="/historico" class="active">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Histórico
+      </a>
+      <a href="/usuarios" id="nav-users" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+        Usuários
+      </a>
+      <a href="/configuracao" id="nav-config" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Configuração
+      </a>
+      <a href="#" onclick="logout()" style="margin-top: auto; color: #dc2626;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+        </svg>
+        Sair
+      </a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <header class="page-header">
+      <h1>Histórico de Certificados</h1>
+      <p>Certificados já mapeados em algum momento e a última data registrada.</p>
+    </header>
+
+    <div class="table-container">
+      <div class="toolbar">
+        <div class="toolbar__status">
+          <p id="status-msg" class="status-line"></p>
+          <p class="hint" id="count-hint"></p>
+        </div>
+        <div class="toolbar__actions">
+          <input type="search" id="busca-historico" placeholder="Buscar por nome, arquivo ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
+          <button type="button" id="btn-refresh" class="primary">Atualizar</button>
+          <button type="button" id="btn-export-pdf">Exportar PDF</button>
+          <button type="button" id="btn-export-excel">Exportar Excel</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Arquivo</th>
+              <th>Nome</th>
+              <th>CNPJ/CPF</th>
+              <th>Último status</th>
+              <th>Vencimento do certificado</th>
+              <th>Última data registrada</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-historico"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/ui-common.js"></script>
+  <script>
+    let itensOriginais = [];
+      let itensVisiveis = [];
+
+    function esc(v) {
+      const d = document.createElement("div");
+      d.textContent = v == null ? "" : String(v);
+      return d.innerHTML;
+    }
+
+    function fmtData(iso) {
+      if (!iso) return "—";
+      return new Date(iso).toLocaleString("pt-BR");
+    }
+
+    function fmtDataUtc(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+    }
+
+    function aplicarBusca() {
+      const q = (document.getElementById("busca-historico").value || "").trim().toLowerCase();
+      const filtrados = itensOriginais.filter((it) => {
+        if (!q) return true;
+        const hay = [it.file_name || "", it.nome || "", it.documento || "", it.status_ultimo || ""].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+      itensVisiveis = filtrados;
+      const tb = document.getElementById("tbody-historico");
+      tb.innerHTML = filtrados.map((it) => `
+        <tr>
+          <td>${esc(it.file_name)}</td>
+          <td>${esc(it.nome)}</td>
+          <td>${esc(it.documento || "—")}</td>
+          <td>${esc(it.status_ultimo || "—")}</td>
+          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+          <td>${esc(fmtData(it.ultima_data_registrada))}</td>
+        </tr>
+      `).join("");
+      document.getElementById("count-hint").textContent = `${filtrados.length} registro(s) exibido(s)`;
+    }
+
+    function exportarExcelVisivel() {
+      const headers = ["Arquivo", "Nome", "CNPJ/CPF", "Último status", "Vencimento do certificado", "Última data registrada"];
+      const rows = itensVisiveis.map((it) => [
+        it.file_name || "",
+        it.nome || "",
+        it.documento || "",
+        it.status_ultimo || "",
+        fmtDataUtc(it.vencimento_certificado),
+        fmtData(it.ultima_data_registrada),
+      ]);
+      const all = [headers, ...rows];
+      const csv = all
+        .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
+        .join("\n");
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "historico_certificados_filtrado.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportarPdfVisivel() {
+      const linhas = itensVisiveis
+        .map((it) => `
+          <tr>
+            <td>${esc(it.file_name || "")}</td>
+            <td>${esc(it.nome || "")}</td>
+            <td>${esc(it.documento || "")}</td>
+            <td>${esc(it.status_ultimo || "")}</td>
+            <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+            <td>${esc(fmtData(it.ultima_data_registrada))}</td>
+          </tr>
+        `)
+        .join("");
+      const w = window.open("", "_blank");
+      if (!w) return;
+      w.document.write(`
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Histórico de certificados filtrado</title>
+            <style>
+              body { font-family: Segoe UI, Arial, sans-serif; padding: 20px; }
+              h1 { margin: 0 0 8px; font-size: 20px; }
+              p { margin: 0 0 14px; color: #555; }
+              table { width: 100%; border-collapse: collapse; font-size: 11px; }
+              th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+              th { background: #f3f4f6; }
+            </style>
+          </head>
+          <body>
+            <h1>Histórico de certificados</h1>
+            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${itensVisiveis.length}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Arquivo</th><th>Nome</th><th>CNPJ/CPF</th><th>Último status</th><th>Vencimento do certificado</th><th>Última data registrada</th>
+                </tr>
+              </thead>
+              <tbody>${linhas}</tbody>
+            </table>
+          </body>
+        </html>
+      `);
+      w.document.close();
+      w.focus();
+      w.print();
+    }
+
+    async function carregarHistorico() {
+      const st = document.getElementById("status-msg");
+      st.textContent = "A carregar…";
+      const r = await fetch("/api/certificados/historico", { headers: getHeaders() });
+      if (!r.ok) {
+        st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
+        return;
+      }
+      const j = await r.json();
+      itensOriginais = j.itens || [];
+      st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
+      aplicarBusca();
+    }
+
+    document.getElementById("btn-refresh").addEventListener("click", carregarHistorico);
+    document.getElementById("busca-historico").addEventListener("input", aplicarBusca);
+    document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
+    document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
+
+    (async function init() {
+      const role = localStorage.getItem("user_role");
+      if (role === "admin") {
+        const elUsers = document.getElementById("nav-users");
+        const elConfig = document.getElementById("nav-config");
+        if (elUsers) elUsers.style.display = "flex";
+        if (elConfig) elConfig.style.display = "flex";
+      }
+      await carregarHistorico();
+    })();
+  </script>
+</body>
+</html>

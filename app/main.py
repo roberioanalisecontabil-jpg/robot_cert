@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -156,6 +156,11 @@ def pagina_login(request: Request) -> HTMLResponse:
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_usuarios(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="usuarios.html")
+
+
+@app.get("/historico", response_class=HTMLResponse)
+def pagina_historico(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="historico.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -313,6 +318,46 @@ def health() -> dict:
     }
 
 
+@app.get("/api/unsplash/background")
+def unsplash_login_background() -> dict:
+    """
+    Devolve URL de uma foto aleatória (Unsplash) para o fundo do login.
+    A chave de API fica só no servidor; o browser só recebe a URL da imagem.
+    """
+    if not config.UNSPLASH_ACCESS_KEY:
+        return {"ok": False, "reason": "not_configured"}
+    try:
+        import httpx
+
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(
+                "https://api.unsplash.com/photos/random",
+                params={
+                    "query": config.UNSPLASH_QUERY,
+                    "orientation": "landscape",
+                    "content_filter": "high",
+                },
+                headers={"Authorization": f"Client-ID {config.UNSPLASH_ACCESS_KEY}"},
+            )
+            r.raise_for_status()
+            data = r.json()
+            urls = data.get("urls") or {}
+            url = urls.get("regular") or urls.get("full")
+            if not url:
+                return {"ok": False, "reason": "no_url"}
+            user = data.get("user") or {}
+            return {
+                "ok": True,
+                "url": url,
+                "author": (user.get("name") or "").strip(),
+                "author_username": (user.get("username") or "").strip(),
+                "unsplash_link": (data.get("links") or {}).get("html", ""),
+            }
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Unsplash indisponível: %s", e)
+        return {"ok": False, "reason": "fetch_failed"}
+
+
 def _settings_dict(s: PortalSettings) -> dict:
     return {
         "source_folder": s.source_folder,
@@ -417,6 +462,77 @@ def listar_certificados(
             status_code=500,
             detail="Falha ao listar certificados. Veja o terminal do uvicorn. Resumo: " + str(e),
         ) from e
+
+
+def _parse_iso_utc(iso_value: Optional[str]) -> datetime:
+    if not iso_value:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    s = str(iso_value).strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+@app.get("/api/certificados/historico", dependencies=[Depends(require_auth)])
+def historico_certificados(
+    limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
+) -> dict:
+    """
+    Lista certificados já mapeados em algum momento, com a última data registrada.
+    """
+    from app.settings_state import _supabase
+
+    snapshots: List[dict[str, Any]] = []
+    sb = _supabase()
+    if sb:
+        try:
+            r = (
+                sb.table("cert_snapshots")
+                .select("scanned_at, items")
+                .order("scanned_at", desc=True)
+                .limit(limite_snapshots)
+                .execute()
+            )
+            snapshots = r.data or []
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Falha ao ler histórico no Supabase")
+            raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
+    else:
+        snap = get_latest_snapshot()
+        if snap:
+            snapshots = [snap]
+
+    agregados: Dict[str, dict] = {}
+    for snap in snapshots:
+        scanned_at = snap.get("scanned_at") or datetime.now(timezone.utc).isoformat()
+        scanned_dt = _parse_iso_utc(scanned_at)
+        for it in (snap.get("items") or []):
+            file_name = str(it.get("file_name") or "").strip()
+            if not file_name:
+                continue
+            key = file_name.lower()
+            atual = agregados.get(key)
+            if (not atual) or (scanned_dt > atual["_dt"]):
+                agregados[key] = {
+                    "_dt": scanned_dt,
+                    "file_name": file_name,
+                    "nome": it.get("nome") or it.get("display_name") or file_name,
+                    "status_ultimo": it.get("status"),
+                    "documento": it.get("documento_formatado") or it.get("documento_numero"),
+                    "vencimento_certificado": it.get("not_after"),
+                    "ultima_data_registrada": scanned_dt.isoformat(),
+                }
+
+    itens = sorted(agregados.values(), key=lambda x: x["_dt"], reverse=True)
+    for row in itens:
+        row.pop("_dt", None)
+    return {"itens": itens, "total": len(itens), "snapshots_lidos": len(snapshots)}
 
 
 @app.post("/api/ingest", dependencies=[Depends(require_auth)])
