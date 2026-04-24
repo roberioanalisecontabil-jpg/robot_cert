@@ -171,11 +171,15 @@ def main() -> None:
         or str(local_cfg.get("interval_sec") or "").strip()
         or "86400"
     )  # Padrão: a cada 24 horas
-    mover_env = os.getenv("MOVER_VENCIDOS", "").strip()
-    mover_local = str(local_cfg.get("mover_vencidos", "")).strip()
-    mover = args.mover or (mover_env in ("1", "true", "True", "yes")) or (
-        mover_local in ("1", "true", "True", "yes")
-    )
+    mover_env = os.getenv("MOVER_VENCIDOS", "").strip().lower()
+    mover_local = str(local_cfg.get("mover_vencidos", "")).strip().lower()
+    mover = True
+    if mover_local:
+        mover = mover_local in ("1", "true", "yes", "on")
+    if mover_env:
+        mover = mover_env in ("1", "true", "yes", "on")
+    if args.mover:
+        mover = True
 
     LOGGER.info("Conectando a: %s", base)
 

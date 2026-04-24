@@ -233,6 +233,11 @@ body {
   color: var(--expired);
 }
 
+.card-erros .card-icon {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
 /* Table Area */
 .table-container {
   background: var(--surface);
@@ -382,6 +387,11 @@ tr:last-child td {
   font-size: 0.85rem;
   color: var(--text-muted);
   font-weight: 500;
+}
+
+.error-cell {
+  color: #b91c1c;
+  font-size: 0.82rem;
 }
 
 /* Configuracao Page Styles */

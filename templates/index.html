@@ -106,6 +106,17 @@
             </svg>
           </div>
         </div>
+        <div class="dashboard-card card-erros">
+          <div class="card-info">
+            <span class="card-title">Erros</span>
+            <span class="card-number" id="n-erros">0</span>
+          </div>
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <!-- Tabela -->
@@ -122,6 +133,7 @@
               <option value="validos">Válidos</option>
               <option value="prestes_vencer">Prestes a vencer</option>
               <option value="vencidos">Vencidos</option>
+              <option value="erros">Erros</option>
             </select>
             <input
               type="search"
@@ -213,9 +225,12 @@
         let okCount = 0;
         let expirandoCount = 0;
         let vencidosCount = 0;
+        let erroCount = 0;
         items.forEach((it) => {
           if (it.status === "expirado") {
             vencidosCount++;
+          } else if (it.status === "erro") {
+            erroCount++;
           } else if (it.status === "ok") {
             if (it._isExpiringSoon) expirandoCount++;
             else okCount++;
@@ -225,7 +240,9 @@
         document.getElementById("n-ok").textContent = okCount;
         document.getElementById("n-exp-soon").textContent = expirandoCount;
         document.getElementById("n-vencidos").textContent = vencidosCount;
+        document.getElementById("n-erros").textContent = erroCount;
       }
+
 
       function renderTabela(items) {
         const colTipo = (it) => {
@@ -275,6 +292,8 @@
             if (!(it.status === "ok" && it._isExpiringSoon)) return false;
           } else if (filtroStatus === "vencidos") {
             if (it.status !== "expirado") return false;
+          } else if (filtroStatus === "erros") {
+            if (it.status !== "erro") return false;
           }
 
           if (!buscaTexto) return true;
