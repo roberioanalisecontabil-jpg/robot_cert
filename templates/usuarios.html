@@ -12,8 +12,12 @@
         .role-badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
         .role-admin { background: #fee2e2; color: #dc2626; }
         .role-user { background: #dcfce7; color: #16a34a; }
-        .btn-delete { color: #dc2626; background: none; border: none; cursor: pointer; font-size: 0.875rem; }
-        .btn-delete:hover { text-decoration: underline; }
+        .row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .btn-action { border: 1px solid var(--border); background: white; border-radius: 6px; padding: 0.35rem 0.55rem; font-size: 0.8rem; cursor: pointer; }
+        .btn-action:hover { background: var(--bg); }
+        .btn-danger { border-color: #fecaca; color: #b91c1c; }
+        .role-disabled { background: #f3f4f6; color: #4b5563; }
+        .users-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -83,6 +87,20 @@
 
         <section class="doc-block">
             <h2>Usuários Ativos</h2>
+            <div class="users-toolbar">
+                <input type="search" id="user-search" class="path-input" style="max-width: 320px;" placeholder="Pesquisar por nome ou e-mail" />
+                <select id="user-role-filter" class="path-input" style="max-width: 180px;">
+                    <option value="todos">Nível: Todos</option>
+                    <option value="admin">Nível: Admin</option>
+                    <option value="user">Nível: Usuário</option>
+                </select>
+                <select id="user-status-filter" class="path-input" style="max-width: 220px;">
+                    <option value="todos">Status: Todos</option>
+                    <option value="ativo">Status: Ativo</option>
+                    <option value="desativado">Status: Desativado</option>
+                </select>
+                <span class="hint" id="users-count"></span>
+            </div>
             <table class="user-table">
                 <thead>
                     <tr>
@@ -102,30 +120,126 @@
 
     <script src="/static/ui-common.js"></script>
     <script>
-        async function loadUsers() {
+        let usersCache = [];
+
+        function esc(v) {
+            const d = document.createElement('div');
+            d.textContent = v == null ? '' : String(v);
+            return d.innerHTML;
+        }
+
+        function roleLabel(role) {
+            const r = String(role || '').toLowerCase();
+            if (r === 'admin') return 'ADMIN';
+            if (r === 'disabled') return 'DESATIVADO';
+            return 'USUÁRIO';
+        }
+
+        function roleClass(role) {
+            const r = String(role || '').toLowerCase();
+            if (r === 'admin') return 'role-admin';
+            if (r === 'disabled') return 'role-disabled';
+            return 'role-user';
+        }
+
+        function renderUsers() {
             const body = document.getElementById('user-list-body');
+            const q = (document.getElementById('user-search').value || '').trim().toLowerCase();
+            const roleFilter = (document.getElementById('user-role-filter').value || 'todos').toLowerCase();
+            const statusFilter = (document.getElementById('user-status-filter').value || 'todos').toLowerCase();
+            const users = usersCache.filter((u) => {
+                const role = String(u.role || '').toLowerCase();
+                const isDisabled = role === 'disabled';
+
+                if (roleFilter !== 'todos' && role !== roleFilter) return false;
+                if (statusFilter === 'ativo' && isDisabled) return false;
+                if (statusFilter === 'desativado' && !isDisabled) return false;
+
+                if (!q) return true;
+                const hay = [u.full_name || '', u.email || ''].join(' ').toLowerCase();
+                return hay.includes(q);
+            });
+            document.getElementById('users-count').textContent = `${users.length} usuário(s) encontrado(s)`;
+            body.innerHTML = users.map(u => `
+                <tr>
+                    <td><strong>${esc(u.full_name || '—')}</strong></td>
+                    <td>${esc(u.email)}</td>
+                    <td><span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span></td>
+                    <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-action" onclick="editarUsuario('${u.id}')">Editar</button>
+                            <button class="btn-action" onclick="redefinirSenha('${u.id}')">Redefinir senha</button>
+                            ${String(u.role || '').toLowerCase() !== 'disabled'
+                                ? `<button class="btn-action btn-danger" onclick="desativarUsuario('${u.id}')">Desativar</button>`
+                                : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadUsers() {
             try {
                 const r = await fetch('/api/users', { headers: getHeaders() });
                 if (!r.ok) return;
-                const users = await r.json();
-                body.innerHTML = users.map(u => `
-                    <tr>
-                        <td><strong>${u.full_name || '—'}</strong></td>
-                        <td>${u.email}</td>
-                        <td><span class="role-badge role-${u.role}">${u.role.toUpperCase()}</span></td>
-                        <td>${new Date(u.created_at).toLocaleDateString()}</td>
-                        <td>
-                            ${u.role !== 'admin' ? `<button class="btn-delete" onclick="deleteUser('${u.id}')">Excluir</button>` : '—'}
-                        </td>
-                    </tr>
-                `).join('');
+                usersCache = await r.json();
+                renderUsers();
             } catch (e) { console.error(e); }
         }
 
-        async function deleteUser(id) {
-            if (!confirm('Deseja realmente remover este usuário?')) return;
-            await fetch(`/api/users/${id}`, { method: 'DELETE', headers: getHeaders() });
-            loadUsers();
+        async function editarUsuario(id) {
+            const user = usersCache.find((u) => u.id === id);
+            if (!user) return;
+            const full_name = prompt('Nome completo:', user.full_name || '');
+            if (full_name === null) return;
+            const email = prompt('E-mail:', user.email || '');
+            if (email === null) return;
+            const roleAtual = String(user.role || 'user').toLowerCase();
+            const role = prompt('Nível (admin | user | disabled):', roleAtual);
+            if (role === null) return;
+            const r = await fetch(`/api/users/${id}`, {
+                method: 'PUT',
+                headers: getHeaders(true),
+                body: JSON.stringify({
+                    full_name: full_name.trim(),
+                    email: email.trim(),
+                    role: role.trim().toLowerCase(),
+                }),
+            });
+            if (!r.ok) {
+                alert('Erro ao editar usuário: ' + (await mensagemCorpoErro(r)));
+                return;
+            }
+            await loadUsers();
+        }
+
+        async function redefinirSenha(id) {
+            const nova = prompt('Digite a nova senha (mínimo 6 caracteres):');
+            if (nova === null) return;
+            const r = await fetch(`/api/users/${id}/reset-password`, {
+                method: 'POST',
+                headers: getHeaders(true),
+                body: JSON.stringify({ password: nova }),
+            });
+            if (!r.ok) {
+                alert('Erro ao redefinir senha: ' + (await mensagemCorpoErro(r)));
+                return;
+            }
+            alert('Senha redefinida com sucesso.');
+        }
+
+        async function desativarUsuario(id) {
+            if (!confirm('Deseja realmente desativar este usuário?')) return;
+            const r = await fetch(`/api/users/${id}/deactivate`, {
+                method: 'POST',
+                headers: getHeaders(true),
+            });
+            if (!r.ok) {
+                alert('Erro ao desativar usuário: ' + (await mensagemCorpoErro(r)));
+                return;
+            }
+            await loadUsers();
         }
 
         document.getElementById('create-user-form').addEventListener('submit', async (e) => {
@@ -154,6 +268,10 @@
                 msg.style.color = "var(--danger)";
             }
         });
+
+        document.getElementById('user-search').addEventListener('input', renderUsers);
+        document.getElementById('user-role-filter').addEventListener('change', renderUsers);
+        document.getElementById('user-status-filter').addEventListener('change', renderUsers);
 
         // Verificar permissão e visibilidade do menu
         const role = localStorage.getItem('user_role');

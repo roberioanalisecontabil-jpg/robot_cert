@@ -188,6 +188,8 @@ def login(body: LoginBody) -> dict:
         user = r.data[0] if r.data else None
         if not user or not auth.verify_password(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
+        if (user.get("role") or "").strip().lower() == "disabled":
+            raise HTTPException(status_code=403, detail="Usuário desativado. Procure um administrador.")
         
         token = auth.create_access_token({"sub": user["email"], "role": user["role"]})
         return {"access_token": token, "token_type": "bearer", "role": user["role"]}
@@ -212,6 +214,16 @@ class UserCreateBody(BaseModel):
     role: str = "user"
 
 
+class UserUpdateBody(BaseModel):
+    email: str
+    full_name: str
+    role: str = "user"
+
+
+class UserResetPasswordBody(BaseModel):
+    password: str
+
+
 @app.post("/api/users", dependencies=[Depends(require_admin)])
 def create_user(body: UserCreateBody) -> dict:
     from app.settings_state import _supabase
@@ -226,6 +238,58 @@ def create_user(body: UserCreateBody) -> dict:
             "full_name": body.full_name,
             "role": body.role
         }).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/users/{user_id}", dependencies=[Depends(require_admin)])
+def update_user(user_id: str, body: UserUpdateBody) -> dict:
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503)
+    role = (body.role or "user").strip().lower()
+    if role not in ("admin", "user", "disabled"):
+        raise HTTPException(status_code=422, detail="Nível inválido. Use: admin, user ou disabled.")
+    try:
+        sb.table("users").update(
+            {
+                "email": body.email.strip().lower(),
+                "full_name": body.full_name.strip(),
+                "role": role,
+            }
+        ).eq("id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_admin)])
+def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503)
+    new_pw = (body.password or "").strip()
+    if len(new_pw) < 6:
+        raise HTTPException(status_code=422, detail="Senha deve ter no mínimo 6 caracteres.")
+    hash_pw = auth.get_password_hash(new_pw)
+    try:
+        sb.table("users").update({"password_hash": hash_pw}).eq("id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_admin)])
+def deactivate_user(user_id: str) -> dict:
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503)
+    try:
+        sb.table("users").update({"role": "disabled"}).eq("id", user_id).execute()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
