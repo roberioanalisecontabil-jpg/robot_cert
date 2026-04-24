@@ -542,3 +542,63 @@ select {
 .doc-list li {
   margin-bottom: 0.5rem;
 }
+
+/* Sidebar toggle */
+.sidebar-toggle-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  width: 40px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 1.05rem;
+  line-height: 1;
+  margin-bottom: 1rem;
+}
+
+body.sidebar-collapsed .sidebar {
+  width: 76px;
+}
+
+body.sidebar-collapsed .main-content {
+  margin-left: 76px;
+}
+
+body.sidebar-collapsed .brand-text {
+  display: none;
+}
+
+body.sidebar-collapsed .sidebar-header {
+  justify-content: center;
+}
+
+body.sidebar-collapsed .sidebar-nav a {
+  justify-content: center;
+  font-size: 0;
+  gap: 0;
+  padding-left: 0.7rem;
+  padding-right: 0.7rem;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 76px;
+  }
+  .brand-text {
+    display: none;
+  }
+  .sidebar-header {
+    justify-content: center;
+  }
+  .sidebar-nav a {
+    justify-content: center;
+    font-size: 0;
+    gap: 0;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
+  .main-content {
+    margin-left: 76px;
+    padding: 1.25rem;
+  }
+}

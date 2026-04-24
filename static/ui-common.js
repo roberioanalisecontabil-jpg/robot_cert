@@ -4,6 +4,7 @@
  */
 const KEY_STORAGE = "cert_robot_api_key"; // Agora armazena o Token JWT
 const FONT_STORAGE = "cert_robot_data_fonte";
+const SIDEBAR_COLLAPSED_STORAGE = "certguard_sidebar_collapsed";
 
 function getDataFonte() {
   return localStorage.getItem(FONT_STORAGE) || "auto";
@@ -56,6 +57,35 @@ async function health() {
   return r.json();
 }
 
+function applySidebarState() {
+  const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE) === "1";
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+}
+
+function toggleSidebar() {
+  const collapsed = document.body.classList.toggle("sidebar-collapsed");
+  localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE, collapsed ? "1" : "0");
+}
+
+function initSidebarToggle() {
+  const sidebar = document.querySelector(".sidebar");
+  const main = document.querySelector(".main-content");
+  if (!sidebar || !main) return;
+  if (document.getElementById("btn-sidebar-toggle")) return;
+
+  applySidebarState();
+
+  const btn = document.createElement("button");
+  btn.id = "btn-sidebar-toggle";
+  btn.type = "button";
+  btn.className = "sidebar-toggle-btn";
+  btn.title = "Recolher/expandir menu";
+  btn.setAttribute("aria-label", "Recolher/expandir menu lateral");
+  btn.innerHTML = "&#9776;";
+  btn.addEventListener("click", toggleSidebar);
+  main.prepend(btn);
+}
+
 // Interceptar todas as requisições para verificar 401
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
@@ -65,3 +95,9 @@ window.fetch = async (...args) => {
     }
     return response;
 };
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initSidebarToggle);
+} else {
+  initSidebarToggle();
+}

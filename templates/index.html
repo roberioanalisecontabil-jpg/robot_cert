@@ -131,6 +131,8 @@
               style="padding: 0.55rem 0.7rem; min-width: 260px; border: 1px solid var(--border); border-radius: 8px;"
             />
             <button type="button" id="btn-refresh" class="primary">Atualizar tabela</button>
+            <button type="button" id="btn-export-pdf">Exportar PDF</button>
+            <button type="button" id="btn-export-excel">Exportar Excel</button>
             <button type="button" id="btn-move" class="danger" title="Apenas se o processo do API tiver acesso às pastas no disco.">
               Mover vencidos
             </button>
@@ -159,6 +161,7 @@
     <script>
       const fonte = () => getDataFonte();
       let itensOriginais = [];
+      let itensVisiveis = [];
 
       const fmt = (iso) => {
         if (!iso) return "—";
@@ -284,8 +287,89 @@
           return false;
         });
 
+        itensVisiveis = filtrados;
         atualizarCards(filtrados);
         renderTabela(filtrados);
+      }
+
+      function statusTexto(it) {
+        if (it.status === "expirado") return "Vencido";
+        if (it.status === "ok" && it._isExpiringSoon) return "Prestes a vencer";
+        if (it.status === "ok") return "Válido";
+        if (it.status === "fora_do_padrao") return "Fora do padrão";
+        if (it.status === "erro") return "Erro";
+        return String(it.status || "");
+      }
+
+      function exportarExcelVisivel() {
+        const headers = ["Status", "Nome", "Emissão (UTC)", "Vencimento (UTC)", "Documento"];
+        const rows = itensVisiveis.map((it) => [
+          statusTexto(it),
+          (it.nome != null && it.nome !== "" ? it.nome : it.display_name) || "",
+          fmt(it.not_before),
+          fmt(it.not_after),
+          it.documento_formatado || it.documento_numero || "",
+        ]);
+        const all = [headers, ...rows];
+        const csv = all
+          .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
+          .join("\n");
+        const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "certificados_filtrados.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function exportarPdfVisivel() {
+        const linhas = itensVisiveis
+          .map((it) => `
+            <tr>
+              <td>${esc(statusTexto(it))}</td>
+              <td>${esc((it.nome != null && it.nome !== "" ? it.nome : it.display_name) || "")}</td>
+              <td>${esc(fmt(it.not_before))}</td>
+              <td>${esc(fmt(it.not_after))}</td>
+              <td>${esc(it.documento_formatado || it.documento_numero || "")}</td>
+            </tr>
+          `)
+          .join("");
+        const w = window.open("", "_blank");
+        if (!w) return;
+        w.document.write(`
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>Certificados filtrados</title>
+              <style>
+                body { font-family: Segoe UI, Arial, sans-serif; padding: 20px; }
+                h1 { margin: 0 0 8px; font-size: 20px; }
+                p { margin: 0 0 14px; color: #555; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+                th { background: #f3f4f6; }
+              </style>
+            </head>
+            <body>
+              <h1>Certificados filtrados</h1>
+              <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${itensVisiveis.length}</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th><th>Nome</th><th>Emissão (UTC)</th><th>Vencimento (UTC)</th><th>Documento</th>
+                  </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+              </table>
+            </body>
+          </html>
+        `);
+        w.document.close();
+        w.focus();
+        w.print();
       }
 
       async function carregarTabela() {
@@ -366,6 +450,8 @@
       }
 
       document.getElementById("btn-refresh").addEventListener("click", carregarTabela);
+      document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
+      document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
       document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
       document.getElementById("busca-cert").addEventListener("input", aplicarFiltros);
       document.getElementById("btn-move").addEventListener("click", async () => {
