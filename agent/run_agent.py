@@ -20,6 +20,7 @@ import os
 import sys
 import time
 import threading
+import json
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -47,13 +48,39 @@ DEFAULT_ROBOT_API_PORT = 8020
 DEFAULT_ROBOT_BASE = f"http://127.0.0.1:{DEFAULT_ROBOT_API_PORT}"
 
 
-def _resolve_paths(s: dict) -> tuple[Path, Path]:
-    """Portal (GET /api/settings) apenas. Sem fallback local para caminhos."""
+def _load_local_agent_config() -> dict:
+    """
+    Lê agent_config.json ao lado do executável/script, quando existir.
+    Útil para instalação em servidor sem depender de editar .env manualmente.
+    """
+    candidates = [
+        Path(sys.executable).resolve().parent / "agent_config.json",
+        Path(__file__).resolve().parent / "agent_config.json",
+        ROOT / "agent_config.json",
+    ]
+    for p in candidates:
+        if not p.is_file():
+            continue
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except (json.JSONDecodeError, OSError):
+            print(f"Aviso: falha ao ler {p}", file=sys.stderr)
+    return {}
+
+
+def _resolve_paths(s: dict, local_cfg: dict) -> tuple[Path, Path]:
+    """Prioriza portal; fallback para agent_config.json e variáveis AGENT_*."""
     raw_src = (s.get("source_folder") or "").strip()
     raw_exp = (s.get("expired_folder") or "").strip()
+    if not raw_src:
+        raw_src = str(local_cfg.get("source_folder") or os.getenv("AGENT_SOURCE") or "").strip()
+    if not raw_exp:
+        raw_exp = str(local_cfg.get("expired_folder") or os.getenv("AGENT_EXPIRED") or "").strip()
     if not raw_src or not raw_exp:
         raise ValueError(
-            "Origem e destino obrigatórios: acesse a página 'Configuração' do portal web e defina as pastas."
+            "Origem e destino obrigatórios: configure no portal web ou em agent_config.json."
         )
     return Path(raw_src), Path(raw_exp)
 
@@ -79,11 +106,17 @@ class CertEventHandler(FileSystemEventHandler):
             self.trigger_event.set()
 
 
-def _machine_id(s: dict) -> str:
-    return (os.getenv("MACHINE_ID") or "").strip() or s.get("machine_id") or "default"
+def _machine_id(s: dict, local_cfg: dict) -> str:
+    return (
+        (os.getenv("MACHINE_ID") or "").strip()
+        or str(local_cfg.get("machine_id") or "").strip()
+        or s.get("machine_id")
+        or "default"
+    )
 
 
 def main() -> None:
+    local_cfg = _load_local_agent_config()
     parser = ArgumentParser(description="Agente de certificados PFX (Windows).")
     parser.add_argument("--once", action="store_true", help="Executa um ciclo e termina")
     parser.add_argument(
@@ -94,8 +127,17 @@ def main() -> None:
     args = parser.parse_args()
 
     default_base = DEFAULT_ROBOT_BASE
-    base = (os.getenv("CERT_ROBOT_BASE_URL") or default_base).strip().rstrip("/")
-    api_key = (os.getenv("CERT_ROBOT_API_KEY") or os.getenv("API_KEY") or "").strip()
+    base = (
+        os.getenv("CERT_ROBOT_BASE_URL")
+        or str(local_cfg.get("cert_robot_base_url") or "").strip()
+        or default_base
+    ).strip().rstrip("/")
+    api_key = (
+        os.getenv("CERT_ROBOT_API_KEY")
+        or str(local_cfg.get("cert_robot_api_key") or "").strip()
+        or os.getenv("API_KEY")
+        or ""
+    ).strip()
     if not base:
         print(
             "Defina CERT_ROBOT_BASE_URL no .env (ex.: " + default_base + ")",
@@ -103,8 +145,16 @@ def main() -> None:
         )
         raise SystemExit(1)
 
-    interval = int(os.getenv("INTERVAL_SEC") or "86400") # Padrão: a cada 24 horas
-    mover = args.mover or (os.getenv("MOVER_VENCIDOS", "").strip() in ("1", "true", "True", "yes"))
+    interval = int(
+        os.getenv("INTERVAL_SEC")
+        or str(local_cfg.get("interval_sec") or "").strip()
+        or "86400"
+    )  # Padrão: a cada 24 horas
+    mover_env = os.getenv("MOVER_VENCIDOS", "").strip()
+    mover_local = str(local_cfg.get("mover_vencidos", "")).strip()
+    mover = args.mover or (mover_env in ("1", "true", "True", "yes")) or (
+        mover_local in ("1", "true", "True", "yes")
+    )
 
     print(f"Conectando a: {base}", file=sys.stderr)
 
@@ -157,7 +207,7 @@ def main() -> None:
             r.raise_for_status()
             s = r.json()
             try:
-                src, exp = _resolve_paths(s)
+                src, exp = _resolve_paths(s, local_cfg)
             except Exception as e:  # noqa: BLE001
                 print("Aguardando configuração:", e, file=sys.stderr)
                 if observer:
@@ -190,8 +240,13 @@ def main() -> None:
                 current_watch_path = str(src)
                 trigger_event.set()
 
-            mid = _machine_id(s)
-            if os.getenv("POLL_COMMANDS", "1").strip().lower() not in (
+            mid = _machine_id(s, local_cfg)
+            poll_commands = (
+                os.getenv("POLL_COMMANDS")
+                or str(local_cfg.get("poll_commands", "")).strip()
+                or "1"
+            )
+            if poll_commands.strip().lower() not in (
                 "0",
                 "false",
                 "no",

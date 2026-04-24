@@ -133,10 +133,18 @@
                 <label for="inp-machine">ID Servidor</label>
                 <input type="text" id="inp-machine" class="path-input" placeholder="default ou nome do PC" />
               </div>
+              <div class="row">
+                <label for="inp-agent-base-url">URL do Portal para o Agente</label>
+                <input type="text" id="inp-agent-base-url" class="path-input" placeholder="https://seu-site.onrender.com" />
+              </div>
               <div style="margin-top: 1.5rem;">
                 <button type="button" id="btn-save-cfg" class="primary">Guardar e Sincronizar</button>
+                <button type="button" id="btn-download-agent-json">Baixar agent_config.json</button>
                 <span id="cfg-msg" class="hint" style="margin-left: 1rem;"></span>
               </div>
+              <p class="hint" style="margin-top: 0.75rem;">
+                Dica: baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>CertGuard_Agent.exe</code> foi instalado.
+              </p>
             </div>
           </section>
 
@@ -247,6 +255,12 @@
           document.getElementById("inp-exp").value = s.expired_folder || "";
           const midG = s.machine_id || "default";
           document.getElementById("inp-machine").value = midG;
+          const inputAgentBaseUrl = document.getElementById("inp-agent-base-url");
+          if (inputAgentBaseUrl) {
+            inputAgentBaseUrl.value =
+              localStorage.getItem("cert_robot_agent_base_url") ||
+              window.location.origin;
+          }
           const cmi = document.getElementById("cmd-machine-id");
           if (cmi) cmi.value = midG;
           st.textContent = "";
@@ -293,6 +307,40 @@
         } catch (e) {
           st.textContent = "Falha: " + e;
         }
+      });
+
+      document.getElementById("btn-download-agent-json").addEventListener("click", () => {
+        const source = (document.getElementById("inp-source").value || "").trim();
+        const expired = (document.getElementById("inp-exp").value || "").trim();
+        const machineId = (document.getElementById("inp-machine").value || "default").trim() || "default";
+        const apiKey = (document.getElementById("api-key").value || "").trim();
+        const baseUrlInput = document.getElementById("inp-agent-base-url");
+        const baseUrl = ((baseUrlInput && baseUrlInput.value) || "").trim() || window.location.origin;
+        localStorage.setItem("cert_robot_agent_base_url", baseUrl);
+
+        const payload = {
+          cert_robot_base_url: baseUrl,
+          cert_robot_api_key: apiKey,
+          machine_id: machineId,
+          source_folder: source,
+          expired_folder: expired,
+          interval_sec: 86400,
+          mover_vencidos: false,
+          poll_commands: true
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "agent_config.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        const st = document.getElementById("cfg-msg");
+        st.textContent = "Arquivo agent_config.json gerado com sucesso.";
       });
 
       async function enqueueRemoteCommand(cmd) {

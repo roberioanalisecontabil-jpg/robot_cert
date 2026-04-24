@@ -1,0 +1,10 @@
+{
+  "cert_robot_base_url": "http://127.0.0.1:8020",
+  "cert_robot_api_key": "",
+  "machine_id": "Meu_Servidor_Windows",
+  "source_folder": "C:\\Certs",
+  "expired_folder": "C:\\Certs\\Vencidos",
+  "interval_sec": 86400,
+  "mover_vencidos": false,
+  "poll_commands": true
+}

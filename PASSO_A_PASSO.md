@@ -57,6 +57,12 @@ Formato do nome do ficheiro:
 
 `Nome legível senha palavra_passe_do_pfx.pfx`
 
+### Exportar configuração pronta para o agente
+
+Na página **Configuração**, use o botão **Baixar agent_config.json**.
+Depois copie este arquivo para a pasta onde o `CertGuard_Agent.exe` foi instalado.
+O agente passa a usar esse arquivo automaticamente.
+
 ## 6. Ver dados no painel
 
 No **Painel**, escolha a **fonte** (automático / local / remoto) e **Atualizar tabela**.
@@ -77,6 +83,20 @@ python agent\run_agent.py
 Para um só ciclo: `python agent\run_agent.py --once`
 
 Comandos remotos (fila) estão na **Configuração**; o agente interroga `/api/agent/next` se `POLL_COMMANDS` não for `0`.
+
+### Gerar executável + instalador (Inno Setup)
+
+Com o Inno Setup 6 instalado, rode:
+
+```powershell
+cd C:\...\robot_cert
+.\scripts\build_agent_installer.ps1
+```
+
+Saídas:
+
+- `dist\CertGuard_Agent.exe` (binário do agente)
+- `dist\installer\Instalador_CertGuard_Agente.exe` (instalador)
 
 ## 8. Validar com testes automáticos
 
