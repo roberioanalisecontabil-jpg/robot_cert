@@ -162,7 +162,6 @@
               </div>
               <div class="toolbar" style="border: none; padding-bottom: 0; margin-bottom: 0.5rem;">
                 <div class="toolbar__actions">
-                  <button type="button" id="cmd-mover" class="danger">Mover vencidos</button>
                   <button type="button" id="cmd-rescan">Forçar Leitura (Rescan)</button>
                   <button type="button" id="cmd-ping">Ping</button>
                   <button type="button" id="cmd-refresh-q">Ver Fila</button>
@@ -387,7 +386,6 @@
         } catch (_e) {}
       }
 
-      document.getElementById("cmd-mover").addEventListener("click", () => enqueueRemoteCommand("mover_vencidos"));
       document.getElementById("cmd-rescan").addEventListener("click", () => enqueueRemoteCommand("rescan"));
       document.getElementById("cmd-ping").addEventListener("click", () => enqueueRemoteCommand("ping"));
       document.getElementById("cmd-refresh-q").addEventListener("click", refreshCommandQueue);

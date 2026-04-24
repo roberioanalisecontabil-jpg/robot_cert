@@ -145,9 +145,6 @@
             <button type="button" id="btn-refresh" class="primary">Atualizar tabela</button>
             <button type="button" id="btn-export-pdf">Exportar PDF</button>
             <button type="button" id="btn-export-excel">Exportar Excel</button>
-            <button type="button" id="btn-move" class="danger" title="Apenas se o processo do API tiver acesso às pastas no disco.">
-              Mover vencidos
-            </button>
           </div>
         </div>
 
@@ -192,15 +189,6 @@
         if (s === "erro") return '<span class="badge badge-bad">Erro</span>';
         return '<span class="badge badge-bad">' + s + '</span>';
       };
-
-      function setMoveButton(d) {
-        const btn = document.getElementById("btn-move");
-        const remoto = d.data_source === "remoto";
-        btn.disabled = remoto;
-        btn.title = remoto
-          ? "Dados remotos: o movimento de ficheiros tem de ser feito no PC do agente (comando remoto) ou com o API a correr aí."
-          : "Move ficheiros vencidos no disco a que o servidor acede.";
-      }
 
       function esc(s) {
         if (!s) return "";
@@ -421,8 +409,6 @@
           st.textContent = "Atualizado em: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
           document.getElementById("data-hint").textContent =
             "Fonte de dados: " + (d.data_source || "—") + (d.machine_id ? " | Servidor: " + d.machine_id : "");
-          setMoveButton(d);
-          
           const items = d.itens || [];
           
           // Cálculo de status
@@ -473,29 +459,6 @@
       document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
       document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
       document.getElementById("busca-cert").addEventListener("input", aplicarFiltros);
-      document.getElementById("btn-move").addEventListener("click", async () => {
-        if (!confirm("Tem a certeza que deseja mover os ficheiros vencidos na pasta remota?")) return;
-        const st = document.getElementById("status-msg");
-        st.textContent = "A mover…";
-        try {
-          const r = await fetch("/api/mover-vencidos", { method: "POST", headers: getHeaders() });
-          if (r.status === 401) {
-            st.textContent = "401: chave em Configuração.";
-            return;
-          }
-          if (!r.ok) {
-            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
-            return;
-          }
-          const d = await r.json();
-          st.textContent =
-            "Movidos: " + (d.total_movidos != null ? d.total_movidos : 0) + (d.erros && d.erros.length ? " (ver resposta API)" : "");
-          await carregarTabela();
-        } catch (e) {
-          st.textContent = "Erro: " + e;
-        }
-      });
-
       window.addEventListener("storage", (ev) => {
         if (ev.key === "cert_robot_data_fonte" || ev.key === KEY_STORAGE) {
           const ph = document.getElementById("panel-hint");
