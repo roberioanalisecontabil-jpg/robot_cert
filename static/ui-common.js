@@ -2,7 +2,8 @@
  * Funções partilhadas entre o painel (/) e a configuração (/configuracao).
  * A chave API fica no localStorage do browser (não no servidor).
  */
-const KEY_STORAGE = "cert_robot_api_key";
+const KEY_STORAGE = "cert_robot_jwt";
+const ROLE_STORAGE = "cert_robot_role";
 const FONT_STORAGE = "cert_robot_data_fonte";
 
 function getDataFonte() {
@@ -14,26 +15,33 @@ function setDataFonte(v) {
   else localStorage.removeItem(FONT_STORAGE);
 }
 
-function getApiKey() {
-  const el = document.getElementById("api-key");
-  const typed = el ? el.value.trim() : "";
-  if (typed) return typed;
+function getJwtToken() {
   return localStorage.getItem(KEY_STORAGE) || "";
+}
+
+function setJwtToken(token) {
+  if (token) localStorage.setItem(KEY_STORAGE, token);
+  else localStorage.removeItem(KEY_STORAGE);
+}
+
+function getUserRole() {
+  return localStorage.getItem(ROLE_STORAGE) || "user";
+}
+
+function logout() {
+  localStorage.removeItem(KEY_STORAGE);
+  localStorage.removeItem(ROLE_STORAGE);
+  window.location.href = "/login";
 }
 
 function getHeaders(json) {
   const h = {};
   if (json) h["Content-Type"] = "application/json";
-  const k = getApiKey();
-  if (k) h["X-API-Key"] = k;
+  const t = getJwtToken();
+  if (t) {
+    h["Authorization"] = "Bearer " + t;
+  }
   return h;
-}
-
-function guardarChaveNoStorage() {
-  const el = document.getElementById("api-key");
-  const t = el ? el.value.trim() : "";
-  if (t) localStorage.setItem(KEY_STORAGE, t);
-  else localStorage.removeItem(KEY_STORAGE);
 }
 
 async function mensagemCorpoErro(r) {

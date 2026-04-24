@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
 from app import config
@@ -21,7 +22,13 @@ from app.settings_state import (
     save_settings,
     save_snapshot,
     supabase_configured,
+    _supabase
 )
+from app.auth import (
+    Token, UserCreate, verify_password, get_password_hash, create_access_token,
+    get_user_from_db, create_user_in_db, SECRET_KEY, ALGORITHM
+)
+from jose import jwt, JWTError
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +38,42 @@ templates = Jinja2Templates(directory=str(ROOT / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login", auto_error=False)
+
+async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("email")
+        role: str = payload.get("role")
+        if email is None:
+            return None
+        return {"email": email, "role": role}
+    except JWTError:
+        return None
+
 async def require_api_key(
+    request: Request,
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    current_user: Optional[dict] = Depends(get_current_user)
 ) -> None:
-    if not config.API_KEY:
+    # 1. Tenta validar se há uma sessão JWT válida
+    if current_user is not None:
         return
-    if x_api_key != config.API_KEY:
-        raise HTTPException(status_code=401, detail="X-API-Key ausente ou inválida.")
+
+    # 2. Se não houver JWT, valida se há API_KEY e se confere com o arquivo .env
+    if config.API_KEY and x_api_key == config.API_KEY:
+        return
+        
+    # Se ambos falharem, ou se API_KEY não for enviada e não tiver JWT:
+    if config.API_KEY:
+         raise HTTPException(status_code=401, detail="X-API-Key ou Token ausente/inválida.")
+
+def require_admin(current_user: Optional[dict] = Depends(get_current_user)):
+    if not current_user or current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem realizar esta ação.")
+    return current_user
 
 
 def _response_from_rows(
@@ -109,6 +145,13 @@ class EnqueueCommandBody(BaseModel):
 def painel(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="index.html")
 
+@app.get("/login", response_class=HTMLResponse)
+def pagina_login(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="login.html")
+
+@app.get("/usuarios", response_class=HTMLResponse)
+def pagina_usuarios(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="usuarios.html")
 
 @app.get("/configuracao", response_class=HTMLResponse)
 def pagina_configuracao(request: Request) -> HTMLResponse:
@@ -247,6 +290,52 @@ def ingest(body: IngestBody) -> dict:
         "itens_recebidos": len(body.items),
         "grava_em": "supabase" if supabase_configured() else "arquivo local (data/last_ingest.json)",
     }
+
+# ----------------- ROTAS DE USUÁRIO -----------------
+
+@app.post("/api/login", response_model=Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    client = _supabase()
+    if not client:
+        raise HTTPException(status_code=500, detail="Supabase não configurado.")
+    user = get_user_from_db(client, form_data.username) # OAuth2 form usa "username" que para nós será o e-mail
+    if not user or not verify_password(form_data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos", headers={"WWW-Authenticate": "Bearer"})
+    access_token = create_access_token(data={"email": user["email"], "role": user["role"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/users", dependencies=[Depends(require_api_key), Depends(require_admin)])
+def list_users():
+    client = _supabase()
+    if not client:
+        raise HTTPException(status_code=500, detail="Supabase não configurado.")
+    r = client.table("users").select("id, email, role, created_at").execute()
+    return r.data
+
+@app.post("/api/users", dependencies=[Depends(require_api_key), Depends(require_admin)])
+def create_user(user: UserCreate):
+    client = _supabase()
+    if not client:
+        raise HTTPException(status_code=500, detail="Supabase não configurado.")
+    # Verifica se já existe
+    exist = get_user_from_db(client, user.email)
+    if exist:
+        raise HTTPException(status_code=400, detail="Email já cadastrado.")
+    novo = create_user_in_db(client, user)
+    if not novo:
+        raise HTTPException(status_code=500, detail="Falha ao criar usuário no banco.")
+    return {"message": "Usuário criado com sucesso", "email": novo["email"]}
+
+@app.delete("/api/users/{user_id}", dependencies=[Depends(require_api_key), Depends(require_admin)])
+def delete_user(user_id: str):
+    client = _supabase()
+    if not client:
+        raise HTTPException(status_code=500, detail="Supabase não configurado.")
+    try:
+        client.table("users").delete().eq("id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/mover-vencidos", dependencies=[Depends(require_api_key)])

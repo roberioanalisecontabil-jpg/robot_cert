@@ -37,3 +37,12 @@ create table if not exists public.agent_command_queue (
 
 create index if not exists agent_cmd_pending_idx
   on public.agent_command_queue (created_at) where (status = 'pending');
+
+-- Tabela de usuários para acesso ao portal
+create table if not exists public.users (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  password_hash text not null,
+  role text not null default 'user',
+  created_at timestamptz not null default now()
+);
