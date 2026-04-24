@@ -24,7 +24,7 @@ def test_pagina_config_200(client: TestClient) -> None:
     r = client.get("/configuracao")
     assert r.status_code == 200
     assert "Chave API" in r.text
-    assert "Pasta de origem" in r.text
+    assert "Origem (.pfx)" in r.text
 
 
 def test_api_settings_sem_chave_200(client: TestClient) -> None:

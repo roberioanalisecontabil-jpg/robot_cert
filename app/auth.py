@@ -7,9 +7,15 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 # Configurações de segurança
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "certguard-super-secret-key-12345")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
+
+
+def _get_secret_key() -> str:
+    secret = (os.getenv("JWT_SECRET_KEY") or "").strip()
+    if not secret:
+        raise RuntimeError("JWT_SECRET_KEY não configurada no ambiente.")
+    return secret
 
 class TokenData(BaseModel):
     email: Optional[str] = None
@@ -39,16 +45,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, _get_secret_key(), algorithm=ALGORITHM)
     return encoded_jwt
 
 def decode_access_token(token: str) -> Optional[TokenData]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _get_secret_key(), algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         role: str = payload.get("role")
         if email is None:
             return None
         return TokenData(email=email, role=role)
-    except JWTError:
+    except (JWTError, RuntimeError):
         return None

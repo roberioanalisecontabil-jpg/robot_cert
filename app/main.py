@@ -25,7 +25,7 @@ from app.settings_state import (
     supabase_configured,
 )
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 async def require_auth(
     auth_creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -42,9 +42,14 @@ async def require_auth(
         if token_data:
             return token_data
     
-    # 2. Tentar API Key (para o Agente)
-    if x_api_key and config.API_KEY and x_api_key == config.API_KEY:
-        return auth.TokenData(email="agent@internal", role="agent")
+    # 2. Se API_KEY estiver ativa, aceitar a chave estática para o agente.
+    if config.API_KEY:
+        if x_api_key and x_api_key == config.API_KEY:
+            return auth.TokenData(email="agent@internal", role="agent")
+    else:
+        # Ambiente aberto (sem API_KEY): mantém compatibilidade para rotas /api/*
+        # que usam require_auth, sem elevar privilégios administrativos.
+        return auth.TokenData(email="anonymous@local", role="agent")
 
     raise HTTPException(
         status_code=401, 
@@ -160,14 +165,10 @@ class LoginBody(BaseModel):
 
 @app.post("/api/login")
 def login(body: LoginBody) -> dict:
-    client = supabase_configured() and load_settings() # trigger client init
+    load_settings()  # trigger client init
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb:
-        # Fallback local se o Supabase não estiver configurado
-        if body.email == "admin@certguard.com" and body.password == "admin123":
-             token = auth.create_access_token({"sub": body.email, "role": "admin"})
-             return {"access_token": token, "token_type": "bearer"}
         raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado para login.")
 
     try:
