@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Histórico — CertGuard</title>
+  <title>Vencidos — CertGuard</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -26,13 +26,13 @@
         </svg>
         Dashboard
       </a>
-      <a href="/historico" class="active">
+      <a href="/historico">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         Histórico
       </a>
-      <a href="/vencidos">
+      <a href="/vencidos" class="active">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
@@ -62,8 +62,8 @@
 
   <main class="main-content">
     <header class="page-header">
-      <h1>Histórico de Certificados</h1>
-      <p>Certificados já mapeados em algum momento e a última data registrada.</p>
+      <h1>Certificados Vencidos</h1>
+      <p>Lista de certificados vencidos, com filtro por período de vencimento.</p>
     </header>
 
     <div class="table-container">
@@ -73,23 +73,26 @@
           <p class="hint" id="count-hint"></p>
         </div>
         <div class="toolbar__actions">
-          <input type="search" id="busca-historico" placeholder="Buscar por nome, arquivo ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
-          <button type="button" id="btn-refresh" class="primary">Atualizar</button>
-          <button type="button" id="btn-export-pdf">Exportar PDF</button>
-          <button type="button" id="btn-export-excel">Exportar Excel</button>
+          <label for="dt-inicio" class="hint">De</label>
+          <input type="date" id="dt-inicio" class="path-input" style="max-width: 170px;" />
+          <label for="dt-fim" class="hint">Até</label>
+          <input type="date" id="dt-fim" class="path-input" style="max-width: 170px;" />
+          <button type="button" id="btn-filtrar" class="primary">Filtrar</button>
         </div>
       </div>
+
       <div style="overflow-x:auto;">
         <table>
           <thead>
             <tr>
+              <th>Arquivo</th>
               <th>Nome</th>
               <th>CNPJ/CPF</th>
-              <th>Último status</th>
               <th>Vencimento do certificado</th>
+              <th>Última data registrada</th>
             </tr>
           </thead>
-          <tbody id="tbody-historico"></tbody>
+          <tbody id="tbody-vencidos"></tbody>
         </table>
       </div>
     </div>
@@ -97,9 +100,6 @@
 
   <script src="/static/ui-common.js"></script>
   <script>
-    let itensOriginais = [];
-      let itensVisiveis = [];
-
     function esc(v) {
       const d = document.createElement("div");
       d.textContent = v == null ? "" : String(v);
@@ -113,117 +113,46 @@
 
     function fmtDataUtc(iso) {
       if (!iso) return "—";
-      const d = new Date(iso);
-      return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+      return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
     }
 
-    function aplicarBusca() {
-      const q = (document.getElementById("busca-historico").value || "").trim().toLowerCase();
-      const filtrados = itensOriginais.filter((it) => {
-        if (!q) return true;
-        const hay = [it.file_name || "", it.nome || "", it.documento || "", it.status_ultimo || ""].join(" ").toLowerCase();
-        return hay.includes(q);
-      });
-      itensVisiveis = filtrados;
-      const tb = document.getElementById("tbody-historico");
-      tb.innerHTML = filtrados.map((it) => `
-        <tr>
-          <td>${esc(it.nome)}</td>
-          <td>${esc(it.documento || "—")}</td>
-          <td>${esc(it.status_ultimo || "—")}</td>
-          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>
-      `).join("");
-      document.getElementById("count-hint").textContent = `${filtrados.length} registro(s) exibido(s)`;
+    function anoAtualRange() {
+      const y = new Date().getFullYear();
+      document.getElementById("dt-inicio").value = `${y}-01-01`;
+      document.getElementById("dt-fim").value = `${y}-12-31`;
     }
 
-    function exportarExcelVisivel() {
-      const headers = ["Nome", "CNPJ/CPF", "Último status", "Vencimento do certificado"];
-      const rows = itensVisiveis.map((it) => [
-        it.nome || "",
-        it.documento || "",
-        it.status_ultimo || "",
-        fmtDataUtc(it.vencimento_certificado),
-      ]);
-      const all = [headers, ...rows];
-      const csv = all
-        .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
-        .join("\n");
-      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "historico_certificados_filtrado.csv";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    function exportarPdfVisivel() {
-      const linhas = itensVisiveis
-        .map((it) => `
-          <tr>
-            <td>${esc(it.nome || "")}</td>
-            <td>${esc(it.documento || "")}</td>
-            <td>${esc(it.status_ultimo || "")}</td>
-            <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-          </tr>
-        `)
-        .join("");
-      const w = window.open("", "_blank");
-      if (!w) return;
-      w.document.write(`
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <title>Histórico de certificados filtrado</title>
-            <style>
-              body { font-family: Segoe UI, Arial, sans-serif; padding: 20px; }
-              h1 { margin: 0 0 8px; font-size: 20px; }
-              p { margin: 0 0 14px; color: #555; }
-              table { width: 100%; border-collapse: collapse; font-size: 11px; }
-              th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
-              th { background: #f3f4f6; }
-            </style>
-          </head>
-          <body>
-            <h1>Histórico de certificados</h1>
-            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${itensVisiveis.length}</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th><th>CNPJ/CPF</th><th>Último status</th><th>Vencimento do certificado</th>
-                </tr>
-              </thead>
-              <tbody>${linhas}</tbody>
-            </table>
-          </body>
-        </html>
-      `);
-      w.document.close();
-      w.focus();
-      w.print();
-    }
-
-    async function carregarHistorico() {
+    async function carregarVencidos() {
       const st = document.getElementById("status-msg");
       st.textContent = "A carregar…";
-      const r = await fetch("/api/certificados/historico", { headers: getHeaders() });
+      const inicio = document.getElementById("dt-inicio").value;
+      const fim = document.getElementById("dt-fim").value;
+      const qs = new URLSearchParams();
+      if (inicio) qs.set("data_inicio", inicio);
+      if (fim) qs.set("data_fim", fim);
+
+      const r = await fetch(`/api/certificados/vencidos?${qs.toString()}`, { headers: getHeaders() });
       if (!r.ok) {
         st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
         return;
       }
       const j = await r.json();
-      itensOriginais = j.itens || [];
+      const itens = j.itens || [];
+      document.getElementById("count-hint").textContent = `${itens.length} vencido(s) exibido(s)`;
       st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
-      aplicarBusca();
+      const tb = document.getElementById("tbody-vencidos");
+      tb.innerHTML = itens.map((it) => `
+        <tr>
+          <td>${esc(it.file_name)}</td>
+          <td>${esc(it.nome)}</td>
+          <td>${esc(it.documento || "—")}</td>
+          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+          <td>${esc(fmtData(it.ultima_data_registrada))}</td>
+        </tr>
+      `).join("");
     }
 
-    document.getElementById("btn-refresh").addEventListener("click", carregarHistorico);
-    document.getElementById("busca-historico").addEventListener("input", aplicarBusca);
-    document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
-    document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
+    document.getElementById("btn-filtrar").addEventListener("click", carregarVencidos);
 
     (async function init() {
       const role = localStorage.getItem("user_role");
@@ -233,7 +162,8 @@
         if (elUsers) elUsers.style.display = "flex";
         if (elConfig) elConfig.style.display = "flex";
       }
-      await carregarHistorico();
+      anoAtualRange();
+      await carregarVencidos();
     })();
   </script>
 </body>

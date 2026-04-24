@@ -33,6 +33,12 @@ def test_pagina_historico_200(client: TestClient) -> None:
     assert "Histórico de Certificados" in r.text
 
 
+def test_pagina_vencidos_200(client: TestClient) -> None:
+    r = client.get("/vencidos")
+    assert r.status_code == 200
+    assert "Certificados Vencidos" in r.text
+
+
 def test_api_settings_sem_chave_200(client: TestClient) -> None:
     """Sem API_KEY no servidor, /api/settings deve ser acessível."""
     r = client.get("/api/settings")
@@ -77,6 +83,18 @@ def test_historico_certificados_200(
 ) -> None:
     h = {"X-API-Key": api_key}
     r = client_com_chave.get("/api/certificados/historico", headers=h)
+    assert r.status_code == 200
+    j = r.json()
+    assert "itens" in j
+    assert "total" in j
+    assert "snapshots_lidos" in j
+
+
+def test_vencidos_certificados_200(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    h = {"X-API-Key": api_key}
+    r = client_com_chave.get("/api/certificados/vencidos", headers=h)
     assert r.status_code == 200
     j = r.json()
     assert "itens" in j

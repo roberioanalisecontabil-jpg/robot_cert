@@ -163,6 +163,11 @@ def pagina_historico(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="historico.html")
 
 
+@app.get("/vencidos", response_class=HTMLResponse)
+def pagina_vencidos(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="vencidos.html")
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon() -> Response:
     """
@@ -316,46 +321,6 @@ def health() -> dict:
         "supabase": supabase_configured(),
         "api_key_required": bool(config.API_KEY),
     }
-
-
-@app.get("/api/unsplash/background")
-def unsplash_login_background() -> dict:
-    """
-    Devolve URL de uma foto aleatória (Unsplash) para o fundo do login.
-    A chave de API fica só no servidor; o browser só recebe a URL da imagem.
-    """
-    if not config.UNSPLASH_ACCESS_KEY:
-        return {"ok": False, "reason": "not_configured"}
-    try:
-        import httpx
-
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get(
-                "https://api.unsplash.com/photos/random",
-                params={
-                    "query": config.UNSPLASH_QUERY,
-                    "orientation": "landscape",
-                    "content_filter": "high",
-                },
-                headers={"Authorization": f"Client-ID {config.UNSPLASH_ACCESS_KEY}"},
-            )
-            r.raise_for_status()
-            data = r.json()
-            urls = data.get("urls") or {}
-            url = urls.get("regular") or urls.get("full")
-            if not url:
-                return {"ok": False, "reason": "no_url"}
-            user = data.get("user") or {}
-            return {
-                "ok": True,
-                "url": url,
-                "author": (user.get("name") or "").strip(),
-                "author_username": (user.get("username") or "").strip(),
-                "unsplash_link": (data.get("links") or {}).get("html", ""),
-            }
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Unsplash indisponível: %s", e)
-        return {"ok": False, "reason": "fetch_failed"}
 
 
 def _settings_dict(s: PortalSettings) -> dict:
@@ -533,6 +498,37 @@ def historico_certificados(
     for row in itens:
         row.pop("_dt", None)
     return {"itens": itens, "total": len(itens), "snapshots_lidos": len(snapshots)}
+
+
+@app.get("/api/certificados/vencidos", dependencies=[Depends(require_auth)])
+def vencidos_certificados(
+    data_inicio: Optional[str] = Query(None, description="Data inicial (YYYY-MM-DD) pelo vencimento"),
+    data_fim: Optional[str] = Query(None, description="Data final (YYYY-MM-DD) pelo vencimento"),
+    limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
+) -> dict:
+    hist = historico_certificados(limite_snapshots=limite_snapshots)
+    itens = hist.get("itens", [])
+    inicio_dt = _parse_iso_utc(data_inicio + "T00:00:00+00:00") if data_inicio else None
+    fim_dt = _parse_iso_utc(data_fim + "T23:59:59+00:00") if data_fim else None
+
+    vencidos: List[dict] = []
+    for it in itens:
+        if str(it.get("status_ultimo") or "").lower() != "expirado":
+            continue
+        venc_dt = _parse_iso_utc(it.get("vencimento_certificado"))
+        if inicio_dt and venc_dt < inicio_dt:
+            continue
+        if fim_dt and venc_dt > fim_dt:
+            continue
+        vencidos.append(it)
+
+    return {
+        "itens": vencidos,
+        "total": len(vencidos),
+        "data_inicio": data_inicio,
+        "data_fim": data_fim,
+        "snapshots_lidos": hist.get("snapshots_lidos", 0),
+    }
 
 
 @app.post("/api/ingest", dependencies=[Depends(require_auth)])
