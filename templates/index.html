@@ -177,7 +177,12 @@
           const f = fonte();
           const r = await fetch("/api/certificados?fonte=" + encodeURIComponent(f), { headers: getHeaders() });
           if (r.status === 401) {
-            st.textContent = "401: defina a chave em Configuração.";
+            st.textContent = "Acesso negado. Chave API ausente ou inválida.";
+            let key = prompt("Acesso restrito.\nPor favor, digite a Chave API para visualizar os certificados:");
+            if (key) {
+                localStorage.setItem(KEY_STORAGE, key.trim());
+                return carregarTabela(); // Tenta carregar novamente com a nova chave
+            }
             return;
           }
           if (r.status === 404) {
