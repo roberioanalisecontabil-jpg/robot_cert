@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
+from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from difflib import SequenceMatcher
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -166,6 +170,11 @@ def pagina_historico(request: Request) -> HTMLResponse:
 @app.get("/vencidos", response_class=HTMLResponse)
 def pagina_vencidos(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="vencidos.html")
+
+
+@app.get("/duplicidades", response_class=HTMLResponse)
+def pagina_duplicidades(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="duplicidades.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -442,6 +451,141 @@ def _parse_iso_utc(iso_value: Optional[str]) -> datetime:
         return dt.astimezone(timezone.utc)
     except ValueError:
         return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _digits_only_doc(value: Any) -> str:
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def _normalize_name_dup(value: Any) -> str:
+    t = str(value or "").strip().lower()
+    t = unicodedata.normalize("NFD", t)
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    return " ".join(t.split())
+
+
+def _item_resumo_duplicidade(it: dict) -> dict[str, Any]:
+    return {
+        "file_name": it.get("file_name"),
+        "nome": it.get("nome") or it.get("display_name"),
+        "documento": it.get("documento_formatado") or it.get("documento_numero"),
+        "documento_numero": it.get("documento_numero"),
+        "not_after": it.get("not_after"),
+        "not_before": it.get("not_before"),
+        "status": it.get("status"),
+        "path": it.get("path"),
+    }
+
+
+def _agrupar_duplicidades(rows: List[dict]) -> Tuple[List[dict], List[dict]]:
+    """
+    Deteta duplicidades no mesmo inventário (último snapshot ou scan local):
+    - mesmo CNPJ/CPF (11+ dígitos) em mais do que um ficheiro;
+    - nomes muito semelhantes (SequenceMatcher) quando não é só o caso do mesmo documento.
+    """
+    by_doc: dict[str, List[dict]] = defaultdict(list)
+    for it in rows:
+        d = _digits_only_doc(it.get("documento_numero") or it.get("documento_formatado"))
+        if len(d) >= 11:
+            by_doc[d].append(_item_resumo_duplicidade(it))
+
+    grupos_documento: List[dict] = []
+    for doc_digits, members in by_doc.items():
+        if len(members) < 2:
+            continue
+        exib = next((m.get("documento") for m in members if m.get("documento")), doc_digits)
+        grupos_documento.append(
+            {
+                "tipo": "documento",
+                "documento_digitos": doc_digits,
+                "documento_exibicao": exib,
+                "itens": members,
+            }
+        )
+
+    n = len(rows)
+    parent = list(range(n))
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            fi = str(rows[i].get("file_name") or "").strip().lower()
+            fj = str(rows[j].get("file_name") or "").strip().lower()
+            if not fi or fi == fj:
+                continue
+            di = _digits_only_doc(rows[i].get("documento_numero") or rows[i].get("documento_formatado"))
+            dj = _digits_only_doc(rows[j].get("documento_numero") or rows[j].get("documento_formatado"))
+            if len(di) >= 11 and len(dj) >= 11 and di == dj:
+                continue
+            ni = _normalize_name_dup(
+                rows[i].get("nome") or rows[i].get("display_name") or rows[i].get("file_name")
+            )
+            nj = _normalize_name_dup(
+                rows[j].get("nome") or rows[j].get("display_name") or rows[j].get("file_name")
+            )
+            if len(ni) < 5 or len(nj) < 5:
+                continue
+            if SequenceMatcher(None, ni, nj).ratio() >= 0.86:
+                union(i, j)
+
+    roots: dict[int, List[int]] = defaultdict(list)
+    for i in range(n):
+        roots[find(i)].append(i)
+
+    grupos_nome: List[dict] = []
+    for _root, idxs in roots.items():
+        if len(idxs) < 2:
+            continue
+        members = [_item_resumo_duplicidade(rows[k]) for k in idxs]
+        nomes_cur = [
+            _normalize_name_dup(rows[k].get("nome") or rows[k].get("display_name") or rows[k].get("file_name"))
+            for k in idxs
+        ]
+        rotulo = max(nomes_cur, key=len) if nomes_cur else "—"
+        grupos_nome.append({"tipo": "nome_similar", "rotulo": rotulo[:120], "itens": members})
+
+    return grupos_documento, grupos_nome
+
+
+@app.get("/api/certificados/duplicidades", dependencies=[Depends(require_auth)])
+def certificados_duplicidades() -> dict[str, Any]:
+    """
+    Analisa o último snapshot recebido (dados atuais do agente) ou, na ausência,
+    o scan local no servidor, e devolve grupos de possíveis duplicados.
+    """
+    snap = get_latest_snapshot()
+    origem = "ultimo_snapshot"
+    scanned_at: Optional[str] = None
+    if snap and (snap.get("items") or []):
+        raw_items: List[dict] = list(snap.get("items") or [])
+        scanned_at = str(snap.get("scanned_at") or "") or None
+    else:
+        sets = load_settings()
+        raw_items = [cert_to_public_dict(c) for c in scan_folder(sets.effective_source())]
+        origem = "scan_local_servidor"
+        scanned_at = datetime.now(timezone.utc).isoformat()
+
+    rows = [it for it in raw_items if str(it.get("file_name") or "").strip()]
+    gd, gn = _agrupar_duplicidades(rows)
+    return {
+        "origem_dados": origem,
+        "scanned_at": scanned_at,
+        "total_itens_analisados": len(rows),
+        "grupos_documento": gd,
+        "grupos_nome_similar": gn,
+        "total_grupos_documento": len(gd),
+        "total_grupos_nome_similar": len(gn),
+    }
 
 
 @app.get("/api/certificados/historico", dependencies=[Depends(require_auth)])
