@@ -117,6 +117,19 @@
             <p id="panel-hint" class="hint" style="display: none; color: #f59e0b;"></p>
           </div>
           <div class="toolbar__actions">
+            <select id="filtro-status" title="Filtrar por status" style="padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px;">
+              <option value="todos">Todos</option>
+              <option value="validos">Válidos</option>
+              <option value="prestes_vencer">Prestes a vencer</option>
+              <option value="vencidos">Vencidos</option>
+            </select>
+            <input
+              type="search"
+              id="busca-cert"
+              placeholder="Buscar por nome, CNPJ ou CPF"
+              title="Busca por nome do certificado, CNPJ/CPF com ou sem pontuação"
+              style="padding: 0.55rem 0.7rem; min-width: 260px; border: 1px solid var(--border); border-radius: 8px;"
+            />
             <button type="button" id="btn-refresh" class="primary">Atualizar tabela</button>
             <button type="button" id="btn-move" class="danger" title="Apenas se o processo do API tiver acesso às pastas no disco.">
               Mover vencidos
@@ -145,6 +158,7 @@
     <script src="/static/ui-common.js"></script>
     <script>
       const fonte = () => getDataFonte();
+      let itensOriginais = [];
 
       const fmt = (iso) => {
         if (!iso) return "—";
@@ -178,6 +192,100 @@
         const d = document.createElement("div");
         d.textContent = s;
         return d.innerHTML;
+      }
+
+      function apenasDigitos(v) {
+        return String(v || "").replace(/\D+/g, "");
+      }
+
+      function normalizarTexto(v) {
+        return String(v || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+      }
+
+      function atualizarCards(items) {
+        let total = items.length;
+        let okCount = 0;
+        let expirandoCount = 0;
+        let vencidosCount = 0;
+        items.forEach((it) => {
+          if (it.status === "expirado") {
+            vencidosCount++;
+          } else if (it.status === "ok") {
+            if (it._isExpiringSoon) expirandoCount++;
+            else okCount++;
+          }
+        });
+        document.getElementById("n-tot").textContent = total;
+        document.getElementById("n-ok").textContent = okCount;
+        document.getElementById("n-exp-soon").textContent = expirandoCount;
+        document.getElementById("n-vencidos").textContent = vencidosCount;
+      }
+
+      function renderTabela(items) {
+        const colTipo = (it) => {
+          const lbl = it.documento_tipo_label || (it.documento_tipo ? String(it.documento_tipo).toUpperCase() : "");
+          if (lbl) {
+            const f = it.documento_formatado || it.documento_numero || "";
+            return (
+              "<span class='doc-type-label'>" +
+              esc(lbl) +
+              "</span>" +
+              (f ? "<span class='doc-type-num'>" + esc(f) + "</span>" : "")
+            );
+          }
+          if (it.error_message) return "<span class='error-cell' style='color:#ef4444'>" + esc(it.error_message) + "</span>";
+          return "—";
+        };
+
+        const tb = document.getElementById("tbody");
+        tb.innerHTML = items
+          .map(
+            (it) =>
+              "<tr><td>" +
+              badge(it.status, it._isExpiringSoon) +
+              "</td><td>" +
+              esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
+              "</td><td>" +
+              fmt(it.not_before) +
+              "</td><td>" +
+              fmt(it.not_after) +
+              "</td><td class='td-doc'>" +
+              colTipo(it) +
+              "</td></tr>"
+          )
+          .join("");
+      }
+
+      function aplicarFiltros() {
+        const filtroStatus = document.getElementById("filtro-status")?.value || "todos";
+        const busca = document.getElementById("busca-cert")?.value || "";
+        const buscaTexto = normalizarTexto(busca.trim());
+        const buscaDigitos = apenasDigitos(busca);
+
+        let filtrados = itensOriginais.filter((it) => {
+          if (filtroStatus === "validos") {
+            if (!(it.status === "ok" && !it._isExpiringSoon)) return false;
+          } else if (filtroStatus === "prestes_vencer") {
+            if (!(it.status === "ok" && it._isExpiringSoon)) return false;
+          } else if (filtroStatus === "vencidos") {
+            if (it.status !== "expirado") return false;
+          }
+
+          if (!buscaTexto) return true;
+
+          const alvoNome = normalizarTexto([it.nome, it.display_name, it.file_name].filter(Boolean).join(" "));
+          const docNumerico = apenasDigitos(it.documento_numero || it.documento_formatado || "");
+
+          if (alvoNome.includes(buscaTexto)) return true;
+          if (buscaDigitos && docNumerico.includes(buscaDigitos)) return true;
+          return false;
+        });
+
+        atualizarCards(filtrados);
+        renderTabela(filtrados);
       }
 
       async function carregarTabela() {
@@ -250,49 +358,16 @@
             }
           });
 
-          document.getElementById("n-tot").textContent = total;
-          document.getElementById("n-ok").textContent = okCount;
-          document.getElementById("n-exp-soon").textContent = expirandoCount;
-          document.getElementById("n-vencidos").textContent = vencidosCount;
-
-          const colTipo = (it) => {
-            const lbl = it.documento_tipo_label || (it.documento_tipo ? String(it.documento_tipo).toUpperCase() : "");
-            if (lbl) {
-              const f = it.documento_formatado || it.documento_numero || "";
-              return (
-                "<span class='doc-type-label'>" +
-                esc(lbl) +
-                "</span>" +
-                (f ? "<span class='doc-type-num'>" + esc(f) + "</span>" : "")
-              );
-            }
-            if (it.error_message) return "<span class='error-cell' style='color:#ef4444'>" + esc(it.error_message) + "</span>";
-            return "—";
-          };
-
-          const tb = document.getElementById("tbody");
-          tb.innerHTML = items
-            .map(
-              (it) =>
-                "<tr><td>" +
-                badge(it.status, it._isExpiringSoon) +
-                "</td><td>" +
-                esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
-                "</td><td>" +
-                fmt(it.not_before) +
-                "</td><td>" +
-                fmt(it.not_after) +
-                "</td><td class='td-doc'>" +
-                colTipo(it) +
-                "</td></tr>"
-            )
-            .join("");
+          itensOriginais = items;
+          aplicarFiltros();
         } catch (e) {
           st.textContent = "Erro: " + e;
         }
       }
 
       document.getElementById("btn-refresh").addEventListener("click", carregarTabela);
+      document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
+      document.getElementById("busca-cert").addEventListener("input", aplicarFiltros);
       document.getElementById("btn-move").addEventListener("click", async () => {
         if (!confirm("Tem a certeza que deseja mover os ficheiros vencidos na pasta remota?")) return;
         const st = document.getElementById("status-msg");

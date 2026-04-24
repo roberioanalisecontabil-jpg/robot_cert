@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -156,6 +156,18 @@ def pagina_login(request: Request) -> HTMLResponse:
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_usuarios(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="usuarios.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    """
+    Serve o favicon do projeto quando disponível.
+    Fallback 204 para evitar ruído de 404 no log em dev.
+    """
+    icon_path = ROOT / "ico" / "icone.ico"
+    if icon_path.is_file():
+        return FileResponse(path=icon_path, media_type="image/x-icon")
+    return Response(status_code=204)
 
 
 class LoginBody(BaseModel):
