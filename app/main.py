@@ -107,12 +107,12 @@ class EnqueueCommandBody(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def painel(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @app.get("/configuracao", response_class=HTMLResponse)
 def pagina_configuracao(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("configuracao.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="configuracao.html")
 
 
 @app.get("/api/health")
