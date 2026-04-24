@@ -85,11 +85,9 @@
         <table>
           <thead>
             <tr>
-              <th>Arquivo</th>
               <th>Nome</th>
               <th>CNPJ/CPF</th>
               <th>Vencimento do certificado</th>
-              <th>Última data registrada</th>
             </tr>
           </thead>
           <tbody id="tbody-vencidos"></tbody>
@@ -104,11 +102,6 @@
       const d = document.createElement("div");
       d.textContent = v == null ? "" : String(v);
       return d.innerHTML;
-    }
-
-    function fmtData(iso) {
-      if (!iso) return "—";
-      return new Date(iso).toLocaleString("pt-BR");
     }
 
     function fmtDataUtc(iso) {
@@ -143,11 +136,9 @@
       const tb = document.getElementById("tbody-vencidos");
       tb.innerHTML = itens.map((it) => `
         <tr>
-          <td>${esc(it.file_name)}</td>
           <td>${esc(it.nome)}</td>
           <td>${esc(it.documento || "—")}</td>
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-          <td>${esc(fmtData(it.ultima_data_registrada))}</td>
         </tr>
       `).join("");
     }
