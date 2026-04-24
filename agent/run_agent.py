@@ -19,11 +19,14 @@ from __future__ import annotations
 import os
 import sys
 import time
+import threading
 from argparse import ArgumentParser
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -45,14 +48,35 @@ DEFAULT_ROBOT_BASE = f"http://127.0.0.1:{DEFAULT_ROBOT_API_PORT}"
 
 
 def _resolve_paths(s: dict) -> tuple[Path, Path]:
-    """Portal (GET /api/settings) ou variáveis AGENT_SOURCE / AGENT_EXPIRED no Windows."""
-    raw_src = (s.get("source_folder") or "").strip() or (os.getenv("AGENT_SOURCE") or "").strip()
-    raw_exp = (s.get("expired_folder") or "").strip() or (os.getenv("AGENT_EXPIRED") or "").strip()
+    """Portal (GET /api/settings) apenas. Sem fallback local para caminhos."""
+    raw_src = (s.get("source_folder") or "").strip()
+    raw_exp = (s.get("expired_folder") or "").strip()
     if not raw_src or not raw_exp:
         raise ValueError(
-            "Origem e destino obrigatórios: defina no portal (Pastas) ou AGENT_SOURCE e AGENT_EXPIRED no .env"
+            "Origem e destino obrigatórios: acesse a página 'Configuração' do portal web e defina as pastas."
         )
     return Path(raw_src), Path(raw_exp)
+
+class CertEventHandler(FileSystemEventHandler):
+    def __init__(self, trigger_event: threading.Event):
+        super().__init__()
+        self.trigger_event = trigger_event
+
+    def on_created(self, event):
+        self._check(event)
+
+    def on_modified(self, event):
+        self._check(event)
+
+    def on_deleted(self, event):
+        self._check(event)
+
+    def _check(self, event):
+        if event.is_directory:
+            return
+        p = event.src_path.lower()
+        if p.endswith(".pfx") or p.endswith(".p12"):
+            self.trigger_event.set()
 
 
 def _machine_id(s: dict) -> str:
@@ -79,10 +103,15 @@ def main() -> None:
         )
         raise SystemExit(1)
 
-    interval = int(os.getenv("INTERVAL_SEC") or "300")
+    interval = int(os.getenv("INTERVAL_SEC") or "86400") # Padrão: a cada 24 horas
     mover = args.mover or (os.getenv("MOVER_VENCIDOS", "").strip() in ("1", "true", "True", "yes"))
 
     print(f"Conectando a: {base}", file=sys.stderr)
+
+    trigger_event = threading.Event()
+    observer = None
+    current_watch_path = None
+    last_full_scan_time = 0.0
 
     def _headers() -> dict:
         h: dict = {"Content-Type": "application/json"}
@@ -130,19 +159,36 @@ def main() -> None:
             try:
                 src, exp = _resolve_paths(s)
             except Exception as e:  # noqa: BLE001
-                print("Pastas inválidas:", e, file=sys.stderr)
+                print("Aguardando configuração:", e, file=sys.stderr)
+                if observer:
+                    observer.stop()
+                    observer.join()
+                    observer = None
+                    current_watch_path = None
                 if args.once:
                     raise SystemExit(1)
-                time.sleep(interval)
+                time.sleep(10)
                 continue
 
             if not src.is_dir():
                 print("Pasta inexistente ou inacessível:", src, file=sys.stderr)
                 if args.once:
                     raise SystemExit(1)
-                time.sleep(interval)
+                time.sleep(10)
                 continue
             exp.mkdir(parents=True, exist_ok=True)
+
+            if current_watch_path != str(src):
+                if observer:
+                    observer.stop()
+                    observer.join()
+                print(f"Iniciando monitoramento em tempo real (Watchdog) na pasta: {src}", file=sys.stderr)
+                observer = Observer()
+                event_handler = CertEventHandler(trigger_event)
+                observer.schedule(event_handler, str(src), recursive=False)
+                observer.start()
+                current_watch_path = str(src)
+                trigger_event.set()
 
             mid = _machine_id(s)
             if os.getenv("POLL_COMMANDS", "1").strip().lower() not in (
@@ -180,43 +226,59 @@ def main() -> None:
                                 mid,
                                 file=sys.stderr,
                             )
+                            trigger_event.set()
                         elif cmd == "ping":
                             print("Comando remoto: ping; máquina", mid, file=sys.stderr)
                 except httpx.HTTPError as e:
                     print("Aviso: /api/agent/next", e, file=sys.stderr)
 
-            itens = scan_folder(src)
-            if mover:
-                for c in itens:
-                    if c.status != CertStatus.EXPIRED:
-                        continue
-                    try:
-                        move_to_expired(c, exp)
-                    except OSError as ex:
-                        print("Falha ao mover", c.file_name, ex, file=sys.stderr)
+            now = time.time()
+            if trigger_event.is_set() or (now - last_full_scan_time > interval):
+                if trigger_event.is_set():
+                    time.sleep(2)  # Debounce de 2s para o Windows terminar cópias
+                    trigger_event.clear()
+                    print("Mudança detectada (ou forçada). Processando...", file=sys.stderr)
+                else:
+                    print("Executando ciclo periódico programado...", file=sys.stderr)
+                
+                last_full_scan_time = time.time()
+                
                 itens = scan_folder(src)
+                if mover:
+                    for c in itens:
+                        if c.status != CertStatus.EXPIRED:
+                            continue
+                        try:
+                            move_to_expired(c, exp)
+                        except OSError as ex:
+                            print("Falha ao mover", c.file_name, ex, file=sys.stderr)
+                    itens = scan_folder(src)
 
-            payload = {
-                "machine_id": mid,
-                "source_folder": str(src),
-                "expired_folder": str(exp),
-                "items": [cert_to_public_dict(c) for c in itens],
-            }
-            try:
-                p = client.post(f"{base}/api/ingest", headers=_headers(), json=payload)
-                p.raise_for_status()
-                print("Enviado:", p.json().get("itens_recebidos"), "itens; máquina:", payload["machine_id"])
-            except httpx.HTTPStatusError as e:
-                print(
-                    f"Erro HTTP ao enviar snapshot: {e.response.status_code}",
-                    file=sys.stderr,
-                )
-            except httpx.HTTPError as e:
-                print("Erro de conexão ao enviar snapshot:", e, file=sys.stderr)
+                payload = {
+                    "machine_id": mid,
+                    "source_folder": str(src),
+                    "expired_folder": str(exp),
+                    "items": [cert_to_public_dict(c) for c in itens],
+                }
+                try:
+                    p = client.post(f"{base}/api/ingest", headers=_headers(), json=payload)
+                    p.raise_for_status()
+                    print("Enviado:", p.json().get("itens_recebidos"), "itens; máquina:", payload["machine_id"])
+                except httpx.HTTPStatusError as e:
+                    print(
+                        f"Erro HTTP ao enviar snapshot: {e.response.status_code}",
+                        file=sys.stderr,
+                    )
+                except httpx.HTTPError as e:
+                    print("Erro de conexão ao enviar snapshot:", e, file=sys.stderr)
 
             if args.once:
+                if observer:
+                    observer.stop()
+                    observer.join()
                 break
-            time.sleep(interval)
+            
+            trigger_event.wait(timeout=10.0)
 
 
 if __name__ == "__main__":

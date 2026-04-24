@@ -7,77 +7,128 @@
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <div class="wrap">
-      <nav class="top-nav" aria-label="Navegação principal">
-        <a class="active" href="/" aria-current="page">Painel</a>
-        <a href="/configuracao">Configuração</a>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h2>Certificados PFX</h2>
+          <span>Monitor de Certificados</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="active">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+          </svg>
+          Dashboard
+        </a>
+        <a href="/configuracao">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Configuração / Agente
+        </a>
       </nav>
+    </aside>
 
+    <!-- Main Content -->
+    <main class="main-content">
       <header class="page-header">
-        <h1>Certificados PFX</h1>
-        <p>
-          Resumo e lista. Pastas, chave API, <strong>fonte dos dados</strong> (local/remoto) e o agente estão em
-          <a href="/configuracao">Configuração</a>.
-        </p>
+        <h1>Painel de Certificados</h1>
+        <p>Visão geral dos certificados digitais mapeados pelo agente.</p>
       </header>
 
-      <div class="toolbar toolbar--painel">
-        <div class="toolbar__actions">
-          <button type="button" id="btn-refresh">Atualizar tabela</button>
-          <button type="button" id="btn-move" class="danger" title="Apenas se o processo do API tiver acesso às pastas no disco.">
-            Mover vencidos (neste servidor)
-          </button>
+      <!-- Resumo Dashboard Cards -->
+      <div class="cards-grid">
+        <div class="dashboard-card card-total">
+          <div class="card-info">
+            <span class="card-title">Total</span>
+            <span class="card-number" id="n-tot">0</span>
+          </div>
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+            </svg>
+          </div>
         </div>
-        <p id="status-msg" class="status-line"></p>
-        <p class="hint" id="data-hint"></p>
-        <p id="panel-hint" class="hint" style="display: none"></p>
+
+        <div class="dashboard-card card-validos">
+          <div class="card-info">
+            <span class="card-title">Válidos</span>
+            <span class="card-number" id="n-ok">0</span>
+          </div>
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="dashboard-card card-expirando">
+          <div class="card-info">
+            <span class="card-title">Expirando</span>
+            <span class="card-number" id="n-exp-soon">0</span>
+            <span class="card-subtitle">Próximos 30 dias</span>
+          </div>
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="dashboard-card card-vencidos">
+          <div class="card-info">
+            <span class="card-title">Vencidos</span>
+            <span class="card-number" id="n-vencidos">0</span>
+          </div>
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+        </div>
       </div>
 
-      <div class="grid" id="summary">
-        <div class="card ok">
-          <div class="n" id="n-ok">0</div>
-          <div class="l">Dentro do prazo</div>
+      <!-- Tabela -->
+      <div class="table-container">
+        <div class="toolbar">
+          <div class="toolbar__status">
+            <p id="status-msg" class="status-line"></p>
+            <p class="hint" id="data-hint"></p>
+            <p id="panel-hint" class="hint" style="display: none; color: #f59e0b;"></p>
+          </div>
+          <div class="toolbar__actions">
+            <button type="button" id="btn-refresh" class="primary">Atualizar tabela</button>
+            <button type="button" id="btn-move" class="danger" title="Apenas se o processo do API tiver acesso às pastas no disco.">
+              Mover vencidos
+            </button>
+          </div>
         </div>
-        <div class="card expired">
-          <div class="n" id="n-exp">0</div>
-          <div class="l">Vencidos</div>
-        </div>
-        <div class="card bad">
-          <div class="n" id="n-bad">0</div>
-          <div class="l">Fora do padrão (nome)</div>
-        </div>
-        <div class="card err">
-          <div class="n" id="n-err">0</div>
-          <div class="l">Erro ao abrir</div>
+
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Nome (titular)</th>
+                <th>Emissão (UTC)</th>
+                <th>Vencimento (UTC)</th>
+                <th>CNPJ / CPF</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
         </div>
       </div>
 
-      <div style="overflow-x: auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Nome (titular)</th>
-              <th>Emissão (UTC)</th>
-              <th>Vencimento (UTC)</th>
-              <th>CNPJ / CPF</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-
-      <section class="doc-callout" aria-label="Explicação breve">
-        <h2 class="doc-callout-title">Sobre o nome e o documento</h2>
-        <p>
-          O <strong>nome</strong> e o <strong>CNPJ ou CPF</strong> vêm do campo <em>Common Name (CN)</em> do
-          certificado (formato comum: <code>NOME:00000000000199</code>). Emissão e vencimento são as datas
-          reais do X.509. O ficheiro <code>.pfx</code> tem de se chamar
-          <code>«apresentação» senha «senha do PFX».pfx</code> para abrir. Consulte
-          <a href="/configuracao">Configuração</a> para pastas e agente.
-        </p>
-      </section>
-    </div>
+    </main>
 
     <script src="/static/ui-common.js"></script>
     <script>
@@ -89,14 +140,16 @@
         return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
       };
 
-      const badge = (s) => {
-        const m = {
-          ok: ["badge-ok", "OK"],
-          expirado: ["badge-expired", "Vencido"],
-          fora_do_padrao: ["badge-bad", "Fora do padrão"],
-          erro: ["badge-err", "Erro"],
-        }[s] || ["", s];
-        return '<span class="badge ' + m[0] + '">' + m[1] + "</span>";
+      // Novo sistema de badges
+      const badge = (s, isExpiringSoon) => {
+        if (s === "ok") {
+            if (isExpiringSoon) return '<span class="badge badge-warning">Expirando</span>';
+            return '<span class="badge badge-ok">Válido</span>';
+        }
+        if (s === "expirado") return '<span class="badge badge-expired">Vencido</span>';
+        if (s === "fora_do_padrao") return '<span class="badge badge-bad">Fora do Padrão</span>';
+        if (s === "erro") return '<span class="badge badge-bad">Erro</span>';
+        return '<span class="badge badge-bad">' + s + '</span>';
       };
 
       function setMoveButton(d) {
@@ -142,25 +195,54 @@
             st.textContent = "Resposta inválida. Confirme o endereço do API. " + jsonErr;
             return;
           }
-          st.textContent = "Atualizado: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
+          st.textContent = "Atualizado em: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
           document.getElementById("data-hint").textContent =
-            "Fonte: " + (d.data_source || "—") + (d.machine_id ? " | máquina: " + d.machine_id : "");
+            "Fonte de dados: " + (d.data_source || "—") + (d.machine_id ? " | Servidor: " + d.machine_id : "");
           setMoveButton(d);
+          
           const items = d.itens || [];
-          let ok = 0,
-            ex = 0,
-            bad = 0,
-            err = 0;
-          for (const it of items) {
-            if (it.status === "ok") ok++;
-            else if (it.status === "expirado") ex++;
-            else if (it.status === "fora_do_padrao") bad++;
-            else if (it.status === "erro") err++;
-          }
-          document.getElementById("n-ok").textContent = ok;
-          document.getElementById("n-exp").textContent = ex;
-          document.getElementById("n-bad").textContent = bad;
-          document.getElementById("n-err").textContent = err;
+          
+          // Cálculo de status
+          let total = items.length;
+          let okCount = 0;
+          let expirandoCount = 0;
+          let vencidosCount = 0;
+
+          const now = new Date();
+          const thirtyDaysFromNow = new Date();
+          thirtyDaysFromNow.setDate(now.getDate() + 30);
+
+          items.forEach(it => {
+            // Verificar proximidade de expiração
+            let isExpiringSoon = false;
+            if (it.not_after) {
+                const expiry = new Date(it.not_after);
+                if (expiry <= thirtyDaysFromNow && expiry >= now) {
+                    isExpiringSoon = true;
+                }
+            }
+            
+            // Grava uma flag no item para usar na tabela
+            it._isExpiringSoon = isExpiringSoon;
+
+            if (it.status === "expirado") {
+                vencidosCount++;
+            } else if (it.status === "ok") {
+                if (isExpiringSoon) {
+                    expirandoCount++;
+                } else {
+                    okCount++;
+                }
+            } else if (it.status === "fora_do_padrao" || it.status === "erro") {
+                // Outros status não contam pros 3 principais além de 'total'
+            }
+          });
+
+          document.getElementById("n-tot").textContent = total;
+          document.getElementById("n-ok").textContent = okCount;
+          document.getElementById("n-exp-soon").textContent = expirandoCount;
+          document.getElementById("n-vencidos").textContent = vencidosCount;
+
           const colTipo = (it) => {
             const lbl = it.documento_tipo_label || (it.documento_tipo ? String(it.documento_tipo).toUpperCase() : "");
             if (lbl) {
@@ -169,10 +251,10 @@
                 "<span class='doc-type-label'>" +
                 esc(lbl) +
                 "</span>" +
-                (f ? "<br><span class='doc-type-num'>" + esc(f) + "</span>" : "")
+                (f ? "<span class='doc-type-num'>" + esc(f) + "</span>" : "")
               );
             }
-            if (it.error_message) return "<span class='error-cell'>" + esc(it.error_message) + "</span>";
+            if (it.error_message) return "<span class='error-cell' style='color:#ef4444'>" + esc(it.error_message) + "</span>";
             return "—";
           };
 
@@ -181,7 +263,7 @@
             .map(
               (it) =>
                 "<tr><td>" +
-                badge(it.status) +
+                badge(it.status, it._isExpiringSoon) +
                 "</td><td>" +
                 esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
                 "</td><td>" +
@@ -200,7 +282,7 @@
 
       document.getElementById("btn-refresh").addEventListener("click", carregarTabela);
       document.getElementById("btn-move").addEventListener("click", async () => {
-        if (!confirm("Mover ficheiros vencidos nas pastas a que ESTE processo de servidor acede?")) return;
+        if (!confirm("Tem a certeza que deseja mover os ficheiros vencidos na pasta remota?")) return;
         const st = document.getElementById("status-msg");
         st.textContent = "A mover…";
         try {
