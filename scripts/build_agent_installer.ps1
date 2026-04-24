@@ -1,6 +1,7 @@
 param(
     [string]$PythonExe = "python",
-    [string]$InnoCompiler = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
+    # Usar chaves: $env:ProgramFiles(x86) quebra; ${env:ProgramFiles(x86)} e o path correto
+    [string]$InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
 
 $ErrorActionPreference = "Stop"

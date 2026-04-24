@@ -73,6 +73,7 @@
           <p class="hint" id="count-hint"></p>
         </div>
         <div class="toolbar__actions">
+          <input type="search" id="busca-vencidos" placeholder="Buscar por nome, documento ou data" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
           <label for="dt-inicio" class="hint">De</label>
           <input type="date" id="dt-inicio" class="path-input" style="max-width: 170px;" />
           <label for="dt-fim" class="hint">Até</label>
@@ -98,10 +99,23 @@
 
   <script src="/static/ui-common.js"></script>
   <script>
+    let itensOriginais = [];
+
     function esc(v) {
       const d = document.createElement("div");
       d.textContent = v == null ? "" : String(v);
       return d.innerHTML;
+    }
+
+    function apenasDigitos(v) {
+      return String(v || "").replace(/\D+/g, "");
+    }
+
+    function normalizarTexto(v) {
+      return String(v || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
     }
 
     function fmtDataUtc(iso) {
@@ -113,6 +127,40 @@
       const y = new Date().getFullYear();
       document.getElementById("dt-inicio").value = `${y}-01-01`;
       document.getElementById("dt-fim").value = `${y}-12-31`;
+    }
+
+    function aplicarBuscaVencidos() {
+      const raw = (document.getElementById("busca-vencidos").value || "").trim();
+      const buscaTexto = normalizarTexto(raw);
+      const buscaDigitos = apenasDigitos(raw);
+      const filtrados = itensOriginais.filter((it) => {
+        if (!buscaTexto) return true;
+        const nomeAlvo = normalizarTexto(it.nome || "");
+        const vencAlvo = normalizarTexto(fmtDataUtc(it.vencimento_certificado));
+        const docAlvo = normalizarTexto(it.documento || "");
+        const docNumerico = apenasDigitos(it.documento || "");
+        if (nomeAlvo.includes(buscaTexto)) return true;
+        if (docAlvo.includes(buscaTexto)) return true;
+        if (vencAlvo.includes(buscaTexto)) return true;
+        if (buscaDigitos && docNumerico.includes(buscaDigitos)) return true;
+        if (buscaDigitos && apenasDigitos(fmtDataUtc(it.vencimento_certificado)).includes(buscaDigitos)) return true;
+        return false;
+      });
+      const tb = document.getElementById("tbody-vencidos");
+      tb.innerHTML = filtrados.map((it) => `
+        <tr>
+          <td>${esc(it.nome)}</td>
+          <td>${esc(it.documento || "—")}</td>
+          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+        </tr>
+      `).join("");
+      const total = itensOriginais.length;
+      const hint = document.getElementById("count-hint");
+      if (raw) {
+        hint.textContent = `${filtrados.length} de ${total} vencido(s) com o filtro atual`;
+      } else {
+        hint.textContent = `${total} vencido(s) exibido(s)`;
+      }
     }
 
     async function carregarVencidos() {
@@ -130,20 +178,13 @@
         return;
       }
       const j = await r.json();
-      const itens = j.itens || [];
-      document.getElementById("count-hint").textContent = `${itens.length} vencido(s) exibido(s)`;
+      itensOriginais = j.itens || [];
       st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
-      const tb = document.getElementById("tbody-vencidos");
-      tb.innerHTML = itens.map((it) => `
-        <tr>
-          <td>${esc(it.nome)}</td>
-          <td>${esc(it.documento || "—")}</td>
-          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>
-      `).join("");
+      aplicarBuscaVencidos();
     }
 
     document.getElementById("btn-filtrar").addEventListener("click", carregarVencidos);
+    document.getElementById("busca-vencidos").addEventListener("input", aplicarBuscaVencidos);
 
     (async function init() {
       const role = localStorage.getItem("user_role");

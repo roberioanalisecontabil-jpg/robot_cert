@@ -82,6 +82,13 @@ def _load_local_agent_config() -> dict:
     return {}
 
 
+def _httpx_timeout() -> httpx.Timeout:
+    """Conecta/ler com margem; portal remoto ou ingest lentos podem precisar de read maior."""
+    read_s = float(os.getenv("AGENT_HTTP_READ_SEC", "300"))
+    connect_s = float(os.getenv("AGENT_HTTP_CONNECT_SEC", "15"))
+    return httpx.Timeout(connect=connect_s, read=read_s, write=60.0, pool=10.0)
+
+
 def _resolve_paths(s: dict, local_cfg: dict) -> tuple[Path, Path]:
     """Prioriza portal; fallback para agent_config.json e variáveis AGENT_*."""
     raw_src = (s.get("source_folder") or "").strip()
@@ -236,15 +243,15 @@ def main() -> None:
     _start_tray()
     LOGGER.info("Logs em: %s", log_file)
 
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=_httpx_timeout()) as client:
         while not quit_event.is_set():
             try:
                 r = client.get(f"{base}/api/settings", headers=_headers())
-            except httpx.ConnectError as e:
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
                 if connected:
                     _notify("CertGuard Agent", "Conexão perdida com o portal.")
                 connected = False
-                LOGGER.error("Falha de conexão com API: %s", e)
+                LOGGER.error("Falha de rede com a API (conexão ou timeout): %s", e)
                 if args.once:
                     raise SystemExit(1) from e
                 time.sleep(interval)
