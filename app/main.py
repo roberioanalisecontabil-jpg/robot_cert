@@ -26,7 +26,9 @@ from app.config import ROOT
 from app.settings_state import (
     PortalSettings,
     get_latest_snapshot,
+    load_colaborador_selecao,
     load_settings,
+    save_colaborador_selecao,
     save_settings,
     save_snapshot,
     supabase_configured,
@@ -750,9 +752,6 @@ def _agrupar_duplicidades(
     return grupos_documento, grupos_nome, grupos_cert_igual
 
 
-SELECAO_COLAB_FILE = ROOT / "data" / "colaborador_certificados.json"
-
-
 def _doc_norm(v: Any) -> str:
     return re.sub(r"\D+", "", str(v or ""))
 
@@ -770,27 +769,6 @@ def _status_prioridade(status: str) -> int:
     if s in ("erro",):
         return 1
     return 0
-
-
-def _carregar_selecao_colab() -> Dict[str, List[str]]:
-    if not SELECAO_COLAB_FILE.is_file():
-        return {}
-    try:
-        data = json.loads(SELECAO_COLAB_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            out: Dict[str, List[str]] = {}
-            for k, v in data.items():
-                if isinstance(v, list):
-                    out[str(k).strip().lower()] = [str(x).strip() for x in v if str(x).strip()]
-            return out
-    except Exception:
-        return {}
-    return {}
-
-
-def _guardar_selecao_colab(data: Dict[str, List[str]]) -> None:
-    SELECAO_COLAB_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SELECAO_COLAB_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _lista_base_docs_historico() -> List[dict]:
@@ -881,8 +859,7 @@ def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_aut
 @app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
 def colaborador_get_selecionados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
-    db = _carregar_selecao_colab()
-    docs = db.get(email, [])
+    docs = load_colaborador_selecao(email)
     return {"documentos": docs, "total": len(docs)}
 
 
@@ -892,17 +869,14 @@ def colaborador_put_selecionados(
 ) -> dict:
     email = (token.email or "").strip().lower()
     docs = sorted({_doc_norm(x) for x in body.documentos if _doc_norm(x)})
-    db = _carregar_selecao_colab()
-    db[email] = docs
-    _guardar_selecao_colab(db)
+    save_colaborador_selecao(email, docs)
     return {"ok": True, "documentos": docs, "total": len(docs)}
 
 
 @app.get("/api/colaborador/certificados/painel", dependencies=[Depends(require_auth)])
 def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
-    db = _carregar_selecao_colab()
-    docs = db.get(email, [])
+    docs = load_colaborador_selecao(email)
     itens = _painel_docs_selecionados(docs)
     return {"itens": itens, "total": len(itens)}
 

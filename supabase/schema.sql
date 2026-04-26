@@ -37,3 +37,10 @@ create table if not exists public.agent_command_queue (
 
 create index if not exists agent_cmd_pending_idx
   on public.agent_command_queue (created_at) where (status = 'pending');
+
+-- Seleção de certificados (CNPJ/CPF) por utilizador na área Acompanhamento (persistido no servidor)
+create table if not exists public.colaborador_cert_selecoes (
+  user_email text primary key,
+  documentos jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);

@@ -5,7 +5,7 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app import config
 
@@ -203,6 +203,84 @@ def get_latest_snapshot() -> Optional[dict]:
         except (json.JSONDecodeError, OSError):
             return None
     return None
+
+
+COLAB_SELECAO_FILE = config.ROOT / "data" / "colaborador_certificados.json"
+
+
+def _load_colaborador_file_dict() -> Dict[str, List[str]]:
+    if not COLAB_SELECAO_FILE.is_file():
+        return {}
+    try:
+        data = json.loads(COLAB_SELECAO_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            out: Dict[str, List[str]] = {}
+            for k, v in data.items():
+                if isinstance(v, list):
+                    out[str(k).strip().lower()] = [str(x).strip() for x in v if str(x).strip()]
+            return out
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return {}
+
+
+def _save_colaborador_file_dict(data: Dict[str, List[str]]) -> None:
+    COLAB_SELECAO_FILE.parent.mkdir(parents=True, exist_ok=True)
+    COLAB_SELECAO_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_colaborador_selecao(email: str) -> List[str]:
+    """
+    Documentos (CNPJ/CPF só dígitos) que o utilizador escolheu para acompanhar.
+    Com Supabase, lê da tabela `colaborador_cert_selecoes`; senão do ficheiro local.
+    """
+    key = (email or "").strip().lower()
+    if not key:
+        return []
+    client = _supabase()
+    if client:
+        try:
+            r = (
+                client.table("colaborador_cert_selecoes")
+                .select("documentos")
+                .eq("user_email", key)
+                .limit(1)
+                .execute()
+            )
+            rows = r.data or []
+            if rows:
+                docs = rows[0].get("documentos")
+                if isinstance(docs, list):
+                    return [str(x).strip() for x in docs if str(x).strip()]
+            return []
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Falha ao ler colaborador_cert_selecoes no Supabase; a usar ficheiro local"
+            )
+    return _load_colaborador_file_dict().get(key, [])
+
+
+def save_colaborador_selecao(email: str, docs: List[str]) -> None:
+    """Grava sempre no ficheiro local; com Supabase faz upsert por e-mail."""
+    key = (email or "").strip().lower()
+    if not key:
+        return
+    clean = [str(x).strip() for x in docs if str(x).strip()]
+    merged = _load_colaborador_file_dict()
+    merged[key] = clean
+    _save_colaborador_file_dict(merged)
+    client = _supabase()
+    if not client:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    row = {"user_email": key, "documentos": clean, "updated_at": now}
+    try:
+        client.table("colaborador_cert_selecoes").upsert(row, on_conflict="user_email").execute()
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Falha ao gravar colaborador_cert_selecoes no Supabase; seleção ficou em %s",
+            COLAB_SELECAO_FILE,
+        )
 
 
 def supabase_configured() -> bool:
