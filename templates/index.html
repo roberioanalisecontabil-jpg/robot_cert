@@ -173,7 +173,7 @@
 
     </main>
 
-    <script src="/static/ui-common.js"></script>
+    <script src="/static/ui-common.js?v=loading-2"></script>
     <script>
       const fonte = () => getDataFonte();
       let itensOriginais = [];
@@ -196,6 +196,12 @@
         if (s === "erro") return '<span class="badge badge-bad">Erro</span>';
         return '<span class="badge badge-bad">' + s + '</span>';
       };
+
+      function toggleLoading(show, text) {
+        if (typeof setGlobalLoading === "function") {
+          setGlobalLoading(show, text);
+        }
+      }
 
       function esc(s) {
         if (!s) return "";
@@ -390,6 +396,7 @@
         const ph = document.getElementById("panel-hint");
         ph.style.display = "none";
         st.textContent = "A carregar…";
+        toggleLoading(true, "Carregando certificados...");
         try {
           const f = fonte();
           const r = await fetch("/api/certificados?fonte=" + encodeURIComponent(f), { headers: getHeaders() });
@@ -457,6 +464,8 @@
           aplicarFiltros();
         } catch (e) {
           st.textContent = "Erro: " + e;
+        } finally {
+          toggleLoading(false);
         }
       }
 

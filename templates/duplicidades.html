@@ -165,8 +165,14 @@
     </div>
   </main>
 
-  <script src="/static/ui-common.js"></script>
+  <script src="/static/ui-common.js?v=loading-2"></script>
   <script>
+    function toggleLoading(show, text) {
+      if (typeof setGlobalLoading === "function") {
+        setGlobalLoading(show, text);
+      }
+    }
+
     function esc(v) {
       const d = document.createElement("div");
       d.textContent = v == null ? "" : String(v);
@@ -646,15 +652,17 @@
       const st = document.getElementById("status-msg");
       const meta = document.getElementById("meta-hint");
       st.textContent = "A analisar…";
-      const r = await fetch("/api/certificados/duplicidades", { headers: getHeaders() });
-      if (!r.ok) {
-        st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
-        return;
-      }
-      const j = await r.json();
-      st.textContent = "";
-      const origem = j.origem_dados === "ultimo_snapshot" ? "Último snapshot (agente)" : "Scan local no servidor";
-      meta.textContent = `${origem} · ${j.total_itens_analisados || 0} ficheiro(s) · atualizado: ${j.scanned_at || "—"}`;
+      toggleLoading(true, "Analisando duplicidades...");
+      try {
+        const r = await fetch("/api/certificados/duplicidades", { headers: getHeaders() });
+        if (!r.ok) {
+          st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
+          return;
+        }
+        const j = await r.json();
+        st.textContent = "";
+        const origem = j.origem_dados === "ultimo_snapshot" ? "Último snapshot (agente)" : "Scan local no servidor";
+        meta.textContent = `${origem} · ${j.total_itens_analisados || 0} ficheiro(s) · atualizado: ${j.scanned_at || "—"}`;
 
       const gci = j.grupos_certificado_igual || [];
       const gd = j.grupos_documento || [];
@@ -666,7 +674,7 @@
       const nada = gci.length === 0 && gd.length === 0 && gn.length === 0;
       const totalItens = j.total_itens_analisados || 0;
 
-      if (nada) {
+        if (nada) {
         sem.style.display = "block";
         secD.style.display = "none";
         secN.style.display = "none";
@@ -687,7 +695,7 @@
         }
         return;
       }
-      sem.style.display = "none";
+        sem.style.display = "none";
 
       secCrypto.style.display = "block";
       preencherTabelaCripto(gci);
@@ -704,16 +712,19 @@
         renderDocTable();
       }
 
-      if (gn.length) {
+        if (gn.length) {
         secN.style.display = "block";
         _rowsNome = flattenNomeGrupos(gn);
         _pageNome = 1;
         renderNomeTable();
-      } else {
+        } else {
         secN.style.display = "none";
         _rowsNome = [];
         _pageNome = 1;
         renderNomeTable();
+        }
+      } finally {
+        toggleLoading(false);
       }
     }
 

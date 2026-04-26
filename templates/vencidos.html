@@ -151,7 +151,7 @@
     </div>
   </main>
 
-  <script src="/static/ui-common.js"></script>
+  <script src="/static/ui-common.js?v=loading-2"></script>
   <script>
     let itensOriginais = [];
     let itensVisiveis = [];
@@ -159,6 +159,12 @@
     let anosResumoIdx = 0;
     let anosResumoTimer = null;
     let anosProgressTimer = null;
+
+    function toggleLoading(show, text) {
+      if (typeof setGlobalLoading === "function") {
+        setGlobalLoading(show, text);
+      }
+    }
 
     function esc(v) {
       const d = document.createElement("div");
@@ -381,22 +387,26 @@
     async function carregarVencidos() {
       const st = document.getElementById("status-msg");
       st.textContent = "A carregar…";
+      toggleLoading(true, "Carregando vencidos...");
       const inicio = document.getElementById("dt-inicio").value;
       const fim = document.getElementById("dt-fim").value;
       const qs = new URLSearchParams();
       if (inicio) qs.set("data_inicio", inicio);
       if (fim) qs.set("data_fim", fim);
-
-      const r = await fetch(`/api/certificados/vencidos?${qs.toString()}`, { headers: getHeaders() });
-      if (!r.ok) {
-        st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
-        return;
+      try {
+        const r = await fetch(`/api/certificados/vencidos?${qs.toString()}`, { headers: getHeaders() });
+        if (!r.ok) {
+          st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
+          return;
+        }
+        const j = await r.json();
+        itensOriginais = j.itens || [];
+        st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
+        aplicarBuscaVencidos();
+        await carregarResumoAnosSemFiltro();
+      } finally {
+        toggleLoading(false);
       }
-      const j = await r.json();
-      itensOriginais = j.itens || [];
-      st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
-      aplicarBuscaVencidos();
-      await carregarResumoAnosSemFiltro();
     }
 
     document.getElementById("btn-filtrar").addEventListener("click", carregarVencidos);

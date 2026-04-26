@@ -86,6 +86,29 @@ function initSidebarToggle() {
   main.prepend(btn);
 }
 
+function ensureGlobalLoadingOverlay() {
+  let overlay = document.getElementById("global-loading-overlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "global-loading-overlay";
+  overlay.className = "global-loading-overlay";
+  overlay.innerHTML = `
+    <div class="global-loading-card" role="status" aria-live="polite">
+      <div class="global-loading-spinner" aria-hidden="true"></div>
+      <div class="global-loading-text" id="global-loading-text">Carregando...</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function setGlobalLoading(show, text = "Carregando...") {
+  const overlay = ensureGlobalLoadingOverlay();
+  const textEl = document.getElementById("global-loading-text");
+  if (textEl) textEl.textContent = text;
+  overlay.classList.toggle("is-visible", !!show);
+}
+
 // Interceptar todas as requisições para verificar 401
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
