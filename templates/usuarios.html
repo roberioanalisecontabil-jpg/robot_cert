@@ -104,6 +104,18 @@
         </section>
 
         <section class="doc-block">
+            <h2>Importar Usuários (CSV)</h2>
+            <div class="panel--nested">
+                <form id="import-users-form" class="row-inline" style="flex-wrap: wrap; gap: 1rem;">
+                    <input type="file" id="import-users-file" accept=".csv,text/csv" class="path-input" style="min-width: 280px;" required>
+                    <button type="submit" class="primary">Importar CSV</button>
+                </form>
+                <p class="hint" style="margin-top: 0.6rem;">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel/role</code>, use exatamente: <code>admin</code> ou <code>user</code>.</p>
+                <p id="msg-import" class="hint" style="margin-top: 0.8rem;"></p>
+            </div>
+        </section>
+
+        <section class="doc-block">
             <h2>Usuários Ativos</h2>
             <div class="users-toolbar">
                 <input type="search" id="user-search" class="path-input" style="max-width: 320px;" placeholder="Pesquisar por nome ou e-mail" />
@@ -285,6 +297,37 @@
                 msg.textContent = "Erro ao criar: " + (await mensagemCorpoErro(r));
                 msg.style.color = "var(--danger)";
             }
+        });
+
+        document.getElementById('import-users-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = document.getElementById('msg-import');
+            const input = document.getElementById('import-users-file');
+            const f = input.files && input.files[0];
+            if (!f) {
+                msg.textContent = 'Selecione um arquivo CSV.';
+                msg.style.color = 'var(--danger)';
+                return;
+            }
+            const fd = new FormData();
+            fd.append('file', f);
+            const headers = getHeaders(false);
+            const r = await fetch('/api/users/import', {
+                method: 'POST',
+                headers,
+                body: fd,
+            });
+            if (!r.ok) {
+                msg.textContent = 'Erro na importação: ' + (await mensagemCorpoErro(r));
+                msg.style.color = 'var(--danger)';
+                return;
+            }
+            const j = await r.json();
+            const nErros = (j.erros || []).length;
+            msg.textContent = `Importação concluída. Criados: ${j.criados || 0}. Ignorados: ${j.ignorados || 0}. Erros: ${nErros}.`;
+            msg.style.color = nErros ? '#b45309' : 'var(--ok)';
+            e.target.reset();
+            await loadUsers();
         });
 
         document.getElementById('user-search').addEventListener('input', renderUsers);

@@ -69,7 +69,7 @@
   <main class="main-content">
     <header class="page-header">
       <h1>Histórico de Certificados</h1>
-      <p>Certificados já mapeados em algum momento e a última data registrada.</p>
+      <p>Certificados já mapeados em algum momento e a última data verificada.</p>
     </header>
 
     <div class="table-container">
@@ -91,7 +91,7 @@
             <tr>
               <th>Nome</th>
               <th>CNPJ/CPF</th>
-              <th>Último status</th>
+              <th>Última data verificada</th>
               <th>Vencimento do certificado</th>
             </tr>
           </thead>
@@ -127,7 +127,7 @@
       const q = (document.getElementById("busca-historico").value || "").trim().toLowerCase();
       const filtrados = itensOriginais.filter((it) => {
         if (!q) return true;
-        const hay = [it.file_name || "", it.nome || "", it.documento || "", it.status_ultimo || ""].join(" ").toLowerCase();
+        const hay = [it.file_name || "", it.nome || "", it.documento || "", fmtDataUtc(it.ultima_data_registrada)].join(" ").toLowerCase();
         return hay.includes(q);
       });
       itensVisiveis = filtrados;
@@ -136,7 +136,7 @@
         <tr>
           <td>${esc(it.nome)}</td>
           <td>${esc(it.documento || "—")}</td>
-          <td>${esc(it.status_ultimo || "—")}</td>
+          <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>
       `).join("");
@@ -144,11 +144,11 @@
     }
 
     function exportarExcelVisivel() {
-      const headers = ["Nome", "CNPJ/CPF", "Último status", "Vencimento do certificado"];
+      const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
       const rows = itensVisiveis.map((it) => [
         it.nome || "",
         it.documento || "",
-        it.status_ultimo || "",
+        fmtDataUtc(it.ultima_data_registrada),
         fmtDataUtc(it.vencimento_certificado),
       ]);
       const all = [headers, ...rows];
@@ -172,7 +172,7 @@
           <tr>
             <td>${esc(it.nome || "")}</td>
             <td>${esc(it.documento || "")}</td>
-            <td>${esc(it.status_ultimo || "")}</td>
+            <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
             <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
           </tr>
         `)
@@ -199,7 +199,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nome</th><th>CNPJ/CPF</th><th>Último status</th><th>Vencimento do certificado</th>
+                  <th>Nome</th><th>CNPJ/CPF</th><th>Última data verificada</th><th>Vencimento do certificado</th>
                 </tr>
               </thead>
               <tbody>${linhas}</tbody>

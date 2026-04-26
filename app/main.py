@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import csv
+import io
 import re
 import unicodedata
 from collections import defaultdict
@@ -8,7 +10,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -241,6 +243,113 @@ class UserUpdateBody(BaseModel):
 
 class UserResetPasswordBody(BaseModel):
     password: str
+
+
+def _norm_header(v: str) -> str:
+    s = unicodedata.normalize("NFD", str(v or "").strip().lower())
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    return s
+
+
+@app.post("/api/users/import", dependencies=[Depends(require_admin)])
+async def import_users(file: UploadFile = File(...)) -> dict:
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+
+    name = (file.filename or "").lower()
+    if not name.endswith(".csv"):
+        raise HTTPException(
+            status_code=422,
+            detail="Formato inválido. Exporte a planilha como CSV e envie um arquivo .csv.",
+        )
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Arquivo vazio.")
+
+    text = raw.decode("utf-8-sig", errors="replace")
+    sniffer = csv.Sniffer()
+    try:
+        dialect = sniffer.sniff(text[:2048], delimiters=",;")
+        delim = dialect.delimiter
+    except csv.Error:
+        delim = ";"
+
+    reader = csv.DictReader(io.StringIO(text), delimiter=delim)
+    if not reader.fieldnames:
+        raise HTTPException(status_code=422, detail="CSV sem cabeçalho.")
+
+    map_headers = {_norm_header(h): h for h in reader.fieldnames}
+
+    def pick(*aliases: str) -> Optional[str]:
+        for a in aliases:
+            key = map_headers.get(_norm_header(a))
+            if key:
+                return key
+        return None
+
+    h_nome = pick("nome", "full_name", "nome completo")
+    h_email = pick("email", "e-mail")
+    h_senha = pick("senha", "password")
+    h_role = pick("role", "nivel", "papel", "perfil")
+    if not h_nome or not h_email or not h_senha:
+        raise HTTPException(
+            status_code=422,
+            detail="Cabeçalho obrigatório: nome, email, senha.",
+        )
+    if not h_role:
+        raise HTTPException(
+            status_code=422,
+            detail="Cabeçalho obrigatório também para nível: use 'nivel' ou 'role' com valores 'admin' ou 'user'.",
+        )
+
+    criados = 0
+    ignorados = 0
+    erros: List[dict[str, Any]] = []
+    linha = 1
+    for row in reader:
+        linha += 1
+        nome = str(row.get(h_nome) or "").strip()
+        email = str(row.get(h_email) or "").strip().lower()
+        senha = str(row.get(h_senha) or "").strip()
+        role = str(row.get(h_role) or "").strip().lower()
+
+        if not nome or not email or not senha or not role:
+            ignorados += 1
+            continue
+        if role not in ("admin", "user"):
+            erros.append(
+                {
+                    "linha": linha,
+                    "email": email,
+                    "erro": "Nível inválido. Use exatamente 'admin' ou 'user'.",
+                }
+            )
+            continue
+        if len(senha) < 6:
+            erros.append({"linha": linha, "email": email, "erro": "Senha deve ter no mínimo 6 caracteres."})
+            continue
+        try:
+            existe = sb.table("users").select("id").eq("email", email).limit(1).execute()
+            if existe.data:
+                ignorados += 1
+                continue
+            sb.table("users").insert(
+                {
+                    "email": email,
+                    "password_hash": auth.get_password_hash(senha),
+                    "full_name": nome,
+                    "role": role,
+                }
+            ).execute()
+            criados += 1
+        except Exception as e:  # noqa: BLE001
+            erros.append({"linha": linha, "email": email, "erro": str(e)})
+
+    return {"ok": True, "criados": criados, "ignorados": ignorados, "erros": erros}
 
 
 @app.post("/api/users", dependencies=[Depends(require_admin)])
