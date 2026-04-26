@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 # Padrão: "nome do certificado senha valorDaSenha.pfx" (ou .p12)
@@ -46,6 +47,11 @@ class CertInfo:
     not_after: Optional[datetime] = None
     not_before: Optional[datetime] = None
     subject: Optional[str] = None
+    # Campos lido(s) do X.509 (para duplicidade / auditoria)
+    issuer: Optional[str] = None
+    serial_number_hex: Optional[str] = None
+    # Fingerprint SHA-256 (hex) do certificado = hash do DER (cryptography: cert.fingerprint(SHA256)).
+    fingerprint_sha256: Optional[str] = None
     # Extraído do CN quando no formato "NOME:CPF" ou "NOME:CNPJ"
     nome_titular: Optional[str] = None
     documento_numero: Optional[str] = None
@@ -112,7 +118,7 @@ def parse_pfx_filename(file_name: str) -> Optional[tuple[str, str]]:
     return logical_name, password
 
 
-def _load_pfx_info(file_path: Path, password: str) -> tuple:
+def _load_pfx_info(file_path: Path, password: str) -> Tuple[datetime, datetime, str, str, str, str]:
     data = file_path.read_bytes()
     _key, cert, _more = pkcs12.load_key_and_certificates(
         data,
@@ -121,9 +127,13 @@ def _load_pfx_info(file_path: Path, password: str) -> tuple:
     if cert is None:
         raise ValueError("PKCS#12 sem certificado (apenas chave).")
     subj = cert.subject.rfc4514_string() if cert.subject else None
+    iss = cert.issuer.rfc4514_string() if cert.issuer else ""
     nb = cert.not_valid_before_utc
     na = cert.not_valid_after_utc
-    return nb, na, subj
+    # Fingerprint padrão (SHA-256 do DER) — mesmo critério que openssl x509 -fingerprint -sha256
+    fp = cert.fingerprint(hashes.SHA256()).hex()
+    serial_hex = f"{cert.serial_number:X}".lower() if cert.serial_number is not None else ""
+    return nb, na, subj, iss, fp, serial_hex
 
 
 def _is_under(child: Path, parent: Path) -> bool:
@@ -181,10 +191,13 @@ def scan_folder(
         )
 
         try:
-            not_before, not_after, subj = _load_pfx_info(p, pwd)
+            not_before, not_after, subj, iss, fp_hex, ser_hex = _load_pfx_info(p, pwd)
             info.not_before = not_before
             info.not_after = not_after
             info.subject = subj
+            info.issuer = iss or None
+            info.fingerprint_sha256 = fp_hex
+            info.serial_number_hex = ser_hex or None
             cn = extract_cn_rfc4514(subj)
             nome, doc, tipo = parse_nome_cnpj_cpf_from_cn(cn)
             info.nome_titular = nome
@@ -247,5 +260,8 @@ def cert_to_public_dict(c: CertInfo) -> dict:
         "documento_formatado": doc_fmt,
         "documento_numero": c.documento_numero,
         "subject": c.subject,
+        "issuer": c.issuer,
+        "serial_number": c.serial_number_hex,
+        "fingerprint_sha256": c.fingerprint_sha256,
         "error_message": c.error_message,
     }

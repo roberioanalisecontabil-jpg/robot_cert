@@ -118,6 +118,7 @@ def test_duplicidades_api_200(
     assert j.get("origem_dados") in ("ultimo_snapshot", "scan_local_servidor")
     assert "grupos_documento" in j
     assert "grupos_nome_similar" in j
+    assert "grupos_certificado_igual" in j
     assert "total_itens_analisados" in j
 
 
@@ -191,6 +192,113 @@ def test_duplicidades_nome_sem_documento_distinto(
     assert r.status_code == 200
     j = r.json()
     assert j["total_grupos_nome_similar"] >= 1
+
+
+def test_duplicidades_mesmo_documento_nao_duplica_quando_so_fingerprint_igual(
+    client_com_chave: TestClient, api_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mesmo CPF + mesmo fingerprint: só agrupa na tabela criptográfica, não em «mesmo documento»."""
+    from app import main as main_mod
+
+    fp = "f" * 64
+
+    def fake_snapshot() -> dict:
+        return {
+            "scanned_at": "2026-04-01T12:00:00+00:00",
+            "items": [
+                {
+                    "file_name": "a senha x.pfx",
+                    "nome": "CHARLES SILVA",
+                    "documento_numero": "87875950368",
+                    "documento_formatado": "878.759.503-68",
+                    "not_after": "2026-07-30T17:25:00+00:00",
+                    "status": "ok",
+                    "fingerprint_sha256": fp,
+                },
+                {
+                    "file_name": "b senha x.pfx",
+                    "nome": "CHARLES SILVA",
+                    "documento_numero": "87875950368",
+                    "documento_formatado": "878.759.503-68",
+                    "not_after": "2026-07-30T17:25:00+00:00",
+                    "status": "ok",
+                    "fingerprint_sha256": fp,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
+    r = client_com_chave.get(
+        "/api/certificados/duplicidades", headers={"X-API-Key": api_key}
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["total_grupos_documento"] == 0
+    assert j["total_grupos_certificado_igual"] >= 1
+
+
+def test_duplicidades_certificado_igual_por_fingerprint(
+    client_com_chave: TestClient, api_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app import main as main_mod
+
+    fp = "a" * 64
+    fp2 = "b" * 64
+    subj = "CN=EMPRESA X:11222333000181"
+    iss = "CN=AC TESTE"
+
+    def fake_snapshot() -> dict:
+        return {
+            "scanned_at": "2026-03-01T12:00:00+00:00",
+            "items": [
+                {
+                    "file_name": "copia1 senha p1.pfx",
+                    "nome": "EMPRESA X",
+                    "documento_numero": "11222333000181",
+                    "not_after": "2027-01-01T00:00:00+00:00",
+                    "not_before": "2026-01-01T00:00:00+00:00",
+                    "status": "ok",
+                    "fingerprint_sha256": fp,
+                    "subject": subj,
+                    "issuer": iss,
+                    "serial_number": "1a",
+                },
+                {
+                    "file_name": "copia2 senha p1.pfx",
+                    "nome": "EMPRESA X",
+                    "documento_numero": "11222333000181",
+                    "not_after": "2027-01-01T00:00:00+00:00",
+                    "not_before": "2026-01-01T00:00:00+00:00",
+                    "status": "ok",
+                    "fingerprint_sha256": fp,
+                    "subject": subj,
+                    "issuer": iss,
+                    "serial_number": "1a",
+                },
+                {
+                    "file_name": "outro senha p1.pfx",
+                    "nome": "EMPRESA X",
+                    "documento_numero": "11222333000181",
+                    "not_after": "2028-01-01T00:00:00+00:00",
+                    "status": "ok",
+                    "fingerprint_sha256": fp2,
+                    "subject": subj,
+                    "issuer": iss,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
+    r = client_com_chave.get(
+        "/api/certificados/duplicidades", headers={"X-API-Key": api_key}
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["total_grupos_certificado_igual"] >= 1
+    gci = j["grupos_certificado_igual"]
+    assert any(
+        g.get("fingerprint_sha256") == fp and len(g.get("itens", [])) == 2 for g in gci
+    )
 
 
 def test_fila_comando_ping(

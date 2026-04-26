@@ -74,3 +74,6 @@ def test_cert_to_public_dict() -> None:
     assert d["nome"] == "teste"
     assert "path" in d
     assert "not_before" in d and "not_after" in d
+    assert d.get("fingerprint_sha256") is None
+    assert d.get("issuer") is None
+    assert d.get("serial_number") is None

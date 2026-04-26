@@ -612,3 +612,234 @@ body.sidebar-collapsed .sidebar-nav a {
     padding: 1.25rem;
   }
 }
+
+/* Duplicidades — tabelas criptográficas com paginação */
+.dup-crypto-table-block {
+  margin-bottom: 2rem;
+}
+
+.dup-crypto-table-block h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.dup-crypto-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.dup-crypto-table-wrap table {
+  margin: 0;
+  width: 100%;
+  min-width: 420px;
+}
+
+.dup-igual-row,
+.dup-doc-row {
+  cursor: help;
+}
+
+.dup-igual-row:hover,
+.dup-crypto-table-wrap tbody tr.dup-data-row:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.dup-igual-status {
+  color: #b45309;
+  font-size: 0.95rem;
+}
+
+.dup-crypto-table-wrap th,
+.dup-crypto-table-wrap td {
+  padding: 0.5rem 0.65rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.dup-crypto-table-wrap tr:last-child td {
+  border-bottom: none;
+}
+
+.dup-crypto-table-wrap tbody tr.hint-only td {
+  border-bottom: none;
+  padding: 0.9rem 0.75rem;
+}
+
+.dup-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.dup-pagination__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dup-pagination button {
+  font: inherit;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dup-pagination button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dup-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dup-pagination button.dup-page--active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.dup-pagination__meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  width: 100%;
+  flex-basis: 100%;
+}
+
+/* Tooltip — ficheiros duplicados (mesma linha) */
+.dup-path-tooltip {
+  position: fixed;
+  z-index: 2000;
+  min-width: 12rem;
+  max-width: min(92vw, 36rem);
+  padding: 0.7rem 0.85rem 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 10px 24px -4px rgba(15, 23, 42, 0.12);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  pointer-events: auto;
+  transition: opacity 0.12s ease;
+}
+
+.dup-path-tooltip[hidden] {
+  display: none !important;
+  pointer-events: none;
+}
+
+.dup-path-tooltip__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.45rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+
+.dup-path-tooltip__head svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.dup-path-tooltip__list {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  list-style: disc;
+  color: var(--text-muted);
+}
+
+.dup-path-tooltip__list li {
+  margin: 0.2rem 0;
+  padding: 0;
+}
+
+.dup-path-tooltip__list li::marker {
+  color: var(--border);
+}
+
+.dup-path-tooltip__path {
+  display: block;
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.28rem 0.45rem;
+  margin: 0.1rem 0 0;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* Tooltip — mesmo documento: bloco vencimento + bloco caminho (mesma linha) */
+ul.dup-doc-tooltip__lines {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.dup-doc-tooltip__bloco {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 0.32rem 0.45rem;
+  min-width: 0;
+  flex: 1 1 9rem;
+}
+
+.dup-doc-tooltip__bloco--venc {
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.dup-doc-tooltip__bloco--arquivo {
+  flex: 2 1 12rem;
+}
+
+.dup-doc-tooltip__caminho {
+  display: block;
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 0.78rem;
+  color: var(--text);
+  word-break: break-all;
+  white-space: pre-wrap;
+  line-height: 1.35;
+}

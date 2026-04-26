@@ -464,7 +464,16 @@ def _normalize_name_dup(value: Any) -> str:
     return " ".join(t.split())
 
 
+def _fingerprint_hex_from_row(row: dict) -> str:
+    """SHA-256 (hex) do fingerprint do certificado; aceita chave antiga `cert_sha256` nos snapshots."""
+    v = row.get("fingerprint_sha256") or row.get("cert_sha256")
+    if v is None or not str(v).strip():
+        return ""
+    return str(v).strip().lower()
+
+
 def _item_resumo_duplicidade(it: dict) -> dict[str, Any]:
+    fp = it.get("fingerprint_sha256") or it.get("cert_sha256")
     return {
         "file_name": it.get("file_name"),
         "nome": it.get("nome") or it.get("display_name"),
@@ -474,14 +483,53 @@ def _item_resumo_duplicidade(it: dict) -> dict[str, Any]:
         "not_before": it.get("not_before"),
         "status": it.get("status"),
         "path": it.get("path"),
+        "subject": it.get("subject"),
+        "issuer": it.get("issuer"),
+        "serial_number": it.get("serial_number"),
+        "fingerprint_sha256": fp,
     }
 
 
-def _agrupar_duplicidades(rows: List[dict]) -> Tuple[List[dict], List[dict]]:
+def _fingerprint_hex_resumo(m: dict) -> str:
+    v = m.get("fingerprint_sha256")
+    if v is None or not str(v).strip():
+        return ""
+    return str(v).strip().lower()
+
+
+def _filtrar_grupo_documento_apos_fingerprint(members: List[dict]) -> List[dict]:
+    """
+    Remove da lista «mesmo documento» os ficheiros que já entram no agrupamento
+    por fingerprint (2+ com o mesmo SHA-256). A duplicidade criptográfica é a
+    validação definitiva; o grupo por documento fica para CPF/CNPJ igual sem
+    fingerprint ou com certificados distintos (ex.: renovação).
+    """
+    by_fp: dict[str, List[dict]] = defaultdict(list)
+    sem_fp: List[dict] = []
+    for m in members:
+        fp = _fingerprint_hex_resumo(m)
+        if not fp:
+            sem_fp.append(m)
+        else:
+            by_fp[fp].append(m)
+    kept: List[dict] = []
+    kept.extend(sem_fp)
+    for _fp, grupo in by_fp.items():
+        if len(grupo) < 2:
+            kept.extend(grupo)
+    return kept
+
+
+def _agrupar_duplicidades(
+    rows: List[dict],
+) -> Tuple[List[dict], List[dict], List[dict]]:
     """
     Deteta duplicidades no mesmo inventário (último snapshot ou scan local):
-    - mesmo CNPJ/CPF (11+ dígitos) em mais do que um ficheiro;
-    - nomes muito semelhantes (SequenceMatcher) quando não é só o caso do mesmo documento.
+    - mesmo CNPJ/CPF (11+ dígitos) em mais de um ficheiro (exceto quando a duplicidade
+      já é explicada só por fingerprint — aí fica só em certificados idênticos);
+    - certificados idênticos: mesmo fingerprint (SHA-256 do DER) em mais de um ficheiro;
+    - nomes muito semelhantes (SequenceMatcher) só quando não existe fingerprint
+      no inventário (export antigo do agente ou leitura falhou).
     """
     by_doc: dict[str, List[dict]] = defaultdict(list)
     for it in rows:
@@ -493,12 +541,34 @@ def _agrupar_duplicidades(rows: List[dict]) -> Tuple[List[dict], List[dict]]:
     for doc_digits, members in by_doc.items():
         if len(members) < 2:
             continue
-        exib = next((m.get("documento") for m in members if m.get("documento")), doc_digits)
+        filtrados = _filtrar_grupo_documento_apos_fingerprint(members)
+        if len(filtrados) < 2:
+            continue
+        exib = next((m.get("documento") for m in filtrados if m.get("documento")), doc_digits)
         grupos_documento.append(
             {
                 "tipo": "documento",
                 "documento_digitos": doc_digits,
                 "documento_exibicao": exib,
+                "itens": filtrados,
+            }
+        )
+
+    by_fp: dict[str, List[dict]] = defaultdict(list)
+    for it in rows:
+        fp = _fingerprint_hex_from_row(it)
+        if not fp:
+            continue
+        by_fp[fp].append(_item_resumo_duplicidade(it))
+
+    grupos_cert_igual: List[dict] = []
+    for fp_hex, members in by_fp.items():
+        if len(members) < 2:
+            continue
+        grupos_cert_igual.append(
+            {
+                "tipo": "certificado_igual",
+                "fingerprint_sha256": fp_hex,
                 "itens": members,
             }
         )
@@ -519,12 +589,18 @@ def _agrupar_duplicidades(rows: List[dict]) -> Tuple[List[dict], List[dict]]:
 
     for i in range(n):
         for j in range(i + 1, n):
+            if _fingerprint_hex_from_row(rows[i]) or _fingerprint_hex_from_row(rows[j]):
+                continue
             fi = str(rows[i].get("file_name") or "").strip().lower()
             fj = str(rows[j].get("file_name") or "").strip().lower()
             if not fi or fi == fj:
                 continue
-            di = _digits_only_doc(rows[i].get("documento_numero") or rows[i].get("documento_formatado"))
-            dj = _digits_only_doc(rows[j].get("documento_numero") or rows[j].get("documento_formatado"))
+            di = _digits_only_doc(
+                rows[i].get("documento_numero") or rows[i].get("documento_formatado")
+            )
+            dj = _digits_only_doc(
+                rows[j].get("documento_numero") or rows[j].get("documento_formatado")
+            )
             if len(di) >= 11 and len(dj) >= 11 and di == dj:
                 continue
             ni = _normalize_name_dup(
@@ -548,13 +624,15 @@ def _agrupar_duplicidades(rows: List[dict]) -> Tuple[List[dict], List[dict]]:
             continue
         members = [_item_resumo_duplicidade(rows[k]) for k in idxs]
         nomes_cur = [
-            _normalize_name_dup(rows[k].get("nome") or rows[k].get("display_name") or rows[k].get("file_name"))
+            _normalize_name_dup(
+                rows[k].get("nome") or rows[k].get("display_name") or rows[k].get("file_name")
+            )
             for k in idxs
         ]
         rotulo = max(nomes_cur, key=len) if nomes_cur else "—"
         grupos_nome.append({"tipo": "nome_similar", "rotulo": rotulo[:120], "itens": members})
 
-    return grupos_documento, grupos_nome
+    return grupos_documento, grupos_nome, grupos_cert_igual
 
 
 @app.get("/api/certificados/duplicidades", dependencies=[Depends(require_auth)])
@@ -576,15 +654,17 @@ def certificados_duplicidades() -> dict[str, Any]:
         scanned_at = datetime.now(timezone.utc).isoformat()
 
     rows = [it for it in raw_items if str(it.get("file_name") or "").strip()]
-    gd, gn = _agrupar_duplicidades(rows)
+    gd, gn, gci = _agrupar_duplicidades(rows)
     return {
         "origem_dados": origem,
         "scanned_at": scanned_at,
         "total_itens_analisados": len(rows),
         "grupos_documento": gd,
         "grupos_nome_similar": gn,
+        "grupos_certificado_igual": gci,
         "total_grupos_documento": len(gd),
         "total_grupos_nome_similar": len(gn),
+        "total_grupos_certificado_igual": len(gci),
     }
 
 
