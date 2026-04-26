@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import csv
 import io
+import json
 import re
 import unicodedata
 from collections import defaultdict
@@ -177,6 +178,11 @@ def pagina_vencidos(request: Request) -> HTMLResponse:
 @app.get("/duplicidades", response_class=HTMLResponse)
 def pagina_duplicidades(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="duplicidades.html")
+
+
+@app.get("/colaborador-certificados", response_class=HTMLResponse)
+def pagina_colaborador_certificados(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="colaborador_certificados.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -742,6 +748,163 @@ def _agrupar_duplicidades(
         grupos_nome.append({"tipo": "nome_similar", "rotulo": rotulo[:120], "itens": members})
 
     return grupos_documento, grupos_nome, grupos_cert_igual
+
+
+SELECAO_COLAB_FILE = ROOT / "data" / "colaborador_certificados.json"
+
+
+def _doc_norm(v: Any) -> str:
+    return re.sub(r"\D+", "", str(v or ""))
+
+
+def _parse_dt_or_min(v: Any) -> datetime:
+    return _parse_iso_utc(str(v or ""))
+
+
+def _status_prioridade(status: str) -> int:
+    s = str(status or "").lower()
+    if s in ("ok", "valido", "válido"):
+        return 3
+    if s in ("expirado", "vencido"):
+        return 2
+    if s in ("erro",):
+        return 1
+    return 0
+
+
+def _carregar_selecao_colab() -> Dict[str, List[str]]:
+    if not SELECAO_COLAB_FILE.is_file():
+        return {}
+    try:
+        data = json.loads(SELECAO_COLAB_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            out: Dict[str, List[str]] = {}
+            for k, v in data.items():
+                if isinstance(v, list):
+                    out[str(k).strip().lower()] = [str(x).strip() for x in v if str(x).strip()]
+            return out
+    except Exception:
+        return {}
+    return {}
+
+
+def _guardar_selecao_colab(data: Dict[str, List[str]]) -> None:
+    SELECAO_COLAB_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SELECAO_COLAB_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _lista_base_docs_historico() -> List[dict]:
+    hist = historico_certificados(limite_snapshots=2000)
+    rows = hist.get("itens", [])
+    grupos: Dict[str, dict] = {}
+    for it in rows:
+        doc = _doc_norm(it.get("documento"))
+        if not doc:
+            continue
+        atual = grupos.get(doc)
+        cand = {
+            "documento": it.get("documento") or doc,
+            "documento_digitos": doc,
+            "nome": it.get("nome") or "—",
+            "status_ultimo": str(it.get("status_ultimo") or "").lower(),
+            "vencimento_certificado": it.get("vencimento_certificado"),
+            "ultima_data_registrada": it.get("ultima_data_registrada"),
+        }
+        if not atual:
+            grupos[doc] = cand
+            continue
+        pa = _status_prioridade(atual.get("status_ultimo", ""))
+        pc = _status_prioridade(cand.get("status_ultimo", ""))
+        if pc > pa:
+            grupos[doc] = cand
+            continue
+        if pc == pa:
+            da = _parse_dt_or_min(atual.get("ultima_data_registrada"))
+            dc = _parse_dt_or_min(cand.get("ultima_data_registrada"))
+            if dc > da:
+                grupos[doc] = cand
+    return sorted(grupos.values(), key=lambda x: (x.get("nome") or "").lower())
+
+
+def _painel_docs_selecionados(doc_ids: List[str]) -> List[dict]:
+    base = _lista_base_docs_historico()
+    by_doc = {str(it.get("documento_digitos")): it for it in base}
+    now = datetime.now(timezone.utc)
+    out: List[dict] = []
+    for d in doc_ids:
+        it = by_doc.get(d)
+        if not it:
+            out.append(
+                {
+                    "documento_digitos": d,
+                    "documento": d,
+                    "nome": "Não encontrado no inventário atual",
+                    "status": "nao_encontrado",
+                    "vencimento_certificado": None,
+                    "dias_restantes": None,
+                }
+            )
+            continue
+        v_iso = it.get("vencimento_certificado")
+        v_dt = _parse_iso_utc(v_iso) if v_iso else datetime.min.replace(tzinfo=timezone.utc)
+        dias = (v_dt.date() - now.date()).days if v_iso else None
+        status = "vencido" if str(it.get("status_ultimo") or "").lower() == "expirado" else "ativo"
+        out.append(
+            {
+                "documento_digitos": d,
+                "documento": it.get("documento") or d,
+                "nome": it.get("nome") or "—",
+                "status": status,
+                "vencimento_certificado": v_iso,
+                "dias_restantes": dias,
+            }
+        )
+    out.sort(
+        key=lambda x: (
+            0 if x.get("status") == "vencido" else 1,
+            x.get("dias_restantes") if x.get("dias_restantes") is not None else 10**9,
+        )
+    )
+    return out
+
+
+class ColaboradorSelecaoBody(BaseModel):
+    documentos: List[str] = Field(default_factory=list)
+
+
+@app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_auth)])
+def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_auth)) -> dict:
+    itens = _lista_base_docs_historico()
+    return {"itens": itens, "total": len(itens)}
+
+
+@app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
+def colaborador_get_selecionados(token: auth.TokenData = Depends(require_auth)) -> dict:
+    email = (token.email or "").strip().lower()
+    db = _carregar_selecao_colab()
+    docs = db.get(email, [])
+    return {"documentos": docs, "total": len(docs)}
+
+
+@app.put("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
+def colaborador_put_selecionados(
+    body: ColaboradorSelecaoBody, token: auth.TokenData = Depends(require_auth)
+) -> dict:
+    email = (token.email or "").strip().lower()
+    docs = sorted({_doc_norm(x) for x in body.documentos if _doc_norm(x)})
+    db = _carregar_selecao_colab()
+    db[email] = docs
+    _guardar_selecao_colab(db)
+    return {"ok": True, "documentos": docs, "total": len(docs)}
+
+
+@app.get("/api/colaborador/certificados/painel", dependencies=[Depends(require_auth)])
+def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
+    email = (token.email or "").strip().lower()
+    db = _carregar_selecao_colab()
+    docs = db.get(email, [])
+    itens = _painel_docs_selecionados(docs)
+    return {"itens": itens, "total": len(itens)}
 
 
 @app.get("/api/certificados/duplicidades", dependencies=[Depends(require_auth)])

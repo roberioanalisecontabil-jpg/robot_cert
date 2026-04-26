@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Acompanhamento — Certificados</title>
+  <link rel="stylesheet" href="/static/style.css?v=loading-2" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-icon"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg></div>
+      <div class="brand-text"><h2>CertGuard</h2><span>Monitor de Certificados</span></div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
+        Dashboard
+      </a>
+      <a href="/historico">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        Histórico
+      </a>
+      <a href="/vencidos">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        Vencidos
+      </a>
+      <a href="/duplicidades">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>
+        Duplicidades
+      </a>
+      <a href="/colaborador-certificados" class="active">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l3-3 3 2 4-5" /></svg>
+        Acompanhamento
+      </a>
+      <a href="/usuarios" id="nav-users" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+        Usuários
+      </a>
+      <a href="/configuracao" id="nav-config" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Configuração
+      </a>
+      <a href="#" onclick="logout()" style="margin-top:auto;color:#dc2626;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+        </svg>
+        Sair
+      </a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <header class="page-header">
+      <h1>Acompanhamento de Certificados</h1>
+      <p>Escolha os certificados a acompanhar e veja o painel com vencimentos.</p>
+    </header>
+
+    <div class="table-container">
+      <div class="toolbar">
+        <div class="toolbar__actions">
+          <button type="button" id="tab-painel" class="primary">Painel</button>
+          <button type="button" id="tab-selecao">Seleção de Certificados</button>
+        </div>
+      </div>
+
+      <section id="sec-painel">
+        <p class="hint" id="painel-hint"></p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>Nome</th><th>CNPJ/CPF</th><th>Vencimento</th><th>Dias restantes</th><th>Status</th></tr>
+            </thead>
+            <tbody id="tbody-painel"></tbody>
+          </table>
+        </div>
+        <div class="toolbar" style="margin-top:0.8rem; margin-bottom:0; border-bottom:none; padding-bottom:0;">
+          <div class="toolbar__status">
+            <p class="hint" id="painel-page-hint"></p>
+          </div>
+          <div class="toolbar__actions">
+            <button type="button" id="painel-prev">Anterior</button>
+            <button type="button" id="painel-next">Próxima</button>
+            <label for="painel-page-size" class="hint">Por página</label>
+            <select id="painel-page-size" class="path-input" style="max-width:90px;">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-selecao" style="display:none;">
+        <div class="toolbar">
+          <div class="toolbar__actions">
+            <input type="search" id="busca-selecao" placeholder="Buscar por nome ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
+            <button type="button" id="btn-salvar-selecao" class="primary">Salvar seleção</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Selecionar</th><th>Nome</th><th>CNPJ/CPF</th><th>Status atual</th><th>Vencimento</th></tr></thead>
+            <tbody id="tbody-selecao"></tbody>
+          </table>
+        </div>
+        <div class="toolbar" style="margin-top:0.8rem; margin-bottom:0; border-bottom:none; padding-bottom:0;">
+          <div class="toolbar__status">
+            <p class="hint" id="selecao-page-hint"></p>
+          </div>
+          <div class="toolbar__actions">
+            <button type="button" id="selecao-prev">Anterior</button>
+            <button type="button" id="selecao-next">Próxima</button>
+            <label for="selecao-page-size" class="hint">Por página</label>
+            <select id="selecao-page-size" class="path-input" style="max-width:90px;">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/static/ui-common.js?v=loading-2"></script>
+  <script>
+    function toggleLoading(show, text) { if (typeof setGlobalLoading === "function") setGlobalLoading(show, text); }
+    function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
+    function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC"; }
+    let opcoes = [];
+    let selecionados = new Set();
+    let painelItens = [];
+    let painelPagina = 1;
+    let painelPageSize = 20;
+    let selecaoPagina = 1;
+    let selecaoPageSize = 20;
+
+    function badgeStatus(v) {
+      if (v === "vencido") return "<span class='badge badge-expired'>Vencido</span>";
+      if (v === "ativo") return "<span class='badge badge-ok'>Ativo</span>";
+      return "<span class='badge badge-bad'>Não encontrado</span>";
+    }
+
+    function renderSelecao() {
+      const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
+      const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+      const total = rows.length;
+      const totalPag = Math.max(1, Math.ceil(total / selecaoPageSize));
+      if (selecaoPagina > totalPag) selecaoPagina = totalPag;
+      const start = (selecaoPagina - 1) * selecaoPageSize;
+      const pageRows = rows.slice(start, start + selecaoPageSize);
+      document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => `
+        <tr>
+          <td><input type="checkbox" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
+          <td>${esc(it.nome || "—")}</td>
+          <td>${esc(it.documento || "—")}</td>
+          <td>${esc(it.status_ultimo || "—")}</td>
+          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+        </tr>`).join("");
+      document.getElementById("selecao-page-hint").textContent = `${total} item(ns) · página ${selecaoPagina}/${totalPag}`;
+      document.getElementById("selecao-prev").disabled = selecaoPagina <= 1;
+      document.getElementById("selecao-next").disabled = selecaoPagina >= totalPag;
+    }
+
+    async function carregarPainel() {
+      const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
+      if (!r.ok) return;
+      const j = await r.json();
+      painelItens = j.itens || [];
+      const total = painelItens.length;
+      const totalPag = Math.max(1, Math.ceil(total / painelPageSize));
+      if (painelPagina > totalPag) painelPagina = totalPag;
+      const start = (painelPagina - 1) * painelPageSize;
+      const pageRows = painelItens.slice(start, start + painelPageSize);
+      document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados`;
+      document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => `
+        <tr style="${it.status === "vencido" ? "background:#fef2f2;" : ""}">
+          <td>${esc(it.nome)}</td>
+          <td>${esc(it.documento)}</td>
+          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+          <td>${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
+          <td>${badgeStatus(it.status)}</td>
+        </tr>`).join("");
+      document.getElementById("painel-page-hint").textContent = `${total} item(ns) · página ${painelPagina}/${totalPag}`;
+      document.getElementById("painel-prev").disabled = painelPagina <= 1;
+      document.getElementById("painel-next").disabled = painelPagina >= totalPag;
+    }
+
+    async function carregarSelecao() {
+      const [ro, rs] = await Promise.all([
+        fetch("/api/colaborador/certificados/opcoes", { headers: getHeaders() }),
+        fetch("/api/colaborador/certificados/selecionados", { headers: getHeaders() }),
+      ]);
+      if (!ro.ok || !rs.ok) return;
+      const jo = await ro.json();
+      const js = await rs.json();
+      opcoes = jo.itens || [];
+      selecionados = new Set((js.documentos || []).map(String));
+      renderSelecao();
+    }
+
+    async function salvarSelecao() {
+      const checks = Array.from(document.querySelectorAll("#tbody-selecao input[type='checkbox'][data-doc]:checked"));
+      const docs = checks.map((x) => x.getAttribute("data-doc")).filter(Boolean);
+      const r = await fetch("/api/colaborador/certificados/selecionados", {
+        method: "PUT",
+        headers: getHeaders(true),
+        body: JSON.stringify({ documentos: docs }),
+      });
+      if (!r.ok) {
+        alert("Erro ao salvar seleção: " + await mensagemCorpoErro(r));
+        return;
+      }
+      selecionados = new Set(docs);
+      await carregarPainel();
+      alert("Seleção salva.");
+    }
+
+    function showTab(tab) {
+      const p = document.getElementById("sec-painel");
+      const s = document.getElementById("sec-selecao");
+      const btP = document.getElementById("tab-painel");
+      const btS = document.getElementById("tab-selecao");
+      const painel = tab === "painel";
+      p.style.display = painel ? "block" : "none";
+      s.style.display = painel ? "none" : "block";
+      btP.classList.toggle("primary", painel);
+      btS.classList.toggle("primary", !painel);
+    }
+
+    document.getElementById("tab-painel").addEventListener("click", () => showTab("painel"));
+    document.getElementById("tab-selecao").addEventListener("click", () => showTab("selecao"));
+    document.getElementById("busca-selecao").addEventListener("input", () => { selecaoPagina = 1; renderSelecao(); });
+    document.getElementById("btn-salvar-selecao").addEventListener("click", salvarSelecao);
+    document.getElementById("painel-prev").addEventListener("click", async () => { if (painelPagina > 1) { painelPagina--; await carregarPainel(); } });
+    document.getElementById("painel-next").addEventListener("click", async () => { painelPagina++; await carregarPainel(); });
+    document.getElementById("selecao-prev").addEventListener("click", () => { if (selecaoPagina > 1) { selecaoPagina--; renderSelecao(); } });
+    document.getElementById("selecao-next").addEventListener("click", () => { selecaoPagina++; renderSelecao(); });
+    document.getElementById("painel-page-size").addEventListener("change", async (e) => { painelPageSize = Number(e.target.value || 20); painelPagina = 1; await carregarPainel(); });
+    document.getElementById("selecao-page-size").addEventListener("change", (e) => { selecaoPageSize = Number(e.target.value || 20); selecaoPagina = 1; renderSelecao(); });
+    document.getElementById("tbody-selecao").addEventListener("change", (e) => {
+      const el = e.target;
+      if (!el || !el.matches("input[type='checkbox'][data-doc]")) return;
+      const doc = el.getAttribute("data-doc");
+      if (!doc) return;
+      if (el.checked) selecionados.add(doc); else selecionados.delete(doc);
+    });
+
+    (async function init() {
+      const role = localStorage.getItem("user_role");
+      if (role === "admin") {
+        const elUsers = document.getElementById("nav-users");
+        const elConfig = document.getElementById("nav-config");
+        if (elUsers) elUsers.style.display = "flex";
+        if (elConfig) elConfig.style.display = "flex";
+      }
+      toggleLoading(true, "Carregando tela de acompanhamento...");
+      try {
+        await carregarSelecao();
+        await carregarPainel();
+      } finally {
+        toggleLoading(false);
+      }
+      showTab("painel");
+    })();
+  </script>
+</body>
+</html>

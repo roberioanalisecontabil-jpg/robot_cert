@@ -45,6 +45,12 @@ def test_pagina_duplicidades_200(client: TestClient) -> None:
     assert "Duplicidades" in r.text
 
 
+def test_pagina_colaborador_certificados_200(client: TestClient) -> None:
+    r = client.get("/colaborador-certificados")
+    assert r.status_code == 200
+    assert "Acompanhamento de Certificados" in r.text
+
+
 def test_api_settings_sem_chave_200(client: TestClient) -> None:
     """Sem API_KEY no servidor, /api/settings deve ser acessível."""
     r = client.get("/api/settings")
@@ -299,6 +305,26 @@ def test_duplicidades_certificado_igual_por_fingerprint(
     assert any(
         g.get("fingerprint_sha256") == fp and len(g.get("itens", [])) == 2 for g in gci
     )
+
+
+def test_colaborador_endpoints_200(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    h = {"X-API-Key": api_key}
+    r1 = client_com_chave.get("/api/colaborador/certificados/opcoes", headers=h)
+    assert r1.status_code == 200
+    r2 = client_com_chave.get("/api/colaborador/certificados/selecionados", headers=h)
+    assert r2.status_code == 200
+    r3 = client_com_chave.put(
+        "/api/colaborador/certificados/selecionados",
+        json={"documentos": ["12.345.678/0001-90", "12345678901"]},
+        headers=h,
+    )
+    assert r3.status_code == 200
+    assert r3.json().get("ok") is True
+    r4 = client_com_chave.get("/api/colaborador/certificados/painel", headers=h)
+    assert r4.status_code == 200
+    assert "itens" in r4.json()
 
 
 def test_fila_comando_ping(
