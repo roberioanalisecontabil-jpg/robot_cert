@@ -191,13 +191,32 @@
         return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
       };
 
-      // Novo sistema de badges
-      const badge = (s, isExpiringSoon) => {
-        if (s === "ok") {
-            if (isExpiringSoon) return '<span class="badge badge-warning">Expirando</span>';
-            return '<span class="badge badge-ok">Válido</span>';
+      /** Vencido por `not_after` mesmo que o snapshot ainda diga `ok` (agente sem reenviar). */
+      const aplicarFlagsDatasCert = (it, now, thirtyDaysFromNow) => {
+        let isExpiringSoon = false;
+        let expiredByDate = false;
+        if (it.not_after) {
+          const expiry = new Date(it.not_after);
+          if (!Number.isNaN(expiry.getTime())) {
+            if (expiry < now) expiredByDate = true;
+            else if (expiry <= thirtyDaysFromNow && expiry >= now) isExpiringSoon = true;
+          }
         }
-        if (s === "expirado") return '<span class="badge badge-expired">Vencido</span>';
+        it._isExpiringSoon = isExpiringSoon;
+        it._isExpiredByDate = expiredByDate;
+      };
+
+      // Novo sistema de badges
+      const badge = (it) => {
+        const s = it.status;
+        const expiredByDate = it._isExpiredByDate;
+        if (s === "expirado" || expiredByDate) {
+          return '<span class="badge badge-expired">Vencido</span>';
+        }
+        if (s === "ok") {
+          if (it._isExpiringSoon) return '<span class="badge badge-warning">Expirando</span>';
+          return '<span class="badge badge-ok">Válido</span>';
+        }
         if (s === "fora_do_padrao") return '<span class="badge badge-bad">Fora do Padrão</span>';
         if (s === "erro") return '<span class="badge badge-bad">Erro</span>';
         return '<span class="badge badge-bad">' + s + '</span>';
@@ -234,7 +253,7 @@
         let vencidosCount = 0;
         let erroCount = 0;
         items.forEach((it) => {
-          if (it.status === "expirado") {
+          if (it.status === "expirado" || it._isExpiredByDate) {
             vencidosCount++;
           } else if (it.status === "erro") {
             erroCount++;
@@ -271,7 +290,7 @@
           .map(
             (it) =>
               "<tr><td>" +
-              badge(it.status, it._isExpiringSoon) +
+              badge(it) +
               "</td><td>" +
               esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
               "</td><td>" +
@@ -293,11 +312,11 @@
 
         let filtrados = itensOriginais.filter((it) => {
           if (filtroStatus === "validos") {
-            if (!(it.status === "ok" && !it._isExpiringSoon)) return false;
+            if (!(it.status === "ok" && !it._isExpiredByDate && !it._isExpiringSoon)) return false;
           } else if (filtroStatus === "prestes_vencer") {
-            if (!(it.status === "ok" && it._isExpiringSoon)) return false;
+            if (!(it.status === "ok" && !it._isExpiredByDate && it._isExpiringSoon)) return false;
           } else if (filtroStatus === "vencidos") {
-            if (it.status !== "expirado") return false;
+            if (!(it.status === "expirado" || it._isExpiredByDate)) return false;
           } else if (filtroStatus === "erros") {
             if (it.status !== "erro") return false;
           }
@@ -318,7 +337,7 @@
       }
 
       function statusTexto(it) {
-        if (it.status === "expirado") return "Vencido";
+        if (it.status === "expirado" || it._isExpiredByDate) return "Vencido";
         if (it.status === "ok" && it._isExpiringSoon) return "Prestes a vencer";
         if (it.status === "ok") return "Válido";
         if (it.status === "fora_do_padrao") return "Fora do padrão";
@@ -429,42 +448,12 @@
           document.getElementById("data-hint").textContent =
             "Fonte de dados: " + (d.data_source || "—") + (d.machine_id ? " | Servidor: " + d.machine_id : "");
           const items = d.itens || [];
-          
-          // Cálculo de status
-          let total = items.length;
-          let okCount = 0;
-          let expirandoCount = 0;
-          let vencidosCount = 0;
 
           const now = new Date();
           const thirtyDaysFromNow = new Date();
           thirtyDaysFromNow.setDate(now.getDate() + 30);
 
-          items.forEach(it => {
-            // Verificar proximidade de expiração
-            let isExpiringSoon = false;
-            if (it.not_after) {
-                const expiry = new Date(it.not_after);
-                if (expiry <= thirtyDaysFromNow && expiry >= now) {
-                    isExpiringSoon = true;
-                }
-            }
-            
-            // Grava uma flag no item para usar na tabela
-            it._isExpiringSoon = isExpiringSoon;
-
-            if (it.status === "expirado") {
-                vencidosCount++;
-            } else if (it.status === "ok") {
-                if (isExpiringSoon) {
-                    expirandoCount++;
-                } else {
-                    okCount++;
-                }
-            } else if (it.status === "fora_do_padrao" || it.status === "erro") {
-                // Outros status não contam pros 3 principais além de 'total'
-            }
-          });
+          items.forEach((it) => aplicarFlagsDatasCert(it, now, thirtyDaysFromNow));
 
           itensOriginais = items;
           aplicarFiltros();
