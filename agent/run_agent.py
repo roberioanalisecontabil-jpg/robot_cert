@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import sys
 import time
+from dataclasses import dataclass
+from typing import Optional, Tuple
 import threading
 import json
 import logging
@@ -25,6 +27,9 @@ if str(ROOT) not in sys.path:
 
 load_dotenv(ROOT / ".env")
 load_dotenv(Path(__file__).resolve().parent / ".env")
+# Instalador PyInstaller: .env e agent_config.json ficam ao lado do .exe
+if getattr(sys, "frozen", False):
+    load_dotenv(Path(sys.executable).resolve().parent / ".env", override=True)
 
 from app.cert_scanner import (  # noqa: E402
     CertStatus,
@@ -37,6 +42,15 @@ from app.cert_scanner import (  # noqa: E402
 DEFAULT_ROBOT_API_PORT = 8020
 DEFAULT_ROBOT_BASE = f"http://127.0.0.1:{DEFAULT_ROBOT_API_PORT}"
 LOGGER = logging.getLogger("certguard_agent")
+
+
+@dataclass(frozen=True)
+class AgentRunConfig:
+    """Opções equivalentes à linha de comandos (para serviço Windows ou CLI)."""
+
+    once: bool = False
+    no_tray: bool = False
+    mover_cli: bool = False
 
 
 def _app_dir() -> Path:
@@ -141,18 +155,156 @@ def _machine_id(s: dict, local_cfg: dict) -> str:
     )
 
 
-def main() -> None:
+def _http_transient_codes() -> frozenset[int]:
+    """Códigos em que faz sentido voltar a tentar (portal em deploy, Render a aquecer)."""
+    return frozenset({408, 425, 429, 502, 503, 504})
+
+
+def _settings_retries() -> int:
+    return max(1, int(os.getenv("AGENT_SETTINGS_RETRIES", "8")))
+
+
+def _settings_retry_base_sec() -> float:
+    return max(1.0, float(os.getenv("AGENT_SETTINGS_RETRY_WAIT_SEC", "5")))
+
+
+def _settings_cache_path() -> Path:
+    return _app_dir() / ".certguard_cached_settings.json"
+
+
+def _save_settings_cache(payload: dict) -> None:
+    """Guarda fonte/expired/machine_id para sobreviver a quedas breves do portal."""
+    path = _settings_cache_path()
+    try:
+        path.write_text(
+            json.dumps(
+                {
+                    "saved_at_epoch": time.time(),
+                    "source_folder": payload.get("source_folder") or "",
+                    "expired_folder": payload.get("expired_folder") or "",
+                    "machine_id": payload.get("machine_id") or "default",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        LOGGER.exception("Não foi possível gravar cache local de settings")
+
+
+def _load_settings_cache() -> dict | None:
+    path = _settings_cache_path()
+    if not path.is_file():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            max_age_h = float(os.getenv("AGENT_SETTINGS_CACHE_MAX_AGE_HOURS", "168"))
+            if max_age_h > 0:
+                age_sec = time.time() - float(raw.get("saved_at_epoch", 0))
+                if age_sec > max_age_h * 3600:
+                    return None
+            return {
+                "source_folder": str(raw.get("source_folder") or ""),
+                "expired_folder": str(raw.get("expired_folder") or ""),
+                "machine_id": str(raw.get("machine_id") or "default"),
+            }
+    except (json.JSONDecodeError, OSError, TypeError):
+        LOGGER.exception("Cache local de settings inválido ou ilegível")
+    return None
+
+
+def _fallback_cache_allowed() -> bool:
+    return os.getenv("AGENT_USE_SETTINGS_CACHE", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def fetch_portal_settings(
+    client: httpx.Client,
+    base: str,
+    headers_factory,
+) -> Tuple[Optional[dict], Optional[str]]:
+    """
+    GET /api/settings com várias tentativas e backoff.
+    Devolve (payload, None) em sucesso; (None, 'unauthorized'|'not_found'|'unavailable').
+    """
+    retries = _settings_retries()
+    base_sleep = _settings_retry_base_sec()
+    transient = _http_transient_codes()
+
+    last_status: int | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = client.get(f"{base}/api/settings", headers=headers_factory())
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError) as e:
+            LOGGER.warning(
+                "Falha de rede ao ler /api/settings (tentativa %s/%s): %s",
+                attempt,
+                retries,
+                e,
+            )
+            if attempt < retries:
+                wait = min(90.0, base_sleep * (2 ** (attempt - 1)))
+                time.sleep(wait)
+            continue
+        last_status = r.status_code
+
+        if r.status_code == 401:
+            return (None, "unauthorized")
+        if r.status_code == 404:
+            return (None, "not_found")
+
+        if r.status_code in transient:
+            LOGGER.warning(
+                "Portal temporariamente indisponível (%s) em /api/settings; tentativa %s/%s",
+                r.status_code,
+                attempt,
+                retries,
+            )
+            if attempt < retries:
+                wait = min(120.0, base_sleep * (2 ** (attempt - 1)))
+                LOGGER.info("Nova tentativa daqui a %.0fs", wait)
+                time.sleep(wait)
+            continue
+
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            LOGGER.error("HTTP %s ao ler /api/settings: %s", e.response.status_code, e)
+            if attempt < retries and e.response.status_code >= 500:
+                wait = min(120.0, base_sleep * (2 ** (attempt - 1)))
+                time.sleep(wait)
+                continue
+            LOGGER.error(
+                "Esgotadas tentativas com erro HTTP não transitório ao ler settings"
+            )
+            return (None, "unavailable")
+
+        body = r.json()
+        if isinstance(body, dict):
+            return (body, None)
+
+        LOGGER.error("Resposta JSON inesperada de /api/settings")
+        return (None, "unavailable")
+
+    LOGGER.error(
+        "Esgotaram-se as tentativas de GET /api/settings (último HTTP=%s)",
+        last_status,
+    )
+    return (None, "unavailable")
+
+
+def _ingest_retries() -> int:
+    return max(1, int(os.getenv("AGENT_INGEST_RETRIES", "5")))
+
+
+def _ingest_retry_base_sec() -> float:
+    return max(1.0, float(os.getenv("AGENT_INGEST_RETRY_WAIT_SEC", "4")))
+
+
+def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> None:
     log_file = _setup_logging()
     local_cfg = _load_local_agent_config()
-    parser = ArgumentParser(description="Agente de certificados PFX (Windows).")
-    parser.add_argument("--once", action="store_true", help="Executa um ciclo e termina")
-    parser.add_argument("--no-tray", action="store_true", help="Executa sem ícone de bandeja")
-    parser.add_argument(
-        "--mover",
-        action="store_true",
-        help="Após o scan, move certificados vencidos (só no disco local desta máquina).",
-    )
-    args = parser.parse_args()
 
     default_base = DEFAULT_ROBOT_BASE
     base = (
@@ -185,7 +337,7 @@ def main() -> None:
         mover = mover_local in ("1", "true", "yes", "on")
     if mover_env:
         mover = mover_env in ("1", "true", "yes", "on")
-    if args.mover:
+    if cfg.mover_cli:
         mover = True
 
     LOGGER.info("Conectando a: %s", base)
@@ -195,7 +347,6 @@ def main() -> None:
     current_watch_path = None
     last_full_scan_time = 0.0
     connected = False
-    quit_event = threading.Event()
     tray_ref: dict[str, pystray.Icon | None] = {"icon": None}
 
     def _notify(title: str, message: str) -> None:
@@ -224,7 +375,7 @@ def main() -> None:
         trigger_event.set()
 
     def _start_tray() -> None:
-        if args.no_tray or args.once:
+        if cfg.no_tray or cfg.once:
             return
         menu = pystray.Menu(
             pystray.MenuItem("Forçar leitura agora", _rescan_action),
@@ -245,39 +396,62 @@ def main() -> None:
 
     with httpx.Client(timeout=_httpx_timeout()) as client:
         while not quit_event.is_set():
-            try:
-                r = client.get(f"{base}/api/settings", headers=_headers())
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                if connected:
-                    _notify("CertGuard Agent", "Conexão perdida com o portal.")
-                connected = False
-                LOGGER.error("Falha de rede com a API (conexão ou timeout): %s", e)
-                if args.once:
-                    raise SystemExit(1) from e
-                time.sleep(interval)
-                continue
-            if r.status_code == 401:
+            s_payload, fetch_err = fetch_portal_settings(client, base, _headers)
+            s = s_payload
+            from_cache = False
+
+            if fetch_err == "unauthorized":
                 connected = False
                 _notify("CertGuard Agent", "Erro 401: configure a chave API no agente.")
                 LOGGER.error("401: servidor exige chave API correta.")
-                if args.once:
+                if cfg.once:
                     raise SystemExit(1)
                 time.sleep(interval)
                 continue
-            if r.status_code == 404:
+            if fetch_err == "not_found":
                 connected = False
                 _notify("CertGuard Agent", "Erro 404: URL do portal inválida no agente.")
                 LOGGER.error("404 em /api/settings. Verifique CERT_ROBOT_BASE_URL.")
-                if args.once:
+                if cfg.once:
                     raise SystemExit(1)
                 time.sleep(interval)
                 continue
-            r.raise_for_status()
-            if not connected:
+
+            if s is None and _fallback_cache_allowed():
+                cached = _load_settings_cache()
+                if cached:
+                    LOGGER.warning(
+                        "Portal indisponível; a usar pastas gravadas localmente desde a última conexão."
+                    )
+                    s = cached
+                    from_cache = True
+
+            if s is None:
+                if connected:
+                    _notify(
+                        "CertGuard Agent",
+                        "Portal indisponível. Novas tentativas em ciclo seguinte.",
+                    )
+                connected = False
+                LOGGER.error(
+                    "Não foi possível obter /api/settings (sem cache). Aguardando antes de tentar novamente."
+                )
+                if cfg.once:
+                    raise SystemExit(1)
+                wait_loop = min(120.0, float(max(30, min(interval, 300))))
+                time.sleep(wait_loop)
+                continue
+
+            if not from_cache:
+                _save_settings_cache(s)
+
+            if not connected and not from_cache:
                 _notify("CertGuard Agent", "Conexão estabelecida com o portal.")
                 LOGGER.info("Conexão com portal estabelecida.")
+            if from_cache:
+                LOGGER.info("Continuando com configuração em cache até o portal voltar.")
+
             connected = True
-            s = r.json()
             try:
                 src, exp = _resolve_paths(s, local_cfg)
             except Exception as e:  # noqa: BLE001
@@ -287,14 +461,14 @@ def main() -> None:
                     observer.join()
                     observer = None
                     current_watch_path = None
-                if args.once:
+                if cfg.once:
                     raise SystemExit(1)
                 time.sleep(10)
                 continue
 
             if not src.is_dir():
                 LOGGER.error("Pasta inexistente ou inacessível: %s", src)
-                if args.once:
+                if cfg.once:
                     raise SystemExit(1)
                 time.sleep(10)
                 continue
@@ -380,22 +554,62 @@ def main() -> None:
                     "expired_folder": str(exp),
                     "items": [cert_to_public_dict(c) for c in itens],
                 }
-                try:
-                    p = client.post(f"{base}/api/ingest", headers=_headers(), json=payload)
-                    p.raise_for_status()
+                transient_codes = _http_transient_codes()
+                max_ingest = _ingest_retries()
+                ingest_base = _ingest_retry_base_sec()
+                sent_ok = False
+                for ingest_try in range(1, max_ingest + 1):
+                    try:
+                        p = client.post(f"{base}/api/ingest", headers=_headers(), json=payload)
+                    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError) as e:
+                        LOGGER.warning(
+                            "Rede ao enviar snapshot (%s/%s): %s", ingest_try, max_ingest, e
+                        )
+                        if ingest_try < max_ingest:
+                            time.sleep(min(90.0, ingest_base * (2 ** (ingest_try - 1))))
+                            continue
+                        LOGGER.error("Falha de rede repetida ao enviar snapshot.")
+                        _notify(
+                            "CertGuard Agent",
+                            "Erro de conexão ao enviar snapshot; tentará no próximo ciclo.",
+                        )
+                        break
+
+                    if p.status_code in transient_codes and ingest_try < max_ingest:
+                        wait = min(120.0, ingest_base * (2 ** (ingest_try - 1)))
+                        LOGGER.warning(
+                            "Servidor (%s) ao enviar snapshot; nova tentativa em %.0fs",
+                            p.status_code,
+                            wait,
+                        )
+                        time.sleep(wait)
+                        continue
+
+                    try:
+                        p.raise_for_status()
+                    except httpx.HTTPStatusError as e:
+                        LOGGER.error(
+                            "Erro HTTP ao enviar snapshot: %s", e.response.status_code
+                        )
+                        _notify(
+                            "CertGuard Agent",
+                            f"Erro HTTP ao enviar snapshot: {e.response.status_code}",
+                        )
+                        break
+
+                    try:
+                        body = p.json()
+                    except json.JSONDecodeError:
+                        body = {}
                     LOGGER.info(
                         "Enviado: %s itens; máquina: %s",
-                        p.json().get("itens_recebidos"),
+                        body.get("itens_recebidos"),
                         payload["machine_id"],
                     )
-                except httpx.HTTPStatusError as e:
-                    LOGGER.error("Erro HTTP ao enviar snapshot: %s", e.response.status_code)
-                    _notify("CertGuard Agent", f"Erro HTTP ao enviar snapshot: {e.response.status_code}")
-                except httpx.HTTPError as e:
-                    LOGGER.error("Erro de conexão ao enviar snapshot: %s", e)
-                    _notify("CertGuard Agent", "Erro de conexão ao enviar snapshot.")
+                    sent_ok = True
+                    break
 
-            if args.once:
+            if cfg.once:
                 if observer:
                     observer.stop()
                     observer.join()
@@ -413,5 +627,44 @@ def main() -> None:
             pass
 
 
+def main() -> None:
+    parser = ArgumentParser(description="Agente de certificados PFX (Windows).")
+    parser.add_argument("--once", action="store_true", help="Executa um ciclo e termina")
+    parser.add_argument("--no-tray", action="store_true", help="Executa sem ícone de bandeja")
+    parser.add_argument(
+        "--mover",
+        action="store_true",
+        help="Após o scan, move certificados vencidos (só no disco local desta máquina).",
+    )
+    args = parser.parse_args()
+    run_agent_application(
+        threading.Event(),
+        AgentRunConfig(once=args.once, no_tray=args.no_tray, mover_cli=args.mover),
+    )
+
+
+def _fatal_restart_backoff_sec() -> float:
+    raw = os.getenv("AGENT_RESTART_ON_FATAL_SEC", "0").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 0.0
+
+
 if __name__ == "__main__":
-    main()
+    restart_sec = _fatal_restart_backoff_sec()
+    while True:
+        try:
+            main()
+            break
+        except SystemExit:
+            raise
+        except KeyboardInterrupt:
+            raise
+        except BaseException:
+            if restart_sec <= 0:
+                raise
+            LOGGER.exception(
+                "Falha inesperada no agente; a reiniciar daqui a %.0fs", restart_sec
+            )
+            time.sleep(restart_sec)

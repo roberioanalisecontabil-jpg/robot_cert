@@ -1,0 +1,56 @@
+# -*- mode: python ; coding: utf-8 -*-
+# Executável hospedeiro SCM (Serviços Windows): CertGuard_Agent_Service.exe
+
+a = Analysis(
+    ["agent\\service_host.py"],
+    pathex=["."],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        "run_agent",
+        "watchdog",
+        "watchdog.events",
+        "watchdog.observers",
+        "pystray",
+        "PIL",
+        "PIL.Image",
+        "PIL.ImageDraw",
+        "win32timezone",
+        "win32service",
+        "win32serviceutil",
+        "win32event",
+        "win32api",
+        "servicemanager",
+        "pywintypes",
+        "pythoncom",
+        "app.cert_scanner",
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name="CertGuard_Agent_Service",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)

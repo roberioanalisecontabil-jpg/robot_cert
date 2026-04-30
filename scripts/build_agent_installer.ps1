@@ -14,14 +14,21 @@ Write-Host "==> Projeto: $repoRoot"
 Write-Host "==> Instalando dependencias de build"
 & $PythonExe -m pip install --upgrade pip
 & $PythonExe -m pip install -r .\requirements.txt
-& $PythonExe -m pip install --upgrade pyinstaller
+& $PythonExe -m pip install --upgrade pyinstaller pywin32
 
-Write-Host "==> Gerando executavel do agente"
+Write-Host "==> Gerando executavel bandeja"
 & $PythonExe -m PyInstaller --noconfirm .\CertGuard_Agent.spec
 
+Write-Host "==> Gerando executavel servico Windows (SCM)"
+& $PythonExe -m PyInstaller --noconfirm .\CertGuard_Service.spec
+
 $exePath = Join-Path $repoRoot "dist\CertGuard_Agent.exe"
+$svcPath = Join-Path $repoRoot "dist\CertGuard_Agent_Service.exe"
 if (-not (Test-Path $exePath)) {
     throw "Executavel nao encontrado em: $exePath"
+}
+if (-not (Test-Path $svcPath)) {
+    throw "Executavel de servico nao encontrado em: $svcPath"
 }
 
 if (-not (Test-Path $InnoCompiler)) {
@@ -34,5 +41,6 @@ Write-Host "==> Gerando instalador Inno Setup"
 $installerDir = Join-Path $repoRoot "dist\installer"
 Write-Host ""
 Write-Host "Build finalizado com sucesso."
-Write-Host "Executavel: $exePath"
+Write-Host "Executavel bandeja: $exePath"
+Write-Host "Executavel servico:  $svcPath"
 Write-Host "Instalador: $installerDir"
