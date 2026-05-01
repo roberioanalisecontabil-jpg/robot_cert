@@ -185,10 +185,20 @@ begin
     Exit;
   end;
 
-  Cmd :=
-    '/C sc config "' + ServiceName + '" ' +
-    'binPath= "\"' + SvcExePath + '\"" ' +
-    'start= auto obj= LocalSystem';
+  if CreatedNow then
+  begin
+    Cmd :=
+      '/C sc config "' + ServiceName + '" ' +
+      'binPath= "\"' + SvcExePath + '\"" ' +
+      'start= auto obj= LocalSystem';
+  end
+  else
+  begin
+    Cmd :=
+      '/C sc config "' + ServiceName + '" ' +
+      'binPath= "\"' + SvcExePath + '\"" ' +
+      'start= auto';
+  end;
   Log('Configurando servico (auto/localSystem): ' + Cmd);
   if not Exec(ExpandConstant('{cmd}'), Cmd, '', SW_HIDE, ewWaitUntilTerminated, RC) then
   begin
