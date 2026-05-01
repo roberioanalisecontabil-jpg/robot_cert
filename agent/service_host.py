@@ -14,6 +14,7 @@ import logging
 import os
 import sys
 import threading
+import traceback
 from pathlib import Path
 
 try:
@@ -28,16 +29,20 @@ except ImportError as exc:  # pragma: no cover - só Windows na build final
 
 
 def _bootstrap_import_paths() -> None:
+    """Garante que run_agent e app.* sejam importáveis em modo frozen e dev."""
     if getattr(sys, "frozen", False):
         mei = getattr(sys, "_MEIPASS", "") or ""
         if mei:
             sys.path.insert(0, mei)
-        sys.path.insert(0, str(Path(sys.executable).resolve().parent))
+        exe_dir = str(Path(sys.executable).resolve().parent)
+        if exe_dir not in sys.path:
+            sys.path.insert(0, exe_dir)
         return
     agent_dir = Path(__file__).resolve().parent
     repo = agent_dir.parent
-    sys.path.insert(0, str(repo))
-    sys.path.insert(0, str(agent_dir))
+    for p in (str(repo), str(agent_dir)):
+        if p not in sys.path:
+            sys.path.insert(0, p)
 
 
 _bootstrap_import_paths()
@@ -47,10 +52,25 @@ logging.basicConfig(
     format="%(asctime)s [CertGuard-Service] %(levelname)s %(message)s",
 )
 
-
-from run_agent import AgentRunConfig, run_agent_application  # noqa: E402
-
 _LOG = logging.getLogger("certguard_service")
+
+# ── Import tardio do agente (com diagnóstico detalhado em caso de falha) ──
+_IMPORT_OK = False
+_IMPORT_ERROR: str | None = None
+
+try:
+    from run_agent import AgentRunConfig, run_agent_application  # noqa: E402
+    _IMPORT_OK = True
+except Exception as _exc:
+    _IMPORT_ERROR = (
+        f"Falha ao importar run_agent: {_exc}\n"
+        f"sys.path = {sys.path}\n"
+        f"cwd = {os.getcwd()}\n"
+        f"frozen = {getattr(sys, 'frozen', False)}\n"
+        f"exe = {sys.executable}\n"
+        f"traceback:\n{traceback.format_exc()}"
+    )
+    _LOG.critical(_IMPORT_ERROR)
 
 
 class CertGuardAgentService(win32serviceutil.ServiceFramework):
@@ -75,11 +95,23 @@ class CertGuardAgentService(win32serviceutil.ServiceFramework):
         if getattr(sys, "frozen", False):
             os.chdir(str(Path(sys.executable).resolve().parent))
 
+        # ── Sinalizar RUNNING ao SCM o mais rápido possível ──────────
+        # O SCM espera essa sinalização em ~30s; se demorar, dá erro 1053.
+        # Todo trabalho pesado (import, I/O, rede) vai para a thread worker.
+        self.ReportServiceStatus(win32service.SERVICE_START_PENDING, waitHint=120000)
         servicemanager.LogMsg(
             servicemanager.EVENTLOG_INFORMATION_TYPE,
             servicemanager.PYS_SERVICE_STARTED,
             (self._svc_name_, ""),
         )
+
+        # Se o import falhou, logar e parar imediatamente (sem travar)
+        if not _IMPORT_OK:
+            servicemanager.LogErrorMsg(
+                f"CertGuardAgent: import de run_agent falhou.\n{_IMPORT_ERROR}"
+            )
+            self.ReportServiceStatus(win32service.SERVICE_STOPPED)
+            return
 
         self._worker = threading.Thread(
             target=self._worker_main,
@@ -87,6 +119,9 @@ class CertGuardAgentService(win32serviceutil.ServiceFramework):
             daemon=True,
         )
         self._worker.start()
+
+        # Sinaliza explicitamente ao SCM que o serviço já iniciou.
+        self.ReportServiceStatus(win32service.SERVICE_RUNNING)
 
         win32event.WaitForSingleObject(self.h_wait_stop, win32event.INFINITE)
         self._agent_quit.set()
@@ -114,7 +149,12 @@ class CertGuardAgentService(win32serviceutil.ServiceFramework):
 def main() -> None:
     if getattr(sys, "frozen", False):
         os.chdir(str(Path(sys.executable).resolve().parent))
-    win32serviceutil.HandleCommandLine(CertGuardAgentService)
+    if len(sys.argv) == 1:
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(CertGuardAgentService)
+        servicemanager.StartServiceCtrlDispatcher()
+    else:
+        win32serviceutil.HandleCommandLine(CertGuardAgentService)
 
 
 if __name__ == "__main__":

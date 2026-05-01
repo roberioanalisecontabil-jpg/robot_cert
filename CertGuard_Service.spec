@@ -1,13 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Executável hospedeiro SCM (Serviços Windows): CertGuard_Agent_Service.exe
+#
+# Build: pyinstaller CertGuard_Service.spec --clean
+
+import os
+
+# Diretório raiz do repositório (onde este .spec vive)
+REPO = os.path.abspath(".")
 
 a = Analysis(
     ["agent\\service_host.py"],
-    pathex=["."],
+    pathex=[REPO, os.path.join(REPO, "agent")],
     binaries=[],
-    datas=[],
+    datas=[
+        # Inclui o pacote app/ inteiro para que app.cert_scanner seja encontrado
+        (os.path.join(REPO, "app"), "app"),
+        # Inclui run_agent.py ao lado do service_host no bundle
+        (os.path.join(REPO, "agent", "run_agent.py"), "."),
+    ],
     hiddenimports=[
         "run_agent",
+        "app",
+        "app.cert_scanner",
         "watchdog",
         "watchdog.events",
         "watchdog.observers",
@@ -23,7 +37,19 @@ a = Analysis(
         "servicemanager",
         "pywintypes",
         "pythoncom",
-        "app.cert_scanner",
+        # httpx e dependências usadas pelo run_agent
+        "httpx",
+        "httpx._transports",
+        "httpx._transports.default",
+        "httpcore",
+        "h11",
+        "certifi",
+        "dotenv",
+        "cryptography",
+        "cryptography.hazmat.primitives",
+        "cryptography.hazmat.primitives.hashes",
+        "cryptography.hazmat.primitives.serialization",
+        "cryptography.hazmat.primitives.serialization.pkcs12",
     ],
     hookspath=[],
     hooksconfig={},
@@ -37,20 +63,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="CertGuard_Agent_Service",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
+    upx=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="CertGuard_Agent_Service",
 )

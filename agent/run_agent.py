@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
+import tempfile
 from dataclasses import dataclass
 from typing import Optional, Tuple
 import threading
@@ -21,7 +23,12 @@ from PIL import Image, ImageDraw
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-ROOT = Path(__file__).resolve().parent.parent
+# No modo frozen (PyInstaller), __file__ aponta para _MEIPASS temporário;
+# ROOT deve ser o diretório do executável para localizar .env e configs.
+if getattr(sys, "frozen", False):
+    ROOT = Path(sys.executable).resolve().parent
+else:
+    ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -43,6 +50,61 @@ DEFAULT_ROBOT_API_PORT = 8020
 DEFAULT_ROBOT_BASE = f"http://127.0.0.1:{DEFAULT_ROBOT_API_PORT}"
 LOGGER = logging.getLogger("certguard_agent")
 
+# ── Cores dos ícones da bandeja ──────────────────────────────────────────
+ICON_COLOR_BLUE = (33, 150, 243)       # Serviço ativo / conectado
+ICON_COLOR_GRAY = (158, 158, 158)      # Serviço parado
+ICON_COLOR_BLINK = (144, 202, 249)     # Frame claro para efeito de piscar
+SERVICE_NAME = "CertGuardAgent"
+
+
+def _status_file_path() -> Path:
+    """Caminho do ficheiro de estado partilhado entre serviço e bandeja."""
+    program_data = os.getenv("PROGRAMDATA", "").strip()
+    if program_data:
+        return Path(program_data) / "CertGuard Agent" / "agent_status.json"
+    return _app_dir() / "agent_status.json"
+
+
+def _write_agent_status(state: str, **extra) -> None:
+    """Escreve estado atual para a bandeja ler. States: idle, scanning, sending."""
+    path = _status_file_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"state": state, "timestamp": time.time(), **extra}
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _read_agent_status() -> dict | None:
+    """Lê o estado escrito pelo serviço/worker."""
+    path = _status_file_path()
+    try:
+        if path.is_file():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                # Considerar stale se > 5 minutos sem atualização
+                age = time.time() - float(data.get("timestamp", 0))
+                if age > 300:
+                    data["state"] = "stale"
+                return data
+    except (json.JSONDecodeError, OSError, TypeError):
+        pass
+    return None
+
+
+def _is_service_running() -> bool:
+    """Verifica se o serviço Windows CertGuardAgent está rodando via sc query."""
+    try:
+        r = subprocess.run(
+            ["sc", "query", SERVICE_NAME],
+            capture_output=True, text=True, timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return "RUNNING" in r.stdout
+    except Exception:
+        return False
+
 
 @dataclass(frozen=True)
 class AgentRunConfig:
@@ -51,6 +113,7 @@ class AgentRunConfig:
     once: bool = False
     no_tray: bool = False
     mover_cli: bool = False
+    tray_only: bool = False
 
 
 def _app_dir() -> Path:
@@ -60,10 +123,39 @@ def _app_dir() -> Path:
 
 
 def _setup_logging() -> Path:
+    candidates: list[Path] = []
     app_dir = _app_dir()
-    app_dir.mkdir(parents=True, exist_ok=True)
-    log_file = app_dir / "agent.log"
-    handler = RotatingFileHandler(log_file, maxBytes=2_000_000, backupCount=5, encoding="utf-8")
+    candidates.append(app_dir)
+
+    program_data = os.getenv("PROGRAMDATA", "").strip()
+    if program_data:
+        candidates.append(Path(program_data) / "CertGuard Agent")
+
+    candidates.append(Path(tempfile.gettempdir()) / "CertGuard Agent")
+
+    last_error: Exception | None = None
+    selected_log_file: Path | None = None
+    handler: RotatingFileHandler | None = None
+    for base_dir in candidates:
+        try:
+            base_dir.mkdir(parents=True, exist_ok=True)
+            candidate_log = base_dir / "agent.log"
+            candidate_handler = RotatingFileHandler(
+                candidate_log,
+                maxBytes=2_000_000,
+                backupCount=5,
+                encoding="utf-8",
+            )
+            selected_log_file = candidate_log
+            handler = candidate_handler
+            break
+        except OSError as exc:
+            last_error = exc
+            continue
+
+    if handler is None or selected_log_file is None:
+        raise RuntimeError("Nao foi possivel inicializar arquivo de log do agente.") from last_error
+
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     handler.setFormatter(formatter)
     LOGGER.setLevel(logging.INFO)
@@ -71,7 +163,7 @@ def _setup_logging() -> Path:
     LOGGER.addHandler(handler)
     LOGGER.addHandler(logging.StreamHandler(sys.stdout))
     LOGGER.propagate = False
-    return log_file
+    return selected_log_file
 
 
 def _load_local_agent_config() -> dict:
@@ -357,12 +449,17 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             except Exception:
                 LOGGER.exception("Falha ao exibir notificação")
 
-    def _create_icon_image() -> Image.Image:
-        img = Image.new("RGB", (64, 64), color=(33, 150, 243))
+    def _create_icon_image(color: tuple = ICON_COLOR_BLUE) -> Image.Image:
+        img = Image.new("RGB", (64, 64), color=color)
         draw = ImageDraw.Draw(img)
         draw.rectangle((10, 10, 54, 54), outline=(255, 255, 255), width=3)
         draw.rectangle((18, 18, 46, 46), fill=(255, 255, 255))
         return img
+
+    # Pré-gerar ícones para não recriar a cada ciclo
+    _icon_blue = _create_icon_image(ICON_COLOR_BLUE)
+    _icon_gray = _create_icon_image(ICON_COLOR_GRAY)
+    _icon_blink = _create_icon_image(ICON_COLOR_BLINK)
 
     def _quit_action(icon: pystray.Icon, _item) -> None:
         LOGGER.info("Encerrando agente por ação do usuário.")
@@ -381,7 +478,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             pystray.MenuItem("Forçar leitura agora", _rescan_action),
             pystray.MenuItem("Sair", _quit_action),
         )
-        icon = pystray.Icon("CertGuard Agent", _create_icon_image(), "CertGuard Agent", menu)
+        icon = pystray.Icon("CertGuard Agent", _icon_gray, "CertGuard Agent — verificando...", menu)
         tray_ref["icon"] = icon
         t = threading.Thread(target=icon.run, daemon=True)
         t.start()
@@ -393,6 +490,61 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
         return h
     _start_tray()
     LOGGER.info("Logs em: %s", log_file)
+
+    if cfg.tray_only:
+        LOGGER.info("Modo tray-only: monitorando estado do serviço %s.", SERVICE_NAME)
+        _prev_visual = None  # rastreia estado visual para evitar atualizações desnecessárias
+        _blink_on = True
+
+        while not quit_event.is_set():
+            icon = tray_ref.get("icon")
+            if not icon:
+                quit_event.wait(timeout=1.0)
+                continue
+
+            svc_running = _is_service_running()
+            status = _read_agent_status() if svc_running else None
+            agent_state = (status or {}).get("state", "idle")
+
+            if not svc_running:
+                # ── Serviço parado → ícone cinza ──
+                if _prev_visual != "stopped":
+                    icon.icon = _icon_gray
+                    icon.title = "CertGuard Agent — Serviço parado"
+                    _prev_visual = "stopped"
+                wait = 3.0
+
+            elif agent_state in ("scanning", "sending"):
+                # ── Escaneando/enviando → piscar azul ↔ claro ──
+                _blink_on = not _blink_on
+                icon.icon = _icon_blue if _blink_on else _icon_blink
+                label = "Escaneando..." if agent_state == "scanning" else "Enviando..."
+                items_n = (status or {}).get("items_count", "")
+                if items_n:
+                    label += f" ({items_n} itens)"
+                icon.title = f"CertGuard Agent — {label}"
+                _prev_visual = "blinking"
+                wait = 0.5  # piscar rápido
+
+            else:
+                # ── Serviço ativo, idle → ícone azul fixo ──
+                if _prev_visual != "running":
+                    icon.icon = _icon_blue
+                    last_ts = (status or {}).get("last_scan_time")
+                    if last_ts:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromtimestamp(float(last_ts))
+                            icon.title = f"CertGuard Agent — Ativo (último scan: {dt:%H:%M})"
+                        except Exception:
+                            icon.title = "CertGuard Agent — Serviço ativo"
+                    else:
+                        icon.title = "CertGuard Agent — Serviço ativo"
+                    _prev_visual = "running"
+                wait = 3.0
+
+            quit_event.wait(timeout=wait)
+        return
 
     with httpx.Client(timeout=_httpx_timeout()) as client:
         while not quit_event.is_set():
@@ -536,7 +688,8 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                     LOGGER.info("Executando ciclo periódico programado...")
                 
                 last_full_scan_time = time.time()
-                
+                _write_agent_status("scanning", machine_id=mid)
+
                 itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
                 if mover:
                     for c in itens:
@@ -558,6 +711,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 max_ingest = _ingest_retries()
                 ingest_base = _ingest_retry_base_sec()
                 sent_ok = False
+                _write_agent_status("sending", machine_id=mid, items_count=len(itens))
                 for ingest_try in range(1, max_ingest + 1):
                     try:
                         p = client.post(f"{base}/api/ingest", headers=_headers(), json=payload)
@@ -607,6 +761,12 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                         payload["machine_id"],
                     )
                     sent_ok = True
+                    _write_agent_status(
+                        "idle",
+                        machine_id=mid,
+                        last_scan_time=last_full_scan_time,
+                        items_count=len(itens),
+                    )
                     break
 
             if cfg.once:
@@ -636,10 +796,20 @@ def main() -> None:
         action="store_true",
         help="Após o scan, move certificados vencidos (só no disco local desta máquina).",
     )
+    parser.add_argument(
+        "--tray-only",
+        action="store_true",
+        help="Inicia somente a bandeja (sem varredura/envio); use com serviço Windows ativo.",
+    )
     args = parser.parse_args()
     run_agent_application(
         threading.Event(),
-        AgentRunConfig(once=args.once, no_tray=args.no_tray, mover_cli=args.mover),
+        AgentRunConfig(
+            once=args.once,
+            no_tray=args.no_tray,
+            mover_cli=args.mover,
+            tray_only=args.tray_only,
+        ),
     )
 
 

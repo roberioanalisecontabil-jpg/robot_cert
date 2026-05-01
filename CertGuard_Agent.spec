@@ -1,12 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+import os
+
+REPO = os.path.abspath(".")
+
 a = Analysis(
     ['agent\\run_agent.py'],
-    pathex=[],
+    pathex=[REPO, os.path.join(REPO, "agent")],
     binaries=[],
-    datas=[],
+    datas=[
+        # Inclui o pacote app/ inteiro para que app.cert_scanner seja encontrado
+        (os.path.join(REPO, "app"), "app"),
+    ],
     hiddenimports=[
+        "app",
+        "app.cert_scanner",
         'watchdog',
         'watchdog.events',
         'watchdog.observers',
@@ -14,6 +23,18 @@ a = Analysis(
         'PIL',
         'PIL.Image',
         'PIL.ImageDraw',
+        "httpx",
+        "httpx._transports",
+        "httpx._transports.default",
+        "httpcore",
+        "h11",
+        "certifi",
+        "dotenv",
+        "cryptography",
+        "cryptography.hazmat.primitives",
+        "cryptography.hazmat.primitives.hashes",
+        "cryptography.hazmat.primitives.serialization",
+        "cryptography.hazmat.primitives.serialization.pkcs12",
     ],
     hookspath=[],
     hooksconfig={},
