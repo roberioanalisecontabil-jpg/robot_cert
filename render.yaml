@@ -3,7 +3,17 @@ services:
     name: robot-cert-portal
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    # Plano Free (512 MB RAM): 1 worker é suficiente e evita OOM.
+    # UvicornWorker com async já lida bem com concorrência I/O-bound (Supabase HTTP).
+    startCommand: >
+      gunicorn app.main:app
+      --workers 1
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:$PORT
+      --timeout 120
+      --keep-alive 5
+      --max-requests 500
+      --max-requests-jitter 50
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8

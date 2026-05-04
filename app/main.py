@@ -772,7 +772,9 @@ def _status_prioridade(status: str) -> int:
 
 
 def _lista_base_docs_historico() -> List[dict]:
-    hist = historico_certificados(limite_snapshots=2000)
+    # Limitamos a 100 snapshots para não sobrecarregar a memória no Render free tier.
+    # Para colaboradores, apenas os snapshots recentes são relevantes.
+    hist = historico_certificados(limite_snapshots=100)
     rows = hist.get("itens", [])
     grupos: Dict[str, dict] = {}
     for it in rows:
