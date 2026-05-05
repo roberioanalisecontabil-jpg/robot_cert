@@ -5,6 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Histórico — CertGuard</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    /* Paginação */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 1rem 0 0.5rem;
+      flex-wrap: wrap;
+    }
+    .pagination button {
+      min-width: 2.2rem;
+      height: 2.2rem;
+      padding: 0 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface, #fff);
+      color: var(--text, #111);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .pagination button:hover:not(:disabled) {
+      background: var(--primary, #2563eb);
+      color: #fff;
+      border-color: var(--primary, #2563eb);
+    }
+    .pagination button.active {
+      background: var(--primary, #2563eb);
+      color: #fff;
+      border-color: var(--primary, #2563eb);
+      font-weight: 600;
+    }
+    .pagination button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .pagination-info {
+      font-size: 0.82rem;
+      color: var(--text-muted, #6b7280);
+      text-align: center;
+      padding-bottom: 0.25rem;
+    }
+  </style>
 </head>
 <body>
   <aside class="sidebar">
@@ -104,18 +148,22 @@
           <tbody id="tbody-historico"></tbody>
         </table>
       </div>
+      <!-- Paginação -->
+      <p id="pagination-info" class="pagination-info"></p>
+      <div id="pagination" class="pagination"></div>
     </div>
   </main>
 
   <script src="/static/ui-common.js?v=loading-2"></script>
   <script>
+    const PAGE_SIZE = 20;
+
     let itensOriginais = [];
-      let itensVisiveis = [];
+    let itensFiltrados  = [];
+    let paginaAtual    = 1;
 
     function toggleLoading(show, text) {
-      if (typeof setGlobalLoading === "function") {
-        setGlobalLoading(show, text);
-      }
+      if (typeof setGlobalLoading === "function") setGlobalLoading(show, text);
     }
 
     function esc(v) {
@@ -124,27 +172,25 @@
       return d.innerHTML;
     }
 
-    function fmtData(iso) {
-      if (!iso) return "—";
-      return new Date(iso).toLocaleString("pt-BR");
-    }
-
     function fmtDataUtc(iso) {
       if (!iso) return "—";
       const d = new Date(iso);
       return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
     }
 
-    function aplicarBusca() {
-      const q = (document.getElementById("busca-historico").value || "").trim().toLowerCase();
-      const filtrados = itensOriginais.filter((it) => {
-        if (!q) return true;
-        const hay = [it.file_name || "", it.nome || "", it.documento || "", fmtDataUtc(it.ultima_data_registrada)].join(" ").toLowerCase();
-        return hay.includes(q);
-      });
-      itensVisiveis = filtrados;
+    // ── Renderiza a página atual ──────────────────────────────────────
+    function renderPagina() {
+      const total   = itensFiltrados.length;
+      const totalPg = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (paginaAtual > totalPg) paginaAtual = totalPg;
+
+      const inicio = (paginaAtual - 1) * PAGE_SIZE;
+      const fim    = Math.min(inicio + PAGE_SIZE, total);
+      const fatia  = itensFiltrados.slice(inicio, fim);
+
+      // Tabela
       const tb = document.getElementById("tbody-historico");
-      tb.innerHTML = filtrados.map((it) => `
+      tb.innerHTML = fatia.map((it) => `
         <tr>
           <td>${esc(it.nome)}</td>
           <td>${esc(it.documento || "—")}</td>
@@ -152,12 +198,88 @@
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>
       `).join("");
-      document.getElementById("count-hint").textContent = `${filtrados.length} registro(s) exibido(s)`;
+
+      // Informação de registros
+      document.getElementById("count-hint").textContent =
+        total === 0
+          ? "Nenhum registro encontrado."
+          : `Exibindo ${inicio + 1}–${fim} de ${total} registro(s)`;
+
+      // Controles de paginação
+      renderControlesPaginacao(totalPg);
     }
 
+    function renderControlesPaginacao(totalPg) {
+      const container = document.getElementById("pagination");
+      const info      = document.getElementById("pagination-info");
+
+      if (totalPg <= 1) {
+        container.innerHTML = "";
+        info.textContent = "";
+        return;
+      }
+
+      info.textContent = `Página ${paginaAtual} de ${totalPg}`;
+
+      // Janela de páginas: mostra no máximo 5 botões ao redor da atual
+      const WINDOW = 2;
+      let inicio = Math.max(1, paginaAtual - WINDOW);
+      let fim    = Math.min(totalPg, paginaAtual + WINDOW);
+      // Ajusta para sempre mostrar 5 botões quando possível
+      if (fim - inicio < WINDOW * 2) {
+        if (inicio === 1) fim = Math.min(totalPg, inicio + WINDOW * 2);
+        else inicio = Math.max(1, fim - WINDOW * 2);
+      }
+
+      let html = `<button id="pg-prev" ${paginaAtual === 1 ? "disabled" : ""}>‹ Anterior</button>`;
+
+      if (inicio > 1) {
+        html += `<button onclick="irPara(1)">1</button>`;
+        if (inicio > 2) html += `<button disabled>…</button>`;
+      }
+      for (let i = inicio; i <= fim; i++) {
+        html += `<button onclick="irPara(${i})" class="${i === paginaAtual ? "active" : ""}">${i}</button>`;
+      }
+      if (fim < totalPg) {
+        if (fim < totalPg - 1) html += `<button disabled>…</button>`;
+        html += `<button onclick="irPara(${totalPg})">${totalPg}</button>`;
+      }
+
+      html += `<button id="pg-next" ${paginaAtual === totalPg ? "disabled" : ""}>Próxima ›</button>`;
+      container.innerHTML = html;
+
+      document.getElementById("pg-prev").addEventListener("click", () => irPara(paginaAtual - 1));
+      document.getElementById("pg-next").addEventListener("click", () => irPara(paginaAtual + 1));
+    }
+
+    function irPara(pg) {
+      paginaAtual = pg;
+      renderPagina();
+      // Rola suavemente para o topo da tabela
+      document.querySelector(".table-container").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // ── Filtro de busca ───────────────────────────────────────────────
+    function aplicarBusca() {
+      const q = (document.getElementById("busca-historico").value || "").trim().toLowerCase();
+      itensFiltrados = itensOriginais.filter((it) => {
+        if (!q) return true;
+        const hay = [
+          it.file_name || "",
+          it.nome      || "",
+          it.documento || "",
+          fmtDataUtc(it.ultima_data_registrada),
+        ].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+      paginaAtual = 1; // volta para primeira página ao filtrar
+      renderPagina();
+    }
+
+    // ── Exportação (usa TODOS os itens filtrados, não só a página) ───
     function exportarExcelVisivel() {
       const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
-      const rows = itensVisiveis.map((it) => [
+      const rows = itensFiltrados.map((it) => [
         it.nome || "",
         it.documento || "",
         fmtDataUtc(it.ultima_data_registrada),
@@ -168,8 +290,8 @@
         .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
         .join("\n");
       const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
       a.href = url;
       a.download = "historico_certificados_filtrado.csv";
       document.body.appendChild(a);
@@ -179,7 +301,7 @@
     }
 
     function exportarPdfVisivel() {
-      const linhas = itensVisiveis
+      const linhas = itensFiltrados
         .map((it) => `
           <tr>
             <td>${esc(it.nome || "")}</td>
@@ -207,7 +329,7 @@
           </head>
           <body>
             <h1>Histórico de certificados</h1>
-            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${itensVisiveis.length}</p>
+            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total: ${itensFiltrados.length}</p>
             <table>
               <thead>
                 <tr>
@@ -224,6 +346,7 @@
       w.print();
     }
 
+    // ── Carregamento ──────────────────────────────────────────────────
     async function carregarHistorico() {
       const st = document.getElementById("status-msg");
       st.textContent = "A carregar…";
@@ -236,8 +359,10 @@
         }
         const j = await r.json();
         itensOriginais = j.itens || [];
+        itensFiltrados  = [...itensOriginais];
+        paginaAtual    = 1;
         st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
-        aplicarBusca();
+        renderPagina();
       } finally {
         toggleLoading(false);
       }
@@ -251,13 +376,14 @@
     (async function init() {
       const role = localStorage.getItem("user_role");
       if (role === "admin") {
-        const elUsers = document.getElementById("nav-users");
+        const elUsers  = document.getElementById("nav-users");
         const elConfig = document.getElementById("nav-config");
-        if (elUsers) elUsers.style.display = "flex";
+        if (elUsers)  elUsers.style.display  = "flex";
         if (elConfig) elConfig.style.display = "flex";
       }
       await carregarHistorico();
     })();
   </script>
+
 </body>
 </html>
