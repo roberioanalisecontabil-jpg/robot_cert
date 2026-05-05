@@ -32,6 +32,7 @@ from app.settings_state import (
     save_settings,
     save_snapshot,
     supabase_configured,
+    upsert_cert_history,
 )
 
 security = HTTPBearer(auto_error=False)
@@ -918,33 +919,67 @@ def certificados_duplicidades() -> dict[str, Any]:
 
 @app.get("/api/certificados/historico", dependencies=[Depends(require_auth)])
 def historico_certificados(
-    limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
+    limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos (ignorado quando cert_history está disponível)"),
 ) -> dict:
     """
     Lista certificados já mapeados em algum momento, com a última data registrada.
+    Usa a tabela materializada cert_history (SELECT simples, <200ms).
+    Fallback para varredura de snapshots se a tabela ainda estiver vazia.
     """
     from app.settings_state import _supabase
 
-    snapshots: List[dict[str, Any]] = []
     sb = _supabase()
     if sb:
+        # ── Caminho rápido: tabela materializada ──────────────────────
         try:
             r = (
+                sb.table("cert_history")
+                .select(
+                    "file_name, nome, documento, status_ultimo, "
+                    "vencimento_certificado, ultima_data_registrada"
+                )
+                .order("ultima_data_registrada", desc=True)
+                .execute()
+            )
+            rows = r.data or []
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Falha ao ler cert_history no Supabase")
+            raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
+
+        if rows:
+            # Normaliza para o formato esperado pelo frontend
+            itens = [
+                {
+                    "file_name":              row.get("file_name"),
+                    "nome":                   row.get("nome"),
+                    "documento":              row.get("documento"),
+                    "status_ultimo":          row.get("status_ultimo"),
+                    "vencimento_certificado": row.get("vencimento_certificado"),
+                    "ultima_data_registrada": row.get("ultima_data_registrada"),
+                }
+                for row in rows
+            ]
+            return {"itens": itens, "total": len(itens), "snapshots_lidos": 0, "fonte": "cert_history"}
+
+        # ── Fallback: cert_history vazia → varrer snapshots (comportamento anterior) ──
+        logger.warning("cert_history vazia; usando fallback de snapshots (execute a migration SQL)")
+        try:
+            r2 = (
                 sb.table("cert_snapshots")
                 .select("scanned_at, items")
                 .order("scanned_at", desc=True)
                 .limit(limite_snapshots)
                 .execute()
             )
-            snapshots = r.data or []
+            snapshots: List[dict[str, Any]] = r2.data or []
         except Exception as e:  # noqa: BLE001
-            logger.exception("Falha ao ler histórico no Supabase")
+            logger.exception("Falha ao ler snapshots no Supabase")
             raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
     else:
         snap = get_latest_snapshot()
-        if snap:
-            snapshots = [snap]
+        snapshots = [snap] if snap else []
 
+    # Processamento legado (fallback)
     agregados: Dict[str, dict] = {}
     for snap in snapshots:
         scanned_at = snap.get("scanned_at") or datetime.now(timezone.utc).isoformat()
@@ -969,7 +1004,7 @@ def historico_certificados(
     itens = sorted(agregados.values(), key=lambda x: x["_dt"], reverse=True)
     for row in itens:
         row.pop("_dt", None)
-    return {"itens": itens, "total": len(itens), "snapshots_lidos": len(snapshots)}
+    return {"itens": itens, "total": len(itens), "snapshots_lidos": len(snapshots), "fonte": "snapshots"}
 
 
 @app.get("/api/certificados/vencidos", dependencies=[Depends(require_auth)])
@@ -1008,11 +1043,19 @@ def ingest(body: IngestBody) -> dict:
     """
     Recebe o resultado de um scan feito no Windows (agente em segundo plano).
     Persiste no Supabase (ou em data/last_ingest.json se o Supabase não estiver configurado).
+    Também faz upsert na tabela materializada cert_history para acelerar o histórico.
     """
+    machine_id = body.machine_id.strip() or "default"
     save_snapshot(
-        machine_id=body.machine_id.strip() or "default",
+        machine_id=machine_id,
         source_folder=body.source_folder.strip(),
         expired_folder=body.expired_folder.strip(),
+        items=body.items,
+    )
+    # Atualiza a tabela materializada — operação rápida, não bloqueia o retorno
+    upsert_cert_history(
+        machine_id=machine_id,
+        scanned_iso=datetime.now(timezone.utc).isoformat(),
         items=body.items,
     )
     return {

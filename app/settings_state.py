@@ -181,7 +181,74 @@ def save_snapshot(
         _save_snapshot_to_file(machine_id, source_folder, expired_folder, scanned_iso, items)
 
 
+def upsert_cert_history(
+    machine_id: str,
+    scanned_iso: str,
+    items: List[dict[str, Any]],
+) -> None:
+    """
+    Mantém a tabela materializada cert_history atualizada.
+    Para cada item do scan faz UPSERT usando file_name como chave,
+    sobrescrevendo apenas se o scanned_at for mais recente que o registrado.
+    Silenciosamente ignorado se o Supabase não estiver configurado.
+    """
+    client = _supabase()
+    if not client or not items:
+        return
+
+    rows = []
+    for it in items:
+        file_name = str(it.get("file_name") or "").strip()
+        if not file_name:
+            continue
+
+        # Tenta parsear o vencimento para um valor compatível com timestamptz
+        not_after = it.get("not_after")
+        vencimento: Optional[str] = None
+        if not_after:
+            try:
+                s = str(not_after).strip()
+                if s.endswith("Z"):
+                    s = s[:-1] + "+00:00"
+                datetime.fromisoformat(s)  # valida formato
+                vencimento = s
+            except ValueError:
+                vencimento = None
+
+        rows.append({
+            "file_name":              file_name,
+            "machine_id":             machine_id,
+            "nome":                   it.get("nome") or it.get("display_name") or file_name,
+            "documento":              it.get("documento_formatado") or it.get("documento_numero"),
+            "documento_numero":       it.get("documento_numero"),
+            "status_ultimo":          it.get("status"),
+            "vencimento_certificado": vencimento,
+            "ultima_data_registrada": scanned_iso,
+            "updated_at":             datetime.now(timezone.utc).isoformat(),
+        })
+
+    if not rows:
+        return
+
+    # Envia em lotes de 200 para não ultrapassar limites do Supabase
+    BATCH = 200
+    for i in range(0, len(rows), BATCH):
+        batch = rows[i : i + BATCH]
+        try:
+            client.table("cert_history").upsert(
+                batch,
+                on_conflict="file_name",
+            ).execute()
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Falha ao fazer upsert em cert_history (lote %d/%d)",
+                i // BATCH + 1,
+                (len(rows) + BATCH - 1) // BATCH,
+            )
+
+
 def get_latest_snapshot() -> Optional[dict]:
+
     """
     Retorna o snapshot mais recente, qualquer machine_id, ou None.
     """
