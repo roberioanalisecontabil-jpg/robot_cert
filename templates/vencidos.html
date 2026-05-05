@@ -6,20 +6,14 @@
   <title>Vencidos — CertGuard</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    .ano-progress-wrap {
-      margin-top: 0.65rem;
-      width: 100%;
-      height: 4px;
-      background: rgba(148, 163, 184, 0.3);
-      border-radius: 999px;
-      overflow: hidden;
-    }
-    .ano-progress-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #f59e0b, #f97316);
-      transform-origin: left center;
-    }
+    .ano-progress-wrap { margin-top:.65rem; width:100%; height:4px; background:rgba(148,163,184,.3); border-radius:999px; overflow:hidden; }
+    .ano-progress-bar  { height:100%; width:0%; background:linear-gradient(90deg,#f59e0b,#f97316); transform-origin:left center; }
+    .pagination { display:flex; align-items:center; justify-content:center; gap:.4rem; padding:1rem 0 .5rem; flex-wrap:wrap; }
+    .pagination button { min-width:2.2rem; height:2.2rem; padding:0 .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface,#fff); color:var(--text,#111); font-size:.85rem; cursor:pointer; transition:background .15s,border-color .15s; }
+    .pagination button:hover:not(:disabled) { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); }
+    .pagination button.active { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); font-weight:600; }
+    .pagination button:disabled { opacity:.4; cursor:default; }
+    .pagination-info { font-size:.82rem; color:var(--text-muted,#6b7280); text-align:center; padding-bottom:.25rem; }
   </style>
 </head>
 <body>
@@ -154,17 +148,36 @@
           <tbody id="tbody-vencidos"></tbody>
         </table>
       </div>
+      <p id="pg-info-venc" class="pagination-info"></p>
+      <div id="pagination-venc" class="pagination"></div>
     </div>
   </main>
 
   <script src="/static/ui-common.js?v=loading-2"></script>
   <script>
     let itensOriginais = [];
-    let itensVisiveis = [];
     let anosResumo = [];
     let anosResumoIdx = 0;
     let anosResumoTimer = null;
     let anosProgressTimer = null;
+
+    // Paginador da página vencidos
+    const pag = new Paginator({
+      containerId : "pagination-venc",
+      infoId      : "pg-info-venc",
+      pageSize    : 20,
+      scrollTarget: ".table-container",
+      onRender(fatia) {
+        const tb = document.getElementById("tbody-vencidos");
+        tb.innerHTML = fatia.map((it) => `
+          <tr>
+            <td>${esc(it.nome)}</td>
+            <td>${esc(it.documento || "—")}</td>
+            <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+          </tr>
+        `).join("");
+      },
+    });
 
     function toggleLoading(show, text) {
       if (typeof setGlobalLoading === "function") {
@@ -208,32 +221,21 @@
         if (!buscaTexto) return true;
         const nomeAlvo = normalizarTexto(it.nome || "");
         const vencAlvo = normalizarTexto(fmtDataUtc(it.vencimento_certificado));
-        const docAlvo = normalizarTexto(it.documento || "");
-        const docNumerico = apenasDigitos(it.documento || "");
+        const docAlvo  = normalizarTexto(it.documento || "");
+        const docNum   = apenasDigitos(it.documento || "");
         if (nomeAlvo.includes(buscaTexto)) return true;
-        if (docAlvo.includes(buscaTexto)) return true;
+        if (docAlvo.includes(buscaTexto))  return true;
         if (vencAlvo.includes(buscaTexto)) return true;
-        if (buscaDigitos && docNumerico.includes(buscaDigitos)) return true;
+        if (buscaDigitos && docNum.includes(buscaDigitos)) return true;
         if (buscaDigitos && apenasDigitos(fmtDataUtc(it.vencimento_certificado)).includes(buscaDigitos)) return true;
         return false;
       });
-      itensVisiveis = filtrados;
       atualizarCardsVencidos(filtrados);
-      const tb = document.getElementById("tbody-vencidos");
-      tb.innerHTML = filtrados.map((it) => `
-        <tr>
-          <td>${esc(it.nome)}</td>
-          <td>${esc(it.documento || "—")}</td>
-          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>
-      `).join("");
-      const total = itensOriginais.length;
       const hint = document.getElementById("count-hint");
-      if (raw) {
-        hint.textContent = `${filtrados.length} de ${total} vencido(s) com o filtro atual`;
-      } else {
-        hint.textContent = `${total} vencido(s) exibido(s)`;
-      }
+      if (hint) hint.textContent = raw
+        ? `${filtrados.length} de ${itensOriginais.length} vencido(s) com o filtro atual`
+        : `${itensOriginais.length} vencido(s) exibido(s)`;
+      pag.set(filtrados); // reseta para pág 1 e renderiza
     }
 
     function atualizarCardsVencidos(lista) {
@@ -325,7 +327,7 @@
 
     function exportarExcelVisivel() {
       const headers = ["Nome", "CNPJ/CPF", "Vencimento do certificado"];
-      const rows = itensVisiveis.map((it) => [
+      const rows = pag.all().map((it) => [
         it.nome || "",
         it.documento || "",
         fmtDataUtc(it.vencimento_certificado),
@@ -346,7 +348,7 @@
     }
 
     function exportarPdfVisivel() {
-      const linhas = itensVisiveis
+      const linhas = pag.all()
         .map((it) => `
           <tr>
             <td>${esc(it.nome || "")}</td>
@@ -373,7 +375,7 @@
           </head>
           <body>
             <h1>Certificados vencidos</h1>
-            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${itensVisiveis.length}</p>
+            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total: ${pag.all().length}</p>
             <table>
               <thead>
                 <tr>

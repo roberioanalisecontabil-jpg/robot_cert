@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="stylesheet" href="/static/style.css" />
+    <style>
+      .pagination { display:flex; align-items:center; justify-content:center; gap:.4rem; padding:1rem 0 .5rem; flex-wrap:wrap; }
+      .pagination button { min-width:2.2rem; height:2.2rem; padding:0 .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface,#fff); color:var(--text,#111); font-size:.85rem; cursor:pointer; transition:background .15s,border-color .15s; }
+      .pagination button:hover:not(:disabled) { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); }
+      .pagination button.active { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); font-weight:600; }
+      .pagination button:disabled { opacity:.4; cursor:default; }
+      .pagination-info { font-size:.82rem; color:var(--text-muted,#6b7280); text-align:center; padding-bottom:.25rem; }
+    </style>
   </head>
   <body>
     <!-- Sidebar -->
@@ -175,6 +183,8 @@
             <tbody id="tbody"></tbody>
           </table>
         </div>
+        <p id="pg-info" class="pagination-info"></p>
+        <div id="pagination" class="pagination"></div>
       </div>
 
     </main>
@@ -183,7 +193,15 @@
     <script>
       const fonte = () => getDataFonte();
       let itensOriginais = [];
-      let itensVisiveis = [];
+
+      // Paginador compartilhado
+      const pag = new Paginator({
+        containerId : "pagination",
+        infoId      : "pg-info",
+        pageSize    : 20,
+        scrollTarget: ".table-container",
+        onRender    : (fatia) => renderTabela(fatia),
+      });
 
       const fmt = (iso) => {
         if (!iso) return "—";
@@ -310,7 +328,7 @@
         const buscaTexto = normalizarTexto(busca.trim());
         const buscaDigitos = apenasDigitos(busca);
 
-        let filtrados = itensOriginais.filter((it) => {
+        const filtrados = itensOriginais.filter((it) => {
           if (filtroStatus === "validos") {
             if (!(it.status === "ok" && !it._isExpiredByDate && !it._isExpiringSoon)) return false;
           } else if (filtroStatus === "prestes_vencer") {
@@ -320,20 +338,16 @@
           } else if (filtroStatus === "erros") {
             if (it.status !== "erro") return false;
           }
-
           if (!buscaTexto) return true;
-
           const alvoNome = normalizarTexto([it.nome, it.display_name, it.file_name].filter(Boolean).join(" "));
           const docNumerico = apenasDigitos(it.documento_numero || it.documento_formatado || "");
-
           if (alvoNome.includes(buscaTexto)) return true;
           if (buscaDigitos && docNumerico.includes(buscaDigitos)) return true;
           return false;
         });
 
-        itensVisiveis = filtrados;
         atualizarCards(filtrados);
-        renderTabela(filtrados);
+        pag.set(filtrados); // reseta para pág 1 e renderiza
       }
 
       function statusTexto(it) {
@@ -347,7 +361,7 @@
 
       function exportarExcelVisivel() {
         const headers = ["Status", "Nome", "Emissão (UTC)", "Vencimento (UTC)", "Documento"];
-        const rows = itensVisiveis.map((it) => [
+        const rows = pag.all().map((it) => [
           statusTexto(it),
           (it.nome != null && it.nome !== "" ? it.nome : it.display_name) || "",
           fmt(it.not_before),
@@ -370,7 +384,7 @@
       }
 
       function exportarPdfVisivel() {
-        const linhas = itensVisiveis
+        const linhas = pag.all()
           .map((it) => `
             <tr>
               <td>${esc(statusTexto(it))}</td>
@@ -399,7 +413,7 @@
             </head>
             <body>
               <h1>Certificados filtrados</h1>
-              <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${itensVisiveis.length}</p>
+              <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${pag.all().length}</p>
               <table>
                 <thead>
                   <tr>

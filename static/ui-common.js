@@ -124,3 +124,105 @@ if (document.readyState === "loading") {
 } else {
   initSidebarToggle();
 }
+
+// ─── Paginador reutilizável ───────────────────────────────────────────────────
+/**
+ * Uso:
+ *   const pag = new Paginator({
+ *     containerId : "pagination",   // id do <div> onde os botões aparecem
+ *     infoId      : "pg-info",      // id do <p> com "Exibindo X–Y de Z"
+ *     pageSize    : 20,
+ *     scrollTarget: ".table-container", // seletor para scroll no topo ao mudar página
+ *     onRender    : (fatia) => { /* renderiza só a fatia *\/ }
+ *   });
+ *   pag.set(todosOsItens);          // carrega/atualiza a lista
+ *   pag.goto(1);                    // força ir para página 1
+ */
+class Paginator {
+  constructor({ containerId, infoId, pageSize = 20, scrollTarget, onRender }) {
+    this._cId    = containerId;
+    this._iId    = infoId;
+    this._size   = pageSize;
+    this._scroll = scrollTarget;
+    this._cb     = onRender;
+    this._items  = [];
+    this._page   = 1;
+  }
+
+  set(items) {
+    this._items = items || [];
+    this._page  = 1;
+    this._render();
+  }
+
+  goto(pg) {
+    const total = Math.max(1, Math.ceil(this._items.length / this._size));
+    this._page  = Math.min(Math.max(1, pg), total);
+    this._render();
+    if (this._scroll) {
+      const el = document.querySelector(this._scroll);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  /** Retorna todos os itens (para exportação). */
+  all() { return this._items; }
+
+  _render() {
+    const total   = this._items.length;
+    const totalPg = Math.max(1, Math.ceil(total / this._size));
+    if (this._page > totalPg) this._page = totalPg;
+
+    const start = (this._page - 1) * this._size;
+    const end   = Math.min(start + this._size, total);
+    const slice = this._items.slice(start, end);
+
+    // Chama o callback de renderização
+    if (this._cb) this._cb(slice);
+
+    // Info de registros
+    const infoEl = document.getElementById(this._iId);
+    if (infoEl) {
+      infoEl.textContent = total === 0
+        ? "Nenhum registro encontrado."
+        : `Exibindo ${start + 1}–${end} de ${total} registro(s)`;
+    }
+
+    // Botões de navegação
+    const cEl = document.getElementById(this._cId);
+    if (!cEl) return;
+    if (totalPg <= 1) { cEl.innerHTML = ""; return; }
+
+    const W = 2;
+    let pStart = Math.max(1, this._page - W);
+    let pEnd   = Math.min(totalPg, this._page + W);
+    if (pEnd - pStart < W * 2) {
+      if (pStart === 1) pEnd = Math.min(totalPg, pStart + W * 2);
+      else pStart = Math.max(1, pEnd - W * 2);
+    }
+
+    const p = this._page;
+    let h = `<button data-pg="${p - 1}" ${p === 1 ? "disabled" : ""}>‹ Anterior</button>`;
+    if (pStart > 1) {
+      h += `<button data-pg="1">1</button>`;
+      if (pStart > 2) h += `<button disabled>…</button>`;
+    }
+    for (let i = pStart; i <= pEnd; i++) {
+      h += `<button data-pg="${i}" class="${i === p ? "active" : ""}">${i}</button>`;
+    }
+    if (pEnd < totalPg) {
+      if (pEnd < totalPg - 1) h += `<button disabled>…</button>`;
+      h += `<button data-pg="${totalPg}">${totalPg}</button>`;
+    }
+    h += `<button data-pg="${p + 1}" ${p === totalPg ? "disabled" : ""}>Próxima ›</button>`;
+    cEl.innerHTML = h;
+
+    // Delegação de eventos (um único listener)
+    cEl.onclick = (ev) => {
+      const btn = ev.target.closest("button[data-pg]");
+      if (!btn || btn.disabled) return;
+      this.goto(Number(btn.dataset.pg));
+    };
+  }
+}
+
