@@ -61,12 +61,20 @@ def _save_file(s: PortalSettings) -> None:
     DATA_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# Singleton: o cliente Supabase é criado uma única vez e reutilizado.
+# Antes: cada chamada a _supabase() criava um novo client (~15-25 MB),
+# gerando dezenas de instâncias por minuto e estourando a memória.
+_supabase_client = None
+
+
 def _supabase():
+    global _supabase_client
     if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_KEY:
         return None
-    from supabase import create_client  # type: ignore[import-untyped]
-
-    return create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
+    if _supabase_client is None:
+        from supabase import create_client  # type: ignore[import-untyped]
+        _supabase_client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
+    return _supabase_client
 
 
 def load_settings() -> PortalSettings:

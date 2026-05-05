@@ -29,11 +29,9 @@ class QueuedCommand:
 
 
 def _supabase():
-    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_KEY:
-        return None
-    from supabase import create_client  # type: ignore[import-untyped]
-
-    return create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
+    # Reutiliza o singleton de settings_state para não criar um segundo client.
+    from app.settings_state import _supabase as _sb
+    return _sb()
 
 
 def _load_file_queue() -> List[dict[str, Any]]:
