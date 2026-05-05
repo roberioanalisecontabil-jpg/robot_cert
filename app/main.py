@@ -931,6 +931,7 @@ def historico_certificados(
     sb = _supabase()
     if sb:
         # ── Caminho rápido: tabela materializada ──────────────────────
+        _use_history_table = True
         try:
             r = (
                 sb.table("cert_history")
@@ -943,10 +944,20 @@ def historico_certificados(
             )
             rows = r.data or []
         except Exception as e:  # noqa: BLE001
-            logger.exception("Falha ao ler cert_history no Supabase")
-            raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
+            # PGRST205 = tabela não existe no schema cache (migration ainda não foi aplicada)
+            err_str = str(e)
+            if "PGRST205" in err_str or "cert_history" in err_str:
+                logger.warning(
+                    "Tabela cert_history não encontrada; usando fallback de snapshots. "
+                    "Execute supabase/migrations/20260504_cert_history.sql no Supabase."
+                )
+                _use_history_table = False
+                rows = []
+            else:
+                logger.exception("Falha inesperada ao ler cert_history no Supabase")
+                raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
 
-        if rows:
+        if _use_history_table and rows:
             # Normaliza para o formato esperado pelo frontend
             itens = [
                 {
@@ -961,8 +972,8 @@ def historico_certificados(
             ]
             return {"itens": itens, "total": len(itens), "snapshots_lidos": 0, "fonte": "cert_history"}
 
-        # ── Fallback: cert_history vazia → varrer snapshots (comportamento anterior) ──
-        logger.warning("cert_history vazia; usando fallback de snapshots (execute a migration SQL)")
+        # ── Fallback: cert_history inexistente ou vazia → varrer snapshots ──
+        logger.warning("cert_history indisponível; usando fallback de snapshots")
         try:
             r2 = (
                 sb.table("cert_snapshots")
