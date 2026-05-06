@@ -158,9 +158,12 @@
   <script>
     const PAGE_SIZE = 20;
 
-    let itensOriginais = [];
-    let itensFiltrados  = [];
-    let paginaAtual    = 1;
+    let itensPagina = [];
+    let totalRegistros = 0;
+    let paginaAtual = 1;
+    let buscaDebounceTimer = null;
+    let ultimaFonte = "";
+    let ultimosSnapshots = 0;
 
     function toggleLoading(show, text) {
       if (typeof setGlobalLoading === "function") setGlobalLoading(show, text);
@@ -178,19 +181,16 @@
       return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
     }
 
-    // ── Renderiza a página atual ──────────────────────────────────────
+    // ── Renderiza a página atual (dados já carregados do servidor) ───
     function renderPagina() {
-      const total   = itensFiltrados.length;
-      const totalPg = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const totalPg = totalRegistros === 0 ? 1 : Math.ceil(totalRegistros / PAGE_SIZE);
       if (paginaAtual > totalPg) paginaAtual = totalPg;
 
-      const inicio = (paginaAtual - 1) * PAGE_SIZE;
-      const fim    = Math.min(inicio + PAGE_SIZE, total);
-      const fatia  = itensFiltrados.slice(inicio, fim);
+      const inicioIdx = totalRegistros === 0 ? 0 : (paginaAtual - 1) * PAGE_SIZE + 1;
+      const fimIdx = Math.min(paginaAtual * PAGE_SIZE, totalRegistros);
 
-      // Tabela
       const tb = document.getElementById("tbody-historico");
-      tb.innerHTML = fatia.map((it) => `
+      tb.innerHTML = itensPagina.map((it) => `
         <tr>
           <td>${esc(it.nome)}</td>
           <td>${esc(it.documento || "—")}</td>
@@ -199,13 +199,11 @@
         </tr>
       `).join("");
 
-      // Informação de registros
       document.getElementById("count-hint").textContent =
-        total === 0
+        totalRegistros === 0
           ? "Nenhum registro encontrado."
-          : `Exibindo ${inicio + 1}–${fim} de ${total} registro(s)`;
+          : `Exibindo ${inicioIdx}–${fimIdx} de ${totalRegistros} registro(s)`;
 
-      // Controles de paginação
       renderControlesPaginacao(totalPg);
     }
 
@@ -254,32 +252,56 @@
 
     function irPara(pg) {
       paginaAtual = pg;
-      renderPagina();
-      // Rola suavemente para o topo da tabela
+      carregarHistorico({ manterPagina: true }).catch(() => {});
       document.querySelector(".table-container").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    // ── Filtro de busca ───────────────────────────────────────────────
-    function aplicarBusca() {
-      const q = (document.getElementById("busca-historico").value || "").trim().toLowerCase();
-      itensFiltrados = itensOriginais.filter((it) => {
-        if (!q) return true;
-        const hay = [
-          it.file_name || "",
-          it.nome      || "",
-          it.documento || "",
-          fmtDataUtc(it.ultima_data_registrada),
-        ].join(" ").toLowerCase();
-        return hay.includes(q);
-      });
-      paginaAtual = 1; // volta para primeira página ao filtrar
-      renderPagina();
+    async function coletarTodosParaExport(headersObj) {
+      const q = (document.getElementById("busca-historico").value || "").trim();
+      let all = [];
+      let off = 0;
+      const chunk = 500;
+      while (true) {
+        const p = new URLSearchParams();
+        p.set("offset", String(off));
+        p.set("limit", String(chunk));
+        if (q) p.set("busca", q);
+        const r = await fetch(`/api/certificados/historico?${p}`, { headers: headersObj });
+        if (!r.ok) throw new Error(String(r.status));
+        const j = await r.json();
+        const batch = j.itens || [];
+        all = all.concat(batch);
+        const total = j.total || 0;
+        if (batch.length === 0 || all.length >= total) break;
+        off += batch.length;
+      }
+      return all;
     }
 
-    // ── Exportação (usa TODOS os itens filtrados, não só a página) ───
-    function exportarExcelVisivel() {
+    // ── Filtro de busca (consulta ao servidor com debounce) ───────────
+    function aplicarBuscaInput() {
+      if (buscaDebounceTimer) clearTimeout(buscaDebounceTimer);
+      buscaDebounceTimer = setTimeout(() => {
+        buscaDebounceTimer = null;
+        paginaAtual = 1;
+        carregarHistorico({ manterPagina: false }).catch(() => {});
+      }, 380);
+    }
+
+    // ── Exportação: busca todas as páginas com o filtro atual ─────────
+    async function exportarExcelVisivel() {
       const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
-      const rows = itensFiltrados.map((it) => [
+      toggleLoading(true, "Preparando exportação…");
+      let itensCompleto = [];
+      try {
+        itensCompleto = await coletarTodosParaExport(getHeaders());
+      } catch (e) {
+        alert(`Falha ao exportar: ${e}`);
+        return;
+      } finally {
+        toggleLoading(false);
+      }
+      const rows = itensCompleto.map((it) => [
         it.nome || "",
         it.documento || "",
         fmtDataUtc(it.ultima_data_registrada),
@@ -300,8 +322,18 @@
       URL.revokeObjectURL(url);
     }
 
-    function exportarPdfVisivel() {
-      const linhas = itensFiltrados
+    async function exportarPdfVisivel() {
+      toggleLoading(true, "Preparando PDF…");
+      let itensCompleto = [];
+      try {
+        itensCompleto = await coletarTodosParaExport(getHeaders());
+      } catch (e) {
+        alert(`Falha ao exportar: ${e}`);
+        return;
+      } finally {
+        toggleLoading(false);
+      }
+      const linhas = itensCompleto
         .map((it) => `
           <tr>
             <td>${esc(it.nome || "")}</td>
@@ -329,7 +361,7 @@
           </head>
           <body>
             <h1>Histórico de certificados</h1>
-            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total: ${itensFiltrados.length}</p>
+            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total: ${itensCompleto.length}</p>
             <table>
               <thead>
                 <tr>
@@ -347,29 +379,45 @@
     }
 
     // ── Carregamento ──────────────────────────────────────────────────
-    async function carregarHistorico() {
+    async function carregarHistorico(opts) {
+      opts = opts || {};
+      const manterPagina = !!opts.manterPagina;
+      if (!manterPagina) paginaAtual = 1;
       const st = document.getElementById("status-msg");
       st.textContent = "A carregar…";
       toggleLoading(true, "Carregando histórico...");
       try {
-        const r = await fetch("/api/certificados/historico", { headers: getHeaders() });
+        const q = (document.getElementById("busca-historico").value || "").trim();
+        const params = new URLSearchParams();
+        params.set("offset", String(Math.max(0, (paginaAtual - 1) * PAGE_SIZE)));
+        params.set("limit", String(PAGE_SIZE));
+        if (q) params.set("busca", q);
+        const r = await fetch(`/api/certificados/historico?${params}`, { headers: getHeaders() });
         if (!r.ok) {
           st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
+          itensPagina = [];
+          totalRegistros = 0;
+          renderPagina();
           return;
         }
         const j = await r.json();
-        itensOriginais = j.itens || [];
-        itensFiltrados  = [...itensOriginais];
-        paginaAtual    = 1;
-        st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
+        itensPagina = j.itens || [];
+        totalRegistros = typeof j.total === "number" ? j.total : itensPagina.length;
+        ultimaFonte = j.fonte || "";
+        ultimosSnapshots = j.snapshots_lidos || 0;
+        const fonteLabel = ultimaFonte === "cert_history" ? "tabela cert_history" : "snapshots";
+        st.textContent = `Fonte: ${fonteLabel} | Snapshots lidos (fallback): ${ultimosSnapshots}`;
         renderPagina();
       } finally {
         toggleLoading(false);
       }
     }
 
-    document.getElementById("btn-refresh").addEventListener("click", carregarHistorico);
-    document.getElementById("busca-historico").addEventListener("input", aplicarBusca);
+    document.getElementById("btn-refresh").addEventListener("click", () => {
+      paginaAtual = 1;
+      carregarHistorico({}).catch(() => {});
+    });
+    document.getElementById("busca-historico").addEventListener("input", aplicarBuscaInput);
     document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
     document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
 
@@ -381,7 +429,7 @@
         if (elUsers)  elUsers.style.display  = "flex";
         if (elConfig) elConfig.style.display = "flex";
       }
-      await carregarHistorico();
+      await carregarHistorico({});
     })();
   </script>
 

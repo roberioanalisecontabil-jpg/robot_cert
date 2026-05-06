@@ -556,6 +556,11 @@ def listar_certificados(
         ) from e
 
 
+def _escape_ilike_pattern(val: str) -> str:
+    """Evita que % e _ do utilizador interfiram com ILIKE."""
+    return val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _parse_iso_utc(iso_value: Optional[str]) -> datetime:
     if not iso_value:
         return datetime.min.replace(tzinfo=timezone.utc)
@@ -917,34 +922,110 @@ def certificados_duplicidades() -> dict[str, Any]:
     }
 
 
-@app.get("/api/certificados/historico", dependencies=[Depends(require_auth)])
 def historico_certificados(
-    limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos (ignorado quando cert_history está disponível)"),
+    limite_snapshots: int = 500,
+    *,
+    offset: Optional[int] = None,
+    limit: Optional[int] = None,
+    busca: Optional[str] = None,
 ) -> dict:
     """
     Lista certificados já mapeados em algum momento, com a última data registrada.
-    Usa a tabela materializada cert_history (SELECT simples, <200ms).
-    Fallback para varredura de snapshots se a tabela ainda estiver vazia.
+    Com ``limit`` definido, lê só uma página de ``cert_history`` (menos carga).
+
+    Chamadas internas devem omitir ``limit`` para obter a lista completa.
     """
     from app.settings_state import _supabase
 
+    pagination = limit is not None
+    offset = max(0, int(offset or 0))
+    page_limit = int(limit) if pagination else None
+    busca_txt = str(busca).strip() if busca else ""
+
+    def _normalize_rows(rows_raw: List[dict[str, Any]]) -> List[dict[str, Any]]:
+        return [
+            {
+                "file_name":              row.get("file_name"),
+                "nome":                   row.get("nome"),
+                "documento":              row.get("documento"),
+                "status_ultimo":          row.get("status_ultimo"),
+                "vencimento_certificado": row.get("vencimento_certificado"),
+                "ultima_data_registrada": row.get("ultima_data_registrada"),
+            }
+            for row in rows_raw
+        ]
+
+    def _filtro_busca_python(itlist: List[dict[str, Any]], q_raw: str) -> List[dict[str, Any]]:
+        if not q_raw:
+            return itlist
+        q = q_raw.lower()
+        out: List[dict[str, Any]] = []
+        for it in itlist:
+            hay = " ".join(
+                [
+                    str(it.get("file_name") or ""),
+                    str(it.get("nome") or ""),
+                    str(it.get("documento") or ""),
+                ]
+            ).lower()
+            if q in hay:
+                out.append(it)
+        return out
+
+    def _apply_cert_history_or_busca(qb: Any) -> Any:
+        if not busca_txt:
+            return qb
+        pat = "%" + _escape_ilike_pattern(busca_txt) + "%"
+        filt = f"nome.ilike.{pat},file_name.ilike.{pat},documento.ilike.{pat}"
+        return qb.or_(filt)
+
     sb = _supabase()
+    snapshots: List[dict[str, Any]] = []
+
     if sb:
-        # ── Caminho rápido: tabela materializada ──────────────────────
         _use_history_table = True
+        rows_non_paginated: List[dict[str, Any]] = []
         try:
-            r = (
-                sb.table("cert_history")
-                .select(
-                    "file_name, nome, documento, status_ultimo, "
-                    "vencimento_certificado, ultima_data_registrada"
+            if pagination and page_limit is not None:
+                qc = _apply_cert_history_or_busca(
+                    sb.table("cert_history").select("file_name", count="exact", head=True)
                 )
-                .order("ultima_data_registrada", desc=True)
-                .execute()
-            )
-            rows = r.data or []
+                c_r = qc.execute()
+                total_count = c_r.count if c_r.count is not None else 0
+
+                if total_count > 0 or busca_txt:
+                    qp = _apply_cert_history_or_busca(
+                        sb.table("cert_history")
+                        .select(
+                            "file_name, nome, documento, status_ultimo, "
+                            "vencimento_certificado, ultima_data_registrada",
+                        )
+                        .order("ultima_data_registrada", desc=True)
+                    )
+                    hi = offset + page_limit - 1
+                    p_r = qp.range(offset, hi).execute()
+                    return {
+                        "itens": _normalize_rows(p_r.data or []),
+                        "total": total_count,
+                        "offset": offset,
+                        "limit": page_limit,
+                        "snapshots_lidos": 0,
+                        "fonte": "cert_history",
+                    }
+
+                # total_count == 0 e sem texto de busca → tentar snapshots (dados legados)
+            else:
+                r = (
+                    sb.table("cert_history")
+                    .select(
+                        "file_name, nome, documento, status_ultimo, "
+                        "vencimento_certificado, ultima_data_registrada"
+                    )
+                    .order("ultima_data_registrada", desc=True)
+                    .execute()
+                )
+                rows_non_paginated = r.data or []
         except Exception as e:  # noqa: BLE001
-            # PGRST205 = tabela não existe no schema cache (migration ainda não foi aplicada)
             err_str = str(e)
             if "PGRST205" in err_str or "cert_history" in err_str:
                 logger.warning(
@@ -952,28 +1033,22 @@ def historico_certificados(
                     "Execute supabase/migrations/20260504_cert_history.sql no Supabase."
                 )
                 _use_history_table = False
-                rows = []
+                rows_non_paginated = []
             else:
                 logger.exception("Falha inesperada ao ler cert_history no Supabase")
                 raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
 
-        if _use_history_table and rows:
-            # Normaliza para o formato esperado pelo frontend
-            itens = [
-                {
-                    "file_name":              row.get("file_name"),
-                    "nome":                   row.get("nome"),
-                    "documento":              row.get("documento"),
-                    "status_ultimo":          row.get("status_ultimo"),
-                    "vencimento_certificado": row.get("vencimento_certificado"),
-                    "ultima_data_registrada": row.get("ultima_data_registrada"),
-                }
-                for row in rows
-            ]
-            return {"itens": itens, "total": len(itens), "snapshots_lidos": 0, "fonte": "cert_history"}
+        if _use_history_table and rows_non_paginated and not pagination:
+            itens = _normalize_rows(rows_non_paginated)
+            return {
+                "itens": itens,
+                "total": len(itens),
+                "offset": 0,
+                "limit": len(itens),
+                "snapshots_lidos": 0,
+                "fonte": "cert_history",
+            }
 
-        # ── Fallback: cert_history inexistente ou vazia → varrer snapshots ──
-        logger.warning("cert_history indisponível; usando fallback de snapshots")
         try:
             r2 = (
                 sb.table("cert_snapshots")
@@ -982,7 +1057,7 @@ def historico_certificados(
                 .limit(limite_snapshots)
                 .execute()
             )
-            snapshots: List[dict[str, Any]] = r2.data or []
+            snapshots = r2.data or []
         except Exception as e:  # noqa: BLE001
             logger.exception("Falha ao ler snapshots no Supabase")
             raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
@@ -990,7 +1065,6 @@ def historico_certificados(
         snap = get_latest_snapshot()
         snapshots = [snap] if snap else []
 
-    # Processamento legado (fallback)
     agregados: Dict[str, dict] = {}
     for snap in snapshots:
         scanned_at = snap.get("scanned_at") or datetime.now(timezone.utc).isoformat()
@@ -1015,7 +1089,54 @@ def historico_certificados(
     itens = sorted(agregados.values(), key=lambda x: x["_dt"], reverse=True)
     for row in itens:
         row.pop("_dt", None)
-    return {"itens": itens, "total": len(itens), "snapshots_lidos": len(snapshots), "fonte": "snapshots"}
+
+    itens = _filtro_busca_python(itens, busca_txt)
+
+    if pagination and page_limit is not None:
+        total_f = len(itens)
+        fatia = itens[offset : offset + page_limit]
+        return {
+            "itens": fatia,
+            "total": total_f,
+            "offset": offset,
+            "limit": page_limit,
+            "snapshots_lidos": len(snapshots),
+            "fonte": "snapshots",
+        }
+
+    return {
+        "itens": itens,
+        "total": len(itens),
+        "offset": 0,
+        "limit": len(itens),
+        "snapshots_lidos": len(snapshots),
+        "fonte": "snapshots",
+    }
+
+
+@app.get("/api/certificados/historico", dependencies=[Depends(require_auth)])
+def historico_certificados_http(
+    limite_snapshots: int = Query(
+        500,
+        ge=1,
+        le=2000,
+        description="Máximo de snapshots no fallback (quando cert_history está vazio)",
+    ),
+    offset: int = Query(0, ge=0, description="Deslocamento base 0 (paginação)"),
+    limit: int = Query(20, ge=1, le=2000, description="Registos por página"),
+    busca: Optional[str] = Query(
+        None,
+        max_length=200,
+        description="Filtro parcial em nome, ficheiro ou documento",
+    ),
+) -> dict:
+    b = busca.strip() if busca else None
+    return historico_certificados(
+        limite_snapshots,
+        offset=offset,
+        limit=limit,
+        busca=b,
+    )
 
 
 @app.get("/api/certificados/vencidos", dependencies=[Depends(require_auth)])
