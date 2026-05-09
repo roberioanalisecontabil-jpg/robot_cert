@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app import config
+from app.historico_agg_cache import invalidate_all as _invalidate_historico_agg_cache
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +188,8 @@ def save_snapshot(
             _save_snapshot_to_file(machine_id, source_folder, expired_folder, scanned_iso, items)
     else:
         _save_snapshot_to_file(machine_id, source_folder, expired_folder, scanned_iso, items)
+
+    _invalidate_historico_agg_cache()
 
 
 def upsert_cert_history(

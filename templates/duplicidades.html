@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Duplicidades — CertGuard</title>
-  <link rel="stylesheet" href="/static/style.css?v=dup-labels-1" />
+  <link rel="stylesheet" href="/static/style.css?v=cg-nav-1" />
 </head>
 <body>
   <aside class="sidebar">
@@ -95,7 +95,7 @@
       <p id="sem-dup" class="hint" style="display:none; margin-bottom:1rem;">Nenhuma duplicidade detetada com os critérios atuais.</p>
 
       <div id="sec-crypto-wrap" style="display:none;">
-        <p class="hint" style="margin-bottom:1.25rem;">Listagem: <strong>20 linhas</strong> por página em cada tabela; use a <strong>paginação</strong> abaixo de cada uma quando houver mais linhas.</p>
+        <p class="hint" style="margin-bottom:1.25rem;">Paginação alinhada às restantes abas: <strong>Anterior · números · Seguinte</strong> e <strong>por página</strong> (valor partilhado entre as três tabelas desta página).</p>
 
         <section id="sec-crypto-igual" class="dup-crypto-table-block" aria-labelledby="tit-igual">
           <h2 id="tit-igual" style="margin-bottom:0.75rem;">Certificados idênticos (mesmo fingerprint)</h2>
@@ -111,7 +111,28 @@
               <tbody id="tbody-cert-igual"></tbody>
             </table>
           </div>
-          <nav class="dup-pagination" id="pag-cert-igual" aria-label="Páginas (certificados idênticos)"></nav>
+          <nav id="paginacao-toolbar-dup-ig" class="cg-page-nav" aria-label="Paginação — certificados idênticos">
+            <div id="pag-meta-dup-ig" class="cg-page-nav__meta"></div>
+            <div class="cg-page-nav__row">
+              <ul id="pag-ul-dup-ig" class="cg-page-nav__ul" role="list">
+                <li>
+                  <button type="button" id="btn-dup-ig-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+                </li>
+                <li id="pag-li-next-dup-ig">
+                  <button type="button" id="btn-dup-ig-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+                </li>
+              </ul>
+              <div>
+                <label for="pag-perpage-dup-ig" class="cg-sr-only">Registos por página</label>
+                <select id="pag-perpage-dup-ig" class="cg-page-perpage-select" title="Itens por página">
+                  <option value="10">10 por página</option>
+                  <option value="25">25 por página</option>
+                  <option value="50">50 por página</option>
+                  <option value="100">100 por página</option>
+                </select>
+              </div>
+            </div>
+          </nav>
         </section>
       </div>
 
@@ -130,7 +151,28 @@
             <tbody id="tbody-grupos-doc"></tbody>
           </table>
         </div>
-        <nav class="dup-pagination" id="pag-grupos-doc" aria-label="Páginas (mesmo documento)"></nav>
+        <nav id="paginacao-toolbar-dup-doc" class="cg-page-nav" aria-label="Paginação — mesmo documento">
+          <div id="pag-meta-dup-doc" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-dup-doc" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-dup-doc-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-dup-doc">
+                <button type="button" id="btn-dup-doc-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-dup-doc" class="cg-sr-only">Registos por página</label>
+              <select id="pag-perpage-dup-doc" class="cg-page-perpage-select" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
+          </div>
+        </nav>
       </section>
 
       <section id="sec-nome" class="dup-crypto-table-block" style="display:none;" aria-labelledby="tit-nome-sim">
@@ -147,7 +189,28 @@
             <tbody id="tbody-grupos-nome"></tbody>
           </table>
         </div>
-        <nav class="dup-pagination" id="pag-grupos-nome" aria-label="Páginas (nomes semelhantes)"></nav>
+        <nav id="paginacao-toolbar-dup-nome" class="cg-page-nav" aria-label="Paginação — nomes semelhantes">
+          <div id="pag-meta-dup-nome" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-dup-nome" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-dup-nome-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-dup-nome">
+                <button type="button" id="btn-dup-nome-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-dup-nome" class="cg-sr-only">Registos por página</label>
+              <select id="pag-perpage-dup-nome" class="cg-page-perpage-select" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
+          </div>
+        </nav>
       </section>
     </div>
 
@@ -171,7 +234,7 @@
     </div>
   </main>
 
-  <script src="/static/ui-common.js?v=paginator-1"></script>
+  <script src="/static/ui-common.js?v=cg-nav-1"></script>
   <script>
     function toggleLoading(show, text) {
       if (typeof setGlobalLoading === "function") {
@@ -217,7 +280,9 @@
       <p class="hint" style="margin:0;">Não foi detetado nenhum par de ficheiros com o <strong>mesmo fingerprint</strong> (SHA-256 do certificado, DER idêntico).</p>
       <p class="hint" style="margin:0.5rem 0 0;">Se o <strong>envio do agente</strong> for antigo, o inventário pode não incluir o fingerprint — <strong>atualize o agente</strong> e reenvie, ou use o <strong>scan local</strong> no servidor.</p>`;
 
-    const PAGE_SIZE_DUP = 20;
+    const LS_PER_PAGE_DUP = "cg_per_page_duplicidades";
+    const ALLOW_PER_PAGE_DUP = [10, 25, 50, 100];
+
     let _rowsIgual = [];
     let _pageIgual = 1;
     let _rowsDoc = [];
@@ -226,6 +291,183 @@
     let _pageNome = 1;
     let _dupPathTipHide = null;
     let _dupDocTipHide = null;
+
+    function porPagDup() {
+      const sel = document.getElementById("pag-perpage-dup-ig");
+      const n = sel ? parseInt(sel.value, 10) : 10;
+      return ALLOW_PER_PAGE_DUP.includes(n) ? n : 10;
+    }
+
+    function syncDupPerPageSelects(valStr) {
+      ["pag-perpage-dup-ig", "pag-perpage-dup-doc", "pag-perpage-dup-nome"].forEach((id) => {
+        const s = document.getElementById(id);
+        if (s) s.value = valStr;
+      });
+    }
+
+    function initDupPerPage() {
+      let v = parseInt(localStorage.getItem(LS_PER_PAGE_DUP) || "10", 10);
+      if (!ALLOW_PER_PAGE_DUP.includes(v)) v = 10;
+      syncDupPerPageSelects(String(v));
+      localStorage.setItem(LS_PER_PAGE_DUP, String(v));
+      ["pag-perpage-dup-ig", "pag-perpage-dup-doc", "pag-perpage-dup-nome"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("change", () => {
+          const nv = parseInt(el.value, 10);
+          const ok = ALLOW_PER_PAGE_DUP.includes(nv) ? nv : 10;
+          localStorage.setItem(LS_PER_PAGE_DUP, String(ok));
+          syncDupPerPageSelects(String(ok));
+          _pageIgual = 1;
+          _pageDoc = 1;
+          _pageNome = 1;
+          renderCertTable();
+          renderDocTable();
+          renderNomeTable();
+        });
+      });
+    }
+
+    /** Modelo cg-page-nav (mesmo Dashboard/Histórico/Vencidos). */
+    function refreshDupNav(which) {
+      const cfgs = {
+        ig: {
+          bar: "paginacao-toolbar-dup-ig",
+          meta: "pag-meta-dup-ig",
+          ul: "pag-ul-dup-ig",
+          liNext: "pag-li-next-dup-ig",
+          prev: "btn-dup-ig-prev",
+          next: "btn-dup-ig-next",
+          getRows: () => _rowsIgual,
+          getPage: () => _pageIgual,
+          setPage: (x) => {
+            _pageIgual = x;
+          },
+          renderExec: () => renderCertTable(),
+        },
+        doc: {
+          bar: "paginacao-toolbar-dup-doc",
+          meta: "pag-meta-dup-doc",
+          ul: "pag-ul-dup-doc",
+          liNext: "pag-li-next-dup-doc",
+          prev: "btn-dup-doc-prev",
+          next: "btn-dup-doc-next",
+          getRows: () => _rowsDoc,
+          getPage: () => _pageDoc,
+          setPage: (x) => {
+            _pageDoc = x;
+          },
+          renderExec: () => renderDocTable(),
+        },
+        nome: {
+          bar: "paginacao-toolbar-dup-nome",
+          meta: "pag-meta-dup-nome",
+          ul: "pag-ul-dup-nome",
+          liNext: "pag-li-next-dup-nome",
+          prev: "btn-dup-nome-prev",
+          next: "btn-dup-nome-next",
+          getRows: () => _rowsNome,
+          getPage: () => _pageNome,
+          setPage: (x) => {
+            _pageNome = x;
+          },
+          renderExec: () => renderNomeTable(),
+        },
+      };
+      const c = cfgs[which];
+      if (!c) return;
+      const psz = porPagDup();
+      const rows = c.getRows();
+      const n = rows.length;
+      if (n === 0) {
+        cgPageNavHide(c.bar, c.ul, c.meta);
+        return;
+      }
+      let p = c.getPage();
+      const totalPg = Math.max(1, Math.ceil(n / psz));
+      if (p > totalPg) p = totalPg;
+      if (p < 1) p = 1;
+      c.setPage(p);
+      cgPageNavRefresh({
+        bar: c.bar,
+        meta: c.meta,
+        ul: c.ul,
+        liNext: c.liNext,
+        prev: c.prev,
+        next: c.next,
+        pg: { pagina: p, total_paginas: totalPg, total_itens: n },
+        metaFormatter: (pg) =>
+          "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + " linha(s) nesta tabela",
+        hideWhenSingle: true,
+        goToPage: (pn) => {
+          c.setPage(pn);
+          c.renderExec();
+        },
+        maxButtons: 5,
+      });
+    }
+
+    function wireDupNavBtns(which) {
+      const cfgs = {
+        ig: {
+          prev: "btn-dup-ig-prev",
+          next: "btn-dup-ig-next",
+          getRows: () => _rowsIgual,
+          getPage: () => _pageIgual,
+          setPage: (x) => {
+            _pageIgual = x;
+          },
+          renderExec: () => renderCertTable(),
+        },
+        doc: {
+          prev: "btn-dup-doc-prev",
+          next: "btn-dup-doc-next",
+          getRows: () => _rowsDoc,
+          getPage: () => _pageDoc,
+          setPage: (x) => {
+            _pageDoc = x;
+          },
+          renderExec: () => renderDocTable(),
+        },
+        nome: {
+          prev: "btn-dup-nome-prev",
+          next: "btn-dup-nome-next",
+          getRows: () => _rowsNome,
+          getPage: () => _pageNome,
+          setPage: (x) => {
+            _pageNome = x;
+          },
+          renderExec: () => renderNomeTable(),
+        },
+      };
+      const c = cfgs[which];
+      if (!c) return;
+      const bp = document.getElementById(c.prev);
+      const bn = document.getElementById(c.next);
+      if (bp && !bp._dupWired) {
+        bp._dupWired = true;
+        bp.addEventListener("click", () => {
+          let p = c.getPage();
+          if (p > 1) {
+            c.setPage(p - 1);
+            c.renderExec();
+          }
+        });
+      }
+      if (bn && !bn._dupWired) {
+        bn._dupWired = true;
+        bn.addEventListener("click", () => {
+          const psz = porPagDup();
+          const rows = c.getRows();
+          const totalPg = Math.max(1, Math.ceil(rows.length / psz));
+          let p = c.getPage();
+          if (p < totalPg) {
+            c.setPage(p + 1);
+            c.renderExec();
+          }
+        });
+      }
+    }
 
     function initDupPathTooltip() {
       const tip = document.getElementById("dup-path-tooltip");
@@ -420,78 +662,25 @@
         </tr>`;
     }
 
-    /**
-     * Paginação partilhada (Certificados idênticos, Mesmo documento, Nomes semelhantes).
-     * @param {string} which  pag-igual | pag-doc | pag-nome
-     */
-    function dupPaginationHtml(n, page, pageSize, which) {
-      if (n === 0) return { html: "", page: 1 };
-      const totalPages = Math.max(1, Math.ceil(n / pageSize));
-      let p = page;
-      if (p > totalPages) p = totalPages;
-      if (p < 1) p = 1;
-      const start = (p - 1) * pageSize;
-      const end = Math.min(start + pageSize, n);
-      if (totalPages <= 1) {
-        return {
-          html: `<p class="dup-pagination__meta">A mostrar ${n} linha(s) (até ${pageSize} por página).</p>`,
-          page: p,
-        };
-      }
-      const parts = [];
-      parts.push(`<div class="dup-pagination__inner">`);
-      parts.push(`<button type="button" class="js-dup-pag" data-which="${which}" data-go="prev" ${p <= 1 ? "disabled" : ""}>« Anterior</button>`);
-      if (totalPages <= 12) {
-        for (let i = 1; i <= totalPages; i++) {
-          const active = i === p ? " dup-page--active" : "";
-          parts.push(`<button type="button" class="js-dup-pag${active}" data-which="${which}" data-go="${i}">${i}</button>`);
-        }
-      } else {
-        parts.push(`<label class="dup-pagination__meta" style="display:inline-flex;align-items:center;gap:0.35rem;margin:0;">Página <select class="js-dup-sel" data-which="${which}" style="font:inherit;padding:0.3rem 0.5rem;border-radius:6px;border:1px solid var(--border);">`);
-        for (let i = 1; i <= totalPages; i++) {
-          const sel = i === p ? " selected" : "";
-          parts.push(`<option value="${i}"${sel}>${i}</option>`);
-        }
-        parts.push(`</select> de ${totalPages}</label>`);
-      }
-      parts.push(`<button type="button" class="js-dup-pag" data-which="${which}" data-go="next" ${p >= totalPages ? "disabled" : ""}>Seguinte »</button>`);
-      parts.push(`</div>`);
-      parts.push(`<p class="dup-pagination__meta">Linhas <strong>${start + 1}</strong>–<strong>${end}</strong> de <strong>${n}</strong></p>`);
-      return { html: parts.join(""), page: p };
-    }
-
-    function buildPaginationBar() {
-      const pagEl = document.getElementById("pag-cert-igual");
-      if (!pagEl) return;
-      const n = _rowsIgual.length;
-      if (n === 0) {
-        pagEl.innerHTML = "";
-        return;
-      }
-      const r = dupPaginationHtml(n, _pageIgual, PAGE_SIZE_DUP, "pag-igual");
-      _pageIgual = r.page;
-      pagEl.innerHTML = r.html;
-    }
-
     function renderCertTable() {
       const rows = _rowsIgual;
       const tbody = document.getElementById("tbody-cert-igual");
       if (!tbody) return;
+      const psz = porPagDup();
       if (rows.length === 0) {
         tbody.innerHTML = `<tr class="hint-only"><td colspan="3">${HINT_CRYPTO_VAZIO_IGUAL}</td></tr>`;
-        const pagEl = document.getElementById("pag-cert-igual");
-        if (pagEl) pagEl.innerHTML = "";
+        cgPageNavHide("paginacao-toolbar-dup-ig", "pag-ul-dup-ig", "pag-meta-dup-ig");
         return;
       }
-      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE_DUP));
+      const totalPages = Math.max(1, Math.ceil(rows.length / psz));
       let p = _pageIgual;
       if (p > totalPages) p = totalPages;
       if (p < 1) p = 1;
       _pageIgual = p;
-      const start = (p - 1) * PAGE_SIZE_DUP;
-      const slice = rows.slice(start, start + PAGE_SIZE_DUP);
+      const start = (p - 1) * psz;
+      const slice = rows.slice(start, start + psz);
       tbody.innerHTML = slice.map((it) => trCertLine(it)).join("");
-      buildPaginationBar();
+      refreshDupNav("ig");
     }
 
     function trDocRow(it) {
@@ -571,48 +760,44 @@
 
     function renderDocTable() {
       const tbody = document.getElementById("tbody-grupos-doc");
-      const pagEl = document.getElementById("pag-grupos-doc");
-      if (!tbody || !pagEl) return;
+      if (!tbody) return;
       const rows = _rowsDoc;
+      const psz = porPagDup();
       if (rows.length === 0) {
         tbody.innerHTML = `<tr class="hint-only"><td colspan="3">Nenhum grupo listado.</td></tr>`;
-        pagEl.innerHTML = "";
+        cgPageNavHide("paginacao-toolbar-dup-doc", "pag-ul-dup-doc", "pag-meta-dup-doc");
         return;
       }
-      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE_DUP));
+      const totalPages = Math.max(1, Math.ceil(rows.length / psz));
       let p = _pageDoc;
       if (p > totalPages) p = totalPages;
       if (p < 1) p = 1;
       _pageDoc = p;
-      const start = (p - 1) * PAGE_SIZE_DUP;
-      const slice = rows.slice(start, start + PAGE_SIZE_DUP);
+      const start = (p - 1) * psz;
+      const slice = rows.slice(start, start + psz);
       tbody.innerHTML = slice.map((it) => trDocRow(it)).join("");
-      const r = dupPaginationHtml(rows.length, _pageDoc, PAGE_SIZE_DUP, "pag-doc");
-      _pageDoc = r.page;
-      pagEl.innerHTML = r.html;
+      refreshDupNav("doc");
     }
 
     function renderNomeTable() {
       const tbody = document.getElementById("tbody-grupos-nome");
-      const pagEl = document.getElementById("pag-grupos-nome");
-      if (!tbody || !pagEl) return;
+      if (!tbody) return;
       const rows = _rowsNome;
+      const psz = porPagDup();
       if (rows.length === 0) {
         tbody.innerHTML = `<tr class="hint-only"><td colspan="2">Nenhum ficheiro listado.</td></tr>`;
-        pagEl.innerHTML = "";
+        cgPageNavHide("paginacao-toolbar-dup-nome", "pag-ul-dup-nome", "pag-meta-dup-nome");
         return;
       }
-      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE_DUP));
+      const totalPages = Math.max(1, Math.ceil(rows.length / psz));
       let p = _pageNome;
       if (p > totalPages) p = totalPages;
       if (p < 1) p = 1;
       _pageNome = p;
-      const start = (p - 1) * PAGE_SIZE_DUP;
-      const slice = rows.slice(start, start + PAGE_SIZE_DUP);
+      const start = (p - 1) * psz;
+      const slice = rows.slice(start, start + psz);
       tbody.innerHTML = slice.map((it) => trNomeRow(it)).join("");
-      const r = dupPaginationHtml(rows.length, _pageNome, PAGE_SIZE_DUP, "pag-nome");
-      _pageNome = r.page;
-      pagEl.innerHTML = r.html;
+      refreshDupNav("nome");
     }
 
     function flattenIgual(gci) {
@@ -737,62 +922,8 @@
     document.getElementById("btn-atualizar").addEventListener("click", carregar);
     initDupPathTooltip();
     initDupDocTooltip();
-
-    document.addEventListener("change", (e) => {
-      const sel = e.target && e.target.closest && e.target.closest(".js-dup-sel");
-      if (!sel) return;
-      const which = sel.getAttribute("data-which");
-      const p = parseInt(String(sel.value), 10);
-      if (!Number.isFinite(p) || p < 1) return;
-      if (which === "pag-igual") {
-        const total = Math.max(1, Math.ceil(_rowsIgual.length / PAGE_SIZE_DUP));
-        _pageIgual = Math.min(p, total);
-        renderCertTable();
-      } else if (which === "pag-doc") {
-        const total = Math.max(1, Math.ceil(_rowsDoc.length / PAGE_SIZE_DUP));
-        _pageDoc = Math.min(p, total);
-        renderDocTable();
-      } else if (which === "pag-nome") {
-        const total = Math.max(1, Math.ceil(_rowsNome.length / PAGE_SIZE_DUP));
-        _pageNome = Math.min(p, total);
-        renderNomeTable();
-      }
-    });
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest(".js-dup-pag");
-      if (!btn) return;
-      const which = btn.getAttribute("data-which");
-      const go = btn.getAttribute("data-go");
-      if (go == null) return;
-      if (which === "pag-igual") {
-        const total = Math.max(1, Math.ceil(_rowsIgual.length / PAGE_SIZE_DUP));
-        if (go === "prev") _pageIgual = Math.max(1, _pageIgual - 1);
-        else if (go === "next") _pageIgual = Math.min(total, _pageIgual + 1);
-        else {
-          const p = parseInt(go, 10);
-          if (Number.isFinite(p)) _pageIgual = Math.min(Math.max(1, p), total);
-        }
-        renderCertTable();
-      } else if (which === "pag-doc") {
-        const total = Math.max(1, Math.ceil(_rowsDoc.length / PAGE_SIZE_DUP));
-        if (go === "prev") _pageDoc = Math.max(1, _pageDoc - 1);
-        else if (go === "next") _pageDoc = Math.min(total, _pageDoc + 1);
-        else {
-          const p = parseInt(go, 10);
-          if (Number.isFinite(p)) _pageDoc = Math.min(Math.max(1, p), total);
-        }
-        renderDocTable();
-      } else if (which === "pag-nome") {
-        const total = Math.max(1, Math.ceil(_rowsNome.length / PAGE_SIZE_DUP));
-        if (go === "prev") _pageNome = Math.max(1, _pageNome - 1);
-        else if (go === "next") _pageNome = Math.min(total, _pageNome + 1);
-        else {
-          const p = parseInt(go, 10);
-          if (Number.isFinite(p)) _pageNome = Math.min(Math.max(1, p), total);
-        }
-        renderNomeTable();
-      }
-    });
+    initDupPerPage();
+    ["ig", "doc", "nome"].forEach((w) => wireDupNavBtns(w));
 
     (async function init() {
       const role = localStorage.getItem("user_role");

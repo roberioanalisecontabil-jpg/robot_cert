@@ -5,14 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="stylesheet" href="/static/style.css" />
-    <style>
-      .pagination { display:flex; align-items:center; justify-content:center; gap:.4rem; padding:1rem 0 .5rem; flex-wrap:wrap; }
-      .pagination button { min-width:2.2rem; height:2.2rem; padding:0 .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface,#fff); color:var(--text,#111); font-size:.85rem; cursor:pointer; transition:background .15s,border-color .15s; }
-      .pagination button:hover:not(:disabled) { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); }
-      .pagination button.active { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); font-weight:600; }
-      .pagination button:disabled { opacity:.4; cursor:default; }
-      .pagination-info { font-size:.82rem; color:var(--text-muted,#6b7280); text-align:center; padding-bottom:.25rem; }
-    </style>
   </head>
   <body>
     <!-- Sidebar -->
@@ -183,25 +175,76 @@
             <tbody id="tbody"></tbody>
           </table>
         </div>
-        <p id="pg-info" class="pagination-info"></p>
-        <div id="pagination" class="pagination"></div>
+        <nav id="paginacao-toolbar" class="cg-page-nav" aria-label="Navegação por páginas">
+          <div id="pag-info-dash" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-dash" class="cg-page-nav__ul" role="list">
+              <li>
+                <button
+                  type="button"
+                  id="btn-pag-prev"
+                  class="cg-page-link cg-page-link--rounded-s"
+                  title="Página anterior"
+                >
+                  Anterior
+                </button>
+              </li>
+              <li id="pag-li-next-dash">
+                <button
+                  type="button"
+                  id="btn-pag-next"
+                  class="cg-page-link cg-page-link--rounded-e"
+                  title="Próxima página"
+                >
+                  Seguinte
+                </button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-dash" class="cg-sr-only">Registos por página</label>
+              <select id="pag-perpage-dash" class="cg-page-perpage-select" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
+          </div>
+        </nav>
       </div>
 
     </main>
 
-    <script src="/static/ui-common.js?v=paginator-1"></script>
+    <script src="/static/ui-common.js?v=cg-nav-1"></script>
     <script>
       const fonte = () => getDataFonte();
-      let itensOriginais = [];
+      const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
+      const ALLOWED_PER_PAGE_DASH = [10, 25, 50, 100];
 
-      // Paginador compartilhado
-      const pag = new Paginator({
-        containerId : "pagination",
-        infoId      : "pg-info",
-        pageSize    : 20,
-        scrollTarget: ".table-container",
-        onRender    : (fatia) => renderTabela(fatia),
-      });
+      function porPaginaDashboard() {
+        const sel = document.getElementById("pag-perpage-dash");
+        const n = sel ? parseInt(sel.value, 10) : 10;
+        return ALLOWED_PER_PAGE_DASH.includes(n) ? n : 10;
+      }
+
+      function initPerPageDashboard() {
+        const sel = document.getElementById("pag-perpage-dash");
+        if (!sel) return;
+        let stored = parseInt(localStorage.getItem(LS_PER_PAGE_DASH) || "10", 10);
+        if (!ALLOWED_PER_PAGE_DASH.includes(stored)) stored = 10;
+        sel.value = String(stored);
+        localStorage.setItem(LS_PER_PAGE_DASH, String(stored));
+        sel.addEventListener("change", () => {
+          localStorage.setItem(LS_PER_PAGE_DASH, sel.value);
+          paginaAtual = 1;
+          carregarTabela();
+        });
+      }
+
+      let paginaAtual = 1;
+      let timerDebounceBusca = null;
+      let itensOriginais = [];
+      let itensVisiveis = [];
 
       const fmt = (iso) => {
         if (!iso) return "—";
@@ -286,6 +329,14 @@
         document.getElementById("n-erros").textContent = erroCount;
       }
 
+      function atualizarCardsResumo(r) {
+        if (!r) return;
+        document.getElementById("n-tot").textContent = r.total ?? 0;
+        document.getElementById("n-ok").textContent = r.validos ?? 0;
+        document.getElementById("n-exp-soon").textContent = r.expirando ?? 0;
+        document.getElementById("n-erros").textContent = r.erros ?? 0;
+      }
+
 
       function renderTabela(items) {
         const colTipo = (it) => {
@@ -322,32 +373,24 @@
           .join("");
       }
 
-      function aplicarFiltros() {
-        const filtroStatus = document.getElementById("filtro-status")?.value || "todos";
-        const busca = document.getElementById("busca-cert")?.value || "";
-        const buscaTexto = normalizarTexto(busca.trim());
-        const buscaDigitos = apenasDigitos(busca);
-
-        const filtrados = itensOriginais.filter((it) => {
-          if (filtroStatus === "validos") {
-            if (!(it.status === "ok" && !it._isExpiredByDate && !it._isExpiringSoon)) return false;
-          } else if (filtroStatus === "prestes_vencer") {
-            if (!(it.status === "ok" && !it._isExpiredByDate && it._isExpiringSoon)) return false;
-          } else if (filtroStatus === "vencidos") {
-            if (!(it.status === "expirado" || it._isExpiredByDate)) return false;
-          } else if (filtroStatus === "erros") {
-            if (it.status !== "erro") return false;
-          }
-          if (!buscaTexto) return true;
-          const alvoNome = normalizarTexto([it.nome, it.display_name, it.file_name].filter(Boolean).join(" "));
-          const docNumerico = apenasDigitos(it.documento_numero || it.documento_formatado || "");
-          if (alvoNome.includes(buscaTexto)) return true;
-          if (buscaDigitos && docNumerico.includes(buscaDigitos)) return true;
-          return false;
+      function atualizarPaginacaoUI(pg) {
+        cgPageNavRefresh({
+          bar: "paginacao-toolbar",
+          meta: "pag-info-dash",
+          ul: "pag-ul-dash",
+          liNext: "pag-li-next-dash",
+          prev: "btn-pag-prev",
+          next: "btn-pag-next",
+          pg: pg,
+          metaFormatter: (p) =>
+            "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " linhas (filtro)",
+          hideWhenSingle: true,
+          goToPage: (pn) => {
+            paginaAtual = pn;
+            carregarTabela();
+          },
+          maxButtons: 5,
         });
-
-        atualizarCards(filtrados);
-        pag.set(filtrados); // reseta para pág 1 e renderiza
       }
 
       function statusTexto(it) {
@@ -359,9 +402,42 @@
         return String(it.status || "");
       }
 
-      function exportarExcelVisivel() {
+      async function carregarTodosFiltradosParaExportacao() {
+        toggleLoading(true, "Preparando exportação...");
+        try {
+          const params = new URLSearchParams({
+            fonte: fonte(),
+            filtro_status: document.getElementById("filtro-status")?.value || "todos",
+            busca: document.getElementById("busca-cert")?.value || "",
+            todas_filtradas: "true",
+          });
+          const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
+          if (r.status === 401) {
+            logout();
+            return null;
+          }
+          if (!r.ok) {
+            alert("Erro ao exportar: " + r.status + " " + (await mensagemCorpoErro(r)));
+            return null;
+          }
+          return await r.json();
+        } finally {
+          toggleLoading(false);
+        }
+      }
+
+      async function exportarExcelVisivel() {
+        const d = await carregarTodosFiltradosParaExportacao();
+        if (!d || !d.itens) return;
+        if (d.lista_truncada) {
+          alert(
+            "Existem mais registos do que o limite de exportação no servidor. O ficheiro contém apenas os primeiros " +
+              d.itens.length +
+              "."
+          );
+        }
         const headers = ["Status", "Nome", "Emissão (UTC)", "Vencimento (UTC)", "Documento"];
-        const rows = pag.all().map((it) => [
+        const rows = d.itens.map((it) => [
           statusTexto(it),
           (it.nome != null && it.nome !== "" ? it.nome : it.display_name) || "",
           fmt(it.not_before),
@@ -383,8 +459,13 @@
         URL.revokeObjectURL(url);
       }
 
-      function exportarPdfVisivel() {
-        const linhas = pag.all()
+      async function exportarPdfVisivel() {
+        const d = await carregarTodosFiltradosParaExportacao();
+        if (!d || !d.itens) return;
+        if (d.lista_truncada) {
+          alert("Lista truncada no servidor: o PDF contém só os primeiros registos dentro do limite.");
+        }
+        const linhas = d.itens
           .map((it) => `
             <tr>
               <td>${esc(statusTexto(it))}</td>
@@ -413,7 +494,7 @@
             </head>
             <body>
               <h1>Certificados filtrados</h1>
-              <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total visível: ${pag.all().length}</p>
+              <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total exportado: ${d.itens.length}</p>
               <table>
                 <thead>
                   <tr>
@@ -438,13 +519,21 @@
         toggleLoading(true, "Carregando certificados...");
         try {
           const f = fonte();
-          const r = await fetch("/api/certificados?fonte=" + encodeURIComponent(f), { headers: getHeaders() });
+          const params = new URLSearchParams({
+            fonte: f,
+            pagina: String(paginaAtual),
+            por_pagina: String(porPaginaDashboard()),
+            filtro_status: document.getElementById("filtro-status")?.value || "todos",
+            busca: document.getElementById("busca-cert")?.value || "",
+          });
+          const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
           if (r.status === 401) {
             logout(); // Se falhar por 401, token expirou ou é inválido
             return;
           }
           if (r.status === 404) {
             st.textContent = "Fonte “remoto”: ainda sem dados. Use “local”/“auto” em Configuração ou o agente no Windows.";
+            atualizarPaginacaoUI(null);
             return;
           }
           if (!r.ok) {
@@ -462,15 +551,21 @@
           document.getElementById("data-hint").textContent =
             "Fonte de dados: " + (d.data_source || "—") + (d.machine_id ? " | Servidor: " + d.machine_id : "");
           const items = d.itens || [];
-
-          const now = new Date();
-          const thirtyDaysFromNow = new Date();
-          thirtyDaysFromNow.setDate(now.getDate() + 30);
-
-          items.forEach((it) => aplicarFlagsDatasCert(it, now, thirtyDaysFromNow));
-
+          if (d.paginacao) {
+            paginaAtual = d.paginacao.pagina;
+            atualizarPaginacaoUI(d.paginacao);
+            atualizarCardsResumo(d.resumo);
+          } else {
+            atualizarPaginacaoUI(null);
+            const now = new Date();
+            const thirtyDaysFromNow = new Date();
+            thirtyDaysFromNow.setDate(now.getDate() + 30);
+            items.forEach((it) => aplicarFlagsDatasCert(it, now, thirtyDaysFromNow));
+            atualizarCards(items);
+          }
           itensOriginais = items;
-          aplicarFiltros();
+          itensVisiveis = items;
+          renderTabela(items);
         } catch (e) {
           st.textContent = "Erro: " + e;
         } finally {
@@ -478,11 +573,31 @@
         }
       }
 
-      document.getElementById("btn-refresh").addEventListener("click", carregarTabela);
-      document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
-      document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
-      document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
-      document.getElementById("busca-cert").addEventListener("input", aplicarFiltros);
+      document.getElementById("btn-refresh").addEventListener("click", () => {
+        paginaAtual = 1;
+        carregarTabela();
+      });
+      document.getElementById("btn-export-excel").addEventListener("click", () => void exportarExcelVisivel());
+      document.getElementById("btn-export-pdf").addEventListener("click", () => void exportarPdfVisivel());
+      document.getElementById("filtro-status").addEventListener("change", () => {
+        paginaAtual = 1;
+        carregarTabela();
+      });
+      document.getElementById("busca-cert").addEventListener("input", () => {
+        paginaAtual = 1;
+        clearTimeout(timerDebounceBusca);
+        timerDebounceBusca = setTimeout(() => carregarTabela(), 350);
+      });
+      document.getElementById("btn-pag-prev").addEventListener("click", () => {
+        if (paginaAtual > 1) {
+          paginaAtual--;
+          carregarTabela();
+        }
+      });
+      document.getElementById("btn-pag-next").addEventListener("click", () => {
+        paginaAtual++;
+        carregarTabela();
+      });
       window.addEventListener("storage", (ev) => {
         if (ev.key === "cert_robot_data_fonte" || ev.key === KEY_STORAGE) {
           const ph = document.getElementById("panel-hint");
@@ -503,6 +618,7 @@
             if (elConfig) elConfig.style.display = 'flex';
         }
 
+        initPerPageDashboard();
         await carregarTabela();
       })();
     </script>

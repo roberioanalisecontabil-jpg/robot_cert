@@ -6,14 +6,20 @@
   <title>Vencidos — CertGuard</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    .ano-progress-wrap { margin-top:.65rem; width:100%; height:4px; background:rgba(148,163,184,.3); border-radius:999px; overflow:hidden; }
-    .ano-progress-bar  { height:100%; width:0%; background:linear-gradient(90deg,#f59e0b,#f97316); transform-origin:left center; }
-    .pagination { display:flex; align-items:center; justify-content:center; gap:.4rem; padding:1rem 0 .5rem; flex-wrap:wrap; }
-    .pagination button { min-width:2.2rem; height:2.2rem; padding:0 .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface,#fff); color:var(--text,#111); font-size:.85rem; cursor:pointer; transition:background .15s,border-color .15s; }
-    .pagination button:hover:not(:disabled) { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); }
-    .pagination button.active { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb); font-weight:600; }
-    .pagination button:disabled { opacity:.4; cursor:default; }
-    .pagination-info { font-size:.82rem; color:var(--text-muted,#6b7280); text-align:center; padding-bottom:.25rem; }
+    .ano-progress-wrap {
+      margin-top: 0.65rem;
+      width: 100%;
+      height: 4px;
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .ano-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #f59e0b, #f97316);
+      transform-origin: left center;
+    }
   </style>
 </head>
 <body>
@@ -148,36 +154,67 @@
           <tbody id="tbody-vencidos"></tbody>
         </table>
       </div>
-      <p id="pg-info-venc" class="pagination-info"></p>
-      <div id="pagination-venc" class="pagination"></div>
+      <nav id="paginacao-toolbar-venc" class="cg-page-nav" aria-label="Navegação por páginas">
+        <div id="pag-meta-venc" class="cg-page-nav__meta"></div>
+        <div class="cg-page-nav__row">
+          <ul id="pag-ul-venc" class="cg-page-nav__ul" role="list">
+            <li>
+              <button type="button" id="btn-venc-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">
+                Anterior
+              </button>
+            </li>
+            <li id="pag-li-next-venc">
+              <button type="button" id="btn-venc-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">
+                Seguinte
+              </button>
+            </li>
+          </ul>
+          <div>
+            <label for="pag-perpage-venc" class="cg-sr-only">Registos por página</label>
+            <select id="pag-perpage-venc" class="cg-page-perpage-select" title="Itens por página">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50">50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
+          </div>
+        </div>
+      </nav>
     </div>
   </main>
 
-  <script src="/static/ui-common.js?v=paginator-1"></script>
+  <script src="/static/ui-common.js?v=cg-nav-1"></script>
   <script>
-    let itensOriginais = [];
+    const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
+    const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
+
+    function porPaginaVenc() {
+      const sel = document.getElementById("pag-perpage-venc");
+      const n = sel ? parseInt(sel.value, 10) : 10;
+      return ALLOWED_PER_PAGE_VENC.includes(n) ? n : 10;
+    }
+
+    function initPerPageVenc() {
+      const sel = document.getElementById("pag-perpage-venc");
+      if (!sel) return;
+      let stored = parseInt(localStorage.getItem(LS_PER_PAGE_VENC) || "10", 10);
+      if (!ALLOWED_PER_PAGE_VENC.includes(stored)) stored = 10;
+      sel.value = String(stored);
+      localStorage.setItem(LS_PER_PAGE_VENC, String(stored));
+      sel.addEventListener("change", () => {
+        localStorage.setItem(LS_PER_PAGE_VENC, sel.value);
+        paginaAtualVenc = 1;
+        carregarVencidos();
+      });
+    }
+
+    let paginaAtualVenc = 1;
+    let debounceVencBusca = null;
+    let itensVisiveis = [];
     let anosResumo = [];
     let anosResumoIdx = 0;
     let anosResumoTimer = null;
     let anosProgressTimer = null;
-
-    // Paginador da página vencidos
-    const pag = new Paginator({
-      containerId : "pagination-venc",
-      infoId      : "pg-info-venc",
-      pageSize    : 20,
-      scrollTarget: ".table-container",
-      onRender(fatia) {
-        const tb = document.getElementById("tbody-vencidos");
-        tb.innerHTML = fatia.map((it) => `
-          <tr>
-            <td>${esc(it.nome)}</td>
-            <td>${esc(it.documento || "—")}</td>
-            <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-          </tr>
-        `).join("");
-      },
-    });
 
     function toggleLoading(show, text) {
       if (typeof setGlobalLoading === "function") {
@@ -213,37 +250,58 @@
       document.getElementById("dt-fim").value = `${y}-12-31`;
     }
 
-    function aplicarBuscaVencidos() {
-      const raw = (document.getElementById("busca-vencidos").value || "").trim();
-      const buscaTexto = normalizarTexto(raw);
-      const buscaDigitos = apenasDigitos(raw);
-      const filtrados = itensOriginais.filter((it) => {
-        if (!buscaTexto) return true;
-        const nomeAlvo = normalizarTexto(it.nome || "");
-        const vencAlvo = normalizarTexto(fmtDataUtc(it.vencimento_certificado));
-        const docAlvo  = normalizarTexto(it.documento || "");
-        const docNum   = apenasDigitos(it.documento || "");
-        if (nomeAlvo.includes(buscaTexto)) return true;
-        if (docAlvo.includes(buscaTexto))  return true;
-        if (vencAlvo.includes(buscaTexto)) return true;
-        if (buscaDigitos && docNum.includes(buscaDigitos)) return true;
-        if (buscaDigitos && apenasDigitos(fmtDataUtc(it.vencimento_certificado)).includes(buscaDigitos)) return true;
-        return false;
+    function atualizarPaginacaoVenc(pg) {
+      cgPageNavRefresh({
+        bar: "paginacao-toolbar-venc",
+        meta: "pag-meta-venc",
+        ul: "pag-ul-venc",
+        liNext: "pag-li-next-venc",
+        prev: "btn-venc-prev",
+        next: "btn-venc-next",
+        pg: pg,
+        metaFormatter: (p) =>
+          "Página " +
+          p.pagina +
+          " de " +
+          p.total_paginas +
+          " · " +
+          p.total_itens +
+          " vencido(s) (filtros)",
+        hideWhenSingle: true,
+        goToPage: (pn) => {
+          paginaAtualVenc = pn;
+          carregarVencidos();
+        },
+        maxButtons: 5,
       });
-      atualizarCardsVencidos(filtrados);
-      const hint = document.getElementById("count-hint");
-      if (hint) hint.textContent = raw
-        ? `${filtrados.length} de ${itensOriginais.length} vencido(s) com o filtro atual`
-        : `${itensOriginais.length} vencido(s) exibido(s)`;
-      pag.set(filtrados); // reseta para pág 1 e renderiza
     }
 
-    function atualizarCardsVencidos(lista) {
-      const totalGeral = itensOriginais.length;
-      const totalAtual = lista.length;
-      document.getElementById("n-vencidos-total").textContent = String(totalAtual);
+    function renderTabelaVencidas(rows, totalServidor) {
+      itensVisiveis = rows;
+      document.getElementById("n-vencidos-total").textContent = String(typeof totalServidor === "number" ? totalServidor : rows.length);
       document.getElementById("n-vencidos-sub").textContent =
-        totalAtual === totalGeral ? "na pasta/listagem atual" : `${totalAtual} de ${totalGeral} com o filtro atual`;
+        typeof totalServidor === "number" && totalServidor > rows.length
+          ? `${rows.length} linhas nesta página`
+          : "no período com o filtro atual";
+      const tb = document.getElementById("tbody-vencidos");
+      tb.innerHTML = rows
+        .map(
+          (it) => `
+        <tr>
+          <td>${esc(it.nome)}</td>
+          <td>${esc(it.documento || "—")}</td>
+          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+        </tr>
+      `
+        )
+        .join("");
+      const hint = document.getElementById("count-hint");
+      const raw = (document.getElementById("busca-vencidos").value || "").trim();
+      if (typeof totalServidor === "number") {
+        hint.textContent = raw
+          ? `${rows.length} na página (${totalServidor} no período com busca)`
+          : `${totalServidor} no período (mostrando ${rows.length})`;
+      }
     }
 
     function renderAnoAtual() {
@@ -300,34 +358,60 @@
       }, passo);
     }
 
-    async function carregarResumoAnosSemFiltro() {
-      const r = await fetch("/api/certificados/vencidos", { headers: getHeaders() });
-      if (!r.ok) {
-        anosResumo = [];
-        anosResumoIdx = 0;
-        renderAnoAtual();
-        return;
-      }
-      const j = await r.json();
-      const porAno = {};
-      (j.itens || []).forEach((it) => {
-        const dt = new Date(it.vencimento_certificado);
-        if (Number.isNaN(dt.getTime())) return;
-        const ano = String(dt.getUTCFullYear());
-        porAno[ano] = (porAno[ano] || 0) + 1;
-      });
-      anosResumo = Object.entries(porAno)
-        .map(([ano, total]) => ({ ano, total }))
-        .sort((a, b) => Number(b.ano) - Number(a.ano));
+    function aplicarResumoAnosDoPayload(j) {
+      anosResumo = Array.isArray(j.resumo_anos) ? j.resumo_anos : [];
       anosResumoIdx = 0;
       renderAnoAtual();
       iniciarBarraProgressoAno();
       iniciarRotacaoAnos();
     }
 
-    function exportarExcelVisivel() {
+    async function fetchVencidosExportacao(qsDates) {
+      toggleLoading(true, "Exportação...");
+      try {
+        const params = qsDates || buildParamsVencidos({ todasFiltradas: true });
+        const r = await fetch(`/api/certificados/vencidos?${params.toString()}`, { headers: getHeaders() });
+        if (r.status === 401) {
+          logout();
+          return null;
+        }
+        if (!r.ok) {
+          alert("Erro: " + r.status + " " + (await mensagemCorpoErro(r)));
+          return null;
+        }
+        return await r.json();
+      } finally {
+        toggleLoading(false);
+      }
+    }
+
+    function buildParamsVencidos(opts) {
+      const { todasFiltradas = false, pagina = paginaAtualVenc } = opts || {};
+      const inicio = document.getElementById("dt-inicio").value;
+      const fim = document.getElementById("dt-fim").value;
+      const params = new URLSearchParams({
+        pagina: String(pagina),
+        por_pagina: String(porPaginaVenc()),
+        busca: document.getElementById("busca-vencidos").value || "",
+      });
+      if (inicio) params.set("data_inicio", inicio);
+      if (fim) params.set("data_fim", fim);
+      if (todasFiltradas) {
+        params.set("todas_filtradas", "true");
+        params.delete("pagina");
+        params.delete("por_pagina");
+      }
+      return params;
+    }
+
+    async function exportarExcelVisivel() {
+      const d = await fetchVencidosExportacao();
+      if (!d || !d.itens) return;
+      if (d.lista_truncada) {
+        alert("Lista truncada: exportados apenas os primeiros " + d.itens.length + " registos.");
+      }
       const headers = ["Nome", "CNPJ/CPF", "Vencimento do certificado"];
-      const rows = pag.all().map((it) => [
+      const rows = d.itens.map((it) => [
         it.nome || "",
         it.documento || "",
         fmtDataUtc(it.vencimento_certificado),
@@ -347,8 +431,11 @@
       URL.revokeObjectURL(url);
     }
 
-    function exportarPdfVisivel() {
-      const linhas = pag.all()
+    async function exportarPdfVisivel() {
+      const d = await fetchVencidosExportacao();
+      if (!d || !d.itens) return;
+      if (d.lista_truncada) alert("Lista truncada na exportação.");
+      const linhas = d.itens
         .map((it) => `
           <tr>
             <td>${esc(it.nome || "")}</td>
@@ -375,7 +462,7 @@
           </head>
           <body>
             <h1>Certificados vencidos</h1>
-            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total: ${pag.all().length}</p>
+            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total exportado: ${d.itens.length}</p>
             <table>
               <thead>
                 <tr>
@@ -396,31 +483,53 @@
       const st = document.getElementById("status-msg");
       st.textContent = "A carregar…";
       toggleLoading(true, "Carregando vencidos...");
-      const inicio = document.getElementById("dt-inicio").value;
-      const fim = document.getElementById("dt-fim").value;
-      const qs = new URLSearchParams();
-      if (inicio) qs.set("data_inicio", inicio);
-      if (fim) qs.set("data_fim", fim);
       try {
+        const qs = buildParamsVencidos({ todasFiltradas: false });
         const r = await fetch(`/api/certificados/vencidos?${qs.toString()}`, { headers: getHeaders() });
+        if (r.status === 401) {
+          logout();
+          return;
+        }
         if (!r.ok) {
           st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
           return;
         }
         const j = await r.json();
-        itensOriginais = j.itens || [];
+        if (j.paginacao) {
+          paginaAtualVenc = j.paginacao.pagina;
+          atualizarPaginacaoVenc(j.paginacao);
+        } else {
+          atualizarPaginacaoVenc(null);
+        }
         st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
-        aplicarBuscaVencidos();
-        await carregarResumoAnosSemFiltro();
+        aplicarResumoAnosDoPayload(j);
+        renderTabelaVencidas(j.itens || [], j.total);
       } finally {
         toggleLoading(false);
       }
     }
 
-    document.getElementById("btn-filtrar").addEventListener("click", carregarVencidos);
-    document.getElementById("busca-vencidos").addEventListener("input", aplicarBuscaVencidos);
-    document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
-    document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
+    document.getElementById("btn-filtrar").addEventListener("click", () => {
+      paginaAtualVenc = 1;
+      carregarVencidos();
+    });
+    document.getElementById("busca-vencidos").addEventListener("input", () => {
+      paginaAtualVenc = 1;
+      clearTimeout(debounceVencBusca);
+      debounceVencBusca = setTimeout(carregarVencidos, 320);
+    });
+    document.getElementById("btn-export-excel").addEventListener("click", () => void exportarExcelVisivel());
+    document.getElementById("btn-export-pdf").addEventListener("click", () => void exportarPdfVisivel());
+    document.getElementById("btn-venc-prev").addEventListener("click", () => {
+      if (paginaAtualVenc > 1) {
+        paginaAtualVenc--;
+        carregarVencidos();
+      }
+    });
+    document.getElementById("btn-venc-next").addEventListener("click", () => {
+      paginaAtualVenc++;
+      carregarVencidos();
+    });
 
     (async function init() {
       const role = localStorage.getItem("user_role");
@@ -430,6 +539,7 @@
         if (elUsers) elUsers.style.display = "flex";
         if (elConfig) elConfig.style.display = "flex";
       }
+      initPerPageVenc();
       anoAtualRange();
       await carregarVencidos();
     })();

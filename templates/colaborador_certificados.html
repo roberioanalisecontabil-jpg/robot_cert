@@ -79,21 +79,28 @@
             <tbody id="tbody-painel"></tbody>
           </table>
         </div>
-        <div class="toolbar" style="margin-top:0.8rem; margin-bottom:0; border-bottom:none; padding-bottom:0;">
-          <div class="toolbar__status">
-            <p class="hint" id="painel-page-hint"></p>
+        <nav id="paginacao-toolbar-colab-painel" class="cg-page-nav" aria-label="Paginação do painel">
+          <div id="pag-meta-colab-painel" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-colab-painel" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-colab-painel-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-colab-painel">
+                <button type="button" id="btn-colab-painel-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-colab-painel" class="cg-sr-only">Registos por página</label>
+              <select id="pag-perpage-colab-painel" class="cg-page-perpage-select" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
           </div>
-          <div class="toolbar__actions">
-            <button type="button" id="painel-prev">Anterior</button>
-            <button type="button" id="painel-next">Próxima</button>
-            <label for="painel-page-size" class="hint">Por página</label>
-            <select id="painel-page-size" class="path-input" style="max-width:90px;">
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
-        </div>
+        </nav>
       </section>
 
       <section id="sec-selecao" style="display:none;">
@@ -109,37 +116,86 @@
             <tbody id="tbody-selecao"></tbody>
           </table>
         </div>
-        <div class="toolbar" style="margin-top:0.8rem; margin-bottom:0; border-bottom:none; padding-bottom:0;">
-          <div class="toolbar__status">
-            <p class="hint" id="selecao-page-hint"></p>
+        <nav id="paginacao-toolbar-colab-sel" class="cg-page-nav" aria-label="Paginação da seleção">
+          <div id="pag-meta-colab-sel" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-colab-sel" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-colab-sel-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-colab-sel">
+                <button type="button" id="btn-colab-sel-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-colab-sel" class="cg-sr-only">Registos por página</label>
+              <select id="pag-perpage-colab-sel" class="cg-page-perpage-select" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
           </div>
-          <div class="toolbar__actions">
-            <button type="button" id="selecao-prev">Anterior</button>
-            <button type="button" id="selecao-next">Próxima</button>
-            <label for="selecao-page-size" class="hint">Por página</label>
-            <select id="selecao-page-size" class="path-input" style="max-width:90px;">
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
-        </div>
+        </nav>
       </section>
     </div>
   </main>
 
-  <script src="/static/ui-common.js?v=paginator-1"></script>
+  <script src="/static/ui-common.js?v=cg-nav-1"></script>
   <script>
     function toggleLoading(show, text) { if (typeof setGlobalLoading === "function") setGlobalLoading(show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
     function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC"; }
+    const LS_PER_PAGE_COLAB_P = "cg_per_page_colab_painel";
+    const LS_PER_PAGE_COLAB_S = "cg_per_page_colab_selecao";
+    const ALLOW_PER_PAGE_COLAB = [10, 25, 50, 100];
+
     let opcoes = [];
     let selecionados = new Set();
     let painelItens = [];
     let painelPagina = 1;
-    let painelPageSize = 20;
     let selecaoPagina = 1;
-    let selecaoPageSize = 20;
+
+    function porPagColabPainel() {
+      const sel = document.getElementById("pag-perpage-colab-painel");
+      const n = sel ? parseInt(sel.value, 10) : 10;
+      return ALLOW_PER_PAGE_COLAB.includes(n) ? n : 10;
+    }
+
+    function porPagColabSelecao() {
+      const sel = document.getElementById("pag-perpage-colab-sel");
+      const n = sel ? parseInt(sel.value, 10) : 10;
+      return ALLOW_PER_PAGE_COLAB.includes(n) ? n : 10;
+    }
+
+    function initPerPageColabPainel() {
+      const sel = document.getElementById("pag-perpage-colab-painel");
+      if (!sel) return;
+      let v = parseInt(localStorage.getItem(LS_PER_PAGE_COLAB_P) || "10", 10);
+      if (!ALLOW_PER_PAGE_COLAB.includes(v)) v = 10;
+      sel.value = String(v);
+      localStorage.setItem(LS_PER_PAGE_COLAB_P, String(v));
+      sel.addEventListener("change", () => {
+        localStorage.setItem(LS_PER_PAGE_COLAB_P, sel.value);
+        painelPagina = 1;
+        void carregarPainel(false);
+      });
+    }
+
+    function initPerPageColabSelecao() {
+      const sel = document.getElementById("pag-perpage-colab-sel");
+      if (!sel) return;
+      let v = parseInt(localStorage.getItem(LS_PER_PAGE_COLAB_S) || "10", 10);
+      if (!ALLOW_PER_PAGE_COLAB.includes(v)) v = 10;
+      sel.value = String(v);
+      localStorage.setItem(LS_PER_PAGE_COLAB_S, String(v));
+      sel.addEventListener("change", () => {
+        localStorage.setItem(LS_PER_PAGE_COLAB_S, sel.value);
+        selecaoPagina = 1;
+        renderSelecao();
+      });
+    }
 
     function badgeStatus(v) {
       if (v === "vencido") return "<span class='badge badge-expired'>Vencido</span>";
@@ -150,11 +206,12 @@
     function renderSelecao() {
       const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
       const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+      const psz = porPagColabSelecao();
       const total = rows.length;
-      const totalPag = Math.max(1, Math.ceil(total / selecaoPageSize));
+      const totalPag = Math.max(1, Math.ceil(total / psz));
       if (selecaoPagina > totalPag) selecaoPagina = totalPag;
-      const start = (selecaoPagina - 1) * selecaoPageSize;
-      const pageRows = rows.slice(start, start + selecaoPageSize);
+      const start = (selecaoPagina - 1) * psz;
+      const pageRows = rows.slice(start, start + psz);
       document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => `
         <tr>
           <td><input type="checkbox" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
@@ -163,21 +220,49 @@
           <td>${esc(it.status_ultimo || "—")}</td>
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>`).join("");
-      document.getElementById("selecao-page-hint").textContent = `${total} item(ns) · página ${selecaoPagina}/${totalPag}`;
-      document.getElementById("selecao-prev").disabled = selecaoPagina <= 1;
-      document.getElementById("selecao-next").disabled = selecaoPagina >= totalPag;
+      cgPageNavRefresh({
+        bar: "paginacao-toolbar-colab-sel",
+        meta: "pag-meta-colab-sel",
+        ul: "pag-ul-colab-sel",
+        liNext: "pag-li-next-colab-sel",
+        prev: "btn-colab-sel-prev",
+        next: "btn-colab-sel-next",
+        pg: { pagina: selecaoPagina, total_paginas: totalPag, total_itens: total },
+        metaFormatter: (pg) =>
+          "Página " +
+          pg.pagina +
+          " de " +
+          pg.total_paginas +
+          " · " +
+          pg.total_itens +
+          " opção(ões) com o filtro atual",
+        hideWhenSingle: true,
+        goToPage: (pn) => {
+          selecaoPagina = pn;
+          renderSelecao();
+        },
+        maxButtons: 5,
+      });
     }
 
-    async function carregarPainel() {
-      const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
-      if (!r.ok) return;
-      const j = await r.json();
-      painelItens = j.itens || [];
+    async function carregarPainel(refetch) {
+      if (refetch !== false) {
+        const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
+        if (!r.ok) {
+          document.getElementById("painel-hint").textContent = "Erro ao carregar painel: " + await mensagemCorpoErro(r);
+          document.getElementById("tbody-painel").innerHTML = "";
+          cgPageNavHide("paginacao-toolbar-colab-painel", "pag-ul-colab-painel", "pag-meta-colab-painel");
+          return;
+        }
+        const j = await r.json();
+        painelItens = j.itens || [];
+      }
+      const psz = porPagColabPainel();
       const total = painelItens.length;
-      const totalPag = Math.max(1, Math.ceil(total / painelPageSize));
+      const totalPag = Math.max(1, Math.ceil(total / psz));
       if (painelPagina > totalPag) painelPagina = totalPag;
-      const start = (painelPagina - 1) * painelPageSize;
-      const pageRows = painelItens.slice(start, start + painelPageSize);
+      const start = (painelPagina - 1) * psz;
+      const pageRows = painelItens.slice(start, start + psz);
       document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados`;
       document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => `
         <tr style="${it.status === "vencido" ? "background:#fef2f2;" : ""}">
@@ -187,9 +272,23 @@
           <td>${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
           <td>${badgeStatus(it.status)}</td>
         </tr>`).join("");
-      document.getElementById("painel-page-hint").textContent = `${total} item(ns) · página ${painelPagina}/${totalPag}`;
-      document.getElementById("painel-prev").disabled = painelPagina <= 1;
-      document.getElementById("painel-next").disabled = painelPagina >= totalPag;
+      cgPageNavRefresh({
+        bar: "paginacao-toolbar-colab-painel",
+        meta: "pag-meta-colab-painel",
+        ul: "pag-ul-colab-painel",
+        liNext: "pag-li-next-colab-painel",
+        prev: "btn-colab-painel-prev",
+        next: "btn-colab-painel-next",
+        pg: { pagina: painelPagina, total_paginas: totalPag, total_itens: total },
+        metaFormatter: (pg) =>
+          "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + " no painel",
+        hideWhenSingle: true,
+        goToPage: (pn) => {
+          painelPagina = pn;
+          void carregarPainel(false);
+        },
+        maxButtons: 5,
+      });
     }
 
     async function carregarSelecao() {
@@ -197,7 +296,13 @@
         fetch("/api/colaborador/certificados/opcoes", { headers: getHeaders() }),
         fetch("/api/colaborador/certificados/selecionados", { headers: getHeaders() }),
       ]);
-      if (!ro.ok || !rs.ok) return;
+      if (!ro.ok || !rs.ok) {
+        const det = !ro.ok ? await mensagemCorpoErro(ro) : await mensagemCorpoErro(rs);
+        document.getElementById("painel-hint").textContent = "Erro ao carregar opções: " + det;
+        opcoes = [];
+        renderSelecao();
+        return;
+      }
       const jo = await ro.json();
       const js = await rs.json();
       opcoes = jo.itens || [];
@@ -218,7 +323,8 @@
         return;
       }
       selecionados = new Set(docs);
-      await carregarPainel();
+      painelPagina = 1;
+      await carregarPainel(true);
       alert("Seleção salva.");
     }
 
@@ -238,12 +344,35 @@
     document.getElementById("tab-selecao").addEventListener("click", () => showTab("selecao"));
     document.getElementById("busca-selecao").addEventListener("input", () => { selecaoPagina = 1; renderSelecao(); });
     document.getElementById("btn-salvar-selecao").addEventListener("click", salvarSelecao);
-    document.getElementById("painel-prev").addEventListener("click", async () => { if (painelPagina > 1) { painelPagina--; await carregarPainel(); } });
-    document.getElementById("painel-next").addEventListener("click", async () => { painelPagina++; await carregarPainel(); });
-    document.getElementById("selecao-prev").addEventListener("click", () => { if (selecaoPagina > 1) { selecaoPagina--; renderSelecao(); } });
-    document.getElementById("selecao-next").addEventListener("click", () => { selecaoPagina++; renderSelecao(); });
-    document.getElementById("painel-page-size").addEventListener("change", async (e) => { painelPageSize = Number(e.target.value || 20); painelPagina = 1; await carregarPainel(); });
-    document.getElementById("selecao-page-size").addEventListener("change", (e) => { selecaoPageSize = Number(e.target.value || 20); selecaoPagina = 1; renderSelecao(); });
+    document.getElementById("btn-colab-painel-prev").addEventListener("click", () => {
+      if (painelPagina > 1) {
+        painelPagina--;
+        void carregarPainel(false);
+      }
+    });
+    document.getElementById("btn-colab-painel-next").addEventListener("click", () => {
+      const psz = porPagColabPainel();
+      const totalPag = Math.max(1, Math.ceil(painelItens.length / psz));
+      if (painelPagina < totalPag) {
+        painelPagina++;
+        void carregarPainel(false);
+      }
+    });
+    document.getElementById("btn-colab-sel-prev").addEventListener("click", () => {
+      if (selecaoPagina > 1) {
+        selecaoPagina--;
+        renderSelecao();
+      }
+    });
+    document.getElementById("btn-colab-sel-next").addEventListener("click", () => {
+      const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
+      const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+      const totalPag = Math.max(1, Math.ceil(rows.length / porPagColabSelecao()));
+      if (selecaoPagina < totalPag) {
+        selecaoPagina++;
+        renderSelecao();
+      }
+    });
     document.getElementById("tbody-selecao").addEventListener("change", (e) => {
       const el = e.target;
       if (!el || !el.matches("input[type='checkbox'][data-doc]")) return;
@@ -260,10 +389,12 @@
         if (elUsers) elUsers.style.display = "flex";
         if (elConfig) elConfig.style.display = "flex";
       }
+      initPerPageColabPainel();
+      initPerPageColabSelecao();
       toggleLoading(true, "Carregando tela de acompanhamento...");
       try {
         await carregarSelecao();
-        await carregarPainel();
+        await carregarPainel(true);
       } finally {
         toggleLoading(false);
       }

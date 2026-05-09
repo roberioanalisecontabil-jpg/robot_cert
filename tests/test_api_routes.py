@@ -112,6 +112,34 @@ def test_vencidos_certificados_200(
     assert "itens" in j
     assert "total" in j
     assert "snapshots_lidos" in j
+    assert "resumo_anos" in j
+    assert isinstance(j["resumo_anos"], list)
+
+
+def test_historico_certificados_paginacao(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    h = {"X-API-Key": api_key}
+    r = client_com_chave.get(
+        "/api/certificados/historico?pagina=1&por_pagina=5", headers=h
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert "paginacao" in j
+    pg = j["paginacao"]
+    assert pg["por_pagina"] == 5
+    assert "total_paginas" in pg
+
+
+def test_vencidos_certificados_paginacao(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    h = {"X-API-Key": api_key}
+    r = client_com_chave.get("/api/certificados/vencidos?pagina=1&por_pagina=5", headers=h)
+    assert r.status_code == 200
+    j = r.json()
+    assert "paginacao" in j
+    assert isinstance(j["resumo_anos"], list)
 
 
 def test_duplicidades_api_200(

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import auth, config
+from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
@@ -73,6 +74,8 @@ async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.T
     return token
 
 logger = logging.getLogger(__name__)
+
+LISTAGEM_EXPORT_MAX = 5000
 
 app = FastAPI(title="Monitor de certificados PFX", version="1.2.0")
 
@@ -922,6 +925,131 @@ def certificados_duplicidades() -> dict[str, Any]:
     }
 
 
+def _historico_merge_snapshot_into_agregados(snap: dict[str, Any], agregados: Dict[str, dict]) -> None:
+    """Acumula itens de um snapshot no mapa por file_name (mantém linha do scan mais recente)."""
+    scanned_at = snap.get("scanned_at") or datetime.now(timezone.utc).isoformat()
+    scanned_dt = _parse_iso_utc(scanned_at)
+    for it in (snap.get("items") or []):
+        file_name = str(it.get("file_name") or "").strip()
+        if not file_name:
+            continue
+        key = file_name.lower()
+        atual = agregados.get(key)
+        if (not atual) or (scanned_dt > atual["_dt"]):
+            doc_raw = (
+                it.get("documento_formatado") or it.get("documento_numero") or it.get("documento")
+            )
+            agregados[key] = {
+                "_dt": scanned_dt,
+                "file_name": file_name,
+                "nome": it.get("nome") or it.get("display_name") or file_name,
+                "status_ultimo": it.get("status"),
+                "documento": doc_raw,
+                "vencimento_certificado": it.get("not_after"),
+                "ultima_data_registrada": scanned_dt.isoformat(),
+            }
+
+
+def _historico_carregar_agregados(limite_snapshots: int) -> Tuple[Dict[str, dict], int]:
+    """
+    Percorre snapshots (Supabase em lotes ou ficheiro local) e devolve agregação por file_name.
+    Resultado pode vir de cache em RAM (TTL configurável) por (Supabase ativo, limite).
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    uses_sb = sb is not None
+
+    def _build() -> Tuple[Dict[str, dict], int]:
+        agregados: Dict[str, dict] = {}
+        snapshots_lidos = 0
+        if sb:
+            try:
+                page_size = 50
+                offset = 0
+                while snapshots_lidos < limite_snapshots:
+                    chunk = min(page_size, limite_snapshots - snapshots_lidos)
+                    end = offset + chunk - 1
+                    r = (
+                        sb.table("cert_snapshots")
+                        .select("scanned_at, items")
+                        .order("scanned_at", desc=True)
+                        .range(offset, end)
+                        .execute()
+                    )
+                    rows = r.data or []
+                    if not rows:
+                        break
+                    for snap in rows:
+                        _historico_merge_snapshot_into_agregados(snap, agregados)
+                    snapshots_lidos += len(rows)
+                    offset += len(rows)
+                    if len(rows) < chunk:
+                        break
+            except Exception as e:  # noqa: BLE001
+                logger.exception("Falha ao ler histórico no Supabase")
+                raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
+        else:
+            snap = get_latest_snapshot()
+            if snap:
+                _historico_merge_snapshot_into_agregados(snap, agregados)
+                snapshots_lidos = 1
+        return agregados, snapshots_lidos
+
+    return _historico_cache_get_or_build(uses_sb, limite_snapshots, _build)
+
+
+def _historico_itens_visualizacao(agregados: Dict[str, dict]) -> List[dict]:
+    linhas = sorted(agregados.values(), key=lambda x: x["_dt"], reverse=True)
+    return [{k: v for k, v in row.items() if k != "_dt"} for row in linhas]
+
+
+def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
+    q = str(busca_raw or "").strip().lower()
+    if not q:
+        return itens
+    out: List[dict] = []
+    for it in itens:
+        haystack = (
+            f"{it.get('file_name') or ''} {it.get('nome') or ''} {it.get('documento') or ''} "
+            f"{it.get('ultima_data_registrada') or ''} {it.get('vencimento_certificado') or ''}"
+        ).lower()
+        if q in haystack:
+            out.append(it)
+    return out
+
+
+def _vencidos_filtrar_busca(rows: List[dict], busca_raw: str) -> List[dict]:
+    if not str(busca_raw or "").strip():
+        return rows
+    raw = str(busca_raw).strip()
+    bt = _painel_busca_normalizada(raw)
+    bd = re.sub(r"\D", "", raw)
+    out: List[dict] = []
+    for it in rows:
+        nome = _painel_busca_normalizada(it.get("nome") or "")
+        doc_txt = _painel_busca_normalizada(it.get("documento") or "")
+        doc_d = _digits_only_doc(it.get("documento") or "")
+        venc_txt = _painel_busca_normalizada(it.get("vencimento_certificado") or "")
+        vn = _digits_only_doc(str(it.get("vencimento_certificado") or ""))
+        if bt and bt in nome:
+            out.append(it)
+            continue
+        if bt and bt in doc_txt:
+            out.append(it)
+            continue
+        if bt and bt in venc_txt:
+            out.append(it)
+            continue
+        if bd and bd in doc_d:
+            out.append(it)
+            continue
+        if bd and bd in vn:
+            out.append(it)
+            continue
+    return out
+
+
 def historico_certificados(
     limite_snapshots: int = 500,
     *,
@@ -955,23 +1083,6 @@ def historico_certificados(
             for row in rows_raw
         ]
 
-    def _filtro_busca_python(itlist: List[dict[str, Any]], q_raw: str) -> List[dict[str, Any]]:
-        if not q_raw:
-            return itlist
-        q = q_raw.lower()
-        out: List[dict[str, Any]] = []
-        for it in itlist:
-            hay = " ".join(
-                [
-                    str(it.get("file_name") or ""),
-                    str(it.get("nome") or ""),
-                    str(it.get("documento") or ""),
-                ]
-            ).lower()
-            if q in hay:
-                out.append(it)
-        return out
-
     def _apply_cert_history_or_busca(qb: Any) -> Any:
         if not busca_txt:
             return qb
@@ -980,8 +1091,6 @@ def historico_certificados(
         return qb.or_(filt)
 
     sb = _supabase()
-    snapshots: List[dict[str, Any]] = []
-
     if sb:
         _use_history_table = True
         rows_non_paginated: List[dict[str, Any]] = []
@@ -1049,48 +1158,9 @@ def historico_certificados(
                 "fonte": "cert_history",
             }
 
-        try:
-            r2 = (
-                sb.table("cert_snapshots")
-                .select("scanned_at, items")
-                .order("scanned_at", desc=True)
-                .limit(limite_snapshots)
-                .execute()
-            )
-            snapshots = r2.data or []
-        except Exception as e:  # noqa: BLE001
-            logger.exception("Falha ao ler snapshots no Supabase")
-            raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
-    else:
-        snap = get_latest_snapshot()
-        snapshots = [snap] if snap else []
-
-    agregados: Dict[str, dict] = {}
-    for snap in snapshots:
-        scanned_at = snap.get("scanned_at") or datetime.now(timezone.utc).isoformat()
-        scanned_dt = _parse_iso_utc(scanned_at)
-        for it in (snap.get("items") or []):
-            file_name = str(it.get("file_name") or "").strip()
-            if not file_name:
-                continue
-            key = file_name.lower()
-            atual = agregados.get(key)
-            if (not atual) or (scanned_dt > atual["_dt"]):
-                agregados[key] = {
-                    "_dt": scanned_dt,
-                    "file_name": file_name,
-                    "nome": it.get("nome") or it.get("display_name") or file_name,
-                    "status_ultimo": it.get("status"),
-                    "documento": it.get("documento_formatado") or it.get("documento_numero"),
-                    "vencimento_certificado": it.get("not_after"),
-                    "ultima_data_registrada": scanned_dt.isoformat(),
-                }
-
-    itens = sorted(agregados.values(), key=lambda x: x["_dt"], reverse=True)
-    for row in itens:
-        row.pop("_dt", None)
-
-    itens = _filtro_busca_python(itens, busca_txt)
+    agregados, snapshots_lidos = _historico_carregar_agregados(limite_snapshots)
+    itens = _historico_itens_visualizacao(agregados)
+    itens = _historico_filtrar_busca(itens, busca_txt)
 
     if pagination and page_limit is not None:
         total_f = len(itens)
@@ -1100,7 +1170,7 @@ def historico_certificados(
             "total": total_f,
             "offset": offset,
             "limit": page_limit,
-            "snapshots_lidos": len(snapshots),
+            "snapshots_lidos": snapshots_lidos,
             "fonte": "snapshots",
         }
 
@@ -1109,7 +1179,7 @@ def historico_certificados(
         "total": len(itens),
         "offset": 0,
         "limit": len(itens),
-        "snapshots_lidos": len(snapshots),
+        "snapshots_lidos": snapshots_lidos,
         "fonte": "snapshots",
     }
 
@@ -1122,8 +1192,12 @@ def historico_certificados_http(
         le=2000,
         description="Máximo de snapshots no fallback (quando cert_history está vazio)",
     ),
-    offset: int = Query(0, ge=0, description="Deslocamento base 0 (paginação)"),
-    limit: int = Query(20, ge=1, le=2000, description="Registos por página"),
+    pagina: int = Query(1, ge=1, description="Página (1-based)"),
+    por_pagina: int = Query(20, ge=1, le=2000, description="Registos por página"),
+    todas_filtradas: bool = Query(
+        False,
+        description="Quando true, devolve toda a lista filtrada (exportação; pode truncar)",
+    ),
     busca: Optional[str] = Query(
         None,
         max_length=200,
@@ -1131,27 +1205,56 @@ def historico_certificados_http(
     ),
 ) -> dict:
     b = busca.strip() if busca else None
-    return historico_certificados(
+    if todas_filtradas:
+        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b)
+        itens = list(raw.get("itens") or [])
+        lista_truncada = len(itens) > LISTAGEM_EXPORT_MAX
+        return {
+            "itens": itens[:LISTAGEM_EXPORT_MAX],
+            "total": len(itens),
+            "snapshots_lidos": raw.get("snapshots_lidos", 0),
+            "fonte": raw.get("fonte"),
+            "lista_truncada": lista_truncada,
+        }
+
+    off = (pagina - 1) * por_pagina
+    raw = historico_certificados(
         limite_snapshots,
-        offset=offset,
-        limit=limit,
+        offset=off,
+        limit=por_pagina,
         busca=b,
     )
+    total = int(raw.get("total") or 0)
+    total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1
+    pagina_out = min(max(1, pagina), total_pags)
+    out = dict(raw)
+    out["paginacao"] = {
+        "pagina": pagina_out,
+        "total_paginas": total_pags,
+        "total_itens": total,
+        "por_pagina": por_pagina,
+    }
+    return out
 
 
 @app.get("/api/certificados/vencidos", dependencies=[Depends(require_auth)])
 def vencidos_certificados(
     data_inicio: Optional[str] = Query(None, description="Data inicial (YYYY-MM-DD) pelo vencimento"),
     data_fim: Optional[str] = Query(None, description="Data final (YYYY-MM-DD) pelo vencimento"),
+    pagina: int = Query(1, ge=1),
+    por_pagina: int = Query(20, ge=1, le=2000),
+    todas_filtradas: bool = Query(False, description="Lista completa filtrada (exportação; pode truncar)"),
+    busca: Optional[str] = Query(None, max_length=200),
     limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
 ) -> dict:
-    hist = historico_certificados(limite_snapshots=limite_snapshots)
-    itens = hist.get("itens", [])
+    hist = historico_certificados(limite_snapshots=limite_snapshots, offset=None, limit=None, busca=None)
+    itens_hist = hist.get("itens", [])
     inicio_dt = _parse_iso_utc(data_inicio + "T00:00:00+00:00") if data_inicio else None
     fim_dt = _parse_iso_utc(data_fim + "T23:59:59+00:00") if data_fim else None
+    busca_txt = str(busca or "").strip() or None
 
-    vencidos: List[dict] = []
-    for it in itens:
+    venc_filtrados: List[dict] = []
+    for it in itens_hist:
         if str(it.get("status_ultimo") or "").lower() != "expirado":
             continue
         venc_dt = _parse_iso_utc(it.get("vencimento_certificado"))
@@ -1159,14 +1262,50 @@ def vencidos_certificados(
             continue
         if fim_dt and venc_dt > fim_dt:
             continue
-        vencidos.append(it)
+        venc_filtrados.append(it)
+
+    venc_filtrados = _vencidos_filtrar_busca(venc_filtrados, busca_txt or "")
+
+    anos_cnt: defaultdict[int, int] = defaultdict(int)
+    for it in venc_filtrados:
+        venc_dt = _parse_iso_utc(it.get("vencimento_certificado"))
+        y = int(venc_dt.year)
+        if y < 1900:
+            continue
+        anos_cnt[y] += 1
+    resumo_anos = [{"ano": ano, "total": anos_cnt[ano]} for ano in sorted(anos_cnt.keys(), reverse=True)]
+
+    total = len(venc_filtrados)
+    if todas_filtradas:
+        lista_truncada = total > LISTAGEM_EXPORT_MAX
+        return {
+            "itens": venc_filtrados[:LISTAGEM_EXPORT_MAX],
+            "total": total,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "snapshots_lidos": hist.get("snapshots_lidos", 0),
+            "lista_truncada": lista_truncada,
+            "resumo_anos": resumo_anos,
+        }
+
+    total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1
+    pagina_out = min(max(1, pagina), total_pags)
+    off_pg = (pagina - 1) * por_pagina
+    pagina_slice = venc_filtrados[off_pg : off_pg + por_pagina]
 
     return {
-        "itens": vencidos,
-        "total": len(vencidos),
+        "itens": pagina_slice,
+        "total": total,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
         "snapshots_lidos": hist.get("snapshots_lidos", 0),
+        "resumo_anos": resumo_anos,
+        "paginacao": {
+            "pagina": pagina_out,
+            "total_paginas": total_pags,
+            "total_itens": total,
+            "por_pagina": por_pagina,
+        },
     }
 
 

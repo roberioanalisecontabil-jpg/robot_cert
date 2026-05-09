@@ -21,3 +21,35 @@ SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip()
 
 # Se definida, todas as rotas /api/* exigem o header X-API-Key (exceto se documentado)
 API_KEY = (os.getenv("API_KEY") or "").strip()
+
+
+def _env_int(name: str, default: int, lo: int, hi: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        v = int(raw)
+    except ValueError:
+        return default
+    return max(lo, min(hi, v))
+
+
+# Máximo de linhas lidas na tabela cert_snapshots ao agregar histórico/vencidos (RAM ~ proporcional ao lote).
+
+
+HISTORICO_LIMITE_SNAPSHOTS = _env_int(
+    "HISTORICO_LIMITE_SNAPSHOTS",
+    default=500,
+    lo=1,
+    hi=2000,
+)
+
+# Cache em RAM da agregação histórico/vencidos (segundos). 0 = desativado.
+
+
+HISTORICO_CACHE_TTL_SEC = _env_int(
+    "HISTORICO_CACHE_TTL_SEC",
+    default=60,
+    lo=0,
+    hi=86400,
+)

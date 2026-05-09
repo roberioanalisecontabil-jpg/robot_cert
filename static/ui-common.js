@@ -109,6 +109,111 @@ function setGlobalLoading(show, text = "Carregando...") {
   overlay.classList.toggle("is-visible", !!show);
 }
 
+/** Lista de página (janela de até `maxBotões`) igual ao modelo Histórico/Dashboard/Vencidos. */
+function cgWindowPaginas(totalPaginas, paginaAtual, maxBotões) {
+  const mb = typeof maxBotões === "number" ? maxBotões : 5;
+  const total = Math.max(1, Number(totalPaginas) || 1);
+  let atual = Number(paginaAtual) || 1;
+  atual = Math.min(Math.max(1, atual), total);
+  if (total <= mb) {
+    const a = [];
+    for (let i = 1; i <= total; i++) a.push(i);
+    return a;
+  }
+  let start = atual - Math.floor(mb / 2);
+  start = Math.max(1, Math.min(start, total - mb + 1));
+  const out = [];
+  for (let j = 0; j < mb; j++) out.push(start + j);
+  return out;
+}
+
+function _cgResolveEl(sel) {
+  return typeof sel === "string" ? document.getElementById(sel) : sel;
+}
+
+/** Esconde barra cg-page-nav (sem números, ex.: sem dados). */
+function cgPageNavHide(bar, ul, metaOptional) {
+  const b = _cgResolveEl(bar);
+  const u = _cgResolveEl(ul);
+  const m = metaOptional != null ? _cgResolveEl(metaOptional) : null;
+  if (b) b.classList.remove("is-visible");
+  if (u) u.querySelectorAll("li[data-cg-page-num]").forEach((node) => node.remove());
+  if (m) m.textContent = "";
+}
+
+/**
+ * Atualiza navegação .cg-page-nav (texto meta, botões numerados, estado Anterior/Seguinte).
+ * Manténha handlers em btn prev/next definidos pela página (só atualiza disabled).
+ *
+ * opts.pg — { pagina, total_paginas, total_itens }; se null/`total_paginas` omitido → esconde.
+ */
+function cgPageNavRefresh(opts) {
+  const bar = _cgResolveEl(opts.bar);
+  const metaEl = _cgResolveEl(opts.meta);
+  const ul = _cgResolveEl(opts.ul);
+  const liNext = _cgResolveEl(opts.liNext);
+  const btnPrev = _cgResolveEl(opts.prev);
+  const btnNext = _cgResolveEl(opts.next);
+  if (!bar || !metaEl || !ul || !liNext || !btnPrev || !btnNext) return;
+
+  const pgRaw = opts.pg;
+  if (!pgRaw || pgRaw.total_paginas == null) {
+    bar.classList.remove("is-visible");
+    ul.querySelectorAll("li[data-cg-page-num]").forEach((n) => n.remove());
+    metaEl.textContent = "";
+    return;
+  }
+
+  let totalPaginas = Math.max(1, Number(pgRaw.total_paginas) || 1);
+  let pagina = Number(pgRaw.pagina) || 1;
+  pagina = Math.min(Math.max(1, pagina), totalPaginas);
+  const totalItens = pgRaw.total_itens != null ? Number(pgRaw.total_itens) : 0;
+  const synthetic = { pagina, total_paginas: totalPaginas, total_itens: totalItens };
+
+  const hideSingle = opts.hideWhenSingle !== false;
+  if (hideSingle && totalPaginas <= 1) {
+    bar.classList.remove("is-visible");
+    ul.querySelectorAll("li[data-cg-page-num]").forEach((n) => n.remove());
+    metaEl.textContent = "";
+    btnPrev.disabled = true;
+    btnNext.disabled = true;
+    return;
+  }
+
+  bar.classList.add("is-visible");
+
+  metaEl.textContent =
+    typeof opts.metaFormatter === "function"
+      ? opts.metaFormatter(synthetic)
+      : `Página ${synthetic.pagina} de ${synthetic.total_paginas} · ${synthetic.total_itens} registo(s)`;
+
+  ul.querySelectorAll("li[data-cg-page-num]").forEach((node) => node.remove());
+
+  const mb = opts.maxButtons != null ? opts.maxButtons : 5;
+  const go = typeof opts.goToPage === "function" ? opts.goToPage : null;
+
+  cgWindowPaginas(totalPaginas, pagina, mb).forEach((pnum) => {
+    const li = document.createElement("li");
+    li.setAttribute("data-cg-page-num", "1");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = String(pnum);
+    const cur = pnum === synthetic.pagina;
+    btn.className = "cg-page-link cg-page-link--square" + (cur ? " cg-page-link--current" : "");
+    if (cur) {
+      btn.setAttribute("aria-current", "page");
+      btn.disabled = true;
+    } else if (go) {
+      btn.addEventListener("click", () => go(pnum));
+    }
+    li.appendChild(btn);
+    ul.insertBefore(li, liNext);
+  });
+
+  btnPrev.disabled = synthetic.pagina <= 1;
+  btnNext.disabled = synthetic.pagina >= synthetic.total_paginas;
+}
+
 // Interceptar todas as requisições para verificar 401
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {

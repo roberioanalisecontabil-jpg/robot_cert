@@ -5,50 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Histórico — CertGuard</title>
   <link rel="stylesheet" href="/static/style.css" />
-  <style>
-    /* Paginação */
-    .pagination {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.4rem;
-      padding: 1rem 0 0.5rem;
-      flex-wrap: wrap;
-    }
-    .pagination button {
-      min-width: 2.2rem;
-      height: 2.2rem;
-      padding: 0 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface, #fff);
-      color: var(--text, #111);
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .pagination button:hover:not(:disabled) {
-      background: var(--primary, #2563eb);
-      color: #fff;
-      border-color: var(--primary, #2563eb);
-    }
-    .pagination button.active {
-      background: var(--primary, #2563eb);
-      color: #fff;
-      border-color: var(--primary, #2563eb);
-      font-weight: 600;
-    }
-    .pagination button:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-    .pagination-info {
-      font-size: 0.82rem;
-      color: var(--text-muted, #6b7280);
-      text-align: center;
-      padding-bottom: 0.25rem;
-    }
-  </style>
 </head>
 <body>
   <aside class="sidebar">
@@ -148,25 +104,72 @@
           <tbody id="tbody-historico"></tbody>
         </table>
       </div>
-      <!-- Paginação -->
-      <p id="pagination-info" class="pagination-info"></p>
-      <div id="pagination" class="pagination"></div>
+      <nav
+        id="paginacao-toolbar-hist"
+        class="cg-page-nav"
+        aria-label="Navegação por páginas"
+      >
+        <div id="pag-meta-hist" class="cg-page-nav__meta"></div>
+        <div class="cg-page-nav__row">
+          <ul id="pag-ul-hist" class="cg-page-nav__ul" role="list">
+            <li>
+              <button type="button" id="btn-hist-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">
+                Anterior
+              </button>
+            </li>
+            <li id="pag-li-next-hist">
+              <button type="button" id="btn-hist-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">
+                Seguinte
+              </button>
+            </li>
+          </ul>
+          <div>
+            <label for="pag-perpage-hist" class="cg-sr-only">Registos por página</label>
+            <select id="pag-perpage-hist" class="cg-page-perpage-select" title="Itens por página">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50">50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
+          </div>
+        </div>
+      </nav>
     </div>
   </main>
 
-  <script src="/static/ui-common.js?v=paginator-1"></script>
+  <script src="/static/ui-common.js?v=cg-nav-1"></script>
   <script>
-    const PAGE_SIZE = 20;
+    const LS_PER_PAGE_HIST = "cg_per_page_historico";
+    const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
 
-    let itensPagina = [];
-    let totalRegistros = 0;
-    let paginaAtual = 1;
-    let buscaDebounceTimer = null;
-    let ultimaFonte = "";
-    let ultimosSnapshots = 0;
+    function porPaginaHist() {
+      const sel = document.getElementById("pag-perpage-hist");
+      const n = sel ? parseInt(sel.value, 10) : 10;
+      return ALLOWED_PER_PAGE_HIST.includes(n) ? n : 10;
+    }
+
+    function initPerPageHist() {
+      const sel = document.getElementById("pag-perpage-hist");
+      if (!sel) return;
+      let stored = parseInt(localStorage.getItem(LS_PER_PAGE_HIST) || "10", 10);
+      if (!ALLOWED_PER_PAGE_HIST.includes(stored)) stored = 10;
+      sel.value = String(stored);
+      localStorage.setItem(LS_PER_PAGE_HIST, String(stored));
+      sel.addEventListener("change", () => {
+        localStorage.setItem(LS_PER_PAGE_HIST, sel.value);
+        paginaAtualHist = 1;
+        carregarHistorico();
+      });
+    }
+
+    let paginaAtualHist = 1;
+    let debounceHist = null;
+    let itensVisiveis = [];
 
     function toggleLoading(show, text) {
-      if (typeof setGlobalLoading === "function") setGlobalLoading(show, text);
+      if (typeof setGlobalLoading === "function") {
+        setGlobalLoading(show, text);
+      }
     }
 
     function esc(v) {
@@ -175,133 +178,84 @@
       return d.innerHTML;
     }
 
+    function fmtData(iso) {
+      if (!iso) return "—";
+      return new Date(iso).toLocaleString("pt-BR");
+    }
+
     function fmtDataUtc(iso) {
       if (!iso) return "—";
       const d = new Date(iso);
       return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
     }
 
-    // ── Renderiza a página atual (dados já carregados do servidor) ───
-    function renderPagina() {
-      const totalPg = totalRegistros === 0 ? 1 : Math.ceil(totalRegistros / PAGE_SIZE);
-      if (paginaAtual > totalPg) paginaAtual = totalPg;
+    function atualizarPaginacaoHist(pg) {
+      cgPageNavRefresh({
+        bar: "paginacao-toolbar-hist",
+        meta: "pag-meta-hist",
+        ul: "pag-ul-hist",
+        liNext: "pag-li-next-hist",
+        prev: "btn-hist-prev",
+        next: "btn-hist-next",
+        pg: pg,
+        metaFormatter: (p) =>
+          "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " registo(s)",
+        hideWhenSingle: true,
+        goToPage: (pn) => {
+          paginaAtualHist = pn;
+          carregarHistorico();
+        },
+        maxButtons: 5,
+      });
+    }
 
-      const inicioIdx = totalRegistros === 0 ? 0 : (paginaAtual - 1) * PAGE_SIZE + 1;
-      const fimIdx = Math.min(paginaAtual * PAGE_SIZE, totalRegistros);
-
+    function renderLinhasHistorico(rows) {
       const tb = document.getElementById("tbody-historico");
-      tb.innerHTML = itensPagina.map((it) => `
+      tb.innerHTML = rows
+        .map(
+          (it) => `
         <tr>
           <td>${esc(it.nome)}</td>
           <td>${esc(it.documento || "—")}</td>
           <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>
-      `).join("");
-
-      document.getElementById("count-hint").textContent =
-        totalRegistros === 0
-          ? "Nenhum registro encontrado."
-          : `Exibindo ${inicioIdx}–${fimIdx} de ${totalRegistros} registro(s)`;
-
-      renderControlesPaginacao(totalPg);
+      `
+        )
+        .join("");
+      itensVisiveis = rows;
     }
 
-    function renderControlesPaginacao(totalPg) {
-      const container = document.getElementById("pagination");
-      const info      = document.getElementById("pagination-info");
-
-      if (totalPg <= 1) {
-        container.innerHTML = "";
-        info.textContent = "";
-        return;
-      }
-
-      info.textContent = `Página ${paginaAtual} de ${totalPg}`;
-
-      // Janela de páginas: mostra no máximo 5 botões ao redor da atual
-      const WINDOW = 2;
-      let inicio = Math.max(1, paginaAtual - WINDOW);
-      let fim    = Math.min(totalPg, paginaAtual + WINDOW);
-      // Ajusta para sempre mostrar 5 botões quando possível
-      if (fim - inicio < WINDOW * 2) {
-        if (inicio === 1) fim = Math.min(totalPg, inicio + WINDOW * 2);
-        else inicio = Math.max(1, fim - WINDOW * 2);
-      }
-
-      let html = `<button id="pg-prev" ${paginaAtual === 1 ? "disabled" : ""}>‹ Anterior</button>`;
-
-      if (inicio > 1) {
-        html += `<button onclick="irPara(1)">1</button>`;
-        if (inicio > 2) html += `<button disabled>…</button>`;
-      }
-      for (let i = inicio; i <= fim; i++) {
-        html += `<button onclick="irPara(${i})" class="${i === paginaAtual ? "active" : ""}">${i}</button>`;
-      }
-      if (fim < totalPg) {
-        if (fim < totalPg - 1) html += `<button disabled>…</button>`;
-        html += `<button onclick="irPara(${totalPg})">${totalPg}</button>`;
-      }
-
-      html += `<button id="pg-next" ${paginaAtual === totalPg ? "disabled" : ""}>Próxima ›</button>`;
-      container.innerHTML = html;
-
-      document.getElementById("pg-prev").addEventListener("click", () => irPara(paginaAtual - 1));
-      document.getElementById("pg-next").addEventListener("click", () => irPara(paginaAtual + 1));
-    }
-
-    function irPara(pg) {
-      paginaAtual = pg;
-      carregarHistorico({ manterPagina: true }).catch(() => {});
-      document.querySelector(".table-container").scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    async function coletarTodosParaExport(headersObj) {
-      const q = (document.getElementById("busca-historico").value || "").trim();
-      let all = [];
-      let off = 0;
-      const chunk = 500;
-      while (true) {
-        const p = new URLSearchParams();
-        p.set("offset", String(off));
-        p.set("limit", String(chunk));
-        if (q) p.set("busca", q);
-        const r = await fetch(`/api/certificados/historico?${p}`, { headers: headersObj });
-        if (!r.ok) throw new Error(String(r.status));
-        const j = await r.json();
-        const batch = j.itens || [];
-        all = all.concat(batch);
-        const total = j.total || 0;
-        if (batch.length === 0 || all.length >= total) break;
-        off += batch.length;
-      }
-      return all;
-    }
-
-    // ── Filtro de busca (consulta ao servidor com debounce) ───────────
-    function aplicarBuscaInput() {
-      if (buscaDebounceTimer) clearTimeout(buscaDebounceTimer);
-      buscaDebounceTimer = setTimeout(() => {
-        buscaDebounceTimer = null;
-        paginaAtual = 1;
-        carregarHistorico({ manterPagina: false }).catch(() => {});
-      }, 380);
-    }
-
-    // ── Exportação: busca todas as páginas com o filtro atual ─────────
-    async function exportarExcelVisivel() {
-      const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
-      toggleLoading(true, "Preparando exportação…");
-      let itensCompleto = [];
+    async function fetchHistoricoExportacao() {
+      toggleLoading(true, "Exportação...");
       try {
-        itensCompleto = await coletarTodosParaExport(getHeaders());
-      } catch (e) {
-        alert(`Falha ao exportar: ${e}`);
-        return;
+        const params = new URLSearchParams({
+          busca: document.getElementById("busca-historico").value || "",
+          todas_filtradas: "true",
+        });
+        const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
+        if (r.status === 401) {
+          logout();
+          return null;
+        }
+        if (!r.ok) {
+          alert("Erro: " + r.status + " " + (await mensagemCorpoErro(r)));
+          return null;
+        }
+        return await r.json();
       } finally {
         toggleLoading(false);
       }
-      const rows = itensCompleto.map((it) => [
+    }
+
+    async function exportarExcelVisivel() {
+      const d = await fetchHistoricoExportacao();
+      if (!d || !d.itens) return;
+      if (d.lista_truncada) {
+        alert("Lista truncada: exportados apenas os primeiros " + d.itens.length + " registos.");
+      }
+      const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
+      const rows = d.itens.map((it) => [
         it.nome || "",
         it.documento || "",
         fmtDataUtc(it.ultima_data_registrada),
@@ -312,8 +266,8 @@
         .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
         .join("\n");
       const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
       a.href = url;
       a.download = "historico_certificados_filtrado.csv";
       document.body.appendChild(a);
@@ -323,17 +277,12 @@
     }
 
     async function exportarPdfVisivel() {
-      toggleLoading(true, "Preparando PDF…");
-      let itensCompleto = [];
-      try {
-        itensCompleto = await coletarTodosParaExport(getHeaders());
-      } catch (e) {
-        alert(`Falha ao exportar: ${e}`);
-        return;
-      } finally {
-        toggleLoading(false);
+      const d = await fetchHistoricoExportacao();
+      if (!d || !d.itens) return;
+      if (d.lista_truncada) {
+        alert("Lista truncada na exportação (limite no servidor).");
       }
-      const linhas = itensCompleto
+      const linhas = d.itens
         .map((it) => `
           <tr>
             <td>${esc(it.nome || "")}</td>
@@ -361,7 +310,7 @@
           </head>
           <body>
             <h1>Histórico de certificados</h1>
-            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total: ${itensCompleto.length}</p>
+            <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total exportado: ${d.itens.length}</p>
             <table>
               <thead>
                 <tr>
@@ -378,60 +327,77 @@
       w.print();
     }
 
-    // ── Carregamento ──────────────────────────────────────────────────
-    async function carregarHistorico(opts) {
-      opts = opts || {};
-      const manterPagina = !!opts.manterPagina;
-      if (!manterPagina) paginaAtual = 1;
+    async function carregarHistorico() {
       const st = document.getElementById("status-msg");
       st.textContent = "A carregar…";
       toggleLoading(true, "Carregando histórico...");
       try {
-        const q = (document.getElementById("busca-historico").value || "").trim();
-        const params = new URLSearchParams();
-        params.set("offset", String(Math.max(0, (paginaAtual - 1) * PAGE_SIZE)));
-        params.set("limit", String(PAGE_SIZE));
-        if (q) params.set("busca", q);
-        const r = await fetch(`/api/certificados/historico?${params}`, { headers: getHeaders() });
+        const params = new URLSearchParams({
+          pagina: String(paginaAtualHist),
+          por_pagina: String(porPaginaHist()),
+          busca: document.getElementById("busca-historico").value || "",
+        });
+        const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
+        if (r.status === 401) {
+          logout();
+          return;
+        }
         if (!r.ok) {
           st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
-          itensPagina = [];
-          totalRegistros = 0;
-          renderPagina();
           return;
         }
         const j = await r.json();
-        itensPagina = j.itens || [];
-        totalRegistros = typeof j.total === "number" ? j.total : itensPagina.length;
-        ultimaFonte = j.fonte || "";
-        ultimosSnapshots = j.snapshots_lidos || 0;
-        const fonteLabel = ultimaFonte === "cert_history" ? "tabela cert_history" : "snapshots";
-        st.textContent = `Fonte: ${fonteLabel} | Snapshots lidos (fallback): ${ultimosSnapshots}`;
-        renderPagina();
+        if (j.paginacao) {
+          paginaAtualHist = j.paginacao.pagina;
+          atualizarPaginacaoHist(j.paginacao);
+        } else {
+          atualizarPaginacaoHist(null);
+        }
+        st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
+        const rows = j.itens || [];
+        renderLinhasHistorico(rows);
+        document.getElementById("count-hint").textContent =
+          typeof j.total === "number"
+            ? j.total + " registo(s) com o filtro atual"
+            : rows.length + " registo(s) nesta página";
       } finally {
         toggleLoading(false);
       }
     }
 
     document.getElementById("btn-refresh").addEventListener("click", () => {
-      paginaAtual = 1;
-      carregarHistorico({}).catch(() => {});
+      paginaAtualHist = 1;
+      carregarHistorico();
     });
-    document.getElementById("busca-historico").addEventListener("input", aplicarBuscaInput);
-    document.getElementById("btn-export-excel").addEventListener("click", exportarExcelVisivel);
-    document.getElementById("btn-export-pdf").addEventListener("click", exportarPdfVisivel);
+    document.getElementById("busca-historico").addEventListener("input", () => {
+      paginaAtualHist = 1;
+      clearTimeout(debounceHist);
+      debounceHist = setTimeout(carregarHistorico, 320);
+    });
+    document.getElementById("btn-export-excel").addEventListener("click", () => void exportarExcelVisivel());
+    document.getElementById("btn-export-pdf").addEventListener("click", () => void exportarPdfVisivel());
+    document.getElementById("btn-hist-prev").addEventListener("click", () => {
+      if (paginaAtualHist > 1) {
+        paginaAtualHist--;
+        carregarHistorico();
+      }
+    });
+    document.getElementById("btn-hist-next").addEventListener("click", () => {
+      paginaAtualHist++;
+      carregarHistorico();
+    });
 
     (async function init() {
       const role = localStorage.getItem("user_role");
       if (role === "admin") {
-        const elUsers  = document.getElementById("nav-users");
+        const elUsers = document.getElementById("nav-users");
         const elConfig = document.getElementById("nav-config");
-        if (elUsers)  elUsers.style.display  = "flex";
+        if (elUsers) elUsers.style.display = "flex";
         if (elConfig) elConfig.style.display = "flex";
       }
-      await carregarHistorico({});
+      initPerPageHist();
+      await carregarHistorico();
     })();
   </script>
-
 </body>
 </html>
