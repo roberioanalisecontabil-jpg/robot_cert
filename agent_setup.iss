@@ -38,17 +38,62 @@ Name: "{autodesktop}\CertGuard Agent"; Filename: "{app}\CertGuard_Agent.exe"; Ta
 [Run]
 Filename: "{app}\CertGuard_Agent.exe"; Parameters: "--tray-only"; Description: "Iniciar o agente em bandeja agora"; Flags: nowait postinstall skipifsilent unchecked; Check: OfferTrayAfterInstall
 
+[Dirs]
+; Diretorio compartilhado de estado/comando entre Servico (LocalSystem) e Tray (Usuario).
+; Sem permissao de escrita aqui o botao "Forcar leitura agora" do tray nao consegue
+; entregar o pedido ao servico.
+Name: "{commonappdata}\CertGuard Agent"; Permissions: users-modify
+
 [Code]
 const
   TrayTaskName = 'CertGuard Agent (Tray)';
   ServiceName = 'CertGuardAgent';
+  ProgramDataDirName = 'CertGuard Agent';
 
 var
   LastOperationError: string;
+  ServiceAccountPage: TInputQueryWizardPage;
 
 function OfferTrayAfterInstall: Boolean;
 begin
   Result := not WizardSilent;
+end;
+
+procedure InitializeWizard;
+begin
+  ServiceAccountPage := CreateInputQueryPage(
+    wpSelectTasks,
+    'Conta do servico CertGuardAgent',
+    'Por padrao o servico roda como LocalSystem, que nao tem credenciais de dominio.',
+    'Se a pasta de certificados estiver em rede ou exigir credenciais de dominio, ' +
+    'informe o usuario (formato DOMINIO\usuario ou .\usuario) e a senha. ' +
+    'Deixe ambos em branco para usar LocalSystem (padrao). ' +
+    'Importante: o usuario informado deve ter o direito "Logon as a service". ' +
+    'Em ambientes de dominio isto geralmente requer politica de grupo.'
+  );
+  ServiceAccountPage.Add('Usuario (opcional):', False);
+  ServiceAccountPage.Add('Senha:', True);
+end;
+
+function ServiceAccountUser: string;
+begin
+  if Assigned(ServiceAccountPage) then
+    Result := Trim(ServiceAccountPage.Values[0])
+  else
+    Result := '';
+end;
+
+function ServiceAccountPassword: string;
+begin
+  if Assigned(ServiceAccountPage) then
+    Result := ServiceAccountPage.Values[1]
+  else
+    Result := '';
+end;
+
+function UseCustomServiceAccount: Boolean;
+begin
+  Result := ServiceAccountUser <> '';
 end;
 
 function StopRunningAgent: Boolean;
@@ -185,12 +230,25 @@ begin
     Exit;
   end;
 
-  if CreatedNow then
+  if UseCustomServiceAccount then
+  begin
+    { Quando ha credenciais customizadas, sempre aplicar obj= e password=. }
+    { Senhas com caracteres especiais devem ser informadas sem aspas duplas. }
+    Cmd :=
+      '/C sc config "' + ServiceName + '" ' +
+      'binPath= "\"' + SvcExePath + '\"" ' +
+      'start= auto ' +
+      'obj= "' + ServiceAccountUser + '" ' +
+      'password= "' + ServiceAccountPassword + '"';
+    Log('Configurando servico com conta especifica: ' + ServiceAccountUser);
+  end
+  else if CreatedNow then
   begin
     Cmd :=
       '/C sc config "' + ServiceName + '" ' +
       'binPath= "\"' + SvcExePath + '\"" ' +
       'start= auto obj= LocalSystem';
+    Log('Configurando servico (auto/LocalSystem): ' + Cmd);
   end
   else
   begin
@@ -198,8 +256,8 @@ begin
       '/C sc config "' + ServiceName + '" ' +
       'binPath= "\"' + SvcExePath + '\"" ' +
       'start= auto';
+    Log('Configurando servico (auto, mantendo conta atual): ' + Cmd);
   end;
-  Log('Configurando servico (auto/localSystem): ' + Cmd);
   if not Exec(ExpandConstant('{cmd}'), Cmd, '', SW_HIDE, ewWaitUntilTerminated, RC) then
   begin
     LastOperationError := 'Falha ao executar sc config.';
@@ -232,9 +290,28 @@ begin
   if (RC <> 0) and (RC <> 1056) then
   begin
     Log('sc start retornou erro nao fatal (' + IntToStr(RC) + '); mantendo instalacao e seguindo.');
-    LastOperationError :=
-      'Servico instalado, mas nao iniciou automaticamente (codigo ' + IntToStr(RC) + ').' + #13#10 +
-      'Acao recomendada: verificar Event Viewer e iniciar manualmente em Services.msc.';
+    if RC = 1069 then
+    begin
+      LastOperationError :=
+        'Servico instalado, mas falhou ao iniciar (codigo 1069: logon failure).' + #13#10 +
+        'Provavel causa: usuario "' + ServiceAccountUser + '" nao tem o direito "Logon as a service",' + #13#10 +
+        'ou a senha esta incorreta.' + #13#10 +
+        'Acao recomendada: em Politicas de Seguranca Local (secpol.msc) >' + #13#10 +
+        '  Politicas Locais > Atribuicao de direitos do usuario > "Logon as a service" (SeServiceLogonRight)' + #13#10 +
+        'adicionar o usuario e reiniciar o servico via Services.msc.';
+    end
+    else if RC = 1057 then
+    begin
+      LastOperationError :=
+        'Servico instalado, mas falhou ao iniciar (codigo 1057: conta invalida).' + #13#10 +
+        'Verifique o formato do usuario (DOMINIO\usuario ou .\usuario) e se a conta existe.';
+    end
+    else
+    begin
+      LastOperationError :=
+        'Servico instalado, mas nao iniciou automaticamente (codigo ' + IntToStr(RC) + ').' + #13#10 +
+        'Acao recomendada: verificar Event Viewer e iniciar manualmente em Services.msc.';
+    end;
     Result := True;
     Exit;
   end;

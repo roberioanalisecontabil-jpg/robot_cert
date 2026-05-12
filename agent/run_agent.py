@@ -94,6 +94,61 @@ def _read_agent_status() -> dict | None:
     return None
 
 
+def _command_file_path() -> Path:
+    """Arquivo de comandos enviados pelo tray do usuário para o serviço LocalSystem."""
+    program_data = os.getenv("PROGRAMDATA", "").strip()
+    if program_data:
+        return Path(program_data) / "CertGuard Agent" / "agent_command.json"
+    return _app_dir() / "agent_command.json"
+
+
+def _write_agent_command(command: str, **extra) -> bool:
+    """Grava um comando para o serviço processar. Retorna True em sucesso."""
+    path = _command_file_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"command": command, "timestamp": time.time(), **extra}
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        return True
+    except OSError:
+        LOGGER.exception("Falha ao gravar comando do tray (%s)", command)
+        return False
+
+
+def _consume_agent_command(max_age_sec: float = 300.0) -> dict | None:
+    """
+    Lê e remove o arquivo de comando. Comandos antigos (> max_age_sec) são descartados.
+    Chamado pelo serviço para receber rescan/etc. solicitados pelo tray.
+    """
+    path = _command_file_path()
+    if not path.is_file():
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    # Remover o arquivo antes de processar para evitar reentrância
+    try:
+        path.unlink()
+    except OSError:
+        LOGGER.exception("Falha ao remover arquivo de comando %s", path)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        LOGGER.warning("Comando do tray inválido (JSON corrompido) — descartado.")
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        age = time.time() - float(data.get("timestamp", 0))
+    except (TypeError, ValueError):
+        age = 0.0
+    if max_age_sec > 0 and age > max_age_sec:
+        LOGGER.info("Comando do tray descartado por idade (%.0fs).", age)
+        return None
+    return data
+
+
 def _is_service_running() -> bool:
     """Verifica se o serviço Windows CertGuardAgent está rodando via sc query."""
     try:
@@ -471,7 +526,8 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     if cfg.mover_cli:
         mover = True
 
-    LOGGER.info("Conectando a: %s", base)
+    if not cfg.tray_only:
+        LOGGER.info("Conectando a: %s", base)
 
     trigger_event = threading.Event()
     observer = None
@@ -479,6 +535,14 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     last_full_scan_time = 0.0
     connected = False
     tray_ref: dict[str, pystray.Icon | None] = {"icon": None}
+    # Estado compartilhado entre o handler do clique e o loop UI do tray-only.
+    # `pending_since`: timestamp do clique em "Forçar leitura agora".
+    # `last_scan_baseline`: último `last_scan_time` conhecido antes do clique
+    # (o loop UI considera "concluído" quando o status apresentar um valor maior).
+    tray_ui_state: dict[str, float] = {"pending_since": 0.0, "last_scan_baseline": 0.0}
+    # Tempo máximo a manter o estado "Solicitando rescan..." piscando antes
+    # de assumir que algo falhou no serviço (timeout em segundos).
+    rescan_pending_timeout_sec = float(os.getenv("AGENT_RESCAN_PENDING_TIMEOUT_SEC", "120"))
 
     def _notify(title: str, message: str) -> None:
         icon = tray_ref.get("icon")
@@ -508,7 +572,31 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
 
     def _rescan_action(_icon: pystray.Icon, _item) -> None:
         LOGGER.info("Rescan manual solicitado pelo menu da bandeja.")
-        trigger_event.set()
+        if cfg.tray_only:
+            # No tray-only não há worker local; quem faz o scan é o serviço.
+            # Sinaliza via arquivo de comando que o loop do serviço observa.
+            if not _is_service_running():
+                _notify(
+                    "CertGuard Agent",
+                    "O serviço CertGuardAgent não está em execução — inicie-o para que o rescan ocorra.",
+                )
+                LOGGER.warning("Rescan ignorado: serviço CertGuardAgent não está em execução.")
+                return
+            if _write_agent_command("rescan", source="tray"):
+                # Snapshot do último scan ANTES do pedido — o loop UI pisca
+                # até detectar que o serviço executou um novo scan (mudou ts).
+                prev_status = _read_agent_status() or {}
+                tray_ui_state["pending_since"] = time.time()
+                tray_ui_state["last_scan_baseline"] = prev_status.get("last_scan_time") or 0.0
+                _notify("CertGuard Agent", "Rescan solicitado ao serviço.")
+                LOGGER.info("Comando 'rescan' enviado ao serviço via %s.", _command_file_path())
+            else:
+                _notify(
+                    "CertGuard Agent",
+                    "Não foi possível enviar o pedido de rescan ao serviço (permissão de escrita).",
+                )
+        else:
+            trigger_event.set()
 
     def _start_tray() -> None:
         if cfg.no_tray or cfg.once:
@@ -530,6 +618,34 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     _start_tray()
     LOGGER.info("Logs em: %s", log_file)
 
+    def _command_watcher() -> None:
+        """Thread separada: consome agent_command.json a cada 1s sem depender
+        do loop principal (que pode estar bloqueado em I/O do portal)."""
+        while not quit_event.is_set():
+            try:
+                pending = _consume_agent_command()
+            except Exception:
+                LOGGER.exception("Erro inesperado ao consumir comando do tray")
+                pending = None
+            if pending:
+                cmd_name = str(pending.get("command", "")).strip().lower()
+                if cmd_name == "rescan":
+                    LOGGER.info(
+                        "Rescan acionado pelo tray (origem=%s).",
+                        pending.get("source") or "desconhecida",
+                    )
+                    trigger_event.set()
+                elif cmd_name:
+                    LOGGER.warning("Comando do tray desconhecido: %s", cmd_name)
+            quit_event.wait(timeout=1.0)
+
+    if not cfg.tray_only and not cfg.once:
+        threading.Thread(
+            target=_command_watcher,
+            name="CertGuardCommandWatcher",
+            daemon=True,
+        ).start()
+
     if cfg.tray_only:
         LOGGER.info("Modo tray-only: monitorando estado do serviço %s.", SERVICE_NAME)
         _prev_visual = None  # rastreia estado visual para evitar atualizações desnecessárias
@@ -545,6 +661,29 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             status = _read_agent_status() if svc_running else None
             agent_state = (status or {}).get("state", "idle")
 
+            # Determinar se ainda estamos a aguardar o serviço processar um
+            # pedido recente do botão "Forçar leitura agora".
+            pending_since = tray_ui_state.get("pending_since", 0.0) or 0.0
+            baseline = tray_ui_state.get("last_scan_baseline", 0.0) or 0.0
+            now_ts = time.time()
+            current_last_scan = float((status or {}).get("last_scan_time") or 0.0)
+            request_pending = False
+            if pending_since > 0.0:
+                age = now_ts - pending_since
+                if current_last_scan > baseline:
+                    # Serviço já executou um novo scan após o clique.
+                    tray_ui_state["pending_since"] = 0.0
+                    tray_ui_state["last_scan_baseline"] = 0.0
+                elif age >= rescan_pending_timeout_sec:
+                    LOGGER.warning(
+                        "Rescan solicitado pelo tray expirou sem confirmação (timeout=%.0fs).",
+                        rescan_pending_timeout_sec,
+                    )
+                    tray_ui_state["pending_since"] = 0.0
+                    tray_ui_state["last_scan_baseline"] = 0.0
+                else:
+                    request_pending = True
+
             if not svc_running:
                 # ── Serviço parado → ícone cinza ──
                 if _prev_visual != "stopped":
@@ -553,14 +692,17 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                     _prev_visual = "stopped"
                 wait = 3.0
 
-            elif agent_state in ("scanning", "sending"):
-                # ── Escaneando/enviando → piscar azul ↔ claro ──
+            elif agent_state in ("scanning", "sending") or request_pending:
+                # ── Escaneando/enviando OU pedido pendente → piscar ──
                 _blink_on = not _blink_on
                 icon.icon = _icon_blue if _blink_on else _icon_blink
-                label = "Escaneando..." if agent_state == "scanning" else "Enviando..."
-                items_n = (status or {}).get("items_count", "")
-                if items_n:
-                    label += f" ({items_n} itens)"
+                if request_pending and agent_state not in ("scanning", "sending"):
+                    label = "Solicitando rescan..."
+                else:
+                    label = "Escaneando..." if agent_state == "scanning" else "Enviando..."
+                    items_n = (status or {}).get("items_count", "")
+                    if items_n:
+                        label += f" ({items_n} itens)"
                 icon.title = f"CertGuard Agent — {label}"
                 _prev_visual = "blinking"
                 wait = 0.5  # piscar rápido
@@ -569,18 +711,20 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 # ── Serviço ativo, idle → ícone azul fixo ──
                 if _prev_visual != "running":
                     icon.icon = _icon_blue
-                    last_ts = (status or {}).get("last_scan_time")
-                    if last_ts:
-                        try:
-                            from datetime import datetime
-                            dt = datetime.fromtimestamp(float(last_ts))
-                            icon.title = f"CertGuard Agent — Ativo (último scan: {dt:%H:%M})"
-                        except Exception:
-                            icon.title = "CertGuard Agent — Serviço ativo"
-                    else:
+                last_ts = (status or {}).get("last_scan_time")
+                if last_ts:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromtimestamp(float(last_ts))
+                        icon.title = f"CertGuard Agent — Ativo (último scan: {dt:%H:%M})"
+                    except Exception:
                         icon.title = "CertGuard Agent — Serviço ativo"
-                    _prev_visual = "running"
-                wait = 3.0
+                else:
+                    icon.title = "CertGuard Agent — Serviço ativo"
+                _prev_visual = "running"
+                # Polling mais frequente para detetar rapidamente o início
+                # de um scan disparado por watchdog/comando remoto.
+                wait = 1.0
 
             quit_event.wait(timeout=wait)
         return
@@ -677,6 +821,9 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 observer.start()
                 current_watch_path = str(src)
                 trigger_event.set()
+
+            # Comandos do tray são consumidos pela thread `_command_watcher`,
+            # que sinaliza `trigger_event` independentemente deste loop.
 
             mid = _machine_id(s, local_cfg)
             poll_commands = (
