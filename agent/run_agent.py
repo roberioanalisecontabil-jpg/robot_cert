@@ -39,6 +39,7 @@ if getattr(sys, "frozen", False):
     load_dotenv(Path(sys.executable).resolve().parent / ".env", override=True)
 
 from app.cert_scanner import (  # noqa: E402
+    CertInfo,
     CertStatus,
     cert_to_public_dict,
     move_to_expired,
@@ -208,6 +209,44 @@ def _resolve_paths(s: dict, local_cfg: dict) -> tuple[Path, Path]:
             "Origem e destino obrigatórios: configure no portal web ou em agent_config.json."
         )
     return Path(raw_src), Path(raw_exp)
+
+
+def _merge_itens_com_pasta_vencidos(
+    itens_origem: list[CertInfo], exp: Path, src: Path
+) -> list[CertInfo]:
+    """
+    Acrescenta ao snapshot os .pfx/.p12 sob ``expired_folder``.
+
+    O scan da origem usa ``exclude_dirs=[exp]`` quando ``exp`` está dentro de
+    ``src``, por isso certificados já movidos para a pasta de vencidos não
+    apareciam em ``items`` — o portal/DB subcontava vencidos.
+    """
+    if not exp.is_dir():
+        return list(itens_origem)
+    if exp.resolve() == src.resolve():
+        return list(itens_origem)
+    try:
+        extra = scan_folder(exp, recursive=True)
+    except OSError:
+        LOGGER.exception("Falha ao ler pasta de vencidos para o snapshot: %s", exp)
+        return list(itens_origem)
+    seen = {str(c.path.resolve()) for c in itens_origem}
+    out: list[CertInfo] = list(itens_origem)
+    for c in extra:
+        key = str(c.path.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
+    n_add = len(out) - len(itens_origem)
+    if n_add:
+        LOGGER.info(
+            "Snapshot: +%s certificado(s) da pasta de vencidos (%s).",
+            n_add,
+            exp,
+        )
+    return out
+
 
 class CertEventHandler(FileSystemEventHandler):
     def __init__(self, trigger_event: threading.Event, ignored_dir: Path | None):
@@ -661,7 +700,9 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                         j = nr.json() or {}
                         cmd = j.get("command")
                         if cmd == "mover_vencidos" and j.get("id"):
-                            itens_mv = scan_folder(src)
+                            itens_mv = scan_folder(
+                                src, recursive=True, exclude_dirs=exclude_dirs
+                            )
                             for c in itens_mv:
                                 if c.status != CertStatus.EXPIRED:
                                     continue
@@ -700,6 +741,8 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                         except OSError as ex:
                             LOGGER.error("Falha ao mover %s: %s", c.file_name, ex)
                     itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
+
+                itens = _merge_itens_com_pasta_vencidos(itens, exp, src)
 
                 payload = {
                     "machine_id": mid,

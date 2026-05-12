@@ -7,7 +7,7 @@ import json
 import re
 import unicodedata
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 
 LISTAGEM_EXPORT_MAX = 5000
 
-app = FastAPI(title="Monitor de certificados PFX", version="1.2.0")
+app = FastAPI(title="Monitor de certificados PFX", version="1.2.1")
 
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
@@ -86,50 +86,152 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 # As funções require_api_key foram removidas em favor do require_auth híbrido.
 
 
-def _response_from_rows(
-    source_dir: str,
-    expired_dir: str,
-    scanned_at: str,
-    items: List[dict],
-    data_source: str,
-    machine_id: Optional[str] = None,
-) -> JSONResponse:
-    return JSONResponse(
-        {
-            "source_dir": source_dir,
-            "expired_dir": expired_dir,
-            "atualizado_em": scanned_at,
-            "itens": items,
-            "data_source": data_source,
-            "machine_id": machine_id,
-            "supabase": supabase_configured(),
+def _painel_busca_normalizada(value: Any) -> str:
+    """Mesma ideia que `normalizarTexto` no dashboard (minúsculas, sem acentos)."""
+    t = str(value or "").lower()
+    t = unicodedata.normalize("NFD", t)
+    return "".join(ch for ch in t if unicodedata.category(ch) != "Mn")
+
+
+def _enrich_cert_item_dashboard_flags(it: dict, now: datetime, thirty_days: datetime) -> dict:
+    """Alinha com o painel: vencido pela data `not_after` mesmo que `status` ainda seja ok."""
+    row = dict(it)
+    expired_by_date = False
+    expiring_soon = False
+    na = row.get("not_after")
+    if na:
+        exp = _parse_iso_utc(str(na))
+        min_dt = datetime.min.replace(tzinfo=timezone.utc)
+        if exp > min_dt:
+            if exp < now:
+                expired_by_date = True
+            elif exp <= thirty_days and exp >= now:
+                expiring_soon = True
+    row["_isExpiredByDate"] = expired_by_date
+    row["_isExpiringSoon"] = expiring_soon
+    return row
+
+
+def _dashboard_filtro_status_match(row: dict, filtro: str) -> bool:
+    s = str(row.get("status") or "").lower()
+    ed = bool(row.get("_isExpiredByDate"))
+    es = bool(row.get("_isExpiringSoon"))
+    f = (filtro or "todos").strip().lower()
+    if f in ("todos", ""):
+        return True
+    if f == "validos":
+        return s == "ok" and not ed and not es
+    if f in ("prestes_vencer", "prestes a vencer"):
+        return s == "ok" and es and not ed
+    if f == "vencidos":
+        return s == "expirado" or ed
+    if f in ("erros", "erro"):
+        return s == "erro"
+    return True
+
+
+def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
+    if not str(q_raw or "").strip():
+        return True
+    raw = str(q_raw).strip()
+    bt = _painel_busca_normalizada(raw)
+    bd = re.sub(r"\D", "", raw)
+    nome = _painel_busca_normalizada(row.get("nome") or row.get("display_name") or "")
+    doc_f = _painel_busca_normalizada(row.get("documento_formatado") or "")
+    doc_n = _painel_busca_normalizada(row.get("documento_numero") or "")
+    fn = _painel_busca_normalizada(row.get("file_name") or "")
+    na_txt = _painel_busca_normalizada(row.get("not_after") or "")
+    dd = _digits_only_doc(row.get("documento_numero") or row.get("documento_formatado"))
+    nd = _digits_only_doc(str(row.get("not_after") or ""))
+    if bt and bt in nome:
+        return True
+    if bt and bt in doc_f:
+        return True
+    if bt and bt in doc_n:
+        return True
+    if bt and bt in fn:
+        return True
+    if bt and bt in na_txt:
+        return True
+    if bd and bd in dd:
+        return True
+    if bd and bd in nd:
+        return True
+    return False
+
+
+def _dashboard_resumo_counts(rows: List[dict]) -> dict[str, int]:
+    total = len(rows)
+    validos = expirando = erros = 0
+    for it in rows:
+        s = str(it.get("status") or "").lower()
+        ed = bool(it.get("_isExpiredByDate"))
+        es = bool(it.get("_isExpiringSoon"))
+        if s == "erro":
+            erros += 1
+        elif s == "expirado" or ed:
+            pass
+        elif s == "ok":
+            if es:
+                expirando += 1
+            else:
+                validos += 1
+    return {"total": total, "validos": validos, "expirando": expirando, "erros": erros}
+
+
+def _list_certificados_payload(
+    sets: PortalSettings,
+    snap: Optional[dict],
+    fonte: str,
+) -> dict[str, Any]:
+    """Monta o payload base (sem paginação) para GET /api/certificados."""
+    if fonte == "local":
+        src = sets.effective_source()
+        exp = sets.effective_expired()
+        itens: List[CertInfo] = scan_folder(src)
+        return {
+            "source_dir": str(src),
+            "expired_dir": str(exp),
+            "atualizado_em": datetime.now(timezone.utc).isoformat(),
+            "itens": [cert_to_public_dict(c) for c in itens],
+            "data_source": "local",
+            "machine_id": sets.machine_id,
         }
-    )
-
-
-def _list_from_snapshot(snap: dict) -> JSONResponse:
-    return _response_from_rows(
-        source_dir=str(snap.get("source_folder", "") or ""),
-        expired_dir=str(snap.get("expired_folder", "") or ""),
-        scanned_at=snap.get("scanned_at", datetime.now(timezone.utc).isoformat()),
-        items=snap.get("items", []) or [],
-        data_source="remoto",
-        machine_id=snap.get("machine_id"),
-    )
-
-
-def _list_local(sets: PortalSettings) -> JSONResponse:
+    if fonte == "remoto":
+        if not snap:
+            raise HTTPException(
+                status_code=404,
+                detail="Nenhum dado remoto. Configure o agente no Windows para enviar leituras.",
+            )
+        return {
+            "source_dir": str(snap.get("source_folder", "") or ""),
+            "expired_dir": str(snap.get("expired_folder", "") or ""),
+            "atualizado_em": snap.get("scanned_at", datetime.now(timezone.utc).isoformat()),
+            "itens": list(snap.get("items", []) or []),
+            "data_source": "remoto",
+            "machine_id": snap.get("machine_id"),
+        }
+    # auto
+    if snap:
+        return {
+            "source_dir": str(snap.get("source_folder", "") or ""),
+            "expired_dir": str(snap.get("expired_folder", "") or ""),
+            "atualizado_em": snap.get("scanned_at", datetime.now(timezone.utc).isoformat()),
+            "itens": list(snap.get("items", []) or []),
+            "data_source": "remoto",
+            "machine_id": snap.get("machine_id"),
+        }
     src = sets.effective_source()
     exp = sets.effective_expired()
-    itens: List[CertInfo] = scan_folder(src)
-    return _response_from_rows(
-        source_dir=str(src),
-        expired_dir=str(exp),
-        scanned_at=datetime.now(timezone.utc).isoformat(),
-        items=[cert_to_public_dict(c) for c in itens],
-        data_source="local",
-        machine_id=sets.machine_id,
-    )
+    itens_scan: List[CertInfo] = scan_folder(src)
+    return {
+        "source_dir": str(src),
+        "expired_dir": str(exp),
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
+        "itens": [cert_to_public_dict(c) for c in itens_scan],
+        "data_source": "local",
+        "machine_id": sets.machine_id,
+    }
 
 
 class SettingsBody(BaseModel):
@@ -524,31 +626,71 @@ def listar_certificados(
         "auto",
         description="auto | remoto | local",
     ),
+    pagina: Optional[int] = Query(None, ge=1, description="Com por_pagina, ativa paginação no servidor"),
+    por_pagina: Optional[int] = Query(None, ge=1, le=2000),
+    filtro_status: str = Query("todos", description="todos | validos | prestes_vencer | vencidos | erros"),
+    busca: Optional[str] = Query(None, max_length=400),
+    todas_filtradas: bool = Query(False, description="Exportação: todos os itens do filtro (até LISTAGEM_EXPORT_MAX)"),
 ) -> JSONResponse:
     """
     * auto: usa o último snapshot ingerido se existir; senão leitura local.
     * remoto: só snapshot (404 se vazio).
     * local: sempre leitura no disco do servidor (pastas efetivas da config).
+
+    Com ``pagina`` e ``por_pagina`` na query, devolve ``paginacao`` e ``resumo`` (painel).
+    Sem esses parâmetros, mantém o comportamento antigo: lista completa em ``itens``.
     """
     try:
         sets = load_settings()
         snap = get_latest_snapshot()
+        base = _list_certificados_payload(sets, snap, fonte)
 
-        if fonte == "local":
-            return _list_local(sets)
+        paged = pagina is not None and por_pagina is not None
+        if not paged and not todas_filtradas:
+            return JSONResponse({**base, "supabase": supabase_configured()})
 
-        if fonte == "remoto":
-            if not snap:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Nenhum dado remoto. Configure o agente no Windows para enviar leituras.",
-                )
-            return _list_from_snapshot(snap)
+        now = datetime.now(timezone.utc)
+        thirty = now + timedelta(days=30)
+        enriched = [_enrich_cert_item_dashboard_flags(it, now, thirty) for it in (base.get("itens") or [])]
+        filtered = [
+            it
+            for it in enriched
+            if _dashboard_filtro_status_match(it, filtro_status) and _dashboard_busca_match(it, busca or "")
+        ]
+        resumo = _dashboard_resumo_counts(filtered)
 
-        # auto
-        if snap:
-            return _list_from_snapshot(snap)
-        return _list_local(sets)
+        if todas_filtradas:
+            lista_truncada = len(filtered) > LISTAGEM_EXPORT_MAX
+            return JSONResponse(
+                {
+                    **base,
+                    "itens": filtered[:LISTAGEM_EXPORT_MAX],
+                    "resumo": resumo,
+                    "lista_truncada": lista_truncada,
+                    "supabase": supabase_configured(),
+                }
+            )
+
+        pp = int(por_pagina or 20)
+        total = len(filtered)
+        total_pags = max(1, (total + pp - 1) // pp) if total else 1
+        pagina_in = min(max(1, int(pagina or 1)), total_pags)
+        off = (pagina_in - 1) * pp
+        page_items = filtered[off : off + pp]
+        return JSONResponse(
+            {
+                **base,
+                "itens": page_items,
+                "resumo": resumo,
+                "paginacao": {
+                    "pagina": pagina_in,
+                    "total_paginas": total_pags,
+                    "total_itens": total,
+                    "por_pagina": pp,
+                },
+                "supabase": supabase_configured(),
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -577,6 +719,27 @@ def _parse_iso_utc(iso_value: Optional[str]) -> datetime:
         return dt.astimezone(timezone.utc)
     except ValueError:
         return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _normalize_ingest_items_status(items: List[dict], now: datetime) -> List[dict]:
+    """
+    Alinha gravacao com o criterio do painel: se not_after ja passou (UTC),
+    marca status como expirado mesmo quando o agente enviou ok (ex.: relogio local desfasado).
+    Nao altera erro, fora_do_padrao nem itens sem not_after valido.
+    """
+    min_dt = datetime.min.replace(tzinfo=timezone.utc)
+    out: List[dict] = []
+    for raw in items:
+        it = dict(raw)
+        s = str(it.get("status") or "").strip().lower()
+        if s == CertStatus.OK.value:
+            na = it.get("not_after")
+            if na:
+                exp = _parse_iso_utc(str(na))
+                if exp > min_dt and exp < now:
+                    it["status"] = CertStatus.EXPIRED.value
+        out.append(it)
+    return out
 
 
 def _digits_only_doc(value: Any) -> str:
@@ -1050,6 +1213,31 @@ def _vencidos_filtrar_busca(rows: List[dict], busca_raw: str) -> List[dict]:
     return out
 
 
+def _cert_history_fetch_all(sb: Any) -> List[dict[str, Any]]:
+    """Lê todas as linhas de cert_history (PostgREST limita ~1000 por pedido sem range)."""
+    cols = (
+        "file_name, nome, documento, status_ultimo, "
+        "vencimento_certificado, ultima_data_registrada"
+    )
+    batch = 1000
+    out: List[dict[str, Any]] = []
+    offset = 0
+    while True:
+        r = (
+            sb.table("cert_history")
+            .select(cols)
+            .order("ultima_data_registrada", desc=True)
+            .range(offset, offset + batch - 1)
+            .execute()
+        )
+        chunk = r.data or []
+        out.extend(chunk)
+        if len(chunk) < batch:
+            break
+        offset += batch
+    return out
+
+
 def historico_certificados(
     limite_snapshots: int = 500,
     *,
@@ -1124,16 +1312,7 @@ def historico_certificados(
 
                 # total_count == 0 e sem texto de busca → tentar snapshots (dados legados)
             else:
-                r = (
-                    sb.table("cert_history")
-                    .select(
-                        "file_name, nome, documento, status_ultimo, "
-                        "vencimento_certificado, ultima_data_registrada"
-                    )
-                    .order("ultima_data_registrada", desc=True)
-                    .execute()
-                )
-                rows_non_paginated = r.data or []
+                rows_non_paginated = _cert_history_fetch_all(sb)
         except Exception as e:  # noqa: BLE001
             err_str = str(e)
             if "PGRST205" in err_str or "cert_history" in err_str:
@@ -1247,21 +1426,42 @@ def vencidos_certificados(
     busca: Optional[str] = Query(None, max_length=200),
     limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
 ) -> dict:
-    hist = historico_certificados(limite_snapshots=limite_snapshots, offset=None, limit=None, busca=None)
+    # Vencidos precisa de uma agregação tão ampla quanto a do histórico (fallback snapshots).
+    lim_hist = max(limite_snapshots, config.HISTORICO_LIMITE_SNAPSHOTS)
+    hist = historico_certificados(lim_hist, offset=None, limit=None, busca=None)
     itens_hist = hist.get("itens", [])
     inicio_dt = _parse_iso_utc(data_inicio + "T00:00:00+00:00") if data_inicio else None
     fim_dt = _parse_iso_utc(data_fim + "T23:59:59+00:00") if data_fim else None
     busca_txt = str(busca or "").strip() or None
 
+    now_utc = datetime.now(timezone.utc)
+    min_dt = datetime.min.replace(tzinfo=timezone.utc)
+
+    def _conta_como_certificado_vencido(it: dict) -> bool:
+        """Inclui `expirado`/`vencido` no status ou data de validade já passada (alinha ao painel)."""
+        s = str(it.get("status_ultimo") or "").lower()
+        if s in ("expirado", "vencido"):
+            return True
+        venc_dt = _parse_iso_utc(it.get("vencimento_certificado"))
+        if venc_dt <= min_dt:
+            return False
+        return venc_dt < now_utc
+
     venc_filtrados: List[dict] = []
     for it in itens_hist:
-        if str(it.get("status_ultimo") or "").lower() != "expirado":
+        if not _conta_como_certificado_vencido(it):
             continue
         venc_dt = _parse_iso_utc(it.get("vencimento_certificado"))
-        if inicio_dt and venc_dt < inicio_dt:
-            continue
-        if fim_dt and venc_dt > fim_dt:
-            continue
+        s_low = str(it.get("status_ultimo") or "").lower()
+        if inicio_dt or fim_dt:
+            if venc_dt <= min_dt:
+                if s_low not in ("expirado", "vencido"):
+                    continue
+            else:
+                if inicio_dt and venc_dt < inicio_dt:
+                    continue
+                if fim_dt and venc_dt > fim_dt:
+                    continue
         venc_filtrados.append(it)
 
     venc_filtrados = _vencidos_filtrar_busca(venc_filtrados, busca_txt or "")
@@ -1290,7 +1490,7 @@ def vencidos_certificados(
 
     total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1
     pagina_out = min(max(1, pagina), total_pags)
-    off_pg = (pagina - 1) * por_pagina
+    off_pg = (pagina_out - 1) * por_pagina
     pagina_slice = venc_filtrados[off_pg : off_pg + por_pagina]
 
     return {
@@ -1317,17 +1517,19 @@ def ingest(body: IngestBody) -> dict:
     Também faz upsert na tabela materializada cert_history para acelerar o histórico.
     """
     machine_id = body.machine_id.strip() or "default"
+    scanned = datetime.now(timezone.utc)
+    items = _normalize_ingest_items_status(body.items, scanned)
     save_snapshot(
         machine_id=machine_id,
         source_folder=body.source_folder.strip(),
         expired_folder=body.expired_folder.strip(),
-        items=body.items,
+        items=items,
     )
     # Atualiza a tabela materializada — operação rápida, não bloqueia o retorno
     upsert_cert_history(
         machine_id=machine_id,
-        scanned_iso=datetime.now(timezone.utc).isoformat(),
-        items=body.items,
+        scanned_iso=scanned.isoformat(),
+        items=items,
     )
     return {
         "ok": True,
