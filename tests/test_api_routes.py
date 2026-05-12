@@ -90,6 +90,23 @@ def test_certificados_local_200(
     assert j.get("data_source") in ("local", "remoto")
 
 
+def test_certificados_dashboard_paginacao(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    """O painel envia pagina/por_pagina; a API deve devolver paginacao e resumo."""
+    h = {"X-API-Key": api_key}
+    r = client_com_chave.get(
+        "/api/certificados?fonte=local&pagina=1&por_pagina=5",
+        headers=h,
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert "paginacao" in j
+    assert j["paginacao"]["por_pagina"] == 5
+    assert "resumo" in j
+    assert "total" in j["resumo"]
+
+
 def test_historico_certificados_200(
     client_com_chave: TestClient, api_key: str
 ) -> None:

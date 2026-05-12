@@ -91,7 +91,7 @@
   <main class="main-content">
     <header class="page-header">
       <h1>Certificados Vencidos</h1>
-      <p>Lista de certificados vencidos, com filtro por período de vencimento.</p>
+      <p>Lista de certificados vencidos. Deixe as datas em branco para ver todos; use De/Até para filtrar pelo vencimento.</p>
     </header>
 
     <div class="cards-grid" style="margin-bottom: 1rem;">
@@ -244,10 +244,12 @@
       return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
     }
 
-    function anoAtualRange() {
-      const y = new Date().getFullYear();
-      document.getElementById("dt-inicio").value = `${y}-01-01`;
-      document.getElementById("dt-fim").value = `${y}-12-31`;
+    /** Sem datas por defeito: a API lista todos os vencidos (evita cortar por ano civil). */
+    function limparCamposDatasVencidos() {
+      const di = document.getElementById("dt-inicio");
+      const df = document.getElementById("dt-fim");
+      if (di) di.value = "";
+      if (df) df.value = "";
     }
 
     function atualizarPaginacaoVenc(pg) {
@@ -540,7 +542,7 @@
         if (elConfig) elConfig.style.display = "flex";
       }
       initPerPageVenc();
-      anoAtualRange();
+      limparCamposDatasVencidos();
       await carregarVencidos();
     })();
   </script>

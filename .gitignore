@@ -5,3 +5,12 @@ venv/
 .env
 *.pfx
 data/
+
+# PyInstaller / instalador (gerar com scripts/build_agent_installer.ps1)
+build/
+dist/
+dist_smoke/
+build_smoke/
+
+.pytest_cache/
+*.egg-info/
