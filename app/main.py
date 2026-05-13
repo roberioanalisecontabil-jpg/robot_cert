@@ -127,6 +127,8 @@ def _dashboard_filtro_status_match(row: dict, filtro: str) -> bool:
         return s == "expirado" or ed
     if f in ("erros", "erro"):
         return s == "erro"
+    if f in ("sem_padrao", "fora_do_padrao"):
+        return s == "fora_do_padrao"
     return True
 
 
@@ -162,21 +164,30 @@ def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
 
 def _dashboard_resumo_counts(rows: List[dict]) -> dict[str, int]:
     total = len(rows)
-    validos = expirando = erros = 0
+    validos = expirando = erros = vencidos = sem_padrao = 0
     for it in rows:
         s = str(it.get("status") or "").lower()
         ed = bool(it.get("_isExpiredByDate"))
         es = bool(it.get("_isExpiringSoon"))
         if s == "erro":
             erros += 1
+        elif s == "fora_do_padrao":
+            sem_padrao += 1
         elif s == "expirado" or ed:
-            pass
+            vencidos += 1
         elif s == "ok":
             if es:
                 expirando += 1
             else:
                 validos += 1
-    return {"total": total, "validos": validos, "expirando": expirando, "erros": erros}
+    return {
+        "total": total,
+        "validos": validos,
+        "expirando": expirando,
+        "erros": erros,
+        "vencidos": vencidos,
+        "sem_padrao": sem_padrao,
+    }
 
 
 def _list_certificados_payload(

@@ -240,7 +240,7 @@
 
     function fmtDataUtc(iso) {
       if (!iso) return "—";
-      return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+      return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" });
     }
 
     /** Sem datas por defeito: a API lista todos os vencidos (evita cortar por ano civil). */
@@ -267,7 +267,7 @@
           p.total_paginas +
           " · " +
           p.total_itens +
-          " vencido(s) (filtros)",
+          " vencido(s)",
         hideWhenSingle: true,
         goToPage: (pn) => {
           paginaAtualVenc = pn;

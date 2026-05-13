@@ -129,6 +129,18 @@
             </svg>
           </div>
         </div>
+
+        <div class="dashboard-card card-sem-padrao">
+          <div class="card-info">
+            <span class="card-title">Sem padrão</span>
+            <span class="card-number" id="n-sem-padrao">0</span>
+          </div>
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <!-- Tabela -->
@@ -144,8 +156,8 @@
               <option value="todos">Todos</option>
               <option value="validos">Válidos</option>
               <option value="prestes_vencer">Prestes a vencer</option>
-              <option value="vencidos">Vencidos</option>
               <option value="erros">Erros</option>
+              <option value="sem_padrao">Sem padrão</option>
             </select>
             <input
               type="search"
@@ -166,8 +178,8 @@
               <tr>
                 <th>Status</th>
                 <th>Nome (titular)</th>
-                <th>Emissão (UTC)</th>
-                <th>Vencimento (UTC)</th>
+                <th>Emissão</th>
+                <th>Vencimento</th>
                 <th>CNPJ / CPF</th>
               </tr>
             </thead>
@@ -248,7 +260,7 @@
       const fmt = (iso) => {
         if (!iso) return "—";
         const d = new Date(iso);
-        return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+        return d.toLocaleString("pt-BR", { timeZone: "UTC" });
       };
 
       /** Vencido por `not_after` mesmo que o snapshot ainda diga `ok` (agente sem reenviar). */
@@ -312,11 +324,14 @@
         let expirandoCount = 0;
         let vencidosCount = 0;
         let erroCount = 0;
+        let semPadraoCount = 0;
         items.forEach((it) => {
           if (it.status === "expirado" || it._isExpiredByDate) {
             vencidosCount++;
           } else if (it.status === "erro") {
             erroCount++;
+          } else if (it.status === "fora_do_padrao") {
+            semPadraoCount++;
           } else if (it.status === "ok") {
             if (it._isExpiringSoon) expirandoCount++;
             else okCount++;
@@ -326,6 +341,7 @@
         document.getElementById("n-ok").textContent = okCount;
         document.getElementById("n-exp-soon").textContent = expirandoCount;
         document.getElementById("n-erros").textContent = erroCount;
+        document.getElementById("n-sem-padrao").textContent = semPadraoCount;
       }
 
       function atualizarCardsResumo(r) {
@@ -334,6 +350,7 @@
         document.getElementById("n-ok").textContent = r.validos ?? 0;
         document.getElementById("n-exp-soon").textContent = r.expirando ?? 0;
         document.getElementById("n-erros").textContent = r.erros ?? 0;
+        document.getElementById("n-sem-padrao").textContent = r.sem_padrao ?? 0;
       }
 
 
@@ -349,7 +366,11 @@
               (f ? "<span class='doc-type-num'>" + esc(f) + "</span>" : "")
             );
           }
-          if (it.error_message) return "<span class='error-cell' style='color:#ef4444'>" + esc(it.error_message) + "</span>";
+          if (it.error_message) {
+            let msg = it.error_message;
+            if (msg && msg.toLowerCase().includes("invalid password")) msg = "Senha incorreta";
+            return "<span class='error-cell' style='color:#ef4444'>" + esc(msg) + "</span>";
+          }
           return "—";
         };
 
@@ -382,7 +403,7 @@
           next: "btn-pag-next",
           pg: pg,
           metaFormatter: (p) =>
-            "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " linhas (filtro)",
+            "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " linhas",
           hideWhenSingle: true,
           goToPage: (pn) => {
             paginaAtual = pn;
@@ -435,7 +456,7 @@
               "."
           );
         }
-        const headers = ["Status", "Nome", "Emissão (UTC)", "Vencimento (UTC)", "Documento"];
+        const headers = ["Status", "Nome", "Emissão", "Vencimento", "Documento"];
         const rows = d.itens.map((it) => [
           statusTexto(it),
           (it.nome != null && it.nome !== "" ? it.nome : it.display_name) || "",
@@ -497,7 +518,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Status</th><th>Nome</th><th>Emissão (UTC)</th><th>Vencimento (UTC)</th><th>Documento</th>
+                    <th>Status</th><th>Nome</th><th>Emissão</th><th>Vencimento</th><th>Documento</th>
                   </tr>
                 </thead>
                 <tbody>${linhas}</tbody>
@@ -547,8 +568,6 @@
             return;
           }
           st.textContent = "Atualizado em: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
-          document.getElementById("data-hint").textContent =
-            "Fonte de dados: " + (d.data_source || "—") + (d.machine_id ? " | Servidor: " + d.machine_id : "");
           const items = d.itens || [];
           if (d.paginacao) {
             paginaAtual = d.paginacao.pagina;

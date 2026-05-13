@@ -75,8 +75,7 @@
     <header class="page-header">
       <h1>Duplicidades</h1>
       <p>
-        Compara os certificados do <strong>último envio do agente</strong> (ou o scan local no servidor, se ainda não houver dados remotos).
-        Os <strong>certificados idênticos</strong> são detetados pelo <strong>fingerprint</strong> do X.509 (SHA-256 do certificado em DER, como em <code>openssl x509 -fingerprint -sha256</code>).
+        Compara os certificados encontrados. Certificados iguais são identificados automaticamente por uma assinatura única de segurança.
       </p>
     </header>
 
@@ -84,7 +83,7 @@
       <div class="toolbar">
         <div class="toolbar__status">
           <p id="status-msg" class="status-line"></p>
-          <p class="hint" id="meta-hint"></p>
+          <p class="hint" id="meta-hint" style="display:none;"></p>
         </div>
         <div class="toolbar__actions">
           <button type="button" id="btn-atualizar" class="primary">Atualizar</button>
@@ -94,10 +93,10 @@
       <p id="sem-dup" class="hint" style="display:none; margin-bottom:1rem;">Nenhuma duplicidade detetada com os critérios atuais.</p>
 
       <div id="sec-crypto-wrap" style="display:none;">
-        <p class="hint" style="margin-bottom:1.25rem;">Paginação alinhada às restantes abas: <strong>Anterior · números · Seguinte</strong> e <strong>por página</strong> (valor partilhado entre as três tabelas desta página).</p>
+
 
         <section id="sec-crypto-igual" class="dup-crypto-table-block" aria-labelledby="tit-igual">
-          <h2 id="tit-igual" style="margin-bottom:0.75rem;">Certificados idênticos (mesmo fingerprint)</h2>
+          <h2 id="tit-igual" style="margin-bottom:0.75rem;">Certificados idênticos (mesma assinatura única de segurança)</h2>
           <div class="dup-crypto-table-wrap">
             <table>
               <thead>
@@ -136,8 +135,8 @@
       </div>
 
       <section id="sec-documento" class="dup-crypto-table-block" style="display:none;" aria-labelledby="tit-doc-dup">
-        <h2 id="tit-doc-dup" style="font-size:1.1rem; margin-bottom:0.75rem;">Mesmo documento (vários ficheiros)</h2>
-        <p class="hint" style="margin-bottom:0.75rem;">Apenas quando o mesmo CPF/CNPJ aparece em mais de um ficheiro <strong>e</strong> não basta o fingerprint para explicar (sem leitura criptográfica, ou certificados diferentes). Cópias do <strong>mesmo</strong> certificado aparecem na tabela <em>Certificados idênticos</em> acima.</p>
+        <h2 id="tit-doc-dup" style="font-size:1.1rem; margin-bottom:0.75rem;">Certificados com mesmo nome ( diferente assinatura única de segurança)</h2>
+        <p class="hint" style="margin-bottom:0.75rem;">Apenas quando o mesmo CPF/CNPJ aparece em mais de um ficheiro e os certificados não podem ser identificados como iguais pela assinatura de segurança.</p>
         <div class="dup-crypto-table-wrap">
           <table>
             <thead>
@@ -249,7 +248,7 @@
 
     function fmtDataUtc(iso) {
       if (!iso) return "—";
-      return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+      return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" });
     }
 
     function resumoSha256(hex) {

@@ -185,7 +185,7 @@
     function fmtDataUtc(iso) {
       if (!iso) return "—";
       const d = new Date(iso);
-      return d.toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC";
+      return d.toLocaleString("pt-BR", { timeZone: "UTC" });
     }
 
     function atualizarPaginacaoHist(pg) {
@@ -357,7 +357,7 @@
         renderLinhasHistorico(rows);
         document.getElementById("count-hint").textContent =
           typeof j.total === "number"
-            ? j.total + " registo(s) com o filtro atual"
+            ? j.total + " registo(s)"
             : rows.length + " registo(s) nesta página";
       } finally {
         toggleLoading(false);

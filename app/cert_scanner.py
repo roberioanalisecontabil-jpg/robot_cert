@@ -206,8 +206,11 @@ def scan_folder(
             if not_after < now:
                 info.status = CertStatus.EXPIRED
         except Exception as e:  # noqa: BLE001 — queremos exibir qualquer falha
+            msg = str(e)
+            if "invalid password" in msg.lower():
+                msg = "Senha incorreta"
             info.status = CertStatus.ERROR
-            info.error_message = str(e) or repr(e)
+            info.error_message = msg or repr(e)
 
         results.append(info)
 

@@ -244,6 +244,11 @@ body {
   color: #ea580c;
 }
 
+.card-sem-padrao .card-icon {
+  background-color: #f5f3ff;
+  color: #7c3aed;
+}
+
 /* Table Area */
 .table-container {
   background: var(--surface);

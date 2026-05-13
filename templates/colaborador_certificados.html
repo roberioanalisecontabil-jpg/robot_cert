@@ -149,7 +149,7 @@
   <script>
     function toggleLoading(show, text) { if (typeof setGlobalLoading === "function") setGlobalLoading(show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
-    function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }) + " UTC"; }
+    function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }); }
     const LS_PER_PAGE_COLAB_P = "cg_per_page_colab_painel";
     const LS_PER_PAGE_COLAB_S = "cg_per_page_colab_selecao";
     const ALLOW_PER_PAGE_COLAB = [10, 25, 50, 100];
@@ -238,7 +238,7 @@
           pg.total_paginas +
           " · " +
           pg.total_itens +
-          " opção(ões) com o filtro atual",
+          " opção(ões)",
         hideWhenSingle: true,
         goToPage: (pn) => {
           selecaoPagina = pn;
