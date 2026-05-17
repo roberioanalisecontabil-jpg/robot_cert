@@ -106,22 +106,27 @@ app = FastAPI(title="Monitor de certificados PFX", version="1.2.1")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     
-    # [Guia Definitivo - A+] Headers Críticos
+    # [Guia Definitivo - A+ / Mozilla Observatory] Headers Críticos
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     
-    # CSP Avançado
+    # [Isolamento de Origem Cruzada - Mitigação Spectre]
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    
+    # CSP Avançado (Com object-src 'none' e frame-ancestors 'none')
     csp = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
         "style-src 'self' 'unsafe-inline'; "
         "font-src 'self'; "
         "img-src 'self' data:; "
+        "object-src 'none'; "
         "form-action 'self'; "
-        "frame-ancestors 'self'; "
+        "frame-ancestors 'none'; "
         "block-all-mixed-content; "
         "upgrade-insecure-requests;"
     )
