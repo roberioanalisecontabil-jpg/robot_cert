@@ -79,6 +79,18 @@ LISTAGEM_EXPORT_MAX = 5000
 
 app = FastAPI(title="Monitor de certificados PFX", version="1.2.1")
 
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # [OWASP] Restrições defensivas HTTP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # Prevenção base de CSP (Permite inline script provisoriamente por compatibilidade, bloqueia forms externos)
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; form-action 'self';"
+    return response
+
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
@@ -394,6 +406,15 @@ async def import_users(file: UploadFile = File(...)) -> dict:
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=422, detail="Arquivo vazio.")
+        
+    # [OWASP A08] Validação de Limite de Tamanho
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Arquivo muito grande (limite de 5MB).")
+        
+    # [OWASP A08] Validação de Magic Bytes (Assinatura real do arquivo)
+    # Rejeita ativamente se for um binário executável ou arquivo restrito disfarçado de CSV
+    if raw.startswith(b'MZ') or raw.startswith(b'\x7fELF') or raw.startswith(b'%PDF') or raw.startswith(b'PK'):
+        raise HTTPException(status_code=422, detail="Conteúdo do arquivo suspeito. Apenas texto puro (CSV) é permitido.")
 
     text = raw.decode("utf-8-sig", errors="replace")
     sniffer = csv.Sniffer()

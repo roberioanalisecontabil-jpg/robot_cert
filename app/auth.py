@@ -33,24 +33,37 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     # O bcrypt espera bytes
     password_bytes = password.encode('utf-8')
-    # Gera o salt e o hash
-    salt = bcrypt.gensalt()
+    # Gera o salt e o hash com fator de custo (rounds) explícito recomendado pela OWASP
+    salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
+    now = datetime.utcnow()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({
+        "exp": expire,
+        "iss": "robot_cert_portal",
+        "aud": "robot_cert_users",
+        "nbf": now
+    })
     encoded_jwt = jwt.encode(to_encode, _get_secret_key(), algorithm=ALGORITHM)
     return encoded_jwt
 
 def decode_access_token(token: str) -> Optional[TokenData]:
     try:
-        payload = jwt.decode(token, _get_secret_key(), algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token, 
+            _get_secret_key(), 
+            algorithms=[ALGORITHM],
+            issuer="robot_cert_portal",
+            audience="robot_cert_users"
+        )
         email: str = payload.get("sub")
         role: str = payload.get("role")
         if email is None:
