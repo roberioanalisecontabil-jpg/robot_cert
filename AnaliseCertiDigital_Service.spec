@@ -1,28 +1,43 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+# Executável hospedeiro SCM (Serviços Windows): AnaliseCertiDigital_Agent_Service.exe
+#
+# Build: pyinstaller AnaliseCertiDigital_Service.spec --clean
 
 import os
 
+# Diretório raiz do repositório (onde este .spec vive)
 REPO = os.path.abspath(".")
 
 a = Analysis(
-    ['agent\\run_agent.py'],
+    ["agent\\service_host.py"],
     pathex=[REPO, os.path.join(REPO, "agent")],
     binaries=[],
     datas=[
         # Inclui o pacote app/ inteiro para que app.cert_scanner seja encontrado
         (os.path.join(REPO, "app"), "app"),
+        # Inclui run_agent.py ao lado do service_host no bundle
+        (os.path.join(REPO, "agent", "run_agent.py"), "."),
     ],
     hiddenimports=[
+        "run_agent",
         "app",
         "app.cert_scanner",
-        'watchdog',
-        'watchdog.events',
-        'watchdog.observers',
-        'pystray',
-        'PIL',
-        'PIL.Image',
-        'PIL.ImageDraw',
+        "watchdog",
+        "watchdog.events",
+        "watchdog.observers",
+        "pystray",
+        "PIL",
+        "PIL.Image",
+        "PIL.ImageDraw",
+        "win32timezone",
+        "win32service",
+        "win32serviceutil",
+        "win32event",
+        "win32api",
+        "servicemanager",
+        "pywintypes",
+        "pythoncom",
+        # httpx e dependências usadas pelo run_agent
         "httpx",
         "httpx._transports",
         "httpx._transports.default",
@@ -48,21 +63,28 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='CertGuard_Agent',
+    exclude_binaries=True,
+    name="AnaliseCertiDigital_Agent_Service",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
+    upx=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=os.path.join(REPO, "ico", "icone.ico"),
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="AnaliseCertiDigital_Agent_Service",
 )

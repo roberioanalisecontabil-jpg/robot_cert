@@ -22,9 +22,9 @@ except ImportError as exc:  # pragma: no cover
 def _log_path() -> Path:
     program_data = os.getenv("PROGRAMDATA", "").strip()
     if program_data:
-        base = Path(program_data) / "CertGuard Service Smoke"
+        base = Path(program_data) / "Analise CertiDigital Service Smoke"
     else:
-        base = Path(tempfile.gettempdir()) / "CertGuard Service Smoke"
+        base = Path(tempfile.gettempdir()) / "Analise CertiDigital Service Smoke"
     base.mkdir(parents=True, exist_ok=True)
     return base / "smoke_service.log"
 
@@ -38,9 +38,9 @@ logging.basicConfig(
 LOGGER = logging.getLogger("service_smoke")
 
 
-class CertGuardSmokeService(win32serviceutil.ServiceFramework):
-    _svc_name_ = "CertGuardSmokeSvc"
-    _svc_display_name_ = "CertGuard Smoke Service"
+class AnaliseCertiDigitalSmokeService(win32serviceutil.ServiceFramework):
+    _svc_name_ = "AnaliseCertiDigitalSmokeSvc"
+    _svc_display_name_ = "Analise CertiDigital Smoke Service"
     _svc_description_ = "Serviço mínimo para validar bootstrap SCM e build PyInstaller."
 
     def __init__(self, args: tuple) -> None:
@@ -93,10 +93,10 @@ def main() -> None:
         os.chdir(str(Path(sys.executable).resolve().parent))
     if len(sys.argv) == 1:
         servicemanager.Initialize()
-        servicemanager.PrepareToHostSingle(CertGuardSmokeService)
+        servicemanager.PrepareToHostSingle(AnaliseCertiDigitalSmokeService)
         servicemanager.StartServiceCtrlDispatcher()
     else:
-        win32serviceutil.HandleCommandLine(CertGuardSmokeService)
+        win32serviceutil.HandleCommandLine(AnaliseCertiDigitalSmokeService)
 
 
 if __name__ == "__main__":

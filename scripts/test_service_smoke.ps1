@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
-$serviceName = "CertGuardSmokeSvc"
+$serviceName = "AnaliseCertiDigitalSmokeSvc"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
@@ -41,7 +41,7 @@ function Remove-SmokeServiceIfExists {
     $null = & sc.exe stop $serviceName 2>$null
     Start-Sleep -Seconds 1
     $null = & sc.exe delete $serviceName 2>$null
-    $null = & cmd.exe /c "taskkill /F /IM CertGuard_Smoke_Service.exe >nul 2>&1"
+    $null = & cmd.exe /c "taskkill /F /IM AnaliseCertiDigital_Smoke_Service.exe >nul 2>&1"
     Start-Sleep -Seconds 1
 }
 
@@ -66,7 +66,7 @@ if (-not $SkipBuild) {
     )
 }
 
-$serviceExe = Join-Path $repoRoot (Join-Path $DistPath "CertGuard_Smoke_Service\CertGuard_Smoke_Service.exe")
+$serviceExe = Join-Path $repoRoot (Join-Path $DistPath "AnaliseCertiDigital_Smoke_Service\AnaliseCertiDigital_Smoke_Service.exe")
 if (-not (Test-Path $serviceExe)) {
     throw "Executável smoke não encontrado: $serviceExe"
 }
@@ -85,7 +85,7 @@ Start-Sleep -Seconds 3
 Write-Log "Status do serviço smoke"
 & sc.exe query $serviceName
 
-$logPath = Join-Path $env:ProgramData "CertGuard Service Smoke\smoke_service.log"
+$logPath = Join-Path $env:ProgramData "Analise CertiDigital Service Smoke\smoke_service.log"
 if (Test-Path $logPath) {
     Write-Log ("Log encontrado: {0}" -f $logPath)
 } else {

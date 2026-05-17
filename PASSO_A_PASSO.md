@@ -60,7 +60,7 @@ Formato do nome do ficheiro:
 ### Exportar configuração pronta para o agente
 
 Na página **Configuração**, use o botão **Baixar agent_config.json**.
-Depois copie este arquivo para a pasta onde o `CertGuard_Agent.exe` foi instalado.
+Depois copie este arquivo para a pasta onde o `AnaliseCertiDigital_Agent.exe` foi instalado.
 O agente passa a usar esse arquivo automaticamente.
 
 ## 6. Ver dados no painel
@@ -95,8 +95,8 @@ cd C:\...\robot_cert
 
 Saídas:
 
-- `dist\CertGuard_Agent.exe` (binário do agente)
-- `dist\installer\Instalador_CertGuard_Agente.exe` (instalador)
+- `dist\AnaliseCertiDigital_Agent.exe` (binário do agente)
+- `dist\installer\Instalador_AnaliseCertiDigital_Agente.exe` (instalador)
 
 ## 8. Validar com testes automáticos
 

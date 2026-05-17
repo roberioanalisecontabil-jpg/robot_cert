@@ -174,10 +174,10 @@ try {
     }
 
     Invoke-BuildStep -StepName "build_pyinstaller" -Action {
-        Invoke-ExternalCommand -StepName "pyinstaller" -FilePath $PythonExe -Arguments @("-m", "PyInstaller", "--noconfirm", ".\CertGuard_Agent.spec")
+        Invoke-ExternalCommand -StepName "pyinstaller" -FilePath $PythonExe -Arguments @("-m", "PyInstaller", "--noconfirm", ".\AnaliseCertiDigital_Agent.spec")
     }
 
-    $exePath = Join-Path $repoRoot "dist\CertGuard_Agent.exe"
+    $exePath = Join-Path $repoRoot "dist\AnaliseCertiDigital_Agent.exe"
     Invoke-BuildStep -StepName "validar_executavel" -Action {
         Assert-PathExists -PathToCheck $exePath -ErrorMessage "Executavel nao encontrado em: $exePath"
         Assert-MinFileSize -PathToCheck $exePath -MinSizeBytes $MinimumExeSizeBytes -Label "Executavel"
@@ -185,10 +185,10 @@ try {
     }
 
     Invoke-BuildStep -StepName "build_pyinstaller_service" -Action {
-        Invoke-ExternalCommand -StepName "pyinstaller_service" -FilePath $PythonExe -Arguments @("-m", "PyInstaller", "--noconfirm", ".\CertGuard_Service.spec")
+        Invoke-ExternalCommand -StepName "pyinstaller_service" -FilePath $PythonExe -Arguments @("-m", "PyInstaller", "--noconfirm", ".\AnaliseCertiDigital_Service.spec")
     }
 
-    $serviceExePath = Join-Path $repoRoot "dist\CertGuard_Agent_Service\CertGuard_Agent_Service.exe"
+    $serviceExePath = Join-Path $repoRoot "dist\AnaliseCertiDigital_Agent_Service\AnaliseCertiDigital_Agent_Service.exe"
     Invoke-BuildStep -StepName "validar_executavel_servico" -Action {
         Assert-PathExists -PathToCheck $serviceExePath -ErrorMessage "Executavel de servico nao encontrado em: $serviceExePath"
         Assert-MinFileSize -PathToCheck $serviceExePath -MinSizeBytes $MinimumServiceExeSizeBytes -Label "ExecutavelServico"
@@ -204,7 +204,7 @@ try {
     }
 
     $installerDir = Join-Path $repoRoot "dist\installer"
-    $installerPath = Join-Path $installerDir "Instalador_CertGuard_Agente.exe"
+    $installerPath = Join-Path $installerDir "Instalador_AnaliseCertiDigital_Agente.exe"
     Invoke-BuildStep -StepName "validar_instalador" -Action {
         Assert-PathExists -PathToCheck $installerDir -ErrorMessage "Diretorio de instalador nao encontrado: $installerDir"
         Assert-PathExists -PathToCheck $installerPath -ErrorMessage "Instalador nao encontrado em: $installerPath"

@@ -125,7 +125,7 @@ def main() -> None:
         ("pool pequeno (muitos choques mesmo ficheiro)", 200, 250, 80),
     ]
 
-    print("Benchmark CertGuard — pipeline agregação histórico\n")
+    print("Benchmark Analise CertiDigital — pipeline agregação histórico\n")
     print(
         "| Cenário | Snaps | Itens/snap | ~Itens lidos | Chaves únicas | ms médio "
         "| Memória Pico (KB) |\n|---|---:|---:|---:|---:|---:|---:|"

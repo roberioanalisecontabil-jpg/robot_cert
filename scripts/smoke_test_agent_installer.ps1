@@ -1,8 +1,8 @@
 param(
-    [string]$InstallerPath = ".\dist\installer\Instalador_CertGuard_Agente.exe",
-    [string]$InstallDir = "${env:ProgramFiles}\CertGuard Agent",
-    [string]$TaskName = "CertGuard Agent (Tray)",
-    [string]$ServiceName = "CertGuardAgent",
+    [string]$InstallerPath = ".\dist\installer\Instalador_AnaliseCertiDigital_Agente.exe",
+    [string]$InstallDir = "${env:ProgramFiles}\Analise CertiDigital Agent",
+    [string]$TaskName = "Analise CertiDigital Agent (Tray)",
+    [string]$ServiceName = "AnaliseCertiDigitalAgent",
     [switch]$Cleanup
 )
 
@@ -63,7 +63,7 @@ function Assert-TaskConfiguration {
     if (-not $cmd) {
         throw "A tarefa nao possui comando configurado."
     }
-    if (-not $cmd.ToLowerInvariant().Contains("certguard_agent.exe")) {
+    if (-not $cmd.ToLowerInvariant().Contains("analise_certidigital_agent.exe")) {
         throw "Comando inesperado na tarefa: $cmd"
     }
     if (-not $cmd.StartsWith($ExpectedInstallDir, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -101,7 +101,7 @@ function Assert-ServiceConfiguration {
 }
 
 function Stop-AgentIfRunning {
-    $null = & taskkill /F /IM "CertGuard_Agent.exe" 2>$null
+    $null = & taskkill /F /IM "AnaliseCertiDigital_Agent.exe" 2>$null
 }
 
 function Remove-TaskIfExists {
@@ -137,7 +137,7 @@ Set-Location $repoRoot
 $resolvedInstaller = (Resolve-Path $InstallerPath).Path
 Assert-PathExists -PathToCheck $resolvedInstaller -ErrorMessage "Instalador nao encontrado: $InstallerPath"
 
-$expectedExePath = Join-Path $InstallDir "CertGuard_Agent.exe"
+$expectedExePath = Join-Path $InstallDir "AnaliseCertiDigital_Agent.exe"
 $installLog = Join-Path $repoRoot "dist\logs\smoke_install.log"
 
 Write-Log -Level "INFO" -Message ("Iniciando smoke test com instalador: {0}" -f $resolvedInstaller)
@@ -157,7 +157,7 @@ if ($LASTEXITCODE -ne 0) {
 Assert-PathExists -PathToCheck $expectedExePath -ErrorMessage "Executavel nao encontrado apos instalacao: $expectedExePath"
 Write-Log -Level "INFO" -Message ("Executavel validado: {0}" -f $expectedExePath)
 
-$expectedServiceExePath = Join-Path $InstallDir "CertGuard_Agent_Service.exe"
+$expectedServiceExePath = Join-Path $InstallDir "AnaliseCertiDigital_Agent_Service.exe"
 Assert-PathExists -PathToCheck $expectedServiceExePath -ErrorMessage "Executavel do servico nao encontrado apos instalacao: $expectedServiceExePath"
 Write-Log -Level "INFO" -Message ("Executavel de servico validado: {0}" -f $expectedServiceExePath)
 
@@ -171,9 +171,9 @@ Write-Log -Level "INFO" -Message ("Servico '{0}' validado com sucesso (AUTO_STAR
 Write-Log -Level "INFO" -Message "Iniciando processo do agente para validar startup manual"
 Start-Process -FilePath $expectedExePath | Out-Null
 Start-Sleep -Seconds 3
-$agentProcess = Get-Process -Name "CertGuard_Agent" -ErrorAction SilentlyContinue
+$agentProcess = Get-Process -Name "AnaliseCertiDigital_Agent" -ErrorAction SilentlyContinue
 if (-not $agentProcess) {
-    throw "Processo CertGuard_Agent nao subiu apos Start-Process."
+    throw "Processo AnaliseCertiDigital_Agent nao subiu apos Start-Process."
 }
 Write-Log -Level "INFO" -Message ("Processo ativo validado. PID: {0}" -f $agentProcess[0].Id)
 

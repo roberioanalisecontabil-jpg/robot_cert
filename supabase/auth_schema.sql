@@ -13,7 +13,7 @@ create table if not exists public.users (
 -- Você poderá alterar sua senha e criar novos usuários pelo painel após logar.
 insert into public.users (email, password_hash, full_name, role)
 values (
-  'admin@certguard.com', 
+  'admin@analise_certidigital.com', 
   '$2b$12$bEdFrM4wU2ZhkfYp7F93Jupt9iW6NF6YJvQX2nXYMXfbNM9fLG0S.', -- Hash real de 'admin123'
   'Administrador Padrão', 
   'admin'

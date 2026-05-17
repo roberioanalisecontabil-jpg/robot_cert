@@ -1,6 +1,6 @@
-# CertGuard — Monitor de Certificados Digitais
+# Analise CertiDigital — Monitor de Certificados Digitais
 
-O **CertGuard** (anteriormente Robot Cert) é um sistema completo de gestão e monitoramento de certificados digitais (arquivos `.pfx` e `.p12`). Ele foi projetado para resolver o problema de certificados expirados em servidores Windows, oferecendo uma visão centralizada em um painel web moderno.
+O **Analise CertiDigital** (anteriormente Robot Cert) é um sistema completo de gestão e monitoramento de certificados digitais (arquivos `.pfx` e `.p12`). Ele foi projetado para resolver o problema de certificados expirados em servidores Windows, oferecendo uma visão centralizada em um painel web moderno.
 
 ## 🚀 Arquitetura do Sistema
 

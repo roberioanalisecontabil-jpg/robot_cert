@@ -29,7 +29,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="CertGuard_Smoke_Service",
+    name="AnaliseCertiDigital_Smoke_Service",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -49,5 +49,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="CertGuard_Smoke_Service",
+    name="AnaliseCertiDigital_Smoke_Service",
 )

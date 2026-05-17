@@ -1,10 +1,10 @@
-"""Hospedeiro do Serviço Windows (SCM) para o CertGuard Agent — usa pywin32.
+"""Hospedeiro do Serviço Windows (SCM) para o Analise CertiDigital Agent — usa pywin32.
 
-Compilar com PyInstaller através de CertGuard_Service.spec → CertGuard_Agent_Service.exe.
+Compilar com PyInstaller através de AnaliseCertiDigital_Service.spec → AnaliseCertiDigital_Agent_Service.exe.
 
 Instalação/registo:
-  CertGuard_Agent_Service.exe install
-  CertGuard_Agent_Service.exe remove
+  AnaliseCertiDigital_Agent_Service.exe install
+  AnaliseCertiDigital_Agent_Service.exe remove
 (o instalador Inno pode criar o serviço automaticamente.)
 """
 
@@ -49,10 +49,10 @@ _bootstrap_import_paths()
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [CertGuard-Service] %(levelname)s %(message)s",
+    format="%(asctime)s [Analise CertiDigital-Service] %(levelname)s %(message)s",
 )
 
-_LOG = logging.getLogger("certguard_service")
+_LOG = logging.getLogger("analise_certidigital_service")
 
 # ── Import tardio do agente (com diagnóstico detalhado em caso de falha) ──
 _IMPORT_OK = False
@@ -73,11 +73,11 @@ except Exception as _exc:
     _LOG.critical(_IMPORT_ERROR)
 
 
-class CertGuardAgentService(win32serviceutil.ServiceFramework):
-    _svc_name_ = "CertGuardAgent"
-    _svc_display_name_ = "CertGuard Agent"
+class AnaliseCertiDigitalAgentService(win32serviceutil.ServiceFramework):
+    _svc_name_ = "AnaliseCertiDigitalAgent"
+    _svc_display_name_ = "Analise CertiDigital Agent"
     _svc_description_ = (
-        "Monitoriza pastas de certificados PFX no Windows e envia inventário ao portal CertGuard."
+        "Monitoriza pastas de certificados PFX no Windows e envia inventário ao portal Analise CertiDigital."
     )
 
     def __init__(self, args: tuple) -> None:
@@ -108,14 +108,14 @@ class CertGuardAgentService(win32serviceutil.ServiceFramework):
         # Se o import falhou, logar e parar imediatamente (sem travar)
         if not _IMPORT_OK:
             servicemanager.LogErrorMsg(
-                f"CertGuardAgent: import de run_agent falhou.\n{_IMPORT_ERROR}"
+                f"AnaliseCertiDigitalAgent: import de run_agent falhou.\n{_IMPORT_ERROR}"
             )
             self.ReportServiceStatus(win32service.SERVICE_STOPPED)
             return
 
         self._worker = threading.Thread(
             target=self._worker_main,
-            name="CertGuardAgentWorker",
+            name="AnaliseCertiDigitalAgentWorker",
             daemon=True,
         )
         self._worker.start()
@@ -143,7 +143,7 @@ class CertGuardAgentService(win32serviceutil.ServiceFramework):
         except SystemExit:
             pass
         except Exception:
-            _LOG.exception("O worker do CertGuard falhou dentro do serviço")
+            _LOG.exception("O worker do Analise CertiDigital falhou dentro do serviço")
 
 
 def main() -> None:
@@ -151,10 +151,10 @@ def main() -> None:
         os.chdir(str(Path(sys.executable).resolve().parent))
     if len(sys.argv) == 1:
         servicemanager.Initialize()
-        servicemanager.PrepareToHostSingle(CertGuardAgentService)
+        servicemanager.PrepareToHostSingle(AnaliseCertiDigitalAgentService)
         servicemanager.StartServiceCtrlDispatcher()
     else:
-        win32serviceutil.HandleCommandLine(CertGuardAgentService)
+        win32serviceutil.HandleCommandLine(AnaliseCertiDigitalAgentService)
 
 
 if __name__ == "__main__":

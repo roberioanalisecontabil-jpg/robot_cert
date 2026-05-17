@@ -12,7 +12,7 @@ if (-not (Get-Command "pip-audit" -ErrorAction SilentlyContinue)) {
 Write-Host "Auditando as dependências do requirements.txt contra o banco de dados de CVEs (PyPI/OSV)..." -ForegroundColor Cyan
 
 # Executa o pip-audit
-pip-audit -r requirements.txt -f json -o audit-report.json
+python -m pip_audit -r requirements.txt -f json -o audit-report.json
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "SUCESSO: Nenhuma vulnerabilidade conhecida foi detectada nas dependências!" -ForegroundColor Green

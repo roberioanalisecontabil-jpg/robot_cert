@@ -49,20 +49,20 @@ from app.cert_scanner import (  # noqa: E402
 # Porta padrão do monitor cert_robot (evita conflito com outro serviço em 8000)
 DEFAULT_ROBOT_API_PORT = 8020
 DEFAULT_ROBOT_BASE = f"http://127.0.0.1:{DEFAULT_ROBOT_API_PORT}"
-LOGGER = logging.getLogger("certguard_agent")
+LOGGER = logging.getLogger("analise_certidigital_agent")
 
 # ── Cores dos ícones da bandeja ──────────────────────────────────────────
 ICON_COLOR_BLUE = (33, 150, 243)       # Serviço ativo / conectado
 ICON_COLOR_GRAY = (158, 158, 158)      # Serviço parado
 ICON_COLOR_BLINK = (144, 202, 249)     # Frame claro para efeito de piscar
-SERVICE_NAME = "CertGuardAgent"
+SERVICE_NAME = "AnaliseCertiDigitalAgent"
 
 
 def _status_file_path() -> Path:
     """Caminho do ficheiro de estado partilhado entre serviço e bandeja."""
     program_data = os.getenv("PROGRAMDATA", "").strip()
     if program_data:
-        return Path(program_data) / "CertGuard Agent" / "agent_status.json"
+        return Path(program_data) / "Analise CertiDigital Agent" / "agent_status.json"
     return _app_dir() / "agent_status.json"
 
 
@@ -98,7 +98,7 @@ def _command_file_path() -> Path:
     """Arquivo de comandos enviados pelo tray do usuário para o serviço LocalSystem."""
     program_data = os.getenv("PROGRAMDATA", "").strip()
     if program_data:
-        return Path(program_data) / "CertGuard Agent" / "agent_command.json"
+        return Path(program_data) / "Analise CertiDigital Agent" / "agent_command.json"
     return _app_dir() / "agent_command.json"
 
 
@@ -150,7 +150,7 @@ def _consume_agent_command(max_age_sec: float = 300.0) -> dict | None:
 
 
 def _is_service_running() -> bool:
-    """Verifica se o serviço Windows CertGuardAgent está rodando via sc query."""
+    """Verifica se o serviço Windows AnaliseCertiDigitalAgent está rodando via sc query."""
     try:
         r = subprocess.run(
             ["sc", "query", SERVICE_NAME],
@@ -185,9 +185,9 @@ def _setup_logging() -> Path:
 
     program_data = os.getenv("PROGRAMDATA", "").strip()
     if program_data:
-        candidates.append(Path(program_data) / "CertGuard Agent")
+        candidates.append(Path(program_data) / "Analise CertiDigital Agent")
 
-    candidates.append(Path(tempfile.gettempdir()) / "CertGuard Agent")
+    candidates.append(Path(tempfile.gettempdir()) / "Analise CertiDigital Agent")
 
     last_error: Exception | None = None
     selected_log_file: Path | None = None
@@ -355,7 +355,7 @@ def _settings_retry_base_sec() -> float:
 
 
 def _settings_cache_path() -> Path:
-    return _app_dir() / ".certguard_cached_settings.json"
+    return _app_dir() / ".analise_certidigital_cached_settings.json"
 
 
 def _save_settings_cache(payload: dict) -> None:
@@ -577,10 +577,10 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             # Sinaliza via arquivo de comando que o loop do serviço observa.
             if not _is_service_running():
                 _notify(
-                    "CertGuard Agent",
-                    "O serviço CertGuardAgent não está em execução — inicie-o para que o rescan ocorra.",
+                    "Analise CertiDigital Agent",
+                    "O serviço AnaliseCertiDigitalAgent não está em execução — inicie-o para que o rescan ocorra.",
                 )
-                LOGGER.warning("Rescan ignorado: serviço CertGuardAgent não está em execução.")
+                LOGGER.warning("Rescan ignorado: serviço AnaliseCertiDigitalAgent não está em execução.")
                 return
             if _write_agent_command("rescan", source="tray"):
                 # Snapshot do último scan ANTES do pedido — o loop UI pisca
@@ -588,11 +588,11 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 prev_status = _read_agent_status() or {}
                 tray_ui_state["pending_since"] = time.time()
                 tray_ui_state["last_scan_baseline"] = prev_status.get("last_scan_time") or 0.0
-                _notify("CertGuard Agent", "Rescan solicitado ao serviço.")
+                _notify("Analise CertiDigital Agent", "Rescan solicitado ao serviço.")
                 LOGGER.info("Comando 'rescan' enviado ao serviço via %s.", _command_file_path())
             else:
                 _notify(
-                    "CertGuard Agent",
+                    "Analise CertiDigital Agent",
                     "Não foi possível enviar o pedido de rescan ao serviço (permissão de escrita).",
                 )
         else:
@@ -605,7 +605,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             pystray.MenuItem("Forçar leitura agora", _rescan_action),
             pystray.MenuItem("Sair", _quit_action),
         )
-        icon = pystray.Icon("CertGuard Agent", _icon_gray, "CertGuard Agent — verificando...", menu)
+        icon = pystray.Icon("Analise CertiDigital Agent", _icon_gray, "Analise CertiDigital Agent — verificando...", menu)
         tray_ref["icon"] = icon
         t = threading.Thread(target=icon.run, daemon=True)
         t.start()
@@ -642,7 +642,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     if not cfg.tray_only and not cfg.once:
         threading.Thread(
             target=_command_watcher,
-            name="CertGuardCommandWatcher",
+            name="AnaliseCertiDigitalCommandWatcher",
             daemon=True,
         ).start()
 
@@ -688,7 +688,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 # ── Serviço parado → ícone cinza ──
                 if _prev_visual != "stopped":
                     icon.icon = _icon_gray
-                    icon.title = "CertGuard Agent — Serviço parado"
+                    icon.title = "Analise CertiDigital Agent — Serviço parado"
                     _prev_visual = "stopped"
                 wait = 3.0
 
@@ -703,7 +703,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                     items_n = (status or {}).get("items_count", "")
                     if items_n:
                         label += f" ({items_n} itens)"
-                icon.title = f"CertGuard Agent — {label}"
+                icon.title = f"Analise CertiDigital Agent — {label}"
                 _prev_visual = "blinking"
                 wait = 0.5  # piscar rápido
 
@@ -716,11 +716,11 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                     try:
                         from datetime import datetime
                         dt = datetime.fromtimestamp(float(last_ts))
-                        icon.title = f"CertGuard Agent — Ativo (último scan: {dt:%H:%M})"
+                        icon.title = f"Analise CertiDigital Agent — Ativo (último scan: {dt:%H:%M})"
                     except Exception:
-                        icon.title = "CertGuard Agent — Serviço ativo"
+                        icon.title = "Analise CertiDigital Agent — Serviço ativo"
                 else:
-                    icon.title = "CertGuard Agent — Serviço ativo"
+                    icon.title = "Analise CertiDigital Agent — Serviço ativo"
                 _prev_visual = "running"
                 # Polling mais frequente para detetar rapidamente o início
                 # de um scan disparado por watchdog/comando remoto.
@@ -737,7 +737,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
 
             if fetch_err == "unauthorized":
                 connected = False
-                _notify("CertGuard Agent", "Erro 401: configure a chave API no agente.")
+                _notify("Analise CertiDigital Agent", "Erro 401: configure a chave API no agente.")
                 LOGGER.error("401: servidor exige chave API correta.")
                 if cfg.once:
                     raise SystemExit(1)
@@ -745,7 +745,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 continue
             if fetch_err == "not_found":
                 connected = False
-                _notify("CertGuard Agent", "Erro 404: URL do portal inválida no agente.")
+                _notify("Analise CertiDigital Agent", "Erro 404: URL do portal inválida no agente.")
                 LOGGER.error("404 em /api/settings. Verifique CERT_ROBOT_BASE_URL.")
                 if cfg.once:
                     raise SystemExit(1)
@@ -764,7 +764,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             if s is None:
                 if connected:
                     _notify(
-                        "CertGuard Agent",
+                        "Analise CertiDigital Agent",
                         "Portal indisponível. Novas tentativas em ciclo seguinte.",
                     )
                 connected = False
@@ -781,7 +781,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 _save_settings_cache(s)
 
             if not connected and not from_cache:
-                _notify("CertGuard Agent", "Conexão estabelecida com o portal.")
+                _notify("Analise CertiDigital Agent", "Conexão estabelecida com o portal.")
                 LOGGER.info("Conexão com portal estabelecida.")
             if from_cache:
                 LOGGER.info("Continuando com configuração em cache até o portal voltar.")
@@ -914,7 +914,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                             continue
                         LOGGER.error("Falha de rede repetida ao enviar snapshot.")
                         _notify(
-                            "CertGuard Agent",
+                            "Analise CertiDigital Agent",
                             "Erro de conexão ao enviar snapshot; tentará no próximo ciclo.",
                         )
                         break
@@ -936,7 +936,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                             "Erro HTTP ao enviar snapshot: %s", e.response.status_code
                         )
                         _notify(
-                            "CertGuard Agent",
+                            "Analise CertiDigital Agent",
                             f"Erro HTTP ao enviar snapshot: {e.response.status_code}",
                         )
                         break

@@ -1,14 +1,14 @@
-; Instalador CertGuard Agent — CertGuard_Agent.exe (bandeja / tarefa agendada)
+; Instalador Analise CertiDigital Agent — AnaliseCertiDigital_Agent.exe (bandeja / tarefa agendada)
 
 [Setup]
-AppName=CertGuard Agent
+AppName=Analise CertiDigital Agent
 AppVersion=1.0.1
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
-DefaultDirName={autopf}\CertGuard Agent
-DefaultGroupName=CertGuard
+DefaultDirName={autopf}\Analise CertiDigital Agent
+DefaultGroupName=Analise CertiDigital
 WizardStyle=modern
 OutputDir=dist\installer
-OutputBaseFilename=Instalador_CertGuard_Agente
+OutputBaseFilename=Instalador_AnaliseCertiDigital_Agente
 Compression=lzma
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -22,33 +22,33 @@ Name: "autostart"; Description: "Ao iniciar sessao: iniciar icone na bandeja (Ta
 
 [Files]
 ; Executável da bandeja (one-file)
-Source: "dist\CertGuard_Agent.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\AnaliseCertiDigital_Agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Executável do serviço (one-dir) + todas as DLLs em _internal
-Source: "dist\CertGuard_Agent_Service\CertGuard_Agent_Service.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\CertGuard_Agent_Service\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\AnaliseCertiDigital_Agent_Service\AnaliseCertiDigital_Agent_Service.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\AnaliseCertiDigital_Agent_Service\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Config: agent_config.json é a config primária (NÃO copiamos .env.example para
 ; evitar sobrescrever URL do portal com localhost)
 Source: "agent\agent_config.example.json"; DestDir: "{app}"; DestName: "agent_config.json"; Flags: onlyifdoesntexist
 
 [Icons]
-Name: "{group}\CertGuard Agent"; Filename: "{app}\CertGuard_Agent.exe"
-Name: "{group}\Desinstalar CertGuard Agent"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\CertGuard Agent"; Filename: "{app}\CertGuard_Agent.exe"; Tasks: desktopicon
+Name: "{group}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"
+Name: "{group}\Desinstalar Analise CertiDigital Agent"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\CertGuard_Agent.exe"; Parameters: "--tray-only"; Description: "Iniciar o agente em bandeja agora"; Flags: nowait postinstall skipifsilent unchecked; Check: OfferTrayAfterInstall
+Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Description: "Iniciar o agente em bandeja agora"; Flags: nowait postinstall skipifsilent unchecked; Check: OfferTrayAfterInstall
 
 [Dirs]
 ; Diretorio compartilhado de estado/comando entre Servico (LocalSystem) e Tray (Usuario).
 ; Sem permissao de escrita aqui o botao "Forcar leitura agora" do tray nao consegue
 ; entregar o pedido ao servico.
-Name: "{commonappdata}\CertGuard Agent"; Permissions: users-modify
+Name: "{commonappdata}\Analise CertiDigital Agent"; Permissions: users-modify
 
 [Code]
 const
-  TrayTaskName = 'CertGuard Agent (Tray)';
-  ServiceName = 'CertGuardAgent';
-  ProgramDataDirName = 'CertGuard Agent';
+  TrayTaskName = 'Analise CertiDigital Agent (Tray)';
+  ServiceName = 'AnaliseCertiDigitalAgent';
+  ProgramDataDirName = 'Analise CertiDigital Agent';
 
 var
   LastOperationError: string;
@@ -63,7 +63,7 @@ procedure InitializeWizard;
 begin
   ServiceAccountPage := CreateInputQueryPage(
     wpSelectTasks,
-    'Conta do servico CertGuardAgent',
+    'Conta do servico AnaliseCertiDigitalAgent',
     'Por padrao o servico roda como LocalSystem, que nao tem credenciais de dominio.',
     'Se a pasta de certificados estiver em rede ou exigir credenciais de dominio, ' +
     'informe o usuario (formato DOMINIO\usuario ou .\usuario) e a senha. ' +
@@ -102,7 +102,7 @@ var
   Cmd: string;
 begin
   LastOperationError := '';
-  Cmd := '/C taskkill /F /IM "CertGuard_Agent.exe"';
+  Cmd := '/C taskkill /F /IM "AnaliseCertiDigital_Agent.exe"';
   Log('Encerrando processo em execucao (se existir): ' + Cmd);
 
   if Exec(ExpandConstant('{cmd}'), Cmd, '', SW_HIDE, ewWaitUntilTerminated, RC) then
@@ -185,14 +185,14 @@ begin
   CreatedNow := False;
 
   { Verificar que o executavel do servico existe ANTES de registrar }
-  SvcExePath := ExpandConstant('{app}\CertGuard_Agent_Service.exe');
+  SvcExePath := ExpandConstant('{app}\AnaliseCertiDigital_Agent_Service.exe');
   if not FileExists(SvcExePath) then
   begin
     LastOperationError :=
       'O executavel do servico nao foi encontrado:' + #13#10 +
       SvcExePath + #13#10 +
       'A build do PyInstaller pode nao ter sido executada antes de compilar o instalador.' + #13#10 +
-      'Acao recomendada: execute "pyinstaller CertGuard_Service.spec --clean" e recompile o instalador.';
+      'Acao recomendada: execute "pyinstaller AnaliseCertiDigital_Service.spec --clean" e recompile o instalador.';
     Exit;
   end;
   Log('Executavel do servico encontrado: ' + SvcExePath);
@@ -210,7 +210,7 @@ begin
   Cmd :=
     '/C sc create "' + ServiceName + '" ' +
     'binPath= "\"' + SvcExePath + '\"" ' +
-    'start= auto DisplayName= "CertGuard Agent Service"';
+    'start= auto DisplayName= "Analise CertiDigital Agent Service"';
   Log('Criando servico: ' + Cmd);
   if not Exec(ExpandConstant('{cmd}'), Cmd, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, RC) then
   begin
@@ -272,7 +272,7 @@ begin
     Exit;
   end;
 
-  Cmd := '/C sc description "' + ServiceName + '" "Servico CertGuard com operacoes administrativas em background."';
+  Cmd := '/C sc description "' + ServiceName + '" "Servico Analise CertiDigital com operacoes administrativas em background."';
   Exec(ExpandConstant('{cmd}'), Cmd, '', SW_HIDE, ewWaitUntilTerminated, RC);
 
   Cmd := '/C sc start "' + ServiceName + '"';
@@ -337,7 +337,7 @@ begin
     '/TN "' + TrayTaskName + '" ' +
     '/SC ONLOGON ' +
     '/RU "' + ExpandConstant('{username}') + '" ' +
-    '/TR "\"' + ExpandConstant('{app}\CertGuard_Agent.exe') + '\" --tray-only" ' +
+    '/TR "\"' + ExpandConstant('{app}\AnaliseCertiDigital_Agent.exe') + '\" --tray-only" ' +
     '/RL HIGHEST /F';
   Log('Criando tarefa agendada de bandeja: ' + Cmd);
 
@@ -391,7 +391,7 @@ begin
     if not StopRunningAgent then
     begin
       MsgBox(
-        'Nao foi possivel encerrar o CertGuard Agent antes da instalacao.' + #13#10 +
+        'Nao foi possivel encerrar o Analise CertiDigital Agent antes da instalacao.' + #13#10 +
         LastOperationError,
         mbError, MB_OK
       );
@@ -439,7 +439,7 @@ begin
     if not StopRunningAgent then
     begin
       MsgBox(
-        'Nao foi possivel encerrar o CertGuard Agent antes da desinstalacao.' + #13#10 +
+        'Nao foi possivel encerrar o Analise CertiDigital Agent antes da desinstalacao.' + #13#10 +
         LastOperationError,
         mbError, MB_OK
       );

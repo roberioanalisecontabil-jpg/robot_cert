@@ -4,7 +4,7 @@
  */
 const KEY_STORAGE = "cert_robot_api_key"; // Agora armazena o Token JWT
 const FONT_STORAGE = "cert_robot_data_fonte";
-const SIDEBAR_COLLAPSED_STORAGE = "certguard_sidebar_collapsed";
+const SIDEBAR_COLLAPSED_STORAGE = "analise_certidigital_sidebar_collapsed";
 
 function getDataFonte() {
   return localStorage.getItem(FONT_STORAGE) || "auto";
