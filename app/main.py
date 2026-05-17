@@ -73,7 +73,30 @@ async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.T
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
     return token
 
+class SecureJSONFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        # [OWASP A09] Ocultação de segredos e geração de Log JSON estruturado para prevenir Log Injection
+        log_obj = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        # Filtrar possíveis senhas ou tokens da mensagem bruta
+        msg_lower = log_obj["message"].lower()
+        if "password" in msg_lower or "token" in msg_lower or "senha" in msg_lower:
+            log_obj["message"] = "*** REDACTED SENSITIVE DATA ***"
+            
+        if record.exc_info:
+            log_obj["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(log_obj)
+
 logger = logging.getLogger(__name__)
+# Configuração base de logging
+_handler = logging.StreamHandler()
+_handler.setFormatter(SecureJSONFormatter())
+logging.root.handlers = [_handler]
+logging.root.setLevel(logging.INFO)
 
 LISTAGEM_EXPORT_MAX = 5000
 
@@ -87,8 +110,8 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # Prevenção base de CSP (Permite inline script provisoriamente por compatibilidade, bloqueia forms externos)
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; form-action 'self';"
+    # Prevenção rigorosa de CSP: Restrito a 'self' para evitar IP Leakage para terceiros e proteger a cadeia de suprimentos
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; form-action 'self';"
     return response
 
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
