@@ -114,7 +114,7 @@
         </form>
     </div>
 
-    <script>
+    <script nonce="{{ request.state.nonce }}">
         const KEY_STORAGE = "cert_robot_api_key"; // Manter o mesmo nome por enquanto ou mudar para token
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {

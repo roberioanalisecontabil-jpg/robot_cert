@@ -102,8 +102,14 @@ LISTAGEM_EXPORT_MAX = 5000
 
 app = FastAPI(title="Monitor de certificados PFX", version="1.2.1")
 
+import secrets
+
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
+    # Gera um nonce único por requisição para blindar scripts
+    nonce = secrets.token_urlsafe(16)
+    request.state.nonce = nonce
+    
     response = await call_next(request)
     
     # [Guia Definitivo - A+ / Mozilla Observatory] Headers Críticos
@@ -117,10 +123,10 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     
-    # CSP Avançado (Com object-src 'none' e frame-ancestors 'none')
+    # CSP Avançado (Removido unsafe-inline/unsafe-eval de script-src e adicionado nonce)
     csp = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        f"script-src 'self' 'nonce-{nonce}'; "
         "style-src 'self' 'unsafe-inline'; "
         "font-src 'self'; "
         "img-src 'self' data:; "

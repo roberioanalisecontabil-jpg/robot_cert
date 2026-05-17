@@ -153,8 +153,8 @@
         </section>
     </main>
 
-    <script src="/static/ui-common.js"></script>
-    <script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js"></script>
+    <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
 
         function esc(v) {

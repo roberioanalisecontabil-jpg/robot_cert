@@ -136,8 +136,8 @@
     </div>
   </main>
 
-  <script src="/static/ui-common.js?v=cg-nav-1"></script>
-  <script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-1"></script>
+  <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_HIST = "cg_per_page_historico";
     const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
 

@@ -222,8 +222,8 @@
 
     </main>
 
-    <script src="/static/ui-common.js"></script>
-    <script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js"></script>
+    <script nonce="{{ request.state.nonce }}">
       function syncSelectFonteFromStorage() {
         const sf = document.getElementById("sel-fonte");
         if (!sf) return;

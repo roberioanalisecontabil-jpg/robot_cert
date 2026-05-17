@@ -226,8 +226,8 @@
 
     </main>
 
-    <script src="/static/ui-common.js?v=cg-nav-1"></script>
-    <script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-1"></script>
+    <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
       const ALLOWED_PER_PAGE_DASH = [10, 25, 50, 100];

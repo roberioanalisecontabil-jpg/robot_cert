@@ -145,8 +145,8 @@
     </div>
   </main>
 
-  <script src="/static/ui-common.js?v=cg-nav-1"></script>
-  <script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-1"></script>
+  <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setGlobalLoading === "function") setGlobalLoading(show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
     function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }); }
