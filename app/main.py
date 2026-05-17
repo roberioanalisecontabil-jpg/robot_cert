@@ -1663,3 +1663,43 @@ def mover_vencidos() -> JSONResponse:
 def _startup() -> None:
     config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
     config.CERT_EXPIRED_DIR.mkdir(parents=True, exist_ok=True)
+
+# =========================================================================
+# LGPD / PRIVACY BY DESIGN - DIREITOS DOS TITULARES
+# =========================================================================
+
+@app.get("/api/users/me/export")
+def export_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """[LGPD] Portabilidade e Consulta de Dados (Art. 18, incisos II e X)"""
+    from app.settings_state import load_colaborador_selecao
+    email = token.email
+    docs = load_colaborador_selecao(email)
+    
+    return {
+        "titular": email,
+        "vinculo_role": token.role,
+        "documentos_monitorados_cnpj_cpf": docs,
+        "exportado_em": datetime.utcnow().isoformat() + "Z",
+        "aviso_lgpd": "Este arquivo contém seus dados pessoais conforme registro no sistema."
+    }
+
+@app.delete("/api/users/me/delete")
+def delete_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """[LGPD] Direito ao Esquecimento / Eliminação (Art. 18, inciso VI)"""
+    from app.settings_state import _supabase
+    email = token.email
+    sb = _supabase()
+    
+    # 1. Apagar seleções (Ações do usuário no app)
+    if sb:
+        sb.table("colaborador_cert_selecoes").delete().eq("user_email", email.lower()).execute()
+    else:
+        # Modo arquivo local: limpa a entrada
+        from app.settings_state import save_colaborador_selecao
+        save_colaborador_selecao(email, [])
+        
+    return {
+        "status": "ok", 
+        "message": "Seus dados operacionais associados foram permanentemente removidos."
+    }
+
