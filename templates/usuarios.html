@@ -76,7 +76,7 @@
               </svg>
               Configuração
             </a>
-            <a href="#" onclick="logout()" style="margin-top: auto; color: #dc2626;">
+            <a href="#" data-action="logout" style="margin-top: auto; color: #dc2626;">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
               </svg>
@@ -203,15 +203,27 @@
                     <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                     <td>
                         <div class="row-actions">
-                            <button class="btn-action" onclick="editarUsuario('${u.id}')">Editar</button>
-                            <button class="btn-action" onclick="redefinirSenha('${u.id}')">Redefinir senha</button>
+                            <button class="btn-action" data-action="editar" data-id="${u.id}">Editar</button>
+                            <button class="btn-action" data-action="redefinir" data-id="${u.id}">Redefinir senha</button>
                             ${String(u.role || '').toLowerCase() !== 'disabled'
-                                ? `<button class="btn-action btn-danger" onclick="desativarUsuario('${u.id}')">Desativar</button>`
+                                ? `<button class="btn-action btn-danger" data-action="desativar" data-id="${u.id}">Desativar</button>`
                                 : ''}
                         </div>
                     </td>
                 </tr>
             `).join('');
+            
+            // Adicionar event listener delegado
+            const bodyEl = document.getElementById('user-list-body');
+            bodyEl.onclick = (e) => {
+                const btn = e.target.closest('button[data-action]');
+                if (!btn) return;
+                const act = btn.getAttribute('data-action');
+                const id = btn.getAttribute('data-id');
+                if (act === 'editar') editarUsuario(id);
+                else if (act === 'redefinir') redefinirSenha(id);
+                else if (act === 'desativar') desativarUsuario(id);
+            };
         }
 
         async function loadUsers() {

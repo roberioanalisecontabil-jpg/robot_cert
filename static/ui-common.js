@@ -36,6 +36,14 @@ function logout() {
   window.location.href = '/login';
 }
 
+document.addEventListener('click', function(e) {
+  const logoutBtn = e.target.closest('[data-action="logout"]');
+  if (logoutBtn) {
+    e.preventDefault();
+    logout();
+  }
+});
+
 async function mensagemCorpoErro(r) {
   const raw = await r.text();
   try {
