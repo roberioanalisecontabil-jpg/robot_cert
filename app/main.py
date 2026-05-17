@@ -105,13 +105,36 @@ app = FastAPI(title="Monitor de certificados PFX", version="1.2.1")
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
-    # [OWASP] Restrições defensivas HTTP
+    
+    # [Guia Definitivo - A+] Headers Críticos
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # Prevenção rigorosa de CSP: Restrito a 'self' para evitar IP Leakage para terceiros e proteger a cadeia de suprimentos
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; form-action 'self';"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    
+    # CSP Avançado
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; "
+        "img-src 'self' data:; "
+        "form-action 'self'; "
+        "frame-ancestors 'self'; "
+        "block-all-mixed-content; "
+        "upgrade-insecure-requests;"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    
+    # Remoção de cabeçalhos de rastreamento/obsoletos
+    if "X-XSS-Protection" in response.headers:
+        del response.headers["X-XSS-Protection"]
+    if "Server" in response.headers:
+        del response.headers["Server"]
+    if "X-Powered-By" in response.headers:
+        del response.headers["X-Powered-By"]
+        
     return response
 
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
