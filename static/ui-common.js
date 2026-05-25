@@ -141,10 +141,22 @@ function setGlobalLoading(show, text = "Carregando...") {
  * @param {string} [text]
  */
 function setTableLoading(container, show, text = "Carregando...") {
-  const el = typeof container === "string" ? document.getElementById(container) : container;
+  let el = typeof container === "string" ? document.getElementById(container) : container;
   if (!el) return;
 
-  // Garante que o container seja "anchor" para o overlay absoluto
+  // Se o elemento contiver um wrapper de tabela (com overflow-x) ou uma tabela direta,
+  // vamos ancorar o loading nele para evitar cobrir a barra de ferramentas (toolbar) com o campo de busca.
+  const tableWrapper = el.querySelector('div[style*="overflow-x"]');
+  if (tableWrapper) {
+    el = tableWrapper;
+  } else {
+    const tableEl = el.querySelector('table');
+    if (tableEl && tableEl.parentElement) {
+      el = tableEl.parentElement;
+    }
+  }
+
+  // Garante que o elemento seja "anchor" para o overlay absoluto
   if (!el.classList.contains("table-loading-anchor")) {
     el.classList.add("table-loading-anchor");
   }
