@@ -7,18 +7,46 @@
     <link rel="icon" href="/favicon.ico?v=brand-2026-05" type="image/x-icon" />
     <link rel="stylesheet" href="/static/style.css?v=brand-2026-05" />
     <style>
-        .user-table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
-        .user-table th, .user-table td { text-align: left; padding: 1rem; border-bottom: 1px solid var(--border); }
-        .user-table th { background: var(--bg); color: var(--text-light); font-weight: 500; font-size: 0.85rem; text-transform: uppercase; }
-        .role-badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .role-admin { background: #fee2e2; color: #dc2626; }
-        .role-user { background: #dcfce7; color: #16a34a; }
-        .row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-        .btn-action { border: 1px solid var(--border); background: white; border-radius: 6px; padding: 0.35rem 0.55rem; font-size: 0.8rem; cursor: pointer; }
-        .btn-action:hover { background: var(--bg); }
-        .btn-danger { border-color: #fecaca; color: #b91c1c; }
-        .role-disabled { background: #f3f4f6; color: #4b5563; }
-        .users-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
+        .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
+        .user-table th { 
+            color: var(--text-muted); 
+            font-weight: 600; 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.10em; 
+            line-height: 1.4;
+        }
+        .user-table tbody tr {
+            transition: background-color var(--duration-fast) var(--ease-out);
+        }
+        .user-table tbody tr:hover {
+            background-color: rgba(0, 113, 227, 0.04);
+        }
+        @media (prefers-color-scheme: dark) {
+            .user-table tbody tr:hover {
+                background-color: rgba(10, 132, 255, 0.06);
+            }
+        }
+        .role-badge { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+        .role-admin { background-color: var(--expired-bg); color: var(--expired); }
+        .role-user { background-color: var(--ok-bg); color: var(--ok); }
+        .role-disabled { background-color: var(--border); color: var(--text-muted); }
+        .row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+        .btn-action { 
+            border: 1.5px solid var(--border); 
+            background: var(--surface); 
+            border-radius: var(--radius-sm); 
+            padding: 0.4rem 0.75rem; 
+            font-size: 0.8rem; 
+            color: var(--text);
+            cursor: pointer; 
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+        .btn-action:hover { background: var(--bg); opacity: 0.9; }
+        .btn-danger { border-color: rgba(255, 59, 48, 0.25); background-color: var(--expired-bg); color: var(--expired); }
+        .btn-danger:hover { background-color: rgba(255, 59, 48, 0.2); border-color: rgba(255, 59, 48, 0.4); }
+        .users-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-4); flex-wrap: wrap; }
     </style>
 </head>
 <body>
