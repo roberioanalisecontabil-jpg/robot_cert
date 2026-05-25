@@ -71,8 +71,47 @@
   --duration-slow: 400ms;
 }
 
+:root[data-theme="dark"] {
+  --bg: #1C1C1E;
+  --surface: #2C2C2E;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-focus: #0A84FF;
+  --text: #F5F5F7;
+  --text-muted: #8E8E93;
+  --accent: #0A84FF;
+  --accent-hover: #0066CC;
+
+  /* Sidebar - Sleek Contrast */
+  --sidebar-bg: #111112;
+  --sidebar-text: #8E8E93;
+  --sidebar-text-active: #FFFFFF;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-active-bg: #0A84FF;
+
+  /* Status Colors */
+  --total: #0A84FF;
+  --total-bg: rgba(10, 132, 255, 0.15);
+  
+  --ok: #30D158;
+  --ok-bg: rgba(48, 209, 88, 0.15);
+  
+  --expired: #FF453A;
+  --expired-bg: rgba(255, 69, 58, 0.15);
+  
+  --warning: #FF9F0A;
+  --warning-bg: rgba(255, 159, 10, 0.15);
+
+  --info: #0A84FF;
+  --info-bg: rgba(10, 132, 255, 0.15);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1C1C1E;
     --surface: #2C2C2E;
     --border: rgba(255, 255, 255, 0.08);

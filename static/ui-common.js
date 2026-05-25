@@ -2,6 +2,13 @@
  * Funções partilhadas entre o painel (/) e a configuração (/configuracao).
  * O token JWT fica no localStorage do browser.
  */
+(function() {
+  const currentTheme = localStorage.getItem("cert_robot_theme");
+  if (currentTheme) {
+    document.documentElement.setAttribute("data-theme", currentTheme);
+  }
+})();
+
 const KEY_STORAGE = "cert_robot_api_key"; // Agora armazena o Token JWT
 const FONT_STORAGE = "cert_robot_data_fonte";
 const SIDEBAR_COLLAPSED_STORAGE = "analise_certidigital_sidebar_collapsed";
@@ -232,10 +239,78 @@ window.fetch = async (...args) => {
     return response;
 };
 
+function applyTheme(theme) {
+  const btn = document.getElementById("btn-theme-toggle");
+  const sunIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>`;
+  const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`;
+  
+  if (theme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    if (btn) {
+      btn.innerHTML = sunIcon;
+      btn.title = "Ativar modo claro";
+    }
+  } else {
+    document.documentElement.setAttribute("data-theme", "light");
+    if (btn) {
+      btn.innerHTML = moonIcon;
+      btn.title = "Ativar modo escuro";
+    }
+  }
+}
+
+function initThemeToggle() {
+  const sidebarHeader = document.querySelector(".sidebar-header");
+  if (!sidebarHeader) return;
+  if (document.getElementById("btn-theme-toggle")) return;
+
+  const btn = document.createElement("button");
+  btn.id = "btn-theme-toggle";
+  btn.type = "button";
+  btn.style.background = "transparent";
+  btn.style.border = "none";
+  btn.style.cursor = "pointer";
+  btn.style.padding = "0.4rem";
+  btn.style.marginLeft = "auto";
+  btn.style.color = "var(--sidebar-text)";
+  btn.style.display = "flex";
+  btn.style.alignItems = "center";
+  btn.style.justifyContent = "center";
+  btn.style.borderRadius = "var(--radius-sm)";
+  btn.style.transition = "all var(--duration-fast) var(--ease-out)";
+  
+  btn.addEventListener("mouseenter", () => {
+    btn.style.backgroundColor = "var(--sidebar-hover)";
+    btn.style.color = "var(--sidebar-text-active)";
+  });
+  btn.addEventListener("mouseleave", () => {
+    btn.style.backgroundColor = "transparent";
+    btn.style.color = "var(--sidebar-text)";
+  });
+
+  btn.addEventListener("click", () => {
+    let current = localStorage.getItem("cert_robot_theme");
+    if (!current) {
+      const isDarkSystem = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      current = isDarkSystem ? "dark" : "light";
+    }
+    const nextTheme = current === "dark" ? "light" : "dark";
+    localStorage.setItem("cert_robot_theme", nextTheme);
+    applyTheme(nextTheme);
+  });
+
+  sidebarHeader.appendChild(btn);
+  applyTheme(localStorage.getItem("cert_robot_theme"));
+}
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initSidebarToggle);
+  document.addEventListener("DOMContentLoaded", () => {
+    initSidebarToggle();
+    initThemeToggle();
+  });
 } else {
   initSidebarToggle();
+  initThemeToggle();
 }
 
 // ─── Paginador reutilizável ───────────────────────────────────────────────────
