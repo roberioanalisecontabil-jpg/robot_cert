@@ -164,20 +164,22 @@
                 </select>
                 <span class="hint" id="users-count"></span>
             </div>
-            <table class="user-table">
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>E-mail</th>
-                        <th>Nível</th>
-                        <th>Criado em</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="user-list-body">
-                    <!-- Preenchido via JS -->
-                </tbody>
-            </table>
+            <div class="table-container" id="table-container-users">
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Nível</th>
+                            <th>Criado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-list-body">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
         </section>
     </main>
 
@@ -254,13 +256,24 @@
             };
         }
 
+        function toggleLoading(show, text) {
+            if (typeof setTableLoading === "function") {
+                setTableLoading("table-container-users", show, text);
+            }
+        }
+
         async function loadUsers() {
+            toggleLoading(true, "Carregando usuários...");
             try {
                 const r = await fetch('/api/users', { headers: getHeaders() });
                 if (!r.ok) return;
                 usersCache = await r.json();
                 renderUsers();
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                toggleLoading(false);
+            }
         }
 
         async function editarUsuario(id) {
