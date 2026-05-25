@@ -767,8 +767,18 @@ select:focus {
   margin-bottom: 0.5rem;
 }
 
-/* Sidebar toggle */
+/* Sidebar toggle + theme toggle — barra do topo */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
 .sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -777,7 +787,25 @@ select:focus {
   border-radius: 8px;
   font-size: 1.05rem;
   line-height: 1;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--bg);
+  border-color: var(--border-focus);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.sidebar-toggle-btn:active {
+  transform: translateY(0);
+}
+
+.theme-toggle-btn {
+  font-size: 0;
+  padding: 0;
 }
 
 body.sidebar-collapsed .sidebar {

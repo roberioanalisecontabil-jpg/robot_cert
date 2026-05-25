@@ -90,6 +90,15 @@ function initSidebarToggle() {
 
   applySidebarState();
 
+  // Wrapper para os botões do topo (menu + tema)
+  let bar = document.getElementById("topbar-actions");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "topbar-actions";
+    bar.className = "topbar-actions";
+    main.prepend(bar);
+  }
+
   const btn = document.createElement("button");
   btn.id = "btn-sidebar-toggle";
   btn.type = "button";
@@ -98,7 +107,7 @@ function initSidebarToggle() {
   btn.setAttribute("aria-label", "Recolher/expandir menu lateral");
   btn.innerHTML = "&#9776;";
   btn.addEventListener("click", toggleSidebar);
-  main.prepend(btn);
+  bar.appendChild(btn);
 }
 
 function ensureGlobalLoadingOverlay() {
@@ -294,33 +303,24 @@ function applyTheme(theme) {
 }
 
 function initThemeToggle() {
-  const sidebarHeader = document.querySelector(".sidebar-header");
-  if (!sidebarHeader) return;
   if (document.getElementById("btn-theme-toggle")) return;
+
+  // Coloca o botão de tema ao lado do botão sanduíche no topbar
+  let bar = document.getElementById("topbar-actions");
+  if (!bar) {
+    // Se initSidebarToggle ainda não rodou, cria o wrapper
+    const main = document.querySelector(".main-content");
+    if (!main) return;
+    bar = document.createElement("div");
+    bar.id = "topbar-actions";
+    bar.className = "topbar-actions";
+    main.prepend(bar);
+  }
 
   const btn = document.createElement("button");
   btn.id = "btn-theme-toggle";
   btn.type = "button";
-  btn.style.background = "transparent";
-  btn.style.border = "none";
-  btn.style.cursor = "pointer";
-  btn.style.padding = "0.4rem";
-  btn.style.marginLeft = "auto";
-  btn.style.color = "var(--sidebar-text)";
-  btn.style.display = "flex";
-  btn.style.alignItems = "center";
-  btn.style.justifyContent = "center";
-  btn.style.borderRadius = "var(--radius-sm)";
-  btn.style.transition = "all var(--duration-fast) var(--ease-out)";
-  
-  btn.addEventListener("mouseenter", () => {
-    btn.style.backgroundColor = "var(--sidebar-hover)";
-    btn.style.color = "var(--sidebar-text-active)";
-  });
-  btn.addEventListener("mouseleave", () => {
-    btn.style.backgroundColor = "transparent";
-    btn.style.color = "var(--sidebar-text)";
-  });
+  btn.className = "sidebar-toggle-btn theme-toggle-btn";
 
   btn.addEventListener("click", () => {
     let current = localStorage.getItem("cert_robot_theme");
@@ -333,7 +333,7 @@ function initThemeToggle() {
     applyTheme(nextTheme);
   });
 
-  sidebarHeader.appendChild(btn);
+  bar.appendChild(btn);
   applyTheme(localStorage.getItem("cert_robot_theme"));
 }
 
