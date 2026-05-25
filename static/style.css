@@ -1008,7 +1008,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   line-height: 1.35;
 }
 
-/* Loading overlay global */
+/* Loading overlay global (mantido para exportações etc.) */
 .global-loading-overlay {
   position: fixed;
   inset: 0;
@@ -1061,6 +1061,47 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Loading inline — cobre apenas a área da tabela */
+.table-loading-anchor {
+  position: relative;
+}
+
+.table-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(1.5px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .table-loading-overlay {
+  background: rgba(17, 24, 39, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  .table-loading-overlay {
+    background: rgba(17, 24, 39, 0.55);
+  }
+}
+
+.table-loading-overlay.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.table-loading-overlay .global-loading-card {
+  min-width: 180px;
 }
 
 /* Paginação (estilo “button group”, sem Tailwind) */

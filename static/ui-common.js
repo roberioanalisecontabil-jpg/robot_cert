@@ -124,6 +124,40 @@ function setGlobalLoading(show, text = "Carregando...") {
   overlay.classList.toggle("is-visible", !!show);
 }
 
+/**
+ * Loading inline – cobre apenas o container indicado (ex.: .table-container).
+ * O container recebe position:relative para que o overlay absoluto fique sobre ele.
+ * @param {string|HTMLElement} container  id ou elemento do container
+ * @param {boolean} show
+ * @param {string} [text]
+ */
+function setTableLoading(container, show, text = "Carregando...") {
+  const el = typeof container === "string" ? document.getElementById(container) : container;
+  if (!el) return;
+
+  // Garante que o container seja "anchor" para o overlay absoluto
+  if (!el.classList.contains("table-loading-anchor")) {
+    el.classList.add("table-loading-anchor");
+  }
+
+  let overlay = el.querySelector(".table-loading-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "table-loading-overlay";
+    overlay.innerHTML = `
+      <div class="global-loading-card" role="status" aria-live="polite">
+        <div class="global-loading-spinner" aria-hidden="true"></div>
+        <div class="global-loading-text">Carregando...</div>
+      </div>
+    `;
+    el.appendChild(overlay);
+  }
+
+  const textEl = overlay.querySelector(".global-loading-text");
+  if (textEl) textEl.textContent = text;
+  overlay.classList.toggle("is-visible", !!show);
+}
+
 /** Lista de página (janela de até `maxBotões`) igual ao modelo Histórico/Dashboard/Vencidos. */
 function cgWindowPaginas(totalPaginas, paginaAtual, maxBotões) {
   const mb = typeof maxBotões === "number" ? maxBotões : 5;

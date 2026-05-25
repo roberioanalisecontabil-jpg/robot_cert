@@ -64,7 +64,7 @@
       <p>Escolha os certificados a acompanhar e veja o painel com vencimentos.</p>
     </header>
 
-    <div class="table-container">
+    <div class="table-container" id="table-container-colab">
       <div class="toolbar">
         <div class="toolbar__actions">
           <button type="button" id="tab-painel" class="primary">Painel</button>
@@ -147,7 +147,7 @@
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-1"></script>
   <script nonce="{{ request.state.nonce }}">
-    function toggleLoading(show, text) { if (typeof setGlobalLoading === "function") setGlobalLoading(show, text); }
+    function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
     function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }); }
     const LS_PER_PAGE_COLAB_P = "cg_per_page_colab_painel";

@@ -79,7 +79,7 @@
       </p>
     </header>
 
-    <div class="table-container">
+    <div class="table-container" id="table-container-dup">
       <div class="toolbar">
         <div class="toolbar__status">
           <p id="status-msg" class="status-line"></p>
@@ -235,8 +235,8 @@
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-1"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) {
-      if (typeof setGlobalLoading === "function") {
-        setGlobalLoading(show, text);
+      if (typeof setTableLoading === "function") {
+        setTableLoading("table-container-dup", show, text);
       }
     }
 

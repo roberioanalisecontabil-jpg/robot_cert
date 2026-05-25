@@ -144,7 +144,7 @@
       </div>
 
       <!-- Tabela -->
-      <div class="table-container">
+      <div class="table-container" id="table-container-dash">
         <div class="toolbar">
           <div class="toolbar__status">
             <p id="status-msg" class="status-line"></p>
@@ -295,8 +295,8 @@
       };
 
       function toggleLoading(show, text) {
-        if (typeof setGlobalLoading === "function") {
-          setGlobalLoading(show, text);
+        if (typeof setTableLoading === "function") {
+          setTableLoading("table-container-dash", show, text);
         }
       }
 
