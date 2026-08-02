@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Acompanhamento — Certificados</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=cg-v2-fluid" />
+  <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -87,7 +87,7 @@
         </svg>
         Configuração
       </a>
-      <a href="#" data-action="logout" style="margin-top:auto;color:#dc2626;">
+      <a href="#" data-action="logout" style="margin-top:auto;color:var(--sidebar-danger);">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
         </svg>
@@ -115,13 +115,15 @@
           </div>
         </div>
         <p class="hint" id="painel-hint"></p>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead>
-              <tr><th>Nome</th><th>CNPJ/CPF</th><th>Vencimento</th><th>Dias restantes</th><th>Status</th></tr>
-            </thead>
-            <tbody id="tbody-painel"></tbody>
-          </table>
+        <div class="table-scroll-anchor">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados do colaborador">
+            <table>
+              <thead>
+                <tr><th>Nome</th><th>CNPJ/CPF</th><th>Vencimento</th><th>Dias restantes</th><th>Status</th></tr>
+              </thead>
+              <tbody id="tbody-painel"></tbody>
+            </table>
+          </div>
         </div>
         <nav id="paginacao-toolbar-colab-painel" class="cg-page-nav" aria-label="Paginação do painel">
           <div id="pag-meta-colab-painel" class="cg-page-nav__meta"></div>
@@ -154,11 +156,13 @@
             <button type="button" id="btn-salvar-selecao" class="primary">Salvar seleção</button>
           </div>
         </div>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th>Selecionar</th><th>Nome</th><th>CNPJ/CPF</th><th>Status atual</th><th>Vencimento</th></tr></thead>
-            <tbody id="tbody-selecao"></tbody>
-          </table>
+        <div class="table-scroll-anchor">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Seleção de certificados">
+            <table>
+              <thead><tr><th>Selecionar</th><th>Nome</th><th>CNPJ/CPF</th><th>Status atual</th><th>Vencimento</th></tr></thead>
+              <tbody id="tbody-selecao"></tbody>
+            </table>
+          </div>
         </div>
         <nav id="paginacao-toolbar-colab-sel" class="cg-page-nav" aria-label="Paginação da seleção">
           <div id="pag-meta-colab-sel" class="cg-page-nav__meta"></div>
@@ -186,7 +190,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-2"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }

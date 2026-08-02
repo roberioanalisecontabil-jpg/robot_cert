@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Duplicidades — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=cg-v2-fluid" />
+  <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
 </head>
 <body>
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -61,7 +61,7 @@
         </svg>
         Configuração
       </a>
-      <a href="#" data-action="logout" style="margin-top: auto; color: #dc2626;">
+      <a href="#" data-action="logout" style="margin-top: auto; color: var(--sidebar-danger);">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
         </svg>
@@ -96,17 +96,19 @@
 
         <section id="sec-crypto-igual" class="dup-crypto-table-block" aria-labelledby="tit-igual">
           <h2 id="tit-igual" style="margin-bottom:0.75rem;">Certificados idênticos (mesma assinatura única de segurança)</h2>
-          <div class="dup-crypto-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Documento (CPF/CNPJ)</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-cert-igual"></tbody>
-            </table>
+          <div class="dup-crypto-table-wrap table-scroll-anchor">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados idênticos">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Documento (CPF/CNPJ)</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-cert-igual"></tbody>
+              </table>
+            </div>
           </div>
           <nav id="paginacao-toolbar-dup-ig" class="cg-page-nav" aria-label="Paginação — certificados idênticos">
             <div id="pag-meta-dup-ig" class="cg-page-nav__meta"></div>
@@ -136,17 +138,19 @@
       <section id="sec-documento" class="dup-crypto-table-block" style="display:none;" aria-labelledby="tit-doc-dup">
         <h2 id="tit-doc-dup" style="font-size:1.1rem; margin-bottom:0.75rem;">Certificados com mesmo nome ( diferente assinatura única de segurança)</h2>
         <p class="hint" style="margin-bottom:0.75rem;">Apenas quando o mesmo CPF/CNPJ aparece em mais de um ficheiro e os certificados não podem ser identificados como iguais pela assinatura de segurança.</p>
-        <div class="dup-crypto-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Documento (CPF/CNPJ)</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-grupos-doc"></tbody>
-          </table>
+        <div class="dup-crypto-table-wrap table-scroll-anchor">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados com mesmo documento">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Documento (CPF/CNPJ)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-grupos-doc"></tbody>
+            </table>
+          </div>
         </div>
         <nav id="paginacao-toolbar-dup-doc" class="cg-page-nav" aria-label="Paginação — mesmo documento">
           <div id="pag-meta-dup-doc" class="cg-page-nav__meta"></div>
@@ -175,16 +179,18 @@
       <section id="sec-nome" class="dup-crypto-table-block" style="display:none;" aria-labelledby="tit-nome-sim">
         <h2 id="tit-nome-sim" style="font-size:1.1rem; margin-bottom:0.75rem;">Nomes muito semelhantes (sem leitura criptográfica)</h2>
         <p class="hint" style="margin-bottom:0.75rem;">Só quando o certificado não pôde ser analisado. Pode haver falsos positivos (empresas homónimas).</p>
-        <div class="dup-crypto-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Arquivo</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-grupos-nome"></tbody>
-          </table>
+        <div class="dup-crypto-table-wrap table-scroll-anchor">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Nomes semelhantes">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Arquivo</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-grupos-nome"></tbody>
+            </table>
+          </div>
         </div>
         <nav id="paginacao-toolbar-dup-nome" class="cg-page-nav" aria-label="Paginação — nomes semelhantes">
           <div id="pag-meta-dup-nome" class="cg-page-nav__meta"></div>
@@ -231,7 +237,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-2"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) {
       if (typeof setTableLoading === "function") {

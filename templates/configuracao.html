@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Configuração — Certificados PFX</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=cg-v2-fluid" />
+    <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -103,7 +103,7 @@
           </svg>
           Configuração
         </a>
-        <a href="#" data-action="logout" style="margin-top: auto; color: #dc2626;">
+        <a href="#" data-action="logout" style="margin-top: auto; color: var(--sidebar-danger);">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
           </svg>
@@ -274,7 +274,7 @@
               <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
               <input type="email" id="inp-smtp-test-dest" placeholder="Destinatário teste" style="padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; max-width: 200px;" />
               <button type="button" id="btn-test-smtp">Enviar Teste</button>
-              <button type="button" id="btn-trigger-alerts" style="background-color: #f59e0b; color: white; border: none; padding: 0.6rem 1rem; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
+              <button type="button" id="btn-trigger-alerts" style="background-color: var(--warning-text); color: #FFFFFF; border: none; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
             </div>
             <span id="smtp-msg" class="hint" style="margin-top: 0.75rem; display: block;"></span>
           </div>
@@ -307,7 +307,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-2"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       // ── Lógica de abas ──────────────────────────────────────────────────────
       const TABS = [

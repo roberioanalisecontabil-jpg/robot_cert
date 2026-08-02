@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=cg-v2-fluid" />
+    <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -64,7 +64,7 @@
           </svg>
           Configuração
         </a>
-        <a href="#" data-action="logout" style="margin-top: auto; color: #dc2626;">
+        <a href="#" data-action="logout" style="margin-top: auto; color: var(--sidebar-danger);">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
           </svg>
@@ -150,7 +150,7 @@
           <div class="toolbar__status" aria-live="polite">
             <p id="status-msg" class="status-line"></p>
             <p class="hint" id="data-hint"></p>
-            <p id="panel-hint" class="hint" style="display: none; color: #f59e0b;"></p>
+            <p id="panel-hint" class="hint" style="display: none; color: var(--warning-text);"></p>
           </div>
           <div class="toolbar__actions">
             <select id="filtro-status" title="Filtrar por status" style="padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px;">
@@ -173,19 +173,21 @@
           </div>
         </div>
 
-        <div style="overflow-x: auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Nome (titular)</th>
-                <th>Emissão</th>
-                <th>Vencimento</th>
-                <th>CNPJ / CPF</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
+        <div class="table-scroll-anchor">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Tabela de certificados">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Nome (titular)</th>
+                  <th>Emissão</th>
+                  <th>Vencimento</th>
+                  <th>CNPJ / CPF</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
         </div>
         <nav id="paginacao-toolbar" class="cg-page-nav" aria-label="Navegação por páginas">
           <div id="pag-info-dash" class="cg-page-nav__meta"></div>
@@ -227,7 +229,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-2"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -370,7 +372,7 @@
           if (it.error_message) {
             let msg = it.error_message;
             if (msg && msg.toLowerCase().includes("invalid password")) msg = "Senha incorreta";
-            return "<span class='error-cell' style='color:#ef4444'>" + esc(msg) + "</span>";
+            return "<span class='error-cell'>" + esc(msg) + "</span>";
           }
           return "—";
         };

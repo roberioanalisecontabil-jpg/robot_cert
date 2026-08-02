@@ -126,6 +126,45 @@ function initSidebarToggle() {
   bar.appendChild(btn);
 }
 
+/**
+ * Uma área rolável precisa ser alcançável por teclado (WCAG 2.1.1) — mas só
+ * enquanto de fato rolar. Com 10 linhas por página a tabela cabe inteira, e um
+ * `tabindex="0"` fixo criaria uma parada de tabulação que não faz nada, além de
+ * poluir a lista de regiões do leitor de tela. Aqui o foco é ligado/desligado
+ * conforme a tabela realmente transborde.
+ */
+function atualizarRegioesRolaveis(raiz) {
+  const escopo = raiz || document;
+  escopo.querySelectorAll(".table-scroll").forEach((el) => {
+    const rola = el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+    if (rola) {
+      el.setAttribute("tabindex", "0");
+      el.setAttribute("role", "region");
+    } else {
+      el.removeAttribute("tabindex");
+      el.removeAttribute("role");
+    }
+  });
+}
+
+/** Observa mudanças de tamanho das áreas roláveis (troca de página, filtro, resize). */
+function initRegioesRolaveis() {
+  atualizarRegioesRolaveis();
+  const alvos = document.querySelectorAll(".table-scroll");
+  if (!alvos.length) return;
+
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => atualizarRegioesRolaveis());
+    alvos.forEach((el) => {
+      ro.observe(el);
+      const t = el.querySelector("table");
+      if (t) ro.observe(t); // o conteúdo muda a cada render da tabela
+    });
+  } else {
+    window.addEventListener("resize", () => atualizarRegioesRolaveis());
+  }
+}
+
 function ensureGlobalLoadingOverlay() {
   let overlay = document.getElementById("global-loading-overlay");
   if (overlay) return overlay;
@@ -160,15 +199,23 @@ function setTableLoading(container, show, text = "Carregando...") {
   let el = typeof container === "string" ? document.getElementById(container) : container;
   if (!el) return;
 
-  // Se o elemento contiver um wrapper de tabela (com overflow-x) ou uma tabela direta,
-  // vamos ancorar o loading nele para evitar cobrir a barra de ferramentas (toolbar) com o campo de busca.
-  const tableWrapper = el.querySelector('div[style*="overflow-x"]');
-  if (tableWrapper) {
-    el = tableWrapper;
+  // Ancoramos o loading na área da tabela (não no container inteiro) para não
+  // cobrir a toolbar com o campo de busca enquanto os dados carregam.
+  // A âncora precisa ser um elemento que NÃO rola: dentro de `.table-scroll` o
+  // overlay `inset: 0` resolveria contra a altura total do conteúdo e o spinner
+  // ficaria fora da área visível em tabelas longas.
+  const anchor = el.querySelector(".table-scroll-anchor");
+  if (anchor) {
+    el = anchor;
   } else {
-    const tableEl = el.querySelector('table');
-    if (tableEl && tableEl.parentElement) {
-      el = tableEl.parentElement;
+    const tableWrapper = el.querySelector('div[style*="overflow-x"]');
+    if (tableWrapper) {
+      el = tableWrapper;
+    } else {
+      const tableEl = el.querySelector("table");
+      if (tableEl && tableEl.parentElement) {
+        el = tableEl.parentElement;
+      }
     }
   }
 
@@ -387,23 +434,47 @@ window.fetch = async (...args) => {
     return response;
 };
 
+/** Tema em vigor quando o usuário nunca escolheu manualmente: o do sistema. */
+function temaDoSistema() {
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+/**
+ * Aplica o tema.
+ * `theme` nulo/ausente = "seguir o sistema": o atributo data-theme é REMOVIDO.
+ * Setar data-theme="light" nesse caso (comportamento anterior) anulava o bloco
+ * `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`,
+ * de modo que todo usuário com sistema escuro recebia a interface clara.
+ */
 function applyTheme(theme) {
   const btn = document.getElementById("btn-theme-toggle");
-  const sunIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>`;
-  const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`;
-  
-  if (theme === "dark") {
-    document.documentElement.setAttribute("data-theme", "dark");
-    if (btn) {
-      btn.innerHTML = sunIcon;
-      btn.title = "Ativar modo claro";
-    }
+  const sunIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>`;
+  const moonIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>`;
+
+  if (theme === "dark" || theme === "light") {
+    document.documentElement.setAttribute("data-theme", theme);
   } else {
-    document.documentElement.setAttribute("data-theme", "light");
-    if (btn) {
-      btn.innerHTML = moonIcon;
-      btn.title = "Ativar modo escuro";
-    }
+    document.documentElement.removeAttribute("data-theme");
+  }
+
+  if (!btn) return;
+
+  // O ícone precisa refletir o tema EM VIGOR, não o preferido — senão, no modo
+  // "seguir o sistema" com SO escuro, o botão ofereceria "ativar modo escuro".
+  const emVigor = theme === "dark" || theme === "light" ? theme : temaDoSistema();
+  const seguindoSistema = theme !== "dark" && theme !== "light";
+  const sufixo = seguindoSistema ? " (seguindo o sistema)" : "";
+
+  if (emVigor === "dark") {
+    btn.innerHTML = sunIcon;
+    btn.title = "Ativar modo claro" + sufixo;
+    btn.setAttribute("aria-label", "Ativar modo claro" + sufixo);
+  } else {
+    btn.innerHTML = moonIcon;
+    btn.title = "Ativar modo escuro" + sufixo;
+    btn.setAttribute("aria-label", "Ativar modo escuro" + sufixo);
   }
 }
 
@@ -428,18 +499,34 @@ function initThemeToggle() {
   btn.className = "sidebar-toggle-btn theme-toggle-btn";
 
   btn.addEventListener("click", () => {
-    let current = localStorage.getItem("cert_robot_theme");
-    if (!current) {
-      const isDarkSystem = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      current = isDarkSystem ? "dark" : "light";
+    const armazenado = localStorage.getItem("cert_robot_theme");
+    const emVigor = armazenado === "dark" || armazenado === "light" ? armazenado : temaDoSistema();
+    const proximo = emVigor === "dark" ? "light" : "dark";
+
+    if (proximo === temaDoSistema()) {
+      // Voltou a coincidir com o SO: devolvemos o controle ao sistema em vez de
+      // congelar a escolha, para que o usuário acompanhe o modo noturno automático.
+      localStorage.removeItem("cert_robot_theme");
+      applyTheme(null);
+    } else {
+      localStorage.setItem("cert_robot_theme", proximo);
+      applyTheme(proximo);
     }
-    const nextTheme = current === "dark" ? "light" : "dark";
-    localStorage.setItem("cert_robot_theme", nextTheme);
-    applyTheme(nextTheme);
   });
 
   bar.appendChild(btn);
   applyTheme(localStorage.getItem("cert_robot_theme"));
+
+  // Enquanto o usuário estiver seguindo o sistema, acompanhar a troca em tempo real
+  // (ex.: modo noturno automático do Windows/macOS virando ao anoitecer).
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const aoMudarSistema = () => {
+      if (!localStorage.getItem("cert_robot_theme")) applyTheme(null);
+    };
+    if (mq.addEventListener) mq.addEventListener("change", aoMudarSistema);
+    else if (mq.addListener) mq.addListener(aoMudarSistema);
+  }
 }
 
 async function fetchNotifications() {
@@ -567,11 +654,13 @@ if (document.readyState === "loading") {
     initSidebarToggle();
     initThemeToggle();
     initNotifications();
+    initRegioesRolaveis();
   });
 } else {
   initSidebarToggle();
   initThemeToggle();
   initNotifications();
+  initRegioesRolaveis();
 }
 
 // ─── Paginador reutilizável ───────────────────────────────────────────────────

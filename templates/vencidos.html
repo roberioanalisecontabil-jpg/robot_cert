@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vencidos — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=cg-v2-fluid" />
+  <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
   <style>
     .ano-progress-wrap {
       margin-top: 0.65rem;
@@ -78,7 +78,7 @@
         </svg>
         Configuração
       </a>
-      <a href="#" data-action="logout" style="margin-top: auto; color: #dc2626;">
+      <a href="#" data-action="logout" style="margin-top: auto; color: var(--sidebar-danger);">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
         </svg>
@@ -141,17 +141,19 @@
         </div>
       </div>
 
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>CNPJ/CPF</th>
-              <th>Vencimento do certificado</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-vencidos"></tbody>
-        </table>
+      <div class="table-scroll-anchor">
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados vencidos">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CNPJ/CPF</th>
+                <th>Vencimento do certificado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-vencidos"></tbody>
+          </table>
+        </div>
       </div>
       <nav id="paginacao-toolbar-venc" class="cg-page-nav" aria-label="Navegação por páginas">
         <div id="pag-meta-venc" class="cg-page-nav__meta"></div>
@@ -182,7 +184,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-2"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];

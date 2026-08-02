@@ -27,15 +27,25 @@
   
   --ok: #34C759;
   --ok-bg: #EAF9EE;
-  
+
   --expired: #FF3B30;
   --expired-bg: #FDF2F2;
-  
+
   --warning: #FF9F0A;
   --warning-bg: #FFF7EB;
 
   --info: #007AFF;
   --info-bg: #E8F0FE;
+
+  /* Texto de status — tom escurecido para atingir 4.5:1 sobre o fundo tonal
+     correspondente. As cores --ok/--warning/--expired continuam sendo a
+     identidade visual (ícones, bordas, preenchimentos); estes tokens existem
+     só para texto, que exige contraste maior que elementos gráficos. */
+  --ok-text: #1D7A3A;        /* 4.95:1 sobre --ok-bg */
+  --warning-text: #8A5200;   /* 6.01:1 sobre --warning-bg */
+  --expired-text: #C1121C;   /* 5.68:1 sobre --expired-bg */
+  --danger-text: #C1121C;    /* texto de erro sobre --surface */
+  --sidebar-danger: #FF6B6B; /* 6.13:1 sobre --sidebar-bg */
 
   /* Border Radii */
   --radius-xs: 4px;
@@ -94,15 +104,23 @@
   
   --ok: #30D158;
   --ok-bg: rgba(48, 209, 88, 0.15);
-  
+
   --expired: #FF453A;
   --expired-bg: rgba(255, 69, 58, 0.15);
-  
+
   --warning: #FF9F0A;
   --warning-bg: rgba(255, 159, 10, 0.15);
 
   --info: #0A84FF;
   --info-bg: rgba(10, 132, 255, 0.15);
+
+  /* Texto de status — no escuro, --ok (5.16:1) e --warning (5.09:1) já passam
+     sobre o fundo tonal e são mantidos. Só --expired reprovava (3.48:1). */
+  --ok-text: #30D158;
+  --warning-text: #FF9F0A;
+  --expired-text: #FF9A93;   /* 5.81:1 sobre --expired-bg */
+  --danger-text: #FF9A93;
+  --sidebar-danger: #FF6B6B; /* 6.80:1 sobre --sidebar-bg */
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -134,15 +152,22 @@
     
     --ok: #30D158;
     --ok-bg: rgba(48, 209, 88, 0.15);
-    
+
     --expired: #FF453A;
     --expired-bg: rgba(255, 69, 58, 0.15);
-    
+
     --warning: #FF9F0A;
     --warning-bg: rgba(255, 159, 10, 0.15);
 
     --info: #0A84FF;
     --info-bg: rgba(10, 132, 255, 0.15);
+
+    /* MANTER SINCRONIZADO com o bloco :root[data-theme="dark"] acima */
+    --ok-text: #30D158;
+    --warning-text: #FF9F0A;
+    --expired-text: #FF9A93;
+    --danger-text: #FF9A93;
+    --sidebar-danger: #FF6B6B;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -607,17 +632,17 @@ tbody tr:hover {
 
 .badge-ok {
   background-color: var(--ok-bg);
-  color: var(--ok);
+  color: var(--ok-text);
 }
 
 .badge-warning {
   background-color: var(--warning-bg);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .badge-expired {
   background-color: var(--expired-bg);
-  color: var(--expired);
+  color: var(--expired-text);
 }
 
 .badge-bad {
@@ -653,7 +678,7 @@ tbody tr:hover {
 }
 
 .error-cell {
-  color: #b91c1c;
+  color: var(--danger-text);
   font-size: 0.82rem;
 }
 
@@ -915,8 +940,10 @@ body.sidebar-collapsed .sidebar-nav a {
   margin: 0 0 0.5rem;
 }
 
+/* A rolagem agora fica no `.table-scroll` interno; este wrapper é só a moldura
+   e a âncora do overlay de loading (ver .table-scroll-anchor). */
 .dup-crypto-table-wrap {
-  overflow-x: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -1357,16 +1384,35 @@ select,
   will-change: background-color, border-color, transform, box-shadow;
 }
 
-/* Media query to respect prefers-reduced-motion standard */
+/* Respeita prefers-reduced-motion (WCAG 2.3.3).
+   NÃO zerar `transform` aqui: neste projeto transform também é layout — o drawer
+   mobile se esconde com translateX(-100%). Um `transform: none !important` global
+   deixava a sidebar permanentemente aberta sobre o conteúdo em telas < 768px,
+   justamente para o usuário que a regra deveria proteger.
+   Duração 0.01ms em vez de 0s: mantém o disparo de `transitionend`, do qual
+   removeToast() depende para remover o toast do DOM. */
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation-delay: 0s !important;
-    animation-duration: 0s !important;
+  *,
+  *::before,
+  *::after {
+    animation-delay: -0.01ms !important;
+    animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-    transform: none !important;
     will-change: auto !important;
+  }
+
+  /* Movimento puramente decorativo: aí sim, remover. */
+  .dashboard-card:hover,
+  .sidebar-toggle-btn:hover,
+  .notification-item:hover {
+    transform: none !important;
+  }
+
+  .notification-badge {
+    animation: none !important;
   }
 }
 
@@ -1870,11 +1916,54 @@ body.sidebar-open .sidebar-backdrop {
   animation: skeleton-shimmer 1.5s infinite;
 }
 
+/* ==========================================================================
+   ÁREA DE ROLAGEM DA TABELA + STICKY HEADER
+   --------------------------------------------------------------------------
+   `position: sticky` resolve contra o scrollport mais próximo. Como os
+   wrappers usavam `overflow-x: auto` (o que faz o overflow-y computar para
+   `auto`), o scrollport passava a ser o próprio wrapper — que tinha altura
+   automática e portanto nunca rolava na vertical. O header nunca grudava.
+   Dando altura máxima ao wrapper, ele rola de fato e o sticky funciona.
+   Efeito colateral desejável: a paginação fica sempre visível abaixo da
+   tabela, sem precisar rolar 100 linhas para alcançá-la.
+   ========================================================================== */
+
+/* Âncora do overlay de loading — precisa ficar FORA da área que rola, senão
+   `inset: 0` resolveria contra a altura total do conteúdo e o spinner cairia
+   fora da parte visível. */
+.table-scroll-anchor {
+  position: relative;
+}
+
+.table-scroll {
+  overflow: auto;
+  max-height: min(68vh, 760px);
+  scrollbar-gutter: stable;
+}
+
+/* Região rolável precisa ser alcançável por teclado (WCAG 2.1.1) */
+.table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.table-scroll table {
+  margin: 0;
+}
+
 /* Sticky Table Headers (Fase 4 - Component Patterns) */
-.table-container table thead th {
+.table-container table thead th,
+.table-scroll table thead th {
   position: sticky;
   top: 0;
   background: var(--surface);
   z-index: 2;
   box-shadow: 0 1px 0 var(--border);
+}
+
+/* Em telas baixas, limitar a 68vh deixaria pouquíssimas linhas visíveis. */
+@media (max-height: 640px) {
+  .table-scroll {
+    max-height: none;
+  }
 }
