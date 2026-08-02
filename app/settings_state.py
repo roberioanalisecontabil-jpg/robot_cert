@@ -20,6 +20,14 @@ class PortalSettings:
     source_folder: str
     expired_folder: str
     machine_id: str = "default"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password_encrypted: str = ""
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_from_email: str = ""
+    smtp_alerts_enabled: bool = False
 
     def effective_source(self) -> Path:
         p = (self.source_folder or "").strip()
@@ -39,6 +47,14 @@ def _from_row(row: dict) -> PortalSettings:
         source_folder=str(row.get("source_folder", "") or ""),
         expired_folder=str(row.get("expired_folder", "") or ""),
         machine_id=str(row.get("machine_id", "default") or "default"),
+        smtp_host=str(row.get("smtp_host", "") or ""),
+        smtp_port=int(row.get("smtp_port", 587) if row.get("smtp_port") is not None else 587),
+        smtp_user=str(row.get("smtp_user", "") or ""),
+        smtp_password_encrypted=str(row.get("smtp_password_encrypted", "") or ""),
+        smtp_use_tls=bool(row.get("smtp_use_tls") if row.get("smtp_use_tls") is not None else True),
+        smtp_use_ssl=bool(row.get("smtp_use_ssl") if row.get("smtp_use_ssl") is not None else False),
+        smtp_from_email=str(row.get("smtp_from_email", "") or ""),
+        smtp_alerts_enabled=bool(row.get("smtp_alerts_enabled") if row.get("smtp_alerts_enabled") is not None else False),
     )
 
 
@@ -51,6 +67,14 @@ def _load_file() -> Optional[PortalSettings]:
             source_folder=str(raw.get("source_folder", "")),
             expired_folder=str(raw.get("expired_folder", "")),
             machine_id=str(raw.get("machine_id", "default")),
+            smtp_host=str(raw.get("smtp_host", "")),
+            smtp_port=int(raw.get("smtp_port", 587)),
+            smtp_user=str(raw.get("smtp_user", "")),
+            smtp_password_encrypted=str(raw.get("smtp_password_encrypted", "")),
+            smtp_use_tls=bool(raw.get("smtp_use_tls", True)),
+            smtp_use_ssl=bool(raw.get("smtp_use_ssl", False)),
+            smtp_from_email=str(raw.get("smtp_from_email", "")),
+            smtp_alerts_enabled=bool(raw.get("smtp_alerts_enabled", False)),
         )
     except (json.JSONDecodeError, OSError):
         return None
@@ -89,13 +113,19 @@ def load_settings() -> PortalSettings:
                 # Se o Supabase tem pastas vazias, tenta complementar com o ficheiro local
                 if not supa.source_folder.strip() and not supa.expired_folder.strip():
                     local = _load_file()
-                    if local and (local.source_folder.strip() or local.expired_folder.strip()):
-                        # Mantém machine_id do Supabase, pastas do ficheiro local
-                        return PortalSettings(
-                            source_folder=local.source_folder,
-                            expired_folder=local.expired_folder,
-                            machine_id=supa.machine_id or local.machine_id,
-                        )
+                    if local:
+                        # Mantém pastas locais e SMTP local se vazios no Supabase
+                        supa.source_folder = local.source_folder
+                        supa.expired_folder = local.expired_folder
+                        if not supa.smtp_host.strip():
+                            supa.smtp_host = local.smtp_host
+                            supa.smtp_port = local.smtp_port
+                            supa.smtp_user = local.smtp_user
+                            supa.smtp_password_encrypted = local.smtp_password_encrypted
+                            supa.smtp_use_tls = local.smtp_use_tls
+                            supa.smtp_use_ssl = local.smtp_use_ssl
+                            supa.smtp_from_email = local.smtp_from_email
+                            supa.smtp_alerts_enabled = local.smtp_alerts_enabled
                 return supa
         except Exception:  # noqa: BLE001
             logger.exception("Falha ao ler portal_settings no Supabase; a usar ficheiro local")
@@ -124,6 +154,14 @@ def save_settings(s: PortalSettings) -> None:
         "source_folder": s.source_folder,
         "expired_folder": s.expired_folder,
         "machine_id": s.machine_id,
+        "smtp_host": s.smtp_host,
+        "smtp_port": s.smtp_port,
+        "smtp_user": s.smtp_user,
+        "smtp_password_encrypted": s.smtp_password_encrypted,
+        "smtp_use_tls": s.smtp_use_tls,
+        "smtp_use_ssl": s.smtp_use_ssl,
+        "smtp_from_email": s.smtp_from_email,
+        "smtp_alerts_enabled": s.smtp_alerts_enabled,
         "updated_at": now,
     }
     try:

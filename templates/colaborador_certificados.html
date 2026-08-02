@@ -6,6 +6,43 @@
   <title>Acompanhamento — Certificados</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
   <link rel="stylesheet" href="/static/style.css?v=brand-gold-v1" />
+  <style>
+    .tab-container-navigation {
+      display: flex;
+      gap: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .tab-btn {
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 0.75rem 0.25rem !important;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      position: relative;
+      box-shadow: none !important;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background-color: var(--accent);
+      border-radius: 2px;
+    }
+  </style>
 </head>
 <body>
   <aside class="sidebar">
@@ -32,7 +69,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>
         Duplicidades
       </a>
-      <a href="/colaborador-certificados" class="active">
+      <a href="/acompanhamento" class="active">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l3-3 3 2 4-5" /></svg>
         Acompanhamento
       </a>
@@ -65,14 +102,17 @@
     </header>
 
     <div class="table-container" id="table-container-colab">
-      <div class="toolbar">
-        <div class="toolbar__actions">
-          <button type="button" id="tab-painel" class="primary">Painel</button>
-          <button type="button" id="tab-selecao">Seleção de Certificados</button>
-        </div>
+      <div class="tab-container-navigation">
+        <button type="button" id="tab-painel" class="tab-btn active">Painel</button>
+        <button type="button" id="tab-selecao" class="tab-btn">Seleção de Certificados</button>
       </div>
 
       <section id="sec-painel">
+        <div class="toolbar">
+          <div class="toolbar__actions">
+            <input type="search" id="busca-painel" placeholder="Buscar por nome ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
+          </div>
+        </div>
         <p class="hint" id="painel-hint"></p>
         <div style="overflow-x:auto;">
           <table>
@@ -157,6 +197,7 @@
     let opcoes = [];
     let selecionados = new Set();
     let painelItens = [];
+    let filteredPainelItens = [];
     let painelPagina = 1;
     let selecaoPagina = 1;
 
@@ -203,6 +244,9 @@
     function badgeStatus(v) {
       if (v === "vencido") return "<span class='badge badge-expired'>Vencido</span>";
       if (v === "ativo") return "<span class='badge badge-ok'>Ativo</span>";
+      if (v === "expirando") return "<span class='badge badge-warning'>Expirando</span>";
+      if (v === "erro") return "<span class='badge badge-bad'>Erro</span>";
+      if (v === "fora_do_padrao") return "<span class='badge badge-bad'>Falha ( Sem padrão)</span>";
       return "<span class='badge badge-bad'>Não encontrado</span>";
     }
 
@@ -215,14 +259,22 @@
       if (selecaoPagina > totalPag) selecaoPagina = totalPag;
       const start = (selecaoPagina - 1) * psz;
       const pageRows = rows.slice(start, start + psz);
-      document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => `
-        <tr>
+      document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => {
+        let styleStr = "";
+        if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
+          styleStr = "background:#fef2f2;";
+        } else if (it.status === "expirando") {
+          styleStr = "background:#fffbeb;";
+        }
+        return `
+        <tr style="${styleStr}">
           <td><input type="checkbox" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
           <td>${esc(it.nome || "—")}</td>
           <td>${esc(it.documento || "—")}</td>
-          <td>${esc(it.status_ultimo || "—")}</td>
+          <td>${badgeStatus(it.status)}</td>
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>`).join("");
+        </tr>`;
+      }).join("");
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-sel",
         meta: "pag-meta-colab-sel",
@@ -260,21 +312,32 @@
         const j = await r.json();
         painelItens = j.itens || [];
       }
+      const q = (document.getElementById("busca-painel")?.value || "").trim().toLowerCase();
+      filteredPainelItens = painelItens.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+
       const psz = porPagColabPainel();
-      const total = painelItens.length;
+      const total = filteredPainelItens.length;
       const totalPag = Math.max(1, Math.ceil(total / psz));
       if (painelPagina > totalPag) painelPagina = totalPag;
       const start = (painelPagina - 1) * psz;
-      const pageRows = painelItens.slice(start, start + psz);
-      document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados`;
-      document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => `
-        <tr style="${it.status === "vencido" ? "background:#fef2f2;" : ""}">
+      const pageRows = filteredPainelItens.slice(start, start + psz);
+      document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados` + (q ? " (filtrado)" : "");
+      document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => {
+        let styleStr = "";
+        if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
+          styleStr = "background:#fef2f2;";
+        } else if (it.status === "expirando") {
+          styleStr = "background:#fffbeb;";
+        }
+        return `
+        <tr style="${styleStr}">
           <td>${esc(it.nome)}</td>
           <td>${esc(it.documento)}</td>
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
           <td>${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
           <td>${badgeStatus(it.status)}</td>
-        </tr>`).join("");
+        </tr>`;
+      }).join("");
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-painel",
         meta: "pag-meta-colab-painel",
@@ -339,12 +402,13 @@
       const painel = tab === "painel";
       p.style.display = painel ? "block" : "none";
       s.style.display = painel ? "none" : "block";
-      btP.classList.toggle("primary", painel);
-      btS.classList.toggle("primary", !painel);
+      btP.classList.toggle("active", painel);
+      btS.classList.toggle("active", !painel);
     }
 
     document.getElementById("tab-painel").addEventListener("click", () => showTab("painel"));
     document.getElementById("tab-selecao").addEventListener("click", () => showTab("selecao"));
+    document.getElementById("busca-painel").addEventListener("input", () => { painelPagina = 1; void carregarPainel(false); });
     document.getElementById("busca-selecao").addEventListener("input", () => { selecaoPagina = 1; renderSelecao(); });
     document.getElementById("btn-salvar-selecao").addEventListener("click", salvarSelecao);
     document.getElementById("btn-colab-painel-prev").addEventListener("click", () => {
@@ -355,7 +419,7 @@
     });
     document.getElementById("btn-colab-painel-next").addEventListener("click", () => {
       const psz = porPagColabPainel();
-      const totalPag = Math.max(1, Math.ceil(painelItens.length / psz));
+      const totalPag = Math.max(1, Math.ceil(filteredPainelItens.length / psz));
       if (painelPagina < totalPag) {
         painelPagina++;
         void carregarPainel(false);

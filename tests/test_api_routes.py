@@ -46,7 +46,7 @@ def test_pagina_duplicidades_200(client: TestClient) -> None:
 
 
 def test_pagina_colaborador_certificados_200(client: TestClient) -> None:
-    r = client.get("/colaborador-certificados")
+    r = client.get("/acompanhamento")
     assert r.status_code == 200
     assert "Acompanhamento de Certificados" in r.text
 

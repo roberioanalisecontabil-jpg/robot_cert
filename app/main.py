@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -24,6 +24,9 @@ from app.historico_agg_cache import get_or_build as _historico_cache_get_or_buil
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
+from app.smtp_service import encrypt_password, validate_smtp_config
+from app.alert_state import trigger_all_alerts
+from app.notification_service import get_active_alerts
 from app.settings_state import (
     PortalSettings,
     get_latest_snapshot,
@@ -127,8 +130,8 @@ async def security_headers_middleware(request: Request, call_next):
     csp = (
         "default-src 'self'; "
         f"script-src 'self' 'nonce-{nonce}'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "font-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
         "object-src 'none'; "
         "form-action 'self'; "
@@ -318,6 +321,14 @@ class SettingsBody(BaseModel):
     source_folder: str = Field(default="", description="Pasta de certificados no Windows (caminho completo)")
     expired_folder: str = Field(default="", description="Pasta destino dos vencidos")
     machine_id: str = Field(default="default", description="Identificador lógico da máquina / agente")
+    smtp_host: str = Field(default="")
+    smtp_port: int = Field(default=587)
+    smtp_user: str = Field(default="")
+    smtp_password: Optional[str] = Field(default=None)
+    smtp_use_tls: bool = Field(default=True)
+    smtp_use_ssl: bool = Field(default=False)
+    smtp_from_email: str = Field(default="")
+    smtp_alerts_enabled: bool = Field(default=False)
 
 
 class IngestBody(BaseModel):
@@ -368,7 +379,7 @@ def pagina_duplicidades(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="duplicidades.html")
 
 
-@app.get("/colaborador-certificados", response_class=HTMLResponse)
+@app.get("/acompanhamento", response_class=HTMLResponse)
 def pagina_colaborador_certificados(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="colaborador_certificados.html")
 
@@ -657,6 +668,14 @@ def _settings_dict(s: PortalSettings) -> dict:
             if supabase_configured()
             else "data/portal_settings.json"
         ),
+        "smtp_host": s.smtp_host,
+        "smtp_port": s.smtp_port,
+        "smtp_user": s.smtp_user,
+        "smtp_password_set": bool(s.smtp_password_encrypted),
+        "smtp_use_tls": s.smtp_use_tls,
+        "smtp_use_ssl": s.smtp_use_ssl,
+        "smtp_from_email": s.smtp_from_email,
+        "smtp_alerts_enabled": s.smtp_alerts_enabled,
     }
 
 
@@ -666,15 +685,81 @@ def get_settings() -> dict:
     return _settings_dict(s)
 
 
-@app.put("/api/settings", dependencies=[Depends(require_auth)])
+@app.put("/api/settings", dependencies=[Depends(require_admin)])
 def put_settings(body: SettingsBody) -> dict:
+    try:
+        validate_smtp_config(body.smtp_use_tls, body.smtp_use_ssl)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+        
+    old = load_settings()
+    enc_password = old.smtp_password_encrypted
+    if body.smtp_password is not None and body.smtp_password.strip() != "":
+        try:
+            enc_password = encrypt_password(body.smtp_password.strip())
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Erro ao criptografar senha SMTP")
+            
     s = PortalSettings(
         source_folder=body.source_folder.strip(),
         expired_folder=body.expired_folder.strip(),
         machine_id=body.machine_id.strip() or "default",
+        smtp_host=body.smtp_host.strip(),
+        smtp_port=body.smtp_port,
+        smtp_user=body.smtp_user.strip(),
+        smtp_password_encrypted=enc_password,
+        smtp_use_tls=body.smtp_use_tls,
+        smtp_use_ssl=body.smtp_use_ssl,
+        smtp_from_email=body.smtp_from_email.strip(),
+        smtp_alerts_enabled=body.smtp_alerts_enabled,
     )
     save_settings(s)
     return _settings_dict(s)
+
+
+class SmtpTestBody(BaseModel):
+    target_email: str
+
+
+@app.post("/api/settings/smtp/test", dependencies=[Depends(require_admin)])
+def test_smtp_config(body: SmtpTestBody) -> dict:
+    s = load_settings()
+    if not s.smtp_host:
+        raise HTTPException(status_code=400, detail="Servidor SMTP não configurado.")
+    try:
+        send_smtp_email(
+            host=s.smtp_host,
+            port=s.smtp_port,
+            user=s.smtp_user,
+            password_enc=s.smtp_password_encrypted,
+            use_tls=s.smtp_use_tls,
+            use_ssl=s.smtp_use_ssl,
+            from_email=s.smtp_from_email,
+            to_email=body.target_email.strip(),
+            subject="Monitor de Certificados - E-mail de Teste",
+            html_content="<p>Olá! Este é um e-mail de teste enviado a partir do seu <strong>Monitor de Certificados</strong> para validar as configurações de SMTP.</p>"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "message": "E-mail de teste enviado com sucesso!"}
+
+
+@app.post("/api/settings/alerts/trigger", dependencies=[Depends(require_admin)])
+def trigger_alerts_manually() -> dict:
+    try:
+        stats = trigger_all_alerts()
+        return {"ok": True, "stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_auth)])
+def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dict:
+    try:
+        alerts = get_active_alerts(token.email, token.role)
+        return {"itens": alerts, "total": len(alerts)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/agent/commands", dependencies=[Depends(require_auth)])
@@ -1089,7 +1174,19 @@ def _painel_docs_selecionados(doc_ids: List[str]) -> List[dict]:
         v_iso = it.get("vencimento_certificado")
         v_dt = _parse_iso_utc(v_iso) if v_iso else datetime.min.replace(tzinfo=timezone.utc)
         dias = (v_dt.date() - now.date()).days if v_iso else None
-        status = "vencido" if str(it.get("status_ultimo") or "").lower() == "expirado" else "ativo"
+        
+        status_ult = str(it.get("status_ultimo") or "").lower()
+        if status_ult == "expirado" or (v_iso and v_dt < now):
+            status = "vencido"
+        elif status_ult == "erro":
+            status = "erro"
+        elif status_ult == "fora_do_padrao":
+            status = "fora_do_padrao"
+        elif v_iso and dias is not None and 0 <= dias <= 30:
+            status = "expirando"
+        else:
+            status = "ativo"
+
         out.append(
             {
                 "documento_digitos": d,
@@ -1116,7 +1213,30 @@ class ColaboradorSelecaoBody(BaseModel):
 @app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_auth)])
 def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_auth)) -> dict:
     itens = _lista_base_docs_historico()
-    return {"itens": itens, "total": len(itens)}
+    now = datetime.now(timezone.utc)
+    out = []
+    for it in itens:
+        v_iso = it.get("vencimento_certificado")
+        v_dt = _parse_iso_utc(v_iso) if v_iso else datetime.min.replace(tzinfo=timezone.utc)
+        dias = (v_dt.date() - now.date()).days if v_iso else None
+        
+        status_ult = str(it.get("status_ultimo") or "").lower()
+        if status_ult == "expirado" or (v_iso and v_dt < now):
+            status = "vencido"
+        elif status_ult == "erro":
+            status = "erro"
+        elif status_ult == "fora_do_padrao":
+            status = "fora_do_padrao"
+        elif v_iso and dias is not None and 0 <= dias <= 30:
+            status = "expirando"
+        else:
+            status = "ativo"
+            
+        out.append({
+            **it,
+            "status": status
+        })
+    return {"itens": out, "total": len(out)}
 
 
 @app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
@@ -1599,7 +1719,7 @@ def vencidos_certificados(
 
 
 @app.post("/api/ingest", dependencies=[Depends(require_auth)])
-def ingest(body: IngestBody) -> dict:
+def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
     """
     Recebe o resultado de um scan feito no Windows (agente em segundo plano).
     Persiste no Supabase (ou em data/last_ingest.json se o Supabase não estiver configurado).
@@ -1620,6 +1740,8 @@ def ingest(body: IngestBody) -> dict:
         scanned_iso=scanned.isoformat(),
         items=items,
     )
+    # Dispara e-mails de alerta em segundo plano para não bloquear a resposta do agente
+    background_tasks.add_task(trigger_all_alerts)
     return {
         "ok": True,
         "itens_recebidos": len(body.items),
@@ -1663,6 +1785,22 @@ def mover_vencidos() -> JSONResponse:
 def _startup() -> None:
     config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
     config.CERT_EXPIRED_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Inicia o job diário automático de alertas em segundo plano
+    import asyncio
+    async def daily_alerts_job_loop():
+        logger.info("Iniciando loop do job diário de alertas (a cada 24 horas)")
+        await asyncio.sleep(60)  # Espera 1 minuto após o boot para o primeiro disparo
+        while True:
+            try:
+                logger.info("Executando job diário automático de alertas por e-mail...")
+                trigger_all_alerts()
+                logger.info("Job diário automático de alertas executado com sucesso.")
+            except Exception as e:
+                logger.error(f"Erro ao executar job diário de alertas: {e}")
+            await asyncio.sleep(86400)  # Espera 24 horas
+            
+    asyncio.create_task(daily_alerts_job_loop())
 
 # =========================================================================
 # LGPD / PRIVACY BY DESIGN - DIREITOS DOS TITULARES

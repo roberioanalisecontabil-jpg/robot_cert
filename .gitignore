@@ -14,3 +14,13 @@ build_smoke/
 
 .pytest_cache/
 *.egg-info/
+
+# Pasta de backup/zip antigo (não commitar)
+robot_cert-main/
+
+# Scripts temporários de desenvolvimento
+scratch/
+
+# Logs gerados localmente
+logs/
+*.log

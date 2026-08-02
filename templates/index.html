@@ -44,7 +44,7 @@
           </svg>
           Duplicidades
         </a>
-        <a href="/colaborador-certificados">
+        <a href="/acompanhamento">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l3-3 3 2 4-5" />
           </svg>
@@ -95,7 +95,7 @@
 
         <div class="dashboard-card card-validos">
           <div class="card-info">
-            <span class="card-title">Válidos</span>
+            <span class="card-title">Ativo</span>
             <span class="card-number" id="n-ok">0</span>
           </div>
           <div class="card-icon">
@@ -120,7 +120,7 @@
 
         <div class="dashboard-card card-erros">
           <div class="card-info">
-            <span class="card-title">Erros</span>
+            <span class="card-title">Erro</span>
             <span class="card-number" id="n-erros">0</span>
           </div>
           <div class="card-icon">
@@ -132,7 +132,7 @@
 
         <div class="dashboard-card card-sem-padrao">
           <div class="card-info">
-            <span class="card-title">Sem padrão</span>
+            <span class="card-title">Falha ( Sem padrão)</span>
             <span class="card-number" id="n-sem-padrao">0</span>
           </div>
           <div class="card-icon">
@@ -154,10 +154,10 @@
           <div class="toolbar__actions">
             <select id="filtro-status" title="Filtrar por status" style="padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px;">
               <option value="todos">Todos</option>
-              <option value="validos">Válidos</option>
-              <option value="prestes_vencer">Prestes a vencer</option>
-              <option value="erros">Erros</option>
-              <option value="sem_padrao">Sem padrão</option>
+              <option value="validos">Ativo</option>
+              <option value="prestes_vencer">Expirando</option>
+              <option value="erros">Erro</option>
+              <option value="sem_padrao">Falha ( Sem padrão)</option>
             </select>
             <input
               type="search"
@@ -287,9 +287,9 @@
         }
         if (s === "ok") {
           if (it._isExpiringSoon) return '<span class="badge badge-warning">Expirando</span>';
-          return '<span class="badge badge-ok">Válido</span>';
+          return '<span class="badge badge-ok">Ativo</span>';
         }
-        if (s === "fora_do_padrao") return '<span class="badge badge-bad">Fora do Padrão</span>';
+        if (s === "fora_do_padrao") return '<span class="badge badge-bad">Falha ( Sem padrão)</span>';
         if (s === "erro") return '<span class="badge badge-bad">Erro</span>';
         return '<span class="badge badge-bad">' + s + '</span>';
       };
@@ -415,9 +415,9 @@
 
       function statusTexto(it) {
         if (it.status === "expirado" || it._isExpiredByDate) return "Vencido";
-        if (it.status === "ok" && it._isExpiringSoon) return "Prestes a vencer";
-        if (it.status === "ok") return "Válido";
-        if (it.status === "fora_do_padrao") return "Fora do padrão";
+        if (it.status === "ok" && it._isExpiringSoon) return "Expirando";
+        if (it.status === "ok") return "Ativo";
+        if (it.status === "fora_do_padrao") return "Falha ( Sem padrão)";
         if (it.status === "erro") return "Erro";
         return String(it.status || "");
       }

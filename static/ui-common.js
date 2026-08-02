@@ -349,14 +349,136 @@ function initThemeToggle() {
   applyTheme(localStorage.getItem("cert_robot_theme"));
 }
 
+async function fetchNotifications() {
+  const token = getToken();
+  if (!token) return;
+  const badge = document.getElementById("notification-badge");
+  const body = document.getElementById("notifications-body");
+  if (!body) return;
+  
+  try {
+    const r = await fetch("/api/colaborador/notificacoes", {
+      headers: getHeaders()
+    });
+    if (!r.ok) {
+      if (r.status === 401) {
+        logout();
+      }
+      return;
+    }
+    const data = await r.json();
+    const items = data.itens || [];
+    
+    // Update badge
+    if (items.length > 0) {
+      badge.textContent = items.length;
+      badge.style.display = "flex";
+    } else {
+      badge.style.display = "none";
+    }
+    
+    // Build items
+    if (items.length === 0) {
+      body.innerHTML = '<div class="notif-empty">Tudo em dia! Sem alertas.</div>';
+    } else {
+      body.innerHTML = items.map(it => {
+        const typeClass = it.tipo === "expired" ? "notif-expired" : "notif-expiring";
+        const typeLabel = it.tipo === "expired" ? "Vencido" : "Expirando";
+        const dateFmt = new Date(it.vencimento).toLocaleDateString('pt-BR');
+        return `
+          <div class="notification-item ${typeClass}">
+            <div class="notif-item-header">
+              <span class="notif-badge-type">${typeLabel}</span>
+              <span class="notif-date">${dateFmt}</span>
+            </div>
+            <div class="notif-message">${it.mensagem}</div>
+            <div class="notif-doc">Doc: ${it.documento}</div>
+          </div>
+        `;
+      }).join('');
+    }
+  } catch (e) {
+    console.error("Erro ao carregar notificações", e);
+    body.innerHTML = '<div class="notif-error">Erro ao carregar alertas.</div>';
+  }
+}
+
+function initNotifications() {
+  if (document.getElementById("notifications-container")) return;
+  const token = getToken();
+  if (!token) return;
+
+  let bar = document.getElementById("topbar-actions");
+  if (!bar) {
+    const main = document.querySelector(".main-content");
+    if (!main) return;
+    bar = document.createElement("div");
+    bar.id = "topbar-actions";
+    bar.className = "topbar-actions";
+    main.prepend(bar);
+  }
+
+  const container = document.createElement("div");
+  container.id = "notifications-container";
+  container.className = "notifications-container";
+  container.innerHTML = `
+    <button id="btn-notifications-toggle" type="button" class="sidebar-toggle-btn notifications-bell-btn" title="Atualização Automática de Alertas" aria-label="Alertas e Notificações">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+      </svg>
+      <span class="notification-badge" id="notification-badge" style="display: none;">0</span>
+    </button>
+    <div class="notifications-dropdown" id="notifications-dropdown" style="display: none;">
+      <div class="notifications-header">
+        <h3>Notificações</h3>
+        <span class="notif-sync-mode" title="Verificação em segundo plano">Atualização Automática</span>
+      </div>
+      <div class="notifications-body" id="notifications-body">
+        <div class="notif-loading">Carregando...</div>
+      </div>
+    </div>
+  `;
+
+  const themeBtn = document.getElementById("btn-theme-toggle");
+  if (themeBtn) {
+    bar.insertBefore(container, themeBtn);
+  } else {
+    bar.appendChild(container);
+  }
+
+  const toggleBtn = document.getElementById("btn-notifications-toggle");
+  const dropdown = document.getElementById("notifications-dropdown");
+
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isVisible = dropdown.style.display === "block";
+    dropdown.style.display = isVisible ? "none" : "block";
+    if (!isVisible) {
+      fetchNotifications();
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#notifications-container")) {
+      dropdown.style.display = "none";
+    }
+  });
+
+  fetchNotifications();
+  // Atualização Automática a cada 60s
+  setInterval(fetchNotifications, 60000);
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     initSidebarToggle();
     initThemeToggle();
+    initNotifications();
   });
 } else {
   initSidebarToggle();
   initThemeToggle();
+  initNotifications();
 }
 
 // ─── Paginador reutilizável ───────────────────────────────────────────────────

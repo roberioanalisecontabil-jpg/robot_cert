@@ -6,6 +6,45 @@
     <title>Configuração — Certificados PFX</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
     <link rel="stylesheet" href="/static/style.css?v=brand-gold-v1" />
+    <style>
+      .tab-container-navigation {
+        display: flex;
+        gap: 1.5rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+      }
+      .tab-btn {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0.75rem 0.25rem !important;
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        cursor: pointer;
+        position: relative;
+        box-shadow: none !important;
+        white-space: nowrap;
+      }
+      .tab-btn:hover {
+        color: var(--text);
+      }
+      .tab-btn.active {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .tab-btn.active::after {
+        content: '';
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background-color: var(--accent);
+        border-radius: 2px;
+      }
+    </style>
   </head>
   <body>
     <!-- Sidebar -->
@@ -44,7 +83,7 @@
           </svg>
           Duplicidades
         </a>
-        <a href="/colaborador-certificados">
+        <a href="/acompanhamento">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l3-3 3 2 4-5" />
           </svg>
@@ -76,154 +115,229 @@
     <main class="main-content">
       <header class="page-header">
         <h1>Configuração</h1>
-        <p>Tudo o que o servidor, o agente Windows e o browser precisam para listar, mover e receber leituras remotas.</p>
+        <p>Gerencie segurança, pastas, alertas por e-mail e comandos remotos do agente Windows.</p>
       </header>
 
-      <section class="panel--nested" style="margin-bottom: 2.5rem;" aria-label="Estado e caminhos">
-        <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Estado do servidor e caminhos</h2>
-        <p class="hint path-summary-sub">
-          Indicadores de ligação e pastas usadas na leitura local; a <strong>fonte dos dados</strong> do painel
-          aplica-se ao carregar a tabela no <a href="/" style="color:var(--accent);">Painel</a>.
-        </p>
-        
-        <div style="margin: 1rem 0;">
+      <!-- Status bar topo -->
+      <section class="panel--nested" style="margin-bottom: 1.5rem;" aria-label="Estado e caminhos">
+        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
           <span class="tag" id="tag-supabase">Supabase: …</span>
           <span class="tag" id="tag-api-key" title="Só indica se o .env exige chave">Chave: …</span>
-        </div>
 
-        <div class="row-inline" style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-          <label for="sel-fonte">Fonte dos dados (Painel):</label>
-          <select id="sel-fonte" aria-describedby="fonte-hint">
-            <option value="auto">Automático (agente ou disco local)</option>
-            <option value="remoto">Só remoto (agente via POST)</option>
-            <option value="local">Só local (disco do servidor FastAPI)</option>
-          </select>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+            <label for="sel-fonte" style="font-size: 0.875rem; color: var(--text-muted); white-space: nowrap;">Fonte dos dados:</label>
+            <select id="sel-fonte" aria-describedby="fonte-hint" style="font-size: 0.875rem;">
+              <option value="auto">Automático</option>
+              <option value="remoto">Só remoto</option>
+              <option value="local">Só local</option>
+            </select>
+          </div>
         </div>
-        <p id="fonte-hint" class="hint">Guardado neste browser. O painel usa a mesma opção ao carregar a tabela.</p>
-        <p id="path-sync-msg" class="hint" style="color: var(--ok); margin-top: 0.5rem;"></p>
-        <p id="panel-auth-hint" class="hint-warn" style="display: none; margin-top: 0.5rem;"></p>
-
-        <div class="row-inline" style="margin-top: 1.5rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem;">
-            <h3 class="path-summary-title" style="margin: 0;">Leitura local efetiva</h3>
-            <div style="width: 100%;">
-                <span class="path-label">Origem</span>
-                <code class="path-value" id="disp-source">—</code>
-            </div>
-            <div style="width: 100%;">
-                <span class="path-label">Destino (Vencidos)</span>
-                <code class="path-value" id="disp-expired">—</code>
-            </div>
-        </div>
-
+        <p id="path-sync-msg" class="hint" style="color: var(--ok); margin-top: 0.5rem; margin-bottom: 0;"></p>
+        <p id="panel-auth-hint" class="hint-warn" style="display: none; margin-top: 0.5rem; margin-bottom: 0;"></p>
       </section>
 
-      <div class="config-grid">
-        <div class="config-main">
-          
-          <!-- Passo 1 -->
-          <section class="doc-block" id="passo-1">
-            <h2>1. Chave API (segurança)</h2>
-            <p>
-              Se o servidor estiver protegido por uma <code>API_KEY</code>, adicione a mesma chave abaixo para liberar as configurações. Fica gravado no seu navegador.
-            </p>
-            <div class="panel--nested">
-              <div class="row">
-                <label for="api-key">Chave API</label>
-                <input type="password" id="api-key" class="path-input" autocomplete="off" placeholder="Insira a chave do .env" />
-                <button type="button" id="btn-save-key" class="primary">Guardar no Navegador</button>
-              </div>
-              <p id="auth-hint" class="hint"></p>
-            </div>
-          </section>
-
-          <!-- Passo 2 -->
-          <section class="doc-block" id="passo-2">
-            <h2>2. Pastas no Windows (origem e destino)</h2>
-            <p>
-              Estes caminhos são a referência para o <strong>agente</strong>. O agente lê daqui para monitorar
-              pastas em tempo real usando o Watchdog.
-            </p>
-            <div class="panel--nested">
-              <div class="row">
-                <label for="inp-source">Origem (.pfx)</label>
-                <input type="text" id="inp-source" class="path-input" placeholder="C:\Certs" />
-              </div>
-              <div class="row">
-                <label for="inp-exp">Vencidos (destino)</label>
-                <input type="text" id="inp-exp" class="path-input" placeholder="C:\Certs\Vencidos" />
-              </div>
-              <div class="row">
-                <label for="inp-machine">ID Servidor</label>
-                <input type="text" id="inp-machine" class="path-input" placeholder="default ou nome do PC" />
-              </div>
-              <div class="row">
-                <label for="inp-agent-base-url">URL do Portal para o Agente</label>
-                <input type="text" id="inp-agent-base-url" class="path-input" placeholder="https://seu-site.onrender.com" />
-              </div>
-              <div style="margin-top: 1.5rem;">
-                <button type="button" id="btn-save-cfg" class="primary">Guardar e Sincronizar</button>
-                <button type="button" id="btn-download-agent-json">Baixar agent_config.json</button>
-                <span id="cfg-msg" class="hint" style="margin-left: 1rem;"></span>
-              </div>
-              <p class="hint" style="margin-top: 0.75rem;">
-                Dica: baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado.
-              </p>
-            </div>
-          </section>
-
-          <!-- Passo 3 -->
-          <section class="doc-block" id="passo-3">
-            <h2>3. Fila de Comandos (Remoto)</h2>
-            <p>
-              Envie comandos para o Agente executar na máquina dele. Por exemplo: <em>Forçar Scan</em> instrui
-              o Watchdog do agente a reler a pasta ignorando o delay de 24 horas.
-            </p>
-            <div class="panel--nested">
-              <div class="row">
-                <label for="cmd-machine-id">Máquina Alvo</label>
-                <input type="text" id="cmd-machine-id" class="path-input" placeholder="default" />
-              </div>
-              <div class="toolbar" style="border: none; padding-bottom: 0; margin-bottom: 0.5rem;">
-                <div class="toolbar__actions">
-                  <button type="button" id="cmd-rescan">Forçar Leitura (Rescan)</button>
-                  <button type="button" id="cmd-ping">Ping</button>
-                  <button type="button" id="cmd-refresh-q">Ver Fila</button>
-                </div>
-              </div>
-              <p id="cmd-msg" class="hint"></p>
-              <pre id="cmd-queue" class="cmd-pre" style="display: none"></pre>
-            </div>
-          </section>
-
+      <!-- Abas de configuração -->
+      <div class="table-container" id="config-tabs-container">
+        <div class="tab-container-navigation">
+          <button type="button" id="tab-chave" class="tab-btn active">Chave API</button>
+          <button type="button" id="tab-pastas" class="tab-btn">Pastas e Agente</button>
+          <button type="button" id="tab-smtp" class="tab-btn">Alertas por E-mail (SMTP)</button>
+          <button type="button" id="tab-comandos" class="tab-btn">Fila de Comandos</button>
         </div>
 
-        <!-- Sidebar Info -->
-        <aside class="config-side">
-          <div class="side-card">
-            <h3>Agente no Windows</h3>
-            <p class="side-text">
-              Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code> e
-              <code>CERT_ROBOT_API_KEY</code> (se houver chave).
-            </p>
-            <p class="side-text">
-              <strong>Importante:</strong> As pastas "Origem" e "Destino" agora <strong>devem obrigatoriamente</strong> ser configuradas na secção 2 desta página. O agente irá atualizar-se automaticamente em tempo real!
-            </p>
-            <p class="side-text" style="background: var(--bg); padding: 0.5rem; border-radius: 6px; font-family: monospace;">python agent\run_agent.py</p>
+        <!-- Aba 1: Chave API -->
+        <section id="sec-chave">
+          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Chave API (segurança)</h2>
+          <p class="hint">
+            Se o servidor estiver protegido por uma <code>API_KEY</code>, adicione a mesma chave abaixo para liberar as configurações. Fica gravado no seu navegador.
+          </p>
+          <div class="panel--nested">
+            <div class="row">
+              <label for="api-key">Chave API</label>
+              <input type="password" id="api-key" class="path-input" autocomplete="off" placeholder="Insira a chave do .env" />
+              <button type="button" id="btn-save-key" class="primary">Guardar no Navegador</button>
+            </div>
+            <p id="auth-hint" class="hint"></p>
           </div>
-          <div class="side-card">
-            <h3>Nome dos arquivos</h3>
-            <p class="side-text">O sistema interpreta os arquivos usando a palavra-chave "senha".</p>
-            <p class="side-text" style="font-family: monospace; background: var(--bg); padding: 0.5rem; border-radius: 6px;">
-              MeuNome certificado senha aMinhaSenha.pfx
+        </section>
+
+        <!-- Aba 2: Pastas e Agente -->
+        <section id="sec-pastas" style="display: none;">
+          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
+          <p class="hint">
+            Estes caminhos são a referência para o <strong>agente</strong>. O agente lê daqui para monitorar pastas usando o Watchdog.
+          </p>
+          <div class="panel--nested">
+            <div class="row">
+              <label for="inp-source">Origem (.pfx)</label>
+              <input type="text" id="inp-source" class="path-input" placeholder="C:\Certs" />
+            </div>
+            <div class="row">
+              <label for="inp-exp">Vencidos (destino)</label>
+              <input type="text" id="inp-exp" class="path-input" placeholder="C:\Certs\Vencidos" />
+            </div>
+            <div class="row">
+              <label for="inp-machine">ID Servidor</label>
+              <input type="text" id="inp-machine" class="path-input" placeholder="default ou nome do PC" />
+            </div>
+            <div class="row">
+              <label for="inp-agent-base-url">URL do Portal para o Agente</label>
+              <input type="text" id="inp-agent-base-url" class="path-input" placeholder="https://seu-site.onrender.com" />
+            </div>
+            <div style="margin-top: 1.5rem;">
+              <button type="button" id="btn-save-cfg" class="primary">Guardar e Sincronizar</button>
+              <button type="button" id="btn-download-agent-json">Baixar agent_config.json</button>
+              <span id="cfg-msg" class="hint" style="margin-left: 1rem;"></span>
+            </div>
+            <p class="hint" style="margin-top: 0.75rem;">
+              Dica: baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado.
             </p>
           </div>
-        </aside>
-      </div>
+
+          <!-- Leitura efetiva -->
+          <div class="panel--nested" style="margin-top: 1.5rem;">
+            <h3 style="margin: 0 0 0.75rem; font-size: 1rem;">Leitura local efetiva</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              <div>
+                <span class="path-label">Origem</span>
+                <code class="path-value" id="disp-source">—</code>
+              </div>
+              <div>
+                <span class="path-label">Destino (Vencidos)</span>
+                <code class="path-value" id="disp-expired">—</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info lateral inline -->
+          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1.5rem;">
+            <div class="side-card" style="flex: 1; min-width: 220px;">
+              <h3>Agente no Windows</h3>
+              <p class="side-text">
+                Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code> e <code>CERT_ROBOT_API_KEY</code> (se houver chave).
+              </p>
+              <p class="side-text" style="background: var(--bg); padding: 0.5rem; border-radius: 6px; font-family: monospace;">python agent\run_agent.py</p>
+            </div>
+            <div class="side-card" style="flex: 1; min-width: 220px;">
+              <h3>Nome dos arquivos</h3>
+              <p class="side-text">O sistema interpreta os arquivos usando a palavra-chave "senha".</p>
+              <p class="side-text" style="font-family: monospace; background: var(--bg); padding: 0.5rem; border-radius: 6px;">
+                MeuNome certificado senha aMinhaSenha.pfx
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Aba 3: SMTP -->
+        <section id="sec-smtp" style="display: none;">
+          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
+          <p class="hint">
+            Configure um servidor SMTP para enviar e-mails de alerta automáticos sobre certificados expirados ou prestes a vencer (até 30 dias).
+          </p>
+          <div class="panel--nested">
+            <div class="row">
+              <label for="inp-smtp-host">Host SMTP</label>
+              <input type="text" id="inp-smtp-host" class="path-input" placeholder="smtp.gmail.com" />
+            </div>
+            <div class="row">
+              <label for="inp-smtp-port">Porta SMTP</label>
+              <input type="number" id="inp-smtp-port" class="path-input" value="587" placeholder="587" />
+            </div>
+            <div class="row">
+              <label for="inp-smtp-user">Usuário / E-mail</label>
+              <input type="text" id="inp-smtp-user" class="path-input" placeholder="seu-email@gmail.com" />
+            </div>
+            <div class="row">
+              <label for="inp-smtp-pass">Senha SMTP</label>
+              <input type="password" id="inp-smtp-pass" class="path-input" placeholder="Preencha apenas para alterar" />
+              <span id="smtp-pass-set-label" style="font-size: 12px; margin-top: 0.25rem; font-weight: 500;">Senha configurada: <span id="smtp-pass-status">—</span></span>
+            </div>
+            <div class="row">
+              <label for="inp-smtp-from">E-mail Remetente</label>
+              <input type="text" id="inp-smtp-from" class="path-input" placeholder="Monitor de Certificados &lt;alertas@empresa.com&gt;" />
+            </div>
+            <div class="row-inline" style="margin-top: 1rem;">
+              <input type="checkbox" id="chk-smtp-tls" style="margin-right: 0.5rem;" checked />
+              <label for="chk-smtp-tls" style="display: inline;">Usar STARTTLS (TLS)</label>
+            </div>
+            <div class="row-inline" style="margin-top: 0.5rem;">
+              <input type="checkbox" id="chk-smtp-ssl" style="margin-right: 0.5rem;" />
+              <label for="chk-smtp-ssl" style="display: inline;">Usar SSL Implícito</label>
+            </div>
+            <div class="row-inline" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+              <input type="checkbox" id="chk-smtp-alerts-enabled" style="margin-right: 0.5rem;" />
+              <label for="chk-smtp-alerts-enabled" style="display: inline; font-weight: bold; color: var(--accent);">Habilitar Disparo de Alertas Automáticos</label>
+            </div>
+            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
+              <input type="email" id="inp-smtp-test-dest" placeholder="Destinatário teste" style="padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; max-width: 200px;" />
+              <button type="button" id="btn-test-smtp">Enviar Teste</button>
+              <button type="button" id="btn-trigger-alerts" style="background-color: #f59e0b; color: white; border: none; padding: 0.6rem 1rem; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
+            </div>
+            <span id="smtp-msg" class="hint" style="margin-top: 0.75rem; display: block;"></span>
+          </div>
+        </section>
+
+        <!-- Aba 4: Fila de Comandos -->
+        <section id="sec-comandos" style="display: none;">
+          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Fila de Comandos (Remoto)</h2>
+          <p class="hint">
+            Envie comandos para o Agente executar na máquina dele. Por exemplo: <em>Forçar Scan</em> instrui o Watchdog do agente a reler a pasta ignorando o delay de 24 horas.
+          </p>
+          <div class="panel--nested">
+            <div class="row">
+              <label for="cmd-machine-id">Máquina Alvo</label>
+              <input type="text" id="cmd-machine-id" class="path-input" placeholder="default" />
+            </div>
+            <div class="toolbar" style="border: none; padding-bottom: 0; margin-bottom: 0.5rem;">
+              <div class="toolbar__actions">
+                <button type="button" id="cmd-rescan">Forçar Leitura (Rescan)</button>
+                <button type="button" id="cmd-ping">Ping</button>
+                <button type="button" id="cmd-refresh-q">Ver Fila</button>
+              </div>
+            </div>
+            <p id="cmd-msg" class="hint"></p>
+            <pre id="cmd-queue" class="cmd-pre" style="display: none"></pre>
+          </div>
+        </section>
+
+      </div><!-- /config-tabs-container -->
 
     </main>
 
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=cg-nav-2"></script>
     <script nonce="{{ request.state.nonce }}">
+      // ── Lógica de abas ──────────────────────────────────────────────────────
+      const TABS = [
+        { btn: "tab-chave",    sec: "sec-chave"    },
+        { btn: "tab-pastas",   sec: "sec-pastas"   },
+        { btn: "tab-smtp",     sec: "sec-smtp"     },
+        { btn: "tab-comandos", sec: "sec-comandos" },
+      ];
+
+      function switchTab(activeId) {
+        TABS.forEach(({ btn, sec }) => {
+          const b = document.getElementById(btn);
+          const s = document.getElementById(sec);
+          const isActive = btn === activeId;
+          b.classList.toggle("active", isActive);
+          s.style.display = isActive ? "" : "none";
+        });
+        try { sessionStorage.setItem("cfg_tab", activeId); } catch(_) {}
+      }
+
+      TABS.forEach(({ btn }) => {
+        document.getElementById(btn).addEventListener("click", () => switchTab(btn));
+      });
+
+      // Restaura aba anterior se existir
+      (function restoreTab() {
+        const last = sessionStorage.getItem("cfg_tab");
+        if (last && TABS.some(t => t.btn === last)) switchTab(last);
+      })();
+
+      // ── Fonte de dados ───────────────────────────────────────────────────────
       function syncSelectFonteFromStorage() {
         const sf = document.getElementById("sel-fonte");
         if (!sf) return;
@@ -231,6 +345,12 @@
         if (["auto", "remoto", "local"].indexOf(v) >= 0) sf.value = v;
       }
 
+      document.getElementById("sel-fonte").addEventListener("change", () => {
+        setDataFonte(document.getElementById("sel-fonte").value);
+        document.getElementById("path-sync-msg").textContent = "Opção guardada. Volte ao Dashboard e atualize a tabela.";
+      });
+
+      // ── API / caminhos ───────────────────────────────────────────────────────
       async function syncPathsFromApi() {
         const emptyHint = "(não definida — padrão do .env / servidor)";
         const warn = document.getElementById("panel-auth-hint");
@@ -238,13 +358,12 @@
         try {
           r = await fetch("/api/settings", { headers: getHeaders() });
         } catch (e) {
-          warn.textContent = "Não foi possível carregar as pastas. Confira a chave API (acima) e o endereço do servidor.";
+          warn.textContent = "Não foi possível carregar as pastas. Confira a chave API e o endereço do servidor.";
           warn.style.display = "block";
           return;
         }
         if (r.status === 401) {
-          warn.innerHTML =
-            'A API exige chave. Cole o mesmo valor de <code>API_KEY</code> (no .env) no campo <strong>Chave API</strong> (secção 1) e clique em Guardar no Navegador.';
+          warn.innerHTML = 'A API exige chave. Cole o mesmo valor de <code>API_KEY</code> (no .env) no campo <strong>Chave API</strong> (aba 1) e clique em Guardar no Navegador.';
           warn.style.display = "block";
           return;
         }
@@ -277,11 +396,21 @@
           document.getElementById("inp-exp").value = s.expired_folder || "";
           const midG = s.machine_id || "default";
           document.getElementById("inp-machine").value = midG;
+
+          document.getElementById("inp-smtp-host").value = s.smtp_host || "";
+          document.getElementById("inp-smtp-port").value = s.smtp_port || 587;
+          document.getElementById("inp-smtp-user").value = s.smtp_user || "";
+          document.getElementById("inp-smtp-pass").value = "";
+          document.getElementById("smtp-pass-status").textContent = s.smtp_password_set ? "Sim" : "Não";
+          document.getElementById("smtp-pass-status").style.color = s.smtp_password_set ? "var(--ok)" : "var(--expired)";
+          document.getElementById("inp-smtp-from").value = s.smtp_from_email || "";
+          document.getElementById("chk-smtp-tls").checked = s.smtp_use_tls !== false;
+          document.getElementById("chk-smtp-ssl").checked = !!s.smtp_use_ssl;
+          document.getElementById("chk-smtp-alerts-enabled").checked = !!s.smtp_alerts_enabled;
+
           const inputAgentBaseUrl = document.getElementById("inp-agent-base-url");
           if (inputAgentBaseUrl) {
-            inputAgentBaseUrl.value =
-              localStorage.getItem("cert_robot_agent_base_url") ||
-              window.location.origin;
+            inputAgentBaseUrl.value = localStorage.getItem("cert_robot_agent_base_url") || window.location.origin;
           }
           const cmi = document.getElementById("cmd-machine-id");
           if (cmi) cmi.value = midG;
@@ -291,6 +420,12 @@
         }
       }
 
+      // ── Guardar chave ────────────────────────────────────────────────────────
+      function guardarChaveNoStorage() {
+        const v = (document.getElementById("api-key").value || "").trim();
+        if (v) localStorage.setItem(KEY_STORAGE, v);
+      }
+
       document.getElementById("btn-save-key").addEventListener("click", () => {
         guardarChaveNoStorage();
         document.getElementById("auth-hint").textContent = "Chave armazenada no browser com sucesso!";
@@ -298,6 +433,7 @@
         syncPathsFromApi();
       });
 
+      // ── Salvar pastas ────────────────────────────────────────────────────────
       document.getElementById("btn-save-cfg").addEventListener("click", async () => {
         const st = document.getElementById("cfg-msg");
         st.textContent = "A guardar…";
@@ -306,24 +442,23 @@
             source_folder: document.getElementById("inp-source").value,
             expired_folder: document.getElementById("inp-exp").value,
             machine_id: document.getElementById("inp-machine").value || "default",
+            smtp_host: document.getElementById("inp-smtp-host").value || "",
+            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
+            smtp_user: document.getElementById("inp-smtp-user").value || "",
+            smtp_password: document.getElementById("inp-smtp-pass").value || null,
+            smtp_use_tls: document.getElementById("chk-smtp-tls").checked,
+            smtp_use_ssl: document.getElementById("chk-smtp-ssl").checked,
+            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
+            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
           };
-          const r = await fetch("/api/settings", {
-            method: "PUT",
-            headers: getHeaders(true),
-            body: JSON.stringify(body),
-          });
-          if (r.status === 401) {
-            st.textContent = "401: chave incompatível com API_KEY.";
-            return;
-          }
-          if (!r.ok) {
-            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
-            return;
-          }
+          const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
+          if (r.status === 401) { st.textContent = "401: chave incompatível com API_KEY."; return; }
+          if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const elKey = document.getElementById("api-key");
           if (elKey && elKey.value.trim()) localStorage.setItem(KEY_STORAGE, elKey.value.trim());
           const j = await r.json();
           st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
+          st.style.color = "var(--ok)";
           await loadSettingsToForm();
           await syncPathsFromApi();
         } catch (e) {
@@ -339,57 +474,94 @@
         const baseUrlInput = document.getElementById("inp-agent-base-url");
         const baseUrl = ((baseUrlInput && baseUrlInput.value) || "").trim() || window.location.origin;
         localStorage.setItem("cert_robot_agent_base_url", baseUrl);
-
-        const payload = {
-          cert_robot_base_url: baseUrl,
-          cert_robot_api_key: apiKey,
-          machine_id: machineId,
-          source_folder: source,
-          expired_folder: expired,
-          interval_sec: 86400,
-          mover_vencidos: true,
-          poll_commands: true
-        };
-
+        const payload = { cert_robot_base_url: baseUrl, cert_robot_api_key: apiKey, machine_id: machineId, source_folder: source, expired_folder: expired, interval_sec: 86400, mover_vencidos: true, poll_commands: true };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = "agent_config.json";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        a.href = url; a.download = "agent_config.json";
+        document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
-
         const st = document.getElementById("cfg-msg");
         st.textContent = "Arquivo agent_config.json gerado com sucesso.";
       });
 
+      // ── SMTP ─────────────────────────────────────────────────────────────────
+      document.getElementById("chk-smtp-tls").addEventListener("change", (e) => {
+        if (e.target.checked) document.getElementById("chk-smtp-ssl").checked = false;
+      });
+      document.getElementById("chk-smtp-ssl").addEventListener("change", (e) => {
+        if (e.target.checked) document.getElementById("chk-smtp-tls").checked = false;
+      });
+
+      document.getElementById("btn-save-smtp").addEventListener("click", async () => {
+        const st = document.getElementById("smtp-msg");
+        st.textContent = "Salvando..."; st.style.color = "";
+        try {
+          const body = {
+            source_folder: document.getElementById("inp-source").value,
+            expired_folder: document.getElementById("inp-exp").value,
+            machine_id: document.getElementById("inp-machine").value || "default",
+            smtp_host: document.getElementById("inp-smtp-host").value || "",
+            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
+            smtp_user: document.getElementById("inp-smtp-user").value || "",
+            smtp_password: document.getElementById("inp-smtp-pass").value || null,
+            smtp_use_tls: document.getElementById("chk-smtp-tls").checked,
+            smtp_use_ssl: document.getElementById("chk-smtp-ssl").checked,
+            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
+            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+          };
+          const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
+          if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
+          if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); st.style.color = "red"; return; }
+          const s = await r.json();
+          document.getElementById("smtp-pass-status").textContent = s.smtp_password_set ? "Sim" : "Não";
+          document.getElementById("smtp-pass-status").style.color = s.smtp_password_set ? "var(--ok)" : "var(--expired)";
+          document.getElementById("inp-smtp-pass").value = "";
+          st.textContent = "Configurações SMTP salvas com sucesso!"; st.style.color = "var(--ok)";
+        } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+      });
+
+      document.getElementById("btn-test-smtp").addEventListener("click", async () => {
+        const st = document.getElementById("smtp-msg");
+        const dest = (document.getElementById("inp-smtp-test-dest").value || "").trim();
+        if (!dest) { st.textContent = "Insira um e-mail de destino para o teste."; st.style.color = "red"; return; }
+        st.textContent = "Enviando teste..."; st.style.color = "";
+        try {
+          const r = await fetch("/api/settings/smtp/test", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ target_email: dest }) });
+          if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
+          if (!r.ok) { st.textContent = "Erro: " + (await mensagemCorpoErro(r)); st.style.color = "red"; return; }
+          st.textContent = "E-mail de teste enviado com sucesso!"; st.style.color = "var(--ok)";
+        } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+      });
+
+      document.getElementById("btn-trigger-alerts").addEventListener("click", async () => {
+        const st = document.getElementById("smtp-msg");
+        st.textContent = "Disparando alertas..."; st.style.color = "";
+        try {
+          const r = await fetch("/api/settings/alerts/trigger", { method: "POST", headers: getHeaders(true) });
+          if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
+          if (!r.ok) { st.textContent = "Erro: " + (await mensagemCorpoErro(r)); st.style.color = "red"; return; }
+          const res = await r.json();
+          const s = res.stats || {};
+          st.textContent = `Alertas processados! Enviados: ${s.alerts_sent || 0} | Ignorados: ${s.skipped_already_sent || 0} | Sem e-mail: ${s.skipped_no_recipient_email || 0} | Erros: ${s.errors || 0}`;
+          st.style.color = "var(--ok)";
+        } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+      });
+
+      // ── Comandos ─────────────────────────────────────────────────────────────
       async function enqueueRemoteCommand(cmd) {
         const st = document.getElementById("cmd-msg");
         st.textContent = "A enfileirar…";
         try {
           const cmi = document.getElementById("cmd-machine-id");
           const mid = cmi && cmi.value.trim() ? cmi.value.trim() : "default";
-          const r = await fetch("/api/agent/commands", {
-            method: "POST",
-            headers: getHeaders(true),
-            body: JSON.stringify({ machine_id: mid, command: cmd }),
-          });
-          if (r.status === 401) {
-            st.textContent = "401: guarde a chave acima ou confirme a API_KEY.";
-            return;
-          }
-          if (!r.ok) {
-            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
-            return;
-          }
+          const r = await fetch("/api/agent/commands", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ machine_id: mid, command: cmd }) });
+          if (r.status === 401) { st.textContent = "401: guarde a chave acima ou confirme a API_KEY."; return; }
+          if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const j = await r.json();
           st.textContent = "Enfileirado: " + (j.command || cmd) + " (id " + (j.id || "—") + ").";
           await refreshCommandQueue();
-        } catch (e) {
-          st.textContent = "Erro: " + e;
-        }
+        } catch (e) { st.textContent = "Erro: " + e; }
       }
 
       async function refreshCommandQueue() {
@@ -399,13 +571,8 @@
           if (r.status === 401 || !r.ok) return;
           const j = await r.json();
           const p = j.pendentes || [];
-          if (p.length) {
-            pre.style.display = "block";
-            pre.textContent = JSON.stringify(p, null, 2);
-          } else {
-            pre.style.display = "none";
-            pre.textContent = "";
-          }
+          if (p.length) { pre.style.display = "block"; pre.textContent = JSON.stringify(p, null, 2); }
+          else { pre.style.display = "none"; pre.textContent = ""; }
         } catch (_e) {}
       }
 
@@ -413,24 +580,18 @@
       document.getElementById("cmd-ping").addEventListener("click", () => enqueueRemoteCommand("ping"));
       document.getElementById("cmd-refresh-q").addEventListener("click", refreshCommandQueue);
 
-      document.getElementById("sel-fonte").addEventListener("change", () => {
-        setDataFonte(document.getElementById("sel-fonte").value);
-        document.getElementById("path-sync-msg").textContent = "Opção guardada. Volte ao Dashboard e atualize a tabela.";
-      });
-
+      // ── Init ─────────────────────────────────────────────────────────────────
       (async function init() {
-        // Controle de visibilidade do menu lateral
         const role = localStorage.getItem('user_role');
         if (role === 'admin') {
-            const elUsers = document.getElementById('nav-users');
-            const elConfig = document.getElementById('nav-config');
-            if (elUsers) elUsers.style.display = 'flex';
-            if (elConfig) elConfig.style.display = 'flex';
+          const elUsers = document.getElementById('nav-users');
+          const elConfig = document.getElementById('nav-config');
+          if (elUsers) elUsers.style.display = 'flex';
+          if (elConfig) elConfig.style.display = 'flex';
         } else {
-            // Se não for admin e estiver na página de config, expulsa
-            alert('Acesso restrito a administradores.');
-            window.location.href = '/';
-            return;
+          alert('Acesso restrito a administradores.');
+          window.location.href = '/';
+          return;
         }
 
         syncSelectFonteFromStorage();
@@ -441,8 +602,7 @@
         if (tagK) tagK.textContent = h.api_key_required ? "Chave: Obrigatória" : "Chave: Aberta";
         const ah = document.getElementById("auth-hint");
         if (h.api_key_required) {
-          ah.textContent =
-            "O servidor exige chave. Cole o mesmo valor de API_KEY do servidor para acessar.";
+          ah.textContent = "O servidor exige chave. Cole o mesmo valor de API_KEY do servidor para acessar.";
         }
         await loadSettingsToForm();
         await syncPathsFromApi();
