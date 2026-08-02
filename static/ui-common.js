@@ -195,6 +195,83 @@ function setTableLoading(container, show, text = "Carregando...") {
   overlay.classList.toggle("is-visible", !!show);
 }
 
+/**
+ * Exibe uma notificação flutuante (Toast) não bloqueante (WCAG 2.2 AA).
+ * @param {string} message - Texto da notificação
+ * @param {'success'|'error'|'warning'|'info'} [type='info'] - Tipo do toast
+ * @param {number} [duration=4000] - Duração em ms antes do auto-dismiss
+ */
+function showToast(message, type = 'info', duration = 4000) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast-item toast-${type}`;
+  
+  const icons = {
+    success: '&#10003;',
+    error: '&#9888;',
+    warning: '&#9888;',
+    info: '&#8505;'
+  };
+
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type] || icons.info}</span>
+    <span class="toast-message">${message}</span>
+    <button type="button" class="toast-close" aria-label="Fechar notificação">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector('.toast-close');
+  closeBtn.addEventListener('click', () => removeToast(toast));
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('is-visible'));
+
+  if (duration > 0) {
+    setTimeout(() => removeToast(toast), duration);
+  }
+}
+
+function removeToast(toast) {
+  if (!toast || !toast.parentNode) return;
+  toast.classList.remove('is-visible');
+  toast.addEventListener('transitionend', () => {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, { once: true });
+}
+
+/**
+ * Renderiza um estado vazio ilustrado e acionável em tabelas ou containers.
+ * @param {HTMLElement|string} target - Container alvo
+ * @param {Object} options - Configurações do empty state
+ */
+function renderEmptyState(target, { title = "Nenhum registro encontrado", description = "Não há dados para exibir no momento.", icon = "&#128269;", actionText = null, onAction = null }) {
+  const container = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!container) return;
+
+  const html = `
+    <div class="empty-state-card">
+      <div class="empty-state-icon">${icon}</div>
+      <h3 class="empty-state-title">${title}</h3>
+      <p class="empty-state-desc">${description}</p>
+      ${actionText ? `<button type="button" class="primary empty-state-btn">${actionText}</button>` : ''}
+    </div>
+  `;
+  container.innerHTML = html;
+
+  if (actionText && typeof onAction === 'function') {
+    const btn = container.querySelector('.empty-state-btn');
+    if (btn) btn.addEventListener('click', onAction);
+  }
+}
+
 /** Lista de página (janela de até `maxBotões`) igual ao modelo Histórico/Dashboard/Vencidos. */
 function cgWindowPaginas(totalPaginas, paginaAtual, maxBotões) {
   const mb = typeof maxBotões === "number" ? maxBotões : 5;
