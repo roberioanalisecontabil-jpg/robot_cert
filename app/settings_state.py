@@ -81,9 +81,12 @@ def _load_file() -> Optional[PortalSettings]:
 
 
 def _save_file(s: PortalSettings) -> None:
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    payload = {**asdict(s), "updated_at": datetime.now(timezone.utc).isoformat()}
-    DATA_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {**asdict(s), "updated_at": datetime.now(timezone.utc).isoformat()}
+        DATA_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as e:
+        logger.warning(f"Falha ao salvar portal_settings.json localmente (ambiente read-only / Vercel): {e}")
 
 
 # Singleton: o cliente Supabase é criado uma única vez e reutilizado.

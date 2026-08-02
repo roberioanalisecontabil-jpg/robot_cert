@@ -12,9 +12,9 @@
 |--------------------|--------------------------------------------|
 | **Data da última atualização** | 2026-08-02                  |
 | **Branch ativa**   | main                                       |
-| **Versão/Build**   | commit 5bc1b2f                             |
-| **Última tarefa concluída** | Push para GitHub + transferência de conta |
-| **Próxima tarefa** | Deploy no Vercel (vercel.json já criado)  |
+| **Versão/Build**   | Configuração Vercel Serverless pronta      |
+| **Última tarefa concluída** | Verificação + Estrutura para Vercel (api/index.py + vercel.json) |
+| **Próxima tarefa** | Importar repositório no Vercel e configurar Env Vars |
 
 ---
 
@@ -22,21 +22,21 @@
 
 ```
 robot_cert/
+├── api/            → Entrypoint Serverless para Vercel (api/index.py)
 ├── app/            → Portal Web (FastAPI) — backend principal
 │   ├── main.py         → Entry point, rotas principais
 │   └── notification_service.py → Serviço de alertas (SMTP, etc.)
 ├── agent/          → Agente Windows (scanner local de certificados)
 ├── templates/      → Jinja2 HTML templates do portal
 ├── static/         → CSS, JS, imagens
+├── vercel.json     → Configuração de Serverless Function e empacotamento Vercel
 ├── supabase/       → Migrations SQL do banco Supabase
 ├── tests/          → Testes automatizados (pytest)
 ├── scripts/        → Scripts utilitários/auxiliares
-├── scratch/        → Scripts temporários/exploratórios
-├── docs/           → Documentação adicional
 └── .env            → Variáveis de ambiente (não versionado)
 ```
 
-**Stack:** Python 3.11+, FastAPI, Uvicorn, Supabase (PostgreSQL), Watchdog, SMTP
+**Stack:** Python 3.11+, FastAPI, Uvicorn, Supabase (PostgreSQL), Vercel Serverless
 
 ---
 
@@ -44,31 +44,27 @@ robot_cert/
 
 ---
 
-### 🗓️ 2026-08-02 — Git push + Transferência de conta + Setup Vercel
+### 🗓️ 2026-08-02 — Configuração Completa e Verificação para Deploy no Vercel
 
-**Objetivo da sessão:** Subir o projeto no GitHub e preparar para deploy no Vercel.
-
-**Decisão estratégica:** Abandonar o Render (plano reduzido/instável) → testar Vercel (serverless, free tier generoso).
+**Objetivo da sessão:** Preparar e verificar o projeto FastAPI para rodar nativamente como Serverless Function no Vercel.
 
 **Ações realizadas:**
-- Atualizado `.gitignore` (excluídas pastas `robot_cert-main/`, `scratch/`, `logs/`)
-- Criado `vercel.json` para deploy serverless do FastAPI
-- Commit `5bc1b2f` com 23 arquivos (2263 inserções)
-- Repositório **transferido** de `RoberioMelo` → `roberioanalisecontabil-jpg`
-- Remote local atualizado: `https://github.com/roberioanalisecontabil-jpg/robot_cert.git`
-- Git global configurado: user.name e credential.helper
+- Criado o arquivo `api/index.py` importando `app` de `app.main` para padrão nativo Vercel Python.
+- Criado `vercel.json` configurado com `@vercel/python`, rotas genéricas (`/(.*)` -> `api/index.py`) e empacotamento explícito dos assets (`templates/**`, `static/**`).
+- Protegidos os hooks de inicialização e salvamento (`app/main.py` e `app/settings_state.py`) com blocos `try...except OSError` para imunidade contra o sistema de arquivos read-only do Vercel.
+- Validada a importação limpa da aplicação via `api/index.py`.
 
-**Arquivos criados nesta sessão:**
-- `vercel.json` → configuração de deploy serverless no Vercel
+**Arquivos criados / modificados:**
+- `api/index.py` → Entrypoint da função serverless
+- `vercel.json` → Arquivo de rotas e build Vercel
+- `app/main.py` → Proteção `OSError` na startup hook
+- `app/settings_state.py` → Proteção `OSError` na `_save_file`
 
-**⚠️ Pendência de segurança:**
-- [ ] **REVOGAR token `ghp_c6ZN8...` no GitHub** (foi exposto no chat) e gerar novo
-
-**Próximos passos:**
-- [ ] Acessar vercel.com → Import Git Repository → `roberioanalisecontabil-jpg/robot_cert`
-- [ ] Configurar variáveis de ambiente no painel do Vercel
-- [ ] Validar que o portal funciona no domínio `.vercel.app`
-- [ ] Desligar o serviço no Render
+**Próximos passos (Ação do Usuário):**
+- [ ] Conectar conta GitHub no Vercel (https://vercel.com)
+- [ ] Importar o repositório `roberioanalisecontabil-jpg/robot_cert`
+- [ ] Definir as variáveis de ambiente: `JWT_SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `API_KEY`
+- [ ] Fazer o deploy e testar a URL `.vercel.app`
 
 ---
 

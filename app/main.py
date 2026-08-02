@@ -1783,8 +1783,11 @@ def mover_vencidos() -> JSONResponse:
 
 @app.on_event("startup")
 def _startup() -> None:
-    config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
-    config.CERT_EXPIRED_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+        config.CERT_EXPIRED_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logger.warning(f"Não foi possível criar diretórios locais (ambiente read-only / Vercel): {e}")
     
     # Inicia o job diário automático de alertas em segundo plano
     import asyncio
