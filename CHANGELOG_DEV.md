@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-01                  |
-| **Branch ativa**   | (informar)                                 |
-| **Versão/Build**   | (informar)                                 |
-| **Última tarefa concluída** | Guia de migração Render → Windows Server |
-| **Próxima tarefa** | Executar migração e configurar serviço NSSM |
+| **Data da última atualização** | 2026-08-02                  |
+| **Branch ativa**   | main                                       |
+| **Versão/Build**   | commit 5bc1b2f                             |
+| **Última tarefa concluída** | Push para GitHub + transferência de conta |
+| **Próxima tarefa** | Deploy no Vercel (vercel.json já criado)  |
 
 ---
 
@@ -41,6 +41,34 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-02 — Git push + Transferência de conta + Setup Vercel
+
+**Objetivo da sessão:** Subir o projeto no GitHub e preparar para deploy no Vercel.
+
+**Decisão estratégica:** Abandonar o Render (plano reduzido/instável) → testar Vercel (serverless, free tier generoso).
+
+**Ações realizadas:**
+- Atualizado `.gitignore` (excluídas pastas `robot_cert-main/`, `scratch/`, `logs/`)
+- Criado `vercel.json` para deploy serverless do FastAPI
+- Commit `5bc1b2f` com 23 arquivos (2263 inserções)
+- Repositório **transferido** de `RoberioMelo` → `roberioanalisecontabil-jpg`
+- Remote local atualizado: `https://github.com/roberioanalisecontabil-jpg/robot_cert.git`
+- Git global configurado: user.name e credential.helper
+
+**Arquivos criados nesta sessão:**
+- `vercel.json` → configuração de deploy serverless no Vercel
+
+**⚠️ Pendência de segurança:**
+- [ ] **REVOGAR token `ghp_c6ZN8...` no GitHub** (foi exposto no chat) e gerar novo
+
+**Próximos passos:**
+- [ ] Acessar vercel.com → Import Git Repository → `roberioanalisecontabil-jpg/robot_cert`
+- [ ] Configurar variáveis de ambiente no painel do Vercel
+- [ ] Validar que o portal funciona no domínio `.vercel.app`
+- [ ] Desligar o serviço no Render
 
 ---
 
