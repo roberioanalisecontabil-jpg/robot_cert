@@ -103,6 +103,7 @@
     </style>
 </head>
 <body>
+    <main class="login-container" id="main-content" style="width: 100%; display: flex; justify-content: center; align-items: center;">
     <div class="login-card">
         <div class="login-header">
             <img src="/static/logo.png?v=brand-gold-v1" alt="Analise Certificado" class="login-logo">
@@ -110,20 +111,21 @@
             <p>Faça login para acessar o monitor</p>
         </div>
         
-        <div id="login-error">E-mail ou senha incorretos.</div>
+        <div id="login-error" role="alert" aria-live="assertive">E-mail ou senha incorretos.</div>
         
         <form id="login-form">
             <div class="form-group">
                 <label for="email">E-mail</label>
-                <input type="email" id="email" required placeholder="exemplo@email.com">
+                <input type="email" id="email" required autocomplete="username" placeholder="exemplo@email.com">
             </div>
             <div class="form-group">
                 <label for="password">Senha</label>
-                <input type="password" id="password" required placeholder="••••••••">
+                <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
             </div>
             <button type="submit" class="login-btn" id="btn-entrar">Entrar</button>
         </form>
     </div>
+    </main>
 
     <script nonce="{{ request.state.nonce }}">
         const KEY_STORAGE = "cert_robot_api_key"; // Manter o mesmo nome por enquanto ou mudar para token

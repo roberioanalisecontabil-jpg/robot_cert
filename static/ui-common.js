@@ -582,3 +582,29 @@ class Paginator {
   }
 }
 
+/* --- ATALHOS DE TECLADO E ACESSIBILIDADE (WCAG 2.2 AA) --- */
+document.addEventListener('keydown', function(e) {
+  // Atalho '/' para focar na caixa de busca rápida
+  if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+    const searchInput = document.getElementById('busca-cert') || document.querySelector('input[type="search"]');
+    if (searchInput) {
+      e.preventDefault();
+      searchInput.focus();
+    }
+  }
+
+  // Tecla 'Escape' para fechar modais ou dropdowns ativos
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal, [role="dialog"]').forEach(modal => {
+      if (modal.style.display !== 'none' && modal.classList.contains('active')) {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+      }
+    });
+    const notifDropdown = document.getElementById('notifications-dropdown');
+    if (notifDropdown && notifDropdown.style.display !== 'none') {
+      notifDropdown.style.display = 'none';
+    }
+  }
+});
+
