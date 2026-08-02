@@ -861,6 +861,9 @@ def listar_certificados(
                     "total_paginas": total_pags,
                     "total_itens": total,
                     "por_pagina": pp,
+                    # Permite ao portal avisar sobre truncamento ANTES de exportar,
+                    # em vez de só depois que o ficheiro já foi gerado.
+                    "export_max": LISTAGEM_EXPORT_MAX,
                 },
                 "supabase": supabase_configured(),
             }
@@ -1621,6 +1624,7 @@ def historico_certificados_http(
         "total_paginas": total_pags,
         "total_itens": total,
         "por_pagina": por_pagina,
+        "export_max": LISTAGEM_EXPORT_MAX,
     }
     return out
 
@@ -1714,6 +1718,7 @@ def vencidos_certificados(
             "total_paginas": total_pags,
             "total_itens": total,
             "por_pagina": por_pagina,
+            "export_max": LISTAGEM_EXPORT_MAX,
         },
     }
 

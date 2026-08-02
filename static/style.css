@@ -1902,6 +1902,57 @@ body.sidebar-open .sidebar-backdrop {
   line-height: 1.5;
 }
 
+/* Banner persistente de aviso (07 §16) — cor + ícone + texto, nunca só cor. */
+.cg-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.cg-banner__icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.cg-banner__text {
+  min-width: 0;
+}
+
+.cg-banner--warning {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--warning-text);
+}
+
+.cg-banner--error {
+  background: var(--expired-bg);
+  border-color: var(--expired);
+  color: var(--expired-text);
+}
+
+.cg-banner--info {
+  background: var(--info-bg);
+  border-color: var(--info);
+  color: var(--text);
+}
+
+/* Empty state renderizado como linha de tabela (renderEmptyRow) */
+.empty-state-card .empty-state-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.4rem;
+}
+
 /* Skeleton Loaders para prevenção de Layout Shift (CLS) */
 @keyframes skeleton-shimmer {
   0% { background-position: -200% 0; }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Histórico — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
 </head>
 <body>
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -137,7 +137,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_HIST = "cg_per_page_historico";
     const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
@@ -211,6 +211,34 @@
 
     function renderLinhasHistorico(rows) {
       const tb = document.getElementById("tbody-historico");
+      limparSkeleton(tb);
+
+      if (!rows.length) {
+        const busca = (document.getElementById("busca-historico")?.value || "").trim();
+        if (busca) {
+          renderEmptyRow(tb, 4, {
+            icon: "🔍",
+            title: "Nenhum registro para “" + busca + "”",
+            description: "Tente outro nome, CNPJ ou CPF.",
+            actionText: "Limpar busca",
+            onAction: () => {
+              document.getElementById("busca-historico").value = "";
+              paginaAtualHist = 1;
+              carregarHistorico();
+            },
+          });
+        } else {
+          renderEmptyRow(tb, 4, {
+            icon: "🕓",
+            title: "Ainda não há histórico",
+            description:
+              "O histórico é montado a partir dos snapshots enviados pelo agente. Assim que houver leituras, elas aparecem aqui.",
+          });
+        }
+        itensVisiveis = [];
+        return;
+      }
+
       tb.innerHTML = rows
         .map(
           (it) => `
@@ -239,7 +267,7 @@
           return null;
         }
         if (!r.ok) {
-          alert("Erro: " + r.status + " " + (await mensagemCorpoErro(r)));
+          showToast("Não foi possível exportar (erro " + r.status + "): " + (await mensagemCorpoErro(r)), "error");
           return null;
         }
         return await r.json();
@@ -252,7 +280,12 @@
       const d = await fetchHistoricoExportacao();
       if (!d || !d.itens) return;
       if (d.lista_truncada) {
-        alert("Lista truncada: exportados apenas os primeiros " + d.itens.length + " registos.");
+        showToast(
+          "O arquivo contém apenas os primeiros " +
+            d.itens.length.toLocaleString("pt-BR") +
+            " registros — o filtro atual excede o limite de exportação.",
+          "warning"
+        );
       }
       const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
       const rows = d.itens.map((it) => [
@@ -280,7 +313,12 @@
       const d = await fetchHistoricoExportacao();
       if (!d || !d.itens) return;
       if (d.lista_truncada) {
-        alert("Lista truncada na exportação (limite no servidor).");
+        showToast(
+          "O PDF contém apenas os primeiros " +
+            d.itens.length.toLocaleString("pt-BR") +
+            " registros — o filtro atual excede o limite de exportação.",
+          "warning"
+        );
       }
       const linhas = d.itens
         .map((it) => `
@@ -327,10 +365,16 @@
       w.print();
     }
 
+    let primeiroCarregamentoHist = true;
+
     async function carregarHistorico() {
       const st = document.getElementById("status-msg");
-      st.textContent = "A carregar…";
-      toggleLoading(true, "Carregando histórico...");
+      st.textContent = "Carregando…";
+      if (primeiroCarregamentoHist) {
+        renderSkeletonRows("tbody-historico", Math.min(porPaginaHist(), 10), 4);
+      } else {
+        toggleLoading(true, "Carregando histórico...");
+      }
       try {
         const params = new URLSearchParams({
           pagina: String(paginaAtualHist),
@@ -343,7 +387,16 @@
           return;
         }
         if (!r.ok) {
-          st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
+          const detalhe = await mensagemCorpoErro(r);
+          st.textContent = `Erro ${r.status}`;
+          showToast("Não foi possível carregar o histórico: " + detalhe, "error");
+          renderEmptyRow("tbody-historico", 4, {
+            icon: "⚠️",
+            title: "Erro ao carregar o histórico",
+            description: detalhe || `O servidor respondeu com erro ${r.status}.`,
+            actionText: "Tentar novamente",
+            onAction: () => carregarHistorico(),
+          });
           return;
         }
         const j = await r.json();
@@ -353,6 +406,7 @@
         } else {
           atualizarPaginacaoHist(null);
         }
+        setBannerAviso("table-container-hist", mensagemLimiteExportacao(j.paginacao));
         st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
         const rows = j.itens || [];
         renderLinhasHistorico(rows);
@@ -360,8 +414,20 @@
           typeof j.total === "number"
             ? j.total + " registo(s)"
             : rows.length + " registo(s) nesta página";
+      } catch (e) {
+        st.textContent = "Falha de conexão.";
+        showToast("Falha de conexão com o servidor: " + e, "error");
+        renderEmptyRow("tbody-historico", 4, {
+          icon: "🔌",
+          title: "Sem conexão com o servidor",
+          description: "Verifique se o portal está em execução e tente novamente.",
+          actionText: "Tentar novamente",
+          onAction: () => carregarHistorico(),
+        });
       } finally {
         toggleLoading(false);
+        limparSkeleton("tbody-historico");
+        primeiroCarregamentoHist = false;
       }
     }
 

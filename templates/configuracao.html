@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Configuração — Certificados PFX</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -307,7 +307,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       // ── Lógica de abas ──────────────────────────────────────────────────────
       const TABS = [
@@ -590,7 +590,9 @@
           if (elUsers) elUsers.style.display = 'flex';
           if (elConfig) elConfig.style.display = 'flex';
         } else {
-          alert('Acesso restrito a administradores.');
+          // Toast na página de destino: um toast aqui sumiria junto com a
+          // navegação, e um alert() bloquearia o redirecionamento.
+          showToastAfterRedirect('Acesso restrito a administradores.', 'warning');
           window.location.href = '/';
           return;
         }

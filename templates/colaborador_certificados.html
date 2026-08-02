@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Acompanhamento — Certificados</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -190,7 +190,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
@@ -264,6 +264,24 @@
       if (selecaoPagina > totalPag) selecaoPagina = totalPag;
       const start = (selecaoPagina - 1) * psz;
       const pageRows = rows.slice(start, start + psz);
+
+      if (!pageRows.length) {
+        renderEmptyRow("tbody-selecao", 5, q ? {
+          icon: "🔍",
+          title: "Nenhum certificado para “" + q + "”",
+          description: "Tente outro nome ou documento.",
+          actionText: "Limpar busca",
+          onAction: () => {
+            document.getElementById("busca-selecao").value = "";
+            selecaoPagina = 1;
+            renderSelecao();
+          },
+        } : {
+          icon: "📭",
+          title: "Nenhum certificado disponível",
+          description: "Não há certificados mapeados para selecionar no momento.",
+        });
+      } else {
       document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => {
         let styleStr = "";
         if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
@@ -280,6 +298,7 @@
           <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>`;
       }).join("");
+      }
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-sel",
         meta: "pag-meta-colab-sel",
@@ -309,8 +328,16 @@
       if (refetch !== false) {
         const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
         if (!r.ok) {
-          document.getElementById("painel-hint").textContent = "Erro ao carregar painel: " + await mensagemCorpoErro(r);
-          document.getElementById("tbody-painel").innerHTML = "";
+          const detalhe = await mensagemCorpoErro(r);
+          document.getElementById("painel-hint").textContent = "";
+          showToast("Não foi possível carregar o painel: " + detalhe, "error");
+          renderEmptyRow("tbody-painel", 5, {
+            icon: "⚠️",
+            title: "Erro ao carregar o painel",
+            description: detalhe || "O servidor respondeu com erro " + r.status + ".",
+            actionText: "Tentar novamente",
+            onAction: () => void carregarPainel(true),
+          });
           cgPageNavHide("paginacao-toolbar-colab-painel", "pag-ul-colab-painel", "pag-meta-colab-painel");
           return;
         }
@@ -327,6 +354,24 @@
       const start = (painelPagina - 1) * psz;
       const pageRows = filteredPainelItens.slice(start, start + psz);
       document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados` + (q ? " (filtrado)" : "");
+
+      if (!pageRows.length) {
+        renderEmptyRow("tbody-painel", 5, q ? {
+          icon: "🔍",
+          title: "Nenhum certificado para “" + q + "”",
+          description: "Tente outro nome ou documento.",
+          actionText: "Limpar busca",
+          onAction: () => {
+            document.getElementById("busca-painel").value = "";
+            painelPagina = 1;
+            void carregarPainel(false);
+          },
+        } : {
+          icon: "⭐",
+          title: "Você ainda não acompanha nenhum certificado",
+          description: "Use a aba de seleção para escolher quais certificados quer monitorar.",
+        });
+      } else {
       document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => {
         let styleStr = "";
         if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
@@ -343,6 +388,7 @@
           <td>${badgeStatus(it.status)}</td>
         </tr>`;
       }).join("");
+      }
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-painel",
         meta: "pag-meta-colab-painel",
@@ -390,13 +436,18 @@
         body: JSON.stringify({ documentos: docs }),
       });
       if (!r.ok) {
-        alert("Erro ao salvar seleção: " + await mensagemCorpoErro(r));
+        showToast("Não foi possível salvar a seleção: " + (await mensagemCorpoErro(r)), "error");
         return;
       }
       selecionados = new Set(docs);
       painelPagina = 1;
       await carregarPainel(true);
-      alert("Seleção salva.");
+      showToast(
+        docs.length === 1
+          ? "1 certificado selecionado para acompanhamento."
+          : docs.length + " certificados selecionados para acompanhamento.",
+        "success"
+      );
     }
 
     function showTab(tab) {

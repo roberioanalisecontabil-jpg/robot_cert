@@ -33,7 +33,7 @@ Além disso, dois defeitos funcionais reais foram identificados: o tema escuro a
 
 ## 🔴 CRÍTICO
 
-### C1 · Toasts, empty states e skeletons entregues mas nunca usados
+### C1 · Toasts, empty states e skeletons entregues mas nunca usados ✅ CORRIGIDO
 **Skill:** `07 §15`, `07 §3`, `01 §9` (feedback ausente)
 
 O commit `9f73371` declara "concluir Fases 2, 3 e 4 (toasts, empty states, skeleton loaders)". As três funções existem e estão corretas:
@@ -63,7 +63,7 @@ E a tabela do dashboard, quando não há dados, fica simplesmente em branco — 
 
 ---
 
-### C2 · Tema escuro automático não funciona
+### C2 · Tema escuro automático não funciona ✅ CORRIGIDO
 **Skill:** `02 §1.2` ("definir a paleta em modo claro e escuro desde o início")
 
 `ui-common.js:442` executa em todo carregamento de página:
@@ -93,7 +93,7 @@ function applyTheme(theme) {
 
 ---
 
-### C3 · `prefers-reduced-motion` quebra o menu mobile
+### C3 · `prefers-reduced-motion` quebra o menu mobile ✅ CORRIGIDO
 **Skill:** `02 §11`, `04 §10`, `03 §1`
 
 `style.css:1361-1371` aplica ao seletor universal:
@@ -171,7 +171,7 @@ Os badges se distinguem por cor + texto ("Ativo"/"Expirando"/"Vencido") — o te
 
 ---
 
-### A3 · Sticky headers não funcionam
+### A3 · Sticky headers não funcionam ✅ CORRIGIDO
 **Skill:** `07 §7` ("header fixo (sticky) com labels de coluna")
 
 `style.css:1874-1880` define:
@@ -358,7 +358,7 @@ Existem `--radius-xs/sm/md/lg/pill`, mas há 20 declarações com pixels literai
 
 ---
 
-### M7 · Exportações usam `alert()` para avisar sobre truncamento
+### M7 · Exportações usam `alert()` para avisar sobre truncamento ✅ CORRIGIDO
 **Skill:** `01 §1.9`, `07 §16` (alertas/banners)
 
 `index.html:454`, `historico.html:253`, `vencidos.html:412`: quando o servidor trunca a lista, o usuário recebe um `alert()` bloqueante **depois** que o download já começou. A informação é importante (o arquivo está incompleto) — e por isso mesmo `07 §15` diz que informação crítica não deve ser toast, mas sim alerta persistente.
@@ -479,13 +479,51 @@ O B8 aparece em pelo menos 8 pontos e é o mais visível para o usuário final d
 - Drawer mobile abrindo/fechando com `prefers-reduced-motion: reduce` ativo
 - Aparência dos badges recoloridos nos dois temas
 
-### Sprint 2 — Fechar a Fase 3 (~1 dia)
-O maior ganho percebido pelo usuário, e o mais barato do relatório:
+### ✅ Sprint 2 — Fechar a Fase 3 — CONCLUÍDO em 2026-08-02
 
-6. **C1a** — substituir os 17 `alert()` por `showToast()` (2h)
-7. **C1b** — `renderEmptyState()` nas 5 tabelas (1h)
-8. **C1c** — skeleton loaders no primeiro carregamento (1h)
-9. **M7** — banner de truncamento antes da exportação (30min)
+6. ✅ **C1a** — os 17 `alert()` eliminados (restam 0 no código)
+7. ✅ **C1b** — estados vazios em 6 tabelas, 18 pontos de chamada
+8. ✅ **C1c** — skeleton loaders no primeiro carregamento de 3 telas
+9. ✅ **M7** — banner de limite exibido **antes** da exportação
+
+**Arquivos alterados:** `app/main.py`, `static/ui-common.js`, `static/style.css`, 8 templates.
+
+**Decisão de arquitetura: `renderEmptyState()` não servia para tabelas.**
+A função entregue na Fase 3 substitui o `innerHTML` do container — numa tabela isso destruiria o `<thead>`, e o usuário perderia a referência de quais colunas existem. Foi criada `renderEmptyRow(tbody, colspan, opts)`, que insere o estado vazio como uma linha única com `colspan`, preservando o cabeçalho. `renderEmptyState()` continua disponível para containers que não sejam tabela.
+
+**Mudança de backend necessária para o M7.**
+O plano pedia avisar sobre truncamento *antes* de exportar, mas `LISTAGEM_EXPORT_MAX = 5000` era constante interna de `app/main.py`, invisível ao cliente — que só descobria o truncamento pelo campo `lista_truncada`, depois que o arquivo já havia sido gerado incompleto. Foi adicionado `export_max` ao objeto `paginacao` das três rotas de listagem (`/api/certificados`, `/historico`, `/vencidos`). Zero requisições extras: o valor chega junto com os dados que a tabela já busca. O banner agora aparece assim que o filtro ultrapassa o limite, e o toast pós-exportação ficou como confirmação do que de fato saiu.
+
+**Refinamentos incorporados:**
+
+- **Estado vazio sensível ao contexto.** "Sem resultado" e "sem dado" são situações diferentes e recebem textos diferentes. Sem filtro ativo, o dashboard explica que o agente ainda não enviou dados; com filtro, oferece um botão **Limpar filtros**. Em `/vencidos`, zero resultados sem filtro é tratado como bom resultado ("Todos os certificados monitorados estão dentro da validade", ícone ✅), não como falha.
+- **Toast que sobrevive ao redirecionamento.** Em `configuracao.html` e `usuarios.html`, o `alert()` de acesso negado era seguido de `window.location.href`. Um toast comum sumiria junto com a página. `showToastAfterRedirect()` grava em `sessionStorage` e o toast é exibido na página de destino.
+- **Skeleton só no primeiro carregamento.** Nas recargas (filtro, paginação) o overlay é mantido, preservando a tabela anterior visível. Trocar tudo por blocos cinzentos a cada tecla digitada na busca seria mais agitado, não mais informativo.
+- **Toasts seguem `07 §15`.** Duração proporcional ao texto (~55ms/caractere, mínimo 4s, teto 12s) e no máximo 3 empilhados, substituindo os mais antigos — dois requisitos explícitos da skill que a implementação original não atendia.
+- **Erros agora deixam a tabela em estado recuperável.** Antes, um erro só trocava o texto de status e a tabela ficava com o conteúdo antigo (ou, com skeleton, travada em blocos cinzentos para sempre). Agora cada ramo de erro — HTTP, JSON inválido, falha de conexão — renderiza um estado com botão **Tentar novamente**.
+- **Helpers montam DOM com `textContent`, não `innerHTML`.** Mensagens carregam nome/CN do titular do certificado, que é conteúdo de terceiros. Fecha parte do **M8** antes do previsto.
+- **`removeToast` com rede de segurança.** O `transitionend` não dispara com a aba oculta; sem isso os toasts vazariam no DOM.
+
+**Validação executada:**
+
+| Verificação | Resultado |
+|---|---|
+| `alert()` remanescentes | **0** (eram 17) |
+| Sintaxe dos 8 blocos `<script>` inline | 8/8 compilam |
+| `node --check` em `ui-common.js` | OK |
+| Referências a helpers resolvem | 38 usos, 0 indefinidos |
+| Ordem de carga (ui-common antes do inline) | 7/7 correta |
+| `colspan` × nº real de colunas | 18/18 conferem |
+| Testes unitários dos helpers (shim de DOM) | **20/20 passam** |
+| `export_max` nas 3 rotas | 3/3 retornam 5000 |
+| Portal servindo as rotas | 8/8 HTTP 200 |
+| `pytest tests/` | **41 passed** |
+
+**Fora do escopo, encontrado durante a implementação:**
+
+`usuarios.html` usa 4 `prompt()` nativos para editar usuário e redefinir senha (linhas 287, 289, 292, 312). É pior que o `alert()` que acabamos de remover: `prompt()` não valida, não permite cancelar campo a campo, e no caso da senha exibe o valor digitado em texto claro. O `confirm()` de desativação (linha 327) foi **mantido de propósito** — é acessível, tem focus trap nativo do navegador, e substituí-lo por um modal caseiro sem focus trap seria uma regressão (`07 §14`). Recomendo tratar os `prompt()` num sprint próprio, com formulário inline ou modal adequado.
+
+`duplicidades.html` não recebeu estado vazio nas 3 tabelas porque já possui o elemento `#sem-dup` cumprindo essa função no nível da página.
 
 ### Sprint 3 — Acessibilidade AA (~1,5 dia)
 10. **A4** — labels `.cg-sr-only` nos 43 inputs/selects (1h30)

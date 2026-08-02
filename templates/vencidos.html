@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vencidos — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
   <style>
     .ano-progress-wrap {
       margin-top: 0.65rem;
@@ -184,7 +184,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
@@ -287,6 +287,37 @@
           ? `${rows.length} linhas nesta página`
           : "no período com o filtro atual";
       const tb = document.getElementById("tbody-vencidos");
+      limparSkeleton(tb);
+
+      if (!rows.length) {
+        const busca = (document.getElementById("busca-vencidos")?.value || "").trim();
+        const di = document.getElementById("dt-inicio")?.value || "";
+        const df = document.getElementById("dt-fim")?.value || "";
+        if (busca || di || df) {
+          renderEmptyRow(tb, 3, {
+            icon: "🔍",
+            title: "Nenhum vencido com esses filtros",
+            description: "Amplie o período ou limpe a busca para ver outros certificados.",
+            actionText: "Limpar filtros",
+            onAction: () => {
+              document.getElementById("busca-vencidos").value = "";
+              document.getElementById("dt-inicio").value = "";
+              document.getElementById("dt-fim").value = "";
+              paginaAtualVenc = 1;
+              carregarVencidos();
+            },
+          });
+        } else {
+          // Zero vencidos sem filtro é um bom resultado, não uma falha.
+          renderEmptyRow(tb, 3, {
+            icon: "✅",
+            title: "Nenhum certificado vencido",
+            description: "Todos os certificados monitorados estão dentro da validade.",
+          });
+        }
+        return;
+      }
+
       tb.innerHTML = rows
         .map(
           (it) => `
@@ -379,7 +410,7 @@
           return null;
         }
         if (!r.ok) {
-          alert("Erro: " + r.status + " " + (await mensagemCorpoErro(r)));
+          showToast("Não foi possível exportar (erro " + r.status + "): " + (await mensagemCorpoErro(r)), "error");
           return null;
         }
         return await r.json();
@@ -411,7 +442,12 @@
       const d = await fetchVencidosExportacao();
       if (!d || !d.itens) return;
       if (d.lista_truncada) {
-        alert("Lista truncada: exportados apenas os primeiros " + d.itens.length + " registos.");
+        showToast(
+          "O arquivo contém apenas os primeiros " +
+            d.itens.length.toLocaleString("pt-BR") +
+            " registros — o filtro atual excede o limite de exportação.",
+          "warning"
+        );
       }
       const headers = ["Nome", "CNPJ/CPF", "Vencimento do certificado"];
       const rows = d.itens.map((it) => [
@@ -437,7 +473,14 @@
     async function exportarPdfVisivel() {
       const d = await fetchVencidosExportacao();
       if (!d || !d.itens) return;
-      if (d.lista_truncada) alert("Lista truncada na exportação.");
+      if (d.lista_truncada) {
+        showToast(
+          "O PDF contém apenas os primeiros " +
+            d.itens.length.toLocaleString("pt-BR") +
+            " registros — o filtro atual excede o limite de exportação.",
+          "warning"
+        );
+      }
       const linhas = d.itens
         .map((it) => `
           <tr>
@@ -482,10 +525,16 @@
       w.print();
     }
 
+    let primeiroCarregamentoVenc = true;
+
     async function carregarVencidos() {
       const st = document.getElementById("status-msg");
-      st.textContent = "A carregar…";
-      toggleLoading(true, "Carregando vencidos...");
+      st.textContent = "Carregando…";
+      if (primeiroCarregamentoVenc) {
+        renderSkeletonRows("tbody-vencidos", Math.min(porPaginaVenc(), 10), 3);
+      } else {
+        toggleLoading(true, "Carregando vencidos...");
+      }
       try {
         const qs = buildParamsVencidos({ todasFiltradas: false });
         const r = await fetch(`/api/certificados/vencidos?${qs.toString()}`, { headers: getHeaders() });
@@ -494,7 +543,16 @@
           return;
         }
         if (!r.ok) {
-          st.textContent = `Erro ${r.status}: ${await mensagemCorpoErro(r)}`;
+          const detalhe = await mensagemCorpoErro(r);
+          st.textContent = `Erro ${r.status}`;
+          showToast("Não foi possível carregar os vencidos: " + detalhe, "error");
+          renderEmptyRow("tbody-vencidos", 3, {
+            icon: "⚠️",
+            title: "Erro ao carregar os vencidos",
+            description: detalhe || `O servidor respondeu com erro ${r.status}.`,
+            actionText: "Tentar novamente",
+            onAction: () => carregarVencidos(),
+          });
           return;
         }
         const j = await r.json();
@@ -504,11 +562,24 @@
         } else {
           atualizarPaginacaoVenc(null);
         }
+        setBannerAviso("table-container-venc", mensagemLimiteExportacao(j.paginacao));
         st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
         aplicarResumoAnosDoPayload(j);
         renderTabelaVencidas(j.itens || [], j.total);
+      } catch (e) {
+        st.textContent = "Falha de conexão.";
+        showToast("Falha de conexão com o servidor: " + e, "error");
+        renderEmptyRow("tbody-vencidos", 3, {
+          icon: "🔌",
+          title: "Sem conexão com o servidor",
+          description: "Verifique se o portal está em execução e tente novamente.",
+          actionText: "Tentar novamente",
+          onAction: () => carregarVencidos(),
+        });
       } finally {
         toggleLoading(false);
+        limparSkeleton("tbody-vencidos");
+        primeiroCarregamentoVenc = false;
       }
     }
 

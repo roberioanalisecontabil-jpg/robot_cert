@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=s1-a11y-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -229,7 +229,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s1-a11y-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -357,6 +357,45 @@
       }
 
 
+      /** Há filtro ativo? Muda o texto do estado vazio: "sem resultado" ≠ "sem dado". */
+      function temFiltroAtivo() {
+        const st = document.getElementById("filtro-status")?.value || "todos";
+        const bu = (document.getElementById("busca-cert")?.value || "").trim();
+        return st !== "todos" || bu !== "";
+      }
+
+      function renderEstadoVazio() {
+        if (temFiltroAtivo()) {
+          renderEmptyRow("tbody", 5, {
+            icon: "🔍",
+            title: "Nenhum certificado corresponde ao filtro",
+            description:
+              "Ajuste a busca ou o status selecionado para ver outros certificados.",
+            actionText: "Limpar filtros",
+            onAction: () => {
+              const sel = document.getElementById("filtro-status");
+              const bu = document.getElementById("busca-cert");
+              if (sel) sel.value = "todos";
+              if (bu) bu.value = "";
+              paginaAtual = 1;
+              carregarTabela();
+            },
+          });
+        } else {
+          renderEmptyRow("tbody", 5, {
+            icon: "📭",
+            title: "Nenhum certificado mapeado ainda",
+            description:
+              "O agente ainda não enviou dados. Verifique se ele está em execução no servidor e se a pasta de origem está configurada.",
+            actionText: "Atualizar tabela",
+            onAction: () => {
+              paginaAtual = 1;
+              carregarTabela();
+            },
+          });
+        }
+      }
+
       function renderTabela(items) {
         const colTipo = (it) => {
           const lbl = it.documento_tipo_label || (it.documento_tipo ? String(it.documento_tipo).toUpperCase() : "");
@@ -378,6 +417,13 @@
         };
 
         const tb = document.getElementById("tbody");
+        limparSkeleton(tb);
+
+        if (!items.length) {
+          renderEstadoVazio();
+          return;
+        }
+
         tb.innerHTML = items
           .map(
             (it) =>
@@ -440,7 +486,7 @@
             return null;
           }
           if (!r.ok) {
-            alert("Erro ao exportar: " + r.status + " " + (await mensagemCorpoErro(r)));
+            showToast("Não foi possível exportar (erro " + r.status + "): " + (await mensagemCorpoErro(r)), "error");
             return null;
           }
           return await r.json();
@@ -453,10 +499,11 @@
         const d = await carregarTodosFiltradosParaExportacao();
         if (!d || !d.itens) return;
         if (d.lista_truncada) {
-          alert(
-            "Existem mais registos do que o limite de exportação no servidor. O ficheiro contém apenas os primeiros " +
-              d.itens.length +
-              "."
+          showToast(
+            "O arquivo contém apenas os primeiros " +
+              d.itens.length.toLocaleString("pt-BR") +
+              " registros — o filtro atual excede o limite de exportação.",
+            "warning"
           );
         }
         const headers = ["Status", "Nome", "Emissão", "Vencimento", "Documento"];
@@ -486,7 +533,12 @@
         const d = await carregarTodosFiltradosParaExportacao();
         if (!d || !d.itens) return;
         if (d.lista_truncada) {
-          alert("Lista truncada no servidor: o PDF contém só os primeiros registos dentro do limite.");
+          showToast(
+            "O PDF contém apenas os primeiros " +
+              d.itens.length.toLocaleString("pt-BR") +
+              " registros — o filtro atual excede o limite de exportação.",
+            "warning"
+          );
         }
         const linhas = d.itens
           .map((it) => `
@@ -534,12 +586,23 @@
         w.print();
       }
 
+      let primeiroCarregamento = true;
+
       async function carregarTabela() {
         const st = document.getElementById("status-msg");
         const ph = document.getElementById("panel-hint");
         ph.style.display = "none";
-        st.textContent = "A carregar…";
-        toggleLoading(true, "Carregando certificados...");
+        st.textContent = "Carregando…";
+
+        // Primeiro carregamento: skeleton (não há dado antigo para preservar).
+        // Recargas: overlay, que mantém a tabela anterior visível e evita o
+        // "pisca" de a tela inteira virar blocos cinzentos a cada filtro.
+        if (primeiroCarregamento) {
+          renderSkeletonRows("tbody", porPaginaDashboard() > 10 ? 10 : porPaginaDashboard(), 5);
+        } else {
+          toggleLoading(true, "Carregando certificados...");
+        }
+
         try {
           const f = fonte();
           const params = new URLSearchParams({
@@ -555,19 +618,44 @@
             return;
           }
           if (r.status === 404) {
-            st.textContent = "Fonte “remoto”: ainda sem dados. Use “local”/“auto” em Configuração ou o agente no Windows.";
+            st.textContent = "Fonte “remoto”: ainda sem dados.";
             atualizarPaginacaoUI(null);
+            renderEmptyRow("tbody", 5, {
+              icon: "🛰️",
+              title: "A fonte remota ainda não tem dados",
+              description:
+                "Selecione a fonte “local” ou “auto” em Configuração, ou inicie o agente no servidor Windows.",
+              actionText: "Abrir Configuração",
+              onAction: () => (window.location.href = "/configuracao"),
+            });
             return;
           }
           if (!r.ok) {
-            st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
+            const detalhe = await mensagemCorpoErro(r);
+            st.textContent = "Erro " + r.status;
+            showToast("Não foi possível carregar os certificados: " + detalhe, "error");
+            renderEmptyRow("tbody", 5, {
+              icon: "⚠️",
+              title: "Erro ao carregar os certificados",
+              description: detalhe || "O servidor respondeu com erro " + r.status + ".",
+              actionText: "Tentar novamente",
+              onAction: () => carregarTabela(),
+            });
             return;
           }
           let d;
           try {
             d = await r.json();
           } catch (jsonErr) {
-            st.textContent = "Resposta inválida. Confirme o endereço do API. " + jsonErr;
+            st.textContent = "Resposta inválida do servidor.";
+            showToast("Resposta inválida do servidor. Confirme o endereço da API.", "error");
+            renderEmptyRow("tbody", 5, {
+              icon: "⚠️",
+              title: "Resposta inválida do servidor",
+              description: "Confirme o endereço da API em Configuração.",
+              actionText: "Tentar novamente",
+              onAction: () => carregarTabela(),
+            });
             return;
           }
           st.textContent = "Atualizado em: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
@@ -584,13 +672,25 @@
             items.forEach((it) => aplicarFlagsDatasCert(it, now, thirtyDaysFromNow));
             atualizarCards(items);
           }
+          // Aviso ANTES de exportar, não depois que o ficheiro já saiu incompleto.
+          setBannerAviso("table-container-dash", mensagemLimiteExportacao(d.paginacao));
           itensOriginais = items;
           itensVisiveis = items;
           renderTabela(items);
         } catch (e) {
-          st.textContent = "Erro: " + e;
+          st.textContent = "Falha de conexão.";
+          showToast("Falha de conexão com o servidor: " + e, "error");
+          renderEmptyRow("tbody", 5, {
+            icon: "🔌",
+            title: "Sem conexão com o servidor",
+            description: "Verifique se o portal está em execução e tente novamente.",
+            actionText: "Tentar novamente",
+            onAction: () => carregarTabela(),
+          });
         } finally {
           toggleLoading(false);
+          limparSkeleton("tbody");
+          primeiroCarregamento = false;
         }
       }
 

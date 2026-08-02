@@ -242,56 +242,266 @@ function setTableLoading(container, show, text = "Carregando...") {
   overlay.classList.toggle("is-visible", !!show);
 }
 
+const TOAST_MAX_EMPILHADOS = 3;
+const TOAST_PENDENTE_STORAGE = "cg_toast_pendente";
+
+/**
+ * Duração proporcional ao tamanho da mensagem, mínimo 4s (`07 §15`).
+ * Base de ~55ms por caractere ≈ velocidade de leitura confortável.
+ */
+function _toastDuracao(message) {
+  return Math.min(12000, Math.max(4000, String(message || "").length * 55));
+}
+
 /**
  * Exibe uma notificação flutuante (Toast) não bloqueante (WCAG 2.2 AA).
- * @param {string} message - Texto da notificação
+ * Substitui `alert()`: não bloqueia a página nem exige clique para prosseguir.
+ * @param {string} message - Texto da notificação (inserido como texto, nunca como HTML)
  * @param {'success'|'error'|'warning'|'info'} [type='info'] - Tipo do toast
- * @param {number} [duration=4000] - Duração em ms antes do auto-dismiss
+ * @param {number} [duration] - ms antes do auto-dismiss; 0 = não fecha sozinho.
+ *                              Omitido = calculado pelo tamanho da mensagem.
  */
-function showToast(message, type = 'info', duration = 4000) {
-  let container = document.getElementById('toast-container');
+function showToast(message, type = "info", duration) {
+  let container = document.getElementById("toast-container");
   if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    container.setAttribute('aria-live', 'polite');
-    container.setAttribute('aria-atomic', 'true');
+    container = document.createElement("div");
+    container.id = "toast-container";
+    container.className = "toast-container";
+    // Erros interrompem a leitura; sucesso/info esperam uma pausa natural.
+    container.setAttribute("aria-live", "polite");
+    container.setAttribute("aria-atomic", "false");
     document.body.appendChild(container);
   }
 
-  const toast = document.createElement('div');
-  toast.className = `toast-item toast-${type}`;
-  
-  const icons = {
-    success: '&#10003;',
-    error: '&#9888;',
-    warning: '&#9888;',
-    info: '&#8505;'
-  };
-
-  toast.innerHTML = `
-    <span class="toast-icon">${icons[type] || icons.info}</span>
-    <span class="toast-message">${message}</span>
-    <button type="button" class="toast-close" aria-label="Fechar notificação">&times;</button>
-  `;
-
-  const closeBtn = toast.querySelector('.toast-close');
-  closeBtn.addEventListener('click', () => removeToast(toast));
-
-  container.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add('is-visible'));
-
-  if (duration > 0) {
-    setTimeout(() => removeToast(toast), duration);
+  // Máximo de 3 simultâneos, substituindo os mais antigos (`07 §15`).
+  const existentes = container.querySelectorAll(".toast-item");
+  for (let i = 0; i <= existentes.length - TOAST_MAX_EMPILHADOS; i++) {
+    removeToast(existentes[i]);
   }
+
+  const icons = { success: "✓", error: "⚠", warning: "⚠", info: "ℹ" };
+
+  const toast = document.createElement("div");
+  toast.className = `toast-item toast-${type}`;
+  if (type === "error") toast.setAttribute("role", "alert");
+
+  const spanIcon = document.createElement("span");
+  spanIcon.className = "toast-icon";
+  spanIcon.setAttribute("aria-hidden", "true");
+  spanIcon.textContent = icons[type] || icons.info;
+
+  // textContent, não innerHTML: mensagens carregam dados de certificado
+  // (nome/CN do titular), que são conteúdo controlado por terceiros.
+  const spanMsg = document.createElement("span");
+  spanMsg.className = "toast-message";
+  spanMsg.textContent = String(message == null ? "" : message);
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "toast-close";
+  btn.setAttribute("aria-label", "Fechar notificação");
+  btn.textContent = "×";
+  btn.addEventListener("click", () => removeToast(toast));
+
+  toast.append(spanIcon, spanMsg, btn);
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("is-visible"));
+
+  const ms = duration === undefined ? _toastDuracao(message) : duration;
+  if (ms > 0) setTimeout(() => removeToast(toast), ms);
+  return toast;
 }
 
 function removeToast(toast) {
   if (!toast || !toast.parentNode) return;
-  toast.classList.remove('is-visible');
-  toast.addEventListener('transitionend', () => {
+  toast.classList.remove("is-visible");
+  // Rede de segurança: se a transição não disparar (aba oculta, reduced-motion),
+  // o nó seria mantido no DOM indefinidamente.
+  const remover = () => {
     if (toast.parentNode) toast.parentNode.removeChild(toast);
-  }, { once: true });
+  };
+  toast.addEventListener("transitionend", remover, { once: true });
+  setTimeout(remover, 600);
+}
+
+/**
+ * Guarda um toast para ser exibido DEPOIS de uma navegação.
+ * Usado onde antes havia `alert()` seguido de `window.location.href`: um toast
+ * comum apareceria e sumiria junto com a página, sem chance de leitura.
+ */
+function showToastAfterRedirect(message, type = "info") {
+  try {
+    sessionStorage.setItem(TOAST_PENDENTE_STORAGE, JSON.stringify({ message, type }));
+  } catch (_e) {
+    /* sessionStorage indisponível (modo privado antigo): apenas ignora */
+  }
+}
+
+function _consumirToastPendente() {
+  let raw = null;
+  try {
+    raw = sessionStorage.getItem(TOAST_PENDENTE_STORAGE);
+    if (raw) sessionStorage.removeItem(TOAST_PENDENTE_STORAGE);
+  } catch (_e) {
+    return;
+  }
+  if (!raw) return;
+  try {
+    const { message, type } = JSON.parse(raw);
+    if (message) showToast(message, type || "info");
+  } catch (_e) {
+    /* payload corrompido: ignora */
+  }
+}
+
+/**
+ * Estado vazio DENTRO de uma tabela, como linha única com colspan.
+ * `renderEmptyState()` substitui o innerHTML do container — em uma tabela isso
+ * destruiria o <thead>. Aqui o cabeçalho é preservado, então o usuário continua
+ * vendo quais colunas existem.
+ */
+function renderEmptyRow(tbody, colspan, options = {}) {
+  const el = typeof tbody === "string" ? document.getElementById(tbody) : tbody;
+  if (!el) return;
+
+  const {
+    title = "Nenhum registro encontrado",
+    description = "Não há dados para exibir com os filtros atuais.",
+    icon = "🔍",
+    actionText = null,
+    onAction = null,
+  } = options;
+
+  el.innerHTML = "";
+
+  const tr = document.createElement("tr");
+  const td = document.createElement("td");
+  td.colSpan = colspan || 1;
+  td.style.padding = "0";
+  td.style.border = "0";
+
+  const card = document.createElement("div");
+  card.className = "empty-state-card";
+  card.style.margin = "0";
+  card.style.border = "0";
+
+  const divIcon = document.createElement("div");
+  divIcon.className = "empty-state-icon";
+  divIcon.setAttribute("aria-hidden", "true");
+  divIcon.textContent = icon;
+
+  const h3 = document.createElement("p");
+  h3.className = "empty-state-title";
+  h3.textContent = title;
+
+  const p = document.createElement("p");
+  p.className = "empty-state-desc";
+  p.textContent = description;
+
+  card.append(divIcon, h3, p);
+
+  if (actionText && typeof onAction === "function") {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "primary";
+    btn.textContent = actionText;
+    btn.addEventListener("click", onAction);
+    card.appendChild(btn);
+  }
+
+  td.appendChild(card);
+  tr.appendChild(td);
+  el.appendChild(tr);
+}
+
+/**
+ * Linhas "fantasma" durante o primeiro carregamento (`07 §3`).
+ * Preferível ao overlay quando ainda não há dado nenhum na tela: o usuário vê
+ * a forma da tabela se montando em vez de um retângulo vazio, e o layout não
+ * dá salto quando os dados chegam (CLS).
+ */
+function renderSkeletonRows(tbody, linhas = 6, colunas = 5) {
+  const el = typeof tbody === "string" ? document.getElementById(tbody) : tbody;
+  if (!el) return;
+  el.setAttribute("aria-busy", "true");
+  el.innerHTML = "";
+  for (let i = 0; i < linhas; i++) {
+    const tr = document.createElement("tr");
+    tr.setAttribute("aria-hidden", "true");
+    for (let c = 0; c < colunas; c++) {
+      const td = document.createElement("td");
+      const div = document.createElement("div");
+      div.className = "skeleton-cell";
+      // Larguras irregulares parecem texto real, não uma grade de blocos.
+      div.style.width = [92, 70, 84, 60, 78][(i + c) % 5] + "%";
+      td.appendChild(div);
+      tr.appendChild(td);
+    }
+    el.appendChild(tr);
+  }
+}
+
+function limparSkeleton(tbody) {
+  const el = typeof tbody === "string" ? document.getElementById(tbody) : tbody;
+  if (el) el.removeAttribute("aria-busy");
+}
+
+/**
+ * Banner persistente de aviso no topo de um `.table-container` (`07 §16`).
+ * Diferente do toast: fica visível até a condição deixar de valer, porque é
+ * informação que o usuário precisa consultar no momento em que decide exportar.
+ * Passar `mensagem` vazia remove o banner.
+ */
+function setBannerAviso(container, mensagem, tipo = "warning") {
+  const el = typeof container === "string" ? document.getElementById(container) : container;
+  if (!el) return;
+
+  let banner = el.querySelector(".cg-banner");
+
+  if (!mensagem) {
+    if (banner) banner.remove();
+    return;
+  }
+
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.className = "cg-banner";
+    banner.setAttribute("role", "status");
+
+    const span = document.createElement("span");
+    span.className = "cg-banner__icon";
+    span.setAttribute("aria-hidden", "true");
+    span.textContent = "⚠";
+
+    const txt = document.createElement("span");
+    txt.className = "cg-banner__text";
+
+    banner.append(span, txt);
+
+    // Logo acima da área da tabela, depois da toolbar — onde o olho já está
+    // quando o usuário procura o botão de exportar.
+    const alvo = el.querySelector(".table-scroll-anchor");
+    if (alvo) el.insertBefore(banner, alvo);
+    else el.appendChild(banner);
+  }
+
+  banner.className = "cg-banner cg-banner--" + tipo;
+  banner.querySelector(".cg-banner__text").textContent = mensagem;
+}
+
+/** Mensagem padrão de limite de exportação, ou null se não há truncamento. */
+function mensagemLimiteExportacao(pg) {
+  if (!pg) return null;
+  const max = Number(pg.export_max) || 0;
+  const total = Number(pg.total_itens) || 0;
+  if (!max || total <= max) return null;
+  return (
+    "Este filtro tem " +
+    total.toLocaleString("pt-BR") +
+    " registros, mas a exportação envia no máximo " +
+    max.toLocaleString("pt-BR") +
+    ". Refine os filtros para exportar tudo."
+  );
 }
 
 /**
@@ -655,12 +865,14 @@ if (document.readyState === "loading") {
     initThemeToggle();
     initNotifications();
     initRegioesRolaveis();
+    _consumirToastPendente();
   });
 } else {
   initSidebarToggle();
   initThemeToggle();
   initNotifications();
   initRegioesRolaveis();
+  _consumirToastPendente();
 }
 
 // ─── Paginador reutilizável ───────────────────────────────────────────────────
