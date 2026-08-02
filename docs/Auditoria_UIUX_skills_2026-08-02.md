@@ -162,7 +162,7 @@ Pendente (fora do Sprint 1): `.card-erros` ícone `#ea580c`/`#fff7ed` a 3.35:1 �
 
 ---
 
-### A2 · Status transmitido apenas por cor
+### A2 · Status transmitido apenas por cor ⚠️ ACHADO SUPERDIMENSIONADO
 **Skill:** `04 §9` ("nunca usar cor como único diferenciador"), `02 §1.1`
 
 Os badges se distinguem por cor + texto ("Ativo"/"Expirando"/"Vencido") — o texto salva a acessibilidade **na tabela**. Mas nos cards do dashboard (`index.html:85-145`) a única diferenciação entre Total/Ativo/Expirando/Erro/Falha é a cor do `.card-icon`. Com deuteranopia (~8% dos homens), verde e laranja convergem.
@@ -191,7 +191,7 @@ Mas a tabela está dentro de `<div style="overflow-x: auto">` (`index.html:176`)
 
 ---
 
-### A4 · Inputs e selects sem `<label>` associado
+### A4 · Inputs e selects sem `<label>` associado ✅ CORRIGIDO
 **Skill:** `04 §7` ("nunca apenas `placeholder` como substituto de label")
 
 43 `<input>`/`<select>` nas telas, 27 `<label>`. O caso mais visível é a toolbar do dashboard (`index.html:156-169`): o `#filtro-status` e o `#busca-cert` têm apenas `title` e `placeholder`. Leitor de tela anuncia "caixa de edição, em branco" ou lê o placeholder — que desaparece assim que o usuário digita.
@@ -200,7 +200,7 @@ Mas a tabela está dentro de `<div style="overflow-x: auto">` (`index.html:176`)
 
 ---
 
-### A5 · Dropdown de notificações sem `aria-expanded` nem gestão de foco
+### A5 · Dropdown de notificações sem `aria-expanded` nem gestão de foco ✅ CORRIGIDO
 **Skill:** `04 §6`, `04 §4`
 
 O sino (`ui-common.js:518`) tem `aria-label`, mas **`aria-expanded` aparece 0 vezes em todo o projeto**. Leitor de tela não anuncia se o painel está aberto ou fechado. Além disso o dropdown abre sem mover o foco, não tem navegação por setas, e ao fechar com `Esc` (`ui-common.js:697`) o foco não retorna ao botão que o abriu.
@@ -215,7 +215,7 @@ document.getElementById("btn-notifications-toggle")?.focus();
 
 ---
 
-### A6 · Alvos de toque abaixo do mínimo
+### A6 · Alvos de toque abaixo do mínimo ✅ CORRIGIDO
 **Skill:** `03 §9` (44×44px), `04 §10` (WCAG 2.5.8 — mínimo 24×24px)
 
 | Elemento | Tamanho computado | 44px | 24px |
@@ -411,7 +411,7 @@ document.addEventListener("visibilitychange", () => {
 
 ---
 
-### M12 · Nenhum estado `:active` nem `:disabled` visual nos botões
+### M12 · Nenhum estado `:active` nem `:disabled` visual nos botões ✅ CORRIGIDO
 **Skill:** `02 §8` ("todo componente interativo precisa definir Default, Hover, Focus, Active, Disabled, Loading, Error")
 
 `button` tem `:hover` (`style.css:532`) e `:focus-visible` (global). Não tem `:active` (exceto `.sidebar-toggle-btn:active`) nem `:disabled`. O `.cg-page-link` é a exceção que fez certo (`:disabled { opacity: 0.45; cursor: not-allowed }` — `style.css:1276`). O botão "Entrar" do login desabilita durante o request (`login.html:140`) mas sem nenhuma pista visual além do texto mudar.
@@ -525,12 +525,69 @@ O plano pedia avisar sobre truncamento *antes* de exportar, mas `LISTAGEM_EXPORT
 
 `duplicidades.html` não recebeu estado vazio nas 3 tabelas porque já possui o elemento `#sem-dup` cumprindo essa função no nível da página.
 
-### Sprint 3 — Acessibilidade AA (~1,5 dia)
-10. **A4** — labels `.cg-sr-only` nos 43 inputs/selects (1h30)
-11. **A5** — `aria-expanded` + retorno de foco no dropdown (45min)
-12. **A6** — alvos de toque ≥44px (30min)
-13. **A2** — ícone/forma nos badges além da cor (45min)
-14. **M12** — estados `:active`/`:disabled` nos botões (30min)
+### ✅ Sprint 3 — Acessibilidade AA — CONCLUÍDO em 2026-08-02
+
+10. ✅ **A4** — 42 campos, 0 sem rótulo acessível
+11. ✅ **A5** — `aria-expanded`, `aria-haspopup`, `aria-controls` e retorno de foco
+12. ✅ **A6** — alvos de toque ≥44px
+13. ⚠️ **A2** — **achado superdimensionado na auditoria**, ver abaixo
+14. ✅ **M12** — estados `:active`/`:disabled` generalizados
+
+**Arquivos alterados:** `static/style.css`, `static/ui-common.js`, 6 templates.
+
+> **Correção do diagnóstico: o A4 contava 43 campos e 27 labels.**
+> Era contagem bruta, não análise de cobertura — vários campos já tinham `<label for>` ou `aria-label`. A verificação campo a campo apontou **15 sem rótulo acessível**, não 43. Todos foram corrigidos.
+
+> **Correção do diagnóstico: o A2 estava superdimensionado.**
+> A auditoria afirmava que os badges precisavam de forma além da cor. Na verificação, os badges **já carregam texto** ("Ativo", "Expirando", "Vencido") e os 5 cards do dashboard **já têm ícones SVG distintos** mais título em texto — `04 §9` já estava satisfeito nos dois casos.
+> Acrescentar um glifo via `::before` teria custo real: leitores de tela anunciam conteúdo de pseudo-elemento, e o usuário ouviria "check Ativo". Seria decoração com prejuízo de acessibilidade, então **não foi feito**.
+> O que era real naquela área: os fundos de linha de `colaborador_certificados.html` usavam `#fef2f2`/`#fffbeb` hardcoded — invisíveis no tema escuro. Foram promovidos a `--row-tint-danger`/`--row-tint-warning` com variante escura.
+
+**Achado grave durante a verificação: o Sprint 1 corrigiu apenas metade do problema de contraste.**
+
+A correção anterior tratou `.badge-*` e `.error-cell` no `style.css`. O mesmo padrão — cor de status usada como **texto** sobre seu próprio fundo tonal — estava replicado em **13 outros pontos**, incluindo dois arquivos que a busca do Sprint 1 não cobriu (o `<style>` inline de `usuarios.html` e o de `login.html`):
+
+| Elemento | Arquivo | Antes | Depois |
+|---|---|---|---|
+| `.role-admin` | `usuarios.html` (inline) | 3.24:1 ❌ | 5.68:1 ✅ |
+| `.role-user` | `usuarios.html` (inline) | 2.04:1 ❌ | 4.95:1 ✅ |
+| `.btn-danger` | `usuarios.html` (inline) | 3.24:1 ❌ | 5.68:1 ✅ |
+| `#login-error` | `login.html` (inline) | 3.24:1 ❌ | 5.68:1 ✅ |
+| `#path-sync-msg` | `configuracao.html` | 2.22:1 ❌ | 5.39:1 ✅ |
+| `button.danger` | `style.css` | 3.24:1 ❌ | 5.68:1 ✅ |
+| `.toast-success .toast-icon` | `style.css` | 2.22:1 ❌ | 5.39:1 ✅ |
+| `.toast-error .toast-icon` | `style.css` | 3.55:1 ❌ | 6.23:1 ✅ |
+| `.toast-warning .toast-icon` | `style.css` | 2.06:1 ❌ | 6.39:1 ✅ |
+| `.notif-expired .notif-badge-type` | `style.css` | 3.24:1 ❌ | 5.68:1 ✅ |
+| `.notif-expiring .notif-badge-type` | `style.css` | 1.93:1 ❌ | 6.01:1 ✅ |
+| `.card-validos .card-icon` | `style.css` | 2.04:1 ❌ | 4.95:1 ✅ |
+| `.card-expirando .card-icon` | `style.css` | 1.93:1 ❌ | 6.01:1 ✅ |
+
+Lição de método: uma busca por `grep` no arquivo de estilo principal não basta neste projeto — 4 dos 8 templates têm bloco `<style>` próprio. Verificações futuras de token precisam varrer `templates/` também.
+
+**Refinamentos incorporados:**
+
+- **Rótulos visíveis no formulário de criação de usuário**, não `.cg-sr-only`. É onde o placeholder-como-label mais atrapalha: ao digitar, o usuário perde a referência de qual campo está preenchendo. Nas toolbars de busca/filtro, o rótulo oculto é suficiente — a função do campo é óbvia pelo contexto e um rótulo visível competiria por espaço.
+- **`autocomplete="new-password"` no cadastro de usuário.** Sem isso, o navegador tende a preencher a senha do próprio admin no campo destinado à senha inicial de outra pessoa. Adicionado `autocomplete="off"` em nome e e-mail pelo mesmo motivo, e `minlength="6"` para validar no cliente o que a mensagem já prometia.
+- **`Esc` do painel de notificações saiu do handler global.** O handler genérico de teclado fechava o dropdown mas deixava o foco no `<body>` — a navegação por teclado recomeçaria do topo da página. O novo handler vive em `initNotifications()`, único escopo que conhece o botão que abriu o painel, e devolve o foco a ele. A duplicação no handler global foi removida.
+- **Abrir/fechar centralizado em `definirDropdownAberto()`.** Havia três caminhos de fechamento (clique no botão, clique fora, `Esc`); com `aria-expanded` a manter em sincronia, três lugares independentes viram três oportunidades de dessincronizar.
+- **`.toast-close` com margem negativa.** O alvo foi de ~20×17px para 44×44px, mas a margem negativa evita que o toast inche visualmente — a área clicável cresce, o desenho não.
+
+**Validação executada:**
+
+| Verificação | Resultado |
+|---|---|
+| Campos sem rótulo acessível | **0 de 42** (eram 15) |
+| Contraste dos 13 pontos corrigidos, 2 temas | **13/13 passam** |
+| `aria-expanded` no dropdown | presente + sincronizado nos 3 caminhos |
+| Retorno de foco no `Esc` | implementado |
+| Alvos de toque ≥44px | 6 regras aplicadas |
+| Estados `:active`/`:disabled` | generalizados para `button` |
+| `node --check` em `ui-common.js` | OK |
+| Chaves CSS | 291/291 |
+| Balanço de `<div>` nos templates | 8/8 |
+| Portal servindo as rotas | 8/8 HTTP 200 |
+| `pytest tests/` | **41 passed** |
 
 ### Sprint 4 — Mobile e performance (~1,5 dia)
 15. **A7** — tabelas → cards empilhados < 768px (3h)

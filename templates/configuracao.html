@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Configuração — Certificados PFX</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -134,7 +134,7 @@
             </select>
           </div>
         </div>
-        <p id="path-sync-msg" class="hint" style="color: var(--ok); margin-top: 0.5rem; margin-bottom: 0;"></p>
+        <p id="path-sync-msg" class="hint" style="color: var(--ok-text); margin-top: 0.5rem; margin-bottom: 0;"></p>
         <p id="panel-auth-hint" class="hint-warn" style="display: none; margin-top: 0.5rem; margin-bottom: 0;"></p>
       </section>
 
@@ -272,6 +272,7 @@
             </div>
             <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
               <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
+              <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
               <input type="email" id="inp-smtp-test-dest" placeholder="Destinatário teste" style="padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; max-width: 200px;" />
               <button type="button" id="btn-test-smtp">Enviar Teste</button>
               <button type="button" id="btn-trigger-alerts" style="background-color: var(--warning-text); color: #FFFFFF; border: none; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
@@ -307,7 +308,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       // ── Lógica de abas ──────────────────────────────────────────────────────
       const TABS = [

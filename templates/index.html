@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -153,6 +153,7 @@
             <p id="panel-hint" class="hint" style="display: none; color: var(--warning-text);"></p>
           </div>
           <div class="toolbar__actions">
+            <label for="filtro-status" class="cg-sr-only">Filtrar por status do certificado</label>
             <select id="filtro-status" title="Filtrar por status" style="padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px;">
               <option value="todos">Todos</option>
               <option value="validos">Ativo</option>
@@ -160,6 +161,7 @@
               <option value="erros">Erro</option>
               <option value="sem_padrao">Falha ( Sem padrão)</option>
             </select>
+            <label for="busca-cert" class="cg-sr-only">Buscar certificado por nome, CNPJ ou CPF</label>
             <input
               type="search"
               id="busca-cert"
@@ -229,7 +231,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";

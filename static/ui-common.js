@@ -812,7 +812,7 @@ function initNotifications() {
   container.id = "notifications-container";
   container.className = "notifications-container";
   container.innerHTML = `
-    <button id="btn-notifications-toggle" type="button" class="sidebar-toggle-btn notifications-bell-btn" title="Atualização Automática de Alertas" aria-label="Alertas e Notificações">
+    <button id="btn-notifications-toggle" type="button" class="sidebar-toggle-btn notifications-bell-btn" title="Alertas e notificações" aria-label="Alertas e notificações" aria-expanded="false" aria-haspopup="true" aria-controls="notifications-dropdown">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:1.25rem;height:1.25rem;">
         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
       </svg>
@@ -839,18 +839,35 @@ function initNotifications() {
   const toggleBtn = document.getElementById("btn-notifications-toggle");
   const dropdown = document.getElementById("notifications-dropdown");
 
+  /** Fonte única de verdade para abrir/fechar: mantém aria-expanded em sincronia. */
+  function definirDropdownAberto(aberto, devolverFoco) {
+    dropdown.style.display = aberto ? "block" : "none";
+    toggleBtn.setAttribute("aria-expanded", String(aberto));
+    if (aberto) {
+      fetchNotifications();
+    } else if (devolverFoco) {
+      // Devolve o foco a quem abriu (04 §4) — sem isso, ao fechar com Esc o
+      // foco ficaria no <body> e a navegação por teclado recomeçaria do topo.
+      toggleBtn.focus();
+    }
+  }
+
   toggleBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    const isVisible = dropdown.style.display === "block";
-    dropdown.style.display = isVisible ? "none" : "block";
-    if (!isVisible) {
-      fetchNotifications();
-    }
+    definirDropdownAberto(dropdown.style.display !== "block", false);
   });
 
   document.addEventListener("click", (e) => {
-    if (!e.target.closest("#notifications-container")) {
-      dropdown.style.display = "none";
+    if (!e.target.closest("#notifications-container") && dropdown.style.display === "block") {
+      definirDropdownAberto(false, false);
+    }
+  });
+
+  // Esc fecha e devolve o foco. Registrado aqui (e não no handler global de
+  // teclado) porque só este escopo conhece o botão que abriu o painel.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && dropdown.style.display === "block") {
+      definirDropdownAberto(false, true);
     }
   });
 
@@ -987,7 +1004,9 @@ document.addEventListener('keydown', function(e) {
     }
   }
 
-  // Tecla 'Escape' para fechar modais ou dropdowns ativos
+  // Tecla 'Escape' fecha modais ativos.
+  // O painel de notificações NÃO é tratado aqui: initNotifications() registra o
+  // próprio handler, que além de fechar devolve o foco ao botão que o abriu.
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal, [role="dialog"]').forEach(modal => {
       if (modal.style.display !== 'none' && modal.classList.contains('active')) {
@@ -995,10 +1014,6 @@ document.addEventListener('keydown', function(e) {
         modal.classList.remove('active');
       }
     });
-    const notifDropdown = document.getElementById('notifications-dropdown');
-    if (notifDropdown && notifDropdown.style.display !== 'none') {
-      notifDropdown.style.display = 'none';
-    }
   }
 });
 

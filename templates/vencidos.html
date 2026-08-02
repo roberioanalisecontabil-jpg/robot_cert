@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vencidos — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
   <style>
     .ano-progress-wrap {
       margin-top: 0.65rem;
@@ -130,6 +130,7 @@
           <p class="hint" id="count-hint"></p>
         </div>
         <div class="toolbar__actions">
+          <label for="busca-vencidos" class="cg-sr-only">Buscar vencidos por nome, documento ou data</label>
           <input type="search" id="busca-vencidos" placeholder="Buscar por nome, documento ou data" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
           <label for="dt-inicio" class="hint">De</label>
           <input type="date" id="dt-inicio" class="path-input" style="max-width: 170px;" />
@@ -184,7 +185,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];

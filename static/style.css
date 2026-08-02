@@ -47,6 +47,11 @@
   --danger-text: #C1121C;    /* texto de erro sobre --surface */
   --sidebar-danger: #FF6B6B; /* 6.13:1 sobre --sidebar-bg */
 
+  /* Tinta de fundo de linha de tabela — reforço visual do status, sempre
+     acompanhado do badge com texto na coluna Status (04 §9). */
+  --row-tint-danger: #FEF2F2;
+  --row-tint-warning: #FFFBEB;
+
   /* Border Radii */
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -121,6 +126,8 @@
   --expired-text: #FF9A93;   /* 5.81:1 sobre --expired-bg */
   --danger-text: #FF9A93;
   --sidebar-danger: #FF6B6B; /* 6.80:1 sobre --sidebar-bg */
+  --row-tint-danger: rgba(255, 69, 58, 0.10);
+  --row-tint-warning: rgba(255, 159, 10, 0.10);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -168,6 +175,8 @@
     --expired-text: #FF9A93;
     --danger-text: #FF9A93;
     --sidebar-danger: #FF6B6B;
+    --row-tint-danger: rgba(255, 69, 58, 0.10);
+    --row-tint-warning: rgba(255, 159, 10, 0.10);
 
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -488,17 +497,17 @@ textarea:focus-visible {
 
 .card-validos .card-icon {
   background-color: var(--ok-bg);
-  color: var(--ok);
+  color: var(--ok-text);
 }
 
 .card-expirando .card-icon {
   background-color: var(--warning-bg);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .card-vencidos .card-icon {
   background-color: var(--expired-bg);
-  color: var(--expired);
+  color: var(--expired-text);
 }
 
 .card-erros .card-icon {
@@ -554,10 +563,23 @@ button {
   gap: var(--sp-1);
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background-color: var(--bg);
   border-color: var(--border);
   opacity: 0.9;
+}
+
+/* Estados obrigatórios de componente interativo (02 §8).
+   O padrão já existia em .cg-page-link; aqui é generalizado. */
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  /* Mantido no DOM e legível: a informação de que a ação existe é relevante. */
 }
 
 button.primary {
@@ -566,14 +588,19 @@ button.primary {
   border-color: var(--accent);
 }
 
-button.primary:hover {
+button.primary:hover:not(:disabled) {
   background-color: var(--accent-hover);
   border-color: var(--accent-hover);
   opacity: 0.95;
 }
 
+button.primary:disabled {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
 button.danger {
-  color: var(--expired);
+  color: var(--expired-text);
   border-color: rgba(255, 59, 48, 0.25);
   background-color: var(--expired-bg);
 }
@@ -1286,6 +1313,8 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+  /* 36px -> 44px (03 §9). Paginação é alvo frequente em uso por toque. */
+  min-height: 44px;
 }
 
 .cg-page-link:hover:not(:disabled) {
@@ -1306,7 +1335,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .cg-page-link--square {
-  min-width: 2.25rem;
+  min-width: 44px;
   padding-left: 0;
   padding-right: 0;
   border-radius: 0;
@@ -1575,11 +1604,11 @@ select,
 }
 
 .notif-expired .notif-badge-type {
-  color: var(--expired);
+  color: var(--expired-text);
 }
 
 .notif-expiring .notif-badge-type {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .notif-date {
@@ -1663,8 +1692,8 @@ body.sidebar-open .sidebar-backdrop {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
@@ -1824,15 +1853,25 @@ body.sidebar-open .sidebar-backdrop {
   line-height: 1.4;
 }
 
+/* 44x44px: WCAG 2.2 exige 24x24 (2.5.8) e as HIG recomendam 44 (03 §9).
+   Antes eram ~20x17px — o único alvo do projeto que reprovava no critério. */
 .toast-close {
   background: transparent;
   border: none;
   color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
-  padding: 0 0.25rem;
+  padding: 0;
   line-height: 1;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Compensa o alvo ampliado para não inchar o toast visualmente. */
+  margin: -0.5rem -0.5rem -0.5rem 0;
 }
 
 .toast-close:hover {
@@ -1843,21 +1882,21 @@ body.sidebar-open .sidebar-backdrop {
   border-left: 4px solid var(--ok);
 }
 .toast-success .toast-icon {
-  color: var(--ok);
+  color: var(--ok-text);
 }
 
 .toast-error {
   border-left: 4px solid var(--expired);
 }
 .toast-error .toast-icon {
-  color: var(--expired);
+  color: var(--expired-text);
 }
 
 .toast-warning {
   border-left: 4px solid var(--warning);
 }
 .toast-warning .toast-icon {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .toast-info {
@@ -1900,6 +1939,26 @@ body.sidebar-open .sidebar-backdrop {
   max-width: 400px;
   margin: 0 0 1.25rem;
   line-height: 1.5;
+}
+
+/* Campo de formulário com rótulo visível (04 §7): placeholder não substitui
+   label — ele some assim que o usuário digita, e o contraste é insuficiente. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.form-field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.form-field .path-input,
+.form-field select {
+  width: 100%;
 }
 
 /* Banner persistente de aviso (07 §16) — cor + ícone + texto, nunca só cor. */

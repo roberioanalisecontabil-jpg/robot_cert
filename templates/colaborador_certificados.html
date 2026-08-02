@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Acompanhamento — Certificados</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s2-feedback-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -111,6 +111,7 @@
       <section id="sec-painel">
         <div class="toolbar">
           <div class="toolbar__actions">
+            <label for="busca-painel" class="cg-sr-only">Buscar no painel por nome ou documento</label>
             <input type="search" id="busca-painel" placeholder="Buscar por nome ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
           </div>
         </div>
@@ -152,6 +153,7 @@
       <section id="sec-selecao" style="display:none;">
         <div class="toolbar">
           <div class="toolbar__actions">
+            <label for="busca-selecao" class="cg-sr-only">Buscar certificados para selecionar</label>
             <input type="search" id="busca-selecao" placeholder="Buscar por nome ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
             <button type="button" id="btn-salvar-selecao" class="primary">Salvar seleção</button>
           </div>
@@ -190,7 +192,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s2-feedback-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
@@ -285,9 +287,9 @@
       document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => {
         let styleStr = "";
         if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
-          styleStr = "background:#fef2f2;";
+          styleStr = "background:var(--row-tint-danger);";
         } else if (it.status === "expirando") {
-          styleStr = "background:#fffbeb;";
+          styleStr = "background:var(--row-tint-warning);";
         }
         return `
         <tr style="${styleStr}">
@@ -375,9 +377,9 @@
       document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => {
         let styleStr = "";
         if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
-          styleStr = "background:#fef2f2;";
+          styleStr = "background:var(--row-tint-danger);";
         } else if (it.status === "expirando") {
-          styleStr = "background:#fffbeb;";
+          styleStr = "background:var(--row-tint-warning);";
         }
         return `
         <tr style="${styleStr}">
