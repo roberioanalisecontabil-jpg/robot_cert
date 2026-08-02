@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Duplicidades — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v=s4-mobile-2026-08" />
 </head>
 <body>
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -98,15 +102,15 @@
           <h2 id="tit-igual" style="margin-bottom:0.75rem;">Certificados idênticos (mesma assinatura única de segurança)</h2>
           <div class="dup-crypto-table-wrap table-scroll-anchor">
             <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados idênticos">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Documento (CPF/CNPJ)</th>
-                    <th>Status</th>
+              <table role="table">
+                <thead role="rowgroup">
+                  <tr role="row">
+                    <th role="columnheader">Nome</th>
+                    <th role="columnheader">Documento (CPF/CNPJ)</th>
+                    <th role="columnheader">Status</th>
                   </tr>
                 </thead>
-                <tbody id="tbody-cert-igual"></tbody>
+                <tbody role="rowgroup" id="tbody-cert-igual"></tbody>
               </table>
             </div>
           </div>
@@ -140,15 +144,15 @@
         <p class="hint" style="margin-bottom:0.75rem;">Apenas quando o mesmo CPF/CNPJ aparece em mais de um ficheiro e os certificados não podem ser identificados como iguais pela assinatura de segurança.</p>
         <div class="dup-crypto-table-wrap table-scroll-anchor">
           <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados com mesmo documento">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Documento (CPF/CNPJ)</th>
-                  <th>Status</th>
+            <table role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th role="columnheader">Nome</th>
+                  <th role="columnheader">Documento (CPF/CNPJ)</th>
+                  <th role="columnheader">Status</th>
                 </tr>
               </thead>
-              <tbody id="tbody-grupos-doc"></tbody>
+              <tbody role="rowgroup" id="tbody-grupos-doc"></tbody>
             </table>
           </div>
         </div>
@@ -181,14 +185,14 @@
         <p class="hint" style="margin-bottom:0.75rem;">Só quando o certificado não pôde ser analisado. Pode haver falsos positivos (empresas homónimas).</p>
         <div class="dup-crypto-table-wrap table-scroll-anchor">
           <div class="table-scroll" tabindex="0" role="region" aria-label="Nomes semelhantes">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Arquivo</th>
+            <table role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th role="columnheader">Nome</th>
+                  <th role="columnheader">Arquivo</th>
                 </tr>
               </thead>
-              <tbody id="tbody-grupos-nome"></tbody>
+              <tbody role="rowgroup" id="tbody-grupos-nome"></tbody>
             </table>
           </div>
         </div>
@@ -237,7 +241,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s4-mobile-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) {
       if (typeof setTableLoading === "function") {
@@ -658,10 +662,10 @@
       const st = it._statusDup != null ? it._statusDup : "—";
       const enc = encodeURIComponent(JSON.stringify(it._pathsList || []));
       return `
-        <tr class="dup-igual-row" data-dup-paths="${enc}">
-          <td style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>
-          <td><span style="white-space:nowrap;">${esc(it.documento || "—")}</span></td>
-          <td class="dup-igual-status" style="max-width:16rem;">${esc(st)}</td>
+        <tr role="row" class="dup-igual-row" data-dup-paths="${enc}">
+          <td role="cell" data-label="Nome" style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>
+          <td role="cell" data-label="Documento"><span style="white-space:nowrap;">${esc(it.documento || "—")}</span></td>
+          <td role="cell" data-label="Status" class="dup-igual-status" style="max-width:16rem;">${esc(st)}</td>
         </tr>`;
     }
 
@@ -671,7 +675,7 @@
       if (!tbody) return;
       const psz = porPagDup();
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="hint-only"><td colspan="3">${HINT_CRYPTO_VAZIO_IGUAL}</td></tr>`;
+        tbody.innerHTML = `<tr class="hint-only cg-state-row"><td colspan="3">${HINT_CRYPTO_VAZIO_IGUAL}</td></tr>`;
         cgPageNavHide("paginacao-toolbar-dup-ig", "pag-ul-dup-ig", "pag-meta-dup-ig");
         return;
       }
@@ -689,10 +693,10 @@
     function trDocRow(it) {
       const enc = encodeURIComponent(JSON.stringify(it._linhasVencPath || []));
       return `
-        <tr class="dup-data-row dup-doc-row" data-dup-doc-lines="${enc}">
-          <td style="max-width:22rem; word-break:break-word;">${esc(it.nome || "—")}</td>
-          <td><span style="white-space:nowrap;">${esc(it.documento || "—")}</span></td>
-          <td class="dup-igual-status" style="max-width:16rem;">${esc(it._statusDup || "—")}</td>
+        <tr role="row" class="dup-data-row dup-doc-row" data-dup-doc-lines="${enc}">
+          <td role="cell" data-label="Nome" style="max-width:22rem; word-break:break-word;">${esc(it.nome || "—")}</td>
+          <td role="cell" data-label="Documento"><span style="white-space:nowrap;">${esc(it.documento || "—")}</span></td>
+          <td role="cell" data-label="Status" class="dup-igual-status" style="max-width:16rem;">${esc(it._statusDup || "—")}</td>
         </tr>`;
     }
 
@@ -702,9 +706,9 @@
       );
       const titleAttr = it._titleGrupo ? ` title="${escAttrTitle(it._titleGrupo)}"` : "";
       return `
-        <tr class="dup-data-row"${titleAttr}>
-          <td style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>
-          <td style="max-width:22rem; word-break:break-all;"><code style="font-size:0.85rem;">${esc(pathDisp)}</code></td>
+        <tr role="row" class="dup-data-row"${titleAttr}>
+          <td role="cell" data-label="Nome" style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>
+          <td role="cell" data-label="Arquivo" style="max-width:22rem; word-break:break-all;"><code style="font-size:0.85rem;">${esc(pathDisp)}</code></td>
         </tr>`;
     }
 
@@ -767,7 +771,7 @@
       const rows = _rowsDoc;
       const psz = porPagDup();
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="hint-only"><td colspan="3">Nenhum grupo listado.</td></tr>`;
+        tbody.innerHTML = `<tr class="hint-only cg-state-row"><td colspan="3">Nenhum grupo listado.</td></tr>`;
         cgPageNavHide("paginacao-toolbar-dup-doc", "pag-ul-dup-doc", "pag-meta-dup-doc");
         return;
       }
@@ -788,7 +792,7 @@
       const rows = _rowsNome;
       const psz = porPagDup();
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="hint-only"><td colspan="2">Nenhum ficheiro listado.</td></tr>`;
+        tbody.innerHTML = `<tr class="hint-only cg-state-row"><td colspan="2">Nenhum ficheiro listado.</td></tr>`;
         cgPageNavHide("paginacao-toolbar-dup-nome", "pag-ul-dup-nome", "pag-meta-dup-nome");
         return;
       }

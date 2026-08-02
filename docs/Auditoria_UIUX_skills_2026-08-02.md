@@ -230,7 +230,7 @@ O `.toast-close` é o único que reprova no critério normativo 2.5.8 (`font-siz
 
 ---
 
-### A7 · Tabela força scroll horizontal no mobile
+### A7 · Tabela força scroll horizontal no mobile ✅ CORRIGIDO
 **Skill:** `07 §7` ("em mobile, transformar em cards empilhados com labels inline em vez de scroll horizontal forçado")
 
 Todas as tabelas usam `overflow-x: auto`. Em 375px de largura, uma tabela de 5 colunas (Status/Nome/Emissão/Vencimento/CNPJ) obriga o usuário a rolar lateralmente e perde o contexto da coluna ao fazê-lo — o header não acompanha.
@@ -262,7 +262,7 @@ Menor, mas relacionado: o botão diz "Entrar" (`login.html:125`). `06 §1` pede 
 
 ---
 
-### A9 · Fonte carregada por `@import` (render-blocking em cascata)
+### A9 · Fonte carregada por `@import` (render-blocking em cascata) ✅ CORRIGIDO
 **Skill:** `08 §7` (fontes, Core Web Vitals)
 
 `style.css:1`:
@@ -324,7 +324,7 @@ Nenhuma delas tem variante escura. Duas (`#f59e0b`, `#dc2626`) já reprovam em c
 
 ---
 
-### M3 · `will-change` aplicado em massa
+### M3 · `will-change` aplicado em massa ✅ CORRIGIDO
 **Skill:** `08 §7` (performance)
 
 `style.css:1353-1358` declara `will-change: background-color, border-color, transform, box-shadow` para **todos** os `button`, `.path-input`, `select` e `.sidebar-nav a` da aplicação — permanentemente, não só durante a interação. Cada elemento com `will-change` ganha uma camada de composição própria na GPU. Numa tela como `/duplicidades` (937 linhas, dezenas de botões de paginação), isso é consumo de memória de vídeo sem contrapartida — as transições envolvidas são de cor, que nem se beneficiam de promoção de camada.
@@ -376,7 +376,7 @@ O risco prático está **mitigado pela CSP com nonce** (`{{ request.state.nonce 
 
 ---
 
-### M9 · `setInterval` de notificações nunca é limpo
+### M9 · `setInterval` de notificações nunca é limpo ✅ CORRIGIDO
 **Skill:** `08 §6` ("sempre limpar event listeners e timers")
 
 `ui-common.js:562`: `setInterval(fetchNotifications, 60000)` roda indefinidamente, inclusive com a aba em segundo plano. Em navegação de dia inteiro com a aba aberta, são ~480 requisições autenticadas desnecessárias.
@@ -395,7 +395,7 @@ document.addEventListener("visibilitychange", () => {
 
 ---
 
-### M10 · Grid de cards travado em 5 colunas
+### M10 · Grid de cards travado em 5 colunas ✅ CORRIGIDO
 **Skill:** `03 §8`, `08 §3`
 
 `style.css:384-388` força `repeat(5, 1fr) !important` acima de 960px. Funciona hoje porque há exatamente 5 cards — mas `style.css:1350` já prevê um `:nth-child(6)` com delay de animação, sinalizando que um 6º card foi planejado. Quando ele chegar, o layout quebra em 5+1 órfão. O `auto-fit`/`minmax` da linha 379 (que a skill `03 §8` recomenda explicitamente) já resolveria sozinho, sem `!important`.
@@ -589,12 +589,52 @@ Lição de método: uma busca por `grep` no arquivo de estilo principal não bas
 | Portal servindo as rotas | 8/8 HTTP 200 |
 | `pytest tests/` | **41 passed** |
 
-### Sprint 4 — Mobile e performance (~1,5 dia)
-15. **A7** — tabelas → cards empilhados < 768px (3h)
-16. **A9** — decidir e corrigir o carregamento da Inter (45min)
-17. **M3** — remover `will-change` em massa (10min)
-18. **M9** — pausar polling com `visibilitychange` (20min)
-19. **M10** — grid fluido sem `!important` (20min)
+### ✅ Sprint 4 — Mobile e performance — CONCLUÍDO em 2026-08-02
+
+15. ✅ **A7** — 9 tabelas viram cards empilhados < 768px, com semântica preservada
+16. ✅ **A9** — `@import` → `preconnect` + `link`; peso 800 removido
+17. ✅ **M3** — `will-change` em massa removido
+18. ✅ **M9** — polling pausado com `visibilitychange`
+19. ✅ **M10** — grid fluido, sem media query e sem `!important`
+
+**Arquivos alterados:** `static/style.css`, `static/ui-common.js`, 8 templates.
+
+**A decisão do A9 estava documentada no próprio repositório.**
+A auditoria deixou em aberto se a Inter é fonte de marca ou peso morto. `docs/guia-design-apple.md` §3 resolve: *"A Apple usa SF Pro como fonte principal. Para projetos web, use a stack a seguir para garantir a fonte nativa do sistema"* — com a Inter listada por último e descrita como "alternativa gratuita". A ordem atual (`-apple-system` → `BlinkMacSystemFont` → `Inter`) portanto está **correta e intencional**: macOS/iOS recebem SF Pro real, e a Inter atende Windows — plataforma principal deste produto, já que o agente roda em Windows Server. Reordenar teria mudado a aparência no macOS sem ganho.
+
+Só o mecanismo de carga mudou: `@import` (cadeia serial) → `preconnect` + `<link>` no `<head>` (paralelo). Bônus: o peso **800 era baixado e nunca usado** — o projeto só usa 400, 500, 600 e 700. Removido da URL.
+
+A CSP já autorizava `fonts.googleapis.com` em `style-src` e `fonts.gstatic.com` em `font-src` (`app/main.py:133-134`), então a mudança não exigiu ajuste de segurança.
+
+**O A7 tinha uma armadilha de acessibilidade.**
+O padrão usual de tabela responsiva aplica `display: block` em `table`/`tr`/`td`. Isso funciona visualmente, mas faz o navegador **descartar os papéis implícitos** de tabela — o leitor de tela perde a associação linha/coluna e passa a ler uma lista solta de valores. Seria uma regressão de acessibilidade disfarçada de melhoria de acessibilidade.
+
+Por isso os papéis foram declarados explicitamente: `role="table"` nas 9 tabelas, `role="rowgroup"` em `thead`/`tbody`, `role="columnheader"` nos 35 `<th>`, e `role="row"`/`role="cell"` nas linhas geradas por JS. Com os papéis explícitos, a semântica sobrevive ao `display: block`. O `<thead>` sai da tela por `clip`, não por `display: none`, para permanecer na árvore de acessibilidade.
+
+**Refinamentos incorporados:**
+
+- **`data-label` conferido contra o cabeçalho de cada coluna.** As 34 etiquetas foram cruzadas com os `<th>` correspondentes, na ordem. Algumas foram encurtadas de propósito para caber em 375px ("Documento (CPF/CNPJ)" → "Documento", "Última data verificada" → "Última verificação").
+- **Coluna de ações sem `data-label`.** Em `/usuarios`, a última coluna são botões; um rótulo "Ações" à esquerda deles seria ruído. O CSS trata `td:not([data-label])` alinhando à esquerda, sem prefixo.
+- **Regressão evitada no helper do Sprint 1.** Abaixo de 768px o `.table-scroll` vira `overflow: visible`, mas `scrollHeight > clientHeight` continua verdadeiro num elemento que não rola — `initRegioesRolaveis()` teria adicionado `tabindex="0"` a cada tabela, criando paradas de tabulação fantasma no mobile. O helper agora consulta `getComputedStyle` e só considera rolável o que de fato rola.
+- **Linhas de estado excluídas do layout de cards.** `renderEmptyRow()` e `renderSkeletonRows()` passaram a marcar `.cg-state-row`; sem isso, o estado vazio viraria um "card" com rótulo de coluna. As linhas `.hint-only` de `/duplicidades` receberam a mesma marca.
+- **`aria-label` nos checkboxes de seleção.** Em `/acompanhamento`, a coluna "Selecionar" tinha checkboxes sem nome acessível — no layout de cards, sem o cabeçalho visível, ficariam ainda mais ambíguos. Agora anunciam "Acompanhar «nome do titular»".
+- **`min(180px, 100%)` no grid dos cards.** `minmax(180px, 1fr)` puro transbordaria o container em telas de 320px.
+- **Busca imediata ao voltar para a aba.** Ao retomar a visibilidade, o polling não espera o próximo ciclo de 60s — o dado pode estar uma hora desatualizado.
+
+**Validação executada:**
+
+| Verificação | Resultado |
+|---|---|
+| `data-label` × cabeçalho de coluna | **34/34** conferem, na ordem |
+| Papéis ARIA aplicados | 9 `table`, 35 `columnheader`, rows/cells no JS |
+| `@import` no CSS servido | **0** (era 1) |
+| `will-change` em massa | removido; resta 1 uso delimitado |
+| Sintaxe dos blocos `<script>` | 8/8 compilam |
+| `node --check` em `ui-common.js` | OK |
+| Chaves CSS | 300/300 |
+| Balanço de `<div>` | 8/8 |
+| Portal servindo as rotas | 8/8 HTTP 200 |
+| `pytest tests/` | **41 passed** |
 
 ### Backlog — Débito técnico (~1 dia)
 20. **A8** — recuperação de senha e toggle de visibilidade no login

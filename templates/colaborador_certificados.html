@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Acompanhamento — Certificados</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v=s4-mobile-2026-08" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -118,11 +122,11 @@
         <p class="hint" id="painel-hint"></p>
         <div class="table-scroll-anchor">
           <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados do colaborador">
-            <table>
-              <thead>
-                <tr><th>Nome</th><th>CNPJ/CPF</th><th>Vencimento</th><th>Dias restantes</th><th>Status</th></tr>
+            <table role="table">
+              <thead role="rowgroup">
+                <tr role="row"><th role="columnheader">Nome</th><th role="columnheader">CNPJ/CPF</th><th role="columnheader">Vencimento</th><th role="columnheader">Dias restantes</th><th role="columnheader">Status</th></tr>
               </thead>
-              <tbody id="tbody-painel"></tbody>
+              <tbody role="rowgroup" id="tbody-painel"></tbody>
             </table>
           </div>
         </div>
@@ -160,9 +164,9 @@
         </div>
         <div class="table-scroll-anchor">
           <div class="table-scroll" tabindex="0" role="region" aria-label="Seleção de certificados">
-            <table>
-              <thead><tr><th>Selecionar</th><th>Nome</th><th>CNPJ/CPF</th><th>Status atual</th><th>Vencimento</th></tr></thead>
-              <tbody id="tbody-selecao"></tbody>
+            <table role="table">
+              <thead role="rowgroup"><tr role="row"><th role="columnheader">Selecionar</th><th role="columnheader">Nome</th><th role="columnheader">CNPJ/CPF</th><th role="columnheader">Status atual</th><th role="columnheader">Vencimento</th></tr></thead>
+              <tbody role="rowgroup" id="tbody-selecao"></tbody>
             </table>
           </div>
         </div>
@@ -192,7 +196,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s4-mobile-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
@@ -292,12 +296,12 @@
           styleStr = "background:var(--row-tint-warning);";
         }
         return `
-        <tr style="${styleStr}">
-          <td><input type="checkbox" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
-          <td>${esc(it.nome || "—")}</td>
-          <td>${esc(it.documento || "—")}</td>
-          <td>${badgeStatus(it.status)}</td>
-          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+        <tr role="row" style="${styleStr}">
+          <td role="cell" data-label="Selecionar"><input type="checkbox" aria-label="Acompanhar ${esc(it.nome || it.documento || "certificado")}" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
+          <td role="cell" data-label="Nome">${esc(it.nome || "—")}</td>
+          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento || "—")}</td>
+          <td role="cell" data-label="Status">${badgeStatus(it.status)}</td>
+          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>`;
       }).join("");
       }
@@ -382,12 +386,12 @@
           styleStr = "background:var(--row-tint-warning);";
         }
         return `
-        <tr style="${styleStr}">
-          <td>${esc(it.nome)}</td>
-          <td>${esc(it.documento)}</td>
-          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-          <td>${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
-          <td>${badgeStatus(it.status)}</td>
+        <tr role="row" style="${styleStr}">
+          <td role="cell" data-label="Nome">${esc(it.nome)}</td>
+          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento)}</td>
+          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+          <td role="cell" data-label="Dias restantes">${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
+          <td role="cell" data-label="Status">${badgeStatus(it.status)}</td>
         </tr>`;
       }).join("");
       }

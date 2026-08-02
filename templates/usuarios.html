@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Usuários — Analise Certificado</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="/static/style.css?v=s4-mobile-2026-08" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -191,17 +195,17 @@
             <div class="table-container" id="table-container-users">
                 <div class="table-scroll-anchor">
                     <div class="table-scroll" tabindex="0" role="region" aria-label="Lista de usuários">
-                        <table class="user-table">
-                            <thead>
-                                <tr>
-                                    <th>Nome</th>
-                                    <th>E-mail</th>
-                                    <th>Nível</th>
-                                    <th>Criado em</th>
-                                    <th>Ações</th>
+                        <table class="user-table" role="table">
+                            <thead role="rowgroup">
+                                <tr role="row">
+                                    <th role="columnheader">Nome</th>
+                                    <th role="columnheader">E-mail</th>
+                                    <th role="columnheader">Nível</th>
+                                    <th role="columnheader">Criado em</th>
+                                    <th role="columnheader">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody id="user-list-body">
+                            <tbody role="rowgroup" id="user-list-body">
                                 <!-- Preenchido via JS -->
                             </tbody>
                         </table>
@@ -211,7 +215,7 @@
         </section>
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s4-mobile-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
 
@@ -277,12 +281,12 @@
             }
 
             body.innerHTML = users.map(u => `
-                <tr>
-                    <td><strong>${esc(u.full_name || '—')}</strong></td>
-                    <td>${esc(u.email)}</td>
-                    <td><span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span></td>
-                    <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
-                    <td>
+                <tr role="row">
+                    <td role="cell" data-label="Nome"><strong>${esc(u.full_name || '—')}</strong></td>
+                    <td role="cell" data-label="E-mail">${esc(u.email)}</td>
+                    <td role="cell" data-label="Nível"><span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span></td>
+                    <td role="cell" data-label="Criado em">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                    <td role="cell">
                         <div class="row-actions">
                             <button class="btn-action" data-action="editar" data-id="${u.id}">Editar</button>
                             <button class="btn-action" data-action="redefinir" data-id="${u.id}">Redefinir senha</button>

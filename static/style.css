@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* A fonte NÃO é carregada aqui. `@import` dentro do CSS cria uma cadeia serial
+   (baixa style.css -> descobre o @import -> só então busca a fonte), o que
+   atrasa o LCP. O carregamento foi movido para <link rel="preconnect|preload">
+   no <head> de cada template, onde dispara em paralelo (08 §7).
+
+   Ordem da stack conforme docs/guia-design-apple.md §3: fonte nativa do sistema
+   primeiro (SF Pro no macOS/iOS), Inter como alternativa livre — é ela que
+   atende Windows, plataforma principal deste produto. */
 
 :root {
   /* Font Family - Fallback to system fonts and Inter */
@@ -410,16 +417,18 @@ textarea:focus-visible {
 /* Cards */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  /* min(180px, 100%) evita transbordo em telas de 320px, onde 180px fixos
+     estourariam o container (03 §8). */
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 0.85rem;
   margin-bottom: 2rem;
 }
 
-@media (min-width: 960px) {
-  .cards-grid {
-    grid-template-columns: repeat(5, 1fr) !important;
-  }
-}
+/* Sem media query e sem !important: `auto-fit` + `minmax` resolve sozinho
+   (03 §8). Com 5 cards a ~180px mínimos, cabem os 5 em linha a partir de
+   ~960px — o mesmo resultado da regra anterior, mas sem quebrar se um 6º card
+   for adicionado (a regra fixa de 5 colunas deixaria um órfão; o CSS já previa
+   um :nth-child(6) na animação, sinal de que isso estava planejado). */
 
 .dashboard-card {
   background: var(--surface);
@@ -1405,13 +1414,13 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .cards-grid > .dashboard-card:nth-child(5) { animation-delay: 0.25s; }
 .cards-grid > .dashboard-card:nth-child(6) { animation-delay: 0.30s; }
 
-/* Apply will-change to active inputs, buttons and interactive cards */
-button,
-.path-input,
-select,
-.sidebar-nav a {
-  will-change: background-color, border-color, transform, box-shadow;
-}
+/* `will-change` em massa foi REMOVIDO daqui (08 §7).
+   Aplicá-lo a todo button/input/select/link da sidebar promovia dezenas de
+   elementos a camadas de composição próprias na GPU, permanentemente — e as
+   transições envolvidas são de cor, que não se beneficiam de promoção.
+   Em /duplicidades, com as três paginações, eram dezenas de camadas ociosas.
+   O único `will-change` mantido está nos 5 cards do dashboard, que animam
+   transform/box-shadow de fato e são um conjunto pequeno e delimitado. */
 
 /* Respeita prefers-reduced-motion (WCAG 2.3.3).
    NÃO zerar `transform` aqui: neste projeto transform também é layout — o drawer
@@ -1767,6 +1776,101 @@ body.sidebar-open .sidebar-backdrop {
 
   .table-container {
     padding: 1rem;
+  }
+
+  /* ----------------------------------------------------------------------
+     TABELA -> CARDS EMPILHADOS (07 §7)
+     Rolagem horizontal em 375px obriga o usuário a arrastar de lado e perder
+     a referência da coluna. Aqui cada linha vira um card com rótulo inline.
+
+     ATENÇÃO: `display: block` em elementos de tabela faz o navegador
+     descartar os papéis implícitos (table/row/cell) e o leitor de tela perde
+     a associação linha/coluna. Por isso os `role` estão explícitos no HTML e
+     no JS que gera as linhas — sem eles, isto seria uma regressão de
+     acessibilidade disfarçada de melhoria.
+     ---------------------------------------------------------------------- */
+  .table-scroll {
+    max-height: none;   /* sem viewport aninhado: os cards rolam com a página */
+    overflow: visible;
+  }
+
+  .table-scroll table,
+  .table-scroll tbody,
+  .table-scroll tr,
+  .table-scroll td {
+    display: block;
+    width: auto;
+  }
+
+  /* Cabeçalho sai da tela mas permanece na árvore de acessibilidade. */
+  .table-scroll thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .table-scroll tbody tr:not(.cg-state-row) {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: var(--sp-3);
+    margin-bottom: var(--sp-3);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .table-scroll tbody tr:not(.cg-state-row) td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--sp-4);
+    padding: var(--sp-2) 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+  }
+
+  .table-scroll tbody tr:not(.cg-state-row) td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .table-scroll tbody tr:not(.cg-state-row) td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 45%;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* Célula sem data-label (ex.: coluna de ações) ocupa a largura toda. */
+  .table-scroll tbody tr:not(.cg-state-row) td:not([data-label])::before {
+    content: none;
+  }
+
+  .table-scroll tbody tr:not(.cg-state-row) td:not([data-label]) {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* Linhas de estado (vazio/erro/skeleton) continuam ocupando a largura toda. */
+  .table-scroll tbody tr.cg-state-row {
+    display: block;
+  }
+
+  .table-scroll tbody tr.cg-state-row td {
+    display: block;
+    width: 100%;
+  }
+
+  .table-scroll .empty-state-card {
+    padding: 2rem 1rem;
   }
 
   table th, table td {

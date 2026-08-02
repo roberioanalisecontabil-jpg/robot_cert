@@ -136,7 +136,14 @@ function initSidebarToggle() {
 function atualizarRegioesRolaveis(raiz) {
   const escopo = raiz || document;
   escopo.querySelectorAll(".table-scroll").forEach((el) => {
-    const rola = el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+    // Abaixo de 768px o container vira `overflow: visible` (layout de cards).
+    // Sem esta checagem, `scrollHeight > clientHeight` continuaria verdadeiro
+    // num elemento que não rola, criando uma parada de tabulação fantasma.
+    const est = window.getComputedStyle(el);
+    const podeRolar = /(auto|scroll)/.test(est.overflowY + " " + est.overflowX);
+    const rola =
+      podeRolar &&
+      (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
     if (rola) {
       el.setAttribute("tabindex", "0");
       el.setAttribute("role", "region");
@@ -375,6 +382,9 @@ function renderEmptyRow(tbody, colspan, options = {}) {
   el.innerHTML = "";
 
   const tr = document.createElement("tr");
+  // Marcada como linha de estado: o layout de cards no mobile a ignora,
+  // senão o estado vazio viraria um "card" com rótulo de coluna.
+  tr.className = "cg-state-row";
   const td = document.createElement("td");
   td.colSpan = colspan || 1;
   td.style.padding = "0";
@@ -427,6 +437,7 @@ function renderSkeletonRows(tbody, linhas = 6, colunas = 5) {
   el.innerHTML = "";
   for (let i = 0; i < linhas; i++) {
     const tr = document.createElement("tr");
+    tr.className = "cg-state-row cg-skeleton-row";
     tr.setAttribute("aria-hidden", "true");
     for (let c = 0; c < colunas; c++) {
       const td = document.createElement("td");
@@ -872,8 +883,21 @@ function initNotifications() {
   });
 
   fetchNotifications();
-  // Atualização Automática a cada 60s
-  setInterval(fetchNotifications, 60000);
+
+  // Atualização automática a cada 60s, PAUSADA com a aba em segundo plano.
+  // Antes o timer rodava para sempre: uma aba deixada aberta o dia inteiro
+  // gerava ~480 requisições autenticadas que ninguém veria (08 §6).
+  const INTERVALO_NOTIF = 60000;
+  let timerNotif = setInterval(fetchNotifications, INTERVALO_NOTIF);
+
+  document.addEventListener("visibilitychange", () => {
+    clearInterval(timerNotif);
+    if (document.visibilityState === "visible") {
+      // Busca imediata ao voltar: o dado pode estar 1h desatualizado.
+      fetchNotifications();
+      timerNotif = setInterval(fetchNotifications, INTERVALO_NOTIF);
+    }
+  });
 }
 
 if (document.readyState === "loading") {

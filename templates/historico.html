@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Histórico — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css?v=s4-mobile-2026-08" />
 </head>
 <body>
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -92,16 +96,16 @@
       </div>
       <div class="table-scroll-anchor">
         <div class="table-scroll" tabindex="0" role="region" aria-label="Histórico de certificados">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>CNPJ/CPF</th>
-                <th>Última data verificada</th>
-                <th>Vencimento do certificado</th>
+          <table role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader">Nome</th>
+                <th role="columnheader">CNPJ/CPF</th>
+                <th role="columnheader">Última data verificada</th>
+                <th role="columnheader">Vencimento do certificado</th>
               </tr>
             </thead>
-            <tbody id="tbody-historico"></tbody>
+            <tbody role="rowgroup" id="tbody-historico"></tbody>
           </table>
         </div>
       </div>
@@ -138,7 +142,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s4-mobile-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_HIST = "cg_per_page_historico";
     const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
@@ -243,11 +247,11 @@
       tb.innerHTML = rows
         .map(
           (it) => `
-        <tr>
-          <td>${esc(it.nome)}</td>
-          <td>${esc(it.documento || "—")}</td>
-          <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
-          <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+        <tr role="row">
+          <td role="cell" data-label="Nome">${esc(it.nome)}</td>
+          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento || "—")}</td>
+          <td role="cell" data-label="Última verificação">${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
+          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>
       `
         )

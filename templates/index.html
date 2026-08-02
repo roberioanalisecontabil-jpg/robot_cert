@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="stylesheet" href="/static/style.css?v=s3-a11y-aa-2026-08" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="/static/style.css?v=s4-mobile-2026-08" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -177,17 +181,17 @@
 
         <div class="table-scroll-anchor">
           <div class="table-scroll" tabindex="0" role="region" aria-label="Tabela de certificados">
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Nome (titular)</th>
-                  <th>Emissão</th>
-                  <th>Vencimento</th>
-                  <th>CNPJ / CPF</th>
+            <table role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th role="columnheader">Status</th>
+                  <th role="columnheader">Nome (titular)</th>
+                  <th role="columnheader">Emissão</th>
+                  <th role="columnheader">Vencimento</th>
+                  <th role="columnheader">CNPJ / CPF</th>
                 </tr>
               </thead>
-              <tbody id="tbody"></tbody>
+              <tbody role="rowgroup" id="tbody"></tbody>
             </table>
           </div>
         </div>
@@ -231,7 +235,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s3-a11y-aa-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s4-mobile-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -426,18 +430,20 @@
           return;
         }
 
+        // role="row"/"cell" e data-label sustentam o layout de cards < 768px
+        // (ver .table-scroll no media query de style.css).
         tb.innerHTML = items
           .map(
             (it) =>
-              "<tr><td>" +
+              "<tr role='row'><td role='cell' data-label='Status'>" +
               badge(it) +
-              "</td><td>" +
+              "</td><td role='cell' data-label='Nome'>" +
               esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
-              "</td><td>" +
+              "</td><td role='cell' data-label='Emissão'>" +
               fmt(it.not_before) +
-              "</td><td>" +
+              "</td><td role='cell' data-label='Vencimento'>" +
               fmt(it.not_after) +
-              "</td><td class='td-doc'>" +
+              "</td><td role='cell' data-label='CNPJ / CPF' class='td-doc'>" +
               colTipo(it) +
               "</td></tr>"
           )
