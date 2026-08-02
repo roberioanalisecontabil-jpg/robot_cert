@@ -73,13 +73,29 @@ async function health() {
 }
 
 function applySidebarState() {
-  const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE) === "1";
-  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  if (window.innerWidth > 768) {
+    const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE) === "1";
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+  }
 }
 
 function toggleSidebar() {
-  const collapsed = document.body.classList.toggle("sidebar-collapsed");
-  localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE, collapsed ? "1" : "0");
+  if (window.innerWidth <= 768) {
+    const isOpen = document.body.classList.toggle("sidebar-open");
+    let backdrop = document.getElementById("sidebar-backdrop");
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.id = "sidebar-backdrop";
+      backdrop.className = "sidebar-backdrop";
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener("click", () => {
+        document.body.classList.remove("sidebar-open");
+      });
+    }
+  } else {
+    const collapsed = document.body.classList.toggle("sidebar-collapsed");
+    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE, collapsed ? "1" : "0");
+  }
 }
 
 function initSidebarToggle() {

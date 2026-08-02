@@ -1575,3 +1575,147 @@ select,
 @keyframes notif-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   FASE 2: RESPONSIVIDADE MOBILE-FIRST & TOKENS DE DESIGN SYSTEM
+   ========================================================================== */
+
+/* Overlay escuro de fundo para menu mobile */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s var(--ease-out), visibility 0.25s var(--ease-out);
+}
+
+body.sidebar-open .sidebar-backdrop {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Topbar responsiva com ações (Hamburger, tema, notificações) */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.sidebar-toggle-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: var(--bg);
+}
+
+/* Responsividade: Telas Médias e Pequenas (Tablets e Mobiles < 768px) */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s var(--ease-spring);
+    box-shadow: var(--shadow-lg);
+    width: 270px;
+  }
+
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+    padding: 1.25rem 1rem !important;
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+  }
+
+  .page-header p {
+    font-size: 13px;
+  }
+
+  .cards-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .dashboard-card {
+    padding: 0.85rem 1rem;
+  }
+
+  .card-number {
+    font-size: 22px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .toolbar__actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .toolbar__actions input[type="search"],
+  .toolbar__actions select,
+  .toolbar__actions button {
+    width: 100%;
+    min-width: 100% !important;
+  }
+
+  .table-container {
+    padding: 1rem;
+  }
+
+  table th, table td {
+    padding: 0.65rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .cg-page-nav__row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+/* Responsividade: Dispositivos Móveis Muito Pequenos (< 480px) */
+@media (max-width: 480px) {
+  .cards-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card-title {
+    font-size: 10px;
+  }
+
+  .card-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .card-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+}
