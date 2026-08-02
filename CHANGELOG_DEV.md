@@ -12,9 +12,9 @@
 |--------------------|--------------------------------------------|
 | **Data da última atualização** | 2026-08-02                  |
 | **Branch ativa**   | main                                       |
-| **Versão/Build**   | Configuração Vercel Serverless pronta      |
-| **Última tarefa concluída** | Verificação + Estrutura para Vercel (api/index.py + vercel.json) |
-| **Próxima tarefa** | Importar repositório no Vercel e configurar Env Vars |
+| **Versão/Build**   | Deploy Vercel ativo em produção            |
+| **Última tarefa concluída** | Deploy e validação no Vercel (.vercel.app) |
+| **Próxima tarefa** | Monitoramento e validação de requisições do Agente Windows |
 
 ---
 
@@ -44,15 +44,16 @@ robot_cert/
 
 ---
 
-### 🗓️ 2026-08-02 — Configuração Completa e Verificação para Deploy no Vercel
+### 🗓️ 2026-08-02 — Configuração Completa e Deploy de Sucesso no Vercel
 
-**Objetivo da sessão:** Preparar e verificar o projeto FastAPI para rodar nativamente como Serverless Function no Vercel.
+**Objetivo da sessão:** Preparar e verificar o projeto FastAPI para rodar nativamente como Serverless Function no Vercel e colocar o portal no ar.
 
 **Ações realizadas:**
 - Criado o arquivo `api/index.py` importando `app` de `app.main` para padrão nativo Vercel Python.
 - Criado `vercel.json` configurado com `@vercel/python`, rotas genéricas (`/(.*)` -> `api/index.py`) e empacotamento explícito dos assets (`templates/**`, `static/**`).
 - Protegidos os hooks de inicialização e salvamento (`app/main.py` e `app/settings_state.py`) com blocos `try...except OSError` para imunidade contra o sistema de arquivos read-only do Vercel.
 - Validada a importação limpa da aplicação via `api/index.py`.
+- **Deploy realizado com sucesso no Vercel!** O portal web agora está operando em produção no ambiente serverless.
 
 **Arquivos criados / modificados:**
 - `api/index.py` → Entrypoint da função serverless
@@ -60,11 +61,11 @@ robot_cert/
 - `app/main.py` → Proteção `OSError` na startup hook
 - `app/settings_state.py` → Proteção `OSError` na `_save_file`
 
-**Próximos passos (Ação do Usuário):**
-- [ ] Conectar conta GitHub no Vercel (https://vercel.com)
-- [ ] Importar o repositório `roberioanalisecontabil-jpg/robot_cert`
-- [ ] Definir as variáveis de ambiente: `JWT_SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `API_KEY`
-- [ ] Fazer o deploy e testar a URL `.vercel.app`
+**Status do Deploy:**
+- [x] Conectar conta GitHub no Vercel
+- [x] Importar o repositório `roberioanalisecontabil-jpg/robot_cert`
+- [x] Definir variáveis de ambiente (`JWT_SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `API_KEY`)
+- [x] Deploy concluído e portal funcionando no Vercel.
 
 ---
 
