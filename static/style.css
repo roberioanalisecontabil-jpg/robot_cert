@@ -879,28 +879,14 @@ select:focus {
 }
 
 /* Sidebar toggle + theme toggle — barra do topo */
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
+/* .topbar-actions e .sidebar-toggle-btn eram declaradas duas vezes neste
+   arquivo, com valores conflitantes — a segunda vencia pela cascata e a
+   primeira era código morto que só confundia. Definição única mais abaixo,
+   na seção de responsividade. */
 
 .sidebar-toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  width: 40px;
-  height: 36px;
-  border-radius: 8px;
-  font-size: 1.05rem;
   line-height: 1;
   margin-bottom: 0;
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .sidebar-toggle-btn:hover {
@@ -1397,13 +1383,23 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   }
 }
 
+/* `backwards`, NUNCA `both`.
+   Com `both` o último keyframe fica aplicado para sempre — e ele contém
+   `transform: translateY(0)`. Um transform diferente de `none` cria um contexto
+   de empilhamento, então cada filho de .main-content virava um contexto próprio,
+   pintado em ordem de DOM. O painel de notificações (dentro do topbar, que é o
+   primeiro filho) ficava preso atrás dos cards e da tabela, e nenhum z-index
+   dentro dele resolvia.
+   `backwards` mantém o mesmo efeito visual (segura o estado inicial durante o
+   delay) mas devolve o elemento ao estado natural ao terminar — sem transform
+   residual, sem contexto de empilhamento. */
 .main-content > * {
-  animation: fadeUp var(--duration-slow) var(--ease-spring) both;
+  animation: fadeUp var(--duration-slow) var(--ease-spring) backwards;
 }
 
 /* Stagger cards animation */
 .cards-grid > .dashboard-card {
-  animation: fadeUp var(--duration-slow) var(--ease-spring) both;
+  animation: fadeUp var(--duration-slow) var(--ease-spring) backwards;
   will-change: transform, box-shadow;
 }
 
@@ -1732,6 +1728,18 @@ body.sidebar-open .sidebar-backdrop {
   justify-content: space-between;
   margin-bottom: 1.5rem;
   gap: 1rem;
+
+  /* Segunda linha de defesa para o painel de notificações.
+     Mesmo com `animation-fill-mode: backwards` removendo os contextos de
+     empilhamento residuais, os cards do dashboard ainda criam contexto próprio
+     por causa do `will-change: transform`. Posicionar o topbar garante que ele
+     e o dropdown fiquem acima do conteúdo em qualquer caso.
+
+     z-index 5 e não 100: precisa ficar ACIMA dos irmãos em .main-content
+     (que pintam em 0) e ABAIXO do backdrop (9) e da sidebar (10), senão o
+     drawer mobile deixaria de cobrir o conteúdo. */
+  position: relative;
+  z-index: 5;
 }
 
 .sidebar-toggle-btn {
