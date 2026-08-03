@@ -859,7 +859,7 @@
         }
         const j = await r.json();
         st.textContent = "";
-        const origem = j.origem_dados === "ultimo_snapshot" ? "Último snapshot (agente)" : "Scan local no servidor";
+        const origem = j.origem_dados === "ultimo_snapshot" ? "Agente Windows" : "Scan local no servidor";
         meta.textContent = `${origem} · ${j.total_itens_analisados || 0} ficheiro(s) · atualizado: ${j.scanned_at || "—"}`;
 
       const gci = j.grupos_certificado_igual || [];

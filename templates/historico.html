@@ -412,7 +412,7 @@
           atualizarPaginacaoHist(null);
         }
         setBannerAviso("table-container-hist", mensagemLimiteExportacao(j.paginacao));
-        st.textContent = `Snapshots lidos: ${j.snapshots_lidos || 0}`;
+        st.textContent = j.atualizado_em ? "Atualizado em: " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
         const rows = j.itens || [];
         renderLinhasHistorico(rows);
         document.getElementById("count-hint").textContent =
