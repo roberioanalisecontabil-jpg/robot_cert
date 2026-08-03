@@ -13,7 +13,7 @@ from app import config
 logger = logging.getLogger(__name__)
 
 # Comandos reconhecidos pelo agente
-COMMANDS = frozenset({"mover_vencidos", "rescan", "ping"})
+COMMANDS = frozenset({"mover_vencidos", "rescan", "ping", "instalar_certificados"})
 
 _file_lock = threading.Lock()
 QUEUE_FILE = config.ROOT / "data" / "agent_command_queue.json"

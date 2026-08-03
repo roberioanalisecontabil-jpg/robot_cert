@@ -53,3 +53,16 @@ HISTORICO_CACHE_TTL_SEC = _env_int(
     lo=0,
     hi=86400,
 )
+
+# ── Módulo Instalador de Certificados ──────────────────────────────────
+# Chave AES-256 para cifrar/decifrar PFX em repouso no banco (hex, 64 chars = 32 bytes).
+# Gere com: python -c "import secrets; print(secrets.token_hex(32))"
+CERT_ENCRYPTION_KEY = (os.getenv("CERT_ENCRYPTION_KEY") or "").strip()
+
+# TTL (minutos) dos tokens de instalação. Padrão: 5 min.
+CERT_INSTALL_TOKEN_TTL_MIN = _env_int(
+    "CERT_INSTALL_TOKEN_TTL_MIN",
+    default=5,
+    lo=1,
+    hi=60,
+)

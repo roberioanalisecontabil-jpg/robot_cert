@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Instalador de Certificados — Analise Certificado</title>
+    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="/static/style.css?v=cg-v2-fluid" />
+  </head>
+  <body>
+    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">
+          <img src="/static/logo.png?v=brand-gold-v1" alt="Analise Certificado">
+        </div>
+        <div class="brand-text">
+          <h2>Analise Certificado</h2>
+          <span>Monitor de Certificados</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+          </svg>
+          Dashboard
+        </a>
+        <a href="/historico">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Histórico
+        </a>
+        <a href="/vencidos">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Vencidos
+        </a>
+        <a href="/duplicidades">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+          </svg>
+          Duplicidades
+        </a>
+        <a href="/acompanhamento">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l3-3 3 2 4-5" />
+          </svg>
+          Acompanhamento
+        </a>
+        <a href="/instalador" class="active" id="nav-installer" style="display: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" />
+          </svg>
+          Instalador
+        </a>
+        <a href="/usuarios" id="nav-users" style="display: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+          </svg>
+          Usuários
+        </a>
+        <a href="/configuracao" id="nav-config" style="display: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Configuração
+        </a>
+        <a href="#" data-action="logout" style="margin-top: auto; color: var(--sidebar-danger);">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+          </svg>
+          Sair
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+      <header class="page-header">
+        <h1>Instalador de Certificados Digitais</h1>
+        <p>Instale certificados com segurança nas máquinas clientes marcados como Não-Exportáveis.</p>
+      </header>
+
+      <!-- Painel de Ação de Instalação -->
+      <section class="card" style="margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+          <div>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Enviar Certificados para Estação</h2>
+            <p class="text-muted" style="font-size: 0.875rem;">Selecione os certificados abaixo e a máquina destino para disparar a instalação não-exportável via Agente.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <label for="selectTargetMachine" style="font-weight: 500; font-size: 0.875rem;">Máquina Destino:</label>
+            <input type="text" id="inputTargetMachine" class="form-control" placeholder="ex.: Meu_Servidor_Windows ou default" style="width: 240px;" value="default" />
+            <button id="btnPrepareInstall" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" />
+              </svg>
+              Instalar Selecionados
+            </button>
+          </div>
+        </div>
+
+        <div id="installMessageArea"></div>
+
+        <!-- Tabela de Certificados Disponíveis no Cofre -->
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">
+                  <input type="checkbox" id="chkSelectAllCerts" title="Selecionar Todos" />
+                </th>
+                <th>Titular / CNPJ / CPF</th>
+                <th>Máquina Origem</th>
+                <th>Validade</th>
+                <th>Fingerprint (SHA-256)</th>
+              </tr>
+            </thead>
+            <tbody id="tblAvailableCerts">
+              <tr>
+                <td colspan="5" class="text-center" style="padding: 2rem;">Carregando certificados no cofre...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Auditoria e Logs de Instalação -->
+      <section class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <div>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Trilha de Auditoria de Instalações</h2>
+            <p class="text-muted" style="font-size: 0.875rem;">Histórico completo de solicitações, resgates e status de execução.</p>
+          </div>
+          <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar Logs</button>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Data / Hora</th>
+                <th>Evento</th>
+                <th>Solicitante</th>
+                <th>Máquina Destino</th>
+                <th>Status</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody id="tblInstallLogs">
+              <tr>
+                <td colspan="6" class="text-center" style="padding: 2rem;">Carregando histórico...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/ui-common.js?v=cg-v2-fluid"></script>
+    <script nonce="{{ nonce }}">
+      document.addEventListener("DOMContentLoaded", function() {
+        // Verificar perfil Admin
+        const role = localStorage.getItem("user_role");
+        if (role === "admin") {
+          const navInst = document.getElementById("nav-installer");
+          const navUsers = document.getElementById("nav-users");
+          const navConfig = document.getElementById("nav-config");
+          if (navInst) navInst.style.display = "flex";
+          if (navUsers) navUsers.style.display = "flex";
+          if (navConfig) navConfig.style.display = "flex";
+        } else {
+          window.location.href = "/";
+          return;
+        }
+
+        loadAvailableCerts();
+        loadInstallLogs();
+
+        // Checkbox selecionar todos
+        const chkSelectAll = document.getElementById("chkSelectAllCerts");
+        if (chkSelectAll) {
+          chkSelectAll.addEventListener("change", function() {
+            const chks = document.querySelectorAll(".chk-cert-select");
+            chks.forEach(c => c.checked = chkSelectAll.checked);
+          });
+        }
+
+        // Botão de instalar
+        document.getElementById("btnPrepareInstall").addEventListener("click", handlePrepareInstall);
+        document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
+      });
+
+      async function loadAvailableCerts() {
+        const tbody = document.getElementById("tblAvailableCerts");
+        const token = localStorage.getItem("access_token");
+        try {
+          const res = await fetch("/api/cert-installer/available", {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const certs = data.certificates || [];
+
+          if (certs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum certificado armazenado no cofre do servidor até o momento. O agente enviará os arquivos no próximo scan.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = certs.map(c => {
+            const doc = c.documento ? ` (${c.documento})` : "";
+            const nome = c.nome_titular || c.friendly_name || c.subject || "Sem Nome";
+            const val = c.not_after ? new Date(c.not_after).toLocaleDateString("pt-BR") : "N/D";
+            const fpShort = c.fingerprint ? c.fingerprint.substring(0, 16) + "..." : "N/D";
+
+            return `
+              <tr>
+                <td style="text-align: center;">
+                  <input type="checkbox" class="chk-cert-select" value="${c.id}" />
+                </td>
+                <td><strong>${escapeHtml(nome)}</strong>${escapeHtml(doc)}</td>
+                <td><span class="badge" style="background: var(--surface); border: 1px solid var(--border);">${escapeHtml(c.machine_id)}</span></td>
+                <td>${val}</td>
+                <td><code style="font-size: 0.8rem;">${fpShort}</code></td>
+              </tr>
+            `;
+          }).join("");
+        } catch (err) {
+          tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar certificados: ${escapeHtml(err.message)}</td></tr>`;
+        }
+      }
+
+      async function loadInstallLogs() {
+        const tbody = document.getElementById("tblInstallLogs");
+        const token = localStorage.getItem("access_token");
+        try {
+          const res = await fetch("/api/cert-installer/logs?limit=50", {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const logs = data.logs || [];
+
+          if (logs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum log de instalação registrado.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = logs.map(l => {
+            const dt = l.created_at ? new Date(l.created_at).toLocaleString("pt-BR") : "N/D";
+            let statusBadge = `<span class="badge" style="background: var(--bg); color: var(--text-muted);">${escapeHtml(l.event)}</span>`;
+            if (l.event === "CONCLUIDO") {
+              statusBadge = `<span class="badge" style="background: rgba(46, 125, 50, 0.15); color: #2e7d32; border: 1px solid rgba(46,125,50,0.3);">CONCLUÍDO</span>`;
+            } else if (l.event === "ERRO" || l.status === "FALHA") {
+              statusBadge = `<span class="badge" style="background: rgba(198, 40, 40, 0.15); color: #c62828; border: 1px solid rgba(198,40,40,0.3);">ERRO</span>`;
+            } else if (l.event === "REDIMIDO") {
+              statusBadge = `<span class="badge" style="background: rgba(2, 136, 209, 0.15); color: #0288d1; border: 1px solid rgba(2,136,209,0.3);">REDIMIDO</span>`;
+            } else if (l.event === "SOLICITADO") {
+              statusBadge = `<span class="badge" style="background: rgba(237, 108, 2, 0.15); color: #ed6c02; border: 1px solid rgba(237,108,2,0.3);">SOLICITADO</span>`;
+            }
+
+            return `
+              <tr>
+                <td>${dt}</td>
+                <td>${statusBadge}</td>
+                <td>${escapeHtml(l.user_email || l.user_id)}</td>
+                <td><strong>${escapeHtml(l.target_machine || "default")}</strong></td>
+                <td>${escapeHtml(l.status || "-")}</td>
+                <td style="font-size: 0.85rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.detail || "")}">${escapeHtml(l.detail || "-")}</td>
+              </tr>
+            `;
+          }).join("");
+        } catch (err) {
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar histórico: ${escapeHtml(err.message)}</td></tr>`;
+        }
+      }
+
+      async function handlePrepareInstall() {
+        const selectedChks = document.querySelectorAll(".chk-cert-select:checked");
+        const certIds = Array.from(selectedChks).map(c => c.value);
+        const targetMachine = document.getElementById("inputTargetMachine").value.strip ? document.getElementById("inputTargetMachine").value.strip() : document.getElementById("inputTargetMachine").value.trim();
+        const msgArea = document.getElementById("installMessageArea");
+
+        if (certIds.length === 0) {
+          msgArea.innerHTML = `<div class="toast toast-warning" style="margin-bottom: 1rem;">Selecione pelo menos um certificado na tabela para instalar.</div>`;
+          return;
+        }
+
+        if (!targetMachine) {
+          msgArea.innerHTML = `<div class="toast toast-warning" style="margin-bottom: 1rem;">Informe a máquina destino (ex.: Meu_Servidor_Windows ou default).</div>`;
+          return;
+        }
+
+        const btn = document.getElementById("btnPrepareInstall");
+        btn.disabled = true;
+        btn.innerText = "Solicitando...";
+
+        const token = localStorage.getItem("access_token");
+        try {
+          const res = await fetch("/api/cert-installer/prepare", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              certificate_ids: certIds,
+              target_machine: targetMachine
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Falha ao solicitar instalação");
+
+          msgArea.innerHTML = `<div class="toast toast-success" style="margin-bottom: 1rem;">Solicitação enviada com sucesso! Comando enfileirado para a máquina <strong>${escapeHtml(targetMachine)}</strong>. O agente instalará em instantes.</div>`;
+
+          // Limpar seleção
+          document.querySelectorAll(".chk-cert-select").forEach(c => c.checked = false);
+          const selectAll = document.getElementById("chkSelectAllCerts");
+          if (selectAll) selectAll.checked = false;
+
+          // Atualizar logs após 1 segundo
+          setTimeout(loadInstallLogs, 1000);
+        } catch (err) {
+          msgArea.innerHTML = `<div class="toast toast-danger" style="margin-bottom: 1rem;">Erro: ${escapeHtml(err.message)}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" /></svg> Instalar Selecionados`;
+        }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+    </script>
+  </body>
+</html>

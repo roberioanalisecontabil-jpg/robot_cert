@@ -1870,3 +1870,328 @@ def delete_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
         "message": "Seus dados operacionais associados foram permanentemente removidos."
     }
 
+
+# ══════════════════════════════════════════════════════════════════════════
+# MÓDULO INSTALADOR DE CERTIFICADOS DIGITAIS
+# ══════════════════════════════════════════════════════════════════════════
+
+from app import cert_installer
+
+
+class UploadPfxRequest(BaseModel):
+    """Payload enviado pelo agente com o PFX cifrado em trânsito."""
+    fingerprint: str
+    machine_id: str = "default"
+    pfx_b64: str  # PFX em base64 (cifrado em trânsito via TLS)
+    password: Optional[str] = None
+    nome_titular: Optional[str] = None
+    documento: Optional[str] = None
+    documento_tipo: Optional[str] = None
+    subject: Optional[str] = None
+    not_before: Optional[str] = None
+    not_after: Optional[str] = None
+    friendly_name: Optional[str] = None
+
+
+@app.post("/api/cert-installer/upload-pfx")
+def upload_pfx(
+    body: UploadPfxRequest,
+    request: Request,
+    token: auth.TokenData = Depends(require_auth),
+):
+    """
+    Recebe um PFX do agente, cifra com a chave do servidor e armazena.
+    Chamado pelo agente durante o ciclo de scan.
+    """
+    import base64 as b64mod
+    try:
+        pfx_bytes = b64mod.b64decode(body.pfx_b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="pfx_b64 inválido")
+
+    if len(pfx_bytes) > 50 * 1024 * 1024:  # 50 MB max
+        raise HTTPException(status_code=413, detail="PFX excede 50 MB")
+
+    try:
+        cert_id = cert_installer.upsert_pfx(
+            fingerprint=body.fingerprint,
+            pfx_bytes=pfx_bytes,
+            machine_id=body.machine_id,
+            password=body.password,
+            nome_titular=body.nome_titular,
+            documento=body.documento,
+            documento_tipo=body.documento_tipo,
+            subject=body.subject,
+            not_before=body.not_before,
+            not_after=body.not_after,
+            friendly_name=body.friendly_name,
+        )
+        return {"status": "ok", "id": cert_id, "fingerprint": body.fingerprint}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao processar upload de PFX")
+        raise HTTPException(status_code=500, detail="Erro interno ao armazenar PFX")
+
+
+class PrepareInstallRequest(BaseModel):
+    """Admin seleciona certificados e máquina destino."""
+    certificate_ids: List[str]
+    target_machine: str
+
+
+@app.post("/api/cert-installer/prepare")
+def prepare_install(
+    body: PrepareInstallRequest,
+    request: Request,
+    token: auth.TokenData = Depends(require_admin),
+):
+    """
+    Gera token de uso único e enfileira comando de instalação na fila do agente.
+    Apenas admins podem solicitar instalação.
+    """
+    if not body.certificate_ids:
+        raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
+
+    # Buscar user_id real (para tokens criados com JWT)
+    user_id = _resolve_user_id(token.email)
+    if not user_id:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    client_ip = request.client.host if request.client else None
+
+    try:
+        # 1. Criar token
+        token_raw, token_id, expires_at = cert_installer.create_install_token(
+            user_id=user_id,
+            user_email=token.email,
+            target_machine=body.target_machine,
+            certificate_ids=body.certificate_ids,
+            client_ip=client_ip,
+        )
+
+        # 2. Log SOLICITADO para cada certificado
+        for cid in body.certificate_ids:
+            cert_installer.log_event(
+                event="SOLICITADO",
+                user_id=user_id,
+                user_email=token.email,
+                token_id=token_id,
+                certificate_id=cid,
+                target_machine=body.target_machine,
+                client_ip=client_ip,
+            )
+
+        # 3. Enfileirar comando na agent_command_queue
+        cmd_id = cert_installer.enqueue_install_command(
+            target_machine=body.target_machine,
+            token_raw=token_raw,
+        )
+
+        return {
+            "status": "ok",
+            "token_id": token_id,
+            "command_id": cmd_id,
+            "target_machine": body.target_machine,
+            "certificates_count": len(body.certificate_ids),
+            "expires_at": expires_at.isoformat(),
+        }
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao preparar instalação")
+        raise HTTPException(status_code=500, detail="Erro interno ao preparar instalação")
+
+
+class RedeemRequest(BaseModel):
+    """Payload enviado pelo agente para resgatar o bundle criptografado."""
+    token: str
+    clientPublicKey: str  # SPKI base64 (ECDH P-256)
+
+
+@app.post("/api/cert-installer/redeem")
+def redeem_install(
+    body: RedeemRequest,
+    request: Request,
+    _token: auth.TokenData = Depends(require_auth),
+):
+    """
+    Agente consome o token e recebe o bundle de certificados criptografado via ECDH.
+    """
+    client_ip = request.client.host if request.client else None
+
+    # 1. Validar e consumir token
+    token_data = cert_installer.validate_and_consume_token(body.token)
+    if not token_data:
+        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já consumido")
+
+    user_id = token_data["user_id"]
+    token_id = str(token_data["id"])
+    cert_ids = token_data.get("certificate_ids") or []
+
+    # 2. Log REDIMIDO
+    cert_installer.log_event(
+        event="REDIMIDO",
+        user_id=user_id,
+        user_email=token_data.get("user_email"),
+        token_id=token_id,
+        target_machine=token_data.get("target_machine"),
+        client_ip=client_ip,
+    )
+
+    # 3. Montar bundle criptografado
+    try:
+        bundle = cert_installer.build_encrypted_bundle(
+            certificate_ids=cert_ids,
+            client_public_key_b64=body.clientPublicKey,
+        )
+        return bundle
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao montar bundle criptografado")
+        raise HTTPException(status_code=500, detail="Erro interno ao montar bundle")
+
+
+class InstallResultItem(BaseModel):
+    certificateId: str
+    fingerprint: Optional[str] = None
+    thumbprint: Optional[str] = None
+    status: str  # "OK" | "FALHA"
+    detail: Optional[str] = None
+
+
+class ReportRequest(BaseModel):
+    """Payload enviado pelo agente após instalar os certificados."""
+    token: str
+    results: List[InstallResultItem]
+
+
+@app.post("/api/cert-installer/report")
+def report_install(
+    body: ReportRequest,
+    request: Request,
+    _token: auth.TokenData = Depends(require_auth),
+):
+    """
+    Agente reporta o resultado da instalação de cada certificado.
+    """
+    client_ip = request.client.host if request.client else None
+
+    # Validar que o token existe e foi redimido (consumed_at != null)
+    import hashlib
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=500, detail="Supabase não configurado")
+
+    try:
+        r = sb.table("install_token").select("*").eq("token_hash", token_hash).execute()
+        rows = r.data or []
+        if not rows:
+            raise HTTPException(status_code=403, detail="Token desconhecido")
+        token_row = rows[0]
+        if not token_row.get("consumed_at"):
+            raise HTTPException(status_code=403, detail="Token ainda não foi redimido")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Erro ao verificar token no report")
+        raise HTTPException(status_code=500, detail="Erro interno")
+
+    user_id = token_row["user_id"]
+    token_id = str(token_row["id"])
+
+    # Gravar log para cada resultado
+    for result in body.results:
+        event = "CONCLUIDO" if result.status.upper() == "OK" else "ERRO"
+        cert_installer.log_event(
+            event=event,
+            user_id=user_id,
+            user_email=token_row.get("user_email"),
+            token_id=token_id,
+            certificate_id=result.certificateId,
+            fingerprint=result.fingerprint,
+            target_machine=token_row.get("target_machine"),
+            status=result.status,
+            detail=result.detail,
+            client_ip=client_ip,
+        )
+
+    return {
+        "status": "ok",
+        "processed": len(body.results),
+    }
+
+
+# ── Endpoints auxiliares do instalador ────────────────────────────────────
+
+@app.get("/api/cert-installer/available")
+def list_available_certificates(
+    machine_id: Optional[str] = Query(None),
+    token: auth.TokenData = Depends(require_admin),
+):
+    """Lista certificados PFX disponíveis para instalação (sem dados cifrados)."""
+    certs = cert_installer.list_available_pfx(machine_id=machine_id)
+    return {
+        "certificates": [
+            {
+                "id": c.id,
+                "fingerprint": c.fingerprint,
+                "machine_id": c.machine_id,
+                "nome_titular": c.nome_titular,
+                "documento": c.documento,
+                "documento_tipo": c.documento_tipo,
+                "subject": c.subject,
+                "not_before": c.not_before,
+                "not_after": c.not_after,
+                "friendly_name": c.friendly_name,
+                "uploaded_at": c.uploaded_at,
+            }
+            for c in certs
+        ]
+    }
+
+
+@app.get("/api/cert-installer/logs")
+def list_installer_logs(
+    limit: int = Query(100, ge=1, le=500),
+    token: auth.TokenData = Depends(require_admin),
+):
+    """Lista logs de auditoria de instalação."""
+    logs = cert_installer.list_install_logs(limit=limit)
+    return {"logs": logs}
+
+
+@app.post("/api/cert-installer/cleanup")
+def cleanup_tokens(token: auth.TokenData = Depends(require_admin)):
+    """Remove tokens de instalação expirados (manutenção)."""
+    count = cert_installer.cleanup_expired_tokens()
+    return {"status": "ok", "removed": count}
+
+
+def _resolve_user_id(email: str) -> Optional[str]:
+    """Busca o UUID do usuário pelo email."""
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        return None
+    try:
+        r = sb.table("users").select("id").eq("email", email).limit(1).execute()
+        if r.data:
+            return str(r.data[0]["id"])
+    except Exception:
+        logger.exception("Erro ao resolver user_id para email=%s", email)
+    return None
+
+
+# ── Página HTML do Instalador ─────────────────────────────────────────────
+
+@app.get("/instalador", response_class=HTMLResponse)
+def page_instalador(request: Request):
+    return templates.TemplateResponse("instalador.html", {
+        "request": request,
+        "nonce": getattr(request.state, "nonce", ""),
+    })
+

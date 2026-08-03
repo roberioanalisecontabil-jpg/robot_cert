@@ -863,6 +863,17 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                             trigger_event.set()
                         elif cmd == "ping":
                             LOGGER.info("Comando remoto: ping; máquina %s.", mid)
+                        elif cmd == "instalar_certificados":
+                            token_inst = j.get("token") or j.get("token_raw") or j.get("payload") or j.get("extra")
+                            if token_inst:
+                                LOGGER.info("Comando remoto: instalar_certificados (token %s...); máquina %s.", str(token_inst)[:8], mid)
+                                try:
+                                    from agent.installer_client import process_install_command
+                                    process_install_command(client, base, _headers(), str(token_inst))
+                                except Exception as ex_inst:
+                                    LOGGER.exception("Erro ao executar instalação remota: %s", ex_inst)
+                            else:
+                                LOGGER.warning("Comando instalar_certificados recebido sem token.")
                 except httpx.HTTPError as e:
                     LOGGER.warning("Aviso em /api/agent/next: %s", e)
 
@@ -957,6 +968,14 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                         last_scan_time=last_full_scan_time,
                         items_count=len(itens),
                     )
+
+                    # Envia os PFXs lidos para o cofre seguro do servidor
+                    try:
+                        from agent.installer_client import upload_pfx_files
+                        upload_pfx_files(client, base, _headers(), mid, itens)
+                    except Exception as ex_up:
+                        LOGGER.warning("Falha ao sincronizar PFXs com o servidor: %s", ex_up)
+
                     break
 
             if cfg.once:
