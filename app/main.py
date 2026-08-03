@@ -25,8 +25,8 @@ from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
 from app.smtp_service import encrypt_password, validate_smtp_config
-from app.alert_state import trigger_all_alerts
-from app.notification_service import get_active_alerts
+from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente
+from app.notification_service import build_notifications_payload
 from app.settings_state import (
     PortalSettings,
     get_latest_snapshot,
@@ -756,8 +756,9 @@ def trigger_alerts_manually() -> dict:
 @app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_auth)])
 def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dict:
     try:
-        alerts = get_active_alerts(token.email, token.role)
-        return {"itens": alerts, "total": len(alerts)}
+        # Devolve lista limitada + totais separados: antes eram 519 itens
+        # (167 KB) a cada poll de 60s, com os acionáveis no fim da lista.
+        return build_notifications_payload(token.email, token.role)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1794,20 +1795,40 @@ def _startup() -> None:
     except OSError as e:
         logger.warning(f"Não foi possível criar diretórios locais (ambiente read-only / Vercel): {e}")
     
-    # Inicia o job diário automático de alertas em segundo plano
+    # Job diário de alertas por e-mail.
+    #
+    # Dois problemas do desenho anterior:
+    #
+    # 1. `trigger_all_alerts()` é síncrona e era chamada direto no laço async.
+    #    Ela faz a varredura completa dos certificados (2,5-3,3s numa base de
+    #    mil) e depois N envios SMTP sequenciais — tudo isso travava o event
+    #    loop, ou seja, o portal inteiro parava de responder durante o job.
+    #    Agora roda em thread separada via run_in_executor.
+    #
+    # 2. O laço dormia 86400s, mas o Procfile usa `--max-requests 500`: o worker
+    #    recicla várias vezes ao dia e o job redisparava em cada boot+60s.
+    #    "Diário" nunca foi diário. O marcador em disco (job_ja_executado_
+    #    recentemente) torna a cadência real, independente de reinícios.
     import asyncio
+
     async def daily_alerts_job_loop():
-        logger.info("Iniciando loop do job diário de alertas (a cada 24 horas)")
-        await asyncio.sleep(60)  # Espera 1 minuto após o boot para o primeiro disparo
+        logger.info("Iniciando loop do job diário de alertas")
+        await asyncio.sleep(60)  # Deixa o boot terminar antes do primeiro disparo
+        loop = asyncio.get_running_loop()
         while True:
             try:
-                logger.info("Executando job diário automático de alertas por e-mail...")
-                trigger_all_alerts()
-                logger.info("Job diário automático de alertas executado com sucesso.")
+                if job_ja_executado_recentemente():
+                    logger.info("Job de alertas ignorado: já executado nas últimas horas.")
+                else:
+                    logger.info("Executando job de alertas por e-mail...")
+                    stats = await loop.run_in_executor(None, trigger_all_alerts)
+                    logger.info(f"Job de alertas concluído: {stats}")
             except Exception as e:
-                logger.error(f"Erro ao executar job diário de alertas: {e}")
-            await asyncio.sleep(86400)  # Espera 24 horas
-            
+                logger.error(f"Erro ao executar job de alertas: {e}")
+            # Reavalia de hora em hora: com o marcador de última execução, o
+            # trabalho real acontece uma vez por dia mesmo com ciclo curto.
+            await asyncio.sleep(3600)
+
     asyncio.create_task(daily_alerts_job_loop())
 
 # =========================================================================

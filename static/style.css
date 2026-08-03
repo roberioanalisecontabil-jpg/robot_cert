@@ -1638,6 +1638,43 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   color: var(--text-muted);
 }
 
+/* Cabeçalho de seção do sino (Expirando / Vencidos) */
+.notif-section-title {
+  margin: 0.75rem 0.25rem 0.4rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.notifications-body > .notif-section-title:first-child {
+  margin-top: 0.25rem;
+}
+
+.notif-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.25rem 0.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.notif-footer__link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.notif-footer__link:hover {
+  text-decoration: underline;
+}
+
 .notif-empty, .notif-loading, .notif-error {
   padding: 2rem 1rem;
   text-align: center;

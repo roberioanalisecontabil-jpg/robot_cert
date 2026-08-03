@@ -750,57 +750,173 @@ function initThemeToggle() {
   }
 }
 
+/** Atualiza o badge e o nome acessível do sino a partir dos totais. */
+function _aplicarBadgeNotificacoes(dados) {
+  const badge = document.getElementById("notification-badge");
+  const btn = document.getElementById("btn-notifications-toggle");
+  if (!badge) return;
+
+  // Contamos só o que está dentro da janela de ação. Antes o badge exibia o
+  // total (519), que incluía centenas de certificados vencidos há 1 a 2 anos —
+  // um número que nunca baixava e por isso deixava de ser sinal.
+  const n = Number(dados && dados.total_acionavel) || 0;
+
+  if (n > 0) {
+    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.style.display = "flex";
+  } else {
+    badge.style.display = "none";
+  }
+
+  if (btn) {
+    // A contagem precisa chegar ao leitor de tela: o aria-label era fixo.
+    btn.setAttribute(
+      "aria-label",
+      n > 0
+        ? `Alertas e notificações: ${n} exigem atenção`
+        : "Alertas e notificações: nenhum item exige atenção"
+    );
+  }
+}
+
+/** Um item da lista, montado no DOM (nunca innerHTML: `nome` vem do CN do certificado). */
+function _criarItemNotificacao(it) {
+  const div = document.createElement("div");
+  div.className = "notification-item " + (it.tipo === "expired" ? "notif-expired" : "notif-expiring");
+
+  const header = document.createElement("div");
+  header.className = "notif-item-header";
+
+  const tipo = document.createElement("span");
+  tipo.className = "notif-badge-type";
+  const dias = Number(it.dias_restantes);
+  if (it.tipo === "expired") {
+    tipo.textContent = dias === 0 ? "Venceu hoje" : `Venceu há ${Math.abs(dias)}d`;
+  } else {
+    tipo.textContent = dias === 0 ? "Vence hoje" : `Vence em ${dias}d`;
+  }
+
+  const data = document.createElement("span");
+  data.className = "notif-date";
+  const d = new Date(it.vencimento);
+  data.textContent = isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+
+  header.append(tipo, data);
+
+  const nome = document.createElement("div");
+  nome.className = "notif-message";
+  nome.textContent = it.nome || "Certificado sem nome";
+
+  const doc = document.createElement("div");
+  doc.className = "notif-doc";
+  doc.textContent = "Doc: " + (it.documento || "—");
+
+  div.append(header, nome, doc);
+
+  // Duplicidade não é escondida: o mesmo certificado em N arquivos vira uma
+  // linha só, mas a contagem fica visível.
+  const oc = Number(it.ocorrencias) || 1;
+  if (oc > 1) {
+    const dup = document.createElement("div");
+    dup.className = "notif-doc";
+    dup.textContent = `Encontrado em ${oc} arquivos`;
+    div.appendChild(dup);
+  }
+
+  return div;
+}
+
+function _criarSecaoNotificacoes(titulo, total, itens) {
+  const frag = document.createDocumentFragment();
+
+  const h = document.createElement("p");
+  h.className = "notif-section-title";
+  h.textContent = total > itens.length ? `${titulo} (${itens.length} de ${total})` : `${titulo} (${total})`;
+  frag.appendChild(h);
+
+  itens.forEach((it) => frag.appendChild(_criarItemNotificacao(it)));
+  return frag;
+}
+
 async function fetchNotifications() {
   const token = getToken();
   if (!token) return;
-  const badge = document.getElementById("notification-badge");
   const body = document.getElementById("notifications-body");
   if (!body) return;
-  
+
   try {
-    const r = await fetch("/api/colaborador/notificacoes", {
-      headers: getHeaders()
-    });
+    const r = await fetch("/api/colaborador/notificacoes", { headers: getHeaders() });
     if (!r.ok) {
-      if (r.status === 401) {
-        logout();
-      }
+      if (r.status === 401) logout();
+      // Sem isto, o badge mantinha a contagem antiga após uma falha.
+      _aplicarBadgeNotificacoes(null);
+      body.innerHTML = "";
+      body.appendChild(
+        Object.assign(document.createElement("div"), {
+          className: "notif-error",
+          textContent: "Não foi possível carregar os alertas.",
+        })
+      );
       return;
     }
+
     const data = await r.json();
     const items = data.itens || [];
-    
-    // Update badge
-    if (items.length > 0) {
-      badge.textContent = items.length;
-      badge.style.display = "flex";
-    } else {
-      badge.style.display = "none";
+    _aplicarBadgeNotificacoes(data);
+
+    body.innerHTML = "";
+
+    if (!items.length) {
+      body.appendChild(
+        Object.assign(document.createElement("div"), {
+          className: "notif-empty",
+          textContent: "Tudo em dia! Nenhum certificado vencido ou a vencer.",
+        })
+      );
+      return;
     }
-    
-    // Build items
-    if (items.length === 0) {
-      body.innerHTML = '<div class="notif-empty">Tudo em dia! Sem alertas.</div>';
-    } else {
-      body.innerHTML = items.map(it => {
-        const typeClass = it.tipo === "expired" ? "notif-expired" : "notif-expiring";
-        const typeLabel = it.tipo === "expired" ? "Vencido" : "Expirando";
-        const dateFmt = new Date(it.vencimento).toLocaleDateString('pt-BR');
-        return `
-          <div class="notification-item ${typeClass}">
-            <div class="notif-item-header">
-              <span class="notif-badge-type">${typeLabel}</span>
-              <span class="notif-date">${dateFmt}</span>
-            </div>
-            <div class="notif-message">${it.mensagem}</div>
-            <div class="notif-doc">Doc: ${it.documento}</div>
-          </div>
-        `;
-      }).join('');
+
+    // Duas seções: primeiro o que ainda dá para evitar, depois o passivo.
+    const expirando = items.filter((x) => x.tipo === "expiring");
+    const vencidos = items.filter((x) => x.tipo === "expired");
+
+    if (expirando.length) {
+      body.appendChild(
+        _criarSecaoNotificacoes("Expirando", Number(data.total_expirando) || expirando.length, expirando)
+      );
+    }
+    if (vencidos.length) {
+      body.appendChild(
+        _criarSecaoNotificacoes("Vencidos", Number(data.total_vencidos) || vencidos.length, vencidos)
+      );
+    }
+
+    // Rodapé: o que não coube continua alcançável, em vez de sumir.
+    if (data.truncado) {
+      const rodape = document.createElement("div");
+      rodape.className = "notif-footer";
+
+      const txt = document.createElement("span");
+      txt.textContent = `Mostrando ${data.exibidos} de ${data.total}`;
+
+      const link = document.createElement("a");
+      link.href = "/vencidos";
+      link.className = "notif-footer__link";
+      link.textContent = "Ver lista completa";
+
+      rodape.append(txt, link);
+      body.appendChild(rodape);
     }
   } catch (e) {
     console.error("Erro ao carregar notificações", e);
-    body.innerHTML = '<div class="notif-error">Erro ao carregar alertas.</div>';
+    _aplicarBadgeNotificacoes(null);
+    body.innerHTML = "";
+    body.appendChild(
+      Object.assign(document.createElement("div"), {
+        className: "notif-error",
+        textContent: "Falha de conexão ao carregar os alertas.",
+      })
+    );
   }
 }
 
@@ -832,7 +948,7 @@ function initNotifications() {
     <div class="notifications-dropdown" id="notifications-dropdown" style="display: none;">
       <div class="notifications-header">
         <h3>Notificações</h3>
-        <span class="notif-sync-mode" title="Verificação em segundo plano">Atualização Automática</span>
+        <span class="notif-sync-mode" title="A lista é atualizada automaticamente enquanto esta aba está aberta">Automático</span>
       </div>
       <div class="notifications-body" id="notifications-body">
         <div class="notif-loading">Carregando...</div>

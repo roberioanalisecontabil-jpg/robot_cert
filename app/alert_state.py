@@ -1,3 +1,4 @@
+import html
 import json
 import logging
 import os
@@ -13,6 +14,24 @@ from app.smtp_service import send_smtp_email
 logger = logging.getLogger(__name__)
 
 SENT_ALERTS_FILE = config.ROOT / "data" / "sent_alerts.json"
+JOB_STATE_FILE = config.ROOT / "data" / "alerts_job_state.json"
+
+# Marcos de reforço antes do vencimento. Antes existia um único aviso: a chave
+# antispam era (certificado, "expiring", destinatário, validade), então um
+# certificado entrando na janela de 30 dias recebia UM e-mail no dia 30 e
+# silêncio até vencer. Com marcos, cada limiar dispara uma vez.
+MARCOS_EXPIRACAO = [30, 15, 7, 1]
+
+# Intervalo mínimo entre execuções do job. Necessário porque o Procfile usa
+# `--max-requests 500`: o worker recicla várias vezes ao dia e o job dispara em
+# boot+60s a cada reinício, então "diário" nunca foi diário de fato.
+INTERVALO_MINIMO_JOB_HORAS = 20
+
+
+def _marco_expiracao(dias: int) -> int:
+    """Menor marco ainda não ultrapassado — 25 dias -> 30, 12 -> 15, 5 -> 7, 0 -> 1."""
+    candidatos = [m for m in MARCOS_EXPIRACAO if m >= dias]
+    return min(candidatos) if candidatos else MARCOS_EXPIRACAO[-1]
 
 def _load_local_sent_alerts() -> List[Dict[str, Any]]:
     if not SENT_ALERTS_FILE.is_file():
@@ -106,6 +125,72 @@ def _record_sent_alert(
     })
     _save_local_sent_alerts(local_alerts)
 
+def _get_admin_emails() -> List[str]:
+    """
+    E-mails dos administradores ativos.
+
+    O sino mostra ao admin todos os certificados do sistema, mas o e-mail só ia
+    para quem tinha documentos selecionados em `colaborador_cert_selecoes` — um
+    admin via 519 alertas na tela e recebia zero e-mails. Aqui os dois canais
+    passam a concordar sobre quem deve ser avisado.
+    """
+    client = _supabase()
+    if not client:
+        return []
+    try:
+        r = client.table("users").select("email, role").eq("role", "admin").execute()
+        out = []
+        for row in (r.data or []):
+            email = str(row.get("email") or "").strip().lower()
+            if email:
+                out.append(email)
+        return sorted(set(out))
+    except Exception as e:
+        logger.warning(f"Não foi possível listar administradores para o resumo: {e}")
+        return []
+
+
+def _load_job_state() -> Dict[str, Any]:
+    if not JOB_STATE_FILE.is_file():
+        return {}
+    try:
+        return json.loads(JOB_STATE_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+def _save_job_state(state: Dict[str, Any]) -> None:
+    try:
+        JOB_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        JOB_STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        # Sistema de arquivos efêmero (Vercel/containers): sem marcador, o job
+        # volta a rodar a cada reinício. É desperdício, não duplicidade — o
+        # antispam por certificado continua valendo.
+        logger.warning(f"Não foi possível gravar o estado do job de alertas: {e}")
+
+
+def job_ja_executado_recentemente() -> bool:
+    """True se o job rodou há menos de INTERVALO_MINIMO_JOB_HORAS."""
+    ultimo = _load_job_state().get("ultima_execucao")
+    if not ultimo:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(ultimo).replace("Z", "+00:00"))
+    except Exception:
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - dt
+    return delta < timedelta(hours=INTERVALO_MINIMO_JOB_HORAS)
+
+
+def registrar_execucao_job() -> None:
+    state = _load_job_state()
+    state["ultima_execucao"] = datetime.now(timezone.utc).isoformat()
+    _save_job_state(state)
+
+
 def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
     """Mapeia user_email -> lista de documentos digitos."""
     client = _supabase()
@@ -123,6 +208,141 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
             logger.warning(f"Falha ao ler seleções de colaboradores no Supabase, usando local: {e}")
             
     return _load_colaborador_file_dict()
+
+def _linha_resumo(cert: Dict[str, Any], dias: int, cor: str) -> str:
+    nome = html.escape(str(cert.get("nome") or cert.get("display_name") or "Sem nome"))
+    doc = html.escape(str(cert.get("documento_formatado") or cert.get("documento_numero") or "—"))
+    if dias < 0:
+        quando = "venceu hoje" if dias == 0 else f"venceu há {abs(dias)} dias"
+    elif dias == 0:
+        quando = "vence hoje"
+    elif dias == 1:
+        quando = "vence amanhã"
+    else:
+        quando = f"vence em {dias} dias"
+    return (
+        f'<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;">{nome}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;">{doc}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;color:{cor};'
+        f'white-space:nowrap;">{quando}</td></tr>'
+    )
+
+
+def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) -> Dict[str, Any]:
+    """
+    Um único e-mail consolidado por administrador, por dia.
+
+    Enviar um e-mail por certificado ao admin geraria centenas de mensagens
+    (hoje seriam 519 numa base de 1.028 certificados). O resumo entrega o mesmo
+    conteúdo do sino: totais, mais a lista do que ainda dá para evitar.
+    """
+    out = {"admin_resumos_enviados": 0, "admin_resumos_ignorados": 0}
+    admins = _get_admin_emails()
+    if not admins:
+        return out
+
+    expirando, vencidos_recentes = [], []
+    for it in itens:
+        venc_iso = it.get("not_after")
+        if not venc_iso:
+            continue
+        try:
+            v_dt = datetime.fromisoformat(str(venc_iso).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        dias = (v_dt.date() - now.date()).days
+        if v_dt >= now and 0 <= dias <= MARCOS_EXPIRACAO[0]:
+            expirando.append((it, dias))
+        elif v_dt < now and abs(dias) <= MARCOS_EXPIRACAO[0]:
+            vencidos_recentes.append((it, dias))
+
+    # Deduplica pelo mesmo critério do sino: o certificado em N arquivos é 1 item.
+    def _dedup(pares):
+        vistos, saida = set(), []
+        for it, d in pares:
+            k = it.get("fingerprint_sha256") or f"{it.get('nome')}|{it.get('not_after')}"
+            if k in vistos:
+                continue
+            vistos.add(k)
+            saida.append((it, d))
+        return saida
+
+    expirando = sorted(_dedup(expirando), key=lambda p: p[1])
+    vencidos_recentes = sorted(_dedup(vencidos_recentes), key=lambda p: -p[1])
+
+    if not expirando and not vencidos_recentes:
+        logger.info("Resumo para administradores não enviado: nada dentro da janela de ação.")
+        return out
+
+    hoje = now.date().isoformat()
+    linhas_venc = "".join(_linha_resumo(c, d, "#ff3b30") for c, d in vencidos_recentes)
+    linhas_exp = "".join(_linha_resumo(c, d, "#b35c00") for c, d in expirando)
+
+    def _bloco(titulo: str, linhas: str, total: int) -> str:
+        if not linhas:
+            return ""
+        return f"""
+          <h3 style="font-size:15px;margin:22px 0 8px;">{titulo} ({total})</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Nome</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">CNPJ/CPF</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Situação</th>
+            </tr>
+            {linhas}
+          </table>"""
+
+    html_content = f"""
+    <html>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f5f5f7; padding:20px; color:#1d1d1f;">
+        <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid #e5e5ea;">
+          <h2 style="margin-top:0;">Resumo de certificados</h2>
+          <p style="color:#6e6e73;margin-top:0;">
+            Situação em {now.strftime('%d/%m/%Y')} — {len(vencidos_recentes)} vencido(s) nos últimos
+            {MARCOS_EXPIRACAO[0]} dias e {len(expirando)} a vencer nos próximos {MARCOS_EXPIRACAO[0]}.
+          </p>
+          {_bloco("Vencidos recentemente", linhas_venc, len(vencidos_recentes))}
+          {_bloco("A vencer", linhas_exp, len(expirando))}
+          <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
+            Você recebe este resumo porque tem perfil de administrador no portal.
+            Certificados vencidos há mais de {MARCOS_EXPIRACAO[0]} dias não entram aqui —
+            consulte a página Vencidos para a lista completa.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    subject = (
+        f"Resumo de certificados — {len(expirando)} a vencer, "
+        f"{len(vencidos_recentes)} vencidos recentemente"
+    )
+
+    for admin_email in admins:
+        # Chave antispam por dia: um resumo por administrador por dia, mesmo que
+        # o job dispare várias vezes (reinício de worker, disparo manual).
+        if _is_alert_already_sent("__resumo_admin__", f"digest:{hoje}", admin_email, hoje):
+            out["admin_resumos_ignorados"] += 1
+            continue
+        try:
+            send_smtp_email(
+                host=settings.smtp_host,
+                port=settings.smtp_port,
+                user=settings.smtp_user,
+                password_enc=settings.smtp_password_encrypted,
+                use_tls=settings.smtp_use_tls,
+                use_ssl=settings.smtp_use_ssl,
+                from_email=settings.smtp_from_email,
+                to_email=admin_email,
+                subject=subject,
+                html_content=html_content,
+            )
+            out["admin_resumos_enviados"] += 1
+            _record_sent_alert("__resumo_admin__", f"digest:{hoje}", admin_email, hoje)
+        except Exception as e:
+            logger.error(f"Falha ao enviar resumo de administrador para {admin_email}: {e}")
+
+    return out
+
 
 def trigger_all_alerts() -> Dict[str, Any]:
     """
@@ -174,14 +394,20 @@ def trigger_all_alerts() -> Dict[str, Any]:
         except Exception:
             continue
             
-        # Determina tipo de alerta
+        # Determina tipo de alerta e a chave antispam.
+        # Para "expiring" a chave inclui o marco (30/15/7/1), de modo que cada
+        # limiar dispara um reforço. Para "expired" continua uma única chave:
+        # um certificado vencido há dois anos não deve cobrar todo dia.
         dias = (v_dt.date() - now.date()).days
         tipo_alerta = None
+        chave_antispam = None
         if v_dt < now:
             tipo_alerta = "expired"
-        elif 0 <= dias <= 30:
+            chave_antispam = "expired"
+        elif 0 <= dias <= MARCOS_EXPIRACAO[0]:
             tipo_alerta = "expiring"
-            
+            chave_antispam = f"expiring:{_marco_expiracao(dias)}"
+
         if not tipo_alerta:
             continue
             
@@ -210,15 +436,21 @@ def trigger_all_alerts() -> Dict[str, Any]:
                 continue
                 
             # Verifica antispam
-            if _is_alert_already_sent(fingerprint, tipo_alerta, email_dest, venc_iso):
+            if _is_alert_already_sent(fingerprint, chave_antispam, email_dest, venc_iso):
                 stats["skipped_already_sent"] += 1
                 continue
-                
-            # Prepara e-mail
+
+            # Prepara e-mail.
+            # `nome`/`documento` vêm do CN do certificado — conteúdo controlado
+            # por quem gera o .pfx. Escapado antes de entrar no HTML.
+            nome_cert = html.escape(
+                str(it.get("nome") or it.get("display_name") or "Certificado Digital")
+            )
+            doc_fmt = html.escape(
+                str(it.get("documento_formatado") or it.get("documento_numero") or "Sem documento")
+            )
             subject = ""
             html_content = ""
-            nome_cert = it.get("nome") or it.get("display_name") or "Certificado Digital"
-            doc_fmt = it.get("documento_formatado") or it.get("documento_numero") or "Sem documento"
             
             if tipo_alerta == "expired":
                 subject = f"⚠️ ALERTA: Certificado Vencido - {nome_cert}"
@@ -277,9 +509,13 @@ def trigger_all_alerts() -> Dict[str, Any]:
                     html_content=html_content
                 )
                 stats["alerts_sent"] += 1
-                _record_sent_alert(fingerprint, tipo_alerta, email_dest, venc_iso)
+                _record_sent_alert(fingerprint, chave_antispam, email_dest, venc_iso)
             except Exception as e:
                 stats["errors"] += 1
                 logger.error(f"Falha ao enviar e-mail de alerta para {email_dest}: {e}")
-                
+
+    # Resumo consolidado para administradores.
+    stats.update(_enviar_resumo_admins(settings, itens, now))
+
+    registrar_execucao_job()
     return stats
