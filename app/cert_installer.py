@@ -39,12 +39,29 @@ logger = logging.getLogger(__name__)
 # Helpers de criptografia
 # ──────────────────────────────────────────────────────────────────────────
 
-def _get_server_key() -> bytes:
-    """Retorna a chave AES-256 do servidor (32 bytes) a partir do hex no .env."""
-    raw = config.CERT_ENCRYPTION_KEY
+# Versão atual da chave de cifragem em repouso. Gravada em cada linha de
+# cert_pfx_store para permitir rotação incremental: ao trocar a chave, sobe-se
+# esta constante e os registros antigos continuam decifráveis pela chave da
+# versão deles, em vez de exigir recifrar tudo numa janela só.
+CURRENT_KEY_VERSION = 1
+
+
+def _get_server_key(version: int = CURRENT_KEY_VERSION) -> bytes:
+    """
+    Chave AES-256 do servidor (32 bytes) a partir do hex no .env.
+
+    `version` prepara a rotação: a chave em vigor vem de CERT_ENCRYPTION_KEY e
+    as anteriores de CERT_ENCRYPTION_KEY_V<n>. Enquanto só existe a versão 1,
+    o comportamento é idêntico ao anterior.
+    """
+    if version == CURRENT_KEY_VERSION:
+        raw = config.CERT_ENCRYPTION_KEY
+    else:
+        raw = getattr(config, f"CERT_ENCRYPTION_KEY_V{version}", "") or ""
+
     if not raw or len(raw) != 64:
         raise RuntimeError(
-            "CERT_ENCRYPTION_KEY não configurada ou inválida. "
+            f"CERT_ENCRYPTION_KEY (versão {version}) não configurada ou inválida. "
             "Gere com: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
     return bytes.fromhex(raw)
@@ -70,9 +87,14 @@ def encrypt_pfx_at_rest(pfx_bytes: bytes) -> Tuple[str, str, str]:
     )
 
 
-def decrypt_pfx_at_rest(ciphertext_b64: str, iv_b64: str, auth_tag_b64: str) -> bytes:
-    """Decifra um PFX armazenado no banco."""
-    key = _get_server_key()
+def decrypt_pfx_at_rest(
+    ciphertext_b64: str,
+    iv_b64: str,
+    auth_tag_b64: str,
+    key_version: int = CURRENT_KEY_VERSION,
+) -> bytes:
+    """Decifra um PFX armazenado no banco, com a chave da versão em que foi gravado."""
+    key = _get_server_key(key_version)
     aesgcm = AESGCM(key)
     nonce = base64.b64decode(iv_b64)
     ciphertext = base64.b64decode(ciphertext_b64)
@@ -191,12 +213,15 @@ def upsert_pfx(
 
     encrypted_pfx, pfx_iv, pfx_auth_tag = encrypt_pfx_at_rest(pfx_bytes)
 
-    # Cifrar a senha do PFX junto (se fornecida)
-    encrypted_password = None
+    # A senha do PFX NÃO é mais armazenada.
+    # Antes era cifrada com a MESMA chave do PFX e guardada na mesma linha, de
+    # modo que um único vazamento de chave entregava certificado e senha juntos.
+    # E não havia ganho: a senha já vive no nome do arquivo no servidor de
+    # origem (padrão "nome senha VALOR.pfx"), então o agente a lê de lá na hora
+    # de instalar. O parâmetro `password` continua na assinatura para não
+    # quebrar quem chama, mas é descartado.
     if password:
-        pwd_ct, pwd_iv, pwd_tag = encrypt_pfx_at_rest(password.encode("utf-8"))
-        # Armazenar como JSON compacto: iv:tag:ct
-        encrypted_password = f"{pwd_iv}:{pwd_tag}:{pwd_ct}"
+        logger.debug("Senha recebida em upsert_pfx e descartada por política.")
 
     now = datetime.now(timezone.utc).isoformat()
     row = {
@@ -212,7 +237,8 @@ def upsert_pfx(
         "encrypted_pfx": encrypted_pfx,
         "pfx_iv": pfx_iv,
         "pfx_auth_tag": pfx_auth_tag,
-        "pfx_password": encrypted_password,
+        "pfx_password": None,
+        "key_version": CURRENT_KEY_VERSION,
         "updated_at": now,
     }
 
@@ -287,6 +313,67 @@ def get_pfx_by_ids(cert_ids: List[str]) -> List[Dict[str, Any]]:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Opt-in do cofre — quais certificados podem ter o PFX armazenado
+# ──────────────────────────────────────────────────────────────────────────
+
+def listar_optin_fingerprints(machine_id: Optional[str] = None) -> List[str]:
+    """
+    Fingerprints autorizados a ir para o cofre.
+
+    O agente consulta esta lista antes de enviar qualquer PFX. Antes ele enviava
+    todos os certificados lidos a cada ciclo — numa base de mil certificados,
+    mil chaves privadas copiadas para o Supabase sem decisão explícita.
+    """
+    client = _supabase()
+    if not client:
+        return []
+    try:
+        q = client.table("cert_vault_optin").select("fingerprint")
+        if machine_id:
+            q = q.eq("machine_id", machine_id)
+        r = q.execute()
+        return [str(row["fingerprint"]) for row in (r.data or []) if row.get("fingerprint")]
+    except Exception:
+        logger.exception("Falha ao listar opt-in do cofre")
+        # Lista vazia = nada é enviado. Falha fechada: na dúvida, não copiar
+        # chave privada para o servidor.
+        return []
+
+
+def autorizar_no_cofre(
+    fingerprint: str,
+    enabled_by: str,
+    machine_id: str = "default",
+    nome_titular: Optional[str] = None,
+    documento: Optional[str] = None,
+) -> None:
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+    client.table("cert_vault_optin").upsert(
+        {
+            "fingerprint": fingerprint,
+            "machine_id": machine_id,
+            "nome_titular": nome_titular,
+            "documento": documento,
+            "enabled_by": enabled_by,
+        },
+        on_conflict="fingerprint",
+    ).execute()
+
+
+def revogar_do_cofre(fingerprint: str) -> None:
+    """Remove a autorização E o PFX já armazenado."""
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+    client.table("cert_vault_optin").delete().eq("fingerprint", fingerprint).execute()
+    # Revogar sem apagar o material armazenado deixaria a chave privada no
+    # servidor indefinidamente — o oposto da intenção.
+    client.table("cert_pfx_store").delete().eq("fingerprint", fingerprint).execute()
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # CRUD — install_token
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -332,8 +419,21 @@ def create_install_token(
 
 def validate_and_consume_token(token_raw: str) -> Optional[Dict[str, Any]]:
     """
-    Valida e consome um token de instalação.
-    Retorna os dados do token se válido, None se inválido/expirado/já consumido.
+    Valida e consome um token de instalação, de forma atômica.
+
+    Retorna os dados do token se válido; None se inválido, expirado ou já
+    consumido.
+
+    A implementação anterior fazia SELECT e depois UPDATE em duas chamadas: dois
+    resgates simultâneos passavam pelo SELECT antes de qualquer UPDATE e ambos
+    recebiam o bundle — "uso único" era apenas intenção. O blueprint previa
+    `SELECT ... FOR UPDATE`, que não existe na API REST do Supabase.
+
+    A solução equivalente é um compare-and-swap: o UPDATE traz as condições
+    (`consumed_at IS NULL` e `expires_at > agora`) na própria cláusula WHERE.
+    O Postgres serializa UPDATEs concorrentes na mesma linha, então exatamente
+    um deles encontra `consumed_at IS NULL` e escreve; o outro casa com zero
+    linhas. Quem recebe linha de volta é o dono do token.
     """
     client = _supabase()
     if not client:
@@ -345,29 +445,25 @@ def validate_and_consume_token(token_raw: str) -> Optional[Dict[str, Any]]:
     try:
         r = (
             client.table("install_token")
-            .select("*")
+            .update({"consumed_at": now.isoformat()})
             .eq("token_hash", token_hash)
             .is_("consumed_at", "null")
+            .gt("expires_at", now.isoformat())
             .execute()
         )
         rows = r.data or []
         if not rows:
+            # Não distinguimos os motivos para o chamador: token inexistente,
+            # expirado, já consumido e perda da corrida produzem a mesma
+            # resposta, para não virar oráculo de tokens válidos.
+            logger.info("Resgate de token recusado (inexistente, expirado, consumido ou corrida).")
             return None
 
-        token_row = rows[0]
+        if len(rows) > 1:
+            # token_hash é UNIQUE na migration; se isto aparecer, o índice sumiu.
+            logger.error("install_token com token_hash duplicado — verifique o índice UNIQUE.")
 
-        # Verificar expiração
-        expires_at = datetime.fromisoformat(token_row["expires_at"].replace("Z", "+00:00"))
-        if now > expires_at:
-            logger.warning("Token expirado (expires_at=%s)", token_row["expires_at"])
-            return None
-
-        # Marcar como consumido
-        client.table("install_token").update(
-            {"consumed_at": now.isoformat()}
-        ).eq("id", token_row["id"]).execute()
-
-        return token_row
+        return rows[0]
     except Exception:
         logger.exception("Falha ao validar/consumir install_token")
         return None
@@ -460,20 +556,13 @@ def build_encrypted_bundle(
 
     certificates = []
     for row in rows:
-        # Decifrar PFX do repouso
+        # Decifrar PFX do repouso, com a chave da versão em que foi gravado
         pfx_bytes = decrypt_pfx_at_rest(
             row["encrypted_pfx"],
             row["pfx_iv"],
             row["pfx_auth_tag"],
+            key_version=int(row.get("key_version") or CURRENT_KEY_VERSION),
         )
-
-        # Decifrar senha do PFX (se houver)
-        pfx_password = None
-        if row.get("pfx_password"):
-            parts = row["pfx_password"].split(":", 2)
-            if len(parts) == 3:
-                pwd_bytes = decrypt_pfx_at_rest(parts[2], parts[0], parts[1])
-                pfx_password = pwd_bytes.decode("utf-8")
 
         # Re-cifrar para o cliente via ECDH
         bundle = encrypt_bundle_for_client(pfx_bytes, client_public_key_b64)
@@ -481,20 +570,16 @@ def build_encrypted_bundle(
         bundle["fingerprint"] = str(row.get("fingerprint", ""))
         bundle["friendlyName"] = row.get("friendly_name") or row.get("nome_titular") or ""
 
-        # Senha do PFX cifrada junto no bundle para o agente
-        if pfx_password:
-            pwd_bundle = encrypt_bundle_for_client(
-                pfx_password.encode("utf-8"),
-                client_public_key_b64,
-            )
-            bundle["pfxPassword"] = pwd_bundle
-        else:
-            bundle["pfxPassword"] = None
+        # A senha não trafega mais no bundle: o agente a extrai do nome do
+        # arquivo local no momento da instalação (ver installer_client).
+        bundle["pfxPassword"] = None
 
         certificates.append(bundle)
 
-        # Zerar PFX em claro da memória
-        pfx_bytes = b"\x00" * len(pfx_bytes)
+        # Nota: não há como zerar `pfx_bytes` de forma confiável aqui. `bytes` é
+        # imutável em Python; reatribuir o nome (como se fazia antes) só cria um
+        # objeto novo e deixa o PFX em claro na memória até o GC. Registrado como
+        # limitação em vez de fingir mitigação.
 
     return {"certificates": certificates}
 
@@ -508,25 +593,21 @@ def enqueue_install_command(
     token_raw: str,
 ) -> str:
     """
-    Enfileira um comando 'instalar_certificados' na fila do agente.
-    Retorna o ID do comando.
-    """
-    client = _supabase()
-    if not client:
-        raise RuntimeError("Supabase não configurado")
+    Enfileira um comando 'instalar_certificados' para o agente, carregando o
+    token de uso único no payload.
 
-    cid = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    A versão anterior recebia `token_raw` e não o gravava: o insert só tinha
+    id/machine_id/command/status/created_at. O agente recebia o comando sem
+    token, registrava "instalar_certificados recebido sem token" e nunca
+    chamava /redeem — a instalação jamais acontecia.
+
+    Reusa `command_queue.enqueue` em vez de inserir direto, para herdar a
+    validação de comando e o fallback em disco quando o Supabase cai.
+    """
+    from app.command_queue import enqueue
 
     try:
-        client.table("agent_command_queue").insert({
-            "id": cid,
-            "machine_id": target_machine,
-            "command": "instalar_certificados",
-            "status": "pending",
-            "created_at": now,
-        }).execute()
-        return cid
+        return enqueue(target_machine, "instalar_certificados", payload=token_raw)
     except Exception:
         logger.exception("Falha ao enfileirar comando de instalação")
         raise

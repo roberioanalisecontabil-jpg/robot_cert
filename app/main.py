@@ -41,6 +41,10 @@ from app.settings_state import (
 
 security = HTTPBearer(auto_error=False)
 
+# Identidade atribuída quando API_KEY não está configurada (ambiente aberto).
+# Rotas sensíveis devem recusá-la — é o oposto de "autenticado".
+ANONYMOUS_IDENTITY_EMAIL = "anonymous@local"
+
 async def require_auth(
     auth_creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
@@ -63,7 +67,9 @@ async def require_auth(
     else:
         # Ambiente aberto (sem API_KEY): mantém compatibilidade para rotas /api/*
         # que usam require_auth, sem elevar privilégios administrativos.
-        return auth.TokenData(email="anonymous@local", role="agent")
+        # ATENÇÃO: esta identidade é anônima. Rotas que manipulam material
+        # criptográfico devem recusá-la — ver require_agent_or_admin.
+        return auth.TokenData(email=ANONYMOUS_IDENTITY_EMAIL, role="agent")
 
     raise HTTPException(
         status_code=401, 
@@ -74,6 +80,35 @@ async def require_auth(
 async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
     if token.role != "admin":
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    return token
+
+
+ERRO_ACESSO_MAQUINA = "Acesso restrito ao agente e a administradores."
+
+
+async def require_agent_or_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+    """
+    Endpoints da máquina: alimentados pelo agente (X-API-Key -> role 'agent') e
+    acessíveis a administradores para diagnóstico.
+
+    Existe porque `require_auth` sozinho é permissivo demais para estas rotas.
+
+    1. Aceita qualquer usuário do portal, inclusive role 'user'. Em /upload-pfx
+       isso permitia a um usuário comum enviar um PFX próprio reaproveitando o
+       fingerprint de um certificado já armazenado: como `upsert_pfx` usa
+       `on_conflict="fingerprint"`, o registro legítimo seria sobrescrito e o
+       certificado do atacante acabaria instalado num servidor pelo fluxo
+       normal de instalação. `require_admin` não serve como alternativa: o
+       agente tem role 'agent', não 'admin'.
+
+    2. Quando API_KEY não está configurada, `require_auth` devolve uma
+       identidade ANÔNIMA com role 'agent' para manter compatibilidade. Para as
+       rotas antigas isso é aceitável; para estas, que entregam PFX e senhas,
+       significaria acesso sem credencial nenhuma. Aqui a identidade anônima é
+       recusada explicitamente.
+    """
+    if token.role not in ("agent", "admin") or token.email == ANONYMOUS_IDENTITY_EMAIL:
+        raise HTTPException(status_code=403, detail=ERRO_ACESSO_MAQUINA)
     return token
 
 class SecureJSONFormatter(logging.Formatter):
@@ -786,7 +821,13 @@ def agent_next_command(
     q = pop_next_for_agent(machine_id)
     if not q:
         return {"command": None, "id": None}
-    return {"command": q.command, "id": q.id, "machine_id": q.machine_id}
+    out = {"command": q.command, "id": q.id, "machine_id": q.machine_id}
+    # `payload` carrega o token de uso único de instalar_certificados. A linha
+    # da fila já foi removida no pop, então o token só trafega uma vez, para o
+    # agente autenticado que o solicitou.
+    if q.payload:
+        out["payload"] = q.payload
+    return out
 
 
 @app.get("/api/agent/queue", dependencies=[Depends(require_auth)])
@@ -1897,7 +1938,7 @@ class UploadPfxRequest(BaseModel):
 def upload_pfx(
     body: UploadPfxRequest,
     request: Request,
-    token: auth.TokenData = Depends(require_auth),
+    token: auth.TokenData = Depends(require_agent_or_admin),
 ):
     """
     Recebe um PFX do agente, cifra com a chave do servidor e armazena.
@@ -1909,8 +1950,18 @@ def upload_pfx(
     except Exception:
         raise HTTPException(status_code=400, detail="pfx_b64 inválido")
 
-    if len(pfx_bytes) > 50 * 1024 * 1024:  # 50 MB max
-        raise HTTPException(status_code=413, detail="PFX excede 50 MB")
+    # Um PFX real tem poucos KB. 50 MB era um vetor de DoS via base64 no banco.
+    if len(pfx_bytes) > 1 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PFX excede 1 MB")
+
+    # Barreira de servidor para o opt-in: mesmo que um agente desatualizado
+    # (ou adulterado) envie tudo, só entra no cofre o que foi autorizado.
+    autorizados = set(cert_installer.listar_optin_fingerprints())
+    if body.fingerprint not in autorizados:
+        raise HTTPException(
+            status_code=403,
+            detail="Certificado não autorizado para o cofre. Habilite-o em /instalador.",
+        )
 
     try:
         cert_id = cert_installer.upsert_pfx(
@@ -1932,6 +1983,63 @@ def upload_pfx(
     except Exception:
         logger.exception("Erro ao processar upload de PFX")
         raise HTTPException(status_code=500, detail="Erro interno ao armazenar PFX")
+
+
+class VaultOptinRequest(BaseModel):
+    """Admin autoriza um certificado a ter o PFX guardado no cofre."""
+    fingerprint: str
+    machine_id: str = "default"
+    nome_titular: Optional[str] = None
+    documento: Optional[str] = None
+
+
+@app.get("/api/cert-installer/vault-optin")
+def listar_vault_optin(
+    machine_id: Optional[str] = Query(None),
+    _token: auth.TokenData = Depends(require_agent_or_admin),
+):
+    """
+    Fingerprints autorizados ao cofre.
+
+    O agente consulta antes de cada ciclo de upload; o admin usa para montar a
+    tela. Não devolve material criptográfico, só a lista de autorizações.
+    """
+    return {"fingerprints": cert_installer.listar_optin_fingerprints(machine_id)}
+
+
+@app.post("/api/cert-installer/vault-optin", dependencies=[Depends(require_admin)])
+def autorizar_vault_optin(
+    body: VaultOptinRequest,
+    token: auth.TokenData = Depends(require_admin),
+):
+    """Autoriza um certificado a ser copiado para o cofre do servidor."""
+    try:
+        cert_installer.autorizar_no_cofre(
+            fingerprint=body.fingerprint,
+            enabled_by=token.email or "desconhecido",
+            machine_id=body.machine_id,
+            nome_titular=body.nome_titular,
+            documento=body.documento,
+        )
+        return {"status": "ok", "fingerprint": body.fingerprint}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao autorizar certificado no cofre")
+        raise HTTPException(status_code=500, detail="Erro interno ao autorizar")
+
+
+@app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_admin)])
+def revogar_vault_optin(fingerprint: str):
+    """Revoga a autorização e APAGA o PFX já armazenado."""
+    try:
+        cert_installer.revogar_do_cofre(fingerprint)
+        return {"status": "ok", "fingerprint": fingerprint, "pfx_removido": True}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao revogar certificado do cofre")
+        raise HTTPException(status_code=500, detail="Erro interno ao revogar")
 
 
 class PrepareInstallRequest(BaseModel):
@@ -2013,7 +2121,7 @@ class RedeemRequest(BaseModel):
 def redeem_install(
     body: RedeemRequest,
     request: Request,
-    _token: auth.TokenData = Depends(require_auth),
+    _token: auth.TokenData = Depends(require_agent_or_admin),
 ):
     """
     Agente consome o token e recebe o bundle de certificados criptografado via ECDH.
@@ -2071,7 +2179,7 @@ class ReportRequest(BaseModel):
 def report_install(
     body: ReportRequest,
     request: Request,
-    _token: auth.TokenData = Depends(require_auth),
+    _token: auth.TokenData = Depends(require_agent_or_admin),
 ):
     """
     Agente reporta o resultado da instalação de cada certificado.
@@ -2189,9 +2297,11 @@ def _resolve_user_id(email: str) -> Optional[str]:
 # ── Página HTML do Instalador ─────────────────────────────────────────────
 
 @app.get("/instalador", response_class=HTMLResponse)
-def page_instalador(request: Request):
-    return templates.TemplateResponse("instalador.html", {
-        "request": request,
-        "nonce": getattr(request.state, "nonce", ""),
-    })
+def page_instalador(request: Request) -> HTMLResponse:
+    # Assinatura por keyword, igual às outras 8 rotas de página. A forma
+    # posicional antiga — TemplateResponse(name, context) — quebra nesta versão
+    # do Starlette com "TypeError: unhashable type: 'dict'", e a página do
+    # módulo respondia 500 em toda requisição.
+    # O nonce vem de request.state.nonce no template, como nos demais.
+    return templates.TemplateResponse(request=request, name="instalador.html")
 

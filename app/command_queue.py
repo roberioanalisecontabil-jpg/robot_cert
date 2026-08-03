@@ -26,6 +26,10 @@ class QueuedCommand:
     command: str
     status: str
     created_at: str
+    # Dado extra do comando. Em `instalar_certificados` carrega o token de uso
+    # único: era gerado no /prepare e nunca chegava ao agente, então a
+    # instalação nunca completava.
+    payload: Optional[str] = None
 
 
 def _supabase():
@@ -60,38 +64,32 @@ def _matches_agent(row_machine: str, agent_id: str) -> bool:
     return a == b
 
 
-def enqueue(machine_id: str, command: str) -> str:
+def enqueue(machine_id: str, command: str, payload: Optional[str] = None) -> str:
     if command not in COMMANDS:
         raise ValueError(f"Comando inválido. Use: {', '.join(sorted(COMMANDS))}")
     mid = (machine_id or "").strip() or "default"
     now = datetime.now(timezone.utc).isoformat()
     cid = str(uuid.uuid4())
+    row = {
+        "id": cid,
+        "machine_id": mid,
+        "command": command,
+        "status": "pending",
+        "created_at": now,
+    }
+    if payload is not None:
+        row["payload"] = payload
+
     client = _supabase()
     if client:
         try:
-            client.table("agent_command_queue").insert(
-                {
-                    "id": cid,
-                    "machine_id": mid,
-                    "command": command,
-                    "status": "pending",
-                    "created_at": now,
-                }
-            ).execute()
+            client.table("agent_command_queue").insert(row).execute()
             return cid
         except Exception:  # noqa: BLE001
             logger.exception("Fila Supabase indisponível; a enfileirar em disco")
     with _file_lock:
         q = _load_file_queue()
-        q.append(
-            {
-                "id": cid,
-                "machine_id": mid,
-                "command": command,
-                "status": "pending",
-                "created_at": now,
-            }
-        )
+        q.append(row)
         _save_file_queue(q)
     return cid
 
@@ -124,6 +122,7 @@ def _pop_from_file(agent: str) -> Optional[QueuedCommand]:
             command=str(row["command"]),
             status="popped",
             created_at=str(row.get("created_at", "")),
+            payload=row.get("payload"),
         )
         del q[i]
         _save_file_queue(q)
@@ -159,11 +158,19 @@ def _pop_from_supabase(client: Any, agent: str) -> Optional[QueuedCommand]:
             command=str(row.get("command", "")),
             status="popped",
             created_at=str(row.get("created_at", "")),
+            payload=row.get("payload"),
         )
     return None
 
 
 def list_pending() -> List[dict[str, Any]]:
+    """
+    Comandos pendentes para monitorização no portal.
+
+    NÃO devolve `payload`: em instalar_certificados ele carrega o token de uso
+    único, e esta lista é exposta em /api/agent/queue. A seleção de colunas
+    abaixo é explícita de propósito — não trocar por select("*").
+    """
     out: List[dict[str, Any]] = []
     client = _supabase()
     if client:

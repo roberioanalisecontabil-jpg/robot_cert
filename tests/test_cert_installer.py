@@ -87,5 +87,7 @@ def test_stored_pfx_dataclass():
 def test_invalid_key_raises():
     """Garante erro claro se a chave AES não estiver configurada."""
     with patch.object(config, "CERT_ENCRYPTION_KEY", ""):
-        with pytest.raises(RuntimeError, match="CERT_ENCRYPTION_KEY não configurada"):
+        # Casa com o nome da variável e o problema, sem prender-se à redação —
+        # a mensagem passou a incluir a versão da chave (rotação).
+        with pytest.raises(RuntimeError, match=r"CERT_ENCRYPTION_KEY.*não configurada"):
             cert_installer._get_server_key()

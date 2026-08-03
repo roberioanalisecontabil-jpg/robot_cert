@@ -166,7 +166,7 @@
     </main>
 
     <script src="/static/ui-common.js?v=cg-v2-fluid"></script>
-    <script nonce="{{ nonce }}">
+    <script nonce="{{ request.state.nonce }}">
       document.addEventListener("DOMContentLoaded", function() {
         // Verificar perfil Admin
         const role = localStorage.getItem("user_role");

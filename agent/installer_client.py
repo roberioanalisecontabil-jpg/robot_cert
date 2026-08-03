@@ -37,6 +37,35 @@ from app.cert_scanner import CertInfo
 LOGGER = logging.getLogger("analise_certidigital_agent")
 
 
+def _buscar_fingerprints_autorizados(
+    client: httpx.Client,
+    base_url: str,
+    headers: dict,
+    machine_id: str,
+) -> Optional[set]:
+    """
+    Lista de certificados autorizados a ir para o cofre.
+
+    Devolve None se a consulta falhar — o chamador interpreta como "não enviar
+    nada". Falha fechada de propósito: na dúvida, não copiar chave privada para
+    o servidor.
+    """
+    try:
+        r = client.get(
+            f"{base_url}/api/cert-installer/vault-optin",
+            headers=headers,
+            params={"machine_id": machine_id},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            LOGGER.warning("Não foi possível obter a lista do cofre (%s).", r.status_code)
+            return None
+        return {str(f) for f in (r.json().get("fingerprints") or [])}
+    except Exception as e:
+        LOGGER.warning("Falha ao consultar a lista do cofre: %s", e)
+        return None
+
+
 def upload_pfx_files(
     client: httpx.Client,
     base_url: str,
@@ -44,12 +73,30 @@ def upload_pfx_files(
     machine_id: str,
     items: List[CertInfo],
 ) -> None:
-    """Envia os arquivos .pfx lidos para o servidor armazenar com criptografia."""
+    """
+    Envia ao cofre APENAS os .pfx explicitamente autorizados.
+
+    Antes esta função enviava todos os certificados lidos, a cada ciclo de scan.
+    Numa base de mil certificados, isso copiava mil chaves privadas (e suas
+    senhas) para o Supabase sem que ninguém tivesse decidido — e reenviava tudo
+    a cada varredura.
+    """
+    autorizados = _buscar_fingerprints_autorizados(client, base_url, headers, machine_id)
+    if autorizados is None:
+        LOGGER.info("Sincronização com o cofre ignorada: lista de autorizações indisponível.")
+        return
+    if not autorizados:
+        LOGGER.debug("Nenhum certificado autorizado ao cofre; nada a enviar.")
+        return
+
+    enviados = 0
     for c in items:
         if not c.path or not c.path.is_file():
             continue
         # Só envia certificados válidos/lidos que possuam fingerprint
         if not c.fingerprint_sha256:
+            continue
+        if c.fingerprint_sha256 not in autorizados:
             continue
 
         try:
@@ -60,7 +107,8 @@ def upload_pfx_files(
                 "fingerprint": c.fingerprint_sha256,
                 "machine_id": machine_id,
                 "pfx_b64": pfx_b64,
-                "password": c.password_from_name,
+                # A senha NÃO é mais enviada: o servidor a descarta e o agente
+                # a lê do nome do arquivo local na hora de instalar.
                 "nome_titular": c.nome_titular,
                 "documento": c.documento_numero,
                 "documento_tipo": c.documento_tipo,
@@ -76,6 +124,7 @@ def upload_pfx_files(
                 json=payload,
             )
             if resp.status_code == 200:
+                enviados += 1
                 LOGGER.debug("PFX %s enviado com sucesso ao servidor.", c.file_name)
             else:
                 LOGGER.warning(
@@ -86,6 +135,13 @@ def upload_pfx_files(
                 )
         except Exception as ex:
             LOGGER.exception("Falha ao enviar arquivo PFX %s: %s", c.file_name, ex)
+
+    if enviados:
+        LOGGER.info(
+            "Cofre sincronizado: %d de %d certificados autorizados enviados.",
+            enviados,
+            len(autorizados),
+        )
 
 
 def _decrypt_payload_ecdh(
