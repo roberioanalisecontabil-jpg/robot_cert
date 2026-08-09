@@ -263,19 +263,34 @@
 
       let _optinCandidatos = [];
       let _optinAutorizados = new Set();
+      // O machine_id vem na RAIZ do payload de /api/certificados, não em cada
+      // item. Gravar a autorização com machine_id errado é falha silenciosa: o
+      // agente consulta filtrando pelo dele, não encontra, e nunca envia o PFX
+      // — enquanto a tela mostra "Autorizado".
+      let _optinMachineId = "default";
 
       async function loadOptinPanel() {
         const tbody = document.getElementById("tblOptinCerts");
         renderSkeletonRows(tbody, 5, 5);
         try {
-          const [rCerts, rOptin] = await Promise.all([
-            fetch("/api/certificados?fonte=auto&pagina=1&por_pagina=500", { headers: getHeaders() }),
-            fetch("/api/cert-installer/vault-optin", { headers: getHeaders() }),
-          ]);
+          // Sequencial de propósito: o machine_id sai do inventário e precisa
+          // entrar na consulta de autorizações. Buscar as duas em paralelo
+          // devolveria o opt-in de todas as máquinas, e o badge "Autorizado"
+          // apareceria para certificado que este agente não vai receber.
+          const rCerts = await fetch(
+            "/api/certificados?fonte=auto&pagina=1&por_pagina=500",
+            { headers: getHeaders() }
+          );
           if (!rCerts.ok) throw new Error(`Inventário: HTTP ${rCerts.status}`);
-          if (!rOptin.ok) throw new Error(`Autorizações: HTTP ${rOptin.status}`);
-
           const dCerts = await rCerts.json();
+
+          _optinMachineId = dCerts.machine_id || "default";
+
+          const rOptin = await fetch(
+            `/api/cert-installer/vault-optin?machine_id=${encodeURIComponent(_optinMachineId)}`,
+            { headers: getHeaders() }
+          );
+          if (!rOptin.ok) throw new Error(`Autorizações: HTTP ${rOptin.status}`);
           const dOptin = await rOptin.json();
 
           // Só entram candidatos com fingerprint: é a chave de autorização.
@@ -311,7 +326,10 @@
             .filter(Boolean).join(" ").toLowerCase().includes(q);
         });
 
+        // A máquina fica visível: a autorização vale para ela, e só o agente
+        // dela vai receber os certificados listados aqui.
         document.getElementById("optinResumo").textContent =
+          `Máquina: ${_optinMachineId} · ` +
           `${_optinAutorizados.size} autorizado(s) de ${_optinCandidatos.length} certificado(s) no inventário` +
           (q ? ` · ${linhas.length} correspondem à busca` : "");
 
@@ -397,7 +415,7 @@
                 headers: getHeaders(true),
                 body: JSON.stringify({
                   fingerprint: fp,
-                  machine_id: cert.machine_id || "default",
+                  machine_id: cert.machine_id || _optinMachineId,
                   nome_titular: cert.nome || cert.display_name || null,
                   documento: cert.documento_formatado || cert.documento_numero || null,
                 }),

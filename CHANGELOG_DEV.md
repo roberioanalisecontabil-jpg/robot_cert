@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-02                  |
+| **Data da última atualização** | 2026-08-08                  |
 | **Branch ativa**   | main                                       |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Deploy e validação no Vercel (.vercel.app) |
-| **Próxima tarefa** | Monitoramento e validação de requisições do Agente Windows |
+| **Última tarefa concluída** | Correção do `machine_id` no opt-in do cofre + 4 testes de regressão (127 no total) |
+| **Próxima tarefa** | Validação fim-a-fim do instalador com agente real: autorizar → agente enviar PFX → instalar na estação |
 
 ---
 
@@ -41,6 +41,67 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-08 — Painel de Opt-in do Cofre: correção do `machine_id` e testes de regressão
+
+**Objetivo da sessão:** Validar o painel de opt-in recém-commitado (`c28f98a`) e fechar as pendências de infraestrutura de teste.
+
+**Bug encontrado e corrigido (falha silenciosa, severidade alta):**
+
+O painel gravava a autorização com `machine_id: cert.machine_id || "default"`. Mas em `fonte=auto` o portal devolve o `machine_id` na **raiz** do payload de `/api/certificados` (`app/main.py:334-342`), não em cada item — então `cert.machine_id` era sempre `undefined` e **toda autorização ia para o literal `"default"`**.
+
+Do outro lado, o agente consulta filtrando pelo machine_id dele (`agent/installer_client.py:57`) e `listar_optin_fingerprints` aplica `.eq("machine_id", ...)` (`app/cert_installer.py:332`). O `_machine_id()` do agente (`agent/run_agent.py:335`) resolve de `MACHINE_ID` → config local → settings → `"default"`.
+
+Resultado: em qualquer instalação cujo machine_id não fosse literalmente `"default"`, o admin clicava "Autorizar", o badge ficava verde, e o agente **nunca recebia o certificado**. Nenhum erro em lugar nenhum. O GET sem filtro de máquina agravava, mostrando o opt-in de todas as máquinas e mascarando a divergência.
+
+**Arquivos modificados:**
+- `templates/instalador.html` → `_optinMachineId` lido da raiz do payload; POST usa ele; GET de `/vault-optin` passa `?machine_id=`; busca do inventário virou sequencial (o machine_id precisa sair dela antes); máquina exibida no resumo do painel
+
+**Arquivos criados:**
+- `pytest.ini` → `testpaths = tests` + `norecursedirs`. Sem isto, `pytest` sem argumentos varria `robot_cert-main/` (backup do zip antigo) e quebrava com `ImportPathMismatchError`
+- `tests/test_instalador_optin_machine_id.py` → 4 testes de invariante do painel
+
+**Decisões técnicas tomadas:**
+- O `Promise.all` do carregamento do painel foi desfeito **de propósito**: o machine_id sai do inventário e precisa entrar na consulta de autorizações. Reintroduzir o paralelismo volta a perder o filtro — está documentado no código e coberto por teste.
+- `robot_cert-main/` **não foi apagado** (é backup, gitignored, 0,7 MB). Resolvido por config em vez de remoção.
+
+**Validações executadas:**
+- Suíte: **127 passed** (123 anteriores + 4 novos), `pytest` puro já funciona
+- Teste de mutação: reintroduzindo cada uma das duas metades do bug, os testes novos falham (1 e 2 falhas respectivamente) — não são testes decorativos
+- Portal no ar em `127.0.0.1:8020`: `/api/health` respondeu com os campos novos, `/instalador` renderizou HTTP 200 com todos os marcadores do painel
+- Os 6 helpers JS usados pelo painel conferidos em `static/ui-common.js`
+
+**Pendências / Próximos passos:**
+- [ ] Validação fim-a-fim com agente real (autorizar → upload do PFX → instalação na estação) — é a única parte sem cobertura automatizada
+- [ ] Definir `ENCRYPTION_KEY` nos ambientes (ver dívida técnica #2)
+
+---
+
+### 🗓️ 2026-08-03 — Módulo Instalador Remoto de Certificados
+
+**Objetivo da sessão:** Implementar instalação remota de certificados na estação do usuário via agente Windows, e endurecer o módulo após revisão.
+
+**Commits:** `fce8c4a` (implementação) e `f2557aa` (endurecimento + testes)
+
+**Entregue:**
+- Transporte cifrado ponta a ponta: **AES-256-GCM + ECDH** entre portal e agente
+- Cofre de PFX no servidor (`cert_pfx_store`) com material cifrado em repouso e `key_version` gravado por registro, permitindo rotação incremental de chave
+- Tabela `cert_vault_optin` + **RLS no Supabase** (`REVOKE` de `anon`/`authenticated`, acesso só via `service_role`)
+- Suíte de **123 testes** automatizados
+
+**Cinco decisões do endurecimento** (documentadas em `tests/test_cert_installer_hardening.py`):
+1. **Opt-in do cofre** — o agente enviava TODOS os certificados lidos a cada ciclo; numa base de 1.028, mil chaves privadas copiadas ao servidor sem decisão explícita
+2. **Token de instalação** era gerado no `/prepare` e nunca chegava ao agente — a instalação nunca completava
+3. **`key_version` gravado** — sem ele, rotacionar a chave exigiria recifrar tudo
+4. **Senha do PFX não é mais armazenada** — era cifrada com a MESMA chave do PFX
+5. **Limite de upload** reduzido de 50 MB para 1 MB
+
+**Migrations criadas:**
+- `20260803_cert_installer.sql`, `20260803120000_cert_installer_rls.sql`, `20260803130000_cert_installer_hardening.sql`
+
+**Nota:** a UI do opt-in ficou pendente nesta sessão e foi entregue em `c28f98a` — com o bug de `machine_id` corrigido em 08/08.
 
 ---
 
@@ -201,7 +262,11 @@ robot_cert/
 
 | # | Descrição | Severidade | Status |
 |---|-----------|------------|--------|
-| 1 | (Registrar aqui conforme identificado) | — | Aberto |
+| 1 | `robot_cert-main/` é uma cópia inteira do projeto dentro dele mesmo (backup do zip de 25/05, gitignored, 0,7 MB). Contornado por `pytest.ini`, mas continua confundindo buscas e ferramentas | Baixa | Contornado |
+| 2 | `ENCRYPTION_KEY` não definida (`/api/health` → `smtp_key_dedicada: false`). Sem ela a chave do SMTP é derivada da `JWT_SECRET_KEY` — se a JWT diferir entre ambientes, a senha SMTP para de descriptografar | Média | Aberto |
+| 3 | Instalação fim-a-fim (autorizar → upload → instalar na estação) não tem cobertura automatizada; depende de agente Windows real | Média | Aberto |
+| 4 | `autorizar_no_cofre` usa `on_conflict="fingerprint"` — o mesmo certificado não pode estar autorizado em duas máquinas ao mesmo tempo; a segunda autorização move a primeira | Baixa | Aberto |
+| 5 | `app/main.py` usa `@app.on_event("startup")`, deprecado no FastAPI (avisos na suíte). Migrar para lifespan handlers | Baixa | Aberto |
 
 ---
 
