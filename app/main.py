@@ -869,7 +869,10 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
     if not s.smtp_host:
         raise HTTPException(status_code=400, detail="Servidor SMTP não configurado.")
     try:
-        send_smtp_email(
+        # Qualificado pelo módulo: `send_smtp_email` nunca esteve na lista de
+        # imports deste arquivo, então a rota levantava NameError em vez de
+        # enviar. Só não aparecia porque ninguém clicava em "Enviar Teste".
+        smtp_service.send_smtp_email(
             host=s.smtp_host,
             port=s.smtp_port,
             user=s.smtp_user,
