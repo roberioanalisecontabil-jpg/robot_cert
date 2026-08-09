@@ -10,6 +10,7 @@ venv/
 !.env.example
 *_key.txt
 encryption_key.txt
+a.txt
 *.pfx
 data/
 
