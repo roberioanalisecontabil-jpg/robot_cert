@@ -26,6 +26,7 @@ from app.historico_agg_cache import get_or_build as _historico_cache_get_or_buil
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
+from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente
 from app.notification_service import build_notifications_payload
@@ -158,6 +159,16 @@ async def lifespan(_app: FastAPI):
     `finally` agora cancela e aguarda o encerramento.
     """
     import asyncio
+
+    # Antes de qualquer outra coisa: sem a chave de cifragem da senha SMTP o
+    # portal não sobe. Deliberadamente fatal — o desenho anterior derivava uma
+    # chave da JWT_SECRET_KEY e seguia em frente, e a consequência (senha SMTP
+    # indecifrável) só aparecia como "os alertas pararam", desligado no tempo e
+    # no espaço da causa.
+    #
+    # ATENÇÃO AO DEPLOY: defina ENCRYPTION_KEY no painel da plataforma
+    # (Vercel/Render) ANTES de publicar esta versão. O .env não sobe no deploy.
+    smtp_service.verificar_chave_configurada()
 
     try:
         config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)

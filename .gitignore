@@ -3,6 +3,11 @@ __pycache__/
 .venv/
 venv/
 .env
+# O padrão `.env` casa só o nome exato. Backups e variantes (.env.bak,
+# .env.local, .env.producao) ficavam de fora e apareciam como não rastreados,
+# prontos para entrar num `git add .` com segredos dentro.
+.env.*
+!.env.example
 *.pfx
 data/
 

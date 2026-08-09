@@ -27,6 +27,19 @@ def sem_supabase_real(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def encryption_key_de_teste(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Chave Fernet fixa para os testes.
+
+    O boot passou a exigir ENCRYPTION_KEY (`smtp_service.verificar_chave_
+    configurada`), então sem isto a suíte dependeria do .env da máquina — e
+    passaria ou falharia conforme quem a roda. Chave literal de propósito: é de
+    teste, não é segredo, e ser fixa mantém o resultado reprodutível.
+    """
+    monkeypatch.setenv("ENCRYPTION_KEY", "hUXK9m0Qs2vZ8pYbN3rTfL6wJcE1aD4gXoV7iS5kBnM=")
+
+
 @pytest.fixture
 def no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """API sem exigir X-API-Key (reproduz ambiente dev sem API_KEY)."""
