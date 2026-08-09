@@ -8,6 +8,7 @@ import os
 import re
 import unicodedata
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
@@ -116,7 +117,10 @@ class SecureJSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         # [OWASP A09] Ocultação de segredos e geração de Log JSON estruturado para prevenir Log Injection
         log_obj = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            # O replace preserva o sufixo "Z": isoformat() de um datetime aware
+            # emite "+00:00", e concatenar "Z" daria "+00:00Z". O formato do log
+            # continua byte a byte igual ao de antes.
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -139,7 +143,81 @@ logging.root.setLevel(logging.INFO)
 
 LISTAGEM_EXPORT_MAX = 5000
 
-app = FastAPI(title="Monitor de certificados PFX", version="1.2.1")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """
+    Inicialização e encerramento do portal.
+
+    Substitui `@app.on_event("startup")`, deprecado no FastAPI. A ordem é a
+    mesma de antes: criar os diretórios locais e só então subir o job de
+    alertas.
+
+    O que muda além da deprecação: o `asyncio.create_task` do laço de alertas
+    não tinha contrapartida no shutdown — a task ficava pendurada e, em
+    reinícios rápidos, um novo laço subia enquanto o anterior ainda dormia. O
+    `finally` agora cancela e aguarda o encerramento.
+    """
+    import asyncio
+
+    try:
+        config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+        config.CERT_EXPIRED_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logger.warning(f"Não foi possível criar diretórios locais (ambiente read-only / Vercel): {e}")
+
+    # Job diário de alertas por e-mail.
+    #
+    # Dois problemas do desenho anterior:
+    #
+    # 1. `trigger_all_alerts()` é síncrona e era chamada direto no laço async.
+    #    Ela faz a varredura completa dos certificados (2,5-3,3s numa base de
+    #    mil) e depois N envios SMTP sequenciais — tudo isso travava o event
+    #    loop, ou seja, o portal inteiro parava de responder durante o job.
+    #    Agora roda em thread separada via run_in_executor.
+    #
+    # 2. O laço dormia 86400s, mas o Procfile usa `--max-requests 500`: o worker
+    #    recicla várias vezes ao dia e o job redisparava em cada boot+60s.
+    #    "Diário" nunca foi diário. O marcador em disco (job_ja_executado_
+    #    recentemente) torna a cadência real, independente de reinícios.
+    async def daily_alerts_job_loop():
+        logger.info("Iniciando loop do job diário de alertas")
+        await asyncio.sleep(60)  # Deixa o boot terminar antes do primeiro disparo
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                if job_ja_executado_recentemente():
+                    logger.info("Job de alertas ignorado: já executado nas últimas horas.")
+                else:
+                    logger.info("Executando job de alertas por e-mail...")
+                    stats = await loop.run_in_executor(None, trigger_all_alerts)
+                    logger.info(f"Job de alertas concluído: {stats}")
+            except Exception as e:
+                logger.error(f"Erro ao executar job de alertas: {e}")
+            # Reavalia de hora em hora: com o marcador de última execução, o
+            # trabalho real acontece uma vez por dia mesmo com ciclo curto.
+            await asyncio.sleep(3600)
+
+    tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
+    try:
+        yield
+    finally:
+        # O `await` é limitado no tempo de propósito. Esperar a task sem prazo
+        # significa que qualquer falha em encerrá-la (um cancel que não chega,
+        # um run_in_executor preso num envio SMTP) trava o shutdown do processo
+        # para sempre — o worker não recicla e o deploy não termina. Desistir
+        # depois de alguns segundos e registrar é melhor que pendurar.
+        # `asyncio.wait` em vez de `wait_for` + `except CancelledError`: aquele
+        # except engolia qualquer cancelamento, inclusive um dirigido ao próprio
+        # lifespan por quem o encerra — o shutdown virava inignorável e a espera
+        # pelo prazo cheio passava despercebida. `asyncio.wait` devolve a task
+        # pendente sem levantar, e deixa passar um cancelamento externo.
+        tarefa_alertas.cancel()
+        _, pendentes = await asyncio.wait({tarefa_alertas}, timeout=5)
+        if pendentes:
+            logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
+
+
+app = FastAPI(title="Monitor de certificados PFX", version="1.2.1", lifespan=lifespan)
 
 import secrets
 
@@ -1846,50 +1924,6 @@ def mover_vencidos() -> JSONResponse:
     )
 
 
-@app.on_event("startup")
-def _startup() -> None:
-    try:
-        config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
-        config.CERT_EXPIRED_DIR.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        logger.warning(f"Não foi possível criar diretórios locais (ambiente read-only / Vercel): {e}")
-    
-    # Job diário de alertas por e-mail.
-    #
-    # Dois problemas do desenho anterior:
-    #
-    # 1. `trigger_all_alerts()` é síncrona e era chamada direto no laço async.
-    #    Ela faz a varredura completa dos certificados (2,5-3,3s numa base de
-    #    mil) e depois N envios SMTP sequenciais — tudo isso travava o event
-    #    loop, ou seja, o portal inteiro parava de responder durante o job.
-    #    Agora roda em thread separada via run_in_executor.
-    #
-    # 2. O laço dormia 86400s, mas o Procfile usa `--max-requests 500`: o worker
-    #    recicla várias vezes ao dia e o job redisparava em cada boot+60s.
-    #    "Diário" nunca foi diário. O marcador em disco (job_ja_executado_
-    #    recentemente) torna a cadência real, independente de reinícios.
-    import asyncio
-
-    async def daily_alerts_job_loop():
-        logger.info("Iniciando loop do job diário de alertas")
-        await asyncio.sleep(60)  # Deixa o boot terminar antes do primeiro disparo
-        loop = asyncio.get_running_loop()
-        while True:
-            try:
-                if job_ja_executado_recentemente():
-                    logger.info("Job de alertas ignorado: já executado nas últimas horas.")
-                else:
-                    logger.info("Executando job de alertas por e-mail...")
-                    stats = await loop.run_in_executor(None, trigger_all_alerts)
-                    logger.info(f"Job de alertas concluído: {stats}")
-            except Exception as e:
-                logger.error(f"Erro ao executar job de alertas: {e}")
-            # Reavalia de hora em hora: com o marcador de última execução, o
-            # trabalho real acontece uma vez por dia mesmo com ciclo curto.
-            await asyncio.sleep(3600)
-
-    asyncio.create_task(daily_alerts_job_loop())
-
 # =========================================================================
 # LGPD / PRIVACY BY DESIGN - DIREITOS DOS TITULARES
 # =========================================================================
@@ -1905,7 +1939,7 @@ def export_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
         "titular": email,
         "vinculo_role": token.role,
         "documentos_monitorados_cnpj_cpf": docs,
-        "exportado_em": datetime.utcnow().isoformat() + "Z",
+        "exportado_em": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "aviso_lgpd": "Este arquivo contém seus dados pessoais conforme registro no sistema."
     }
 

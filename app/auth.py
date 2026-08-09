@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
@@ -40,7 +40,10 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    now = datetime.utcnow()
+    # Aware em vez de utcnow() (deprecado). O epoch gravado em exp/nbf não muda:
+    # o python-jose converte datetimes via utctimetuple(), que já normaliza para
+    # UTC — tokens emitidos antes e depois desta troca expiram no mesmo instante.
+    now = datetime.now(timezone.utc)
     if expires_delta:
         expire = now + expires_delta
     else:
