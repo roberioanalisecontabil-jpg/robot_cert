@@ -191,23 +191,73 @@ def registrar_execucao_job() -> None:
     _save_job_state(state)
 
 
-def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
-    """Mapeia user_email -> lista de documentos digitos."""
+def _emails_ativos() -> Optional[set]:
+    """
+    E-mails que podem receber alerta: existem em `users` e não estão desativados.
+
+    Devolve None se a lista não puder ser obtida — o chamador interpreta como
+    "não sei filtrar" e mantém o comportamento anterior, em vez de silenciar
+    todos os alertas por causa de uma falha de leitura.
+    """
     client = _supabase()
+    if not client:
+        return None
+    try:
+        r = client.table("users").select("email, role").execute()
+        return {
+            str(row.get("email") or "").strip().lower()
+            for row in (r.data or [])
+            if str(row.get("email") or "").strip()
+            and str(row.get("role") or "").strip().lower() != "disabled"
+        }
+    except Exception as e:
+        logger.warning(f"Não foi possível listar usuários ativos para filtrar alertas: {e}")
+        return None
+
+
+def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
+    """
+    Mapeia user_email -> lista de documentos (dígitos), só de usuários ativos.
+
+    O filtro por usuário ativo é a parte que faltava. Os destinatários dos
+    alertas de vencimento saíam desta tabela sem nenhuma consulta a `users`:
+    desativar alguém no painel não o tirava dos e-mails, e uma linha órfã —
+    de conta apagada ou de identidade de serviço como `agent@internal` —
+    continuava recebendo indefinidamente.
+
+    Em 09/08/2026 havia quatro dessas em produção, duas em domínios de
+    terceiros (`certguard.com`, `example.com`), recebendo nome de titular,
+    CNPJ/CPF e vencimento de certificados de clientes reais. Não era acesso
+    indevido a uma tela: era e-mail saindo para fora.
+    """
+    client = _supabase()
+    selecoes: Dict[str, List[str]] = {}
     if client:
         try:
             r = client.table("colaborador_cert_selecoes").select("user_email, documentos").execute()
-            out = {}
             for row in (r.data or []):
                 email = str(row.get("user_email") or "").lower().strip()
                 docs = row.get("documentos")
                 if email and isinstance(docs, list):
-                    out[email] = [str(x).strip() for x in docs if str(x).strip()]
-            return out
+                    selecoes[email] = [str(x).strip() for x in docs if str(x).strip()]
         except Exception as e:
             logger.warning(f"Falha ao ler seleções de colaboradores no Supabase, usando local: {e}")
-            
-    return _load_colaborador_file_dict()
+            selecoes = _load_colaborador_file_dict()
+    else:
+        selecoes = _load_colaborador_file_dict()
+
+    ativos = _emails_ativos()
+    if ativos is None:
+        return selecoes
+
+    permitidas = {e: d for e, d in selecoes.items() if e in ativos}
+    descartadas = sorted(set(selecoes) - set(permitidas))
+    if descartadas:
+        logger.info(
+            "Seleções ignoradas por usuário inativo ou inexistente: %s",
+            ", ".join(descartadas),
+        )
+    return permitidas
 
 def _linha_resumo(cert: Dict[str, Any], dias: int, cor: str) -> str:
     nome = html.escape(str(cert.get("nome") or cert.get("display_name") or "Sem nome"))
