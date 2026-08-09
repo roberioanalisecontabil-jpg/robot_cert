@@ -235,14 +235,47 @@ def _import_pfx_non_exportable(pfx_bytes: bytes, password: str) -> tuple[bool, s
             pass
 
 
+def _senhas_por_fingerprint(source_dir) -> dict:
+    """
+    Mapeia fingerprint -> senha, lida do nome dos arquivos locais.
+
+    A senha do PFX deixou de ser armazenada no servidor no endurecimento de
+    03/08 (era cifrada com a MESMA chave do PFX, então guardá-la junto não
+    protegia nada). O plano registrado em `cert_installer.py` era o agente
+    extraí-la do nome do arquivo na hora de instalar — mas essa parte nunca foi
+    escrita: o bundle chega com `pfxPassword: None` e a instalação seguia com
+    senha vazia, fazendo o certutil recusar todo PFX protegido, que são todos.
+
+    A extração já existia em `cert_scanner` (padrão «nome» senha «valor».pfx,
+    exposto em `CertInfo.password_from_name`); faltava ligar as duas pontas.
+    """
+    if not source_dir:
+        return {}
+    try:
+        from app.cert_scanner import scan_folder
+
+        mapa = {}
+        for c in scan_folder(source_dir, recursive=True):
+            if c.fingerprint_sha256 and c.password_from_name:
+                mapa[c.fingerprint_sha256] = c.password_from_name
+        return mapa
+    except Exception as ex:
+        LOGGER.warning("Não foi possível ler as senhas dos arquivos locais: %s", ex)
+        return {}
+
+
 def process_install_command(
     client: httpx.Client,
     base_url: str,
     headers: dict,
     token: str,
+    source_dir=None,
 ) -> bool:
     """
     Executa o ciclo completo de resgate e instalação de certificados via comando remoto.
+
+    `source_dir` é a pasta de certificados da estação: é de onde sai a senha de
+    cada PFX, já que o servidor não a guarda mais.
     """
     LOGGER.info("Iniciando processo de instalação remota de certificados (token %s...)", token[:8])
 
@@ -282,6 +315,10 @@ def process_install_command(
 
     results = []
 
+    # Senhas dos arquivos locais. Lidas uma vez só: a varredura da pasta leva
+    # alguns segundos numa base grande e o bundle costuma trazer vários itens.
+    senhas_locais = _senhas_por_fingerprint(source_dir)
+
     # 3. Processar cada certificado no bundle
     for item in certificates:
         cert_id = item.get("certificateId", "")
@@ -289,11 +326,36 @@ def process_install_command(
         try:
             pfx_bytes = _decrypt_payload_ecdh(client_private_key, item)
 
-            password = ""
-            pwd_bundle = item.get("pfxPassword")
-            if pwd_bundle:
-                pwd_bytes = _decrypt_payload_ecdh(client_private_key, pwd_bundle)
-                password = pwd_bytes.decode("utf-8")
+            # Ordem: senha do arquivo local primeiro; o bundle só como
+            # compatibilidade com registros anteriores ao endurecimento, que
+            # ainda podem trazer `pfxPassword` preenchido.
+            password = senhas_locais.get(fingerprint, "")
+            if not password:
+                pwd_bundle = item.get("pfxPassword")
+                if pwd_bundle:
+                    pwd_bytes = _decrypt_payload_ecdh(client_private_key, pwd_bundle)
+                    password = pwd_bytes.decode("utf-8")
+
+            if not password:
+                # Falhar aqui, com causa nomeada, em vez de deixar o certutil
+                # recusar por "senha incorreta" — que aponta para o lugar errado.
+                LOGGER.error(
+                    "Senha não encontrada para o certificado %s. O arquivo precisa "
+                    "existir na pasta local seguindo «nome» senha «valor».pfx",
+                    fingerprint[:16],
+                )
+                results.append({
+                    "certificateId": cert_id,
+                    "fingerprint": fingerprint,
+                    "status": "FALHA",
+                    "detail": (
+                        "Senha do PFX não encontrada: o arquivo não está na pasta "
+                        "local desta estação, ou o nome não segue o padrão "
+                        "«nome» senha «valor».pfx"
+                    ),
+                })
+                pfx_bytes = b"\x00" * len(pfx_bytes)
+                continue
 
             success, detail = _import_pfx_non_exportable(pfx_bytes, password)
 

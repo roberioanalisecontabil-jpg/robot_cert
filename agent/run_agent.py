@@ -869,7 +869,12 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                                 LOGGER.info("Comando remoto: instalar_certificados (token %s...); máquina %s.", str(token_inst)[:8], mid)
                                 try:
                                     from agent.installer_client import process_install_command
-                                    process_install_command(client, base, _headers(), str(token_inst))
+                                    # `src` é de onde sai a senha de cada PFX: o
+                                    # servidor não a guarda mais, o agente a lê do
+                                    # nome do arquivo local.
+                                    process_install_command(
+                                        client, base, _headers(), str(token_inst), source_dir=src
+                                    )
                                 except Exception as ex_inst:
                                     LOGGER.exception("Erro ao executar instalação remota: %s", ex_inst)
                             else:
