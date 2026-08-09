@@ -898,6 +898,48 @@ def trigger_alerts_manually() -> dict:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/cron/alerts")
+def cron_alerts(request: Request) -> dict:
+    """
+    Disparo agendado dos alertas, chamado pelo Cron do Vercel.
+
+    Existe porque o laço do `lifespan` não roda em serverless: cada requisição
+    instancia a função e a encerra, então o `asyncio.create_task` morre antes
+    dos 60s do primeiro disparo. No Render, com processo vivo, o laço bastava;
+    no Vercel ninguém nunca chamaria `trigger_all_alerts`.
+
+    Autenticação por CRON_SECRET em vez de JWT: o Cron do Vercel não faz login.
+    Quando a variável CRON_SECRET existe no projeto, o Vercel envia
+    `Authorization: Bearer <CRON_SECRET>` automaticamente em cada chamada.
+
+    Falha FECHADA se a variável não estiver definida: uma rota que dispara
+    envio de e-mail em massa não pode ficar aberta a quem descobrir a URL só
+    porque alguém esqueceu de configurar o segredo.
+    """
+    segredo = (os.getenv("CRON_SECRET") or "").strip()
+    if not segredo:
+        logger.error("CRON_SECRET não configurada — disparo agendado recusado.")
+        raise HTTPException(
+            status_code=503,
+            detail="CRON_SECRET não configurada no ambiente.",
+        )
+
+    enviado = (request.headers.get("authorization") or "").strip()
+    esperado = f"Bearer {segredo}"
+    # compare_digest evita vazar o segredo pelo tempo de resposta.
+    if not secrets.compare_digest(enviado, esperado):
+        logger.warning("Chamada ao cron de alertas com credencial inválida.")
+        raise HTTPException(status_code=401, detail="Não autorizado.")
+
+    try:
+        stats = trigger_all_alerts()
+        logger.info(f"Cron de alertas concluído: {stats}")
+        return {"ok": True, "stats": stats}
+    except Exception as e:
+        logger.exception("Falha no cron de alertas")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_auth)])
 def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dict:
     try:
