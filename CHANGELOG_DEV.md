@@ -13,8 +13,8 @@
 | **Data da última atualização** | 2026-08-08                  |
 | **Branch ativa**   | main                                       |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Correção do `machine_id` no opt-in do cofre + 4 testes de regressão (127 no total) |
-| **Próxima tarefa** | Validação fim-a-fim do instalador com agente real: autorizar → agente enviar PFX → instalar na estação |
+| **Última tarefa concluída** | Opt-in do cofre vinculado ao `machine_id` na tela e na barreira do upload + cobertura do circuito (136 testes) |
+| **Próxima tarefa** | Validação com agente Windows real (transporte ECDH/AES e instalação na estação) |
 
 ---
 
@@ -61,20 +61,35 @@ Resultado: em qualquer instalação cujo machine_id não fosse literalmente `"de
 
 **Arquivos criados:**
 - `pytest.ini` → `testpaths = tests` + `norecursedirs`. Sem isto, `pytest` sem argumentos varria `robot_cert-main/` (backup do zip antigo) e quebrava com `ImportPathMismatchError`
-- `tests/test_instalador_optin_machine_id.py` → 4 testes de invariante do painel
+- `tests/test_instalador_optin_machine_id.py` → 4 testes de invariante do painel (lado da tela)
+- `tests/test_cert_installer_optin_e2e.py` → 8 testes do circuito completo pelo HTTP real (lado do servidor), com fake de Supabase em memória
+
+**Por que dois arquivos de teste:** o bug sobreviveu porque *cada lado, isolado, estava correto* — a tela gravava um machine_id válido, o servidor filtrava corretamente por machine_id. O que faltava era um teste **atravessando a fronteira**: autorizar na máquina A e verificar que o agente da A vê e o da B não vê. O fake de Supabase é um banco de brinquedo, não mock de asserção, para exercitar a lógica de filtro real em vez de conferir que uma chamada aconteceu.
 
 **Decisões técnicas tomadas:**
 - O `Promise.all` do carregamento do painel foi desfeito **de propósito**: o machine_id sai do inventário e precisa entrar na consulta de autorizações. Reintroduzir o paralelismo volta a perder o filtro — está documentado no código e coberto por teste.
 - `robot_cert-main/` **não foi apagado** (é backup, gitignored, 0,7 MB). Resolvido por config em vez de remoção.
 
 **Validações executadas:**
-- Suíte: **127 passed** (123 anteriores + 4 novos), `pytest` puro já funciona
-- Teste de mutação: reintroduzindo cada uma das duas metades do bug, os testes novos falham (1 e 2 falhas respectivamente) — não são testes decorativos
+- Suíte: **136 passed** (123 anteriores + 4 do painel + 9 do circuito), `pytest` puro já funciona
+- Teste de mutação em ambos os arquivos novos — não são testes decorativos:
+  - reintroduzindo cada metade do bug no template: 1 e 2 falhas
+  - removendo `.eq("machine_id", ...)` de `listar_optin_fingerprints`: 2 falhas
+  - fazendo `revogar_do_cofre` não apagar o PFX: 1 falha
+  - devolvendo a barreira do `/upload-pfx` ao estado global: 1 falha
 - Portal no ar em `127.0.0.1:8020`: `/api/health` respondeu com os campos novos, `/instalador` renderizou HTTP 200 com todos os marcadores do painel
 - Os 6 helpers JS usados pelo painel conferidos em `static/ui-common.js`
 
+**Segundo achado, corrigido na mesma sessão — barreira global no `/upload-pfx`:**
+
+`app/main.py` chamava `cert_installer.listar_optin_fingerprints()` **sem `machine_id`**, embora `body.machine_id` estivesse disponível na requisição. A barreira de servidor do upload era portanto global: bastava o fingerprint estar autorizado em qualquer máquina.
+
+O agente bem-comportado nunca esbarrava nisso — só envia o que a consulta filtrada dele devolveu. Mas a barreira existe justamente para o agente "desatualizado (ou adulterado)", e contra esse é que ela não olhava a máquina: declarando-se da estação B, ele gravava o PFX de um certificado autorizado só na A e, como `upsert_pfx` usa `on_conflict="fingerprint"`, sobrescrevia o registro legítimo — o mesmo vetor já descrito em `require_agent_or_admin`, por outro caminho.
+
+Passou a ser `listar_optin_fingerprints(body.machine_id)`. Verificado antes de aplicar que o caminho legítimo não quebra: `agent/installer_client.py` usa a **mesma** variável `machine_id` na consulta (linha 84) e no payload do upload (linha 108).
+
 **Pendências / Próximos passos:**
-- [ ] Validação fim-a-fim com agente real (autorizar → upload do PFX → instalação na estação) — é a única parte sem cobertura automatizada
+- [ ] Validação com agente Windows real — o circuito lógico está coberto, mas o transporte ECDH/AES e a instalação na estação não
 - [ ] Definir `ENCRYPTION_KEY` nos ambientes (ver dívida técnica #2)
 
 ---
@@ -264,7 +279,8 @@ Resultado: em qualquer instalação cujo machine_id não fosse literalmente `"de
 |---|-----------|------------|--------|
 | 1 | `robot_cert-main/` é uma cópia inteira do projeto dentro dele mesmo (backup do zip de 25/05, gitignored, 0,7 MB). Contornado por `pytest.ini`, mas continua confundindo buscas e ferramentas | Baixa | Contornado |
 | 2 | `ENCRYPTION_KEY` não definida (`/api/health` → `smtp_key_dedicada: false`). Sem ela a chave do SMTP é derivada da `JWT_SECRET_KEY` — se a JWT diferir entre ambientes, a senha SMTP para de descriptografar | Média | Aberto |
-| 3 | Instalação fim-a-fim (autorizar → upload → instalar na estação) não tem cobertura automatizada; depende de agente Windows real | Média | Aberto |
+| 3 | Instalação fim-a-fim: o circuito do opt-in passou a ter cobertura (`test_cert_installer_optin_e2e.py`); falta o transporte ECDH/AES e a instalação na estação, que dependem de agente Windows real | Média | Parcial |
+| 6 | Barreira de servidor do `/upload-pfx` era global — não conferia o `machine_id` do agente contra o da autorização. Agente adulterado podia sobrescrever `cert_pfx_store` de outra máquina | Média | **Resolvido em 08/08** |
 | 4 | `autorizar_no_cofre` usa `on_conflict="fingerprint"` — o mesmo certificado não pode estar autorizado em duas máquinas ao mesmo tempo; a segunda autorização move a primeira | Baixa | Aberto |
 | 5 | `app/main.py` usa `@app.on_event("startup")`, deprecado no FastAPI (avisos na suíte). Migrar para lifespan handlers | Baixa | Aberto |
 

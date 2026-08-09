@@ -1974,7 +1974,14 @@ def upload_pfx(
 
     # Barreira de servidor para o opt-in: mesmo que um agente desatualizado
     # (ou adulterado) envie tudo, só entra no cofre o que foi autorizado.
-    autorizados = set(cert_installer.listar_optin_fingerprints())
+    #
+    # O filtro por machine_id é parte da barreira, não detalhe de consulta. Sem
+    # ele bastava o fingerprint estar autorizado em QUALQUER máquina: um agente
+    # que se declarasse de outra estação gravava o PFX de um certificado
+    # autorizado só na primeira e, como `upsert_pfx` usa
+    # `on_conflict="fingerprint"`, sobrescrevia o registro legítimo — o mesmo
+    # vetor descrito em require_agent_or_admin, por outro caminho.
+    autorizados = set(cert_installer.listar_optin_fingerprints(body.machine_id))
     if body.fingerprint not in autorizados:
         raise HTTPException(
             status_code=403,
