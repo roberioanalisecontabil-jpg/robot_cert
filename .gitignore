@@ -19,6 +19,8 @@ build_smoke/
 
 .pytest_cache/
 *.egg-info/
+.coverage
+htmlcov/
 
 # Pasta de backup/zip antigo (não commitar)
 robot_cert-main/
