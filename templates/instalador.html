@@ -90,10 +90,58 @@
       </header>
 
       <!-- Painel de Ação de Instalação -->
+      <!-- Passo 1: autorizar quais certificados podem ir para o cofre do servidor -->
+      <section class="card" style="margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+          <div>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">1 · Autorizar certificados para o cofre</h2>
+            <p class="text-muted" style="font-size: 0.875rem;">
+              Só os certificados autorizados aqui têm a chave privada copiada para o servidor.
+              O agente ignora todos os demais.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <label for="buscaOptin" class="cg-sr-only">Buscar certificado por nome ou documento</label>
+            <input type="search" id="buscaOptin" class="form-control" placeholder="Buscar por nome ou documento" style="width: 260px;" />
+            <button id="btnRefreshOptin" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
+          </div>
+        </div>
+
+        <div class="cg-banner cg-banner--info" style="margin-bottom: 1rem;">
+          <span class="cg-banner__icon" aria-hidden="true">🔐</span>
+          <span class="cg-banner__text">
+            Autorizar copia a chave privada do certificado para o banco do portal, cifrada.
+            Revogar remove a autorização <strong>e apaga o arquivo já armazenado</strong>.
+            Autorize apenas o necessário para instalação remota.
+          </span>
+        </div>
+
+        <div id="optinMessageArea"></div>
+
+        <div class="table-scroll-anchor">
+          <div class="table-scroll">
+            <table class="data-table" role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th role="columnheader">Titular / CNPJ / CPF</th>
+                  <th role="columnheader">Validade</th>
+                  <th role="columnheader">Fingerprint</th>
+                  <th role="columnheader">No cofre</th>
+                  <th role="columnheader">Ação</th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup" id="tblOptinCerts"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="hint" id="optinResumo" style="margin-top: 0.75rem;"></p>
+      </section>
+
+      <!-- Passo 2: disparar a instalação do que já está no cofre -->
       <section class="card" style="margin-bottom: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Enviar Certificados para Estação</h2>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">2 · Enviar Certificados para Estação</h2>
             <p class="text-muted" style="font-size: 0.875rem;">Selecione os certificados abaixo e a máquina destino para disparar a instalação não-exportável via Agente.</p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center;">
@@ -165,7 +213,7 @@
       </section>
     </main>
 
-    <script src="/static/ui-common.js?v=cg-v2-fluid"></script>
+    <script src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       document.addEventListener("DOMContentLoaded", function() {
         // Verificar perfil Admin
@@ -182,8 +230,17 @@
           return;
         }
 
+        loadOptinPanel();
         loadAvailableCerts();
         loadInstallLogs();
+
+        document.getElementById("btnRefreshOptin").addEventListener("click", loadOptinPanel);
+        const buscaOptin = document.getElementById("buscaOptin");
+        let debounceOptin = null;
+        buscaOptin.addEventListener("input", () => {
+          clearTimeout(debounceOptin);
+          debounceOptin = setTimeout(renderOptinTable, 250);
+        });
 
         // Checkbox selecionar todos
         const chkSelectAll = document.getElementById("chkSelectAllCerts");
@@ -199,12 +256,175 @@
         document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
       });
 
+      // ─── Passo 1: opt-in do cofre ──────────────────────────────────────
+      // A lista de candidatos vem do inventário que o portal já tem (metadados
+      // vindos do agente). O que está no cofre vem de /vault-optin. A tela
+      // cruza os dois: candidato + está autorizado?
+
+      let _optinCandidatos = [];
+      let _optinAutorizados = new Set();
+
+      async function loadOptinPanel() {
+        const tbody = document.getElementById("tblOptinCerts");
+        renderSkeletonRows(tbody, 5, 5);
+        try {
+          const [rCerts, rOptin] = await Promise.all([
+            fetch("/api/certificados?fonte=auto&pagina=1&por_pagina=500", { headers: getHeaders() }),
+            fetch("/api/cert-installer/vault-optin", { headers: getHeaders() }),
+          ]);
+          if (!rCerts.ok) throw new Error(`Inventário: HTTP ${rCerts.status}`);
+          if (!rOptin.ok) throw new Error(`Autorizações: HTTP ${rOptin.status}`);
+
+          const dCerts = await rCerts.json();
+          const dOptin = await rOptin.json();
+
+          // Só entram candidatos com fingerprint: é a chave de autorização.
+          const vistos = new Set();
+          _optinCandidatos = (dCerts.itens || []).filter((c) => {
+            const fp = c.fingerprint_sha256;
+            if (!fp || vistos.has(fp)) return false;
+            vistos.add(fp);
+            return true;
+          });
+          _optinAutorizados = new Set(dOptin.fingerprints || []);
+          renderOptinTable();
+        } catch (err) {
+          limparSkeleton(tbody);
+          renderEmptyRow(tbody, 5, {
+            icon: "⚠️",
+            title: "Não foi possível carregar os certificados",
+            description: err.message,
+            actionText: "Tentar novamente",
+            onAction: loadOptinPanel,
+          });
+        }
+      }
+
+      function renderOptinTable() {
+        const tbody = document.getElementById("tblOptinCerts");
+        limparSkeleton(tbody);
+
+        const q = (document.getElementById("buscaOptin").value || "").trim().toLowerCase();
+        const linhas = _optinCandidatos.filter((c) => {
+          if (!q) return true;
+          return [c.nome, c.display_name, c.documento_formatado, c.documento_numero]
+            .filter(Boolean).join(" ").toLowerCase().includes(q);
+        });
+
+        document.getElementById("optinResumo").textContent =
+          `${_optinAutorizados.size} autorizado(s) de ${_optinCandidatos.length} certificado(s) no inventário` +
+          (q ? ` · ${linhas.length} correspondem à busca` : "");
+
+        if (!linhas.length) {
+          renderEmptyRow(tbody, 5, q
+            ? { icon: "🔍", title: `Nenhum certificado para “${q}”`, description: "Tente outro nome ou documento." }
+            : { icon: "📭", title: "Nenhum certificado no inventário", description: "O agente ainda não enviou leituras." });
+          return;
+        }
+
+        tbody.innerHTML = "";
+        linhas.forEach((c) => {
+          const fp = c.fingerprint_sha256;
+          const autorizado = _optinAutorizados.has(fp);
+          const nome = c.nome || c.display_name || "Sem nome";
+          const doc = c.documento_formatado || c.documento_numero || "—";
+          const val = c.not_after ? new Date(c.not_after).toLocaleDateString("pt-BR") : "—";
+
+          const tr = document.createElement("tr");
+          tr.setAttribute("role", "row");
+
+          const tdNome = document.createElement("td");
+          tdNome.setAttribute("role", "cell");
+          tdNome.setAttribute("data-label", "Titular");
+          const forte = document.createElement("strong");
+          forte.textContent = nome;
+          tdNome.append(forte, document.createTextNode(` (${doc})`));
+
+          const tdVal = document.createElement("td");
+          tdVal.setAttribute("role", "cell");
+          tdVal.setAttribute("data-label", "Validade");
+          tdVal.textContent = val;
+
+          const tdFp = document.createElement("td");
+          tdFp.setAttribute("role", "cell");
+          tdFp.setAttribute("data-label", "Fingerprint");
+          const code = document.createElement("code");
+          code.style.fontSize = "0.8rem";
+          code.textContent = fp.substring(0, 16) + "…";
+          code.title = fp;
+          tdFp.appendChild(code);
+
+          const tdSt = document.createElement("td");
+          tdSt.setAttribute("role", "cell");
+          tdSt.setAttribute("data-label", "No cofre");
+          const badge = document.createElement("span");
+          badge.className = "badge " + (autorizado ? "badge-ok" : "badge-bad");
+          badge.textContent = autorizado ? "Autorizado" : "Não";
+          tdSt.appendChild(badge);
+
+          const tdAcao = document.createElement("td");
+          tdAcao.setAttribute("role", "cell");
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = autorizado ? "danger" : "primary";
+          btn.textContent = autorizado ? "Revogar" : "Autorizar";
+          btn.addEventListener("click", () => alternarOptin(c, autorizado, btn));
+          tdAcao.appendChild(btn);
+
+          tr.append(tdNome, tdVal, tdFp, tdSt, tdAcao);
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function alternarOptin(cert, autorizado, btn) {
+        const fp = cert.fingerprint_sha256;
+        const nome = cert.nome || cert.display_name || "este certificado";
+
+        // Revogar apaga a chave privada guardada — merece confirmação explícita.
+        if (autorizado && !confirm(
+          `Revogar “${nome}” do cofre?\n\n` +
+          `A autorização será removida E o arquivo já armazenado no servidor será apagado.`
+        )) return;
+
+        btn.disabled = true;
+        try {
+          const res = autorizado
+            ? await fetch(`/api/cert-installer/vault-optin/${encodeURIComponent(fp)}`, {
+                method: "DELETE", headers: getHeaders(),
+              })
+            : await fetch("/api/cert-installer/vault-optin", {
+                method: "POST",
+                headers: getHeaders(true),
+                body: JSON.stringify({
+                  fingerprint: fp,
+                  machine_id: cert.machine_id || "default",
+                  nome_titular: cert.nome || cert.display_name || null,
+                  documento: cert.documento_formatado || cert.documento_numero || null,
+                }),
+              });
+
+          if (!res.ok) throw new Error(await mensagemCorpoErro(res));
+
+          if (autorizado) {
+            _optinAutorizados.delete(fp);
+            showToast(`“${nome}” revogado. O arquivo foi apagado do servidor.`, "success");
+          } else {
+            _optinAutorizados.add(fp);
+            showToast(`“${nome}” autorizado. O agente enviará no próximo ciclo.`, "success");
+          }
+          renderOptinTable();
+          loadAvailableCerts();
+        } catch (err) {
+          btn.disabled = false;
+          showToast("Não foi possível concluir: " + err.message, "error");
+        }
+      }
+
       async function loadAvailableCerts() {
         const tbody = document.getElementById("tblAvailableCerts");
-        const token = localStorage.getItem("access_token");
         try {
           const res = await fetch("/api/cert-installer/available", {
-            headers: { "Authorization": `Bearer ${token}` }
+            headers: getHeaders()
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
@@ -240,10 +460,9 @@
 
       async function loadInstallLogs() {
         const tbody = document.getElementById("tblInstallLogs");
-        const token = localStorage.getItem("access_token");
         try {
           const res = await fetch("/api/cert-installer/logs?limit=50", {
-            headers: { "Authorization": `Bearer ${token}` }
+            headers: getHeaders()
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
@@ -303,14 +522,10 @@
         btn.disabled = true;
         btn.innerText = "Solicitando...";
 
-        const token = localStorage.getItem("access_token");
         try {
           const res = await fetch("/api/cert-installer/prepare", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
+            headers: getHeaders(true),
             body: JSON.stringify({
               certificate_ids: certIds,
               target_machine: targetMachine

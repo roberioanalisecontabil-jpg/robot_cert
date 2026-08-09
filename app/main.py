@@ -4,6 +4,7 @@ import logging
 import csv
 import io
 import json
+import os
 import re
 import unicodedata
 from collections import defaultdict
@@ -683,10 +684,27 @@ def delete_user(user_id: str) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
+    """
+    Estado de configuração do ambiente.
+
+    Devolve apenas BOOLEANOS de "está configurado?", nunca valores — a rota é
+    pública. Serve para conferir um deploy (Vercel/Render) sem descobrir por
+    tentativa e erro: o .env não sobe no deploy, então cada ambiente precisa
+    ter suas variáveis definidas no painel da plataforma.
+    """
     return {
         "ok": True,
         "supabase": supabase_configured(),
         "api_key_required": bool(config.API_KEY),
+        # Sem esta chave o cofre não funciona: /upload-pfx falha no primeiro
+        # certificado que o agente tentar enviar.
+        "cert_vault_key_configurada": bool(
+            config.CERT_ENCRYPTION_KEY and len(config.CERT_ENCRYPTION_KEY) == 64
+        ),
+        # Ausente, a chave do SMTP é derivada da JWT_SECRET_KEY — o que faz a
+        # senha SMTP parar de descriptografar se a JWT diferir entre ambientes.
+        "smtp_key_dedicada": bool(os.getenv("ENCRYPTION_KEY")),
+        "jwt_configurado": bool(os.getenv("JWT_SECRET_KEY")),
     }
 
 
