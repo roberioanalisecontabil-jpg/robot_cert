@@ -16,6 +16,14 @@ a = Analysis(
     hiddenimports=[
         "app",
         "app.cert_scanner",
+        # Módulo instalador (03/08). É importado tarde, dentro das funções de
+        # run_agent, e a pasta agent/ não era um pacote — duas razões para o
+        # PyInstaller não o alcançar sozinho. Sem ele o agente empacotado nunca
+        # consulta /vault-optin nem instala nada: o recurso simplesmente não
+        # existe no executável, sem erro visível.
+        "agent",
+        "agent.installer_client",
+        "app.cert_installer",
         'watchdog',
         'watchdog.events',
         'watchdog.observers',
@@ -35,6 +43,12 @@ a = Analysis(
         "cryptography.hazmat.primitives.hashes",
         "cryptography.hazmat.primitives.serialization",
         "cryptography.hazmat.primitives.serialization.pkcs12",
+        # Primitivas do transporte do instalador: ECDH P-256, AES-256-GCM e
+        # HKDF. Nenhuma era usada antes de 03/08.
+        "cryptography.hazmat.primitives.asymmetric.ec",
+        "cryptography.hazmat.primitives.asymmetric.utils",
+        "cryptography.hazmat.primitives.ciphers.aead",
+        "cryptography.hazmat.primitives.kdf.hkdf",
     ],
     hookspath=[],
     hooksconfig={},
