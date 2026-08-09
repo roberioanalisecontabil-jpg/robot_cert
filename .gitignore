@@ -8,6 +8,8 @@ venv/
 # prontos para entrar num `git add .` com segredos dentro.
 .env.*
 !.env.example
+*_key.txt
+encryption_key.txt
 *.pfx
 data/
 
