@@ -11,6 +11,7 @@ venv/
 *_key.txt
 encryption_key.txt
 a.txt
+aa.txt
 *.pfx
 data/
 
