@@ -295,6 +295,20 @@ def _load_local_agent_config() -> dict:
     return {}
 
 
+def _novo_http_client() -> httpx.Client:
+    """
+    Client HTTP do agente.
+
+    `follow_redirects` não é detalhe: o httpx não segue redirects por padrão, e
+    o portal responde 308 de http:// para https://. Com um config apontando
+    para http://, o 308 caía no `raise_for_status` de `fetch_portal_settings` e
+    virava "unavailable" — o mesmo laço de erro de um portal fora do ar, com
+    outra causa. Corrigir apenas a URL no config resolveria hoje e voltaria a
+    quebrar no próximo redirect que o servidor introduzisse.
+    """
+    return httpx.Client(timeout=_httpx_timeout(), follow_redirects=True)
+
+
 def _httpx_timeout() -> httpx.Timeout:
     """Conecta/ler com margem; portal remoto ou ingest lentos podem precisar de read maior."""
     read_s = float(os.getenv("AGENT_HTTP_READ_SEC", "300"))
@@ -780,7 +794,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             quit_event.wait(timeout=wait)
         return
 
-    with httpx.Client(timeout=_httpx_timeout()) as client:
+    with _novo_http_client() as client:
         while not quit_event.is_set():
             s_payload, fetch_err = fetch_portal_settings(client, base, _headers)
             s = s_payload
