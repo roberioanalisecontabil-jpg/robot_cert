@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -222,10 +223,29 @@ def _setup_logging() -> Path:
     return selected_log_file
 
 
+# Barra invertida que não inicia um escape JSON válido (\" \\ \/ \b \f \n \r \t \uXXXX).
+# Caminhos Windows colados à mão no agent_config.json ("F:\07. CERTIFICADOS") caem aqui.
+_INVALID_JSON_ESCAPE = re.compile(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})')
+
+
+def _repair_windows_paths(raw: str) -> str:
+    """
+    Duplica barras invertidas soltas para que caminhos Windows não escapados
+    virem JSON válido. Fora de strings a barra já seria inválida, então aplicar
+    ao documento inteiro não introduz ambiguidade.
+    """
+    return _INVALID_JSON_ESCAPE.sub(r"\\\\", raw)
+
+
 def _load_local_agent_config() -> dict:
     """
     Lê agent_config.json ao lado do executável/script, quando existir.
     Útil para instalação em servidor sem depender de editar .env manualmente.
+
+    JSON malformado aqui é silencioso e caro: sem config o agente cai no
+    ``DEFAULT_ROBOT_BASE`` (127.0.0.1:8020) e passa horas em WinError 10061
+    contra um portal que nunca esteve local. Por isso o erro vai para o
+    LOGGER (agent.log) e caminhos Windows não escapados são recuperados.
     """
     candidates = [
         Path(sys.executable).resolve().parent / "agent_config.json",
@@ -236,11 +256,42 @@ def _load_local_agent_config() -> dict:
         if not p.is_file():
             continue
         try:
-            raw = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                return raw
-        except (json.JSONDecodeError, OSError):
-            print(f"Aviso: falha ao ler {p}", file=sys.stderr)
+            text = p.read_text(encoding="utf-8")
+        except OSError as e:
+            LOGGER.error("Falha ao abrir %s: %s", p, e)
+            continue
+
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as e:
+            repaired = _repair_windows_paths(text)
+            try:
+                raw = json.loads(repaired)
+            except json.JSONDecodeError:
+                LOGGER.error(
+                    "agent_config.json inválido em %s (linha %s, coluna %s): %s. "
+                    "Config ignorada — o agente usará os padrões.",
+                    p,
+                    e.lineno,
+                    e.colno,
+                    e.msg,
+                )
+                continue
+            LOGGER.warning(
+                "agent_config.json em %s tem barras invertidas não escapadas "
+                "(linha %s): recuperado automaticamente, mas corrija usando "
+                r'"F:\\pasta" ou "F:/pasta".',
+                p,
+                e.lineno,
+            )
+
+        if isinstance(raw, dict):
+            return raw
+        LOGGER.error(
+            "agent_config.json em %s não contém um objeto JSON (encontrado %s).",
+            p,
+            type(raw).__name__,
+        )
     return {}
 
 
