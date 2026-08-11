@@ -203,6 +203,29 @@ def test_claim_tem_limite_por_ip(client_com_chave: TestClient, banco) -> None:
 # Rota de download
 # ──────────────────────────────────────────────────────────────────────────
 
+def test_vercel_empacota_o_executavel() -> None:
+    """
+    Produção é Vercel, e o bundle só leva o que está em `includeFiles`.
+
+    Sem esta entrada o deploy sobe verde e a rota de download responde 503 para
+    todo usuário — o binário simplesmente não existe no runtime. É um modo de
+    falha que nenhum teste de aplicação pega, porque o arquivo existe na máquina
+    de quem desenvolve.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    raiz = _Path(__file__).resolve().parents[1]
+    cfg = _json.loads((raiz / "vercel.json").read_text(encoding="utf-8"))
+    incluidos = cfg["builds"][0]["config"]["includeFiles"]
+
+    relativo = app_main.INSTALADOR_AVULSO_EXE.relative_to(raiz).as_posix()
+    assert relativo in incluidos, (
+        f"{relativo} não está em vercel.json:includeFiles — "
+        "a rota /instalador/baixar responderá 503 em produção"
+    )
+
+
 def _nome_do_download(resposta) -> str:
     """Nome do arquivo como o navegador o gravaria (RFC 5987, percent-encoded)."""
     from urllib.parse import unquote

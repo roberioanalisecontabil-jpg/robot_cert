@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-08                  |
-| **Branch ativa**   | main                                       |
+| **Data da última atualização** | 2026-08-11                  |
+| **Branch ativa**   | `feat/instalador-avulso` (3 commits, não enviada) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Opt-in do cofre vinculado ao `machine_id` na tela e na barreira do upload + cobertura do circuito (136 testes) |
-| **Próxima tarefa** | Validação com agente Windows real (transporte ECDH/AES e instalação na estação) |
+| **Última tarefa concluída** | Instalador avulso baixável pelo portal (modelo Ninite), validado ponta a ponta com certificados ICP-Brasil reais (219 testes) |
+| **Próxima tarefa** | Deploy: migration → `CERT_PASSWORD_ENCRYPTION_KEY` na Vercel → push. E obter a `API_KEY` real para destravar o agente do ANALISESRV |
 
 ---
 
@@ -41,6 +41,76 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-10/11 — Instalador avulso (modelo Ninite) + três bloqueios do agente em produção
+
+**Objetivo da sessão:** partir de um agente em produção que não conectava havia 11 horas e chegar a um fluxo em que o usuário escolhe o certificado no portal, baixa um `.exe` e o instala na própria máquina, sem agente na estação.
+
+---
+
+#### Parte 1 — Três bloqueios empilhados no ANALISESRV
+
+O `agent.log` tinha 1.675 linhas, e **1.333 delas eram o mesmo `WinError 10061`**. Nenhuma dizia a causa. Eram três defeitos em série, cada um escondendo o seguinte:
+
+**(1) `agent_config.json` com JSON inválido.** Caminhos Windows não escapados (`"F:\07. CERTIFICADOS"` — `\0` não é escape JSON). O `except` em `_load_local_agent_config` imprimia em `stderr` e devolvia `{}` — e **stderr num serviço Windows não vai a lugar nenhum**. Sem config, o agente caía no `DEFAULT_ROBOT_BASE` (`127.0.0.1:8020`) e batia num portal local que nunca existiu naquela máquina. A pista estava na contradição entre o log (`Conectando a: http://127.0.0.1:8020`) e o config (`certificado.analisegroup.cnt.br`).
+
+**(2) Redirect 308 não seguido.** Corrigido o (1), o agente passaria a usar a URL do config — que apontava para `http://`, e o portal responde **308** para `https://`. O `httpx` não segue redirects por padrão, então o 308 chegava ao `raise_for_status` e virava `"unavailable"`: o mesmo laço de erro, com outra causa.
+
+**(3) API key inválida.** A chave do config recebe **401** do portal. Não é a de produção. **Continua aberto** — depende do valor real da `API_KEY`.
+
+**Consequência do (3) para o instalador:** a senha do PFX só é gravada no cofre quando o agente reenvia o certificado. Enquanto o agente não conectar, os registros existentes ficam sem senha e o instalador avulso falha neles com causa nomeada.
+
+---
+
+#### Parte 2 — Instalador avulso
+
+**Por que existir:** o fluxo anterior enfileirava um comando para um agente rodando na estação destino. Como o serviço roda por padrão como **LocalSystem** e o `certutil` é chamado com `-user`, o certificado ia para o repositório do LocalSystem — invisível para a pessoa que loga na máquina e abre o navegador. O modelo novo instala no repositório de quem executa, que é o ponto.
+
+**Token no nome do arquivo, não dentro do binário.** Injetar o token no `.exe` faria cada download ser um binário inédito para o Windows, e o alerta do SmartScreen apareceria em **toda** instalação — justo no fluxo que deveria ser de um clique, e justo com um público que está instalando credenciais. Com o token no nome, o binário é único e pode ser assinado uma vez. É o que o Ninite faz.
+
+**A senha do PFX voltou ao cofre, sob chave dedicada.** Ela saiu em 03/08 por dois motivos: estava cifrada com a **mesma** chave do PFX, e o agente a lia do nome do arquivo na pasta de origem. O segundo motivo não vale para o instalador avulso — a máquina do usuário não tem pasta nenhuma — e sem senha o `certutil` recusa todo PFX. O primeiro continua valendo: `_get_password_key()` **recusa operar** se `CERT_PASSWORD_ENCRYPTION_KEY` for igual a `CERT_ENCRYPTION_KEY`.
+
+> ⚠️ A separação só vale se as duas chaves viverem em lugares distintos. Ambas no mesmo `.env` do mesmo servidor tornam a proteção nominal.
+
+**`/claim` resgata sem `X-API-Key`.** Embutir a chave do agente num executável público seria distribuí-la a quem baixasse, e ela abre todas as rotas do agente. O token vira a credencial — uso único (compare-and-swap), TTL de 5 min, e limite de 10 tentativas por IP/minuto contra força bruta.
+
+**O caminho via agente continua intacto.** O botão novo foi adicionado ao lado do antigo, não no lugar dele.
+
+---
+
+#### Arquivos criados
+- `agent/instalador_standalone.py` → o `.exe` que o usuário baixa
+- `Instalar_Certificado.spec` + `scripts/build_instalador_avulso.ps1` → build (o endereço do portal é gravado em `agent/_build_config.py`, gitignored)
+- `supabase/migrations/20260811000000_senha_pfx_chave_dedicada.sql` → colunas `pfx_password_{enc,iv,tag}`
+- `tests/test_agent_config_loader.py`, `tests/test_agente_redirect.py`, `tests/test_instalador_avulso.py`
+
+#### Arquivos modificados
+- `agent/run_agent.py` → loader loga no LOGGER e recupera barras invertidas; `_novo_http_client()` com `follow_redirects=True`
+- `app/cert_installer.py` → cifragem da senha sob chave própria; bundle leva a senha via ECDH
+- `app/main.py` → `/claim`, `/preparar-download`, `/instalador/baixar/{token}`, `/report-avulso`
+- `agent/installer_client.py` → volta a enviar a senha no upload
+- `templates/instalador.html` → botão "Baixar Instalador"
+- `vercel.json` → `dist/Instalar_Certificado.exe` em `includeFiles`
+- `.gitignore` → `dist/*` + exceção para o executável
+
+#### Decisões técnicas
+- **O `.exe` é versionado.** O deploy é Vercel, que builda num container Linux e jamais geraria um `.exe` de Windows. Sem ele no repositório, `/instalador/baixar` responde 503. Custo: ~16 MB permanentes no histórico por rebuild.
+- **`dist/*` em vez de `dist/`** no `.gitignore` — o git não entra em diretório excluído, então a exceção nunca seria avaliada.
+- **Um teste guarda o `vercel.json`.** Sem a entrada em `includeFiles`, o deploy sobe verde e a rota falha só para o usuário — modo de falha que nenhum teste de aplicação pega, porque o arquivo existe na máquina de quem desenvolve.
+- **`test_senha_do_pfx_nunca_e_armazenada` foi reescrito**, não removido. Virou `test_senha_e_guardada_cifrada_sob_chave_propria`, fixando o que continua valendo: nunca em claro, nunca na coluna antiga, sob chave distinta. Mais um teste que recusa chaves iguais.
+- **A coluna `pfx_password` antiga não foi removida.** `DROP COLUMN` em produção é irreversível e não há ganho.
+
+#### Validação
+E2E real nesta máquina, com dois certificados ICP-Brasil de verdade: portal local → escolher → baixar → executar → certificado no repositório do usuário, **não-exportável** (confirmado tentando exportar e recebendo recusa), trilha `SOLICITADO → REDIMIDO → CONCLUIDO`, token consumido, reuso recusado com 403. **219 testes.**
+
+#### Pendências
+1. `API_KEY` real para o ANALISESRV *(bloqueia o reenvio de certificados ao cofre)*
+2. Rodar a migration no Supabase **antes** do deploy
+3. `CERT_PASSWORD_ENCRYPTION_KEY` no painel da **Vercel** (não no `.env`, que não sobe)
+4. Assinatura de código — decidido adiar; mitigação é diretiva de grupo pondo o domínio na zona Intranet Local nas estações. **Não verificado em máquina real.**
+5. Agente por estação (instalação silenciosa repetida) — avaliado e adiado; vale se a frequência de instalação por máquina for alta
 
 ---
 
