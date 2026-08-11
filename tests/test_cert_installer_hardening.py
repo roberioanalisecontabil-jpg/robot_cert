@@ -174,16 +174,51 @@ def test_key_version_e_gravado(captura) -> None:
     assert captura.linha["key_version"] == ci.CURRENT_KEY_VERSION
 
 
-def test_senha_do_pfx_nunca_e_armazenada(captura) -> None:
-    """Era cifrada com a mesma chave do PFX — um vazamento entregava os dois."""
+def test_senha_e_guardada_cifrada_sob_chave_propria(captura) -> None:
+    """
+    A senha voltou ao cofre — o que não voltou foi guardá-la sob a chave do PFX.
+
+    O endurecimento de 03/08 tirou a senha do banco por dois motivos: estava
+    cifrada com a MESMA chave do PFX (um vazamento entregava os dois) e o agente
+    conseguia lê-la do nome do arquivo na pasta de origem. O segundo motivo caiu
+    com o instalador avulso: a máquina do usuário final não tem pasta nenhuma,
+    e sem a senha o certutil recusa todo PFX.
+
+    O primeiro motivo continua valendo, e é o que este teste fixa: nunca em
+    claro, nunca na coluna antiga, e sob chave distinta.
+    """
     ci.upsert_pfx(
         fingerprint="e" * 64,
         pfx_bytes=b"x",
         machine_id="m1",
         password="senha-super-secreta",
     )
-    assert captura.linha["pfx_password"] is None
-    assert "senha-super-secreta" not in str(captura.linha)
+
+    assert "senha-super-secreta" not in str(captura.linha), "senha em claro na linha"
+    assert captura.linha["pfx_password"] is None, "a coluna antiga tem de seguir vazia"
+    assert captura.linha["pfx_password_enc"], "a senha deveria estar cifrada"
+
+    # E o material cifrado só abre com a chave da senha, não com a do PFX.
+    assert ci.decrypt_password_at_rest(
+        captura.linha["pfx_password_enc"],
+        captura.linha["pfx_password_iv"],
+        captura.linha["pfx_password_tag"],
+    ) == "senha-super-secreta"
+
+
+def test_sem_senha_as_colunas_ficam_nulas(captura) -> None:
+    ci.upsert_pfx(fingerprint="e" * 64, pfx_bytes=b"x", machine_id="m1")
+    assert captura.linha["pfx_password_enc"] is None
+
+
+def test_chave_da_senha_igual_a_do_pfx_e_recusada(monkeypatch) -> None:
+    """A separação é o único motivo de a senha poder voltar ao banco."""
+    monkeypatch.setattr("app.config.CERT_ENCRYPTION_KEY", "33" * 32)
+    monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "33" * 32)
+
+    with pytest.raises(RuntimeError) as exc:
+        ci.encrypt_password_at_rest("x")
+    assert "igual" in str(exc.value).lower()
 
 
 def test_decrypt_usa_a_versao_de_chave_do_registro(monkeypatch) -> None:

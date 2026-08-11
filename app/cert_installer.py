@@ -67,6 +67,51 @@ def _get_server_key(version: int = CURRENT_KEY_VERSION) -> bytes:
     return bytes.fromhex(raw)
 
 
+def _get_password_key() -> bytes:
+    """
+    Chave AES-256 dedicada à senha do PFX.
+
+    Separada de propósito de `_get_server_key`: guardar senha e certificado sob
+    a mesma chave foi o defeito que tirou a senha do banco em 03/08. Recusa-se a
+    operar se as duas forem iguais — seria o mesmo defeito com outro nome.
+    """
+    raw = config.CERT_PASSWORD_ENCRYPTION_KEY
+    if not raw or len(raw) != 64:
+        raise RuntimeError(
+            "CERT_PASSWORD_ENCRYPTION_KEY não configurada ou inválida. "
+            "Gere com: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    if raw == config.CERT_ENCRYPTION_KEY:
+        raise RuntimeError(
+            "CERT_PASSWORD_ENCRYPTION_KEY não pode ser igual a CERT_ENCRYPTION_KEY: "
+            "senha e PFX sob a mesma chave anulam a separação que justifica guardar a senha."
+        )
+    return bytes.fromhex(raw)
+
+
+def encrypt_password_at_rest(password: str) -> Tuple[str, str, str]:
+    """Cifra a senha do PFX com a chave dedicada. Retorna (ct_b64, iv_b64, tag_b64)."""
+    key = _get_password_key()
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    ct = aesgcm.encrypt(nonce, password.encode("utf-8"), None)
+    return (
+        base64.b64encode(ct[:-16]).decode(),
+        base64.b64encode(nonce).decode(),
+        base64.b64encode(ct[-16:]).decode(),
+    )
+
+
+def decrypt_password_at_rest(ct_b64: str, iv_b64: str, tag_b64: str) -> str:
+    """Inverso de `encrypt_password_at_rest`."""
+    key = _get_password_key()
+    aesgcm = AESGCM(key)
+    nonce = base64.b64decode(iv_b64)
+    ct = base64.b64decode(ct_b64)
+    tag = base64.b64decode(tag_b64)
+    return aesgcm.decrypt(nonce, ct + tag, None).decode("utf-8")
+
+
 def encrypt_pfx_at_rest(pfx_bytes: bytes) -> Tuple[str, str, str]:
     """
     Cifra um PFX com AES-256-GCM usando a chave do servidor.
@@ -213,15 +258,16 @@ def upsert_pfx(
 
     encrypted_pfx, pfx_iv, pfx_auth_tag = encrypt_pfx_at_rest(pfx_bytes)
 
-    # A senha do PFX NÃO é mais armazenada.
-    # Antes era cifrada com a MESMA chave do PFX e guardada na mesma linha, de
-    # modo que um único vazamento de chave entregava certificado e senha juntos.
-    # E não havia ganho: a senha já vive no nome do arquivo no servidor de
-    # origem (padrão "nome senha VALOR.pfx"), então o agente a lê de lá na hora
-    # de instalar. O parâmetro `password` continua na assinatura para não
-    # quebrar quem chama, mas é descartado.
+    # A senha volta ao banco — sob chave PRÓPRIA (ver `_get_password_key`).
+    #
+    # Ela saiu em 03/08 porque estava cifrada com a mesma chave do PFX (um
+    # vazamento entregava os dois) e porque o agente podia lê-la do nome do
+    # arquivo na pasta de origem. Esse segundo argumento vale para o agente, não
+    # para o instalador avulso: a máquina do usuário final não tem a pasta, logo
+    # não tem de onde tirar a senha. Sem isto, o certutil recusa todo PFX.
+    pwd_ct = pwd_iv = pwd_tag = None
     if password:
-        logger.debug("Senha recebida em upsert_pfx e descartada por política.")
+        pwd_ct, pwd_iv, pwd_tag = encrypt_password_at_rest(password)
 
     now = datetime.now(timezone.utc).isoformat()
     row = {
@@ -237,7 +283,11 @@ def upsert_pfx(
         "encrypted_pfx": encrypted_pfx,
         "pfx_iv": pfx_iv,
         "pfx_auth_tag": pfx_auth_tag,
+        # A coluna antiga continua sem uso: guardava a senha sob a chave do PFX.
         "pfx_password": None,
+        "pfx_password_enc": pwd_ct,
+        "pfx_password_iv": pwd_iv,
+        "pfx_password_tag": pwd_tag,
         "key_version": CURRENT_KEY_VERSION,
         "updated_at": now,
     }
@@ -570,9 +620,21 @@ def build_encrypted_bundle(
         bundle["fingerprint"] = str(row.get("fingerprint", ""))
         bundle["friendlyName"] = row.get("friendly_name") or row.get("nome_titular") or ""
 
-        # A senha não trafega mais no bundle: o agente a extrai do nome do
-        # arquivo local no momento da instalação (ver installer_client).
+        # A senha viaja cifrada para ESTE cliente (mesmo ECDH efêmero do PFX),
+        # nunca em claro. O consumidor já esperava este formato desde o
+        # endurecimento — ver installer_client._decrypt_payload_ecdh. Fica None
+        # quando o registro é anterior à volta da senha ao cofre; nesse caso o
+        # agente ainda a resolve pelo nome do arquivo local.
         bundle["pfxPassword"] = None
+        if row.get("pfx_password_enc"):
+            senha = decrypt_password_at_rest(
+                row["pfx_password_enc"],
+                row["pfx_password_iv"],
+                row["pfx_password_tag"],
+            )
+            bundle["pfxPassword"] = encrypt_bundle_for_client(
+                senha.encode("utf-8"), client_public_key_b64
+            )
 
         certificates.append(bundle)
 

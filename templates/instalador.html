@@ -141,17 +141,23 @@
       <section class="card" style="margin-bottom: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">2 · Enviar Certificados para Estação</h2>
-            <p class="text-muted" style="font-size: 0.875rem;">Selecione os certificados abaixo e a máquina destino para disparar a instalação não-exportável via Agente.</p>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">2 · Instalar Certificados</h2>
+            <p class="text-muted" style="font-size: 0.875rem;">Selecione os certificados e baixe o instalador para executar nesta máquina — ou envie para uma estação que já roda o Agente.</p>
           </div>
-          <div style="display: flex; gap: 0.75rem; align-items: center;">
-            <label for="selectTargetMachine" style="font-weight: 500; font-size: 0.875rem;">Máquina Destino:</label>
-            <input type="text" id="inputTargetMachine" class="form-control" placeholder="ex.: Meu_Servidor_Windows ou default" style="width: 240px;" value="default" />
-            <button id="btnPrepareInstall" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button id="btnBaixarInstalador" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Baixar Instalador
+            </button>
+            <span class="text-muted" style="font-size: 0.75rem;">ou via Agente:</span>
+            <input type="text" id="inputTargetMachine" class="form-control" placeholder="ex.: Meu_Servidor_Windows ou default" style="width: 200px;" value="default" />
+            <button id="btnPrepareInstall" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" />
               </svg>
-              Instalar Selecionados
+              Enviar para Estação
             </button>
           </div>
         </div>
@@ -253,6 +259,7 @@
 
         // Botão de instalar
         document.getElementById("btnPrepareInstall").addEventListener("click", handlePrepareInstall);
+        document.getElementById("btnBaixarInstalador").addEventListener("click", handleBaixarInstalador);
         document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
       });
 
@@ -462,7 +469,7 @@
             return `
               <tr>
                 <td style="text-align: center;">
-                  <input type="checkbox" class="chk-cert-select" value="${c.id}" />
+                  <input type="checkbox" class="chk-cert-select" value="${c.id}" data-nome="${escapeHtml(nome)}" />
                 </td>
                 <td><strong>${escapeHtml(nome)}</strong>${escapeHtml(doc)}</td>
                 <td><span class="badge" style="background: var(--surface); border: 1px solid var(--border);">${escapeHtml(c.machine_id)}</span></td>
@@ -517,6 +524,57 @@
           }).join("");
         } catch (err) {
           tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar histórico: ${escapeHtml(err.message)}</td></tr>`;
+        }
+      }
+
+      async function handleBaixarInstalador() {
+        const marcados = Array.from(document.querySelectorAll(".chk-cert-select:checked"));
+        const msgArea = document.getElementById("installMessageArea");
+
+        if (marcados.length === 0) {
+          msgArea.innerHTML = `<div class="toast toast-warning" style="margin-bottom: 1rem;">Selecione ao menos um certificado na tabela.</div>`;
+          return;
+        }
+
+        const btn = document.getElementById("btnBaixarInstalador");
+        const rotulo = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerText = "Gerando...";
+
+        try {
+          const res = await fetch("/api/cert-installer/preparar-download", {
+            method: "POST",
+            headers: getHeaders(true),
+            body: JSON.stringify({
+              certificate_ids: marcados.map(c => c.value),
+              nome: marcados.length === 1 ? marcados[0].dataset.nome : `${marcados.length} certificados`
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Falha ao gerar o instalador");
+
+          // O download dispara sozinho; o link fica visível porque o token
+          // expira em poucos minutos e o usuário precisa saber disso.
+          window.location.href = data.download_url;
+
+          msgArea.innerHTML = `
+            <div class="toast toast-success" style="margin-bottom: 1rem;">
+              <strong>Instalador gerado.</strong> O download começou.
+              Execute o arquivo <em>nesta máquina</em> para instalar o certificado —
+              não renomeie, o código de instalação faz parte do nome.
+              <br><small>Vale para uma instalação e expira em ${data.validade_min} minutos.</small>
+            </div>`;
+
+          document.querySelectorAll(".chk-cert-select").forEach(c => c.checked = false);
+          const selectAll = document.getElementById("chkSelectAllCerts");
+          if (selectAll) selectAll.checked = false;
+          setTimeout(loadInstallLogs, 1000);
+        } catch (err) {
+          msgArea.innerHTML = `<div class="toast toast-danger" style="margin-bottom: 1rem;">Erro: ${escapeHtml(err.message)}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = rotulo;
         }
       }
 

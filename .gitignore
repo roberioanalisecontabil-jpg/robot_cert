@@ -17,9 +17,18 @@ data/
 
 # PyInstaller / instalador (gerar com scripts/build_agent_installer.ps1)
 build/
-dist/
+# `dist/*` em vez de `dist/` porque o git nao entra em diretorio excluido: sem
+# isso a excecao abaixo nunca seria avaliada.
+dist/*
 dist_smoke/
 build_smoke/
+
+# Excecao: o instalador avulso PRECISA estar no repositorio. O deploy e um push
+# para o Render, que builda com pip num container Linux e nunca geraria um .exe
+# de Windows — se ele nao viajar versionado, /instalador/baixar responde 503 em
+# producao. Rebuild com scripts/build_instalador_avulso.ps1 (sem parametro para
+# apontar a producao); cada rebuild adiciona ~16 MB permanentes ao historico.
+!dist/Instalar_Certificado.exe
 
 .pytest_cache/
 *.egg-info/
@@ -35,3 +44,6 @@ scratch/
 # Logs gerados localmente
 logs/
 *.log
+
+# Gerado por scripts/build_instalador_avulso.ps1 (endereco do portal no build)
+agent/_build_config.py

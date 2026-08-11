@@ -59,6 +59,14 @@ HISTORICO_CACHE_TTL_SEC = _env_int(
 # Gere com: python -c "import secrets; print(secrets.token_hex(32))"
 CERT_ENCRYPTION_KEY = (os.getenv("CERT_ENCRYPTION_KEY") or "").strip()
 
+# Chave AES-256 para a SENHA do PFX (hex, 64 chars). Tem de ser diferente de
+# CERT_ENCRYPTION_KEY: o motivo de a senha ter saído do banco em 03/08 foi estar
+# cifrada com a MESMA chave do PFX, de modo que um vazamento entregava os dois
+# juntos. Ela voltou porque o instalador avulso (máquina do usuário, que não tem
+# a pasta de origem) não tem outra forma de obtê-la — mas só faz sentido guardada
+# sob chave própria. Idealmente as duas vivem em cofres/ambientes distintos.
+CERT_PASSWORD_ENCRYPTION_KEY = (os.getenv("CERT_PASSWORD_ENCRYPTION_KEY") or "").strip()
+
 # TTL (minutos) dos tokens de instalação. Padrão: 5 min.
 CERT_INSTALL_TOKEN_TTL_MIN = _env_int(
     "CERT_INSTALL_TOKEN_TTL_MIN",

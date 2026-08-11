@@ -6,12 +6,15 @@ import io
 import json
 import os
 import re
+import threading
+import time
 import unicodedata
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -2276,6 +2279,182 @@ def redeem_install(
         raise HTTPException(status_code=500, detail="Erro interno ao montar bundle")
 
 
+# ── Instalador avulso (modelo Ninite) ─────────────────────────────────────
+#
+# O agente resgata em /redeem autenticando-se com X-API-Key. O instalador que o
+# usuário baixa não pode fazer o mesmo: embutir a API key no executável seria
+# distribuí-la a todos que baixassem — e ela abre todas as rotas do agente.
+#
+# Aqui o próprio token É a credencial, como numa URL de download assinada. Isso
+# se sustenta porque ele é de uso único (compare-and-swap em
+# validate_and_consume_token), expira em CERT_INSTALL_TOKEN_TTL_MIN minutos, e
+# só libera os certificate_ids gravados nele. O que falta a um bearer assim é
+# resistência a força bruta, daí o limite por IP abaixo.
+
+_CLAIM_JANELA_SEC = 60
+_CLAIM_MAX_POR_JANELA = 10
+_claim_tentativas: dict[str, list[float]] = {}
+_claim_lock = threading.Lock()
+
+
+def _claim_rate_limit(ip: str) -> bool:
+    """True se o IP ainda pode tentar. Janela deslizante em memória."""
+    agora = time.time()
+    with _claim_lock:
+        tentativas = [t for t in _claim_tentativas.get(ip, []) if agora - t < _CLAIM_JANELA_SEC]
+        if len(tentativas) >= _CLAIM_MAX_POR_JANELA:
+            _claim_tentativas[ip] = tentativas
+            return False
+        tentativas.append(agora)
+        _claim_tentativas[ip] = tentativas
+        # A limpeza oportunista evita o dicionário crescer sem limite com IPs
+        # que apareceram uma vez. Barato: só roda quando o mapa já está grande.
+        if len(_claim_tentativas) > 1000:
+            for k in [k for k, v in _claim_tentativas.items()
+                      if not v or agora - v[-1] > _CLAIM_JANELA_SEC]:
+                _claim_tentativas.pop(k, None)
+        return True
+
+
+@app.post("/api/cert-installer/claim")
+def claim_install(body: RedeemRequest, request: Request):
+    """
+    Resgate SEM API key, para o instalador avulso. O token é a credencial.
+
+    Deliberadamente não distingue token inválido de expirado ou já consumido:
+    a resposta única evita virar oráculo de tokens válidos.
+    """
+    client_ip = request.client.host if request.client else "desconhecido"
+
+    if not _claim_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+
+    token_data = cert_installer.validate_and_consume_token(body.token)
+    if not token_data:
+        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
+
+    cert_installer.log_event(
+        event="REDIMIDO",
+        user_id=token_data["user_id"],
+        user_email=token_data.get("user_email"),
+        token_id=str(token_data["id"]),
+        target_machine=token_data.get("target_machine"),
+        client_ip=client_ip,
+        detail="instalador avulso",
+    )
+
+    try:
+        return cert_installer.build_encrypted_bundle(
+            certificate_ids=token_data.get("certificate_ids") or [],
+            client_public_key_b64=body.clientPublicKey,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao montar bundle para instalador avulso")
+        raise HTTPException(status_code=500, detail="Erro interno ao montar bundle")
+
+
+class PrepararDownloadRequest(BaseModel):
+    """Admin escolhe os certificados e recebe o link do instalador."""
+    certificate_ids: List[str]
+    nome: Optional[str] = None
+
+
+@app.post("/api/cert-installer/preparar-download")
+def preparar_download(
+    body: PrepararDownloadRequest,
+    request: Request,
+    token: auth.TokenData = Depends(require_admin),
+):
+    """
+    Cria o token e devolve a URL do instalador — sem enfileirar nada.
+
+    Difere de /prepare no destino: lá o alvo é uma máquina que já roda o agente,
+    e o comando vai para a fila dela. Aqui o alvo é a máquina de quem clicou,
+    que não tem agente nenhum; o "transporte" é o próprio download.
+    """
+    if not body.certificate_ids:
+        raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
+
+    user_id = _resolve_user_id(token.email)
+    if not user_id:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    client_ip = request.client.host if request.client else None
+
+    try:
+        token_raw, token_id, expires_at = cert_installer.create_install_token(
+            user_id=user_id,
+            user_email=token.email,
+            # Não há máquina alvo conhecida: quem executar o instalador define
+            # onde o certificado entra. Fica registrado como tal na auditoria.
+            target_machine="download-avulso",
+            certificate_ids=body.certificate_ids,
+            client_ip=client_ip,
+        )
+        for cid in body.certificate_ids:
+            cert_installer.log_event(
+                event="SOLICITADO",
+                user_id=user_id,
+                user_email=token.email,
+                token_id=token_id,
+                certificate_id=cid,
+                target_machine="download-avulso",
+                client_ip=client_ip,
+            )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao preparar download do instalador")
+        raise HTTPException(status_code=500, detail="Erro interno ao preparar instalador")
+
+    nome = quote((body.nome or "Certificado")[:60])
+    return {
+        "status": "ok",
+        "download_url": f"/instalador/baixar/{token_raw}?nome={nome}",
+        "expires_at": expires_at.isoformat(),
+        "validade_min": config.CERT_INSTALL_TOKEN_TTL_MIN,
+    }
+
+
+# Onde o build deposita o instalador avulso já compilado.
+INSTALADOR_AVULSO_EXE = ROOT / "dist" / "Instalar_Certificado.exe"
+
+# Só o alfabeto de secrets.token_urlsafe. Serve para recusar, antes de tocar o
+# disco, qualquer coisa que não tenha forma de token — inclusive travessia de
+# caminho, já que o valor vai para o nome do arquivo servido.
+_TOKEN_SEGURO = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+
+
+@app.get("/instalador/baixar/{token}")
+def baixar_instalador(token: str, nome: str = Query("Certificado")):
+    """
+    Serve o instalador avulso com o token no NOME do arquivo.
+
+    O binário é sempre o mesmo — não é recompilado por download. Isso é o que
+    permite assiná-lo uma vez e acumular reputação no SmartScreen; um executável
+    gerado a cada clique seria inédito para o Windows em toda instalação, e o
+    aviso de "aplicativo não reconhecido" apareceria justamente no fluxo que
+    deveria ser de um clique só. O instalador lê o token do próprio argv[0].
+    """
+    if not _TOKEN_SEGURO.match(token):
+        raise HTTPException(status_code=400, detail="Token malformado")
+
+    if not INSTALADOR_AVULSO_EXE.is_file():
+        raise HTTPException(
+            status_code=503,
+            detail="Instalador ainda não compilado no servidor. Rode scripts/build_instalador_avulso.ps1.",
+        )
+
+    seguro = re.sub(r"[^A-Za-z0-9 _-]", "", nome)[:60].strip() or "Certificado"
+    return FileResponse(
+        path=INSTALADOR_AVULSO_EXE,
+        media_type="application/vnd.microsoft.portable-executable",
+        filename=f"Instalar {seguro} -{token}.exe",
+    )
+
+
 class InstallResultItem(BaseModel):
     certificateId: str
     fingerprint: Optional[str] = None
@@ -2299,6 +2478,26 @@ def report_install(
     """
     Agente reporta o resultado da instalação de cada certificado.
     """
+    return _registrar_relatorio(body, request)
+
+
+@app.post("/api/cert-installer/report-avulso")
+def report_install_avulso(body: ReportRequest, request: Request):
+    """
+    Mesma gravação, para o instalador avulso — que não tem API key.
+
+    Abrir a rota não afeta o gate real: `_registrar_relatorio` já exigia um
+    token conhecido E já redimido, o que a dependência de autenticação apenas
+    duplicava. O pior que um token vazado permite aqui é sujar a auditoria da
+    própria instalação que ele representa; não devolve material criptográfico.
+    """
+    ip = request.client.host if request.client else "desconhecido"
+    if not _claim_rate_limit(ip):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+    return _registrar_relatorio(body, request)
+
+
+def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
     client_ip = request.client.host if request.client else None
 
     # Validar que o token existe e foi redimido (consumed_at != null)

@@ -107,8 +107,11 @@ def upload_pfx_files(
                 "fingerprint": c.fingerprint_sha256,
                 "machine_id": machine_id,
                 "pfx_b64": pfx_b64,
-                # A senha NÃO é mais enviada: o servidor a descarta e o agente
-                # a lê do nome do arquivo local na hora de instalar.
+                # A senha volta a ser enviada, para o cofre guardá-la sob chave
+                # própria. Sem isto o instalador avulso não teria como abrir o
+                # PFX: a máquina do usuário final não tem a pasta de origem de
+                # onde o agente extrai a senha pelo nome do arquivo.
+                "password": c.password_from_name,
                 "nome_titular": c.nome_titular,
                 "documento": c.documento_numero,
                 "documento_tipo": c.documento_tipo,

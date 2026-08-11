@@ -40,6 +40,20 @@ def encryption_key_de_teste(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENCRYPTION_KEY", "hUXK9m0Qs2vZ8pYbN3rTfL6wJcE1aD4gXoV7iS5kBnM=")
 
 
+@pytest.fixture(autouse=True)
+def chaves_do_cofre(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Chaves do instalador: uma para o PFX, outra para a senha.
+
+    Precisam ser DIFERENTES entre si — `cert_installer._get_password_key` recusa
+    chaves iguais, porque cifrar senha e certificado com a mesma chave foi o
+    defeito que tirou a senha do banco em 03/08. Literais de teste, fixas para o
+    resultado não depender do .env da máquina.
+    """
+    monkeypatch.setattr("app.config.CERT_ENCRYPTION_KEY", "11" * 32, raising=False)
+    monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "22" * 32, raising=False)
+
+
 @pytest.fixture
 def no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """API sem exigir X-API-Key (reproduz ambiente dev sem API_KEY)."""
