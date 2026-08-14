@@ -1,8 +1,8 @@
-; Instalador Analise CertiDigital Agent — AnaliseCertiDigital_Agent.exe (bandeja / tarefa agendada)
+﻿; Instalador Analise CertiDigital Agent â€” AnaliseCertiDigital_Agent.exe (bandeja / tarefa agendada)
 
 [Setup]
 AppName=Analise CertiDigital Agent
-AppVersion=1.0.1
+AppVersion=1.1.0
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
 DefaultGroupName=Analise CertiDigital
@@ -21,19 +21,26 @@ Name: "desktopicon"; Description: "Atalho no ambiente de trabalho"; GroupDescrip
 Name: "autostart"; Description: "Ao iniciar sessao: iniciar icone na bandeja (Tarefa Agendada)"; GroupDescription: "Bandeja"
 
 [Files]
-; Executável da bandeja (one-file)
+; ExecutÃ¡vel da bandeja (one-file)
 Source: "dist\AnaliseCertiDigital_Agent.exe"; DestDir: "{app}"; Flags: ignoreversion
-; Executável do serviço (one-dir) + todas as DLLs em _internal
+; ExecutÃ¡vel do serviÃ§o (one-dir) + todas as DLLs em _internal
 Source: "dist\AnaliseCertiDigital_Agent_Service\AnaliseCertiDigital_Agent_Service.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\AnaliseCertiDigital_Agent_Service\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Config: agent_config.json é a config primária (NÃO copiamos .env.example para
+; Config: agent_config.json Ã© a config primÃ¡ria (NÃƒO copiamos .env.example para
 ; evitar sobrescrever URL do portal com localhost)
 Source: "agent\agent_config.example.json"; DestDir: "{app}"; DestName: "agent_config.json"; Flags: onlyifdoesntexist
 
 [Icons]
-Name: "{group}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"
+; --tray-only e obrigatorio nos atalhos. Sem o parametro, o executavel sobe um
+; AGENTE COMPLETO â€” com o proprio ciclo de varredura e as proprias chamadas ao
+; portal â€” em paralelo ao servico Windows que ja faz isso. Foi o que produziu os
+; dois ciclos de retry simultaneos observados no agent.log do ANALISESRV, e
+; tambem deixava o icone parado em cinza, porque o loop visual so era executado
+; neste modo. O que o usuario quer ao clicar no atalho e a bandeja, nao um
+; segundo agente.
+Name: "{group}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"
 Name: "{group}\Desinstalar Analise CertiDigital Agent"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Tasks: desktopicon
+Name: "{autodesktop}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Description: "Iniciar o agente em bandeja agora"; Flags: nowait postinstall skipifsilent unchecked; Check: OfferTrayAfterInstall
@@ -152,6 +159,53 @@ begin
   end;
 end;
 
+function KillProcess(ExeName: string): Boolean;
+var
+  RC: Integer;
+begin
+  if Exec(ExpandConstant('{cmd}'), '/C taskkill /F /IM "' + ExeName + '"', '', SW_HIDE, ewWaitUntilTerminated, RC) then
+  begin
+    Log('taskkill ' + ExeName + ' retornou: ' + IntToStr(RC));
+    { 0 = encerrado, 128 = nao estava em execucao }
+    Result := (RC = 0) or (RC = 128);
+  end
+  else
+  begin
+    Log('Falha ao executar taskkill para ' + ExeName);
+    Result := False;
+  end;
+end;
+
+function WaitForServiceStopped(TimeoutSeconds: Integer): Boolean;
+var
+  RC: Integer;
+  Esperado: Integer;
+begin
+  { `sc stop` retorna assim que o pedido e aceito, nao quando o processo morre.
+    Copiar arquivos nesse intervalo e o que produz "arquivo em uso": o servico
+    ainda segura os .dll/.pyd de _internal. Aqui esperamos o estado STOPPED de
+    facto â€” `find` devolve 0 quando acha a string, 1 quando nao acha. }
+  Esperado := 0;
+  Result := False;
+  while Esperado < TimeoutSeconds do
+  begin
+    if Exec(ExpandConstant('{cmd}'),
+            '/C sc query "' + ServiceName + '" | find "STOPPED"',
+            '', SW_HIDE, ewWaitUntilTerminated, RC) then
+    begin
+      if RC = 0 then
+      begin
+        Log('Servico confirmado STOPPED apos ' + IntToStr(Esperado) + 's.');
+        Result := True;
+        exit;
+      end;
+    end;
+    Sleep(1000);
+    Esperado := Esperado + 1;
+  end;
+  Log('Timeout aguardando o servico parar (' + IntToStr(TimeoutSeconds) + 's).');
+end;
+
 function RemoveService: Boolean;
 var
   RC: Integer;
@@ -171,6 +225,40 @@ begin
     Log('Falha ao executar sc delete.');
     LastOperationError := 'Falha ao remover servico.';
   end;
+end;
+
+function PrepararAmbienteParaInstalar: Boolean;
+begin
+  { Sequencia executada ANTES da copia de arquivos.
+
+    O que havia antes: ssInstall so dava taskkill na bandeja, e o servico era
+    parado la no ssPostInstall â€” ou seja, DEPOIS de os arquivos ja terem sido
+    copiados por cima de binarios que o servico ainda mantinha abertos. Dai os
+    conflitos de "arquivo em uso" e instalacoes terminando com a pasta
+    _internal misturando versoes.
+
+    Agora: para o servico, confirma que parou de facto, mata os dois
+    executaveis pelo nome (caso algum trave sem responder ao sc stop), e remove
+    o servico. O ssPostInstall recria em seguida, entao a instalacao parte de um
+    estado limpo em vez de sobrescrever o que esta em execucao. }
+  Log('--- Preparando ambiente: parar, matar, desinstalar ---');
+
+  StopServiceIfRunning;
+  WaitForServiceStopped(30);
+
+  { Sem verificar retorno: aqui e rede de seguranca. Se o processo ja morreu com
+    o sc stop, o taskkill devolve 128 e esta tudo certo. }
+  KillProcess('AnaliseCertiDigital_Agent_Service.exe');
+  KillProcess('AnaliseCertiDigital_Agent.exe');
+
+  { Folga curta: o Windows leva um instante para soltar os handles de arquivo
+    depois que o processo termina. }
+  Sleep(1500);
+
+  RemoveService;
+
+  LastOperationError := '';
+  Result := True;
 end;
 
 function InstallOrUpdateService: Boolean;
@@ -397,6 +485,9 @@ begin
       );
       Abort;
     end;
+    { Parar a bandeja nao basta: quem segura os binarios de _internal e o
+      servico, e ele so era parado no ssPostInstall â€” depois da copia. }
+    PrepararAmbienteParaInstalar;
   end;
 
   if CurStep = ssPostInstall then
