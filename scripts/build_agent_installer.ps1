@@ -82,9 +82,27 @@ function Invoke-ExternalCommand {
 
     $joinedArgs = $Arguments -join " "
     Write-Log -Level "INFO" -Message ("exec etapa='{0}' cmd='{1}' args='{2}'" -f $StepName, $FilePath, $joinedArgs)
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Comando falhou na etapa '$StepName' com codigo de saida $LASTEXITCODE. Comando: $FilePath $joinedArgs"
+
+    # O PyInstaller escreve o progresso (INFO) em stderr. No Windows PowerShell
+    # 5.1 cada linha de stderr de um executavel nativo vira um ErrorRecord
+    # (NativeCommandError) e, com ErrorActionPreference=Stop no topo do script,
+    # aborta o build na PRIMEIRA linha de log — antes mesmo de chegar ao teste
+    # de $LASTEXITCODE abaixo. O sintoma e enganoso: a mensagem de erro e o
+    # banner de versao do PyInstaller, como se ele tivesse falhado ao iniciar.
+    # Quem decide sucesso aqui e o codigo de saida, entao a preferencia e
+    # relaxada so durante a chamada.
+    $anterior = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $FilePath @Arguments
+        $codigo = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $anterior
+    }
+
+    if ($codigo -ne 0) {
+        throw "Comando falhou na etapa '$StepName' com codigo de saida $codigo. Comando: $FilePath $joinedArgs"
     }
 }
 
