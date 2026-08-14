@@ -13,6 +13,49 @@ def test_health(client: TestClient) -> None:
     assert "api_key_required" in j
 
 
+def test_health_reporta_as_duas_chaves_do_cofre(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    O /health precisa distinguir a chave do PFX da chave da SENHA.
+
+    Com só a primeira reportada, um servidor sem CERT_PASSWORD_ENCRYPTION_KEY
+    parecia saudável enquanto /upload-pfx devolvia 500 em todo certificado. O
+    sintoma aparecia longe: o cofre mantinha o registro antigo, sem senha, e a
+    falha só se manifestava na máquina do usuário final, ao rodar o instalador
+    avulso — "o portal não enviou a senha deste certificado".
+    """
+    r = client.get("/api/health")
+    j = r.json()
+
+    assert j["cert_senha_key_configurada"] is True
+    assert j["cert_senha_key_distinta"] is True
+
+
+def test_health_acusa_chave_da_senha_ausente(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "", raising=False)
+
+    j = client.get("/api/health").json()
+
+    assert j["cert_senha_key_configurada"] is False
+    assert j["cert_senha_key_distinta"] is False
+
+
+def test_health_acusa_chaves_iguais(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chaves iguais anulam a separação — a aplicação recusa operar assim."""
+    monkeypatch.setattr("app.config.CERT_ENCRYPTION_KEY", "cc" * 32, raising=False)
+    monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "cc" * 32, raising=False)
+
+    j = client.get("/api/health").json()
+
+    assert j["cert_senha_key_configurada"] is True
+    assert j["cert_senha_key_distinta"] is False, "chaves iguais têm de aparecer aqui"
+
+
 def test_pagina_painel_200(client: TestClient) -> None:
     r = client.get("/")
     assert r.status_code == 200

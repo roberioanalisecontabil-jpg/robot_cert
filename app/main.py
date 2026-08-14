@@ -793,6 +793,20 @@ def health() -> dict:
         "cert_vault_key_configurada": bool(
             config.CERT_ENCRYPTION_KEY and len(config.CERT_ENCRYPTION_KEY) == 64
         ),
+        # Chave da SENHA do PFX. Sem ela — ou igual à do PFX, que a aplicação
+        # recusa — `upsert_pfx` levanta e /upload-pfx devolve 500. O sintoma
+        # aparece longe daqui: o cofre mantém o registro antigo, sem senha, e o
+        # instalador avulso falha na máquina do usuário com "o portal não
+        # enviou a senha". Sem estes dois campos, descobrir isso exige ler o
+        # agent.log de um servidor.
+        "cert_senha_key_configurada": bool(
+            config.CERT_PASSWORD_ENCRYPTION_KEY
+            and len(config.CERT_PASSWORD_ENCRYPTION_KEY) == 64
+        ),
+        "cert_senha_key_distinta": bool(
+            config.CERT_PASSWORD_ENCRYPTION_KEY
+            and config.CERT_PASSWORD_ENCRYPTION_KEY != config.CERT_ENCRYPTION_KEY
+        ),
         # Ausente, a chave do SMTP é derivada da JWT_SECRET_KEY — o que faz a
         # senha SMTP parar de descriptografar se a JWT diferir entre ambientes.
         "smtp_key_dedicada": bool(os.getenv("ENCRYPTION_KEY")),
