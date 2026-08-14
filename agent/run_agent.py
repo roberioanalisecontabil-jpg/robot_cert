@@ -295,6 +295,47 @@ def _load_local_agent_config() -> dict:
     return {}
 
 
+def estado_do_pedido_rescan(
+    *,
+    pendente_desde: float,
+    baseline: float,
+    status: dict | None,
+    agora: float,
+    timeout_sec: float,
+) -> str:
+    """
+    Situação de um rescan pedido pela bandeja: 'aguardando', 'confirmado' ou 'expirado'.
+
+    Antes a bandeja só dava por confirmado quando `last_scan_time` avançava — e
+    esse campo só é gravado no FIM de um ciclo inteiro e bem-sucedido, depois do
+    upload ao portal. Bastava o envio demorar ou falhar para a bandeja anunciar
+    "expirou sem confirmação" enquanto o serviço, no mesmo log, registrava ter
+    recebido e acionado o rescan. A mensagem acusava o lugar errado.
+
+    O serviço começar a trabalhar (`scanning`/`sending`) já é prova de que o
+    comando chegou, e aparece em segundos. É esse o sinal de confirmação; o
+    prazo passa a cobrir só o trecho entre o pedido e o início do trabalho, não
+    a duração da varredura — que numa base grande é legitimamente longa.
+    """
+    if pendente_desde <= 0.0:
+        return "confirmado"
+
+    estado = str((status or {}).get("state") or "")
+    if estado in ("scanning", "sending"):
+        return "confirmado"
+
+    try:
+        ultimo = float((status or {}).get("last_scan_time") or 0.0)
+    except (TypeError, ValueError):
+        ultimo = 0.0
+    if ultimo > baseline:
+        return "confirmado"
+
+    if agora - pendente_desde >= timeout_sec:
+        return "expirado"
+    return "aguardando"
+
+
 def _novo_http_client() -> httpx.Client:
     """
     Client HTTP do agente.
@@ -768,24 +809,24 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             # pedido recente do botão "Forçar leitura agora".
             pending_since = tray_ui_state.get("pending_since", 0.0) or 0.0
             baseline = tray_ui_state.get("last_scan_baseline", 0.0) or 0.0
-            now_ts = time.time()
-            current_last_scan = float((status or {}).get("last_scan_time") or 0.0)
-            request_pending = False
-            if pending_since > 0.0:
-                age = now_ts - pending_since
-                if current_last_scan > baseline:
-                    # Serviço já executou um novo scan após o clique.
-                    tray_ui_state["pending_since"] = 0.0
-                    tray_ui_state["last_scan_baseline"] = 0.0
-                elif age >= rescan_pending_timeout_sec:
+            situacao = estado_do_pedido_rescan(
+                pendente_desde=pending_since,
+                baseline=baseline,
+                status=status,
+                agora=time.time(),
+                timeout_sec=rescan_pending_timeout_sec,
+            )
+            request_pending = situacao == "aguardando"
+            if pending_since > 0.0 and situacao != "aguardando":
+                if situacao == "expirado":
                     LOGGER.warning(
-                        "Rescan solicitado pelo tray expirou sem confirmação (timeout=%.0fs).",
+                        "Rescan solicitado pelo tray expirou sem o serviço iniciar o trabalho "
+                        "(timeout=%.0fs). O comando foi gravado em %s.",
                         rescan_pending_timeout_sec,
+                        _command_file_path(),
                     )
-                    tray_ui_state["pending_since"] = 0.0
-                    tray_ui_state["last_scan_baseline"] = 0.0
-                else:
-                    request_pending = True
+                tray_ui_state["pending_since"] = 0.0
+                tray_ui_state["last_scan_baseline"] = 0.0
 
             if not svc_running:
                 # ── Serviço parado → ícone cinza ──
