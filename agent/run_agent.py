@@ -357,6 +357,25 @@ def _httpx_timeout() -> httpx.Timeout:
     return httpx.Timeout(connect=connect_s, read=read_s, write=60.0, pool=10.0)
 
 
+def _timeout_poll_comandos() -> httpx.Timeout:
+    """
+    Prazo curto para o poll de /api/agent/next.
+
+    O timeout do client (300 s de leitura) existe para o ingest, que sobe
+    centenas de certificados de uma vez e é legitimamente lento. Herdá-lo neste
+    poll — que roda a cada volta do laço — significa que uma resposta lenta do
+    portal prende o laço PRINCIPAL por até cinco minutos, sem escrever nada no
+    log. E é o mesmo laço que atende o botão "Forçar leitura agora": o gatilho
+    da bandeja só é lido depois desta chamada.
+
+    Foi o que apareceu no ANALISESRV em 14/08: o serviço registrou ter recebido
+    o rescan às 08:07:23 e não logou mais nada por dois minutos. Um poll que
+    falha é inofensivo — a próxima volta tenta de novo em 10 s.
+    """
+    segundos = float(os.getenv("AGENT_POLL_TIMEOUT_SEC", "20"))
+    return httpx.Timeout(connect=10.0, read=segundos, write=20.0, pool=10.0)
+
+
 def _resolve_paths(s: dict, local_cfg: dict) -> tuple[Path, Path]:
     """Prioriza portal; fallback para agent_config.json e variáveis AGENT_*."""
     raw_src = (s.get("source_folder") or "").strip()
@@ -998,11 +1017,20 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 "off",
             ):
                 try:
+                    _inicio_poll = time.monotonic()
                     nr = client.get(
                         f"{base}/api/agent/next",
                         params={"machine_id": mid},
                         headers=_headers(),
+                        timeout=_timeout_poll_comandos(),
                     )
+                    _demora_poll = time.monotonic() - _inicio_poll
+                    if _demora_poll > 5.0:
+                        # Deixa rastro quando o portal demora: é este ponto que
+                        # segura o laço antes de ele olhar o pedido da bandeja.
+                        LOGGER.warning(
+                            "/api/agent/next demorou %.1fs a responder.", _demora_poll
+                        )
                     if nr.status_code == 200:
                         j = nr.json() or {}
                         cmd = j.get("command")

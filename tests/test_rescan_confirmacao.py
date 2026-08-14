@@ -22,7 +22,36 @@ longa (medidos ~24 s para os 556 certificados do ANALISESRV).
 
 import pytest
 
-from agent.run_agent import estado_do_pedido_rescan
+from agent.run_agent import (
+    _httpx_timeout,
+    _timeout_poll_comandos,
+    estado_do_pedido_rescan,
+)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# O outro lado do mesmo incidente: por que o laço demorou a ver o gatilho
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_poll_de_comandos_nao_herda_o_prazo_do_ingest() -> None:
+    """
+    O laço principal chama /api/agent/next ANTES de olhar o gatilho da bandeja.
+
+    Com o timeout do client (300 s, dimensionado para subir centenas de
+    certificados), uma resposta lenta do portal prendia esse laço por até cinco
+    minutos sem escrever nada no log — e o pedido de rescan só era lido depois.
+    É o que explica o silêncio de dois minutos entre "Rescan acionado pelo tray"
+    e o timeout da bandeja.
+    """
+    poll = _timeout_poll_comandos().read
+    ingest = _httpx_timeout().read
+
+    assert poll < ingest, "o poll não pode herdar o prazo do ingest"
+    assert poll <= 60, f"prazo de {poll}s ainda segura o laço tempo demais"
+
+
+def test_poll_tem_prazo_de_conexao_proprio() -> None:
+    assert _timeout_poll_comandos().connect <= 15
 
 
 def _situacao(**kw) -> str:
