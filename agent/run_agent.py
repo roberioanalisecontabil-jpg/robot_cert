@@ -663,10 +663,30 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
         else:
             trigger_event.set()
 
+    def _status_action(_icon: pystray.Icon, _item) -> None:
+        """Abre a janela de status (serviço, versão, última consulta, erro)."""
+        from agent import __version__
+        from agent.janela_status import EstadoAgente, abrir_janela, montar_estado
+
+        def _estado() -> EstadoAgente:
+            return montar_estado(
+                servico_ativo=_is_service_running() if cfg.tray_only else True,
+                status=_read_agent_status(),
+                versao=__version__,
+                portal=base,
+                machine_id=_machine_id({}, local_cfg),
+                caminho_log=Path(log_file),
+            )
+
+        abrir_janela(obter_estado=_estado, nome_servico=SERVICE_NAME)
+
     def _start_tray() -> None:
         if cfg.no_tray or cfg.once:
             return
         menu = pystray.Menu(
+            # Primeiro item = ação do duplo clique no ícone, que é o gesto que o
+            # usuário tenta primeiro para "ver como está".
+            pystray.MenuItem("Status do serviço", _status_action, default=True),
             pystray.MenuItem("Forçar leitura agora", _rescan_action),
             pystray.MenuItem("Sair", _quit_action),
         )
@@ -711,9 +731,23 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             daemon=True,
         ).start()
 
-    if cfg.tray_only:
-        LOGGER.info("Modo tray-only: monitorando estado do serviço %s.", SERVICE_NAME)
-        _prev_visual = None  # rastreia estado visual para evitar atualizações desnecessárias
+    def _loop_visual_bandeja() -> None:
+        """
+        Mantém o ícone refletindo o estado: cinza parado, piscando em atividade,
+        aceso quando ativo e ocioso.
+
+        Roda nos DOIS modos. Antes vivia dentro do ramo `tray_only`, e o efeito
+        era pior do que "faltar animação": os atalhos do Menu Iniciar e da Área
+        de Trabalho chamam o executável sem `--tray-only` (agent_setup.iss), de
+        modo que o ícone nascia cinza (o padrão de `_start_tray`) e nunca era
+        tocado — indicando "serviço parado" justamente enquanto o agente
+        trabalhava.
+
+        A diferença entre os modos é só a origem do estado:
+        * `tray_only` — o trabalho é do serviço Windows; consulta-se `sc query`.
+        * normal — quem trabalha é este processo; enquanto ele vive, está ativo.
+        """
+        _prev_visual = None  # evita reescrever o ícone a cada volta
         _blink_on = True
 
         while not quit_event.is_set():
@@ -722,8 +756,12 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 quit_event.wait(timeout=1.0)
                 continue
 
-            svc_running = _is_service_running()
-            status = _read_agent_status() if svc_running else None
+            if cfg.tray_only:
+                svc_running = _is_service_running()
+                status = _read_agent_status() if svc_running else None
+            else:
+                svc_running = True
+                status = _read_agent_status()
             agent_state = (status or {}).get("state", "idle")
 
             # Determinar se ainda estamos a aguardar o serviço processar um
@@ -792,7 +830,23 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 wait = 1.0
 
             quit_event.wait(timeout=wait)
+
+    if cfg.tray_only:
+        # Sem worker local: este processo existe só para desenhar a bandeja e
+        # observar o serviço, então o loop visual pode ocupar a thread principal.
+        LOGGER.info("Modo tray-only: monitorando estado do serviço %s.", SERVICE_NAME)
+        _loop_visual_bandeja()
         return
+
+    # Modo normal: o loop principal abaixo é quem varre e envia, e passa a maior
+    # parte do tempo bloqueado em I/O do portal. O visual vai para uma thread
+    # própria para continuar animando durante essas esperas.
+    if not cfg.no_tray and not cfg.once:
+        threading.Thread(
+            target=_loop_visual_bandeja,
+            name="AnaliseCertiDigitalTrayUI",
+            daemon=True,
+        ).start()
 
     with _novo_http_client() as client:
         while not quit_event.is_set():

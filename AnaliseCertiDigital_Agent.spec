@@ -23,6 +23,13 @@ a = Analysis(
         # existe no executável, sem erro visível.
         "agent",
         "agent.installer_client",
+        # Janela de status da bandeja. Importada tarde, dentro do handler do
+        # menu — o PyInstaller não a alcança pela análise estática, e sem estas
+        # entradas o item "Status do serviço" falharia só ao ser clicado, no
+        # executável empacotado, sem sintoma nenhum antes disso.
+        "agent.janela_status",
+        "tkinter",
+        "tkinter.ttk",
         "app.cert_installer",
         'watchdog',
         'watchdog.events',
