@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1, 2 (a–d), 3a e 3b aplicadas em 2026-08-15. Falta 3c, 4 e 5.**
+> **Status: Etapas 0, 1, 2 (a–d) e 3 (a–c) aplicadas em 2026-08-15. Faltam 4 e 5.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -320,17 +320,17 @@ depois (§6).
 >   migration, e é o grupo que faltou no incidente da chave desta manhã.
 > - **3b ✅ (15/08)** — configuração: pontos **2, 5 e 7**, com colunas novas em
 >   `portal_settings` e rota de gravação parcial.
-> - **3c** — trilha e limpeza: pontos **1, 6, 8** e a saída da operação.
+> - **3c ✅ (15/08)** — trilha e limpeza: pontos **1, 6, 8** e a saída da operação.
 >
-> **A seção "2 · Instalar Certificados" NÃO foi removida ainda.** O download
-> mudou-se para o Início na etapa 2d, mas o "Enviar para Estação" (instalação
-> via agente, com `target_machine`) não tem destino lá. Removê-la agora seria
-> tirar uma capacidade sem substituto — fica para a 3c, junto com o destino.
+> **A seção "2 · Instalar Certificados" saiu na 3c**, depois que o "Enviar para
+> Estação" ganhou destino: virou ação secundária da barra de seleção do Início,
+> visível só a admin e gestor. A capacidade não foi descartada junto com a tela
+> — `prepare` continua existindo, agora atrás da mesma barreira de carteira.
 
 Hoje a página tem três seções: autorizar ao cofre, instalar, e trilha de
 auditoria. As de operação saem para o Início. O que fica, e o que falta:
 
-### 1. Ícone do `.exe` — declarar que é entrada de *build*, não de runtime
+### 1. Ícone do `.exe` — declarar que é entrada de *build*, não de runtime ✅
 
 O campo pode existir, mas **mentir sobre ele é o pior erro possível nesta
 página**. Deve mostrar o ícone em uso, de qual arquivo veio, e o aviso de que
@@ -367,7 +367,7 @@ trade-off na própria tela**: curto demais e o usuário perde a janela e volta a
 pedir; longo demais e o link fica vivo numa caixa de e-mail. Número sem o
 trade-off ao lado é convite para alguém pôr 30 dias.
 
-### 6. Log de instalação — cadeia por token, não lista plana
+### 6. Log de instalação — cadeia por token, não lista plana ✅
 
 O que foi pedido, mas a forma importa. Hoje `install_log` tem 25 linhas, 3 dias,
 um usuário, sem filtro nenhum. Precisa de filtro (período, usuário, status,
@@ -386,7 +386,7 @@ SOLICITADO  9   →   REDIMIDO  8   →   CONCLUIDO  2
 expurgo**. Cresce para sempre com dado pessoal. Configuração de retenção + rotina
 de expurgo. Deixar para depois significa decidir sobre dado que já se acumulou.
 
-### 8. Opt-in do cofre — agora explicitamente **por estação**
+### 8. Opt-in do cofre — agora explicitamente **por estação** ✅
 
 Continua aqui: é decisão de segurança, não operação. Mas desde a chave composta
 `(machine_id, fingerprint)` de 15/08, autorizar e revogar valem **para uma
@@ -553,7 +553,7 @@ Etapa 2c carteira + barreira no server ✅ aplicada — barreira e teste estrutu
    ↓
 Etapa 2d Início: seleção + flutuante   ✅ aplicada — nasceu ciente de carteira
    ↓
-Etapa 3  /instalador só configuração   ← recebe o painel de desativação (§3.2c)
+Etapa 3  /instalador só configuração   ✅ aplicada — diagnóstico, config e trilha
    ↓
 Etapa 4  /dashboard novo               ← decidir agregação ANTES do 1º endpoint (§5.4)
          + tabela user_activity

@@ -1268,6 +1268,148 @@ def list_install_logs(
         return []
 
 
+# Ordem em que os eventos acontecem numa instalação bem-sucedida. Serve para
+# dizer ONDE a cadeia parou, que é a única coisa que a lista plana não dizia.
+ORDEM_DOS_EVENTOS = ["SOLICITADO", "REDIMIDO", "CONCLUIDO"]
+
+
+def cadeias_de_instalacao(
+    limite: int = 500,
+    desde: Optional[str] = None,
+    user_email: Optional[str] = None,
+    apenas_com_falha: bool = False,
+) -> List[Dict[str, Any]]:
+    """
+    Agrupa `install_log` por token: uma linha por tentativa de instalação.
+
+    A lista plana mostrava eventos soltos em ordem cronológica, e o que importa
+    é **onde a cadeia quebrou**. Os números de produção explicam por quê:
+
+        SOLICITADO 9  →  REDIMIDO 8  →  CONCLUIDO 2
+                                        ERRO      6
+
+    Lidos em fila, são 25 linhas sem forma. Agrupados, são nove tentativas das
+    quais seis morreram no mesmo ponto e pela mesma causa — que foi como se
+    descobriu que a senha estava ausente no cofre.
+
+    `desde` é ISO-8601; a filtragem por período vai no banco, a por usuário e
+    falha em memória (o agrupamento precisa da cadeia inteira para saber se ela
+    falhou, então filtrar antes cortaria eventos da mesma tentativa).
+    """
+    client = _supabase()
+    if not client:
+        return []
+
+    try:
+        q = client.table("install_log").select("*")
+        if desde:
+            q = q.gte("created_at", desde)
+        r = q.order("created_at", desc=True).limit(limite).execute()
+        eventos = list(r.data or [])
+    except Exception:
+        logger.exception("Falha ao listar install_log para agrupar")
+        return []
+
+    por_token: Dict[str, Dict[str, Any]] = {}
+    for ev in eventos:
+        # Evento sem token é raro mas existe (falha antes de o token nascer);
+        # cai num balde próprio em vez de sumir da trilha.
+        chave = str(ev.get("token_id") or f"sem-token:{ev.get('id')}")
+        cadeia = por_token.setdefault(
+            chave,
+            {
+                "token_id": ev.get("token_id"),
+                "user_email": ev.get("user_email"),
+                "target_machine": ev.get("target_machine"),
+                "client_ip": ev.get("client_ip"),
+                "eventos": [],
+                "certificados": set(),
+            },
+        )
+        cadeia["eventos"].append(
+            {
+                "event": ev.get("event"),
+                "status": ev.get("status"),
+                "detail": ev.get("detail"),
+                "created_at": ev.get("created_at"),
+                "certificate_id": ev.get("certificate_id"),
+            }
+        )
+        if ev.get("certificate_id"):
+            cadeia["certificados"].add(str(ev["certificate_id"]))
+
+    saida: List[Dict[str, Any]] = []
+    for cadeia in por_token.values():
+        cadeia["eventos"].sort(key=lambda e: e["created_at"] or "")
+        nomes = {e["event"] for e in cadeia["eventos"]}
+        falhou = "ERRO" in nomes or any(e["status"] == "FALHA" for e in cadeia["eventos"])
+        concluiu = "CONCLUIDO" in nomes
+
+        if concluiu and not falhou:
+            desfecho, parou_em = "concluido", None
+        elif falhou:
+            desfecho = "falhou"
+            # Onde parou = último marco da ordem canônica que chegou a acontecer.
+            alcancados = [e for e in ORDEM_DOS_EVENTOS if e in nomes]
+            parou_em = alcancados[-1] if alcancados else None
+        else:
+            desfecho = "incompleto"
+            alcancados = [e for e in ORDEM_DOS_EVENTOS if e in nomes]
+            parou_em = alcancados[-1] if alcancados else None
+
+        motivos = [
+            e["detail"] for e in cadeia["eventos"]
+            if e["detail"] and (e["event"] == "ERRO" or e["status"] == "FALHA")
+        ]
+
+        cadeia.update(
+            {
+                "certificados": len(cadeia["certificados"]),
+                "desfecho": desfecho,
+                "parou_em": parou_em,
+                "motivos": sorted(set(motivos)),
+                "inicio": cadeia["eventos"][0]["created_at"] if cadeia["eventos"] else None,
+                "fim": cadeia["eventos"][-1]["created_at"] if cadeia["eventos"] else None,
+            }
+        )
+        saida.append(cadeia)
+
+    if user_email:
+        alvo = user_email.strip().lower()
+        saida = [c for c in saida if (c.get("user_email") or "").lower() == alvo]
+    if apenas_com_falha:
+        saida = [c for c in saida if c["desfecho"] == "falhou"]
+
+    saida.sort(key=lambda c: c["inicio"] or "", reverse=True)
+    return saida
+
+
+def resumo_das_cadeias(cadeias: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Funil e causas, para a tela mostrar o número antes da tabela.
+
+    `causas` é o campo que resolveu o caso real: as seis falhas de produção
+    tinham a MESMA causa, e isso só aparece contando os motivos.
+    """
+    total = len(cadeias)
+    concluidas = sum(1 for c in cadeias if c["desfecho"] == "concluido")
+    falhadas = sum(1 for c in cadeias if c["desfecho"] == "falhou")
+
+    causas: Dict[str, int] = {}
+    for c in cadeias:
+        for m in c["motivos"]:
+            causas[m] = causas.get(m, 0) + 1
+
+    return {
+        "total": total,
+        "concluidas": concluidas,
+        "falhadas": falhadas,
+        "incompletas": total - concluidas - falhadas,
+        "taxa_conclusao": round(100 * concluidas / total) if total else None,
+        "causas": dict(sorted(causas.items(), key=lambda kv: -kv[1])),
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Montagem do bundle criptografado para o agente
 # ──────────────────────────────────────────────────────────────────────────

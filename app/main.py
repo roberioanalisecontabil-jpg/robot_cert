@@ -3121,6 +3121,32 @@ def list_installer_logs(
     return {"logs": logs}
 
 
+@app.get("/api/cert-installer/trilha", dependencies=[Depends(require_admin)])
+def trilha_de_instalacao(
+    dias: int = Query(30, ge=1, le=365),
+    user_email: Optional[str] = Query(None),
+    apenas_falhas: bool = Query(False),
+    limite: int = Query(500, ge=1, le=2000),
+) -> dict:
+    """
+    A trilha agrupada por token: uma linha por tentativa de instalação.
+
+    Substitui a lista plana, que mostrava eventos soltos em ordem cronológica.
+    O que importa é **onde a cadeia quebrou** — e os números de produção
+    mostram por quê: nove tentativas, seis mortas no mesmo ponto e pela mesma
+    causa. Em fila, são 25 linhas sem forma.
+    """
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    cadeias = cert_installer.cadeias_de_instalacao(
+        limite=limite, desde=desde, user_email=user_email, apenas_com_falha=apenas_falhas
+    )
+    return {
+        "dias": dias,
+        "resumo": cert_installer.resumo_das_cadeias(cadeias),
+        "cadeias": cadeias,
+    }
+
+
 @app.post("/api/cert-installer/cleanup")
 def cleanup_tokens(token: auth.TokenData = Depends(require_admin)):
     """Remove tokens de instalação expirados (manutenção)."""

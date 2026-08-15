@@ -101,10 +101,16 @@
       <section class="card" style="margin-bottom: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">1 · Custódia dos certificados</h2>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">
+              Custódia dos certificados
+              <span id="badgeMaquina" class="badge"
+                    style="margin-left: 0.5rem; font-size: 0.72rem; vertical-align: middle;
+                           background: var(--bg); color: var(--text-muted);">—</span>
+            </h2>
             <p class="text-muted" style="font-size: 0.875rem;">
               Todo certificado válido do inventário vai ao cofre por padrão. Desative aqui os
               que não devem ter a chave privada copiada para o servidor — o agente passa a ignorá-los.
+              <strong>As decisões desta tela valem só para a máquina indicada acima.</strong>
             </p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center;">
@@ -144,81 +150,51 @@
         <p class="hint" id="optinResumo" style="margin-top: 0.75rem;"></p>
       </section>
 
-      <!-- Passo 2: disparar a instalação do que já está no cofre -->
-      <section class="card" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+      <!-- Trilha agrupada por token: uma linha por TENTATIVA, não por evento.
+           A lista plana mostrava eventos soltos em ordem cronológica, e o que
+           importa é onde a cadeia quebrou. Ver cadeias_de_instalacao(). -->
+      <section class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">2 · Instalar Certificados</h2>
-            <p class="text-muted" style="font-size: 0.875rem;">Selecione os certificados e baixe o instalador para executar nesta máquina — ou envie para uma estação que já roda o Agente.</p>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Trilha de instalações</h2>
+            <p class="text-muted" style="font-size: 0.875rem;">
+              Uma linha por tentativa, do pedido ao desfecho.
+            </p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <button id="btnBaixarInstalador" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-              Baixar Instalador
-            </button>
-            <span class="text-muted" style="font-size: 0.75rem;">ou via Agente:</span>
-            <input type="text" id="inputTargetMachine" class="form-control" placeholder="ex.: Meu_Servidor_Windows ou default" style="width: 200px;" value="default" />
-            <button id="btnPrepareInstall" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" />
-              </svg>
-              Enviar para Estação
-            </button>
+            <label for="trilhaDias" class="cg-sr-only">Período</label>
+            <select id="trilhaDias" class="form-control" style="width: 150px;">
+              <option value="7">Últimos 7 dias</option>
+              <option value="30" selected>Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="365">Último ano</option>
+            </select>
+            <label for="trilhaEmail" class="cg-sr-only">Filtrar por solicitante</label>
+            <input type="search" id="trilhaEmail" class="form-control" placeholder="Filtrar por e-mail" style="width: 220px;" />
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem;">
+              <input type="checkbox" id="trilhaSoFalhas" /> só falhas
+            </label>
+            <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
           </div>
         </div>
 
-        <div id="installMessageArea"></div>
-
-        <!-- Tabela de Certificados Disponíveis no Cofre -->
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th style="width: 40px; text-align: center;">
-                  <input type="checkbox" id="chkSelectAllCerts" title="Selecionar Todos" />
-                </th>
-                <th>Titular / CNPJ / CPF</th>
-                <th>Máquina Origem</th>
-                <th>Validade</th>
-                <th>Fingerprint (SHA-256)</th>
-              </tr>
-            </thead>
-            <tbody id="tblAvailableCerts">
-              <tr>
-                <td colspan="5" class="text-center" style="padding: 2rem;">Carregando certificados no cofre...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Auditoria e Logs de Instalação -->
-      <section class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Trilha de Auditoria de Instalações</h2>
-            <p class="text-muted" style="font-size: 0.875rem;">Histórico completo de solicitações, resgates e status de execução.</p>
-          </div>
-          <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar Logs</button>
-        </div>
+        <div id="trilhaResumo" style="margin-bottom: 1rem;"></div>
 
         <div class="table-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Data / Hora</th>
-                <th>Evento</th>
+                <th>Quando</th>
                 <th>Solicitante</th>
-                <th>Máquina Destino</th>
-                <th>Status</th>
-                <th>Detalhes</th>
+                <th>Destino</th>
+                <th>Certs</th>
+                <th>Cadeia</th>
+                <th>Desfecho</th>
               </tr>
             </thead>
             <tbody id="tblInstallLogs">
               <tr>
-                <td colspan="6" class="text-center" style="padding: 2rem;">Carregando histórico...</td>
+                <td colspan="6" class="text-center" style="padding: 2rem;">Carregando trilha...</td>
               </tr>
             </tbody>
           </table>
@@ -244,7 +220,6 @@
         }
 
         loadOptinPanel();
-        loadAvailableCerts();
         loadInstallLogs();
 
         document.getElementById("btnRefreshOptin").addEventListener("click", loadOptinPanel);
@@ -256,18 +231,12 @@
         });
 
         // Checkbox selecionar todos
-        const chkSelectAll = document.getElementById("chkSelectAllCerts");
-        if (chkSelectAll) {
-          chkSelectAll.addEventListener("change", function() {
-            const chks = document.querySelectorAll(".chk-cert-select");
-            chks.forEach(c => c.checked = chkSelectAll.checked);
-          });
-        }
 
         // Botão de instalar
-        document.getElementById("btnPrepareInstall").addEventListener("click", handlePrepareInstall);
-        document.getElementById("btnBaixarInstalador").addEventListener("click", handleBaixarInstalador);
         document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
+        document.getElementById("trilhaDias").addEventListener("change", loadInstallLogs);
+        document.getElementById("trilhaSoFalhas").addEventListener("change", loadInstallLogs);
+        document.getElementById("trilhaEmail").addEventListener("change", loadInstallLogs);
         document.getElementById("btnRefreshDiag").addEventListener("click", loadDiagnostico);
         document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
         document.getElementById("btnSalvarCfg").addEventListener("click", salvarConfigInstalador);
@@ -408,8 +377,20 @@
           ...(b.signatarios || []).map((s) =>
             linhaDiag("Signatário", esc(s.subject), s.expirado ? "ruim" : "bom")
           ),
-          linhaDiag("Ícone", (d.icone && d.icone.presente) ? "presente" : "ausente",
-                    (d.icone && d.icone.presente) ? "" : "ruim"),
+          linhaDiag(
+            "Ícone do instalador",
+            (d.icone && d.icone.presente)
+              ? "<img src='/favicon.ico' alt='Ícone do instalador' " +
+                "style='width:16px;height:16px;vertical-align:middle' /> em uso"
+              : "ausente",
+            (d.icone && d.icone.presente) ? "" : "ruim"
+          ),
+          // Entrada de BUILD, não configuração: o binário é o mesmo para todo
+          // download de propósito — é o que permite assiná-lo uma vez e
+          // acumular reputação no SmartScreen. Um seletor que parecesse aplicar
+          // na hora geraria um chamado de suporte por uso.
+          linhaDiag("Trocar o ícone",
+                    "<span style='font-size:0.75rem'>exige recompilar e reassinar</span>"),
         ]);
 
         // "Sem senha cifrada" é o número que mais importa aqui: foi a causa
@@ -579,8 +560,10 @@
 
         // A máquina fica visível: a autorização vale para ela, e só o agente
         // dela vai receber os certificados listados aqui.
+        // A máquina também vira badge no cabeçalho: quem vai clicar em
+        // "Desativar" precisa ver de qual estação ANTES de agir, não no rodapé.
+        document.getElementById("badgeMaquina").textContent = _optinMachineId;
         document.getElementById("optinResumo").textContent =
-          `Máquina: ${_optinMachineId} · ` +
           `${_optinAutorizados.size} sob custódia de ${_optinCandidatos.length} certificado(s) no inventário` +
           (q ? ` · ${linhas.length} correspondem à busca` : "");
 
@@ -690,193 +673,104 @@
             showToast(`“${nome}” de volta à custódia. O agente enviará no próximo ciclo.`, "success");
           }
           renderOptinTable();
-          loadAvailableCerts();
-        } catch (err) {
+          } catch (err) {
           btn.disabled = false;
           showToast("Não foi possível concluir: " + err.message, "error");
         }
       }
 
-      async function loadAvailableCerts() {
-        const tbody = document.getElementById("tblAvailableCerts");
-        try {
-          const res = await fetch("/api/cert-installer/available", {
-            headers: getHeaders()
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          const certs = data.certificates || [];
+      function desenharCadeia(c) {
+        const nomes = new Set((c.eventos || []).map((e) => e.event));
+        return MARCOS.map((m) => {
+          const alcancado = nomes.has(m);
+          const parouAqui = c.parou_em === m && c.desfecho !== "concluido";
+          const cor = parouAqui ? "var(--expired-text)"
+                    : alcancado ? "var(--ok-text)"
+                    : "var(--text-muted)";
+          const peso = alcancado ? "600" : "400";
+          return `<span style="color:${cor};font-weight:${peso};font-size:0.78rem">` +
+                 `${m.slice(0, 4)}${alcancado ? "&nbsp;✓" : "&nbsp;·"}</span>`;
+        }).join("<span style='color:var(--text-muted)'>&nbsp;→&nbsp;</span>");
+      }
 
-          if (certs.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum certificado armazenado no cofre do servidor até o momento. O agente enviará os arquivos no próximo scan.</td></tr>`;
-            return;
-          }
+      function badgeDesfecho(d) {
+        const mapa = {
+          concluido: ["CONCLUÍDO", "rgba(46,125,50,0.15)", "#2e7d32"],
+          falhou: ["FALHOU", "rgba(198,40,40,0.15)", "#c62828"],
+          incompleto: ["INCOMPLETO", "rgba(237,108,2,0.15)", "#ed6c02"],
+        };
+        const [rot, bg, fg] = mapa[d] || ["?", "var(--bg)", "var(--text-muted)"];
+        return `<span class="badge" style="background:${bg};color:${fg}">${rot}</span>`;
+      }
 
-          tbody.innerHTML = certs.map(c => {
-            const doc = c.documento ? ` (${c.documento})` : "";
-            const nome = c.nome_titular || c.friendly_name || c.subject || "Sem Nome";
-            const val = c.not_after ? new Date(c.not_after).toLocaleDateString("pt-BR") : "N/D";
-            const fpShort = c.fingerprint ? c.fingerprint.substring(0, 16) + "..." : "N/D";
-
-            return `
-              <tr>
-                <td style="text-align: center;">
-                  <input type="checkbox" class="chk-cert-select" value="${c.id}" data-nome="${escapeHtml(nome)}" />
-                </td>
-                <td><strong>${escapeHtml(nome)}</strong>${escapeHtml(doc)}</td>
-                <td><span class="badge" style="background: var(--surface); border: 1px solid var(--border);">${escapeHtml(c.machine_id)}</span></td>
-                <td>${val}</td>
-                <td><code style="font-size: 0.8rem;">${fpShort}</code></td>
-              </tr>
-            `;
-          }).join("");
-        } catch (err) {
-          tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar certificados: ${escapeHtml(err.message)}</td></tr>`;
+      function renderResumoTrilha(r) {
+        if (!r.total) {
+          document.getElementById("trilhaResumo").innerHTML = "";
+          return;
         }
+        // As CAUSAS vêm antes da tabela de propósito: foi contando os motivos
+        // que se descobriu que as seis falhas de produção eram a mesma coisa.
+        const causas = Object.entries(r.causas || {});
+        const blocoCausas = causas.length
+          ? "<div style='margin-top:0.75rem'>" +
+            causas.map(([m, n]) =>
+              `<div style="font-size:0.82rem;color:var(--expired-text)">` +
+              `<strong>${n}×</strong> ${esc(m)}</div>`
+            ).join("") + "</div>"
+          : "";
+
+        document.getElementById("trilhaResumo").innerHTML =
+          "<div class='cg-banner " + (r.falhadas ? "cg-banner--error" : "cg-banner--info") + "'>" +
+          "<span class='cg-banner__text'>" +
+          `<strong>${r.total}</strong> tentativa(s) · ` +
+          `<strong>${r.concluidas}</strong> concluída(s) · ` +
+          `<strong>${r.falhadas}</strong> com falha · ` +
+          `<strong>${r.incompletas}</strong> sem desfecho` +
+          (r.taxa_conclusao !== null ? ` · taxa de conclusão <strong>${r.taxa_conclusao}%</strong>` : "") +
+          blocoCausas +
+          "</span></div>";
       }
 
       async function loadInstallLogs() {
         const tbody = document.getElementById("tblInstallLogs");
-        try {
-          const res = await fetch("/api/cert-installer/logs?limit=50", {
-            headers: getHeaders()
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          const logs = data.logs || [];
+        const dias = document.getElementById("trilhaDias").value;
+        const email = (document.getElementById("trilhaEmail").value || "").trim();
+        const soFalhas = document.getElementById("trilhaSoFalhas").checked;
 
-          if (logs.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhum log de instalação registrado.</td></tr>`;
+        const params = new URLSearchParams({ dias, apenas_falhas: soFalhas });
+        if (email) params.set("user_email", email);
+
+        try {
+          const res = await fetch("/api/cert-installer/trilha?" + params.toString(), {
+            headers: getHeaders(),
+          });
+          if (!res.ok) throw new Error(await mensagemCorpoErro(res));
+          const data = await res.json();
+          renderResumoTrilha(data.resumo || {});
+          const cadeias = data.cadeias || [];
+
+          if (!cadeias.length) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhuma instalação no período.</td></tr>`;
             return;
           }
 
-          tbody.innerHTML = logs.map(l => {
-            const dt = l.created_at ? new Date(l.created_at).toLocaleString("pt-BR") : "N/D";
-            let statusBadge = `<span class="badge" style="background: var(--bg); color: var(--text-muted);">${escapeHtml(l.event)}</span>`;
-            if (l.event === "CONCLUIDO") {
-              statusBadge = `<span class="badge" style="background: rgba(46, 125, 50, 0.15); color: #2e7d32; border: 1px solid rgba(46,125,50,0.3);">CONCLUÍDO</span>`;
-            } else if (l.event === "ERRO" || l.status === "FALHA") {
-              statusBadge = `<span class="badge" style="background: rgba(198, 40, 40, 0.15); color: #c62828; border: 1px solid rgba(198,40,40,0.3);">ERRO</span>`;
-            } else if (l.event === "REDIMIDO") {
-              statusBadge = `<span class="badge" style="background: rgba(2, 136, 209, 0.15); color: #0288d1; border: 1px solid rgba(2,136,209,0.3);">REDIMIDO</span>`;
-            } else if (l.event === "SOLICITADO") {
-              statusBadge = `<span class="badge" style="background: rgba(237, 108, 2, 0.15); color: #ed6c02; border: 1px solid rgba(237,108,2,0.3);">SOLICITADO</span>`;
-            }
-
+          tbody.innerHTML = cadeias.map((c) => {
+            const quando = c.inicio ? new Date(c.inicio).toLocaleString("pt-BR") : "—";
+            const motivo = (c.motivos || []).join(" · ");
             return `
               <tr>
-                <td>${dt}</td>
-                <td>${statusBadge}</td>
-                <td>${escapeHtml(l.user_email || l.user_id)}</td>
-                <td><strong>${escapeHtml(l.target_machine || "default")}</strong></td>
-                <td>${escapeHtml(l.status || "-")}</td>
-                <td style="font-size: 0.85rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.detail || "")}">${escapeHtml(l.detail || "-")}</td>
-              </tr>
-            `;
+                <td style="font-size:0.85rem">${quando}</td>
+                <td>${esc(c.user_email || "—")}</td>
+                <td><strong>${esc(c.target_machine || "—")}</strong></td>
+                <td style="text-align:center">${c.certificados}</td>
+                <td style="white-space:nowrap">${desenharCadeia(c)}</td>
+                <td>${badgeDesfecho(c.desfecho)}${
+                  motivo ? `<div style="font-size:0.75rem;color:var(--expired-text);margin-top:0.25rem">${esc(motivo)}</div>` : ""
+                }</td>
+              </tr>`;
           }).join("");
         } catch (err) {
-          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar histórico: ${escapeHtml(err.message)}</td></tr>`;
-        }
-      }
-
-      async function handleBaixarInstalador() {
-        const marcados = Array.from(document.querySelectorAll(".chk-cert-select:checked"));
-        const msgArea = document.getElementById("installMessageArea");
-
-        if (marcados.length === 0) {
-          msgArea.innerHTML = `<div class="toast toast-warning" style="margin-bottom: 1rem;">Selecione ao menos um certificado na tabela.</div>`;
-          return;
-        }
-
-        const btn = document.getElementById("btnBaixarInstalador");
-        const rotulo = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerText = "Gerando...";
-
-        try {
-          const res = await fetch("/api/cert-installer/preparar-download", {
-            method: "POST",
-            headers: getHeaders(true),
-            body: JSON.stringify({
-              certificate_ids: marcados.map(c => c.value),
-              nome: marcados.length === 1 ? marcados[0].dataset.nome : `${marcados.length} certificados`
-            })
-          });
-
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || "Falha ao gerar o instalador");
-
-          // O download dispara sozinho; o link fica visível porque o token
-          // expira em poucos minutos e o usuário precisa saber disso.
-          window.location.href = data.download_url;
-
-          msgArea.innerHTML = `
-            <div class="toast toast-success" style="margin-bottom: 1rem;">
-              <strong>Instalador gerado.</strong> O download começou.
-              Execute o arquivo <em>nesta máquina</em> para instalar o certificado —
-              não renomeie, o código de instalação faz parte do nome.
-              <br><small>Vale para uma instalação e expira em ${data.validade_min} minutos.</small>
-            </div>`;
-
-          document.querySelectorAll(".chk-cert-select").forEach(c => c.checked = false);
-          const selectAll = document.getElementById("chkSelectAllCerts");
-          if (selectAll) selectAll.checked = false;
-          setTimeout(loadInstallLogs, 1000);
-        } catch (err) {
-          msgArea.innerHTML = `<div class="toast toast-danger" style="margin-bottom: 1rem;">Erro: ${escapeHtml(err.message)}</div>`;
-        } finally {
-          btn.disabled = false;
-          btn.innerHTML = rotulo;
-        }
-      }
-
-      async function handlePrepareInstall() {
-        const selectedChks = document.querySelectorAll(".chk-cert-select:checked");
-        const certIds = Array.from(selectedChks).map(c => c.value);
-        const targetMachine = document.getElementById("inputTargetMachine").value.strip ? document.getElementById("inputTargetMachine").value.strip() : document.getElementById("inputTargetMachine").value.trim();
-        const msgArea = document.getElementById("installMessageArea");
-
-        if (certIds.length === 0) {
-          msgArea.innerHTML = `<div class="toast toast-warning" style="margin-bottom: 1rem;">Selecione pelo menos um certificado na tabela para instalar.</div>`;
-          return;
-        }
-
-        if (!targetMachine) {
-          msgArea.innerHTML = `<div class="toast toast-warning" style="margin-bottom: 1rem;">Informe a máquina destino (ex.: Meu_Servidor_Windows ou default).</div>`;
-          return;
-        }
-
-        const btn = document.getElementById("btnPrepareInstall");
-        btn.disabled = true;
-        btn.innerText = "Solicitando...";
-
-        try {
-          const res = await fetch("/api/cert-installer/prepare", {
-            method: "POST",
-            headers: getHeaders(true),
-            body: JSON.stringify({
-              certificate_ids: certIds,
-              target_machine: targetMachine
-            })
-          });
-
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || "Falha ao solicitar instalação");
-
-          msgArea.innerHTML = `<div class="toast toast-success" style="margin-bottom: 1rem;">Solicitação enviada com sucesso! Comando enfileirado para a máquina <strong>${escapeHtml(targetMachine)}</strong>. O agente instalará em instantes.</div>`;
-
-          // Limpar seleção
-          document.querySelectorAll(".chk-cert-select").forEach(c => c.checked = false);
-          const selectAll = document.getElementById("chkSelectAllCerts");
-          if (selectAll) selectAll.checked = false;
-
-          // Atualizar logs após 1 segundo
-          setTimeout(loadInstallLogs, 1000);
-        } catch (err) {
-          msgArea.innerHTML = `<div class="toast toast-danger" style="margin-bottom: 1rem;">Erro: ${escapeHtml(err.message)}</div>`;
-        } finally {
-          btn.disabled = false;
-          btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" /></svg> Instalar Selecionados`;
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar a trilha: ${esc(err.message)}</td></tr>`;
         }
       }
 
