@@ -149,7 +149,7 @@ def test_salvar_config_do_instalador_preserva_o_smtp(
     r = client.put(
         "/api/cert-installer/configuracao",
         json={"instalador_nome_template": "{nome}-{token}.exe",
-              "install_token_ttl_min": 15, "install_log_retencao_dias": 90},
+              "install_token_ttl_min": 15, "trilha_retencao_dias": 90},
         headers=_admin(),
     )
     assert r.status_code == 200, r.text

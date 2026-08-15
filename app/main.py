@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import auth, config
+from app import atividade, auth, config
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -467,7 +467,7 @@ class SettingsBody(BaseModel):
     # uma configuração nunca tocada tem de se comportar como antes de existir.
     instalador_nome_template: str = Field(default="")
     install_token_ttl_min: int = Field(default=0)
-    install_log_retencao_dias: int = Field(default=0)
+    trilha_retencao_dias: int = Field(default=0)
 
 
 class IngestBody(BaseModel):
@@ -567,21 +567,47 @@ class LoginBody(BaseModel):
 
 
 @app.post("/api/login")
-def login(body: LoginBody) -> dict:
+def login(body: LoginBody, request: Request) -> dict:
     load_settings()  # trigger client init
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb:
         raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado para login.")
 
+    ip = request.client.host if request and request.client else None
     try:
         r = sb.table("users").select("*").eq("email", body.email).limit(1).execute()
         user = r.data[0] if r.data else None
         if not user or not auth.verify_password(body.password, user["password_hash"]):
+            # Só registra quando a conta EXISTE: e-mail inexistente viraria
+            # guardar entrada arbitrária de quem chamou. Com conta existente, o
+            # registro responde "alguém está tentando entrar aqui", que é o
+            # caso que importa.
+            if user:
+                atividade.registrar(
+                    atividade.EVENTO_LOGIN_NEGADO,
+                    user_id=str(user.get("id") or "") or None,
+                    user_email=body.email,
+                    client_ip=ip,
+                    contexto={"motivo": "senha_incorreta"},
+                )
             raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
         if not conta_ativa(user):
+            atividade.registrar(
+                atividade.EVENTO_LOGIN_NEGADO,
+                user_id=str(user.get("id") or "") or None,
+                user_email=body.email,
+                client_ip=ip,
+                contexto={"motivo": "conta_desativada"},
+            )
             raise HTTPException(status_code=403, detail="Usuário desativado. Procure um administrador.")
 
+        atividade.registrar(
+            atividade.EVENTO_LOGIN,
+            user_id=str(user.get("id") or "") or None,
+            user_email=user["email"],
+            client_ip=ip,
+        )
         token = auth.create_access_token({"sub": user["email"], "role": user["role"]})
         return {"access_token": token, "token_type": "bearer", "role": user["role"]}
     except HTTPException:
@@ -952,7 +978,7 @@ def _settings_dict(s: PortalSettings) -> dict:
         "instalador_nome_efetivo": s.instalador_nome_template or cert_installer.TEMPLATE_NOME_PADRAO,
         "install_token_ttl_min": s.install_token_ttl_min,
         "install_token_ttl_efetivo": cert_installer.ttl_do_token(),
-        "install_log_retencao_dias": s.install_log_retencao_dias,
+        "trilha_retencao_dias": s.trilha_retencao_dias,
         "smtp_from_email": s.smtp_from_email,
         "smtp_alerts_enabled": s.smtp_alerts_enabled,
     }
@@ -989,7 +1015,7 @@ def put_settings(body: SettingsBody) -> dict:
             ),
         )
 
-    retencao = int(body.install_log_retencao_dias or 0)
+    retencao = int(body.trilha_retencao_dias or 0)
     if retencao < 0:
         raise HTTPException(status_code=422, detail="Retenção não pode ser negativa.")
 
@@ -1016,7 +1042,7 @@ def put_settings(body: SettingsBody) -> dict:
         smtp_alerts_enabled=body.smtp_alerts_enabled,
         instalador_nome_template=template,
         install_token_ttl_min=ttl,
-        install_log_retencao_dias=retencao,
+        trilha_retencao_dias=retencao,
     )
     save_settings(s)
     return _settings_dict(s)
@@ -1110,9 +1136,12 @@ def cron_alerts(request: Request) -> dict:
     # derrubar o envio de alertas, que é o motivo de a rota existir. Se falhar,
     # aparece na resposta em vez de sumir.
     try:
-        expurgo = cert_installer.expurgar_install_log()
+        expurgo = {
+            "install_log": cert_installer.expurgar_install_log(),
+            "user_activity": atividade.expurgar(),
+        }
     except Exception as e:  # noqa: BLE001
-        logger.exception("Falha no expurgo do install_log")
+        logger.exception("Falha no expurgo da trilha")
         expurgo = {"executado": False, "motivo": str(e)}
 
     return {"ok": True, "stats": stats, "expurgo": expurgo}
@@ -2519,7 +2548,7 @@ def remover_carteira(
 class ConfigInstaladorBody(BaseModel):
     instalador_nome_template: str = ""
     install_token_ttl_min: int = 0
-    install_log_retencao_dias: int = 0
+    trilha_retencao_dias: int = 0
 
 
 @app.put("/api/cert-installer/configuracao", dependencies=[Depends(require_admin)])
@@ -2550,14 +2579,14 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
             ),
         )
 
-    retencao = int(body.install_log_retencao_dias or 0)
+    retencao = int(body.trilha_retencao_dias or 0)
     if retencao < 0:
         raise HTTPException(status_code=422, detail="Retenção não pode ser negativa.")
 
     atual = load_settings()
     atual.instalador_nome_template = template
     atual.install_token_ttl_min = ttl
-    atual.install_log_retencao_dias = retencao
+    atual.trilha_retencao_dias = retencao
     save_settings(atual)
     return _settings_dict(atual)
 
@@ -2571,7 +2600,10 @@ def expurgar_log_agora() -> dict:
     nela — e uma rotina de LGPD que só roda amanhã de manhã não dá para
     verificar antes de responder por ela.
     """
-    return cert_installer.expurgar_install_log()
+    return {
+        "install_log": cert_installer.expurgar_install_log(),
+        "user_activity": atividade.expurgar(),
+    }
 
 
 @app.get("/api/dashboard", dependencies=[Depends(require_admin)])

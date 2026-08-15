@@ -329,6 +329,108 @@ def painel_acesso() -> Dict[str, Any]:
     }
 
 
+def painel_atividade(dias: int = 30) -> Dict[str, Any]:
+    """
+    Atividade por usuário: última vez, ações no período, e o que travou.
+
+    **Não é tempo de uso.** Ver `app/atividade.py` para o porquê — em resumo,
+    tempo alto neste portal significa que a pessoa não achou o que queria, e um
+    número que sobe quando a ferramenta piora não serve para decidir nada.
+
+    Junta as duas fontes em vez de duplicá-las: `user_activity` tem os logins,
+    `install_log` tem as instalações. Cada fato mora num lugar só.
+
+    O campo que responde "quem travou" é `sem_sucesso`: entrou, pediu, e não
+    concluiu nenhuma. É gente que provavelmente está esperando alguém — o
+    gestor atribuir carteira, o agente enviar o certificado — sem saber disso.
+    """
+    client = _supabase()
+    if not client:
+        return {"erro": "Supabase não configurado"}
+
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    try:
+        atividades = _todas_as_linhas(
+            lambda i, f: client.table("user_activity")
+            .select("user_email, evento, ocorrido_em")
+            .gte("ocorrido_em", desde)
+            .range(i, f)
+        )
+        eventos_inst = _todas_as_linhas(
+            lambda i, f: client.table("install_log")
+            .select("user_email, event, status, created_at")
+            .gte("created_at", desde)
+            .range(i, f)
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha no painel de atividade")
+        return {"erro": str(e)}
+
+    por_usuario: Dict[str, Dict[str, Any]] = {}
+
+    def _slot(email: str) -> Dict[str, Any]:
+        return por_usuario.setdefault(
+            email,
+            {
+                "user_email": email,
+                "logins": 0,
+                "logins_negados": 0,
+                "instalacoes_pedidas": 0,
+                "instalacoes_concluidas": 0,
+                "instalacoes_falhadas": 0,
+                "ultima_atividade": None,
+            },
+        )
+
+    def _marcar(slot: Dict[str, Any], quando: Optional[str]) -> None:
+        if quando and (slot["ultima_atividade"] is None or quando > slot["ultima_atividade"]):
+            slot["ultima_atividade"] = quando
+
+    for a in atividades:
+        email = str(a.get("user_email") or "").strip().lower()
+        if not email:
+            continue
+        s = _slot(email)
+        if a.get("evento") == "login":
+            s["logins"] += 1
+        elif a.get("evento") == "login_negado":
+            s["logins_negados"] += 1
+        _marcar(s, a.get("ocorrido_em"))
+
+    for e in eventos_inst:
+        email = str(e.get("user_email") or "").strip().lower()
+        if not email:
+            continue
+        s = _slot(email)
+        evento = e.get("event")
+        if evento == "SOLICITADO":
+            s["instalacoes_pedidas"] += 1
+        elif evento == "CONCLUIDO":
+            s["instalacoes_concluidas"] += 1
+        elif evento == "ERRO" or e.get("status") == "FALHA":
+            s["instalacoes_falhadas"] += 1
+        _marcar(s, e.get("created_at"))
+
+    usuarios = sorted(
+        por_usuario.values(), key=lambda u: u["ultima_atividade"] or "", reverse=True
+    )
+    travados = [
+        u for u in usuarios
+        if u["instalacoes_pedidas"] and not u["instalacoes_concluidas"]
+    ]
+
+    return {
+        "dias": dias,
+        "usuarios": usuarios,
+        "ativos_no_periodo": len(usuarios),
+        "sem_sucesso": len(travados),
+        # Sem login registrado no período não quer dizer que ninguém entrou:
+        # a instrumentação começou em 15/08. Dizer isso evita concluir que o
+        # portal está abandonado quando só falta histórico.
+        "logins_registrados": sum(u["logins"] for u in usuarios),
+    }
+
+
 def visao_geral(dias: int = 30) -> Dict[str, Any]:
     """
     Os painéis baratos, numa chamada.
@@ -346,6 +448,7 @@ def visao_geral(dias: int = 30) -> Dict[str, Any]:
         "acervo": painel_acervo(),
         "alertas": painel_alertas(dias),
         "acesso": painel_acesso(),
+        "atividade": painel_atividade(dias),
     }
 
 

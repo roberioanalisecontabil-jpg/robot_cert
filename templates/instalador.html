@@ -259,7 +259,7 @@
           const s = await r.json();
           document.getElementById("cfgNomeTemplate").value = s.instalador_nome_template || "";
           document.getElementById("cfgTtl").value = s.install_token_ttl_min || 0;
-          document.getElementById("cfgRetencao").value = s.install_log_retencao_dias || 0;
+          document.getElementById("cfgRetencao").value = s.trilha_retencao_dias || 0;
           // O "em vigor" existe porque o campo em branco não diz nada: quem
           // olha precisa saber o que realmente vale agora, não o que está
           // digitado.
@@ -282,7 +282,7 @@
             body: JSON.stringify({
               instalador_nome_template: document.getElementById("cfgNomeTemplate").value,
               install_token_ttl_min: parseInt(document.getElementById("cfgTtl").value || "0", 10),
-              install_log_retencao_dias: parseInt(document.getElementById("cfgRetencao").value || "0", 10),
+              trilha_retencao_dias: parseInt(document.getElementById("cfgRetencao").value || "0", 10),
             }),
           });
           if (!r.ok) throw new Error(await mensagemCorpoErro(r));

@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1, 2 (a–d), 3 (a–c) e 4a aplicadas em 2026-08-15. Faltam 4b e 5.**
+> **Status: Etapas 0 a 4 aplicadas em 2026-08-15. Falta a 5 (UI do gestor).**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -444,15 +444,29 @@ Os painéis 2, 3 e 7 são os que apontam para trabalho concreto. O painel 2 vale
 sozinho a etapa: **as seis falhas de produção têm causa única, provavelmente já
 resolvida pelo rescan de 15/08 — e ninguém tem como saber.**
 
-### 5.3 Não construível: "tempo de uso" → **atividade por usuário**
+### 5.3 Não construível: "tempo de uso" → **atividade por usuário** ✅
 
-Ver §0.1. A contraproposta, que é também o pré-requisito da etapa 5:
+Ver §0.1. A contraproposta, aplicada na etapa 4b:
 
-- tabela `user_activity` (`user_id`, `evento`, `ocorrido_em`, contexto)
-- eventos discretos: login, download solicitado, instalação concluída/falhou
-- o dashboard mostra **última atividade, ações no período, taxa de conclusão por
-  usuário** — não cronômetro
-- retenção definida **junto com a criação da tabela**, não depois (§4.7)
+- tabela `user_activity` (`user_id`, `user_email`, `evento`, `client_ip`,
+  `contexto`, `ocorrido_em`), com o vocabulário de eventos fechado por `CHECK`
+- eventos discretos: login e login negado. **Sem cronômetro, sem heartbeat, sem
+  rastreio de navegação** — o que mantém a coleta proporcional, e isso importa
+  porque é dado pessoal de funcionário
+- **não duplica `install_log`.** Aquela já registra quem instalou o quê e com
+  que desfecho; repetir aqui criaria duas fontes de verdade sobre o mesmo fato.
+  O painel junta as duas na leitura
+- retenção definida junto com a tabela, e o ajuste passou a chamar-se
+  `trilha_retencao_dias`: cobre `install_log` **e** `user_activity`, que são o
+  mesmo tipo de dado com a mesma justificativa. Dois botões seria convite a
+  configurar um e esquecer o outro
+- o painel responde "quem travou": pediu instalação e não concluiu nenhuma —
+  gente provavelmente esperando alguém, sem saber disso
+
+**Decisão registrada:** o registro é chamado do caminho de login e **nunca
+levanta**. Telemetria que impede alguém de entrar no portal é pior que
+telemetria nenhuma, e é um jeito fácil de uma tabela nova virar indisponibilidade
+total. A mutação que a faz levantar derruba a suíte.
 
 ### 5.4 Maior risco técnico: agregação ✅ *(resolvido em 15/08, por medição)*
 
@@ -577,7 +591,7 @@ Etapa 2d Início: seleção + flutuante   ✅ aplicada — nasceu ciente de cart
 Etapa 3  /instalador só configuração   ✅ aplicada — diagnóstico, config e trilha
    ↓
 Etapa 4a /dashboard novo               ✅ aplicada — agregação decidida por medição
-         4b tabela user_activity        ← pré-requisito da etapa 5
+         4b tabela user_activity        ✅ aplicada — eventos discretos, não cronômetro
    ↓
 Etapa 5  UI do gestor + trilha         ← trilha obrigatória pelo alcance total (§6.3)
 ```

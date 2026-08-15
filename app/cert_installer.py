@@ -1075,7 +1075,7 @@ def expurgar_install_log(dias: Optional[int] = None) -> Dict[str, Any]:
         try:
             from app.settings_state import load_settings
 
-            dias = int(load_settings().install_log_retencao_dias or 0)
+            dias = int(load_settings().trilha_retencao_dias or 0)
         except Exception as e:  # noqa: BLE001
             logger.exception("Falha ao ler a retenção configurada")
             return {"executado": False, "motivo": f"configuração ilegível: {e}"}

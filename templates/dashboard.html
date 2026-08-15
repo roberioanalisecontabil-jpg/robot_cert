@@ -57,6 +57,7 @@
         <div class="painel"><h2>Acervo ilegível</h2><div id="pAcervo">—</div></div>
         <div class="painel"><h2>Acesso</h2><div id="pAcesso">—</div></div>
         <div class="painel"><h2>Alertas</h2><div id="pAlertas">—</div></div>
+        <div class="painel" style="grid-column: 1 / -1;"><h2>Atividade por usuário</h2><div id="pAtividade">—</div></div>
         <!-- Este carrega por conta própria: precisa de dois snapshots completos
              (~1 MB) contra as poucas dezenas de KB dos outros. Fazer o barato
              esperar o caro atrasaria a tela toda pelo painel menos urgente. -->
@@ -180,6 +181,49 @@
           Object.entries(d.por_tipo || {}).map(([t, q]) => linha(t, q)).join("");
       }
 
+      function renderAtividade(d) {
+        if (d.erro) return erroPainel("pAtividade", d.erro);
+        const us = d.usuarios || [];
+        if (!us.length) {
+          document.getElementById("pAtividade").innerHTML =
+            `<p class="painel__nota">Nenhuma atividade registrada no período. ` +
+            `O registro de login começou em 15/08 — antes disso não há histórico, ` +
+            `o que é diferente de não ter havido uso.</p>`;
+          return;
+        }
+        // "Sem sucesso" é a coluna que responde "quem travou": entrou, pediu, e
+        // não concluiu nenhuma. É gente provavelmente esperando alguém — o
+        // gestor atribuir carteira, o agente enviar — sem saber disso.
+        const linhas = us.map((u) => {
+          const travado = u.instalacoes_pedidas && !u.instalacoes_concluidas;
+          const quando = u.ultima_atividade
+            ? new Date(u.ultima_atividade).toLocaleString("pt-BR") : "—";
+          return `<tr>
+            <td>${esc(u.user_email)}</td>
+            <td style="text-align:center">${u.logins}</td>
+            <td style="text-align:center">${u.instalacoes_pedidas}</td>
+            <td style="text-align:center;color:${u.instalacoes_concluidas ? "var(--ok-text)" : "var(--text-muted)"}">${u.instalacoes_concluidas}</td>
+            <td style="text-align:center;color:${u.instalacoes_falhadas ? "var(--expired-text)" : "var(--text-muted)"}">${u.instalacoes_falhadas}</td>
+            <td style="font-size:0.8rem">${quando}</td>
+            <td>${travado ? '<span class="badge" style="background:rgba(237,108,2,0.15);color:#ed6c02">TRAVADO</span>' : ""}</td>
+          </tr>`;
+        }).join("");
+
+        document.getElementById("pAtividade").innerHTML =
+          `<div style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:0.75rem">` +
+          `<div><div class="numerao">${d.ativos_no_periodo}</div>` +
+          `<p class="painel__nota">pessoa(s) com atividade</p></div>` +
+          `<div><div class="numerao ${d.sem_sucesso ? "numerao--alerta" : "numerao--ok"}">${d.sem_sucesso}</div>` +
+          `<p class="painel__nota">pediram e não concluíram</p></div></div>` +
+          `<div class="table-container"><table class="data-table"><thead><tr>` +
+          `<th>Usuário</th><th>Logins</th><th>Pedidas</th><th>Concluídas</th>` +
+          `<th>Falhas</th><th>Última atividade</th><th></th>` +
+          `</tr></thead><tbody>${linhas}</tbody></table></div>` +
+          `<p class="painel__nota">Eventos discretos, não tempo de sessão: neste portal ` +
+          `a tarefa dura menos de um minuto, e permanência longa indicaria que a pessoa ` +
+          `não achou o que queria — não engajamento.</p>`;
+      }
+
       function renderRenovacoes(d) {
         document.getElementById("painelRenovacoes").classList.remove("painel--carregando");
         if (d.erro) return erroPainel("pRenovacoes", d.erro);
@@ -219,6 +263,7 @@
           renderAcervo(d.acervo || {});
           renderAcesso(d.acesso || {});
           renderAlertas(d.alertas || {});
+          renderAtividade(d.atividade || {});
           st.textContent = "Atualizado em " + new Date(d.gerado_em).toLocaleString("pt-BR");
         } catch (e) {
           st.textContent = "Falha ao carregar.";
