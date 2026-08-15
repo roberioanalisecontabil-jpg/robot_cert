@@ -677,6 +677,93 @@ def assegurar_carteira(user_id: str, role: str, certificate_ids: List[str]) -> N
         raise ForaDaCarteira(negados)
 
 
+# Motivos pelos quais um certificado do inventário não pode ser instalado.
+# A ordem em que são avaliados importa: o motivo mostrado deve ser o mais
+# fundamental, não o primeiro que a consulta encontrar. De nada adianta dizer
+# "fora da sua carteira" sobre um certificado vencido — resolver a carteira não
+# tornaria aquele instalável.
+ESTADO_OK = "ok"
+ESTADO_VENCIDO = "vencido"
+ESTADO_ILEGIVEL = "ilegivel"
+ESTADO_BLOQUEADO = "bloqueado"
+ESTADO_FORA_DA_CARTEIRA = "fora_da_carteira"
+ESTADO_NAO_ENVIADO = "nao_enviado"
+
+
+def estado_de_instalabilidade(
+    machine_id: str, user_id: str, role: str
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Para cada certificado do inventário desta máquina: dá para instalar, e se
+    não, por quê.
+
+    Uma chamada só, porque a tela precisa das quatro fontes cruzadas — o
+    inventário, os bloqueios, o cofre e a carteira de quem está olhando — e
+    fazer esse cruzamento no cliente espalharia a regra por dois lugares. A
+    barreira de verdade continua em `assegurar_carteira`; isto existe para a
+    tela não convidar o usuário a um erro que o servidor vai recusar depois.
+
+    Levanta `CustodiaIndisponivel`/`CarteiraIndisponivel` em vez de degradar:
+    uma tela que, na dúvida, marca tudo como instalável é pior que uma tela que
+    diz "não consegui verificar".
+    """
+    client = _supabase()
+    if not client:
+        raise CustodiaIndisponivel("Supabase não configurado")
+
+    try:
+        r = (
+            client.table("cert_snapshots")
+            .select("items")
+            .eq("machine_id", machine_id)
+            .order("scanned_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        raise CustodiaIndisponivel(str(e)) from e
+
+    linhas = r.data or []
+    itens = (linhas[0].get("items") or []) if linhas else []
+
+    bloqueados = listar_bloqueios(machine_id)
+    no_cofre = {c.fingerprint: c.id for c in list_available_pfx(machine_id=machine_id)}
+
+    alcance_total = (role or "").strip().lower() in PAPEIS_COM_ALCANCE_TOTAL
+    carteira: Set[str] = set() if alcance_total else listar_carteira(user_id)
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for item in itens:
+        fp = str(item.get("fingerprint_sha256") or "").strip()
+        if not fp:
+            # Sem fingerprint não há o que instalar nem como identificar a
+            # linha; a tela mostra pelo status do próprio inventário.
+            continue
+
+        status = str(item.get("status") or "").strip().lower()
+        doc = so_digitos(item.get("documento_numero"))
+
+        if status in ("expirado", "vencido"):
+            estado = ESTADO_VENCIDO
+        elif status in ("erro", "fora_do_padrao"):
+            estado = ESTADO_ILEGIVEL
+        elif fp in bloqueados:
+            estado = ESTADO_BLOQUEADO
+        elif not alcance_total and (not doc or doc not in carteira):
+            estado = ESTADO_FORA_DA_CARTEIRA
+        elif fp not in no_cofre:
+            # Sob custódia e permitido, mas o agente ainda não subiu o material.
+            # É estado transitório — some no próximo ciclo — e precisa ser dito,
+            # senão a linha parece indevidamente bloqueada.
+            estado = ESTADO_NAO_ENVIADO
+        else:
+            estado = ESTADO_OK
+
+        out[fp] = {"id": no_cofre.get(fp), "estado": estado}
+
+    return out
+
+
 def atribuir_carteira(
     user_id: str,
     documentos: List[str],

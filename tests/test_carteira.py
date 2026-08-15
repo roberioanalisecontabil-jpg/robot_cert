@@ -207,6 +207,29 @@ def test_admin_e_gestor_tem_alcance_total(
     assert r.status_code == 200, r.text
 
 
+@pytest.mark.parametrize("rota,extra", ROTAS)
+def test_teto_de_certificados_por_token(
+    client: TestClient, banco: _Fake, rota: str, extra: dict
+) -> None:
+    """
+    O array `certificate_ids` é livre; sem teto, o bundle fica imprevisível.
+
+    A tela também impede, mas a tela não é barreira: quem chama a rota direto
+    passaria por cima. E o limite tem de valer para admin também — não é
+    permissão, é tamanho de arquivo.
+    """
+    from app.main import MAX_CERTIFICADOS_POR_TOKEN
+
+    demais = [CERT_MEU] * (MAX_CERTIFICADOS_POR_TOKEN + 1)
+    r = _pedir(client, rota, extra, demais, _h("admin"))
+    assert r.status_code == 422, r.text
+    assert str(MAX_CERTIFICADOS_POR_TOKEN) in r.json()["detail"], "a mensagem diz o limite"
+
+    no_limite = [CERT_MEU] * MAX_CERTIFICADOS_POR_TOKEN
+    r = _pedir(client, rota, extra, no_limite, _h("admin"))
+    assert r.status_code == 200, "exatamente no limite tem de passar"
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # 2. Falha fechada, e com o status que manda a pessoa ao lugar certo
 # ──────────────────────────────────────────────────────────────────────────
@@ -351,12 +374,12 @@ def test_toda_rota_que_cria_token_passa_pela_carteira() -> None:
         chamados = nomes_chamados(no)
         if "create_install_token" not in chamados:
             continue
-        if "_assegurar_carteira_ou_403" not in chamados:
+        if "_validar_pedido_de_instalacao" not in chamados:
             faltando.append(f"{no.name} (linha {no.lineno})")
 
     assert not faltando, (
         "rota(s) emitindo token de instalação sem checar a carteira: "
-        f"{faltando} — chame _assegurar_carteira_ou_403 antes de create_install_token"
+        f"{faltando} — chame _validar_pedido_de_instalacao antes de create_install_token"
     )
 
 

@@ -10,6 +10,33 @@
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="/static/style.css?v=s6-stacking-2026-08" />
+    <style nonce="{{ request.state.nonce }}">
+      .barra-selecao {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        flex-wrap: wrap;
+        margin-top: var(--sp-4);
+        padding: 0.9rem var(--sp-4);
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius-md, 10px);
+        /* `position: sticky` mantém a barra ao alcance durante a rolagem sem
+           cobrir a paginação, que fica logo acima dela. */
+        position: sticky;
+        bottom: var(--sp-2);
+        z-index: 5;
+      }
+      .barra-selecao[hidden] { display: none; }
+      .barra-selecao__acoes { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+      .barra-selecao__aviso {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--expired-text, #b00);
+      }
+      #tbody .chk-cert:disabled { cursor: not-allowed; opacity: 0.45; }
+    </style>
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -122,6 +149,10 @@
             <table role="table">
               <thead role="rowgroup">
                 <tr role="row">
+                  <th role="columnheader" style="width: 40px; text-align: center;">
+                    <input type="checkbox" id="chkSelTodos" title="Selecionar os instaláveis desta página"
+                           aria-label="Selecionar os instaláveis desta página" />
+                  </th>
                   <th role="columnheader">Status</th>
                   <th role="columnheader">Nome (titular)</th>
                   <th role="columnheader">Emissão</th>
@@ -169,6 +200,22 @@
             </div>
           </div>
         </nav>
+      </div>
+
+      <!-- A barra fica no fluxo do <main> e não em position:fixed sobre a
+           janela: fixa, ela taparia a paginação no celular, que é justamente o
+           controle que o usuário precisa para continuar escolhendo. Só aparece
+           quando há seleção. -->
+      <div id="barraSelecao" class="barra-selecao" role="region"
+           aria-label="Certificados selecionados" hidden>
+        <div class="barra-selecao__texto">
+          <strong id="selContagem"></strong>
+          <span id="selAviso" class="barra-selecao__aviso"></span>
+        </div>
+        <div class="barra-selecao__acoes">
+          <button id="btnLimparSel" class="btn btn-secondary" type="button">Limpar</button>
+          <button id="btnBaixarSel" class="btn btn-primary" type="button">Baixar instalador</button>
+        </div>
       </div>
 
     </main>
@@ -310,7 +357,7 @@
 
       function renderEstadoVazio() {
         if (temFiltroAtivo()) {
-          renderEmptyRow("tbody", 5, {
+          renderEmptyRow("tbody", 6, {
             icon: "🔍",
             title: "Nenhum certificado corresponde ao filtro",
             description:
@@ -326,7 +373,7 @@
             },
           });
         } else {
-          renderEmptyRow("tbody", 5, {
+          renderEmptyRow("tbody", 6, {
             icon: "📭",
             title: "Nenhum certificado mapeado ainda",
             description:
@@ -337,6 +384,141 @@
               carregarTabela();
             },
           });
+        }
+      }
+
+      // ─── Seleção e instalação ────────────────────────────────────────────
+      //
+      // A tabela pagina no servidor, então `renderTabela` reconstrói o tbody a
+      // cada página. A seleção não pode viver nos checkboxes: marcar três na
+      // página 1 e ir para a 2 apagaria tudo, sem aviso. Ela vive aqui, por
+      // fingerprint, e os checkboxes são só a projeção dela na página visível.
+      // Vem do servidor (`MAX_CERTIFICADOS_POR_TOKEN`): repetir o número aqui
+      // criaria duas verdades, e a divergência apareceria como a tela deixando
+      // marcar mais do que a rota aceita — erro só no download.
+      const MAX_CERTIFICADOS = {{ max_certificados }};
+
+      const _selecao = new Map();      // fingerprint -> { id, nome }
+      let _instalabilidade = {};       // fingerprint -> { id, estado }
+      let _instalMachineId = null;
+      let _instalIndisponivel = false;
+
+      // O motivo é a parte que evita a armadilha: um checkbox desabilitado sem
+      // explicação parece defeito da tela. Com o motivo, o usuário sabe se
+      // espera (o agente ainda não enviou) ou se pede acesso (fora da carteira).
+      const MOTIVO = {
+        vencido: "Certificado vencido",
+        ilegivel: "O robô não conseguiu ler este arquivo",
+        bloqueado: "Custódia desativada pelo administrador",
+        fora_da_carteira: "Fora da sua carteira — peça ao gestor",
+        nao_enviado: "Aguardando o envio pelo agente",
+      };
+
+      function estadoDe(it) {
+        const fp = it.fingerprint_sha256;
+        if (!fp) return { estado: "ilegivel", id: null };
+        return _instalabilidade[fp] || { estado: "nao_enviado", id: null };
+      }
+
+      function celulaSelecao(it) {
+        const fp = it.fingerprint_sha256 || "";
+        const e = estadoDe(it);
+        const ok = e.estado === "ok" && !!e.id && !_instalIndisponivel;
+        const motivo = _instalIndisponivel
+          ? "Não foi possível verificar a disponibilidade"
+          : (MOTIVO[e.estado] || "");
+        return (
+          "<td role='cell' data-label='Selecionar' style='text-align:center'>" +
+          "<input type='checkbox' class='chk-cert'" +
+          " data-fp='" + esc(fp) + "'" +
+          " data-id='" + esc(e.id || "") + "'" +
+          " data-nome='" + esc(it.nome || it.display_name || "") + "'" +
+          (ok ? "" : " disabled") +
+          (ok && _selecao.has(fp) ? " checked" : "") +
+          (ok ? "" : " title='" + esc(motivo) + "'") +
+          " aria-label='" + esc(ok ? "Selecionar certificado" : motivo) + "' />" +
+          (ok ? "" : "<span class='cg-sr-only'>" + esc(motivo) + "</span>") +
+          "</td>"
+        );
+      }
+
+      function atualizarBarraSelecao() {
+        const barra = document.getElementById("barraSelecao");
+        const n = _selecao.size;
+        barra.hidden = n === 0;
+        if (n === 0) return;
+        document.getElementById("selContagem").textContent =
+          n === 1 ? "1 certificado selecionado" : `${n} certificados selecionados`;
+        const excedeu = n > MAX_CERTIFICADOS;
+        document.getElementById("selAviso").textContent = excedeu
+          ? `Máximo de ${MAX_CERTIFICADOS} por instalador — desmarque ${n - MAX_CERTIFICADOS}.`
+          : "";
+        document.getElementById("btnBaixarSel").disabled = excedeu;
+      }
+
+      function sincronizarCheckboxesDaPagina() {
+        document.querySelectorAll("#tbody .chk-cert").forEach((c) => {
+          if (!c.disabled) c.checked = _selecao.has(c.dataset.fp);
+        });
+        const habilitados = Array.from(
+          document.querySelectorAll("#tbody .chk-cert:not([disabled])")
+        );
+        const todos = document.getElementById("chkSelTodos");
+        todos.disabled = habilitados.length === 0;
+        todos.checked = habilitados.length > 0 && habilitados.every((c) => c.checked);
+      }
+
+      async function carregarInstalabilidade(machineId) {
+        if (!machineId || machineId === _instalMachineId) return;
+        _instalMachineId = machineId;
+        try {
+          const r = await fetch(
+            `/api/cert-installer/instalabilidade?machine_id=${encodeURIComponent(machineId)}`,
+            { headers: getHeaders() }
+          );
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          _instalabilidade = d.itens || {};
+          _instalIndisponivel = false;
+        } catch (e) {
+          // Na dúvida, nada fica selecionável. Uma tela que marca tudo como
+          // instalável quando não conseguiu verificar convida ao erro que o
+          // servidor vai recusar depois — e o usuário só descobre no download.
+          _instalabilidade = {};
+          _instalIndisponivel = true;
+          showToast("Não foi possível verificar quais certificados estão disponíveis.", "error");
+        }
+      }
+
+      async function baixarSelecionados() {
+        const btn = document.getElementById("btnBaixarSel");
+        const escolhidos = Array.from(_selecao.entries());
+        if (!escolhidos.length) return;
+
+        btn.disabled = true;
+        const rotulo = btn.textContent;
+        btn.textContent = "Gerando...";
+        try {
+          const r = await fetch("/api/cert-installer/preparar-download", {
+            method: "POST",
+            headers: getHeaders(true),
+            body: JSON.stringify({
+              certificate_ids: escolhidos.map(([, v]) => v.id),
+              nome:
+                escolhidos.length === 1
+                  ? escolhidos[0][1].nome || "Certificado"
+                  : `${escolhidos.length} certificados`,
+            }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.detail || "Falha ao gerar o instalador");
+          window.location.href = d.download_url;
+          showToast("Instalador gerado. O download vai começar.", "success");
+        } catch (e) {
+          showToast("Não foi possível gerar o instalador: " + e.message, "error");
+        } finally {
+          btn.textContent = rotulo;
+          atualizarBarraSelecao();
         }
       }
 
@@ -373,7 +555,9 @@
         tb.innerHTML = items
           .map(
             (it) =>
-              "<tr role='row'><td role='cell' data-label='Status'>" +
+              "<tr role='row'>" +
+              celulaSelecao(it) +
+              "<td role='cell' data-label='Status'>" +
               badge(it) +
               "</td><td role='cell' data-label='Nome'>" +
               esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
@@ -386,6 +570,8 @@
               "</td></tr>"
           )
           .join("");
+
+        sincronizarCheckboxesDaPagina();
       }
 
       function atualizarPaginacaoUI(pg) {
@@ -544,7 +730,7 @@
         // Recargas: overlay, que mantém a tabela anterior visível e evita o
         // "pisca" de a tela inteira virar blocos cinzentos a cada filtro.
         if (primeiroCarregamento) {
-          renderSkeletonRows("tbody", porPaginaDashboard() > 10 ? 10 : porPaginaDashboard(), 5);
+          renderSkeletonRows("tbody", porPaginaDashboard() > 10 ? 10 : porPaginaDashboard(), 6);
         } else {
           toggleLoading(true, "Carregando certificados...");
         }
@@ -566,7 +752,7 @@
           if (r.status === 404) {
             st.textContent = "Fonte “remoto”: ainda sem dados.";
             atualizarPaginacaoUI(null);
-            renderEmptyRow("tbody", 5, {
+            renderEmptyRow("tbody", 6, {
               icon: "🛰️",
               title: "A fonte remota ainda não tem dados",
               description:
@@ -580,7 +766,7 @@
             const detalhe = await mensagemCorpoErro(r);
             st.textContent = "Erro " + r.status;
             showToast("Não foi possível carregar os certificados: " + detalhe, "error");
-            renderEmptyRow("tbody", 5, {
+            renderEmptyRow("tbody", 6, {
               icon: "⚠️",
               title: "Erro ao carregar os certificados",
               description: detalhe || "O servidor respondeu com erro " + r.status + ".",
@@ -595,7 +781,7 @@
           } catch (jsonErr) {
             st.textContent = "Resposta inválida do servidor.";
             showToast("Resposta inválida do servidor. Confirme o endereço da API.", "error");
-            renderEmptyRow("tbody", 5, {
+            renderEmptyRow("tbody", 6, {
               icon: "⚠️",
               title: "Resposta inválida do servidor",
               description: "Confirme o endereço da API em Configuração.",
@@ -622,11 +808,19 @@
           setBannerAviso("table-container-dash", mensagemLimiteExportacao(d.paginacao));
           itensOriginais = items;
           itensVisiveis = items;
+
+          // Antes de desenhar: sem a instalabilidade, todas as linhas sairiam
+          // desabilitadas por um instante e o usuário veria a tela "travada".
+          // O machine_id vem na RAIZ do payload, não em cada item — mesma
+          // pegadinha que causou o bug do opt-in em 08/08.
+          await carregarInstalabilidade(d.machine_id);
+
           renderTabela(items);
+          atualizarBarraSelecao();
         } catch (e) {
           st.textContent = "Falha de conexão.";
           showToast("Falha de conexão com o servidor: " + e, "error");
-          renderEmptyRow("tbody", 5, {
+          renderEmptyRow("tbody", 6, {
             icon: "🔌",
             title: "Sem conexão com o servidor",
             description: "Verifique se o portal está em execução e tente novamente.",
@@ -686,6 +880,42 @@
             if (elConfig) elConfig.style.display = 'flex';
             if (elInst) elInst.style.display = 'flex';
         }
+
+        // Delegação no tbody: a tabela é reconstruída a cada página, e ouvintes
+        // por checkbox teriam de ser religados a cada render.
+        document.getElementById("tbody").addEventListener("change", (ev) => {
+          const c = ev.target.closest(".chk-cert");
+          if (!c || c.disabled) return;
+          if (c.checked) {
+            _selecao.set(c.dataset.fp, { id: c.dataset.id, nome: c.dataset.nome });
+          } else {
+            _selecao.delete(c.dataset.fp);
+          }
+          sincronizarCheckboxesDaPagina();
+          atualizarBarraSelecao();
+        });
+
+        document.getElementById("chkSelTodos").addEventListener("change", (ev) => {
+          // Alcança só os instaláveis DESTA página — marcar 489 de uma vez com
+          // teto de 50 seria uma armadilha, não um atalho.
+          document.querySelectorAll("#tbody .chk-cert:not([disabled])").forEach((c) => {
+            if (ev.target.checked) {
+              _selecao.set(c.dataset.fp, { id: c.dataset.id, nome: c.dataset.nome });
+            } else {
+              _selecao.delete(c.dataset.fp);
+            }
+          });
+          sincronizarCheckboxesDaPagina();
+          atualizarBarraSelecao();
+        });
+
+        document.getElementById("btnLimparSel").addEventListener("click", () => {
+          _selecao.clear();
+          sincronizarCheckboxesDaPagina();
+          atualizarBarraSelecao();
+        });
+
+        document.getElementById("btnBaixarSel").addEventListener("click", baixarSelecionados);
 
         initPerPageDashboard();
         await carregarTabela();

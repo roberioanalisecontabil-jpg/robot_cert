@@ -484,7 +484,15 @@ class EnqueueCommandBody(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 def painel(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
-        request=request, name="index.html", context={"pagina_ativa": "inicio"}
+        request=request,
+        name="index.html",
+        context={
+            "pagina_ativa": "inicio",
+            # O teto vem do servidor para não existir em dois lugares. Um número
+            # digitado na tela divergiria do que a rota aceita, e o sintoma seria
+            # o pior dos dois: a tela deixa marcar 60, o download falha com 422.
+            "max_certificados": MAX_CERTIFICADOS_POR_TOKEN,
+        },
     )
 
 
@@ -2344,19 +2352,37 @@ def bloquear_vault_custodia(
         raise HTTPException(status_code=500, detail="Erro interno ao revogar")
 
 
-def _assegurar_carteira_ou_403(user_id: str, role: str, certificate_ids: List[str]) -> None:
-    """
-    Traduz a barreira de carteira para HTTP.
+# Teto de certificados por token. Cada PFX ocupa ~10 KB no cofre e vai inteiro
+# no bundle do instalador; sem limite, `certificate_ids` é um array livre e o
+# download vira imprevisível. Recusar com número claro é melhor que entregar um
+# arquivo de dezenas de MB que talvez nem baixe.
+MAX_CERTIFICADOS_POR_TOKEN = 50
 
-    Existe como função única para que as duas rotas que emitem token de
-    instalação usem exatamente a mesma regra. Duplicar a checagem seria o
-    caminho natural, e a cópia que divergisse para o lado permissivo não daria
-    sintoma nenhum — só entregaria certificado a quem não devia.
+
+def _validar_pedido_de_instalacao(
+    user_id: str, role: str, certificate_ids: List[str]
+) -> None:
+    """
+    Tudo o que precisa valer antes de emitir um token de instalação.
+
+    Função única de propósito: as duas rotas emissoras chamam exatamente esta,
+    e `tests/test_carteira.py` lê o código para falhar se alguma rota nova
+    emitir token sem passar por aqui. Duplicar a checagem seria o caminho
+    natural, e a cópia que divergisse para o lado permissivo não daria sintoma
+    nenhum — só entregaria certificado a quem não devia.
 
     `CarteiraIndisponivel` vira 503 e não 403: negar por falha de banco é o
     resultado seguro, mas dizer "você não tem permissão" a quem tem manda a
     pessoa procurar o gestor em vez de esperar o banco voltar.
     """
+    if len(certificate_ids) > MAX_CERTIFICADOS_POR_TOKEN:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Selecione no máximo {MAX_CERTIFICADOS_POR_TOKEN} certificados por "
+                f"instalador ({len(certificate_ids)} selecionados)."
+            ),
+        )
     try:
         cert_installer.assegurar_carteira(user_id, role, certificate_ids)
     except cert_installer.ForaDaCarteira as e:
@@ -2437,6 +2463,38 @@ def remover_carteira(
         raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
 
 
+@app.get("/api/cert-installer/instalabilidade")
+def instalabilidade(
+    machine_id: str = Query(..., min_length=1),
+    token: auth.TokenData = Depends(require_auth),
+) -> dict:
+    """
+    O que **este** usuário pode instalar nesta máquina, e o motivo de cada não.
+
+    Alimenta a seleção do Início. Não é barreira — a barreira é
+    `assegurar_carteira`, no momento de emitir o token. Isto existe para a tela
+    não convidar o usuário a marcar o que o servidor vai recusar depois, com o
+    erro chegando só na máquina dele.
+    """
+    user_id = _resolve_user_id(token.email)
+    if not user_id:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    try:
+        itens = cert_installer.estado_de_instalabilidade(machine_id, user_id, token.role)
+    except (cert_installer.CustodiaIndisponivel, cert_installer.CarteiraIndisponivel) as e:
+        logger.warning("Instalabilidade indisponível (%s): %s", machine_id, e)
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível verificar quais certificados estão disponíveis.",
+        )
+    return {
+        "machine_id": machine_id,
+        "alcance_total": (token.role or "").strip().lower()
+        in cert_installer.PAPEIS_COM_ALCANCE_TOTAL,
+        "itens": itens,
+    }
+
+
 class PrepareInstallRequest(BaseModel):
     """Quem instala seleciona certificados e máquina destino."""
     certificate_ids: List[str]
@@ -2464,7 +2522,7 @@ def prepare_install(
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    _assegurar_carteira_ou_403(user_id, token.role, body.certificate_ids)
+    _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
 
     client_ip = request.client.host if request.client else None
 
@@ -2666,7 +2724,7 @@ def preparar_download(
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    _assegurar_carteira_ou_403(user_id, token.role, body.certificate_ids)
+    _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
 
     client_ip = request.client.host if request.client else None
 

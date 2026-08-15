@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1, 2a, 2b e 2c aplicadas em 2026-08-15. O resto é proposta.**
+> **Status: Etapas 0, 1 e 2 (a–d) aplicadas em 2026-08-15. Etapas 3 a 5 são proposta.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -286,6 +286,19 @@ tendo linhas que ele não pode instalar.
    clara — melhor que um download de tamanho imprevisível.
 8. **A barra flutuante não pode tapar a paginação** no mobile.
 
+**Aplicado em 15/08.** Duas decisões que o plano não previa:
+
+- **A seleção não vive nos checkboxes.** A tabela pagina no servidor e o tbody é
+  reconstruído a cada página; marcar três na página 1 e ir para a 2 apagaria
+  tudo, sem aviso. Ela vive num `Map` por fingerprint, e os checkboxes são a
+  projeção dela na página visível.
+- **O teto vem do servidor para a tela** (`max_certificados` no contexto). O
+  número escrito nos dois lugares divergiria na primeira mudança, e o sintoma
+  seria o pior: a tela deixa marcar 60, o download falha com 422 no fim.
+
+E o "selecionar todos" alcança só a página visível — marcar 489 de uma vez com
+teto de 50 seria armadilha, não atalho.
+
 ### 3.5 Consequência de ordem: a carteira deixou de ser "futuro"
 
 Era a etapa 5. Não é mais: **é a carteira que torna o Início correto para quem
@@ -524,7 +537,7 @@ Etapa 2b custódia: opt-in → opt-out    ✅ aplicada — fail-closed estrutura
    ↓
 Etapa 2c carteira + barreira no server ✅ aplicada — barreira e teste estrutural
    ↓
-Etapa 2d Início: seleção + flutuante   ← já nasce ciente de carteira (§3.5)
+Etapa 2d Início: seleção + flutuante   ✅ aplicada — nasceu ciente de carteira
    ↓
 Etapa 3  /instalador só configuração   ← recebe o painel de desativação (§3.2c)
    ↓
