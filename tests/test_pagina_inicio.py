@@ -33,10 +33,30 @@ def test_menu_diz_inicio_e_nao_dashboard(client: TestClient) -> None:
     rotulos = [re.sub(r"<[^>]+>", "", i).strip() for i in itens]
 
     assert "Início" in rotulos, f"rótulos: {rotulos}"
-    assert "Dashboard" not in rotulos, (
-        "'Dashboard' voltou ao menu — o nome está reservado para a página de "
-        "análise da etapa 4, e dois itens com esse nome seriam ambíguos"
+    # "Dashboard" voltou ao menu na etapa 4 — legitimamente, agora que existe
+    # uma página de análise. O que este teste guarda mudou de "o nome não pode
+    # aparecer" para "os dois coexistem e `/` é o Início": a ambiguidade que se
+    # queria evitar era `/` chamar-se Dashboard, não o nome existir.
+    assert "Dashboard" in rotulos, "a página de análise da etapa 4 sumiu do menu"
+    assert rotulos.index("Início") < rotulos.index("Dashboard"), (
+        "Início vem antes: é operação, e é o que a maioria abre todo dia"
     )
+
+
+def test_inicio_e_dashboard_apontam_para_paginas_diferentes(client: TestClient) -> None:
+    """
+    Os dois nomes prometem "a visão geral", e a distinção está na rota e no
+    ícone — casa para operação, grade para análise. Apontar para o mesmo lugar
+    tornaria a renomeação da etapa 1 inútil.
+    """
+    r = client.get("/")
+    nav = re.search(r'<nav class="sidebar-nav">.*?</nav>', r.text, re.DOTALL).group(0)
+    hrefs = dict(
+        (re.sub(r"<[^>]+>", "", corpo).strip(), href)
+        for href, corpo in re.findall(r'<a [^>]*href="([^"]*)"[^>]*>(.*?)</a>', nav, re.DOTALL)
+    )
+    assert hrefs["Início"] == "/"
+    assert hrefs["Dashboard"] == "/dashboard"
 
 
 def test_chave_de_localstorage_preservada() -> None:

@@ -1295,7 +1295,13 @@ def cadeias_de_instalacao(
     `desde` é ISO-8601; a filtragem por período vai no banco, a por usuário e
     falha em memória (o agrupamento precisa da cadeia inteira para saber se ela
     falhou, então filtrar antes cortaria eventos da mesma tentativa).
+
+    O limite é fixado em 1.000 porque é o teto do PostgREST: pedir mais devolve
+    mil assim mesmo, **sem avisar que truncou**. Melhor um teto declarado que um
+    número que parece completo e não é — foi assim que a curva de vencimento do
+    dashboard perdeu 29 certificados em silêncio.
     """
+    limite = min(limite, 1000)
     client = _supabase()
     if not client:
         return []

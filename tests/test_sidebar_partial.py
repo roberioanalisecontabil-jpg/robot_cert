@@ -30,6 +30,7 @@ PARTIAL = TEMPLATES / "_sidebar.html"
 # (rota, chave esperada em pagina_ativa, href que deve acender)
 PAGINAS = [
     ("/", "inicio", "/"),
+    ("/dashboard", "dashboard", "/dashboard"),
     ("/historico", "historico", "/historico"),
     ("/vencidos", "vencidos", "/vencidos"),
     ("/duplicidades", "duplicidades", "/duplicidades"),

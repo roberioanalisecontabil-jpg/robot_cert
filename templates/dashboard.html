@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard — Analise Certificado</title>
+    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="/static/style.css?v=s6-stacking-2026-08" />
+    <style nonce="{{ request.state.nonce }}">
+      .painel-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+      .painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
+      .painel h2 { font-size: 1rem; margin-bottom: 0.75rem; }
+      .painel__nota { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.6rem; line-height: 1.45; }
+      .numerao { font-size: 2.1rem; font-weight: 700; line-height: 1.1; }
+      .numerao--alerta { color: var(--expired-text); }
+      .numerao--ok { color: var(--ok-text); }
+      .linha-dado { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 0.5px solid var(--border); font-size: 0.85rem; }
+      .barra { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 0.35rem; }
+      .barra > span { display: block; height: 100%; background: var(--ok-text); }
+      .painel--carregando { opacity: 0.55; }
+    </style>
+  </head>
+  <body>
+    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+    {% include "_sidebar.html" %}
+
+    <main class="main-content" id="main-content">
+      <header class="page-header">
+        <h1>Dashboard</h1>
+        <p>Análise do acervo, do agente e das instalações. Para operar, use o Início.</p>
+      </header>
+
+      <div class="toolbar" style="margin-bottom: 1rem;">
+        <div class="toolbar__status" aria-live="polite">
+          <p id="dashStatus" class="status-line"></p>
+        </div>
+        <div class="toolbar__actions">
+          <label for="dashDias" class="cg-sr-only">Período</label>
+          <select id="dashDias" class="form-control" style="width: 160px;">
+            <option value="7">Últimos 7 dias</option>
+            <option value="30" selected>Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="365">Último ano</option>
+          </select>
+          <button type="button" id="btnDashRefresh" class="primary">Atualizar</button>
+        </div>
+      </div>
+
+      <div class="painel-grid" id="painelGrid">
+        <div class="painel"><h2>Instalações</h2><div id="pInstalacao">—</div></div>
+        <div class="painel"><h2>Cofre</h2><div id="pCofre">—</div></div>
+        <div class="painel"><h2>Agente</h2><div id="pAgente">—</div></div>
+        <div class="painel"><h2>Vencimentos</h2><div id="pVencimento">—</div></div>
+        <div class="painel"><h2>Acervo ilegível</h2><div id="pAcervo">—</div></div>
+        <div class="painel"><h2>Acesso</h2><div id="pAcesso">—</div></div>
+        <div class="painel"><h2>Alertas</h2><div id="pAlertas">—</div></div>
+        <!-- Este carrega por conta própria: precisa de dois snapshots completos
+             (~1 MB) contra as poucas dezenas de KB dos outros. Fazer o barato
+             esperar o caro atrasaria a tela toda pelo painel menos urgente. -->
+        <div class="painel painel--carregando" id="painelRenovacoes">
+          <h2>Renovações</h2><div id="pRenovacoes">Carregando…</div>
+        </div>
+      </div>
+    </main>
+
+    <script src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}">
+      function n(v) { return v === null || v === undefined ? "—" : String(v); }
+
+      function linha(rotulo, valor, tom) {
+        const cor = tom === "ruim" ? "var(--expired-text)"
+                  : tom === "bom" ? "var(--ok-text)" : "var(--text)";
+        return `<div class="linha-dado"><span class="text-muted">${esc(rotulo)}</span>` +
+               `<span style="color:${cor}">${valor}</span></div>`;
+      }
+
+      function erroPainel(el, msg) {
+        document.getElementById(el).innerHTML =
+          `<p style="color:var(--expired-text);font-size:0.85rem">${esc(msg)}</p>`;
+      }
+
+      function renderInstalacao(d) {
+        if (d.erro) return erroPainel("pInstalacao", d.erro);
+        if (!d.total) {
+          document.getElementById("pInstalacao").innerHTML =
+            `<p class="painel__nota">Nenhuma instalação no período.</p>`;
+          return;
+        }
+        // As CAUSAS vêm depois do número, e não num gráfico: contar motivos foi
+        // o que transformou "seis falhas" em "um problema" na investigação real.
+        const causas = Object.entries(d.causas || {});
+        document.getElementById("pInstalacao").innerHTML =
+          `<div class="numerao ${d.taxa_conclusao >= 80 ? "numerao--ok" : "numerao--alerta"}">` +
+          `${n(d.taxa_conclusao)}%</div>` +
+          `<p class="painel__nota">de conclusão · ${d.total} tentativa(s)</p>` +
+          linha("Concluídas", d.concluidas, "bom") +
+          linha("Com falha", d.falhadas, d.falhadas ? "ruim" : "") +
+          linha("Sem desfecho", d.incompletas) +
+          (causas.length
+            ? `<p class="painel__nota"><strong>Causas:</strong><br>` +
+              causas.map(([m, q]) => `${q}× ${esc(m)}`).join("<br>") + `</p>`
+            : "");
+      }
+
+      function renderCofre(d) {
+        if (d.erro) return erroPainel("pCofre", d.erro);
+        const pct = d.cobertura_pct;
+        document.getElementById("pCofre").innerHTML =
+          `<div class="numerao ${pct >= 80 ? "numerao--ok" : "numerao--alerta"}">${n(pct)}%</div>` +
+          `<div class="barra"><span style="width:${Math.min(100, pct || 0)}%"></span></div>` +
+          `<p class="painel__nota">do inventário é instalável pelo portal</p>` +
+          linha("Guardados no cofre", d.guardados) +
+          linha("No inventário", d.inventario);
+      }
+
+      function renderAgente(d) {
+        if (d.erro) return erroPainel("pAgente", d.erro);
+        const maquinas = d.maquinas || [];
+        const atrasadas = maquinas.filter((m) => m.atrasado);
+        document.getElementById("pAgente").innerHTML =
+          `<div class="numerao ${atrasadas.length ? "numerao--alerta" : "numerao--ok"}">` +
+          `${maquinas.length - atrasadas.length}/${maquinas.length}</div>` +
+          `<p class="painel__nota">máquina(s) em dia · ${d.varreduras} varredura(s) no período</p>` +
+          maquinas.map((m) =>
+            linha(m.machine_id,
+                  m.horas_atras === null ? "—" : `há ${m.horas_atras}h`,
+                  m.atrasado ? "ruim" : "bom")
+          ).join("");
+      }
+
+      function renderVencimento(d) {
+        if (d.erro) return erroPainel("pVencimento", d.erro);
+        const v = d.vencimento || {};
+        document.getElementById("pVencimento").innerHTML =
+          `<div class="numerao ${v.ate_30_dias ? "numerao--alerta" : ""}">${n(v.ate_30_dias)}</div>` +
+          `<p class="painel__nota">vencem nos próximos 30 dias</p>` +
+          linha("Já vencidos", v.vencido, v.vencido ? "ruim" : "") +
+          linha("Em até 7 dias", v.ate_7_dias, v.ate_7_dias ? "ruim" : "") +
+          linha("8 a 30 dias", v.ate_30_dias) +
+          linha("31 a 60 dias", v.ate_60_dias) +
+          linha("61 a 90 dias", v.ate_90_dias) +
+          linha("Acima de 90 dias", v.acima_de_90) +
+          (d.sem_data_de_vencimento
+            ? `<p class="painel__nota">${d.sem_data_de_vencimento} sem data de vencimento registrada.</p>` : "");
+      }
+
+      function renderAcervo(d) {
+        if (d.erro) return erroPainel("pAcervo", d.erro);
+        // Somados de propósito: "42 erro" e "41 fora do padrão" separados
+        // parecem ruído; juntos, são arquivos que ninguém consegue instalar.
+        document.getElementById("pAcervo").innerHTML =
+          `<div class="numerao ${d.ilegiveis ? "numerao--alerta" : "numerao--ok"}">${n(d.ilegiveis)}</div>` +
+          `<p class="painel__nota">arquivo(s) que o robô não consegue ler — nunca vão ao cofre, ` +
+          `logo nunca são instaláveis pelo portal</p>` +
+          Object.entries(d.por_status || {}).map(([s, q]) =>
+            linha(s, q, (s === "erro" || s === "fora_do_padrao") ? "ruim" : "")
+          ).join("") +
+          `<p class="painel__nota">${d.total} arquivo(s) no histórico.</p>`;
+      }
+
+      function renderAcesso(d) {
+        if (d.erro) return erroPainel("pAcesso", d.erro);
+        const semCarteira = (d.operadores || 0) - (d.operadores_com_carteira || 0);
+        document.getElementById("pAcesso").innerHTML =
+          `<div class="numerao ${semCarteira ? "numerao--alerta" : "numerao--ok"}">${semCarteira}</div>` +
+          `<p class="painel__nota">operador(es) sem carteira — não conseguem instalar nada</p>` +
+          linha("Usuários ativos", d.usuarios_ativos) +
+          Object.entries(d.por_papel || {}).map(([p, q]) => linha(p, q)).join("") +
+          linha("Documentos atribuídos", d.documentos_atribuidos);
+      }
+
+      function renderAlertas(d) {
+        if (d.erro) return erroPainel("pAlertas", d.erro);
+        document.getElementById("pAlertas").innerHTML =
+          `<div class="numerao">${n(d.total)}</div>` +
+          `<p class="painel__nota">alerta(s) enviados no período para ${n(d.destinatarios)} destinatário(s)</p>` +
+          Object.entries(d.por_tipo || {}).map(([t, q]) => linha(t, q)).join("");
+      }
+
+      function renderRenovacoes(d) {
+        document.getElementById("painelRenovacoes").classList.remove("painel--carregando");
+        if (d.erro) return erroPainel("pRenovacoes", d.erro);
+        if (d.sem_referencia) {
+          document.getElementById("pRenovacoes").innerHTML =
+            `<p class="painel__nota">${esc(d.motivo)}</p>`;
+          return;
+        }
+        // A data de referência fica visível porque as varreduras têm lacunas:
+        // pedir 30 dias pode comparar com uma de 54 dias atrás, e apresentar
+        // isso como "últimos 30 dias" seria mentira.
+        const ref = new Date(d.referencia).toLocaleDateString("pt-BR");
+        document.getElementById("pRenovacoes").innerHTML =
+          `<div class="numerao numerao--ok">${n(d.renovados)}</div>` +
+          `<p class="painel__nota">documento(s) com validade estendida desde <strong>${ref}</strong></p>` +
+          linha("Novos no acervo", d.novos) +
+          linha("Saíram do acervo", d.sairam) +
+          linha("Documentos hoje", d.documentos_hoje) +
+          `<p class="painel__nota">Comparado com a varredura de ${ref} — a mais recente ` +
+          `anterior ao período pedido. Saídas são o fluxo normal: o agente move ` +
+          `vencidos para a pasta de expirados.</p>`;
+      }
+
+      async function carregarDashboard() {
+        const dias = document.getElementById("dashDias").value;
+        const st = document.getElementById("dashStatus");
+        st.textContent = "Carregando...";
+
+        try {
+          const r = await fetch(`/api/dashboard?dias=${dias}`, { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          renderInstalacao(d.instalacao || {});
+          renderCofre(d.cofre || {});
+          renderAgente(d.agente || {});
+          renderVencimento(d.acervo || {});
+          renderAcervo(d.acervo || {});
+          renderAcesso(d.acesso || {});
+          renderAlertas(d.alertas || {});
+          st.textContent = "Atualizado em " + new Date(d.gerado_em).toLocaleString("pt-BR");
+        } catch (e) {
+          st.textContent = "Falha ao carregar.";
+          showToast("Não foi possível carregar o dashboard: " + e.message, "error");
+        }
+
+        // Depois e em separado, de propósito.
+        document.getElementById("painelRenovacoes").classList.add("painel--carregando");
+        try {
+          const r = await fetch(`/api/dashboard/renovacoes?dias=${dias}`, { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          renderRenovacoes(await r.json());
+        } catch (e) {
+          renderRenovacoes({ erro: e.message });
+        }
+      }
+
+      (async function init() {
+        const role = localStorage.getItem("user_role");
+        if (role === "admin") {
+          ["nav-users", "nav-config", "nav-installer", "nav-dashboard"].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = "flex";
+          });
+        }
+        document.getElementById("btnDashRefresh").addEventListener("click", carregarDashboard);
+        document.getElementById("dashDias").addEventListener("change", carregarDashboard);
+        await carregarDashboard();
+      })();
+    </script>
+  </body>
+</html>

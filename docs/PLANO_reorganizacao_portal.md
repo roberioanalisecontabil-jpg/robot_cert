@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1, 2 (a–d) e 3 (a–c) aplicadas em 2026-08-15. Faltam 4 e 5.**
+> **Status: Etapas 0, 1, 2 (a–d), 3 (a–c) e 4a aplicadas em 2026-08-15. Faltam 4b e 5.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -437,7 +437,7 @@ incidente de 15/08 aconteceu.
 | 4 | **Saúde do agente** | `cert_snapshots.scanned_at` | 2/5/4/4/7/2 varreduras nos últimos dias |
 | 5 | **Certificados renovados** | `cert_snapshots` (§0.2) | mesmo `documento_numero` com `not_after` avançando |
 | 6 | **Curva de vencimento** | `cert_history.vencimento_certificado` | 923 de 1.029 com data |
-| 7 | **Acervo ilegível** | `cert_history.status_ultimo` | 41 `erro` + 36 `fora_do_padrao` = **77 arquivos** |
+| 7 | **Acervo ilegível** | `cert_history.status_ultimo` | 42 `erro` + 41 `fora_do_padrao` = **83 arquivos** |
 | 8 | **Alertas enviados** | `sent_alerts` | 11 — fecha o ciclo "avisamos → renovou?" |
 
 Os painéis 2, 3 e 7 são os que apontam para trabalho concreto. O painel 2 vale
@@ -454,14 +454,35 @@ Ver §0.1. A contraproposta, que é também o pré-requisito da etapa 5:
   usuário** — não cronômetro
 - retenção definida **junto com a criação da tabela**, não depois (§4.7)
 
-### 5.4 Maior risco técnico: agregação
+### 5.4 Maior risco técnico: agregação ✅ *(resolvido em 15/08, por medição)*
 
-`cert_snapshots` são 317 linhas × ~560 itens. Varrer isso a cada carga de página
-numa função serverless da Vercel **vai estourar o tempo** — e piora sozinho a
-cada varredura do agente. Os painéis 4, 5 e 6 exigem agregação prévia: tabela de
-métricas diária alimentada de forma incremental, ou view materializada. **Decidir
-isso antes de escrever o primeiro endpoint**, porque é o que define o formato de
-todos eles.
+Medido contra produção antes de escrever qualquer endpoint:
+
+| Consulta | Tamanho | Tempo |
+|---|---|---|
+| snapshots só com `scanned_at` (317) | 24,5 KB | 0,59s |
+| **UM** snapshot com `items` | **518,8 KB** | 0,42s |
+| `cert_history` (2 colunas, 1.029) | 78,6 KB | 0,28s |
+| `cert_pfx_store` (2 colunas, 489) | 54,7 KB | 0,22s |
+
+Varrer os 317 snapshots com `items` daria **~160 MB**. Mas a medição mostrou que
+o custo **não está espalhado**: só renovações precisa dos itens, e só de **dois**
+snapshots — o de hoje e o de N dias atrás. ~1 MB.
+
+Por isso **não** houve tabela de métricas, view materializada nem job de
+pré-cálculo: seriam a resposta certa para um custo espalhado. Dois endpoints
+bastaram — os seis painéis baratos numa chamada (~1s) e as renovações em outra,
+carregada em separado para o barato não esperar o caro.
+
+### 5.5 O que a medição encontrou de quebra: truncamento silencioso
+
+O PostgREST devolve no máximo **1.000 linhas** por requisição e **não avisa**.
+A curva de vencimento reportava 1.000 arquivos de uma tabela com 1.029 — 29
+certificados sumindo sem erro nenhum, e o desvio crescendo com o acervo.
+
+**Os números publicados antes deste ponto estavam errados**, inclusive nesta
+página: "77 ilegíveis" era 83. Corrigido acima. Toda leitura que pode passar de
+mil linhas passou a paginar, e o teto virou explícito onde não vale paginar.
 
 ---
 
@@ -555,8 +576,8 @@ Etapa 2d Início: seleção + flutuante   ✅ aplicada — nasceu ciente de cart
    ↓
 Etapa 3  /instalador só configuração   ✅ aplicada — diagnóstico, config e trilha
    ↓
-Etapa 4  /dashboard novo               ← decidir agregação ANTES do 1º endpoint (§5.4)
-         + tabela user_activity
+Etapa 4a /dashboard novo               ✅ aplicada — agregação decidida por medição
+         4b tabela user_activity        ← pré-requisito da etapa 5
    ↓
 Etapa 5  UI do gestor + trilha         ← trilha obrigatória pelo alcance total (§6.3)
 ```

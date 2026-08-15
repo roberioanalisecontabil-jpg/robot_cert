@@ -2574,6 +2574,48 @@ def expurgar_log_agora() -> dict:
     return cert_installer.expurgar_install_log()
 
 
+@app.get("/api/dashboard", dependencies=[Depends(require_admin)])
+def dashboard_visao_geral(dias: int = Query(30, ge=1, le=365)) -> dict:
+    """
+    Os painéis baratos do dashboard, numa chamada (~1s).
+
+    Separado das renovações de propósito: aquele precisa de dois snapshots
+    completos (~1 MB) e os outros seis somam poucas dezenas de KB. Fazer o
+    barato esperar o caro atrasaria toda a tela pelo painel menos urgente.
+    """
+    from app import dashboard
+
+    return dashboard.visao_geral(dias)
+
+
+@app.get("/api/dashboard/renovacoes", dependencies=[Depends(require_admin)])
+def dashboard_renovacoes(
+    dias: int = Query(30, ge=1, le=365),
+    machine_id: str = Query("ANALISESRV", min_length=1),
+) -> dict:
+    """
+    Renovações: o inventário de hoje contra o de N dias atrás.
+
+    Sai de `cert_snapshots`, não de `cert_history` — aquela é
+    `upsert(on_conflict="file_name")` e guarda só o estado atual, então o valor
+    anterior já foi sobrescrito e a conta daria zero.
+
+    A resposta traz `referencia`: as varreduras têm lacunas, e pedir 30 dias
+    pode devolver a comparação com uma de 54 dias atrás. Apresentar isso como
+    "últimos 30 dias" seria mentira.
+    """
+    from app import dashboard
+
+    return dashboard.painel_renovacoes(dias=dias, machine_id=machine_id)
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def pagina_dashboard(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request, name="dashboard.html", context={"pagina_ativa": "dashboard"}
+    )
+
+
 @app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_admin)])
 def diagnostico_do_instalador() -> dict:
     """
@@ -3126,7 +3168,7 @@ def trilha_de_instalacao(
     dias: int = Query(30, ge=1, le=365),
     user_email: Optional[str] = Query(None),
     apenas_falhas: bool = Query(False),
-    limite: int = Query(500, ge=1, le=2000),
+    limite: int = Query(500, ge=1, le=1000),
 ) -> dict:
     """
     A trilha agrupada por token: uma linha por tentativa de instalação.
