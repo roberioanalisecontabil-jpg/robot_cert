@@ -15,6 +15,7 @@ import base64
 import hashlib
 import logging
 import os
+import re
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -809,6 +810,77 @@ def remover_da_carteira(user_id: str, documento: str) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Nome do arquivo baixado
+#
+# O `{token}` NÃO é decoração: o instalador avulso lê o token do próprio
+# `argv[0]`. O binário é o mesmo para todo download — de propósito, para poder
+# ser assinado uma vez e acumular reputação no SmartScreen —, então o nome do
+# arquivo é o único canal por onde o token viaja até ele.
+#
+# Um template sem `{token}` produz um executável que abre, não encontra token
+# nenhum e não instala nada. E o sintoma aparece na máquina do usuário final,
+# a um agente e um servidor de distância de quem editou o campo.
+# ──────────────────────────────────────────────────────────────────────────
+
+TEMPLATE_NOME_PADRAO = "Instalar {nome} -{token}.exe"
+
+_CARACTERES_PROIBIDOS = set('/\\:*?"<>|')
+
+
+def validar_template_nome(template: str) -> str:
+    """
+    Devolve o template normalizado ou levanta `ValueError` com o motivo.
+
+    Recusar na hora de salvar é a única defesa possível: depois de gravado, o
+    defeito só se manifesta na máquina de quem baixou.
+    """
+    t = (template or "").strip()
+    if not t:
+        return ""   # vazio = usar o padrão do código
+
+    if "{token}" not in t:
+        raise ValueError(
+            "O template precisa conter {token}: o instalador lê o token do "
+            "próprio nome do arquivo. Sem ele, nada é instalado."
+        )
+    if not t.lower().endswith(".exe"):
+        raise ValueError("O nome do arquivo precisa terminar em .exe.")
+    if any(c in _CARACTERES_PROIBIDOS for c in t.replace("{nome}", "").replace("{token}", "")):
+        raise ValueError('O nome não pode conter / \\ : * ? " < > |.')
+    if len(t) > 120:
+        raise ValueError("O template ficou longo demais (máximo 120 caracteres).")
+
+    desconhecidos = set(re.findall(r"\{(\w+)\}", t)) - {"nome", "token"}
+    if desconhecidos:
+        raise ValueError(
+            "Marcadores desconhecidos: "
+            + ", ".join("{" + d + "}" for d in sorted(desconhecidos))
+            + ". Use apenas {nome} e {token}."
+        )
+    return t
+
+
+def montar_nome_do_arquivo(template: str, nome: str, token: str) -> str:
+    """
+    Aplica o template. O `nome` é sanitizado; o `token` nunca.
+
+    Sanitizar o token o corromperia — ele precisa chegar íntegro ao instalador.
+    Quem o gera é o servidor (`secrets`), e `_TOKEN_SEGURO` já o valida na
+    rota de download antes de chegar aqui.
+    """
+    seguro = re.sub(r"[^A-Za-z0-9 _-]", "", str(nome or ""))[:60].strip() or "Certificado"
+    try:
+        t = validar_template_nome(template) or TEMPLATE_NOME_PADRAO
+    except ValueError:
+        # Template inválido gravado por algum caminho que escapou da validação:
+        # cair no padrão entrega um instalador que funciona, em vez de um nome
+        # quebrado. O erro fica no log, não na mão do usuário.
+        logger.warning("Template de nome inválido em uso; caindo no padrão.")
+        t = TEMPLATE_NOME_PADRAO
+    return t.replace("{nome}", seguro).replace("{token}", token)
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Diagnóstico do cofre e das chaves
 #
 # Escrito depois do incidente de 15/08/2026: a CERT_ENCRYPTION_KEY foi trocada
@@ -955,6 +1027,83 @@ def revalidar_cofre() -> List[Dict[str, Any]]:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Validade do token e retenção do log
+# ──────────────────────────────────────────────────────────────────────────
+
+TTL_TOKEN_MIN = 1
+TTL_TOKEN_MAX = 1440   # 24h
+
+
+def ttl_do_token() -> int:
+    """
+    Minutos de validade do token de instalação.
+
+    A configuração vence o ambiente; zero significa "usar o padrão do
+    ambiente", não "expirar na hora". Os limites existem porque os dois
+    extremos machucam: abaixo de um minuto o usuário perde a janela enquanto
+    lê a tela, e acima de um dia o link fica vivo numa caixa de e-mail muito
+    depois de ter servido.
+
+    Nunca levanta: um token com validade padrão é melhor que uma instalação
+    recusada porque a configuração estava ilegível.
+    """
+    try:
+        from app.settings_state import load_settings
+
+        valor = int(load_settings().install_token_ttl_min or 0)
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler o TTL configurado; usando o do ambiente")
+        valor = 0
+
+    if valor <= 0:
+        valor = config.CERT_INSTALL_TOKEN_TTL_MIN
+    return max(TTL_TOKEN_MIN, min(TTL_TOKEN_MAX, valor))
+
+
+def expurgar_install_log(dias: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Apaga registros de `install_log` mais antigos que a retenção configurada.
+
+    `install_log` guarda `client_ip` e `user_email` e não tinha política de
+    expurgo nenhuma: crescia para sempre com dado pessoal. Zero mantém o
+    comportamento anterior (guardar tudo) de propósito — ligar o expurgo é
+    decisão de quem responde pelos dados, não default de migration.
+
+    Devolve o que fez, para o cron reportar em vez de trabalhar em silêncio.
+    """
+    if dias is None:
+        try:
+            from app.settings_state import load_settings
+
+            dias = int(load_settings().install_log_retencao_dias or 0)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Falha ao ler a retenção configurada")
+            return {"executado": False, "motivo": f"configuração ilegível: {e}"}
+
+    if not dias or dias <= 0:
+        return {"executado": False, "motivo": "retenção desligada (0 = guardar tudo)"}
+
+    client = _supabase()
+    if not client:
+        return {"executado": False, "motivo": "Supabase não configurado"}
+
+    corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    try:
+        r = (
+            client.table("install_log")
+            .delete()
+            .lt("created_at", corte)
+            .execute()
+        )
+        apagados = len(r.data or [])
+        logger.info("Expurgo de install_log: %s registros anteriores a %s", apagados, corte)
+        return {"executado": True, "apagados": apagados, "corte": corte, "retencao_dias": dias}
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha no expurgo de install_log")
+        return {"executado": False, "motivo": str(e)}
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # CRUD — install_token
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -976,7 +1125,7 @@ def create_install_token(
     token_raw = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token_raw.encode()).hexdigest()
     now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(minutes=config.CERT_INSTALL_TOKEN_TTL_MIN)
+    expires_at = now + timedelta(minutes=ttl_do_token())
 
     row = {
         "token_hash": token_hash,

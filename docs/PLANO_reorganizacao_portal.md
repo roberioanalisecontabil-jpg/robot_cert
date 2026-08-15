@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1, 2 (a–d) e 3a aplicadas em 2026-08-15. O resto é proposta.**
+> **Status: Etapas 0, 1, 2 (a–d), 3a e 3b aplicadas em 2026-08-15. Falta 3c, 4 e 5.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -318,8 +318,8 @@ depois (§6).
 >
 > - **3a ✅ (15/08)** — diagnóstico: pontos **3, 4, 9 e 10**. Só leitura, sem
 >   migration, e é o grupo que faltou no incidente da chave desta manhã.
-> - **3b** — configuração: pontos **2, 5 e 7**. Exige colunas em
->   `portal_settings`.
+> - **3b ✅ (15/08)** — configuração: pontos **2, 5 e 7**, com colunas novas em
+>   `portal_settings` e rota de gravação parcial.
 > - **3c** — trilha e limpeza: pontos **1, 6, 8** e a saída da operação.
 >
 > **A seção "2 · Instalar Certificados" NÃO foi removida ainda.** O download
@@ -337,7 +337,7 @@ página**. Deve mostrar o ícone em uso, de qual arquivo veio, e o aviso de que
 trocar exige recompilar e reassinar (seção 0.3). Um seletor que parece aplicar
 na hora e não aplica gera um chamado de suporte por uso.
 
-### 2. Nome do arquivo baixado — template com o `{token}` protegido
+### 2. Nome do arquivo baixado — template com o `{token}` protegido ✅
 
 Já existe (`?nome=`). Virar template configurável, ex. `Instalar {nome} -{token}.exe`.
 **Validação obrigatória:** o token no nome é **funcional** — o instalador o lê do
@@ -360,7 +360,7 @@ deve exibir o que o binário realmente tem — subject, validade, timestamp — 
 dizer que não está assinado. Enquanto for "não verificado", a tela é o lugar de
 essa dívida ficar visível em vez de dormir num changelog.
 
-### 5. Validade do token de instalação
+### 5. Validade do token de instalação ✅
 
 `install_token.expires_at` é constante no código. Vira configuração, **com o
 trade-off na própria tela**: curto demais e o usuário perde a janela e volta a
@@ -380,7 +380,7 @@ SOLICITADO  9   →   REDIMIDO  8   →   CONCLUIDO  2
                                       ERRO       6
 ```
 
-### 7. Retenção do log — LGPD
+### 7. Retenção do log — LGPD ✅
 
 `install_log` guarda `client_ip` e `user_email` e **não tem política de
 expurgo**. Cresce para sempre com dado pessoal. Configuração de retenção + rotina

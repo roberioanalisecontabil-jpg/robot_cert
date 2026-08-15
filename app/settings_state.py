@@ -29,6 +29,14 @@ class PortalSettings:
     smtp_from_email: str = ""
     smtp_alerts_enabled: bool = False
 
+    # ── Módulo instalador (leva 3b, 15/08/2026) ────────────────────────────
+    # Vazio/zero significa "usar o padrão do código", e não "desligado". A
+    # distinção importa: uma configuração nunca tocada tem de se comportar
+    # exatamente como antes de existir.
+    instalador_nome_template: str = ""
+    install_token_ttl_min: int = 0
+    install_log_retencao_dias: int = 0
+
     def effective_source(self) -> Path:
         p = (self.source_folder or "").strip()
         if p:
@@ -55,6 +63,9 @@ def _from_row(row: dict) -> PortalSettings:
         smtp_use_ssl=bool(row.get("smtp_use_ssl") if row.get("smtp_use_ssl") is not None else False),
         smtp_from_email=str(row.get("smtp_from_email", "") or ""),
         smtp_alerts_enabled=bool(row.get("smtp_alerts_enabled") if row.get("smtp_alerts_enabled") is not None else False),
+        instalador_nome_template=str(row.get("instalador_nome_template", "") or ""),
+        install_token_ttl_min=int(row.get("install_token_ttl_min") or 0),
+        install_log_retencao_dias=int(row.get("install_log_retencao_dias") or 0),
     )
 
 
@@ -75,6 +86,9 @@ def _load_file() -> Optional[PortalSettings]:
             smtp_use_ssl=bool(raw.get("smtp_use_ssl", False)),
             smtp_from_email=str(raw.get("smtp_from_email", "")),
             smtp_alerts_enabled=bool(raw.get("smtp_alerts_enabled", False)),
+            instalador_nome_template=str(raw.get("instalador_nome_template", "")),
+            install_token_ttl_min=int(raw.get("install_token_ttl_min", 0) or 0),
+            install_log_retencao_dias=int(raw.get("install_log_retencao_dias", 0) or 0),
         )
     except (json.JSONDecodeError, OSError):
         return None
@@ -165,6 +179,9 @@ def save_settings(s: PortalSettings) -> None:
         "smtp_use_ssl": s.smtp_use_ssl,
         "smtp_from_email": s.smtp_from_email,
         "smtp_alerts_enabled": s.smtp_alerts_enabled,
+        "instalador_nome_template": s.instalador_nome_template,
+        "install_token_ttl_min": s.install_token_ttl_min,
+        "install_log_retencao_dias": s.install_log_retencao_dias,
         "updated_at": now,
     }
     try:

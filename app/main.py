@@ -463,6 +463,11 @@ class SettingsBody(BaseModel):
     smtp_use_ssl: bool = Field(default=False)
     smtp_from_email: str = Field(default="")
     smtp_alerts_enabled: bool = Field(default=False)
+    # Módulo instalador. Vazio/zero = usar o padrão do código, e não "desligado":
+    # uma configuração nunca tocada tem de se comportar como antes de existir.
+    instalador_nome_template: str = Field(default="")
+    install_token_ttl_min: int = Field(default=0)
+    install_log_retencao_dias: int = Field(default=0)
 
 
 class IngestBody(BaseModel):
@@ -941,6 +946,13 @@ def _settings_dict(s: PortalSettings) -> dict:
         "smtp_password_set": bool(s.smtp_password_encrypted),
         "smtp_use_tls": s.smtp_use_tls,
         "smtp_use_ssl": s.smtp_use_ssl,
+        "instalador_nome_template": s.instalador_nome_template,
+        # `efetivo` é o que realmente vale agora, com o padrão já resolvido —
+        # a tela precisa mostrar isso, não o campo em branco.
+        "instalador_nome_efetivo": s.instalador_nome_template or cert_installer.TEMPLATE_NOME_PADRAO,
+        "install_token_ttl_min": s.install_token_ttl_min,
+        "install_token_ttl_efetivo": cert_installer.ttl_do_token(),
+        "install_log_retencao_dias": s.install_log_retencao_dias,
         "smtp_from_email": s.smtp_from_email,
         "smtp_alerts_enabled": s.smtp_alerts_enabled,
     }
@@ -958,7 +970,30 @@ def put_settings(body: SettingsBody) -> dict:
         validate_smtp_config(body.smtp_use_tls, body.smtp_use_ssl)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-        
+
+    # Recusar na hora de salvar é a única defesa possível para o template: um
+    # template sem {token} produz um .exe que abre e não instala nada, e o
+    # sintoma aparece na máquina do usuário final.
+    try:
+        template = cert_installer.validar_template_nome(body.instalador_nome_template)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    ttl = int(body.install_token_ttl_min or 0)
+    if ttl and not (cert_installer.TTL_TOKEN_MIN <= ttl <= cert_installer.TTL_TOKEN_MAX):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Validade do token: use entre {cert_installer.TTL_TOKEN_MIN} e "
+                f"{cert_installer.TTL_TOKEN_MAX} minutos, ou 0 para o padrão."
+            ),
+        )
+
+    retencao = int(body.install_log_retencao_dias or 0)
+    if retencao < 0:
+        raise HTTPException(status_code=422, detail="Retenção não pode ser negativa.")
+
+    
     old = load_settings()
     enc_password = old.smtp_password_encrypted
     if body.smtp_password is not None and body.smtp_password.strip() != "":
@@ -979,6 +1014,9 @@ def put_settings(body: SettingsBody) -> dict:
         smtp_use_ssl=body.smtp_use_ssl,
         smtp_from_email=body.smtp_from_email.strip(),
         smtp_alerts_enabled=body.smtp_alerts_enabled,
+        instalador_nome_template=template,
+        install_token_ttl_min=ttl,
+        install_log_retencao_dias=retencao,
     )
     save_settings(s)
     return _settings_dict(s)
@@ -1059,10 +1097,25 @@ def cron_alerts(request: Request) -> dict:
     try:
         stats = trigger_all_alerts()
         logger.info(f"Cron de alertas concluído: {stats}")
-        return {"ok": True, "stats": stats}
     except Exception as e:
         logger.exception("Falha no cron de alertas")
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Expurgo do install_log pendurado no mesmo disparo diário, e não num cron
+    # próprio: os planos da Vercel limitam o número de crons, e um segundo
+    # agendamento poderia simplesmente não ser criado — falha silenciosa numa
+    # rotina de LGPD é o pior lugar para tê-la.
+    #
+    # Try/except próprio de propósito: apagar log é acessório, e não pode
+    # derrubar o envio de alertas, que é o motivo de a rota existir. Se falhar,
+    # aparece na resposta em vez de sumir.
+    try:
+        expurgo = cert_installer.expurgar_install_log()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha no expurgo do install_log")
+        expurgo = {"executado": False, "motivo": str(e)}
+
+    return {"ok": True, "stats": stats, "expurgo": expurgo}
 
 
 @app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_auth)])
@@ -2463,6 +2516,64 @@ def remover_carteira(
         raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
 
 
+class ConfigInstaladorBody(BaseModel):
+    instalador_nome_template: str = ""
+    install_token_ttl_min: int = 0
+    install_log_retencao_dias: int = 0
+
+
+@app.put("/api/cert-installer/configuracao", dependencies=[Depends(require_admin)])
+def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
+    """
+    Grava **só** as três configurações do módulo instalador.
+
+    Rota própria em vez de reaproveitar `PUT /api/settings`: aquele monta um
+    `PortalSettings` inteiro a partir do corpo, então uma tela que mandasse
+    apenas estes três campos apagaria host, usuário e senha do SMTP — sem erro
+    nenhum, e ninguém notaria até o próximo alerta não sair.
+
+    Aqui a configuração atual é lida, três campos mudam, e o resto vai de volta
+    como estava.
+    """
+    try:
+        template = cert_installer.validar_template_nome(body.instalador_nome_template)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    ttl = int(body.install_token_ttl_min or 0)
+    if ttl and not (cert_installer.TTL_TOKEN_MIN <= ttl <= cert_installer.TTL_TOKEN_MAX):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Validade do token: use entre {cert_installer.TTL_TOKEN_MIN} e "
+                f"{cert_installer.TTL_TOKEN_MAX} minutos, ou 0 para o padrão."
+            ),
+        )
+
+    retencao = int(body.install_log_retencao_dias or 0)
+    if retencao < 0:
+        raise HTTPException(status_code=422, detail="Retenção não pode ser negativa.")
+
+    atual = load_settings()
+    atual.instalador_nome_template = template
+    atual.install_token_ttl_min = ttl
+    atual.install_log_retencao_dias = retencao
+    save_settings(atual)
+    return _settings_dict(atual)
+
+
+@app.post("/api/cert-installer/expurgar-log", dependencies=[Depends(require_admin)])
+def expurgar_log_agora() -> dict:
+    """
+    Roda o expurgo sob demanda, sem esperar o cron.
+
+    Quem acabou de configurar a retenção precisa ver o efeito para confiar
+    nela — e uma rotina de LGPD que só roda amanhã de manhã não dá para
+    verificar antes de responder por ela.
+    """
+    return cert_installer.expurgar_install_log()
+
+
 @app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_admin)])
 def diagnostico_do_instalador() -> dict:
     """
@@ -2862,11 +2973,20 @@ def baixar_instalador(token: str, nome: str = Query("Certificado")):
             detail="Instalador ainda não compilado no servidor. Rode scripts/build_instalador_avulso.ps1.",
         )
 
-    seguro = re.sub(r"[^A-Za-z0-9 _-]", "", nome)[:60].strip() or "Certificado"
+    # O template é configurável desde 15/08, mas o `{token}` continua sendo
+    # obrigatório: o instalador o lê do próprio argv[0]. `montar_nome_do_arquivo`
+    # cai no padrão se o template gravado for inválido — entregar um instalador
+    # que funciona com nome padrão é melhor que um nome bonito que não instala.
+    try:
+        template = load_settings().instalador_nome_template
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler o template do nome; usando o padrão")
+        template = ""
+
     return FileResponse(
         path=INSTALADOR_AVULSO_EXE,
         media_type="application/vnd.microsoft.portable-executable",
-        filename=f"Instalar {seguro} -{token}.exe",
+        filename=cert_installer.montar_nome_do_arquivo(template, nome, token),
     )
 
 

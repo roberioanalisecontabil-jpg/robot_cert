@@ -45,6 +45,57 @@
         <div id="revalidarArea" style="margin-top: 1rem;"></div>
       </section>
 
+      <!-- Configuração do módulo. Os três valores estavam fixos no código, e
+           cada um tem um trade-off que só quem administra o portal resolve. -->
+      <section class="card" style="margin-bottom: 2rem;">
+        <div style="margin-bottom: 1rem;">
+          <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Configuração</h2>
+          <p class="text-muted" style="font-size: 0.875rem;">
+            Deixe em branco ou zero para usar o padrão do sistema.
+          </p>
+        </div>
+
+        <div id="cfgMessageArea"></div>
+
+        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+          <div class="form-field" style="flex: 2; min-width: 320px;">
+            <label for="cfgNomeTemplate">Nome do arquivo baixado</label>
+            <input type="text" id="cfgNomeTemplate" class="form-control"
+                   placeholder="Instalar {nome} -{token}.exe" />
+            <p class="hint" style="margin-top: 0.4rem;">
+              Marcadores: <code>{nome}</code> e <code>{token}</code>.
+              <strong>O <code>{token}</code> é obrigatório</strong> — o instalador lê o token do
+              próprio nome do arquivo. Sem ele, o programa abre e não instala nada.
+            </p>
+            <p class="hint" id="cfgNomeEfetivo" style="margin-top: 0.25rem;"></p>
+          </div>
+
+          <div class="form-field" style="flex: 1; min-width: 200px;">
+            <label for="cfgTtl">Validade do token (minutos)</label>
+            <input type="number" id="cfgTtl" class="form-control" min="0" max="1440" />
+            <p class="hint" style="margin-top: 0.4rem;">
+              Curto demais e o usuário perde a janela e precisa pedir de novo; longo demais e o
+              link continua válido numa caixa de e-mail muito depois de ter servido.
+            </p>
+            <p class="hint" id="cfgTtlEfetivo" style="margin-top: 0.25rem;"></p>
+          </div>
+
+          <div class="form-field" style="flex: 1; min-width: 200px;">
+            <label for="cfgRetencao">Retenção do log (dias)</label>
+            <input type="number" id="cfgRetencao" class="form-control" min="0" />
+            <p class="hint" style="margin-top: 0.4rem;">
+              A trilha guarda <strong>e-mail e IP</strong> de quem instalou. Sem retenção, ela
+              cresce indefinidamente com dado pessoal. <code>0</code> guarda tudo.
+            </p>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
+          <button id="btnSalvarCfg" class="btn btn-primary">Salvar configuração</button>
+          <button id="btnExpurgarAgora" class="btn btn-secondary">Expurgar log agora</button>
+        </div>
+      </section>
+
       <!-- Painel de Ação de Instalação -->
       <!-- Passo 1: autorizar quais certificados podem ir para o cofre do servidor -->
       <section class="card" style="margin-bottom: 2rem;">
@@ -219,8 +270,90 @@
         document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
         document.getElementById("btnRefreshDiag").addEventListener("click", loadDiagnostico);
         document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
+        document.getElementById("btnSalvarCfg").addEventListener("click", salvarConfigInstalador);
+        document.getElementById("btnExpurgarAgora").addEventListener("click", expurgarAgora);
         loadDiagnostico();
+        loadConfigInstalador();
       });
+
+      // ─── Configuração do módulo ────────────────────────────────────────
+
+      function mostrarCfgMsg(texto, tipo) {
+        document.getElementById("cfgMessageArea").innerHTML =
+          `<div class="toast toast-${tipo}" style="margin-bottom: 1rem;">${esc(texto)}</div>`;
+      }
+
+      async function loadConfigInstalador() {
+        try {
+          const r = await fetch("/api/settings", { headers: getHeaders() });
+          if (!r.ok) return;
+          const s = await r.json();
+          document.getElementById("cfgNomeTemplate").value = s.instalador_nome_template || "";
+          document.getElementById("cfgTtl").value = s.install_token_ttl_min || 0;
+          document.getElementById("cfgRetencao").value = s.install_log_retencao_dias || 0;
+          // O "em vigor" existe porque o campo em branco não diz nada: quem
+          // olha precisa saber o que realmente vale agora, não o que está
+          // digitado.
+          document.getElementById("cfgNomeEfetivo").textContent =
+            "Em vigor: " + (s.instalador_nome_efetivo || "—");
+          document.getElementById("cfgTtlEfetivo").textContent =
+            "Em vigor: " + (s.install_token_ttl_efetivo || "—") + " min";
+        } catch (e) {
+          mostrarCfgMsg("Não foi possível carregar a configuração.", "error");
+        }
+      }
+
+      async function salvarConfigInstalador() {
+        const btn = document.getElementById("btnSalvarCfg");
+        btn.disabled = true;
+        try {
+          const r = await fetch("/api/cert-installer/configuracao", {
+            method: "PUT",
+            headers: getHeaders(true),
+            body: JSON.stringify({
+              instalador_nome_template: document.getElementById("cfgNomeTemplate").value,
+              install_token_ttl_min: parseInt(document.getElementById("cfgTtl").value || "0", 10),
+              install_log_retencao_dias: parseInt(document.getElementById("cfgRetencao").value || "0", 10),
+            }),
+          });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          await loadConfigInstalador();
+          mostrarCfgMsg("Configuração salva.", "success");
+        } catch (e) {
+          mostrarCfgMsg(e.message, "error");
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      async function expurgarAgora() {
+        const dias = parseInt(document.getElementById("cfgRetencao").value || "0", 10);
+        if (dias > 0 && !confirm(
+          `Apagar da trilha os registros com mais de ${dias} dias?\n\n` +
+          `Isso é irreversível.`
+        )) return;
+
+        const btn = document.getElementById("btnExpurgarAgora");
+        btn.disabled = true;
+        try {
+          const r = await fetch("/api/cert-installer/expurgar-log", {
+            method: "POST", headers: getHeaders(true),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.detail || "Falha no expurgo");
+          mostrarCfgMsg(
+            d.executado
+              ? `${d.apagados} registro(s) apagados (anteriores a ${d.retencao_dias} dias).`
+              : `Nada a fazer: ${d.motivo}`,
+            d.executado ? "success" : "warning"
+          );
+          loadInstallLogs();
+        } catch (e) {
+          mostrarCfgMsg(e.message, "error");
+        } finally {
+          btn.disabled = false;
+        }
+      }
 
       // ─── Diagnóstico ───────────────────────────────────────────────────
       //
