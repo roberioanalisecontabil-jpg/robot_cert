@@ -550,6 +550,178 @@ def bloquear_custodia(
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Carteira — quais clientes cada operador pode instalar
+#
+# É a outra metade do modelo de 15/08, e o inverso da custódia. A custódia
+# ABRE por padrão (todo certificado válido entra no cofre, o admin desativa);
+# o acesso FECHA por padrão (operador sem atribuição não instala nada). Os
+# dois defaults são opostos de propósito: guardar a mais é desperdício,
+# liberar a mais é vazamento.
+# ──────────────────────────────────────────────────────────────────────────
+
+PAPEIS_COM_ALCANCE_TOTAL = ("admin", "gestor")
+
+
+class CarteiraIndisponivel(RuntimeError):
+    """
+    Não deu para determinar o que este usuário pode instalar.
+
+    Mesma razão de `CustodiaIndisponivel`: "não sei" precisa ser um estado
+    próprio. Um `except` que devolvesse carteira vazia negaria acesso — o lado
+    seguro —, mas devolvê-la sem distinguir do caso real esconderia uma queda
+    de banco atrás de um 403 confuso, e a próxima pessoa a mexer aqui poderia
+    "consertar" invertendo o default.
+    """
+
+
+class ForaDaCarteira(PermissionError):
+    """Pedido inclui certificado que o solicitante não pode instalar."""
+
+    def __init__(self, documentos_negados: List[str]) -> None:
+        self.documentos_negados = documentos_negados
+        super().__init__(
+            "Certificados fora da sua carteira: " + ", ".join(sorted(documentos_negados))
+        )
+
+
+def so_digitos(documento: Optional[str]) -> str:
+    """
+    Normaliza CNPJ/CPF para comparação.
+
+    `cert_pfx_store.documento` e o inventário guardam só dígitos, mas nada
+    impede alguém de atribuir "33.706.943/0001-93" pela tela. Formatos
+    divergentes fariam a carteira nunca casar — sem erro, o operador só nunca
+    conseguiria instalar, e ninguém saberia por quê.
+    """
+    return "".join(c for c in str(documento or "") if c.isdigit())
+
+
+def listar_carteira(user_id: str) -> Set[str]:
+    """
+    Documentos que este usuário pode instalar.
+
+    Levanta `CarteiraIndisponivel` se a consulta falhar, em vez de devolver
+    vazio — ver a docstring da exceção.
+    """
+    client = _supabase()
+    if not client:
+        raise CarteiraIndisponivel("Supabase não configurado")
+    try:
+        r = (
+            client.table("carteira")
+            .select("documento")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return {so_digitos(row.get("documento")) for row in (r.data or []) if row.get("documento")}
+    except Exception as e:
+        logger.exception("Falha ao listar carteira de %s", user_id)
+        raise CarteiraIndisponivel(str(e)) from e
+
+
+def documentos_dos_certificados(certificate_ids: List[str]) -> Dict[str, str]:
+    """
+    Mapa `id do certificado -> documento`, para conferir contra a carteira.
+
+    Certificado ausente do cofre não aparece no mapa; quem chama trata isso
+    como negado, não como permitido.
+    """
+    client = _supabase()
+    if not client:
+        raise CarteiraIndisponivel("Supabase não configurado")
+    try:
+        r = (
+            client.table("cert_pfx_store")
+            .select("id, documento")
+            .in_("id", certificate_ids)
+            .execute()
+        )
+        return {str(row["id"]): so_digitos(row.get("documento")) for row in (r.data or [])}
+    except Exception as e:
+        logger.exception("Falha ao resolver documentos dos certificados")
+        raise CarteiraIndisponivel(str(e)) from e
+
+
+def assegurar_carteira(user_id: str, role: str, certificate_ids: List[str]) -> None:
+    """
+    Barreira de servidor do acesso. Levanta se algum certificado estiver fora.
+
+    **Toda rota que cria um token de instalação precisa chamar isto.** Hoje são
+    duas — a que enfileira para o agente e a que gera o download avulso — e
+    `tests/test_carteira.py` percorre o código para falhar se alguma rota nova
+    esquecer. Esconder ou desabilitar na tela é conveniência; a barreira é aqui.
+
+    `admin` e `gestor` têm alcance total. Para o gestor isso é consequência da
+    decisão de 15/08: quem pode atribuir qualquer cliente a qualquer operador
+    pode atribuir a si mesmo, então limitá-lo seria teatro. Fica explícito em
+    vez de implícito.
+
+    Certificado sem documento é negado ao operador: não há como saber de quem
+    ele é, logo não há como dizer que está na carteira de alguém.
+    """
+    if (role or "").strip().lower() in PAPEIS_COM_ALCANCE_TOTAL:
+        return
+
+    carteira = listar_carteira(user_id)
+    documentos = documentos_dos_certificados(certificate_ids)
+
+    negados: List[str] = []
+    for cid in certificate_ids:
+        doc = documentos.get(str(cid))
+        if not doc or doc not in carteira:
+            # Devolve o documento quando existe (o operador reconhece o
+            # cliente); sem documento, identifica pelo id do certificado.
+            negados.append(doc or f"certificado {cid}")
+
+    if negados:
+        raise ForaDaCarteira(negados)
+
+
+def atribuir_carteira(
+    user_id: str,
+    documentos: List[str],
+    atribuido_por: Optional[str],
+    atribuido_por_email: str,
+) -> int:
+    """Acrescenta documentos à carteira. Devolve quantos foram gravados."""
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+
+    linhas = []
+    for doc in documentos:
+        d = so_digitos(doc)
+        if not d:
+            continue
+        linhas.append(
+            {
+                "user_id": user_id,
+                "documento": d,
+                "atribuido_por": atribuido_por,
+                "atribuido_por_email": atribuido_por_email,
+            }
+        )
+    if not linhas:
+        return 0
+
+    client.table("carteira").upsert(linhas, on_conflict="user_id,documento").execute()
+    return len(linhas)
+
+
+def remover_da_carteira(user_id: str, documento: str) -> None:
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+    (
+        client.table("carteira")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("documento", so_digitos(documento))
+        .execute()
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # CRUD — install_token
 # ──────────────────────────────────────────────────────────────────────────
 

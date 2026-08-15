@@ -2344,8 +2344,101 @@ def bloquear_vault_custodia(
         raise HTTPException(status_code=500, detail="Erro interno ao revogar")
 
 
+def _assegurar_carteira_ou_403(user_id: str, role: str, certificate_ids: List[str]) -> None:
+    """
+    Traduz a barreira de carteira para HTTP.
+
+    Existe como função única para que as duas rotas que emitem token de
+    instalação usem exatamente a mesma regra. Duplicar a checagem seria o
+    caminho natural, e a cópia que divergisse para o lado permissivo não daria
+    sintoma nenhum — só entregaria certificado a quem não devia.
+
+    `CarteiraIndisponivel` vira 503 e não 403: negar por falha de banco é o
+    resultado seguro, mas dizer "você não tem permissão" a quem tem manda a
+    pessoa procurar o gestor em vez de esperar o banco voltar.
+    """
+    try:
+        cert_installer.assegurar_carteira(user_id, role, certificate_ids)
+    except cert_installer.ForaDaCarteira as e:
+        logger.warning("Instalação negada por carteira (user=%s): %s", user_id, e)
+        raise HTTPException(status_code=403, detail=str(e))
+    except cert_installer.CarteiraIndisponivel as e:
+        logger.warning("Carteira indisponível (user=%s): %s", user_id, e)
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível verificar suas permissões agora. Tente novamente.",
+        )
+
+
+async def require_admin_ou_gestor(
+    token: auth.TokenData = Depends(require_auth),
+) -> auth.TokenData:
+    """Quem pode montar carteira. O gestor tem alcance total por decisão de 15/08."""
+    if (token.role or "").strip().lower() not in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        raise HTTPException(status_code=403, detail="Acesso restrito a gestores e administradores.")
+    return token
+
+
+class CarteiraRequest(BaseModel):
+    user_id: str
+    documentos: List[str]
+
+
+@app.get("/api/carteira/{user_id}", dependencies=[Depends(require_admin_ou_gestor)])
+def obter_carteira(user_id: str) -> dict:
+    """Documentos que este operador pode instalar."""
+    try:
+        return {"user_id": user_id, "documentos": sorted(cert_installer.listar_carteira(user_id))}
+    except cert_installer.CarteiraIndisponivel as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/api/carteira")
+def atribuir_carteira(
+    body: CarteiraRequest,
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """
+    Acrescenta documentos à carteira de um operador.
+
+    Quem atribui fica registrado — e-mail inclusive, não só o UUID. Com o
+    gestor podendo atribuir qualquer cliente do acervo, essa trilha é a única
+    forma de reconstruir o que houve se uma conta de gestor for comprometida;
+    guardar só o UUID a perderia no dia em que a conta fosse apagada.
+    """
+    try:
+        gravados = cert_installer.atribuir_carteira(
+            user_id=body.user_id,
+            documentos=body.documentos,
+            atribuido_por=_resolve_user_id(token.email),
+            atribuido_por_email=token.email or "desconhecido",
+        )
+        return {"status": "ok", "gravados": gravados}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao atribuir carteira")
+        raise HTTPException(status_code=500, detail="Erro interno ao atribuir carteira")
+
+
+@app.delete("/api/carteira/{user_id}/{documento}")
+def remover_carteira(
+    user_id: str,
+    documento: str,
+    _token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    try:
+        cert_installer.remover_da_carteira(user_id, documento)
+        return {"status": "ok", "user_id": user_id, "documento": documento}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao remover da carteira")
+        raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
+
+
 class PrepareInstallRequest(BaseModel):
-    """Admin seleciona certificados e máquina destino."""
+    """Quem instala seleciona certificados e máquina destino."""
     certificate_ids: List[str]
     target_machine: str
 
@@ -2354,11 +2447,14 @@ class PrepareInstallRequest(BaseModel):
 def prepare_install(
     body: PrepareInstallRequest,
     request: Request,
-    token: auth.TokenData = Depends(require_admin),
+    token: auth.TokenData = Depends(require_auth),
 ):
     """
     Gera token de uso único e enfileira comando de instalação na fila do agente.
-    Apenas admins podem solicitar instalação.
+
+    Deixou de ser exclusivo de admin em 15/08: o operador instala o que estiver
+    na carteira dele. Quem decide isso é `assegurar_carteira`, no servidor —
+    a tela filtrar é conveniência, e uma chamada forjada não passa por ela.
     """
     if not body.certificate_ids:
         raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
@@ -2367,6 +2463,8 @@ def prepare_install(
     user_id = _resolve_user_id(token.email)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    _assegurar_carteira_ou_403(user_id, token.role, body.certificate_ids)
 
     client_ip = request.client.host if request.client else None
 
@@ -2549,7 +2647,7 @@ class PrepararDownloadRequest(BaseModel):
 def preparar_download(
     body: PrepararDownloadRequest,
     request: Request,
-    token: auth.TokenData = Depends(require_admin),
+    token: auth.TokenData = Depends(require_auth),
 ):
     """
     Cria o token e devolve a URL do instalador — sem enfileirar nada.
@@ -2557,6 +2655,9 @@ def preparar_download(
     Difere de /prepare no destino: lá o alvo é uma máquina que já roda o agente,
     e o comando vai para a fila dela. Aqui o alvo é a máquina de quem clicou,
     que não tem agente nenhum; o "transporte" é o próprio download.
+
+    Mesma barreira de carteira da outra: são os dois caminhos que produzem um
+    token de instalação, e um token é o que entrega a chave privada.
     """
     if not body.certificate_ids:
         raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
@@ -2564,6 +2665,8 @@ def preparar_download(
     user_id = _resolve_user_id(token.email)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    _assegurar_carteira_ou_403(user_id, token.role, body.certificate_ids)
 
     client_ip = request.client.host if request.client else None
 

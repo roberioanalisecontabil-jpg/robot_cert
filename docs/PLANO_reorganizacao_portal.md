@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1, 2a e 2b aplicadas em 2026-08-15. O resto é proposta.**
+> **Status: Etapas 0, 1, 2a, 2b e 2c aplicadas em 2026-08-15. O resto é proposta.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -496,6 +496,16 @@ de `require_admin`, que devolva o filtro em vez de deixá-lo a critério de quem
 escreve a rota — e um teste que percorra as rotas e falhe quando alguma não a
 declare.
 
+**Feito na etapa 2c, pela metade que dá para fazer hoje.** A barreira é uma
+função única (`_assegurar_carteira_ou_403`) que as duas rotas emissoras de token
+chamam, e `test_toda_rota_que_cria_token_passa_pela_carteira` lê `app/main.py`
+com `ast`: qualquer função que chame `create_install_token` sem chamar a barreira
+derruba a suíte. `create_install_token` é o gargalo certo para vigiar — um token
+**é** a entrega da chave privada, e sem token não há bundle.
+
+O que continua em aberto: a leitura. Listagens novas que exponham dados de
+cliente não passam por esse gargalo, e nenhum teste as vigia ainda.
+
 ---
 
 ## 7. Ordem de execução e dependências
@@ -512,7 +522,7 @@ Etapa 2a modelo de usuário             ✅ aplicada — role vs ativo + gestor_
    ↓
 Etapa 2b custódia: opt-in → opt-out    ✅ aplicada — fail-closed estrutural
    ↓
-Etapa 2c carteira + barreira no server ← a tela filtra, o servidor decide (§3.4.5)
+Etapa 2c carteira + barreira no server ✅ aplicada — barreira e teste estrutural
    ↓
 Etapa 2d Início: seleção + flutuante   ← já nasce ciente de carteira (§3.5)
    ↓
