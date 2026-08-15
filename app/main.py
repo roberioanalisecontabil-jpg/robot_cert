@@ -2463,6 +2463,76 @@ def remover_carteira(
         raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
 
 
+@app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_admin)])
+def diagnostico_do_instalador() -> dict:
+    """
+    Estado do módulo instalador, num lugar só.
+
+    Cada bloco corresponde a algo que já falhou em produção sem aviso:
+
+    - **binário**: `is_file()` só era consultado no clique, e a falha virava um
+      503 com instrução de rebuild — inútil na Vercel, onde o FS é read-only.
+    - **assinatura**: adiada em 11/08 e "não verificada em máquina real". Fica
+      visível aqui em vez de dormir num changelog.
+    - **cofre**: as seis falhas de instalação registradas têm causa única
+      ("Senha ausente no cofre"), e descobrir isso exigiu ler o agent.log de
+      uma máquina remota.
+    - **chaves**: em 15/08 a chave foi trocada sem rotação e todo o cofre virou
+      lixo cifrado. Nada na interface disse isso.
+    """
+    from app import pe_assinatura
+
+    binario = pe_assinatura.inspecionar(INSTALADOR_AVULSO_EXE)
+    out: dict = {
+        "binario": {
+            "existe": binario.existe,
+            "caminho": binario.caminho,
+            "tamanho_bytes": binario.tamanho_bytes,
+            "sha256": binario.sha256,
+            "modificado_em": binario.modificado_em,
+            "assinado": binario.assinado,
+            "assinatura_detalhe": binario.assinatura_detalhe,
+            "signatarios": [vars(s) for s in binario.signatarios],
+        },
+        # O ícone é entrada de BUILD, não configuração de runtime: o binário é
+        # o mesmo para todo download de propósito, e é isso que permite assiná-lo
+        # uma vez e acumular reputação no SmartScreen. Trocar exige recompilar.
+        "icone": {
+            "arquivo": str(ROOT / "ico" / "icone.ico"),
+            "presente": (ROOT / "ico" / "icone.ico").is_file(),
+            "observacao": "Definido em Instalar_Certificado.spec; trocar exige recompilar e reassinar.",
+        },
+    }
+
+    try:
+        out["cofre"] = cert_installer.diagnostico_do_cofre()
+        out["chaves"] = cert_installer.diagnostico_das_chaves()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha no diagnóstico do cofre")
+        out["cofre"] = {"erro": str(e)}
+        out["chaves"] = {"erro": str(e)}
+
+    return out
+
+
+@app.post("/api/cert-installer/revalidar-cofre", dependencies=[Depends(require_admin)])
+def revalidar_cofre() -> dict:
+    """
+    Prova que a chave em vigor decifra o que está guardado.
+
+    Contar linhas não prova nada: em 15/08 o cofre tinha uma linha íntegra, com
+    todos os campos preenchidos, e completamente indecifrável. É `POST` porque
+    faz trabalho criptográfico de verdade, não porque grave algo.
+    """
+    try:
+        return {"resultados": cert_installer.revalidar_cofre()}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao revalidar o cofre")
+        raise HTTPException(status_code=500, detail="Erro interno ao revalidar o cofre")
+
+
 @app.get("/api/cert-installer/instalabilidade")
 def instalabilidade(
     machine_id: str = Query(..., min_length=1),

@@ -809,6 +809,152 @@ def remover_da_carteira(user_id: str, documento: str) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Diagnóstico do cofre e das chaves
+#
+# Escrito depois do incidente de 15/08/2026: a CERT_ENCRYPTION_KEY foi trocada
+# no painel da Vercel sem passar pela rotação, e TODO o conteúdo do cofre virou
+# lixo cifrado. Nada na interface disse isso. Descobriu-se por um `InvalidTag`
+# no meio de outra investigação, e o caminho documentado para consertar
+# (CERT_ENCRYPTION_KEY_V<n>) estava ele próprio quebrado.
+#
+# O que segue existe para que a próxima rotação seja vista, não descoberta.
+# ──────────────────────────────────────────────────────────────────────────
+
+def diagnostico_do_cofre() -> Dict[str, Any]:
+    """Números do cofre, agrupados pelo que costuma dar errado."""
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+
+    r = (
+        client.table("cert_pfx_store")
+        .select("machine_id, key_version, updated_at, pfx_password_enc, pfx_password")
+        .execute()
+    )
+    linhas = r.data or []
+
+    por_maquina: Dict[str, int] = {}
+    por_versao: Dict[str, int] = {}
+    sem_senha = 0
+    senha_em_claro = 0
+    ultimo = None
+    for row in linhas:
+        por_maquina[str(row.get("machine_id") or "?")] = (
+            por_maquina.get(str(row.get("machine_id") or "?"), 0) + 1
+        )
+        v = str(row.get("key_version") if row.get("key_version") is not None else "?")
+        por_versao[v] = por_versao.get(v, 0) + 1
+        if not row.get("pfx_password_enc"):
+            sem_senha += 1
+        if row.get("pfx_password"):
+            senha_em_claro += 1
+        u = row.get("updated_at")
+        if u and (ultimo is None or u > ultimo):
+            ultimo = u
+
+    try:
+        b = client.table("cert_vault_bloqueio").select("fingerprint").execute()
+        bloqueios = len(b.data or [])
+    except Exception:
+        logger.exception("Falha ao contar bloqueios")
+        bloqueios = None
+
+    return {
+        "total": len(linhas),
+        "por_maquina": por_maquina,
+        "por_key_version": por_versao,
+        "ultimo_upload": ultimo,
+        # Foi a causa ÚNICA das seis falhas de instalação registradas em
+        # produção: "Senha ausente no cofre". Sem este número, descobrir isso
+        # exigiu ler o agent.log de uma máquina remota.
+        "sem_senha_cifrada": sem_senha,
+        # Deve ser sempre zero. A coluna antiga guardava a senha sob a MESMA
+        # chave do PFX, o que um vazamento entregava junto.
+        "senha_em_claro": senha_em_claro,
+        "bloqueios": bloqueios,
+    }
+
+
+def diagnostico_das_chaves() -> Dict[str, Any]:
+    """
+    Quais versões de chave existem, quais estão configuradas, e quais faltam.
+
+    O campo que importa é `versoes_sem_chave`: versão com linhas vivas no cofre
+    e sem chave no ambiente significa material **indecifrável agora**. É
+    exatamente o estado em que o cofre ficou em 15/08, e ninguém viu.
+    """
+    from app import config
+
+    diag = diagnostico_do_cofre()
+    versoes_no_cofre = {
+        int(v) for v in diag["por_key_version"] if str(v).isdigit()
+    }
+
+    configuradas = {CURRENT_KEY_VERSION} if getattr(config, "CERT_ENCRYPTION_KEY", "") else set()
+    prefixo = "CERT_ENCRYPTION_KEY_V"
+    for nome in dir(config):
+        if nome.startswith(prefixo) and nome[len(prefixo):].isdigit():
+            if (getattr(config, nome, "") or "").strip():
+                configuradas.add(int(nome[len(prefixo):]))
+
+    return {
+        "versao_corrente": CURRENT_KEY_VERSION,
+        "versoes_configuradas": sorted(configuradas),
+        "versoes_no_cofre": sorted(versoes_no_cofre),
+        "versoes_sem_chave": sorted(versoes_no_cofre - configuradas),
+        "linhas_por_versao": diag["por_key_version"],
+    }
+
+
+def revalidar_cofre() -> List[Dict[str, Any]]:
+    """
+    Tenta decifrar UM PFX de cada `key_version` e reporta o que aconteceu.
+
+    Contar linhas não prova nada: em 15/08 o cofre tinha uma linha íntegra, com
+    todos os campos preenchidos, e completamente indecifrável. A única prova de
+    que a chave certa está no ambiente é decifrar de fato. Uma amostra por
+    versão basta — todas as linhas de uma versão usam a mesma chave.
+    """
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+
+    versoes = [
+        int(v) for v in diagnostico_do_cofre()["por_key_version"] if str(v).isdigit()
+    ]
+
+    out: List[Dict[str, Any]] = []
+    for versao in sorted(versoes):
+        amostra = (
+            client.table("cert_pfx_store")
+            .select("id, fingerprint, encrypted_pfx, pfx_iv, pfx_auth_tag")
+            .eq("key_version", versao)
+            .limit(1)
+            .execute()
+        )
+        linhas = amostra.data or []
+        if not linhas:
+            continue
+        row = linhas[0]
+        try:
+            dados = decrypt_pfx_at_rest(
+                row["encrypted_pfx"], row["pfx_iv"], row["pfx_auth_tag"], key_version=versao
+            )
+            ok, detalhe = True, f"{len(dados)} bytes decifrados"
+        except Exception as e:  # noqa: BLE001
+            ok, detalhe = False, str(e)
+        out.append(
+            {
+                "key_version": versao,
+                "ok": ok,
+                "detalhe": detalhe,
+                "fingerprint_amostra": str(row.get("fingerprint") or "")[:16],
+            }
+        )
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # CRUD — install_token
 # ──────────────────────────────────────────────────────────────────────────
 

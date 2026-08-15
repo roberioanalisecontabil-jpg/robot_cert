@@ -18,8 +18,32 @@
     <main class="main-content" id="main-content">
       <header class="page-header">
         <h1>Instalador de Certificados Digitais</h1>
-        <p>Instale certificados com segurança nas máquinas clientes marcados como Não-Exportáveis.</p>
+        <p>Configuração e diagnóstico do módulo. Para instalar, use o Início.</p>
       </header>
+
+      <!-- Diagnóstico: cada bloco corresponde a algo que já falhou em produção
+           sem aviso nenhum. Ver a docstring de /api/cert-installer/diagnostico. -->
+      <section class="card" style="margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+          <div>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Diagnóstico</h2>
+            <p class="text-muted" style="font-size: 0.875rem;">
+              O que existe no servidor agora — binário, assinatura, cofre e chaves de cifragem.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button id="btnRevalidarCofre" class="btn btn-secondary" style="font-size: 0.875rem;">
+              Revalidar cofre
+            </button>
+            <button id="btnRefreshDiag" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
+          </div>
+        </div>
+
+        <div id="diagArea">
+          <p class="text-muted" style="font-size: 0.875rem;">Carregando diagnóstico...</p>
+        </div>
+        <div id="revalidarArea" style="margin-top: 1rem;"></div>
+      </section>
 
       <!-- Painel de Ação de Instalação -->
       <!-- Passo 1: autorizar quais certificados podem ir para o cofre do servidor -->
@@ -193,7 +217,162 @@
         document.getElementById("btnPrepareInstall").addEventListener("click", handlePrepareInstall);
         document.getElementById("btnBaixarInstalador").addEventListener("click", handleBaixarInstalador);
         document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
+        document.getElementById("btnRefreshDiag").addEventListener("click", loadDiagnostico);
+        document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
+        loadDiagnostico();
       });
+
+      // ─── Diagnóstico ───────────────────────────────────────────────────
+      //
+      // A regra de leitura aqui é a mesma do módulo que gera os dados: na
+      // dúvida, dizer que não sabe. `assinado: null` significa "não consegui
+      // determinar" e NÃO pode ser mostrado como "não assinado" — o primeiro
+      // pede investigação, o segundo pede uma compra de certificado.
+
+      function bytesLegiveis(n) {
+        if (!n && n !== 0) return "—";
+        return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : (n / 1024).toFixed(0) + " KB";
+      }
+
+      function linhaDiag(rotulo, valor, tom) {
+        const cor = tom === "ruim" ? "var(--expired-text)"
+                  : tom === "bom" ? "var(--ok-text)"
+                  : "var(--text)";
+        return (
+          "<div style='display:flex;justify-content:space-between;gap:1rem;padding:0.35rem 0;" +
+          "border-bottom:0.5px solid var(--border)'>" +
+          "<span class='text-muted' style='font-size:0.85rem'>" + esc(rotulo) + "</span>" +
+          "<span style='font-size:0.85rem;text-align:right;color:" + cor + "'>" + valor + "</span>" +
+          "</div>"
+        );
+      }
+
+      function blocoDiag(titulo, linhas) {
+        return (
+          "<div style='flex:1;min-width:280px'>" +
+          "<h3 style='font-size:0.95rem;margin-bottom:0.5rem'>" + esc(titulo) + "</h3>" +
+          linhas.join("") +
+          "</div>"
+        );
+      }
+
+      function renderDiagnostico(d) {
+        const b = d.binario || {};
+        const c = d.cofre || {};
+        const k = d.chaves || {};
+
+        const assinatura =
+          b.assinado === true ? [esc(b.assinatura_detalhe || "Assinado."), "bom"]
+          : b.assinado === false ? [esc(b.assinatura_detalhe || "Sem assinatura."), "ruim"]
+          : [esc(b.assinatura_detalhe || "Não foi possível determinar."), "aviso"];
+
+        const blocoBinario = blocoDiag("Instalador (.exe)", [
+          linhaDiag("Presente no servidor", b.existe ? "sim" : "NÃO", b.existe ? "bom" : "ruim"),
+          linhaDiag("Tamanho", bytesLegiveis(b.tamanho_bytes)),
+          linhaDiag("Compilado em", b.modificado_em ? new Date(b.modificado_em).toLocaleString("pt-BR") : "—"),
+          linhaDiag("SHA-256", b.sha256 ? "<code style='font-size:0.72rem'>" + esc(b.sha256.slice(0, 32)) + "…</code>" : "—"),
+          linhaDiag("Assinatura", assinatura[0], assinatura[1]),
+          ...(b.signatarios || []).map((s) =>
+            linhaDiag("Signatário", esc(s.subject), s.expirado ? "ruim" : "bom")
+          ),
+          linhaDiag("Ícone", (d.icone && d.icone.presente) ? "presente" : "ausente",
+                    (d.icone && d.icone.presente) ? "" : "ruim"),
+        ]);
+
+        // "Sem senha cifrada" é o número que mais importa aqui: foi a causa
+        // ÚNICA das seis falhas de instalação registradas em produção, e
+        // descobri-la exigiu ler o agent.log de uma máquina remota.
+        const blocoCofre = c.erro
+          ? blocoDiag("Cofre", [linhaDiag("Erro", esc(c.erro), "ruim")])
+          : blocoDiag("Cofre", [
+              linhaDiag("Certificados guardados", String(c.total ?? "—")),
+              linhaDiag("Máquinas", Object.entries(c.por_maquina || {})
+                .map(([m, n]) => esc(m) + ": " + n).join("<br>") || "—"),
+              linhaDiag("Sem senha cifrada", String(c.sem_senha_cifrada ?? "—"),
+                        c.sem_senha_cifrada ? "ruim" : "bom"),
+              linhaDiag("Senha em claro", String(c.senha_em_claro ?? "—"),
+                        c.senha_em_claro ? "ruim" : "bom"),
+              linhaDiag("Custódia desativada", String(c.bloqueios ?? "—")),
+              linhaDiag("Último envio", c.ultimo_upload ? new Date(c.ultimo_upload).toLocaleString("pt-BR") : "—"),
+            ]);
+
+        // Versão com linhas no cofre e sem chave no ambiente = material
+        // indecifrável AGORA. É o estado em que o cofre ficou em 15/08.
+        const semChave = (k.versoes_sem_chave || []);
+        const blocoChaves = k.erro
+          ? blocoDiag("Chaves de cifragem", [linhaDiag("Erro", esc(k.erro), "ruim")])
+          : blocoDiag("Chaves de cifragem", [
+              linhaDiag("Versão em vigor", String(k.versao_corrente ?? "—")),
+              linhaDiag("Configuradas no ambiente", (k.versoes_configuradas || []).join(", ") || "nenhuma"),
+              linhaDiag("Em uso no cofre", Object.entries(k.linhas_por_versao || {})
+                .map(([v, n]) => "v" + esc(v) + ": " + n).join("<br>") || "—"),
+              linhaDiag("Versões SEM chave", semChave.length ? semChave.join(", ") : "nenhuma",
+                        semChave.length ? "ruim" : "bom"),
+            ]);
+
+        let aviso = "";
+        if (semChave.length) {
+          aviso =
+            "<div class='cg-banner cg-banner--error' style='margin-bottom:1rem'>" +
+            "<span class='cg-banner__icon' aria-hidden='true'>⚠️</span><span class='cg-banner__text'>" +
+            "Há certificados cifrados sob versões de chave que não estão configuradas (" +
+            esc(semChave.join(", ")) + "). Esse material está <strong>indecifrável agora</strong>. " +
+            "Reponha a chave em CERT_ENCRYPTION_KEY_V&lt;n&gt; ou peça um rescan ao agente — " +
+            "o cofre se reconstrói a partir dos arquivos de origem." +
+            "</span></div>";
+        } else if (b.assinado === false) {
+          aviso =
+            "<div class='cg-banner cg-banner--info' style='margin-bottom:1rem'>" +
+            "<span class='cg-banner__icon' aria-hidden='true'>ℹ️</span><span class='cg-banner__text'>" +
+            "O instalador não está assinado: o Windows vai exibir “aplicativo não reconhecido” " +
+            "na primeira execução em cada estação. Mitigação atual é a diretiva de grupo." +
+            "</span></div>";
+        }
+
+        document.getElementById("diagArea").innerHTML =
+          aviso +
+          "<div style='display:flex;gap:2rem;flex-wrap:wrap'>" +
+          blocoBinario + blocoCofre + blocoChaves +
+          "</div>";
+      }
+
+      async function loadDiagnostico() {
+        try {
+          const r = await fetch("/api/cert-installer/diagnostico", { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          renderDiagnostico(await r.json());
+        } catch (e) {
+          document.getElementById("diagArea").innerHTML =
+            "<p style='color:var(--expired-text);font-size:0.875rem'>Não foi possível carregar o diagnóstico: " +
+            esc(e.message) + "</p>";
+        }
+      }
+
+      async function revalidarCofre() {
+        const btn = document.getElementById("btnRevalidarCofre");
+        const area = document.getElementById("revalidarArea");
+        btn.disabled = true;
+        area.innerHTML = "<p class='text-muted' style='font-size:0.85rem'>Decifrando uma amostra de cada versão...</p>";
+        try {
+          const r = await fetch("/api/cert-installer/revalidar-cofre", {
+            method: "POST", headers: getHeaders(true),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.detail || "Falha ao revalidar");
+          const res = d.resultados || [];
+          area.innerHTML = res.length
+            ? res.map((x) =>
+                "<div class='cg-banner " + (x.ok ? "cg-banner--success" : "cg-banner--error") + "' style='margin-bottom:0.5rem'>" +
+                "<span class='cg-banner__text'>Chave v" + esc(String(x.key_version)) + ": " +
+                (x.ok ? "decifrou a amostra" : "FALHOU") + " — " + esc(x.detalhe) + "</span></div>"
+              ).join("")
+            : "<p class='text-muted' style='font-size:0.85rem'>Cofre vazio: nada a revalidar.</p>";
+        } catch (e) {
+          area.innerHTML = "<p style='color:var(--expired-text);font-size:0.875rem'>" + esc(e.message) + "</p>";
+        } finally {
+          btn.disabled = false;
+        }
+      }
 
       // ─── Passo 1: opt-in do cofre ──────────────────────────────────────
       // A lista de candidatos vem do inventário que o portal já tem (metadados

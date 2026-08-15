@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1 e 2 (a–d) aplicadas em 2026-08-15. Etapas 3 a 5 são proposta.**
+> **Status: Etapas 0, 1, 2 (a–d) e 3a aplicadas em 2026-08-15. O resto é proposta.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -313,6 +313,20 @@ depois (§6).
 
 ## 4. Etapa 3 — `/instalador` vira só configuração: **os 10 pontos**
 
+> **Dividida em três levas.** Dez pontos com backend e tela em um commit só
+> seria impossível de revisar e pior ainda de reverter.
+>
+> - **3a ✅ (15/08)** — diagnóstico: pontos **3, 4, 9 e 10**. Só leitura, sem
+>   migration, e é o grupo que faltou no incidente da chave desta manhã.
+> - **3b** — configuração: pontos **2, 5 e 7**. Exige colunas em
+>   `portal_settings`.
+> - **3c** — trilha e limpeza: pontos **1, 6, 8** e a saída da operação.
+>
+> **A seção "2 · Instalar Certificados" NÃO foi removida ainda.** O download
+> mudou-se para o Início na etapa 2d, mas o "Enviar para Estação" (instalação
+> via agente, com `target_machine`) não tem destino lá. Removê-la agora seria
+> tirar uma capacidade sem substituto — fica para a 3c, junto com o destino.
+
 Hoje a página tem três seções: autorizar ao cofre, instalar, e trilha de
 auditoria. As de operação saem para o Início. O que fica, e o que falta:
 
@@ -330,7 +344,7 @@ Já existe (`?nome=`). Virar template configurável, ex. `Instalar {nome} -{toke
 próprio `argv[0]`. Um template que perca o `{token}` quebra toda instalação, e o
 sintoma aparece na máquina do usuário. A validação recusa salvar sem ele.
 
-### 3. Estado do binário no servidor
+### 3. Estado do binário no servidor ✅
 
 `INSTALADOR_AVULSO_EXE.is_file()` hoje só é consultado no clique, e a falha vira
 503 com a mensagem "rode `scripts/build_instalador_avulso.ps1`" — instrução
@@ -338,7 +352,7 @@ inútil para quem está na Vercel, onde o FS é read-only e o exe vem no bundle
 (`e0581d5`). A página deve mostrar: **existe? tamanho? SHA-256? data? de qual
 build veio?** Sem isso, "o download não funciona" é investigação de log.
 
-### 4. Assinatura de código — estado real, não booleano otimista
+### 4. Assinatura de código — estado real, não booleano otimista ✅
 
 Pendência declarada em 11/08: adiada, com mitigação por diretiva de grupo
 (domínio na zona Intranet Local) e **"não verificado em máquina real"**. A página
@@ -380,7 +394,7 @@ máquina**. Hoje a máquina aparece num hint discreto (`instalador.html:339`).
 Precisa ser elemento de primeira classe da tela — quem revoga tem de saber que
 não está revogando nas outras.
 
-### 9. Saúde do cofre — o painel que faltou em 15/08
+### 9. Saúde do cofre — o painel que faltou em 15/08 ✅
 
 Quantos PFX, por máquina, qual `key_version` de cada, quantos ainda sob chave
 antiga, quando foi o último upload. **Foi exatamente o que faltou nesta data:** a
@@ -389,7 +403,7 @@ cifrado, e nada na interface disse isso — descobriu-se por `InvalidTag` numa
 investigação manual. Deve ter botão "revalidar", que tenta decifrar um PFX de
 cada `key_version` e reporta.
 
-### 10. Rotação da chave de cifragem — mecanismo sem interface
+### 10. Rotação da chave de cifragem — mecanismo sem interface ✅
 
 `CERT_ENCRYPTION_KEY_V<n>` existe, foi consertado em `f96eeec` (o config nunca
 expunha as variáveis) e **não tem tela nenhuma**. Mostrar a versão corrente,
