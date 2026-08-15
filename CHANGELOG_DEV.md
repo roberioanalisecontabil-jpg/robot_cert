@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-11                  |
-| **Branch ativa**   | `feat/instalador-avulso` (3 commits, não enviada) |
+| **Data da última atualização** | 2026-08-15                  |
+| **Branch ativa**   | `main`, sincronizada com o origin (último: `40785f2`) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Instalador avulso baixável pelo portal (modelo Ninite), validado ponta a ponta com certificados ICP-Brasil reais (219 testes) |
-| **Próxima tarefa** | Deploy: migration → `CERT_PASSWORD_ENCRYPTION_KEY` na Vercel → push. E obter a `API_KEY` real para destravar o agente do ANALISESRV |
+| **Última tarefa concluída** | Chave composta `(machine_id, fingerprint)` no cofre — migration aplicada em produção, código no ar, 258 testes |
+| **Próxima tarefa** | Validar a coexistência em duas estações de verdade (passo 5 de `docs/PLANO_chave_composta_cofre.md`) — hoje só existe `ANALISESRV` no cofre. E obter a `API_KEY` real para destravar o agente |
 
 ---
 
@@ -41,6 +41,88 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-15 — A bandeja que mentia, o cofre indecifrável e a chave composta
+
+**Objetivo da sessão:** partir do log do ANALISESRV de 14/08 — onde a bandeja acusava o serviço de não responder a um rescan que ele tinha aceitado em 0,7s — e terminar com a identidade do cofre corrigida.
+
+Seis commits, em três blocos. O fio comum entre os dois primeiros: **todos são falhas silenciosas ou de diagnóstico errado** — o sistema não quebrava, ele apontava para o lugar errado.
+
+---
+
+#### Parte 1 — A bandeja acusava o inocente (`ad438d6`, `7ea532f`, `d50de7a`)
+
+Quatro linhas do log em contradição direta:
+
+```
+08:07:23,891 [INFO]    Rescan acionado pelo tray (origem=tray)
+08:09:23,285 [WARNING] Rescan ... expirou sem confirmação
+```
+
+O serviço confirmou o recebimento em 0,7s; a bandeja anunciou falha dois minutos depois. Três defeitos independentes convergindo no mesmo sintoma:
+
+**(1) O ícone ficava permanentemente cinza.** A lógica de piscar existia e estava correta — mas vivia inteira dentro do ramo `if cfg.tray_only:`, e os atalhos chamavam o executável sem esse parâmetro. O ícone nascia cinza (padrão de `_start_tray`) e nunca era tocado, indicando "serviço parado" justamente enquanto o agente trabalhava. Virou `_loop_visual_bandeja`, rodando nos dois modos — no modo normal em thread própria, porque o laço principal fica bloqueado em I/O do portal e não animaria nada. A única diferença entre os modos passa a ser a **origem** do estado: no tray-only quem trabalha é o serviço (`sc query`), no normal é o próprio processo. Somou-se a janela de status (menu da bandeja e duplo clique).
+
+**(2) A confirmação do rescan media o sinal errado.** `last_scan_time` só é gravado no **fim** de um ciclo inteiro e bem-sucedido, depois do upload ao portal. Bastava o envio demorar ou falhar para a bandeja acusar o serviço de não responder. O serviço entrar em `scanning`/`sending` já prova que o comando chegou, e aparece em segundos — o prazo passa a medir o intervalo entre **pedir e começar**, não a duração da varredura. Medidos ~43ms por certificado, ou ~24s para os 556 do ANALISESRV: uma base maior estoura 120s sem que nada esteja errado. A decisão saiu para `estado_do_pedido_rescan`, função pura, porque era a parte que errava e estava presa dentro do laço da bandeja.
+
+**(3) O poll de comandos prendia o laço em silêncio.** O laço principal chama `/api/agent/next` **antes** de olhar o `trigger_event` — o mesmo gatilho do botão "Forçar leitura agora". Essa chamada herdava o timeout do client (300s de leitura), dimensionado para o ingest, que sobe centenas de certificados e é legitimamente lento. Numa resposta lenta do portal (Vercel é serverless, com cold start), o laço ficava preso até **cinco minutos sem escrever nada no log** antes de ler o pedido da bandeja. É o que explica o silêncio de dois minutos entre as duas linhas acima: falta ali a linha "Mudança detectada (ou forçada)". O poll passou a ter 20s (`AGENT_POLL_TIMEOUT_SEC`) e demora acima de 5s vira `WARNING` — este era o ponto que segurava o laço e não deixava rastro. Um poll que falha é inofensivo: a próxima volta tenta em 10s.
+
+---
+
+#### Parte 2 — A `CERT_ENCRYPTION_KEY` trocada sem rotação (`f3658c7`, `f96eeec`)
+
+A chave foi trocada no painel da Vercel sem passar pelo mecanismo de rotação. A linha então existente no cofre virou lixo cifrado — AES-GCM recusando com `InvalidTag`.
+
+**O reflexo errado foi caçar a chave antiga.** O certo era notar que **`cert_pfx_store` não é fonte de verdade**: os PFX do ANALISESRV são, e o agente extrai a senha do nome do arquivo. O cofre se reconstrói sozinho. Nenhum dado foi perdido — o rescan manual pela bandeja repovoou as **33 linhas** às 14:08 UTC.
+
+Duas correções saíram da investigação:
+
+- **`f96eeec`** — a rotação estava documentada no `.env.example` e implementada em `cert_installer._get_server_key`, que busca as chaves antigas em `config.CERT_ENCRYPTION_KEY_V<n>`. Só que **o config nunca expôs essas variáveis**: o `getattr` devolvia vazio e qualquer versão anterior estourava como "chave não configurada". O caminho documentado para consertar era justamente o que não funcionava. Passou a carregar por varredura do ambiente, para que a próxima rotação não exija editar o arquivo.
+- **`f3658c7`** — o `/api/health` informava `cert_vault_key_configurada` e calava sobre a `CERT_PASSWORD_ENCRYPTION_KEY`. Um servidor sem essa segunda chave (ou com ela igual à primeira, que a aplicação recusa) parecia saudável enquanto `/upload-pfx` devolvia 500 em todo certificado. O sintoma aparece longe da causa: só se manifesta na máquina do usuário final, ao executar o instalador avulso, com o único rastro no `agent.log` de uma máquina remota. Dois booleanos resolvem — `configurada` e `distinta`.
+
+---
+
+#### Parte 3 — Chave composta `(machine_id, fingerprint)` (`40785f2`)
+
+Execução de `docs/PLANO_chave_composta_cofre.md`, escrito em 08/08 e até aqui marcado "nada aplicado".
+
+O fingerprint SHA-256 identifica **o certificado, não a instalação dele**. Num escritório contábil o mesmo A1 e-CNPJ costuma estar em várias estações — que é exatamente o domínio deste projeto. Sob unicidade global, autorizar o certificado X na estação B fazia o upsert sobrescrever a linha da A, trocando o `machine_id`; como `listar_optin_fingerprints` filtra por `machine_id`, o agente de A parava de receber X. Sem erro, sem log, sem mudança na tela de A — **a mesma classe de falha do bug de 08/08**.
+
+**A revogação era a metade perigosa.** `revogar_do_cofre` apagava por fingerprint nas duas tabelas — correto enquanto só podia existir uma linha por certificado. Com a chave composta, deixá-la como estava transformaria "revogar nesta estação" em "apagar o material de todas". Por isso `machine_id` ficou **obrigatório** ali e na rota DELETE, sem default: faltando o parâmetro a chamada é recusada com 422 em vez de apagar demais. Essa função tinha de mudar junto com a migration, não depois.
+
+**Arquivos:**
+- `supabase/migrations/20260815160000_cofre_chave_composta.sql` → PK `(machine_id, fingerprint)` em `cert_vault_optin`; UNIQUE composto em `cert_pfx_store` (o PK `id` UUID continua)
+- `app/cert_installer.py` → os dois `on_conflict`; `revogar_do_cofre(fingerprint, machine_id)` filtrando pelos dois nos dois deletes
+- `app/main.py` → `machine_id` como `Query(...)` obrigatório no DELETE; comentário da barreira de upload atualizado (a chave composta fechou a metade **destrutiva** do vetor — um upload declarado como outra estação cria linha própria em vez de sobrescrever; o que ela *não* faz é decidir se aquele PFX podia ser guardado, e isso continua sendo trabalho da barreira)
+- `templates/instalador.html` → `machine_id` no DELETE, e a confirmação diz de qual máquina
+
+**O fake de Supabase precisou mudar antes dos testes.** O `_Query.upsert` comparava **uma coluna só** no `on_conflict` — colidiria onde o banco não colide, escondendo justamente o comportamento sob teste. Passou a aceitar chave composta como o PostgREST aceita (`"col_a,col_b"`).
+
+**Testes acrescentados (5):** coexistência da autorização em A e B; dois uploads do mesmo fingerprint gerando duas linhas com materiais distintos (aqui `upsert_pfx` roda de verdade, sem patch, porque o que se testa é o `on_conflict`); revogar em A não alcança B; revogar sem `machine_id` recusado com 422; e a asserção em `test_cert_installer_hardening` de que os dois deletes filtram pela máquina.
+
+---
+
+#### Validação
+
+- Suíte completa: **258 passed**
+- Migration aplicada em produção pelo SQL Editor. `pg_constraint` confirma exatamente três linhas — `cert_vault_optin_pkey PRIMARY KEY (machine_id, fingerprint)`, `cert_pfx_store_machine_fingerprint_key UNIQUE (machine_id, fingerprint)`, `cert_pfx_store_pkey PRIMARY KEY (id)` — **sem sobra** de `UNIQUE (fingerprint)`
+- Deploy verificado pelo `openapi.json` de produção: `machine_id` consta como query param `required: true` no DELETE
+- Dados intactos após a migration: 33 linhas em `cert_pfx_store`, 34 em `cert_vault_optin`
+- `/api/health` verde, incluindo `cert_senha_key_distinta`
+
+#### Decisões técnicas
+
+- **Migration e deploy em janela única, sem migration em duas fases.** Nos dois sentidos há incompatibilidade momentânea (`42P10 — no unique or exclusion constraint matching the ON CONFLICT specification`): código velho contra schema novo, ou o inverso. A alternativa zero-downtime seria adicionar a constraint composta → deploy → derrubar a antiga. Para 33 linhas numa máquina só, com agente rodando a cada 24h e o resto sendo clique manual, é cerimônia demais. Na prática o deploy já estava no ar quando foi verificado.
+- **`machine_id` obrigatório, sem default, na revogação.** Um default reintroduziria pela porta dos fundos o apagão que a mudança existe para evitar.
+- **A coluna `pfx_password` antiga continua sem uso e sem `DROP`** — mesma decisão de 11/08.
+
+#### Pendências
+
+1. **Passo 5 do plano: validar a coexistência em duas estações reais.** Todas as 33 linhas são de `ANALISESRV` — só existe uma máquina no cofre. Está coberto por teste, **não por campo**.
+2. `API_KEY` real do ANALISESRV — o valor do `.env` local **não** é o da Vercel (levou 401 ao tentar `/api/agent/commands`). Idem `CERT_ENCRYPTION_KEY`. Só o `SUPABASE_SERVICE_KEY` local funciona contra produção.
+3. Migration neste projeto **só pelo SQL Editor**: não há `DATABASE_URL` no `.env` nem CLI do Supabase, e o service key fala com o PostgREST, que não executa DDL.
 
 ---
 
