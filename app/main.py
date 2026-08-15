@@ -472,44 +472,62 @@ class EnqueueCommandBody(BaseModel):
     command: str = Field(..., description="mover_vencidos | rescan | ping")
 
 
+# A `pagina_ativa` acende o item correspondente em templates/_sidebar.html.
+# Rota que esquecer de passa-la renderiza o menu sem nenhum item aceso - falha
+# silenciosa, por isso `tests/test_sidebar_partial.py` cobre todas elas.
 @app.get("/", response_class=HTMLResponse)
 def painel(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(
+        request=request, name="index.html", context={"pagina_ativa": "inicio"}
+    )
 
 
 @app.get("/configuracao", response_class=HTMLResponse)
 def pagina_configuracao(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="configuracao.html")
+    return templates.TemplateResponse(
+        request=request, name="configuracao.html", context={"pagina_ativa": "configuracao"}
+    )
 
 
 @app.get("/login", response_class=HTMLResponse)
 def pagina_login(request: Request) -> HTMLResponse:
+    # Sem sidebar: quem nao entrou ainda nao tem para onde navegar.
     return templates.TemplateResponse(request=request, name="login.html")
 
 
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_usuarios(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="usuarios.html")
+    return templates.TemplateResponse(
+        request=request, name="usuarios.html", context={"pagina_ativa": "usuarios"}
+    )
 
 
 @app.get("/historico", response_class=HTMLResponse)
 def pagina_historico(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="historico.html")
+    return templates.TemplateResponse(
+        request=request, name="historico.html", context={"pagina_ativa": "historico"}
+    )
 
 
 @app.get("/vencidos", response_class=HTMLResponse)
 def pagina_vencidos(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="vencidos.html")
+    return templates.TemplateResponse(
+        request=request, name="vencidos.html", context={"pagina_ativa": "vencidos"}
+    )
 
 
 @app.get("/duplicidades", response_class=HTMLResponse)
 def pagina_duplicidades(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="duplicidades.html")
+    return templates.TemplateResponse(
+        request=request, name="duplicidades.html", context={"pagina_ativa": "duplicidades"}
+    )
 
 
 @app.get("/acompanhamento", response_class=HTMLResponse)
 def pagina_colaborador_certificados(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="colaborador_certificados.html")
+    return templates.TemplateResponse(
+        request=request, name="colaborador_certificados.html", context={"pagina_ativa": "acompanhamento"}
+    )
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -2649,5 +2667,7 @@ def page_instalador(request: Request) -> HTMLResponse:
     # do Starlette com "TypeError: unhashable type: 'dict'", e a página do
     # módulo respondia 500 em toda requisição.
     # O nonce vem de request.state.nonce no template, como nos demais.
-    return templates.TemplateResponse(request=request, name="instalador.html")
+    return templates.TemplateResponse(
+        request=request, name="instalador.html", context={"pagina_ativa": "instalador"}
+    )
 
