@@ -59,6 +59,21 @@ HISTORICO_CACHE_TTL_SEC = _env_int(
 # Gere com: python -c "import secrets; print(secrets.token_hex(32))"
 CERT_ENCRYPTION_KEY = (os.getenv("CERT_ENCRYPTION_KEY") or "").strip()
 
+# Chaves de versões anteriores (CERT_ENCRYPTION_KEY_V1, _V2, ...). Cada linha de
+# cert_pfx_store grava a versão sob a qual foi cifrada, e o decrypt busca a chave
+# dessa versão aqui — é o que permite trocar a chave em vigor sem tornar ilegível
+# o que já está no cofre. Carregadas por varredura do ambiente para que uma nova
+# rotação não exija editar este arquivo.
+_PREFIXO_CHAVE_ANTERIOR = "CERT_ENCRYPTION_KEY_V"
+globals().update(
+    {
+        nome: (valor or "").strip()
+        for nome, valor in os.environ.items()
+        if nome.startswith(_PREFIXO_CHAVE_ANTERIOR)
+        and nome[len(_PREFIXO_CHAVE_ANTERIOR) :].isdigit()
+    }
+)
+
 # Chave AES-256 para a SENHA do PFX (hex, 64 chars). Tem de ser diferente de
 # CERT_ENCRYPTION_KEY: o motivo de a senha ter saído do banco em 03/08 foi estar
 # cifrada com a MESMA chave do PFX, de modo que um vazamento entregava os dois

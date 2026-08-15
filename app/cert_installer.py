@@ -50,9 +50,10 @@ def _get_server_key(version: int = CURRENT_KEY_VERSION) -> bytes:
     """
     Chave AES-256 do servidor (32 bytes) a partir do hex no .env.
 
-    `version` prepara a rotação: a chave em vigor vem de CERT_ENCRYPTION_KEY e
-    as anteriores de CERT_ENCRYPTION_KEY_V<n>. Enquanto só existe a versão 1,
-    o comportamento é idêntico ao anterior.
+    `version` sustenta a rotação: a chave em vigor vem de CERT_ENCRYPTION_KEY e
+    as anteriores de CERT_ENCRYPTION_KEY_V<n>, que o config carrega do ambiente.
+    Até 15/08 esse segundo caminho não funcionava — o config não expunha as
+    variáveis, e qualquer versão anterior estourava como "chave não configurada".
     """
     if version == CURRENT_KEY_VERSION:
         raw = config.CERT_ENCRYPTION_KEY
