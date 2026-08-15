@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapa 0 aplicada em 2026-08-15. Etapas 1 a 5 são proposta.**
+> **Status: Etapas 0 e 1 aplicadas em 2026-08-15. Etapas 2 a 5 são proposta.**
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
 
@@ -128,21 +128,33 @@ de confiar numa lista escrita à mão.
 
 ---
 
-## 2. Etapa 1 — `Dashboard` → `Início`
+## 2. Etapa 1 — `Dashboard` → `Início` ✅ *(aplicada em 2026-08-15)*
 
-- **A rota `/` não muda.** Renomear a URL quebraria favoritos e o link que
-  existe em `configuracao.html:362`.
-- Trocar o rótulo (um arquivo só, depois da etapa 0) e os textos que citam
-  "Dashboard" em outras telas.
-- **Não renomear `LS_PER_PAGE_DASH = "cg_per_page_dashboard"`**
-  (`index.html:247`). É chave de `localStorage`: mudá-la descarta a preferência
-  de itens por página de todo mundo, sem aviso. Nome interno e rótulo não
-  precisam concordar.
-- **Crítica de navegação:** "Início" e "Dashboard" lado a lado na mesma sidebar
-  é ambíguo — os dois nomes prometem "a visão geral". A distinção precisa ficar
-  na ordem e no ícone: **Início = operação** (é onde se faz), **Dashboard =
-  análise** (é onde se olha). Se ficar confuso na tela, o problema não é o
-  rótulo, é ter duas páginas competindo pelo mesmo papel.
+- **A rota `/` não mudou.** Renomear a URL quebraria favoritos e o link interno
+  da tela de configuração.
+- Rótulo trocado no partial (um arquivo, graças à etapa 0). Além dele, só havia
+  **um** texto visível citando o nome — a mensagem "Volte ao Dashboard e atualize
+  a tabela" em `configuracao.html`.
+- Três **comentários de código** que nomeavam a página também foram atualizados.
+  Não é cosmética: quando o Dashboard de verdade existir (etapa 4), um comentário
+  dizendo "modelo Dashboard/Histórico/Vencidos" vai apontar para a página errada.
+- **`LS_PER_PAGE_DASH = "cg_per_page_dashboard"` foi preservada**, e agora há
+  teste que falha se alguém a renomear junto com o rótulo. É chave de
+  `localStorage`: mudá-la descartaria a preferência de itens por página de todo
+  usuário existente — sem aviso e sem erro, porque ler chave inexistente devolve
+  `null` e a tela cai no padrão. Nome interno e rótulo não precisam concordar.
+
+**Decisão que o pedido não continha: o ícone.** O item de `/` usava a grade 2×2,
+que é o ícone canônico de *dashboard*. Mantê-lo em "Início" deixaria o menu
+dizendo "dashboard" em desenho enquanto diz "Início" em texto — e, pior, o
+Dashboard da etapa 4 chegaria sem o ícone que é dele. Trocado por uma casa; a
+grade fica reservada.
+
+**Crítica que permanece em aberto para a etapa 4:** "Início" e "Dashboard" lado a
+lado prometem os dois "a visão geral". A distinção tem de ficar clara na ordem e
+no ícone — **Início = operação** (é onde se faz), **Dashboard = análise** (é onde
+se olha). Se ficar confuso na tela, o problema não será o rótulo: será ter duas
+páginas competindo pelo mesmo papel.
 
 ---
 

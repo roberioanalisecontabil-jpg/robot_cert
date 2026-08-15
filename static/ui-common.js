@@ -540,7 +540,7 @@ function renderEmptyState(target, { title = "Nenhum registro encontrado", descri
   }
 }
 
-/** Lista de página (janela de até `maxBotões`) igual ao modelo Histórico/Dashboard/Vencidos. */
+/** Lista de página (janela de até `maxBotões`) igual ao modelo Histórico/Início/Vencidos. */
 function cgWindowPaginas(totalPaginas, paginaAtual, maxBotões) {
   const mb = typeof maxBotões === "number" ? maxBotões : 5;
   const total = Math.max(1, Number(totalPaginas) || 1);
