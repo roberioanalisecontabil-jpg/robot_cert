@@ -83,6 +83,12 @@ async def require_auth(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+# Definidos em `auth` porque o login e o envio de alertas precisam da mesma
+# regra; duas cópias divergiriam, e a divergência permissiva não daria sintoma.
+PAPEIS_VALIDOS = auth.PAPEIS_VALIDOS
+conta_ativa = auth.conta_ativa
+
+
 async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
     if token.role != "admin":
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
@@ -560,11 +566,17 @@ def login(body: LoginBody) -> dict:
         user = r.data[0] if r.data else None
         if not user or not auth.verify_password(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
-        if (user.get("role") or "").strip().lower() == "disabled":
+        if not conta_ativa(user):
             raise HTTPException(status_code=403, detail="Usuário desativado. Procure um administrador.")
-        
+
         token = auth.create_access_token({"sub": user["email"], "role": user["role"]})
         return {"access_token": token, "token_type": "bearer", "role": user["role"]}
+    except HTTPException:
+        # O `except Exception` abaixo engolia estas: uma senha errada saía como
+        # 500 com "401: E-mail ou senha incorretos." no corpo — mensagem certa,
+        # status errado, e todo tratamento no front que olhasse o código via
+        # "erro do servidor" onde houve credencial inválida.
+        raise
     except Exception as e:
         logger.exception("Erro no login")
         raise HTTPException(status_code=500, detail=str(e))
@@ -575,7 +587,9 @@ def list_users() -> List[dict]:
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb: return []
-    r = sb.table("users").select("id, email, full_name, role, created_at").execute()
+    r = sb.table("users").select(
+        "id, email, full_name, role, ativo, gestor_id, created_at"
+    ).execute()
     return r.data
 
 
@@ -590,6 +604,11 @@ class UserUpdateBody(BaseModel):
     email: str
     full_name: str
     role: str = "user"
+    # Omitir mantém o que está gravado. `role: "disabled"` continua aceito como
+    # forma antiga de desativar (ver `update_user`), mas não escreve mais em
+    # `role` — o papel deixou de ser o lugar onde o estado mora.
+    ativo: Optional[bool] = None
+    gestor_id: Optional[str] = None
 
 
 class UserResetPasswordBody(BaseModel):
@@ -680,12 +699,12 @@ async def import_users(file: UploadFile = File(...)) -> dict:
         if not nome or not email or not senha or not role:
             ignorados += 1
             continue
-        if role not in ("admin", "user"):
+        if role not in PAPEIS_VALIDOS:
             erros.append(
                 {
                     "linha": linha,
                     "email": email,
-                    "erro": "Nível inválido. Use exatamente 'admin' ou 'user'.",
+                    "erro": f"Nível inválido. Use exatamente: {', '.join(PAPEIS_VALIDOS)}.",
                 }
             )
             continue
@@ -718,13 +737,24 @@ def create_user(body: UserCreateBody) -> dict:
     sb = _supabase()
     if not sb: raise HTTPException(status_code=503)
     
+    # A validação não existia aqui: qualquer string virava papel. Com o CHECK
+    # no banco isso passaria a estourar como 400 genérico do PostgREST, sem
+    # dizer qual valor era aceito.
+    role = (body.role or "user").strip().lower()
+    if role not in PAPEIS_VALIDOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
+        )
+
     hash_pw = auth.get_password_hash(body.password)
     try:
         sb.table("users").insert({
             "email": body.email,
             "password_hash": hash_pw,
             "full_name": body.full_name,
-            "role": body.role
+            "role": role,
+            "ativo": True,
         }).execute()
         return {"ok": True}
     except Exception as e:
@@ -738,16 +768,37 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
     if not sb:
         raise HTTPException(status_code=503)
     role = (body.role or "user").strip().lower()
-    if role not in ("admin", "user", "disabled"):
-        raise HTTPException(status_code=422, detail="Nível inválido. Use: admin, user ou disabled.")
+    ativo = body.ativo
+
+    # Cliente antigo mandando role="disabled" quer dizer "desative" — nunca
+    # quis dizer "o papel dele agora é disabled", embora fosse isso que
+    # acontecia. Traduz para o estado e preserva o papel gravado.
+    if role == "disabled":
+        ativo = False
+        role = None
+
+    if role is not None and role not in PAPEIS_VALIDOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
+        )
+
+    campos: Dict[str, Any] = {
+        "email": body.email.strip().lower(),
+        "full_name": body.full_name.strip(),
+    }
+    if role is not None:
+        campos["role"] = role
+    if ativo is not None:
+        campos["ativo"] = bool(ativo)
+    if body.gestor_id is not None:
+        gid = body.gestor_id.strip()
+        if gid and gid == user_id:
+            raise HTTPException(status_code=422, detail="Um usuário não pode ser gestor de si mesmo.")
+        campos["gestor_id"] = gid or None
+
     try:
-        sb.table("users").update(
-            {
-                "email": body.email.strip().lower(),
-                "full_name": body.full_name.strip(),
-                "role": role,
-            }
-        ).eq("id", user_id).execute()
+        sb.table("users").update(campos).eq("id", user_id).execute()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -772,12 +823,43 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
 
 @app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_admin)])
 def deactivate_user(user_id: str) -> dict:
+    """
+    Desativa a conta **preservando o papel**.
+
+    Até 15/08 isto gravava `role = "disabled"`, o que apagava o papel: reativar
+    um administrador virava adivinhação, e o mesmo teria acontecido com gestor —
+    levando junto o sentido das carteiras que ele tivesse criado.
+    """
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb:
         raise HTTPException(status_code=503)
     try:
-        sb.table("users").update({"role": "disabled"}).eq("id", user_id).execute()
+        sb.table("users").update({"ativo": False}).eq("id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_admin)])
+def reactivate_user(user_id: str) -> dict:
+    """
+    Reativa a conta, devolvendo o papel que ela sempre teve.
+
+    Não existia contrapartida para o desativar: o único caminho de volta era
+    editar o nível na mão e escolher um papel de memória. Com estado e papel
+    separados, reativar deixa de ser uma decisão.
+
+    As contas desativadas ANTES desta separação são a exceção: o papel delas foi
+    sobrescrito e a migration as pôs em 'user', o menor privilégio. Se alguma
+    era admin, promover é ato explícito — e é assim que deve ser.
+    """
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503)
+    try:
+        sb.table("users").update({"ativo": True}).eq("id", user_id).execute()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

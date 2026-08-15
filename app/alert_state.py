@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from app import config
+from app.auth import conta_ativa
 from app.settings_state import load_settings, _supabase, _load_colaborador_file_dict
 from app.cert_scanner import scan_folder, cert_to_public_dict
 from app.smtp_service import send_smtp_email
@@ -138,11 +139,16 @@ def _get_admin_emails() -> List[str]:
     if not client:
         return []
     try:
-        r = client.table("users").select("email, role").eq("role", "admin").execute()
+        # O filtro de ativo saiu da consulta para o Python quando papel e estado
+        # se separaram (15/08). Enquanto `disabled` era um papel, `.eq("role",
+        # "admin")` já excluía o desativado por acidente; com as colunas
+        # separadas, o admin desativado continua com role='admin' e voltaria a
+        # receber e-mail. É regressão silenciosa: ninguém reclama de receber.
+        r = client.table("users").select("email, role, ativo").eq("role", "admin").execute()
         out = []
         for row in (r.data or []):
             email = str(row.get("email") or "").strip().lower()
-            if email:
+            if email and conta_ativa(row):
                 out.append(email)
         return sorted(set(out))
     except Exception as e:
@@ -203,12 +209,11 @@ def _emails_ativos() -> Optional[set]:
     if not client:
         return None
     try:
-        r = client.table("users").select("email, role").execute()
+        r = client.table("users").select("email, role, ativo").execute()
         return {
             str(row.get("email") or "").strip().lower()
             for row in (r.data or [])
-            if str(row.get("email") or "").strip()
-            and str(row.get("role") or "").strip().lower() != "disabled"
+            if str(row.get("email") or "").strip() and conta_ativa(row)
         }
     except Exception as e:
         logger.warning(f"Não foi possível listar usuários ativos para filtrar alertas: {e}")

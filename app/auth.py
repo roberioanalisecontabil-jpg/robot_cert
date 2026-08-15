@@ -10,6 +10,30 @@ from pydantic import BaseModel
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
+# Papel e estado da conta são coisas separadas desde 15/08/2026. Antes,
+# desativar alguém gravava role='disabled' e apagava o papel — reativar um
+# administrador virava adivinhação.
+PAPEIS_VALIDOS = ("admin", "gestor", "user")
+
+
+def conta_ativa(user: dict) -> bool:
+    """
+    A conta pode entrar e ser considerada em listagens de gente ativa?
+
+    Mora aqui, e não em `main`, porque quem decide isso são dois módulos: o
+    login e o envio de alertas. Duas cópias da regra divergiriam, e a que
+    divergisse para o lado permissivo não daria sintoma nenhum — alguém
+    desativado voltaria a receber e-mail sem ninguém notar.
+
+    O valor legado 'disabled' continua barrando de propósito: numa base onde a
+    migration ainda não rodou, olhar só `ativo` (ausente, logo verdadeiro por
+    omissão) liberaria exatamente quem foi desativado. Na dúvida, barra.
+    """
+    if (user.get("role") or "").strip().lower() == "disabled":
+        return False
+    ativo = user.get("ativo")
+    return True if ativo is None else bool(ativo)
+
 
 def _get_secret_key() -> str:
     secret = (os.getenv("JWT_SECRET_KEY") or "").strip()

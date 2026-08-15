@@ -35,6 +35,7 @@
         .role-badge { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
         .role-admin { background-color: var(--expired-bg); color: var(--expired-text); }
         .role-user { background-color: var(--ok-bg); color: var(--ok-text); }
+        .role-gestor { background-color: var(--expiring-bg, var(--ok-bg)); color: var(--expiring-text, var(--ok-text)); }
         .role-disabled { background-color: var(--border); color: var(--text-muted); }
         .row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
         .btn-action { 
@@ -88,6 +89,7 @@
                         <label for="new-role">Nível de acesso</label>
                         <select id="new-role" class="path-input">
                             <option value="user">Usuário</option>
+                            <option value="gestor">Gestor</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
@@ -107,7 +109,7 @@
                     </div>
                     <button type="submit" class="primary">Importar CSV</button>
                 </form>
-                <p class="hint" style="margin-top: 0.6rem;">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel/role</code>, use exatamente: <code>admin</code> ou <code>user</code>.</p>
+                <p class="hint" style="margin-top: 0.6rem;">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel/role</code>, use exatamente: <code>admin</code>, <code>gestor</code> ou <code>user</code>.</p>
                 <p id="msg-import" class="hint" style="margin-top: 0.8rem;"></p>
             </div>
         </section>
@@ -121,6 +123,7 @@
                 <select id="user-role-filter" class="path-input" style="max-width: 180px;">
                     <option value="todos">Nível: Todos</option>
                     <option value="admin">Nível: Admin</option>
+                    <option value="gestor">Nível: Gestor</option>
                     <option value="user">Nível: Usuário</option>
                 </select>
                 <label for="user-status-filter" class="cg-sr-only">Filtrar por status</label>
@@ -164,17 +167,26 @@
             return d.innerHTML;
         }
 
+        // Papel e estado da conta são colunas separadas desde 15/08. Espelha
+        // `auth.conta_ativa`: 'disabled' era o único jeito antigo de desativar e
+        // continua barrando, senão um usuário vindo de base sem a migration
+        // apareceria como ativo (a coluna ausente vira undefined).
+        function estaAtivo(u) {
+            if (String(u.role || '').toLowerCase() === 'disabled') return false;
+            return u.ativo === undefined || u.ativo === null ? true : !!u.ativo;
+        }
+
         function roleLabel(role) {
             const r = String(role || '').toLowerCase();
             if (r === 'admin') return 'ADMIN';
-            if (r === 'disabled') return 'DESATIVADO';
+            if (r === 'gestor') return 'GESTOR';
             return 'USUÁRIO';
         }
 
         function roleClass(role) {
             const r = String(role || '').toLowerCase();
             if (r === 'admin') return 'role-admin';
-            if (r === 'disabled') return 'role-disabled';
+            if (r === 'gestor') return 'role-gestor';
             return 'role-user';
         }
 
@@ -185,11 +197,11 @@
             const statusFilter = (document.getElementById('user-status-filter').value || 'todos').toLowerCase();
             const users = usersCache.filter((u) => {
                 const role = String(u.role || '').toLowerCase();
-                const isDisabled = role === 'disabled';
+                const ativo = estaAtivo(u);
 
                 if (roleFilter !== 'todos' && role !== roleFilter) return false;
-                if (statusFilter === 'ativo' && isDisabled) return false;
-                if (statusFilter === 'desativado' && !isDisabled) return false;
+                if (statusFilter === 'ativo' && !ativo) return false;
+                if (statusFilter === 'desativado' && ativo) return false;
 
                 if (!q) return true;
                 const hay = [u.full_name || '', u.email || ''].join(' ').toLowerCase();
@@ -223,15 +235,18 @@
                 <tr role="row">
                     <td role="cell" data-label="Nome"><strong>${esc(u.full_name || '—')}</strong></td>
                     <td role="cell" data-label="E-mail">${esc(u.email)}</td>
-                    <td role="cell" data-label="Nível"><span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span></td>
+                    <td role="cell" data-label="Nível">
+                        <span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span>
+                        ${estaAtivo(u) ? '' : '<span class="role-badge role-disabled" style="margin-left: 0.35rem;">INATIVO</span>'}
+                    </td>
                     <td role="cell" data-label="Criado em">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                     <td role="cell">
                         <div class="row-actions">
                             <button class="btn-action" data-action="editar" data-id="${u.id}">Editar</button>
                             <button class="btn-action" data-action="redefinir" data-id="${u.id}">Redefinir senha</button>
-                            ${String(u.role || '').toLowerCase() !== 'disabled'
+                            ${estaAtivo(u)
                                 ? `<button class="btn-action btn-danger" data-action="desativar" data-id="${u.id}">Desativar</button>`
-                                : ''}
+                                : `<button class="btn-action" data-action="reativar" data-id="${u.id}">Reativar</button>`}
                         </div>
                     </td>
                 </tr>
@@ -247,6 +262,7 @@
                 if (act === 'editar') editarUsuario(id);
                 else if (act === 'redefinir') redefinirSenha(id);
                 else if (act === 'desativar') desativarUsuario(id);
+                else if (act === 'reativar') reativarUsuario(id);
             };
         }
 
@@ -278,7 +294,7 @@
             const email = prompt('E-mail:', user.email || '');
             if (email === null) return;
             const roleAtual = String(user.role || 'user').toLowerCase();
-            const role = prompt('Nível (admin | user | disabled):', roleAtual);
+            const role = prompt('Nível (admin | gestor | user):', roleAtual);
             if (role === null) return;
             const r = await fetch(`/api/users/${id}`, {
                 method: 'PUT',
@@ -323,7 +339,23 @@
                 return;
             }
             await loadUsers();
-            showToast('Usuário desativado.', 'success');
+            showToast('Usuário desativado. O nível de acesso foi preservado.', 'success');
+        }
+
+        async function reativarUsuario(id) {
+            const u = usersCache.find((x) => x.id === id);
+            const nivel = roleLabel(u && u.role);
+            if (!confirm(`Reativar este usuário como ${nivel}?`)) return;
+            const r = await fetch(`/api/users/${id}/reactivate`, {
+                method: 'POST',
+                headers: getHeaders(true),
+            });
+            if (!r.ok) {
+                showToast('Não foi possível reativar o usuário: ' + (await mensagemCorpoErro(r)), 'error');
+                return;
+            }
+            await loadUsers();
+            showToast(`Usuário reativado como ${nivel}.`, 'success');
         }
 
         document.getElementById('create-user-form').addEventListener('submit', async (e) => {

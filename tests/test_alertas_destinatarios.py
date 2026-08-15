@@ -51,16 +51,21 @@ def _banco(users: list, selecoes: list) -> _FakeSupabase:
     return _FakeSupabase({"users": users, "colaborador_cert_selecoes": selecoes})
 
 
+# `saiu@` está na forma NOVA (papel preservado, estado desligado) e `legado@` na
+# forma ANTIGA, de antes de 15/08, quando desativar sobrescrevia o papel. As duas
+# precisam barrar: a segunda porque bases sem a migration aplicada ainda a têm.
 USERS = [
-    {"email": "ativo@empresa.com", "role": "user"},
-    {"email": "chefe@empresa.com", "role": "admin"},
-    {"email": "saiu@empresa.com", "role": "disabled"},
+    {"email": "ativo@empresa.com", "role": "user", "ativo": True},
+    {"email": "chefe@empresa.com", "role": "admin", "ativo": True},
+    {"email": "saiu@empresa.com", "role": "user", "ativo": False},
+    {"email": "legado@empresa.com", "role": "disabled"},
 ]
 
 SELECOES = [
     {"user_email": "ativo@empresa.com", "documentos": ["27049257000194"]},
     {"user_email": "chefe@empresa.com", "documentos": ["37894958000183"]},
     {"user_email": "saiu@empresa.com", "documentos": ["27049257000194"]},
+    {"user_email": "legado@empresa.com", "documentos": ["27049257000194"]},
     {"user_email": "agent@internal", "documentos": ["12345678000190"]},
     {"user_email": "fantasma@outrodominio.com", "documentos": ["27049257000194"]},
 ]
@@ -71,6 +76,21 @@ def test_usuario_desativado_nao_recebe() -> None:
         r = als._get_todos_colaboradores_selecoes()
 
     assert "saiu@empresa.com" not in r, "desativar no painel tem de parar o e-mail"
+
+
+def test_desativado_na_forma_antiga_tambem_nao_recebe() -> None:
+    """
+    `role='disabled'` continua barrando.
+
+    Enquanto o papel guardava o estado, este era o único jeito de desativar. Se
+    a leitura passasse a olhar só `ativo`, a coluna ausente valeria `True` por
+    omissão e todo desativado de antes da migration voltaria a receber e-mail —
+    sem erro, sem log, e sem ninguém para reclamar de receber a mais.
+    """
+    with patch.object(als, "_supabase", lambda: _banco(USERS, SELECOES)):
+        r = als._get_todos_colaboradores_selecoes()
+
+    assert "legado@empresa.com" not in r
 
 
 def test_email_sem_conta_nao_recebe() -> None:
