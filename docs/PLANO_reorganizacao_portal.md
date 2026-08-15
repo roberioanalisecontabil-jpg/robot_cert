@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0 e 1 aplicadas em 2026-08-15. Etapas 2 a 5 são proposta.**
+> **Status: Etapas 0, 1 e 2a aplicadas em 2026-08-15. O resto é proposta.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -500,8 +500,8 @@ Etapa 0  sidebar em partial            ✅ aplicada
    ↓
 Etapa 1  Dashboard → Início            ✅ aplicada
    ↓
-Etapa 2a modelo de usuário             ← role vs ativo (§6.1) + gestor_id (§6.2)
-   ↓                                      a carteira depende de user_id estável
+Etapa 2a modelo de usuário             ✅ aplicada — role vs ativo + gestor_id
+   ↓
 Etapa 2b custódia: opt-in → opt-out    ← fail-closed ESTRUTURAL (§3.2a)
    ↓                                      exclui vencido e ilegível (§3.2b)
 Etapa 2c carteira + barreira no server ← a tela filtra, o servidor decide (§3.4.5)
@@ -527,9 +527,15 @@ conjunto realista.
 
 **Consertos pequenos que valem antes de tudo**, porque ficam mais caros depois:
 
-1. Login devolvendo 500 em credencial inválida (§0.5) — uma linha, e a etapa 2a
-   mexe exatamente nesse handler
+1. ~~Login devolvendo 500 em credencial inválida (§0.5)~~ — feito na etapa 2a,
+   que mexia no mesmo handler
 2. `colaborador_cert_selecoes` chaveada por `user_id` — enquanto é 1 linha
+
+**Aberto, descoberto na 2a:** o JWT dura 24h e é stateless, então desativar
+alguém **não invalida o token que já está no navegador dele** — o acesso cai só
+na expiração. Era irrelevante quando desativar era raro; com a hierarquia, passa
+a ser a operação de revogação principal. Resolver exige checagem por requisição
+ou versionamento de token, e merece etapa própria.
 
 ---
 
