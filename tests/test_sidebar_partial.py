@@ -31,6 +31,7 @@ PARTIAL = TEMPLATES / "_sidebar.html"
 PAGINAS = [
     ("/", "inicio", "/"),
     ("/dashboard", "dashboard", "/dashboard"),
+    ("/carteiras", "carteiras", "/carteiras"),
     ("/historico", "historico", "/historico"),
     ("/vencidos", "vencidos", "/vencidos"),
     ("/duplicidades", "duplicidades", "/duplicidades"),

@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0 a 4 aplicadas em 2026-08-15. Falta a 5 (UI do gestor).**
+> **Status: TODAS as etapas (0 a 5) aplicadas em 2026-08-15.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -500,7 +500,7 @@ mil linhas passou a paginar, e o teto virou explícito onde não vale paginar.
 
 ---
 
-## 6. Etapa 5 — Gestor / operador: a UI de gestão
+## 6. Etapa 5 — Gestor / operador: a UI de gestão ✅ *(aplicada em 2026-08-15)*
 
 **Deixou de ser "futuro" em 15/08.** O modelo de carteira subiu para a etapa 2
 (§3.5), porque é ele que torna o Início correto para quem não é admin. O que
@@ -528,13 +528,29 @@ existirem gestores, essa migration mexe em vínculos e o risco cresce.
 associação, e o caso "dois gestores para a mesma pessoa" não existe hoje —
 resolver o problema que se tem.
 
-### 6.3 Liberação de certificados: ver §3.3
+### 6.3 Liberação de certificados: ver §3.3 ✅
 
-A carteira foi detalhada na etapa 2. O que fica aqui é a tela do gestor —
-atribuir e revogar documentos por operador — e a **trilha**, que deixou de ser
-opcional: com o gestor podendo atribuir qualquer cliente do acervo (decisão de
-15/08), quem atribuiu o quê a quem e quando é a única forma de reconstruir o que
-aconteceu se uma conta de gestor for comprometida.
+A carteira foi detalhada na etapa 2. A tela chegou na 5: `/carteiras`, visível a
+admin **e** gestor — montar carteira é a função do gestor, e ele não administra
+contas. Por isso `/api/carteira/operadores` existe em vez de reaproveitar
+`/api/users`, que é de admin e devolve a linha inteira do usuário.
+
+A **trilha é exibida**, não só guardada: cada documento mostra quem liberou e
+quando. Guardar sem mostrar a tornaria decorativa, e ela é a única forma de
+reconstruir o que houve se uma conta de gestor for comprometida.
+
+Três decisões da tela que o modelo não determinava:
+
+- **Documento atribuído que saiu do inventário continua na carteira**, marcado
+  como tal. A atribuição é uma decisão; sumir com ela esconderia que a pessoa
+  volta a ter acesso quando o certificado reaparecer — e ele reaparece, porque o
+  agente move vencidos entre pastas.
+- **A busca aceita CNPJ pontuado.** Ninguém digita CNPJ sem pontuação, e exigir
+  dígitos puros faria a busca parecer quebrada para quem copia do sistema
+  contábil.
+- **O estado vazio diz a consequência**, não só que está vazio: "esta pessoa não
+  consegue instalar nenhum certificado". É o comportamento correto do modelo,
+  mas é também o que trava alguém sem que ninguém saiba por quê.
 
 Boa notícia: `install_log` já tem `user_id` preenchido em **25 de 25** linhas. O
 histórico por usuário nasce correto.
@@ -593,7 +609,7 @@ Etapa 3  /instalador só configuração   ✅ aplicada — diagnóstico, config 
 Etapa 4a /dashboard novo               ✅ aplicada — agregação decidida por medição
          4b tabela user_activity        ✅ aplicada — eventos discretos, não cronômetro
    ↓
-Etapa 5  UI do gestor + trilha         ← trilha obrigatória pelo alcance total (§6.3)
+Etapa 5  UI do gestor + trilha         ✅ aplicada — /carteiras, com a trilha visível
 ```
 
 **Por que 2a antes de 2b/2c:** a carteira é chaveada por `user_id`, e enquanto

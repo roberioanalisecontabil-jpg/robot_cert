@@ -765,6 +765,80 @@ def estado_de_instalabilidade(
     return out
 
 
+def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
+    """
+    A carteira com a trilha: o que foi atribuído, por quem e quando.
+
+    `listar_carteira` devolve só os documentos porque é o que a barreira
+    precisa — e barreira tem de ser rápida. Aqui é a tela: com o gestor podendo
+    atribuir **qualquer** cliente do acervo (decisão de 15/08), quem concedeu o
+    quê é a única forma de reconstruir o que houve se uma conta for
+    comprometida. Mostrar isso é o que torna a trilha útil em vez de decorativa.
+    """
+    client = _supabase()
+    if not client:
+        raise CarteiraIndisponivel("Supabase não configurado")
+    try:
+        r = (
+            client.table("carteira")
+            .select("documento, atribuido_por_email, atribuido_em")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        linhas = list(r.data or [])
+    except Exception as e:
+        logger.exception("Falha ao detalhar carteira de %s", user_id)
+        raise CarteiraIndisponivel(str(e)) from e
+
+    linhas.sort(key=lambda l: str(l.get("atribuido_em") or ""), reverse=True)
+    return linhas
+
+
+def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, str]]:
+    """
+    Documentos que existem para atribuir, com o nome do titular.
+
+    Sai do **inventário**, não do cofre: um certificado pode estar
+    legitimamente fora do cofre agora (o agente ainda não enviou, ou a custódia
+    foi desativada) e ainda assim fazer sentido pré-atribuir. Restringir ao
+    cofre faria a carteira depender do ciclo do agente.
+
+    O nome do titular vai junto porque ninguém escolhe cliente por CNPJ de
+    cabeça — e uma lista de 488 números seria inutilizável.
+    """
+    client = _supabase()
+    if not client:
+        return []
+    try:
+        q = client.table("cert_snapshots").select("items")
+        if machine_id:
+            q = q.eq("machine_id", machine_id)
+        r = q.order("scanned_at", desc=True).limit(1).execute()
+    except Exception:
+        logger.exception("Falha ao ler o universo de documentos")
+        return []
+
+    linhas = r.data or []
+    if not linhas:
+        return []
+
+    por_doc: Dict[str, str] = {}
+    for item in (linhas[0].get("items") or []):
+        doc = so_digitos(item.get("documento_numero"))
+        if not doc:
+            continue
+        nome = str(item.get("nome") or item.get("display_name") or "").strip()
+        # Fica o nome mais longo: costuma ser a razão social completa, e é o
+        # que a pessoa reconhece.
+        if len(nome) > len(por_doc.get(doc, "")):
+            por_doc[doc] = nome
+
+    return [
+        {"documento": d, "nome": por_doc[d]}
+        for d in sorted(por_doc, key=lambda x: (por_doc[x] or "").lower())
+    ]
+
+
 def atribuir_carteira(
     user_id: str,
     documentos: List[str],

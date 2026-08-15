@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Carteiras — Analise Certificado</title>
+    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="/static/style.css?v=s6-stacking-2026-08" />
+    <style nonce="{{ request.state.nonce }}">
+      .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
+      @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
+      .cart-painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
+      .op-item { display: block; width: 100%; text-align: left; border: 1.5px solid transparent; background: transparent;
+                 border-radius: var(--radius-sm, 8px); padding: 0.6rem 0.7rem; cursor: pointer; color: var(--text); }
+      .op-item:hover { background: var(--bg); }
+      .op-item[aria-current="true"] { border-color: var(--ok-text); background: var(--bg); }
+      .op-item__meta { display: block; font-size: 0.76rem; color: var(--text-muted); margin-top: 0.15rem; }
+      .doc-chip { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+                  padding: 0.5rem 0.6rem; border-bottom: 0.5px solid var(--border); }
+      .doc-chip__trilha { font-size: 0.72rem; color: var(--text-muted); }
+      .lista-busca { max-height: 300px; overflow-y: auto; border: 1.5px solid var(--border);
+                     border-radius: var(--radius-sm, 8px); margin-top: 0.5rem; }
+      .lista-busca__item { display: flex; justify-content: space-between; gap: 1rem; align-items: center;
+                           padding: 0.45rem 0.6rem; border-bottom: 0.5px solid var(--border); font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+    {% include "_sidebar.html" %}
+
+    <main class="main-content" id="main-content">
+      <header class="page-header">
+        <h1>Carteiras</h1>
+        <p>Quais clientes cada operador pode instalar. Sem carteira, ninguém instala nada.</p>
+      </header>
+
+      <div id="cartMsg"></div>
+
+      <div class="cart-layout">
+        <section class="cart-painel">
+          <h2 style="font-size: 1rem; margin-bottom: 0.5rem;">Operadores</h2>
+          <label for="buscaOperador" class="cg-sr-only">Buscar operador</label>
+          <input type="search" id="buscaOperador" class="form-control" placeholder="Buscar por nome ou e-mail" />
+          <div id="listaOperadores" style="margin-top: 0.6rem;">
+            <p class="text-muted" style="font-size: 0.85rem;">Carregando…</p>
+          </div>
+        </section>
+
+        <section class="cart-painel">
+          <div id="semSelecao">
+            <p class="text-muted" style="font-size: 0.9rem;">
+              Escolha um operador à esquerda para ver e montar a carteira dele.
+            </p>
+          </div>
+
+          <div id="detalheCarteira" hidden>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <h2 id="opNome" style="font-size: 1.1rem; margin-bottom: 0.15rem;"></h2>
+                <p id="opEmail" class="text-muted" style="font-size: 0.85rem;"></p>
+              </div>
+              <span id="opAviso"></span>
+            </div>
+
+            <!-- Acrescentar -->
+            <div style="margin-top: 1.25rem;">
+              <h3 style="font-size: 0.95rem; margin-bottom: 0.35rem;">Acrescentar clientes</h3>
+              <label for="buscaDoc" class="cg-sr-only">Buscar cliente por nome ou CNPJ/CPF</label>
+              <input type="search" id="buscaDoc" class="form-control"
+                     placeholder="Buscar por nome ou CNPJ/CPF — digite ao menos 2 caracteres" />
+              <div class="lista-busca" id="resultadoDocs" hidden></div>
+              <p class="hint" id="dicaBusca" style="margin-top: 0.4rem;"></p>
+            </div>
+
+            <!-- Carteira atual -->
+            <div style="margin-top: 1.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 0.95rem;">Carteira atual</h3>
+                <span id="contaDocs" class="text-muted" style="font-size: 0.8rem;"></span>
+              </div>
+              <div id="listaCarteira" style="margin-top: 0.4rem;"></div>
+            </div>
+
+            <!-- Histórico -->
+            <div style="margin-top: 1.5rem;">
+              <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">Instalações desta pessoa</h3>
+              <div id="historicoOperador">
+                <p class="text-muted" style="font-size: 0.85rem;">—</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}">
+      let _operadores = [];
+      let _selecionado = null;
+      let _carteiraAtual = new Set();
+      let _papel = null;
+
+      function msg(texto, tipo) {
+        document.getElementById("cartMsg").innerHTML =
+          `<div class="toast toast-${tipo}" style="margin-bottom: 1rem;">${esc(texto)}</div>`;
+      }
+
+      // ─── Operadores ────────────────────────────────────────────────────
+
+      function renderOperadores() {
+        const q = (document.getElementById("buscaOperador").value || "").trim().toLowerCase();
+        const lista = _operadores.filter((o) => {
+          // Admin e gestor têm alcance total e não dependem de carteira —
+          // listá-los aqui sugeriria que precisam de uma.
+          if (o.role !== "user") return false;
+          if (!q) return true;
+          return ((o.full_name || "") + " " + (o.email || "")).toLowerCase().includes(q);
+        });
+
+        const el = document.getElementById("listaOperadores");
+        if (!lista.length) {
+          el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Nenhum operador encontrado.</p>`;
+          return;
+        }
+        el.innerHTML = lista.map((o) => `
+          <button type="button" class="op-item" data-id="${esc(o.id)}"
+                  aria-current="${_selecionado && _selecionado.id === o.id}">
+            <strong>${esc(o.full_name || o.email)}</strong>
+            <span class="op-item__meta">
+              ${esc(o.email)} ·
+              <span style="color:${o.documentos ? "var(--ok-text)" : "var(--expired-text)"}">
+                ${o.documentos} cliente(s)
+              </span>
+              ${o.ativo ? "" : " · <em>inativo</em>"}
+            </span>
+          </button>`).join("");
+
+        el.querySelectorAll(".op-item").forEach((b) =>
+          b.addEventListener("click", () => selecionar(b.dataset.id))
+        );
+      }
+
+      async function carregarOperadores() {
+        try {
+          const r = await fetch("/api/carteira/operadores", { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          _operadores = (await r.json()).operadores || [];
+          renderOperadores();
+        } catch (e) {
+          document.getElementById("listaOperadores").innerHTML =
+            `<p style="color:var(--expired-text);font-size:0.85rem">${esc(e.message)}</p>`;
+        }
+      }
+
+      // ─── Carteira do selecionado ───────────────────────────────────────
+
+      async function selecionar(id) {
+        _selecionado = _operadores.find((o) => o.id === id) || null;
+        if (!_selecionado) return;
+
+        document.getElementById("semSelecao").hidden = true;
+        document.getElementById("detalheCarteira").hidden = false;
+        document.getElementById("opNome").textContent = _selecionado.full_name || _selecionado.email;
+        document.getElementById("opEmail").textContent = _selecionado.email;
+        document.getElementById("opAviso").innerHTML = _selecionado.ativo
+          ? ""
+          : `<span class="badge" style="background:var(--border);color:var(--text-muted)">CONTA INATIVA</span>`;
+        document.getElementById("buscaDoc").value = "";
+        document.getElementById("resultadoDocs").hidden = true;
+
+        renderOperadores();
+        await Promise.all([carregarCarteira(), carregarHistorico()]);
+      }
+
+      async function carregarCarteira() {
+        const el = document.getElementById("listaCarteira");
+        el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Carregando…</p>`;
+        try {
+          const r = await fetch(`/api/carteira/${encodeURIComponent(_selecionado.id)}`, { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          _carteiraAtual = new Set(d.documentos || []);
+          const itens = d.itens || [];
+
+          document.getElementById("contaDocs").textContent = `${itens.length} cliente(s)`;
+          if (!itens.length) {
+            // O estado vazio precisa dizer a consequência: é o comportamento
+            // correto (o acesso fecha por padrão), mas é também o que trava a
+            // pessoa sem que ela saiba por quê.
+            el.innerHTML =
+              `<p class="text-muted" style="font-size:0.85rem">Carteira vazia — ` +
+              `esta pessoa <strong>não consegue instalar nenhum certificado</strong>. ` +
+              `Use a busca acima para liberar clientes.</p>`;
+            return;
+          }
+
+          el.innerHTML = itens.map((i) => `
+            <div class="doc-chip">
+              <div>
+                <div>${esc(i.nome || "(titular desconhecido)")}</div>
+                <div class="doc-chip__trilha">
+                  ${esc(i.documento)}
+                  ${i.atribuido_por ? " · liberado por " + esc(i.atribuido_por) : ""}
+                  ${i.atribuido_em ? " em " + new Date(i.atribuido_em).toLocaleDateString("pt-BR") : ""}
+                  ${i.no_inventario ? "" : " · <em>fora do inventário atual</em>"}
+                </div>
+              </div>
+              <button type="button" class="btn btn-secondary" data-doc="${esc(i.documento)}"
+                      style="font-size:0.78rem">Remover</button>
+            </div>`).join("");
+
+          el.querySelectorAll("button[data-doc]").forEach((b) =>
+            b.addEventListener("click", () => remover(b.dataset.doc))
+          );
+        } catch (e) {
+          el.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem">${esc(e.message)}</p>`;
+        }
+      }
+
+      async function carregarHistorico() {
+        const el = document.getElementById("historicoOperador");
+        // A trilha é de admin; para o gestor a seção some em vez de mostrar um
+        // erro que ele não pode resolver.
+        if (_papel !== "admin") {
+          el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">` +
+            `Disponível para administradores.</p>`;
+          return;
+        }
+        el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Carregando…</p>`;
+        try {
+          const r = await fetch(
+            `/api/cert-installer/trilha?dias=365&user_email=${encodeURIComponent(_selecionado.email)}`,
+            { headers: getHeaders() }
+          );
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          const cadeias = d.cadeias || [];
+          if (!cadeias.length) {
+            el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Nenhuma instalação registrada.</p>`;
+            return;
+          }
+          const r2 = d.resumo || {};
+          el.innerHTML =
+            `<p class="text-muted" style="font-size:0.85rem;margin-bottom:0.4rem">` +
+            `${r2.total} tentativa(s) · ${r2.concluidas} concluída(s) · ${r2.falhadas} com falha</p>` +
+            cadeias.slice(0, 10).map((c) => `
+              <div class="doc-chip">
+                <div style="font-size:0.82rem">
+                  ${c.inicio ? new Date(c.inicio).toLocaleString("pt-BR") : "—"}
+                  · ${c.certificados} certificado(s) · ${esc(c.target_machine || "—")}
+                </div>
+                <span style="font-size:0.78rem;color:${
+                  c.desfecho === "concluido" ? "var(--ok-text)" : "var(--expired-text)"
+                }">${esc(c.desfecho)}</span>
+              </div>`).join("");
+        } catch (e) {
+          el.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem">${esc(e.message)}</p>`;
+        }
+      }
+
+      // ─── Busca e atribuição ────────────────────────────────────────────
+
+      let _timerBusca = null;
+
+      async function buscarDocumentos() {
+        const q = (document.getElementById("buscaDoc").value || "").trim();
+        const caixa = document.getElementById("resultadoDocs");
+        const dica = document.getElementById("dicaBusca");
+        if (q.length < 2) {
+          caixa.hidden = true;
+          dica.textContent = "";
+          return;
+        }
+        try {
+          const r = await fetch(`/api/carteira/documentos?q=${encodeURIComponent(q)}`, { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          const docs = d.documentos || [];
+          caixa.hidden = false;
+          // Dizer quantos ficaram de fora evita a conclusão de que "só existem
+          // estes" quando na verdade a lista foi cortada.
+          dica.textContent = d.total > docs.length
+            ? `Mostrando ${docs.length} de ${d.total} — refine a busca.` : "";
+
+          caixa.innerHTML = docs.length
+            ? docs.map((x) => {
+                const tem = _carteiraAtual.has(x.documento);
+                return `<div class="lista-busca__item">
+                  <span>${esc(x.nome || "(sem nome)")} <span class="text-muted">· ${esc(x.documento)}</span></span>
+                  ${tem
+                    ? `<span class="text-muted" style="font-size:0.78rem">já na carteira</span>`
+                    : `<button type="button" class="btn btn-primary" data-add="${esc(x.documento)}"
+                               style="font-size:0.75rem;padding:0.25rem 0.6rem">Liberar</button>`}
+                </div>`;
+              }).join("")
+            : `<p class="text-muted" style="font-size:0.85rem;padding:0.6rem">Nada encontrado.</p>`;
+
+          caixa.querySelectorAll("button[data-add]").forEach((b) =>
+            b.addEventListener("click", () => atribuir(b.dataset.add))
+          );
+        } catch (e) {
+          caixa.hidden = false;
+          caixa.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem;padding:0.6rem">${esc(e.message)}</p>`;
+        }
+      }
+
+      async function atribuir(documento) {
+        try {
+          const r = await fetch("/api/carteira", {
+            method: "POST",
+            headers: getHeaders(true),
+            body: JSON.stringify({ user_id: _selecionado.id, documentos: [documento] }),
+          });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          msg("Cliente liberado.", "success");
+          await Promise.all([carregarCarteira(), carregarOperadores()]);
+          buscarDocumentos();
+        } catch (e) {
+          msg("Não foi possível liberar: " + e.message, "error");
+        }
+      }
+
+      async function remover(documento) {
+        // Remover tira acesso de alguém que talvez esteja no meio de uma
+        // instalação — merece confirmação, como qualquer revogação.
+        if (!confirm(`Remover este cliente da carteira?\n\nA pessoa deixa de conseguir instalar os certificados dele.`)) return;
+        try {
+          const r = await fetch(
+            `/api/carteira/${encodeURIComponent(_selecionado.id)}/${encodeURIComponent(documento)}`,
+            { method: "DELETE", headers: getHeaders() }
+          );
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          msg("Cliente removido da carteira.", "success");
+          await Promise.all([carregarCarteira(), carregarOperadores()]);
+        } catch (e) {
+          msg("Não foi possível remover: " + e.message, "error");
+        }
+      }
+
+      (function init() {
+        _papel = localStorage.getItem("user_role");
+        if (_papel === "admin") {
+          ["nav-users", "nav-config", "nav-installer", "nav-dashboard", "nav-carteiras"].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = "flex";
+          });
+        } else if (_papel === "gestor") {
+          const el = document.getElementById("nav-carteiras");
+          if (el) el.style.display = "flex";
+        }
+
+        document.getElementById("buscaOperador").addEventListener("input", renderOperadores);
+        document.getElementById("buscaDoc").addEventListener("input", () => {
+          clearTimeout(_timerBusca);
+          _timerBusca = setTimeout(buscarDocumentos, 250);
+        });
+        carregarOperadores();
+      })();
+    </script>
+  </body>
+</html>

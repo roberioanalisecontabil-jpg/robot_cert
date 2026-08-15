@@ -2492,13 +2492,96 @@ class CarteiraRequest(BaseModel):
     documentos: List[str]
 
 
+@app.get("/api/carteira/operadores", dependencies=[Depends(require_admin_ou_gestor)])
+def listar_operadores() -> dict:
+    """
+    Quem pode receber carteira, com quantos documentos cada um já tem.
+
+    Rota própria em vez de `/api/users`: aquela é de admin e devolve a linha
+    inteira do usuário. O gestor precisa montar carteira **sem** poder
+    administrar contas, e não tem por que ver o hash de senha de ninguém.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Supabase não configurado")
+    try:
+        us = sb.table("users").select("id, email, full_name, role, ativo, gestor_id").execute().data or []
+        cart = sb.table("carteira").select("user_id").execute().data or []
+    except Exception:
+        logger.exception("Falha ao listar operadores")
+        raise HTTPException(status_code=503, detail="Não foi possível listar os operadores.")
+
+    from collections import Counter
+
+    quantos = Counter(str(c.get("user_id")) for c in cart)
+    return {
+        "operadores": [
+            {
+                "id": str(u.get("id")),
+                "email": u.get("email"),
+                "full_name": u.get("full_name"),
+                "role": u.get("role"),
+                "ativo": auth.conta_ativa(u),
+                "gestor_id": u.get("gestor_id"),
+                "documentos": quantos.get(str(u.get("id")), 0),
+            }
+            for u in us
+        ]
+    }
+
+
+@app.get("/api/carteira/documentos", dependencies=[Depends(require_admin_ou_gestor)])
+def listar_documentos_atribuiveis(
+    q: Optional[str] = Query(None, max_length=120),
+    limite: int = Query(100, ge=1, le=500),
+) -> dict:
+    """
+    Universo de documentos para atribuir, filtrável por nome ou número.
+
+    Filtra no servidor e devolve no máximo `limite`: são centenas de clientes,
+    e mandar a lista inteira a cada tecla tornaria a busca mais lenta que
+    digitar o CNPJ na mão.
+    """
+    todos = cert_installer.universo_de_documentos()
+    termo = (q or "").strip().lower()
+    if termo:
+        digitos = cert_installer.so_digitos(termo)
+        todos = [
+            d for d in todos
+            if termo in (d["nome"] or "").lower()
+            or (digitos and digitos in d["documento"])
+        ]
+    return {"total": len(todos), "documentos": todos[:limite]}
+
+
 @app.get("/api/carteira/{user_id}", dependencies=[Depends(require_admin_ou_gestor)])
 def obter_carteira(user_id: str) -> dict:
-    """Documentos que este operador pode instalar."""
+    """Documentos que este operador pode instalar, com a trilha de atribuição."""
     try:
-        return {"user_id": user_id, "documentos": sorted(cert_installer.listar_carteira(user_id))}
+        linhas = cert_installer.detalhar_carteira(user_id)
     except cert_installer.CarteiraIndisponivel as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+    nomes = {d["documento"]: d["nome"] for d in cert_installer.universo_de_documentos()}
+    return {
+        "user_id": user_id,
+        "documentos": sorted(l["documento"] for l in linhas),
+        "itens": [
+            {
+                "documento": l["documento"],
+                # Documento atribuído que não está mais no inventário continua
+                # na carteira: a atribuição é uma decisão, e sumir com ela
+                # esconderia que a pessoa tem acesso a algo que voltou depois.
+                "nome": nomes.get(l["documento"], ""),
+                "no_inventario": l["documento"] in nomes,
+                "atribuido_por": l.get("atribuido_por_email"),
+                "atribuido_em": l.get("atribuido_em"),
+            }
+            for l in linhas
+        ],
+    }
 
 
 @app.post("/api/carteira")
@@ -2639,6 +2722,13 @@ def dashboard_renovacoes(
     from app import dashboard
 
     return dashboard.painel_renovacoes(dias=dias, machine_id=machine_id)
+
+
+@app.get("/carteiras", response_class=HTMLResponse)
+def pagina_carteiras(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request, name="carteiras.html", context={"pagina_ativa": "carteiras"}
+    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
