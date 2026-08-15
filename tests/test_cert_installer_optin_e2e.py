@@ -17,6 +17,7 @@ de brinquedo, para que o teste exercite a lógica real de filtro em vez de
 verificar que uma chamada aconteceu.
 """
 
+import base64
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch
 
@@ -76,9 +77,13 @@ class _Query:
         if self._operacao == "upsert":
             assert self._payload is not None
             if self._on_conflict:
-                chave = self._on_conflict
+                # O PostgREST aceita chave composta como "col_a,col_b" — e é o
+                # que o cofre usa desde a chave (machine_id, fingerprint).
+                # Comparar uma coluna só faria o fake colidir onde o banco não
+                # colide, escondendo justamente o comportamento sob teste.
+                colunas = [c.strip() for c in self._on_conflict.split(",")]
                 for i, r in enumerate(self._tabela):
-                    if r.get(chave) == self._payload.get(chave):
+                    if all(r.get(c) == self._payload.get(c) for c in colunas):
                         self._tabela[i] = dict(self._payload)
                         return _Resultado([dict(self._payload)])
             self._tabela.append(dict(self._payload))
@@ -215,6 +220,71 @@ def test_consulta_sem_machine_id_devolve_todas_as_maquinas(
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Chave composta (machine_id, fingerprint) — a mesma via em duas estações
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_mesmo_certificado_autorizado_em_duas_maquinas_coexiste(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    O mesmo A1 e-CNPJ costuma estar em várias estações do escritório.
+
+    Sob unicidade global do fingerprint, autorizar na B sobrescrevia a linha da
+    A trocando o machine_id — e o agente da A parava de receber o certificado
+    sem nada nos logs. Com a chave composta são duas linhas.
+    """
+    for maquina in (MAQUINA_A, MAQUINA_B):
+        r = client.post(
+            "/api/cert-installer/vault-optin",
+            json={"fingerprint": FP, "machine_id": maquina},
+            headers=_headers_admin(),
+        )
+        assert r.status_code == 200, r.text
+
+    assert len(banco.tabelas["cert_vault_optin"]) == 2
+    for maquina in (MAQUINA_A, MAQUINA_B):
+        r = client.get(
+            f"/api/cert-installer/vault-optin?machine_id={maquina}",
+            headers=_headers_agente(),
+        )
+        assert r.json()["fingerprints"] == [FP], f"agente de {maquina} perdeu o opt-in"
+
+
+def test_upload_do_mesmo_fingerprint_por_duas_maquinas_gera_duas_linhas(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    Cada estação guarda a SUA cópia do PFX.
+
+    O `upsert` roda de verdade aqui (sem patch em `upsert_pfx`) porque o que se
+    testa é justamente o `on_conflict`: com uma coluna só, o segundo upload
+    sobrescreveria o material do primeiro.
+    """
+    for maquina in (MAQUINA_A, MAQUINA_B):
+        client.post(
+            "/api/cert-installer/vault-optin",
+            json={"fingerprint": FP, "machine_id": maquina},
+            headers=_headers_admin(),
+        )
+        r = client.post(
+            "/api/cert-installer/upload-pfx",
+            json={
+                "fingerprint": FP,
+                "pfx_b64": base64.b64encode(f"pfx-de-{maquina}".encode()).decode(),
+                "machine_id": maquina,
+            },
+            headers=_headers_agente(),
+        )
+        assert r.status_code == 200, r.text
+
+    cofre = banco.tabelas["cert_pfx_store"]
+    assert len(cofre) == 2, "o segundo upload sobrescreveu o primeiro"
+    assert sorted(l["machine_id"] for l in cofre) == sorted([MAQUINA_A, MAQUINA_B])
+    # Materiais distintos: cada linha guarda o PFX que a sua estação enviou.
+    assert len({l["encrypted_pfx"] for l in cofre}) == 2
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Revogação
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -228,17 +298,74 @@ def test_revogar_apaga_autorizacao_e_material_armazenado(
         headers=_headers_admin(),
     )
     banco.tabelas.setdefault("cert_pfx_store", []).append(
-        {"fingerprint": FP, "pfx_cifrado": "material"}
+        {"fingerprint": FP, "machine_id": MAQUINA_A, "pfx_cifrado": "material"}
     )
 
     r = client.delete(
-        f"/api/cert-installer/vault-optin/{FP}", headers=_headers_admin()
+        f"/api/cert-installer/vault-optin/{FP}?machine_id={MAQUINA_A}",
+        headers=_headers_admin(),
     )
     assert r.status_code == 200
     assert r.json()["pfx_removido"] is True
 
     assert banco.tabelas["cert_vault_optin"] == []
     assert banco.tabelas["cert_pfx_store"] == [], "o PFX tem de sair junto"
+
+
+def test_revogar_sem_machine_id_e_recusado(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    Sem `machine_id` a rota não tem como saber qual instalação revogar.
+
+    Recusar é o comportamento seguro: a alternativa — apagar por fingerprint —
+    levaria o material de todas as estações que têm o mesmo certificado.
+    """
+    client.post(
+        "/api/cert-installer/vault-optin",
+        json={"fingerprint": FP, "machine_id": MAQUINA_A},
+        headers=_headers_admin(),
+    )
+
+    r = client.delete(
+        f"/api/cert-installer/vault-optin/{FP}", headers=_headers_admin()
+    )
+    assert r.status_code == 422, r.text
+    assert banco.tabelas["cert_vault_optin"], "nada podia ter sido apagado"
+
+
+def test_revogar_numa_maquina_nao_alcanca_a_outra(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    O mesmo certificado autorizado em A e em B: revogar em A não toca em B.
+
+    Este é o ponto da chave composta. Antes dela, a revogação apagava por
+    fingerprint nas duas tabelas — correto sob unicidade global, apagão
+    silencioso depois que duas estações passam a coexistir.
+    """
+    for maquina in (MAQUINA_A, MAQUINA_B):
+        client.post(
+            "/api/cert-installer/vault-optin",
+            json={"fingerprint": FP, "machine_id": maquina},
+            headers=_headers_admin(),
+        )
+        banco.tabelas.setdefault("cert_pfx_store", []).append(
+            {"fingerprint": FP, "machine_id": maquina, "pfx_cifrado": f"de-{maquina}"}
+        )
+
+    r = client.delete(
+        f"/api/cert-installer/vault-optin/{FP}?machine_id={MAQUINA_A}",
+        headers=_headers_admin(),
+    )
+    assert r.status_code == 200
+
+    optin = banco.tabelas["cert_vault_optin"]
+    assert [o["machine_id"] for o in optin] == [MAQUINA_B]
+
+    cofre = banco.tabelas["cert_pfx_store"]
+    assert [c["machine_id"] for c in cofre] == [MAQUINA_B]
+    assert cofre[0]["pfx_cifrado"] == f"de-{MAQUINA_B}", "o material de B foi trocado"
 
 
 def test_usuario_comum_nao_autoriza_nem_revoga(
@@ -255,7 +382,9 @@ def test_usuario_comum_nao_autoriza_nem_revoga(
     )
     assert r.status_code == 403
 
-    r = client.delete(f"/api/cert-installer/vault-optin/{FP}", headers=h)
+    r = client.delete(
+        f"/api/cert-installer/vault-optin/{FP}?machine_id={MAQUINA_A}", headers=h
+    )
     assert r.status_code == 403
 
 

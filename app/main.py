@@ -2083,11 +2083,14 @@ def upload_pfx(
     # (ou adulterado) envie tudo, só entra no cofre o que foi autorizado.
     #
     # O filtro por machine_id é parte da barreira, não detalhe de consulta. Sem
-    # ele bastava o fingerprint estar autorizado em QUALQUER máquina: um agente
-    # que se declarasse de outra estação gravava o PFX de um certificado
-    # autorizado só na primeira e, como `upsert_pfx` usa
-    # `on_conflict="fingerprint"`, sobrescrevia o registro legítimo — o mesmo
-    # vetor descrito em require_agent_or_admin, por outro caminho.
+    # ele bastava o fingerprint estar autorizado em QUALQUER máquina para um
+    # agente que se declarasse de outra estação gravar o PFX de um certificado
+    # que ninguém autorizou ali.
+    #
+    # A chave composta `(machine_id, fingerprint)` fechou a metade destrutiva do
+    # vetor: um upload declarado como outra estação hoje cria uma linha própria
+    # em vez de sobrescrever o registro legítimo. O que ela NÃO faz é decidir se
+    # aquele PFX podia ser guardado — isso continua sendo trabalho desta barreira.
     autorizados = set(cert_installer.listar_optin_fingerprints(body.machine_id))
     if body.fingerprint not in autorizados:
         raise HTTPException(
@@ -2162,11 +2165,26 @@ def autorizar_vault_optin(
 
 
 @app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_admin)])
-def revogar_vault_optin(fingerprint: str):
-    """Revoga a autorização e APAGA o PFX já armazenado."""
+def revogar_vault_optin(
+    fingerprint: str,
+    machine_id: str = Query(..., min_length=1),
+):
+    """
+    Revoga a autorização e APAGA o PFX já armazenado — de UMA estação.
+
+    O `machine_id` é obrigatório: desde a chave composta `(machine_id,
+    fingerprint)`, o mesmo certificado pode estar autorizado em várias estações,
+    e a rota não tem como adivinhar qual delas o admin quer revogar. Sem o
+    parâmetro a chamada é recusada, em vez de apagar o material de todas.
+    """
     try:
-        cert_installer.revogar_do_cofre(fingerprint)
-        return {"status": "ok", "fingerprint": fingerprint, "pfx_removido": True}
+        cert_installer.revogar_do_cofre(fingerprint, machine_id)
+        return {
+            "status": "ok",
+            "fingerprint": fingerprint,
+            "machine_id": machine_id,
+            "pfx_removido": True,
+        }
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception:

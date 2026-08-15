@@ -85,11 +85,17 @@ def test_revogar_apaga_o_pfx_armazenado(monkeypatch) -> None:
             return type("R", (), {"data": []})()
 
     monkeypatch.setattr(ci, "_supabase", lambda: type("C", (), {"table": lambda s, n: _Tabela(n)})())
-    ci.revogar_do_cofre("c" * 64)
+    ci.revogar_do_cofre("c" * 64, "PC-CONTABIL-01")
 
     tabelas = {t for t, _, _ in apagados}
     assert "cert_vault_optin" in tabelas
     assert "cert_pfx_store" in tabelas, "PFX permaneceu no servidor após revogação"
+
+    # Os dois deletes filtram pela máquina. Sem isso, revogar numa estação
+    # levaria o material de todas as outras que têm o mesmo certificado.
+    for tabela in ("cert_vault_optin", "cert_pfx_store"):
+        campos = {c for t, c, _ in apagados if t == tabela}
+        assert campos == {"fingerprint", "machine_id"}, f"{tabela} apagou sem a máquina"
 
 
 # ==========================================================================

@@ -35,7 +35,24 @@ def html() -> str:
 def test_autorizacao_nao_fixa_machine_id_em_default(html: str) -> None:
     """O POST não pode cair no literal "default" como machine_id."""
     assert 'machine_id: cert.machine_id || "default"' not in html
-    assert "machine_id: cert.machine_id || _optinMachineId" in html
+    assert re.search(
+        r"const maquina\s*=\s*cert\.machine_id\s*\|\|\s*_optinMachineId", html
+    )
+    assert "machine_id: maquina" in html
+
+
+def test_revogacao_manda_o_machine_id(html: str) -> None:
+    """
+    Desde a chave composta `(machine_id, fingerprint)`, a rota DELETE exige a
+    máquina — e é ela que limita o alcance da revogação. Um DELETE sem o
+    parâmetro passa a ser recusado pelo servidor (422): a tela para de revogar
+    sem que nada no template pareça errado.
+    """
+    assert re.search(
+        r"vault-optin/\$\{encodeURIComponent\(fp\)\}`\s*\+\s*\n?\s*"
+        r"`\?machine_id=\$\{encodeURIComponent\(maquina\)\}",
+        html,
+    )
 
 
 def test_machine_id_vem_da_raiz_do_payload(html: str) -> None:

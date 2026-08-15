@@ -404,25 +404,32 @@
       async function alternarOptin(cert, autorizado, btn) {
         const fp = cert.fingerprint_sha256;
         const nome = cert.nome || cert.display_name || "este certificado";
+        // A autorização é por instalação, não por certificado: a mesma máquina
+        // que autoriza é a que revoga. Mandar o machine_id no DELETE é o que
+        // impede a revogação de alcançar as outras estações.
+        const maquina = cert.machine_id || _optinMachineId;
 
         // Revogar apaga a chave privada guardada — merece confirmação explícita.
         if (autorizado && !confirm(
           `Revogar “${nome}” do cofre?\n\n` +
-          `A autorização será removida E o arquivo já armazenado no servidor será apagado.`
+          `A autorização será removida E o arquivo já armazenado no servidor será apagado.\n\n` +
+          `Isso vale só para a máquina ${maquina}.`
         )) return;
 
         btn.disabled = true;
         try {
           const res = autorizado
-            ? await fetch(`/api/cert-installer/vault-optin/${encodeURIComponent(fp)}`, {
-                method: "DELETE", headers: getHeaders(),
-              })
+            ? await fetch(
+                `/api/cert-installer/vault-optin/${encodeURIComponent(fp)}` +
+                `?machine_id=${encodeURIComponent(maquina)}`,
+                { method: "DELETE", headers: getHeaders() },
+              )
             : await fetch("/api/cert-installer/vault-optin", {
                 method: "POST",
                 headers: getHeaders(true),
                 body: JSON.stringify({
                   fingerprint: fp,
-                  machine_id: cert.machine_id || _optinMachineId,
+                  machine_id: maquina,
                   nome_titular: cert.nome || cert.display_name || null,
                   documento: cert.documento_formatado || cert.documento_numero || null,
                 }),

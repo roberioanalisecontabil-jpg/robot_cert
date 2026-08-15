@@ -1,7 +1,17 @@
 # Plano — chave composta no cofre de certificados
 
-> **Status: proposta. Nada aplicado.**
+> **Status: aplicado no código em 2026-08-15.** Migration
+> `20260815160000_cofre_chave_composta.sql`, os dois `on_conflict`,
+> `revogar_do_cofre` + rota DELETE + template, e os testes da seção 3.
+> Falta só o passo 5 (validar em duas máquinas de verdade).
+>
 > Elaborado em 2026-08-08 a pedido do item #4 de `a.txt`.
+>
+> **Correção ao item 4.1:** as tabelas não estão mais vazias — em 15/08 o cofre
+> foi repovoado por rescan e tem 33 linhas em `cert_pfx_store` e 34 em
+> `cert_vault_optin`, todas de `ANALISESRV`. A migration segue sem risco de
+> perda pelo mesmo motivo: com fingerprint único, toda linha existente já
+> satisfaz a chave nova.
 
 ## 1. Onde `on_conflict="fingerprint"` é usado
 

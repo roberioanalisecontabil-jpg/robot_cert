@@ -296,7 +296,7 @@ def upsert_pfx(
     try:
         r = (
             client.table("cert_pfx_store")
-            .upsert(row, on_conflict="fingerprint")
+            .upsert(row, on_conflict="machine_id,fingerprint")
             .execute()
         )
         data = r.data
@@ -409,19 +409,37 @@ def autorizar_no_cofre(
             "documento": documento,
             "enabled_by": enabled_by,
         },
-        on_conflict="fingerprint",
+        on_conflict="machine_id,fingerprint",
     ).execute()
 
 
-def revogar_do_cofre(fingerprint: str) -> None:
-    """Remove a autorização E o PFX já armazenado."""
+def revogar_do_cofre(fingerprint: str, machine_id: str) -> None:
+    """
+    Remove a autorização E o PFX já armazenado — de UMA estação.
+
+    O `machine_id` é obrigatório de propósito. Sob a chave composta, revogar só
+    por fingerprint apagaria o material de todas as máquinas que têm o mesmo
+    certificado; quem chama tem de dizer qual instalação está revogando.
+    """
     client = _supabase()
     if not client:
         raise RuntimeError("Supabase não configurado")
-    client.table("cert_vault_optin").delete().eq("fingerprint", fingerprint).execute()
+    (
+        client.table("cert_vault_optin")
+        .delete()
+        .eq("fingerprint", fingerprint)
+        .eq("machine_id", machine_id)
+        .execute()
+    )
     # Revogar sem apagar o material armazenado deixaria a chave privada no
     # servidor indefinidamente — o oposto da intenção.
-    client.table("cert_pfx_store").delete().eq("fingerprint", fingerprint).execute()
+    (
+        client.table("cert_pfx_store")
+        .delete()
+        .eq("fingerprint", fingerprint)
+        .eq("machine_id", machine_id)
+        .execute()
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────
