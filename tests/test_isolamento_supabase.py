@@ -37,7 +37,7 @@ def test_cliente_supabase_nao_e_criado() -> None:
 
 def test_escrita_no_cofre_nao_alcanca_banco_nenhum() -> None:
     """
-    Sem cliente, `autorizar_no_cofre` levanta em vez de gravar em algum lugar.
+    Sem cliente, as escritas do cofre levantam em vez de gravar em algum lugar.
 
     É o caminho exato que escapou: chamar a função real de escrita num teste
     que não fez patch dela.
@@ -45,4 +45,23 @@ def test_escrita_no_cofre_nao_alcanca_banco_nenhum() -> None:
     import pytest
 
     with pytest.raises(RuntimeError):
-        ci.autorizar_no_cofre(fingerprint="c" * 64, enabled_by="teste")
+        ci.bloquear_custodia(
+            fingerprint="c" * 64, machine_id="m1", bloqueado_por="teste"
+        )
+    with pytest.raises(RuntimeError):
+        ci.reativar_custodia(fingerprint="c" * 64, machine_id="m1")
+
+
+def test_leitura_da_custodia_sem_banco_falha_fechada() -> None:
+    """
+    Sem cliente, a leitura levanta `CustodiaIndisponivel` — não devolve vazio.
+
+    Sob opt-out, conjunto vazio de bloqueios significa "libera tudo". Um
+    ambiente sem Supabase configurado não pode ser lido como "nada bloqueado".
+    """
+    import pytest
+
+    with pytest.raises(ci.CustodiaIndisponivel):
+        ci.listar_bloqueios("m1")
+    with pytest.raises(ci.CustodiaIndisponivel):
+        ci.fingerprints_do_inventario("m1")

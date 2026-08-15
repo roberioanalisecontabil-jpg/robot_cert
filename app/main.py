@@ -2179,23 +2179,33 @@ def upload_pfx(
     if len(pfx_bytes) > 1 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="PFX excede 1 MB")
 
-    # Barreira de servidor para o opt-in: mesmo que um agente desatualizado
-    # (ou adulterado) envie tudo, só entra no cofre o que foi autorizado.
+    # Barreira de servidor da custódia: mesmo que um agente desatualizado (ou
+    # adulterado) envie o que não devia, só entra no cofre o que a política
+    # permite. O filtro por machine_id é parte da barreira, não detalhe de
+    # consulta — a custódia é por estação desde a chave composta.
     #
-    # O filtro por machine_id é parte da barreira, não detalhe de consulta. Sem
-    # ele bastava o fingerprint estar autorizado em QUALQUER máquina para um
-    # agente que se declarasse de outra estação gravar o PFX de um certificado
-    # que ninguém autorizou ali.
-    #
-    # A chave composta `(machine_id, fingerprint)` fechou a metade destrutiva do
-    # vetor: um upload declarado como outra estação hoje cria uma linha própria
-    # em vez de sobrescrever o registro legítimo. O que ela NÃO faz é decidir se
-    # aquele PFX podia ser guardado — isso continua sendo trabalho desta barreira.
-    autorizados = set(cert_installer.listar_optin_fingerprints(body.machine_id))
+    # Sob opt-in, esta barreira e a lista que o agente consome eram a MESMA
+    # consulta, e uma falha nela devolvia lista vazia: nada passava. Sob
+    # opt-out isso se inverte, e é aqui que a tradução literal do código antigo
+    # abriria o portão — "não consegui ler os bloqueios" viraria "nada está
+    # bloqueado, pode gravar". Por isso `CustodiaIndisponivel` é tratada como
+    # recusa explícita, e não cai no `except Exception` genérico lá embaixo.
+    try:
+        autorizados = cert_installer.fingerprints_autorizados(body.machine_id)
+    except cert_installer.CustodiaIndisponivel as e:
+        logger.warning("Upload recusado por custódia indisponível (%s): %s", body.machine_id, e)
+        raise HTTPException(
+            status_code=503,
+            detail="Custódia indisponível; o envio será retentado no próximo ciclo.",
+        )
+
     if body.fingerprint not in autorizados:
         raise HTTPException(
             status_code=403,
-            detail="Certificado não autorizado para o cofre. Habilite-o em /instalador.",
+            detail=(
+                "Certificado fora da custódia desta estação: está bloqueado, "
+                "vencido, ilegível, ou ausente do último inventário."
+            ),
         )
 
     try:
@@ -2234,56 +2244,98 @@ def listar_vault_optin(
     _token: auth.TokenData = Depends(require_agent_or_admin),
 ):
     """
-    Fingerprints autorizados ao cofre.
+    Fingerprints que esta máquina pode enviar ao cofre.
 
-    O agente consulta antes de cada ciclo de upload; o admin usa para montar a
-    tela. Não devolve material criptográfico, só a lista de autorizações.
+    **O caminho e o formato da resposta não mudaram na inversão de 15/08**, e
+    isso é deliberado: o agente instalado no ANALISESRV é um `.exe` compilado
+    que sempre perguntou "o que posso mandar?" e só agiu sobre a resposta.
+    Trocar o que entra na lista — de "autorizados um a um" para "inventário
+    válido menos bloqueados" — inverteu a custódia sem recompilar nada.
+
+    Sem `machine_id` não há pergunta a responder: a custódia é por estação
+    desde a chave composta, e uma lista global não significa nada aqui.
     """
-    return {"fingerprints": cert_installer.listar_optin_fingerprints(machine_id)}
+    if not machine_id:
+        raise HTTPException(
+            status_code=422,
+            detail="machine_id é obrigatório: a custódia é definida por estação.",
+        )
+    try:
+        return {"fingerprints": sorted(cert_installer.fingerprints_autorizados(machine_id))}
+    except cert_installer.CustodiaIndisponivel as e:
+        # 503, nunca lista vazia. O agente trata não-200 como "não enviar
+        # nada"; uma lista vazia ele trataria como "nada a enviar", que é o
+        # mesmo efeito hoje — mas as duas respostas dizem coisas diferentes, e
+        # confundi-las é como o opt-out vira falha aberta na próxima mudança.
+        logger.warning("Custódia indisponível para %s: %s", machine_id, e)
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível determinar a custódia do cofre agora.",
+        )
 
 
 @app.post("/api/cert-installer/vault-optin", dependencies=[Depends(require_admin)])
-def autorizar_vault_optin(
+def reativar_vault_custodia(
     body: VaultOptinRequest,
-    token: auth.TokenData = Depends(require_admin),
+    _token: auth.TokenData = Depends(require_admin),
 ):
-    """Autoriza um certificado a ser copiado para o cofre do servidor."""
+    """
+    Devolve o certificado à custódia: apaga o bloqueio.
+
+    Sob opt-in isto se chamava "autorizar" e gravava uma permissão. Sob opt-out
+    a permissão é o padrão, então a ação equivalente é remover a exceção. O
+    caminho continua o mesmo para não quebrar a tela; o que ele faz, não.
+
+    O material volta sozinho na varredura seguinte — o cofre é derivado dos
+    arquivos do ANALISESRV, não há o que restaurar aqui.
+    """
     try:
-        cert_installer.autorizar_no_cofre(
+        cert_installer.reativar_custodia(
             fingerprint=body.fingerprint,
-            enabled_by=token.email or "desconhecido",
             machine_id=body.machine_id,
-            nome_titular=body.nome_titular,
-            documento=body.documento,
         )
-        return {"status": "ok", "fingerprint": body.fingerprint}
+        return {"status": "ok", "fingerprint": body.fingerprint, "custodia": "ativa"}
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception:
-        logger.exception("Erro ao autorizar certificado no cofre")
-        raise HTTPException(status_code=500, detail="Erro interno ao autorizar")
+        logger.exception("Erro ao reativar custódia do certificado")
+        raise HTTPException(status_code=500, detail="Erro interno ao reativar custódia")
 
 
 @app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_admin)])
-def revogar_vault_optin(
+def bloquear_vault_custodia(
     fingerprint: str,
     machine_id: str = Query(..., min_length=1),
+    motivo: Optional[str] = Query(None, max_length=300),
+    token: auth.TokenData = Depends(require_admin),
 ):
     """
-    Revoga a autorização e APAGA o PFX já armazenado — de UMA estação.
+    Desativa a custódia: registra o bloqueio e APAGA o PFX — de UMA estação.
+
+    **O bloqueio é o que faz isto durar.** Sob opt-in bastava apagar
+    autorização e material: sem autorização o agente não reenviava. Sob
+    opt-out, apagar só o material seria um botão que se desfaz sozinho — o
+    certificado segue no inventário, volta a ser autorizado no ciclo seguinte
+    e o PFX sobe de novo em até 24h.
 
     O `machine_id` é obrigatório: desde a chave composta `(machine_id,
-    fingerprint)`, o mesmo certificado pode estar autorizado em várias estações,
-    e a rota não tem como adivinhar qual delas o admin quer revogar. Sem o
-    parâmetro a chamada é recusada, em vez de apagar o material de todas.
+    fingerprint)`, o mesmo certificado pode estar no cofre de várias estações,
+    e a rota não tem como adivinhar qual delas o admin quer desativar. Sem o
+    parâmetro a chamada é recusada, em vez de alcançar todas.
     """
     try:
-        cert_installer.revogar_do_cofre(fingerprint, machine_id)
+        cert_installer.bloquear_custodia(
+            fingerprint=fingerprint,
+            machine_id=machine_id,
+            bloqueado_por=token.email or "desconhecido",
+            motivo=motivo,
+        )
         return {
             "status": "ok",
             "fingerprint": fingerprint,
             "machine_id": machine_id,
             "pfx_removido": True,
+            "custodia": "bloqueada",
         }
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))

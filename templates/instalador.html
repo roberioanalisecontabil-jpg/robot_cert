@@ -26,10 +26,10 @@
       <section class="card" style="margin-bottom: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">1 · Autorizar certificados para o cofre</h2>
+            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">1 · Custódia dos certificados</h2>
             <p class="text-muted" style="font-size: 0.875rem;">
-              Só os certificados autorizados aqui têm a chave privada copiada para o servidor.
-              O agente ignora todos os demais.
+              Todo certificado válido do inventário vai ao cofre por padrão. Desative aqui os
+              que não devem ter a chave privada copiada para o servidor — o agente passa a ignorá-los.
             </p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center;">
@@ -42,9 +42,9 @@
         <div class="cg-banner cg-banner--info" style="margin-bottom: 1rem;">
           <span class="cg-banner__icon" aria-hidden="true">🔐</span>
           <span class="cg-banner__text">
-            Autorizar copia a chave privada do certificado para o banco do portal, cifrada.
-            Revogar remove a autorização <strong>e apaga o arquivo já armazenado</strong>.
-            Autorize apenas o necessário para instalação remota.
+            A custódia copia a chave privada do certificado para o banco do portal, cifrada.
+            Desativar <strong>apaga o arquivo já armazenado</strong> e impede que ele volte na
+            próxima varredura. Vencidos e ilegíveis nunca entram.
           </span>
         </div>
 
@@ -58,7 +58,7 @@
                   <th role="columnheader">Titular / CNPJ / CPF</th>
                   <th role="columnheader">Validade</th>
                   <th role="columnheader">Fingerprint</th>
-                  <th role="columnheader">No cofre</th>
+                  <th role="columnheader">Custódia</th>
                   <th role="columnheader">Ação</th>
                 </tr>
               </thead>
@@ -269,7 +269,7 @@
         // dela vai receber os certificados listados aqui.
         document.getElementById("optinResumo").textContent =
           `Máquina: ${_optinMachineId} · ` +
-          `${_optinAutorizados.size} autorizado(s) de ${_optinCandidatos.length} certificado(s) no inventário` +
+          `${_optinAutorizados.size} sob custódia de ${_optinCandidatos.length} certificado(s) no inventário` +
           (q ? ` · ${linhas.length} correspondem à busca` : "");
 
         if (!linhas.length) {
@@ -313,10 +313,10 @@
 
           const tdSt = document.createElement("td");
           tdSt.setAttribute("role", "cell");
-          tdSt.setAttribute("data-label", "No cofre");
+          tdSt.setAttribute("data-label", "Custódia");
           const badge = document.createElement("span");
           badge.className = "badge " + (autorizado ? "badge-ok" : "badge-bad");
-          badge.textContent = autorizado ? "Autorizado" : "Não";
+          badge.textContent = autorizado ? "Ativa" : "Desativada";
           tdSt.appendChild(badge);
 
           const tdAcao = document.createElement("td");
@@ -324,7 +324,7 @@
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = autorizado ? "danger" : "primary";
-          btn.textContent = autorizado ? "Revogar" : "Autorizar";
+          btn.textContent = autorizado ? "Desativar" : "Reativar";
           btn.addEventListener("click", () => alternarOptin(c, autorizado, btn));
           tdAcao.appendChild(btn);
 
@@ -336,15 +336,16 @@
       async function alternarOptin(cert, autorizado, btn) {
         const fp = cert.fingerprint_sha256;
         const nome = cert.nome || cert.display_name || "este certificado";
-        // A autorização é por instalação, não por certificado: a mesma máquina
-        // que autoriza é a que revoga. Mandar o machine_id no DELETE é o que
-        // impede a revogação de alcançar as outras estações.
+        // A custódia é por instalação, não por certificado: a mesma máquina
+        // que desativa é a que reativa. Mandar o machine_id é o que impede a
+        // ação de alcançar as outras estações.
         const maquina = cert.machine_id || _optinMachineId;
 
-        // Revogar apaga a chave privada guardada — merece confirmação explícita.
+        // Desativar apaga a chave privada guardada — merece confirmação explícita.
         if (autorizado && !confirm(
-          `Revogar “${nome}” do cofre?\n\n` +
-          `A autorização será removida E o arquivo já armazenado no servidor será apagado.\n\n` +
+          `Desativar a custódia de “${nome}”?\n\n` +
+          `O arquivo já armazenado no servidor será apagado, e o certificado não ` +
+          `voltará ao cofre nas próximas varreduras.\n\n` +
           `Isso vale só para a máquina ${maquina}.`
         )) return;
 
@@ -371,10 +372,10 @@
 
           if (autorizado) {
             _optinAutorizados.delete(fp);
-            showToast(`“${nome}” revogado. O arquivo foi apagado do servidor.`, "success");
+            showToast(`“${nome}” fora da custódia. O arquivo foi apagado do servidor.`, "success");
           } else {
             _optinAutorizados.add(fp);
-            showToast(`“${nome}” autorizado. O agente enviará no próximo ciclo.`, "success");
+            showToast(`“${nome}” de volta à custódia. O agente enviará no próximo ciclo.`, "success");
           }
           renderOptinTable();
           loadAvailableCerts();

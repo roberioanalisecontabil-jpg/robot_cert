@@ -2,8 +2,10 @@
 
 Cinco decisões tomadas na revisão:
 
-1. Opt-in do cofre — o agente enviava TODOS os certificados lidos a cada ciclo.
-   Numa base de 1.028, mil chaves privadas copiadas ao servidor sem decisão.
+1. Custódia do cofre — o agente enviava TODOS os certificados lidos a cada
+   ciclo. Numa base de 1.028, mil chaves privadas copiadas ao servidor sem
+   decisão. Virou opt-in; em 15/08/2026 virou opt-out com lista de bloqueios,
+   e o que era "autorização explícita" passou a ser "exceção explícita".
 2. Token entregue ao agente — era gerado no /prepare e nunca chegava, então a
    instalação nunca completava.
 3. `key_version` gravado — sem ele, rotacionar a chave exige recifrar tudo.
@@ -27,24 +29,24 @@ def _admin() -> dict:
 
 
 # ==========================================================================
-# 1. Opt-in do cofre
+# 1. Custódia do cofre (opt-out desde 15/08/2026)
 # ==========================================================================
 
-def test_upload_recusa_certificado_nao_autorizado(client_com_chave: TestClient, api_key: str) -> None:
-    with patch.object(ci, "listar_optin_fingerprints", lambda *a, **k: []):
+def test_upload_recusa_certificado_fora_da_custodia(client_com_chave: TestClient, api_key: str) -> None:
+    with patch.object(ci, "fingerprints_autorizados", lambda *a, **k: set()):
         r = client_com_chave.post(
             "/api/cert-installer/upload-pfx",
             json={"fingerprint": "a" * 64, "pfx_b64": "AAAA", "machine_id": "m1"},
             headers={"X-API-Key": api_key},
         )
     assert r.status_code == 403
-    assert "não autorizado" in r.json()["detail"].lower()
+    assert "fora da custódia" in r.json()["detail"].lower()
 
 
-def test_upload_aceita_certificado_autorizado(client_com_chave: TestClient, api_key: str) -> None:
-    """Passa pela barreira do opt-in; o que falha depois é outra etapa."""
+def test_upload_aceita_certificado_sob_custodia(client_com_chave: TestClient, api_key: str) -> None:
+    """Passa pela barreira da custódia; o que falha depois é outra etapa."""
     fp = "b" * 64
-    with patch.object(ci, "listar_optin_fingerprints", lambda *a, **k: [fp]):
+    with patch.object(ci, "fingerprints_autorizados", lambda *a, **k: {fp}):
         r = client_com_chave.post(
             "/api/cert-installer/upload-pfx",
             json={"fingerprint": fp, "pfx_b64": "AAAA", "machine_id": "m1"},
@@ -53,28 +55,43 @@ def test_upload_aceita_certificado_autorizado(client_com_chave: TestClient, api_
     assert r.status_code != 403
 
 
-def test_lista_de_optin_falha_fechada(monkeypatch) -> None:
+def test_upload_recusa_quando_a_custodia_e_indeterminada(
+    client_com_chave: TestClient, api_key: str
+) -> None:
     """
-    Se a consulta ao opt-in falhar, a lista volta vazia — nada é enviado.
-    Falhar aberto copiaria chaves privadas para o servidor por acidente.
+    Falha fechada na inversão.
+
+    Sob opt-in, erro na consulta e lista vazia davam no mesmo lugar seguro. Sob
+    opt-out são opostos: "não sei o que está bloqueado" não pode virar "nada
+    está bloqueado". Este teste é o que impede a barreira de aceitar tudo
+    justamente quando o banco está instável.
     """
-    class _Quebrado:
-        def table(self, _n):
-            raise RuntimeError("banco fora do ar")
+    def _explode(*a, **k):
+        raise ci.CustodiaIndisponivel("banco fora do ar")
 
-    monkeypatch.setattr(ci, "_supabase", lambda: _Quebrado())
-    assert ci.listar_optin_fingerprints() == []
+    with patch.object(ci, "fingerprints_autorizados", _explode):
+        r = client_com_chave.post(
+            "/api/cert-installer/upload-pfx",
+            json={"fingerprint": "a" * 64, "pfx_b64": "AAAA", "machine_id": "m1"},
+            headers={"X-API-Key": api_key},
+        )
+    assert r.status_code == 503, r.text
 
 
-def test_revogar_apaga_o_pfx_armazenado(monkeypatch) -> None:
-    """Revogar sem apagar deixaria a chave privada no servidor."""
+def test_bloquear_apaga_o_pfx_armazenado(monkeypatch) -> None:
+    """Bloquear sem apagar deixaria a chave privada no servidor."""
     apagados = []
+    gravados = []
 
     class _Tabela:
         def __init__(self, nome):
             self.nome = nome
 
         def delete(self):
+            return self
+
+        def upsert(self, row, **_kw):
+            gravados.append((self.nome, row))
             return self
 
         def eq(self, campo, valor):
@@ -85,17 +102,25 @@ def test_revogar_apaga_o_pfx_armazenado(monkeypatch) -> None:
             return type("R", (), {"data": []})()
 
     monkeypatch.setattr(ci, "_supabase", lambda: type("C", (), {"table": lambda s, n: _Tabela(n)})())
-    ci.revogar_do_cofre("c" * 64, "PC-CONTABIL-01")
+    ci.bloquear_custodia("c" * 64, "PC-CONTABIL-01", bloqueado_por="admin@exemplo.com")
 
     tabelas = {t for t, _, _ in apagados}
     assert "cert_vault_optin" in tabelas
-    assert "cert_pfx_store" in tabelas, "PFX permaneceu no servidor após revogação"
+    assert "cert_pfx_store" in tabelas, "PFX permaneceu no servidor após o bloqueio"
 
-    # Os dois deletes filtram pela máquina. Sem isso, revogar numa estação
+    # Os dois deletes filtram pela máquina. Sem isso, bloquear numa estação
     # levaria o material de todas as outras que têm o mesmo certificado.
     for tabela in ("cert_vault_optin", "cert_pfx_store"):
         campos = {c for t, c, _ in apagados if t == tabela}
         assert campos == {"fingerprint", "machine_id"}, f"{tabela} apagou sem a máquina"
+
+    # E o bloqueio fica registrado: sob opt-out, apagar sem registrar seria um
+    # botão que se desfaz sozinho no ciclo seguinte do agente.
+    assert [n for n, _ in gravados] == ["cert_vault_bloqueio"]
+    linha = gravados[0][1]
+    assert linha["fingerprint"] == "c" * 64
+    assert linha["machine_id"] == "PC-CONTABIL-01"
+    assert linha["bloqueado_por"] == "admin@exemplo.com"
 
 
 # ==========================================================================
@@ -245,7 +270,7 @@ def test_limite_de_upload_e_1mb(client_com_chave: TestClient, api_key: str) -> N
 
     fp = "f" * 64
     grande = base64.b64encode(b"A" * (2 * 1024 * 1024)).decode()
-    with patch.object(ci, "listar_optin_fingerprints", lambda *a, **k: [fp]):
+    with patch.object(ci, "fingerprints_autorizados", lambda *a, **k: {fp}):
         r = client_com_chave.post(
             "/api/cert-installer/upload-pfx",
             json={"fingerprint": fp, "pfx_b64": grande, "machine_id": "m1"},

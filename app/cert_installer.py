@@ -19,7 +19,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric.ec import (
@@ -364,66 +364,173 @@ def get_pfx_by_ids(cert_ids: List[str]) -> List[Dict[str, Any]]:
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Opt-in do cofre — quais certificados podem ter o PFX armazenado
+# Custódia do cofre — quais certificados podem ter o PFX armazenado
+#
+# Desde 15/08/2026 o modelo é OPT-OUT: todo certificado válido do inventário
+# entra, menos os que o admin bloqueou. Antes era opt-in, e o resultado eram
+# 33 de 560 guardados.
+#
+# A inversão traz um perigo que não existia. No opt-in, "não consegui ler a
+# lista" e "a lista está vazia" levavam ao MESMO resultado seguro: não enviar
+# nada. No opt-out são opostos — lista de bloqueios vazia significa "mande
+# tudo". Traduzir o código antigo literalmente transformaria falha fechada em
+# falha aberta, numa mudança de três linhas e sem sintoma nenhum: tudo
+# continuaria funcionando, e chaves privadas demais subiriam.
+#
+# Por isso as funções abaixo **levantam** em vez de devolver vazio. Quem chama
+# é obrigado a decidir o que fazer com o erro, e o `except` distraído deixa de
+# ser o caminho de menor resistência.
 # ──────────────────────────────────────────────────────────────────────────
 
-def listar_optin_fingerprints(machine_id: Optional[str] = None) -> List[str]:
+class CustodiaIndisponivel(RuntimeError):
     """
-    Fingerprints autorizados a ir para o cofre.
+    Não deu para determinar com segurança o que pode ir ao cofre.
 
-    O agente consulta esta lista antes de enviar qualquer PFX. Antes ele enviava
-    todos os certificados lidos a cada ciclo — numa base de mil certificados,
-    mil chaves privadas copiadas para o Supabase sem decisão explícita.
+    Existe para que "não sei" seja um estado próprio, distinto de "nada está
+    bloqueado". Quem trata isto tem de fechar: não enviar, não aceitar.
+    """
+
+
+def listar_bloqueios(machine_id: str) -> Set[str]:
+    """
+    Fingerprints com a custódia desativada pelo admin nesta máquina.
+
+    Levanta `CustodiaIndisponivel` se a consulta falhar. Devolver vazio aqui
+    seria dizer "nada bloqueado, pode mandar tudo" — exatamente o contrário do
+    que uma falha significa.
     """
     client = _supabase()
     if not client:
-        return []
+        raise CustodiaIndisponivel("Supabase não configurado")
     try:
-        q = client.table("cert_vault_optin").select("fingerprint")
-        if machine_id:
-            q = q.eq("machine_id", machine_id)
-        r = q.execute()
-        return [str(row["fingerprint"]) for row in (r.data or []) if row.get("fingerprint")]
-    except Exception:
-        logger.exception("Falha ao listar opt-in do cofre")
-        # Lista vazia = nada é enviado. Falha fechada: na dúvida, não copiar
-        # chave privada para o servidor.
-        return []
+        r = (
+            client.table("cert_vault_bloqueio")
+            .select("fingerprint")
+            .eq("machine_id", machine_id)
+            .execute()
+        )
+        return {str(row["fingerprint"]) for row in (r.data or []) if row.get("fingerprint")}
+    except Exception as e:
+        logger.exception("Falha ao listar bloqueios do cofre")
+        raise CustodiaIndisponivel(str(e)) from e
 
 
-def autorizar_no_cofre(
-    fingerprint: str,
-    enabled_by: str,
-    machine_id: str = "default",
-    nome_titular: Optional[str] = None,
-    documento: Optional[str] = None,
-) -> None:
+def fingerprints_do_inventario(machine_id: str) -> Set[str]:
+    """
+    Fingerprints que a máquina reportou na varredura mais recente.
+
+    O agente envia o snapshot (`/api/ingest`) ANTES de sincronizar o cofre no
+    mesmo ciclo, então o inventário lido aqui é o desta varredura.
+
+    Certificado vencido fica de fora: não instala, e guardar chave privada que
+    não serve para nada é passivo puro. Certificado sem fingerprint idem — o
+    scanner não conseguiu lê-lo.
+    """
+    client = _supabase()
+    if not client:
+        raise CustodiaIndisponivel("Supabase não configurado")
+    try:
+        r = (
+            client.table("cert_snapshots")
+            .select("items")
+            .eq("machine_id", machine_id)
+            .order("scanned_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        logger.exception("Falha ao ler o inventário da máquina %s", machine_id)
+        raise CustodiaIndisponivel(str(e)) from e
+
+    linhas = r.data or []
+    if not linhas:
+        # Máquina que ainda não mandou varredura nenhuma. Não é erro: é uma
+        # máquina sem certificados conhecidos, e o resultado correto é não
+        # autorizar nada até ela se apresentar.
+        return set()
+
+    out: Set[str] = set()
+    for item in (linhas[0].get("items") or []):
+        fp = str(item.get("fingerprint_sha256") or "").strip()
+        if not fp:
+            continue
+        if str(item.get("status") or "").strip().lower() in _STATUS_NAO_CUSTODIAVEL:
+            continue
+        out.add(fp)
+    return out
+
+
+# Vencido não instala; 'erro' e 'fora_do_padrao' o scanner não conseguiu ler.
+# Guardar a chave privada destes é passivo sem contrapartida.
+_STATUS_NAO_CUSTODIAVEL = {"expirado", "vencido", "erro", "fora_do_padrao"}
+
+
+def fingerprints_autorizados(machine_id: str) -> Set[str]:
+    """
+    O que a máquina pode enviar ao cofre: inventário válido MENOS bloqueados.
+
+    É a lista que o agente consome. O contrato com ele não mudou na inversão —
+    ele sempre perguntou "o que posso mandar?" e agiu só sobre a resposta. O
+    que mudou foi o que entra na resposta, e é por isso que o `.exe` instalado
+    no ANALISESRV não precisou ser recompilado.
+    """
+    return fingerprints_do_inventario(machine_id) - listar_bloqueios(machine_id)
+
+
+def reativar_custodia(fingerprint: str, machine_id: str) -> None:
+    """
+    Devolve o certificado ao cofre: apaga o bloqueio.
+
+    O material volta sozinho na varredura seguinte — o agente passa a receber
+    este fingerprint na lista de autorizados e reenvia o PFX. Não há o que
+    restaurar aqui, porque o cofre é derivado dos arquivos do ANALISESRV.
+    """
     client = _supabase()
     if not client:
         raise RuntimeError("Supabase não configurado")
-    client.table("cert_vault_optin").upsert(
+    (
+        client.table("cert_vault_bloqueio")
+        .delete()
+        .eq("fingerprint", fingerprint)
+        .eq("machine_id", machine_id)
+        .execute()
+    )
+
+
+def bloquear_custodia(
+    fingerprint: str,
+    machine_id: str,
+    bloqueado_por: str,
+    motivo: Optional[str] = None,
+) -> None:
+    """
+    Tira o certificado do cofre e impede que ele volte.
+
+    **O registro do bloqueio é a parte indispensável.** Sob opt-in bastava
+    apagar a autorização e o material: sem autorização, o agente não reenviava.
+    Sob opt-out, apagar só o material não resolve nada — o certificado continua
+    no inventário, volta a ser autorizado no ciclo seguinte e o PFX sobe de
+    novo. Seria um botão que parece funcionar e desfaz a si mesmo em 24 horas.
+
+    O `machine_id` é obrigatório de propósito: sob a chave composta, agir só
+    por fingerprint alcançaria todas as máquinas que têm o mesmo certificado.
+    """
+    client = _supabase()
+    if not client:
+        raise RuntimeError("Supabase não configurado")
+
+    client.table("cert_vault_bloqueio").upsert(
         {
-            "fingerprint": fingerprint,
             "machine_id": machine_id,
-            "nome_titular": nome_titular,
-            "documento": documento,
-            "enabled_by": enabled_by,
+            "fingerprint": fingerprint,
+            "motivo": motivo,
+            "bloqueado_por": bloqueado_por,
         },
         on_conflict="machine_id,fingerprint",
     ).execute()
-
-
-def revogar_do_cofre(fingerprint: str, machine_id: str) -> None:
-    """
-    Remove a autorização E o PFX já armazenado — de UMA estação.
-
-    O `machine_id` é obrigatório de propósito. Sob a chave composta, revogar só
-    por fingerprint apagaria o material de todas as máquinas que têm o mesmo
-    certificado; quem chama tem de dizer qual instalação está revogando.
-    """
-    client = _supabase()
-    if not client:
-        raise RuntimeError("Supabase não configurado")
+    # A autorização legada sai junto: enquanto existir, ela contradiz o
+    # bloqueio na trilha, e alguém lendo as duas tabelas veria o certificado
+    # como autorizado e bloqueado ao mesmo tempo.
     (
         client.table("cert_vault_optin")
         .delete()
@@ -431,8 +538,8 @@ def revogar_do_cofre(fingerprint: str, machine_id: str) -> None:
         .eq("machine_id", machine_id)
         .execute()
     )
-    # Revogar sem apagar o material armazenado deixaria a chave privada no
-    # servidor indefinidamente — o oposto da intenção.
+    # Bloquear sem apagar o material deixaria a chave privada no servidor
+    # indefinidamente — o oposto da intenção.
     (
         client.table("cert_pfx_store")
         .delete()

@@ -1,6 +1,6 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
-> **Status: Etapas 0, 1 e 2a aplicadas em 2026-08-15. O resto é proposta.**
+> **Status: Etapas 0, 1, 2a e 2b aplicadas em 2026-08-15. O resto é proposta.**
 > Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
@@ -222,6 +222,14 @@ Mitigações, em ordem de custo-benefício:
 
 É a inversão do "Passo 1" atual, e continua fora do Início: desativar custódia é
 decisão de segurança, não rotina de operação (§4.8).
+
+#### (d) Consequência de volume, aplicada mas não resolvida
+
+O agente reenvia **tudo o que está autorizado a cada ciclo** — não há verificação
+de "já está no cofre e não mudou". Com 33 certificados isso era invisível; com
+~490 passam a ser ~490 requisições e ~5,7 MB por varredura, todo dia, contra uma
+função serverless. Não quebra nada hoje, mas é desperdício de 15× e merece uma
+etapa própria: o agente pular o que já está gravado com o mesmo fingerprint.
 
 ### 3.3 Acesso: a carteira
 
@@ -502,8 +510,8 @@ Etapa 1  Dashboard → Início            ✅ aplicada
    ↓
 Etapa 2a modelo de usuário             ✅ aplicada — role vs ativo + gestor_id
    ↓
-Etapa 2b custódia: opt-in → opt-out    ← fail-closed ESTRUTURAL (§3.2a)
-   ↓                                      exclui vencido e ilegível (§3.2b)
+Etapa 2b custódia: opt-in → opt-out    ✅ aplicada — fail-closed estrutural
+   ↓
 Etapa 2c carteira + barreira no server ← a tela filtra, o servidor decide (§3.4.5)
    ↓
 Etapa 2d Início: seleção + flutuante   ← já nasce ciente de carteira (§3.5)
