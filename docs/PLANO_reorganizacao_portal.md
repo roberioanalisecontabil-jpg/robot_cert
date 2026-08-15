@@ -1,6 +1,7 @@
 # Plano — reorganização do portal: Início, Dashboard, Instalador e gestão
 
 > **Status: Etapas 0 e 1 aplicadas em 2026-08-15. Etapas 2 a 5 são proposta.**
+> Modelo de custódia e carteira definido pelo cliente em 15/08 — ver §3.
 > Elaborado em 2026-08-15. Todos os números deste documento foram medidos
 > contra o banco de produção na data, não estimados.
 
@@ -32,7 +33,7 @@ Soma-se o peso de LGPD: o projeto já tem `20260517193000_rls_lgpd.sql`, e
 Cronometrar presença de funcionário é exatamente o tipo de coleta que precisa de
 justificativa, e aqui ela não existe.
 
-**Contraproposta (seção 4.9):** medir **atividade**, não permanência. Última
+**Contraproposta (§5.3):** medir **atividade**, não permanência. Última
 atividade, ações no período, taxa de conclusão por usuário. Responde a pergunta
 real — *quem está usando e quem travou?* — com evento discreto em vez de
 cronômetro, e alimenta direto a etapa de gestor/operador.
@@ -158,50 +159,134 @@ páginas competindo pelo mesmo papel.
 
 ---
 
-## 3. Etapa 2 — Início: seleção + barra flutuante
+## 3. Etapa 2 — Custódia, carteira e a seleção no Início
 
-**É a etapa mais arriscada do plano, e o risco não é de UI.**
+> **Revisto em 2026-08-15** depois da definição do modelo pelo cliente. A versão
+> anterior desta seção supunha que o opt-in continuaria como está; não continua.
 
-### 3.1 O problema central: 560 listados, 33 instaláveis
+### 3.1 Um flag hoje decide duas coisas diferentes
 
-| Origem | Quantidade |
-|---|---|
-| Inventário do agente (`/api/certificados?fonte=auto`) — o que a tela lista hoje | **560** |
-| Autorizados ao cofre (`cert_vault_optin`) | **34** |
-| Efetivamente no cofre, com PFX (`cert_pfx_store`) | **33** |
+`cert_vault_optin` responde, com um único registro, a duas perguntas que têm
+donos, defaults e riscos distintos:
 
-**6% do que está na tela é instalável.** Uma seleção ingênua deixa o usuário
-marcar 10 certificados e receber um `.exe` que instala um. O erro aparece depois
-do download, na máquina dele, longe da causa — o pior lugar possível.
+| Pergunta | Quem decide | Default definido |
+|---|---|---|
+| **Custódia** — o PFX sai do ANALISESRV e fica guardado no servidor? | admin | **ligado**, admin desativa pontualmente |
+| **Acesso** — quem pode instalar este certificado? | gestor | **desligado**, gestor concede por carteira |
 
-### 3.2 Consequências de design, em ordem de importância
+Separar as duas é o que torna o modelo pedido coerente. Enquanto forem o mesmo
+flag, "liberar para o operador instalar" e "copiar a chave privada para a nuvem"
+são o mesmo clique — e não deveriam ser.
 
-1. **Cada linha precisa de estado de instalabilidade**, resolvido na carga:
-   *no cofre* / *autorizado, aguardando o agente* / *não autorizado*.
-2. **Checkbox desabilitado com motivo visível** em quem não é instalável.
-   Deixar marcar e falhar depois é a armadilha descrita acima.
+### 3.2 Custódia: o opt-in vira opt-out
+
+Hoje o cofre tem 33 de 560 (**6%**), porque cada certificado exige autorização
+explícita. Passa a ser o contrário: entra por padrão, o admin desativa o que não
+quer.
+
+**Isto inverte uma decisão tomada de propósito**, e há dois efeitos a tratar —
+nenhum deles é armazenamento (560 PFX ≈ **5,7 MB**; não é problema).
+
+#### (a) A falha precisa continuar fechando — e ela inverte sozinha
+
+`listar_optin_fingerprints` devolve lista vazia quando a consulta falha, e o
+código diz por quê: *"Falha fechada: na dúvida, não copiar chave privada para o
+servidor."*
+
+No modelo invertido, a tradução ingênua é consultar os **desativados** — e aí
+lista vazia por erro passa a significar **"nada foi desativado, mande tudo"**. É
+fail-closed virando fail-open numa mudança de três linhas que parece inofensiva,
+e o sintoma é o oposto de um erro: tudo funciona, e chaves demais sobem.
+
+**Requisito estrutural, não convenção:** a resposta precisa carregar a afirmação
+de completude — algo como `{"modo": "opt-out", "desativados": [...]}` — e o
+agente recusa enviar quando não conseguiu obtê-la. Distinguir *"nenhum
+desativado"* de *"não consegui saber"* é a coisa toda.
+
+#### (b) O raio de exposição vai de 33 para ~490 chaves privadas
+
+São certificados ICP-Brasil de **clientes** do escritório, não do escritório.
+Um vazamento de banco somado à chave de cifragem deixa de comprometer 33
+assinaturas juridicamente válidas e passa a comprometer quase quinhentas.
+Mitigações, em ordem de custo-benefício:
+
+1. **Não guardar o que não instala.** Do inventário atual: 16 vencidos, 21 com
+   erro de leitura, 31 fora do padrão — **68 certificados** que são passivo puro,
+   sem utilidade nenhuma. "Tudo por padrão" deve significar **todo certificado
+   válido e legível**, não todo arquivo da pasta.
+2. **Expurgo por vencimento.** Certificado que venceu sai do cofre. Sem isso o
+   acervo só cresce, e cresce em chave privada.
+3. As chaves distintas para PFX e senha já existem (feito em 11/08).
+
+#### (c) O painel de desativação é do admin, e fica na configuração
+
+É a inversão do "Passo 1" atual, e continua fora do Início: desativar custódia é
+decisão de segurança, não rotina de operação (§4.8).
+
+### 3.3 Acesso: a carteira
+
+**Já existe meia implementação.** `colaborador_cert_selecoes` (`user_email` →
+lista de documentos) é exatamente uma carteira — hoje usada para decidir quem
+recebe alerta de qual certificado. O conceito já está validado no produto; falta
+aplicá-lo a instalação.
+
+**Granularidade: documento (CNPJ/CPF)**, como já é nos alertas. O universo atual
+é de **488 documentos distintos** entre 508 certificados que têm documento.
+
+**Decisões tomadas pelo cliente em 15/08:**
+
+| Decisão | Escolha | Consequência a mitigar |
+|---|---|---|
+| Alcance do gestor | pode atribuir **qualquer** cliente do acervo | conta de gestor comprometida alcança tudo → **trilha obrigatória** de quem atribuiu o quê, a quem e quando |
+| Visão do operador | **vê todos**, instala só os da carteira | a relação de clientes do escritório fica visível a todo operador; se isso incomodar depois, mascarar o documento das linhas bloqueadas resolve sem mudar o modelo |
+
+**Os 52 certificados sem documento** não podem ser atribuídos por CNPJ. Precisam
+de regra explícita — a mais simples é mantê-los acessíveis só a admin, já que
+sem documento não há como saber de quem são.
+
+**Tabela nova, não estender a existente.** `colaborador_cert_selecoes` está
+chaveada por `user_email` (e-mail muda, e a liberação se desprenderia da pessoa
+em silêncio) e serve a outro propósito — receber alerta não é o mesmo que poder
+instalar. A carteira nova nasce por `user_id`, com `atribuido_por` e
+`atribuido_em` para a trilha exigida acima.
+
+### 3.4 A tela do Início
+
+O problema original desta etapa — *560 listados, 33 instaláveis* — **muda de
+natureza, não desaparece**. Com o opt-out, quase tudo estará no cofre; o filtro
+que passa a mandar é a carteira. E como o operador vê todos, a lista continua
+tendo linhas que ele não pode instalar.
+
+1. **Estado de instalabilidade por linha**, agora com motivos diferentes: *fora
+   da sua carteira* (o caso comum), *custódia desativada pelo admin*, *ainda não
+   enviado pelo agente*, *vencido*.
+2. **Checkbox desabilitado com o motivo visível.** Deixar marcar e falhar depois
+   entrega o erro na máquina do usuário, longe da causa.
 3. **A barra flutuante mostra os dois números** — "12 selecionados · 3
-   instaláveis" — e o botão age só sobre os instaláveis.
+   instaláveis" — e age só sobre os instaláveis.
 4. **Falta o mapa `fingerprint` → `id`.** `prepare-install` recebe
-   `certificate_ids` (UUID de `cert_pfx_store`); a tela do Início tem
-   fingerprints do inventário. Exige uma chamada a `list_available_pfx` na carga
-   da página — que é também a fonte natural do estado do item 1.
-5. **`target_machine` não pode ser campo de texto livre para o usuário final.**
-   Hoje o instalador pede digitado, com default `"default"`. No modelo Ninite o
-   `.exe` roda na máquina de quem baixou; **verificar se `target_machine` ainda
+   `certificate_ids` (UUID de `cert_pfx_store`); a tela tem fingerprints do
+   inventário. Uma chamada a `list_available_pfx` na carga resolve, e é a mesma
+   fonte do estado do item 1.
+5. **A carteira tem de ser aplicada no servidor, não só na tela.** Esconder ou
+   desabilitar no HTML é conveniência; a barreira real vai em `prepare-install`,
+   que hoje não sabe o que é carteira. Sem isso, basta forjar a chamada.
+6. **`target_machine` não pode ser campo de texto livre para o usuário final.**
+   No modelo Ninite o `.exe` roda na máquina de quem baixou; **verificar se ainda
    tem função nesse fluxo** antes de expor ou remover.
-6. **Definir teto de certificados por token.** `certificate_ids` é array sem
-   limite; o bundle vai junto no download. Escolher o teto e recusar acima dele
-   com mensagem clara — melhor que um download de tamanho imprevisível.
-7. **A barra flutuante não pode tapar a paginação** no mobile. A tabela já pagina
-   e a barra vive embaixo.
+7. **Definir teto de certificados por token** e recusar acima dele com mensagem
+   clara — melhor que um download de tamanho imprevisível.
+8. **A barra flutuante não pode tapar a paginação** no mobile.
 
-### 3.3 O que NÃO fazer nesta etapa
+### 3.5 Consequência de ordem: a carteira deixou de ser "futuro"
 
-Não mover a autorização do cofre para o Início. Autorizar é decidir **copiar uma
-chave privada para o servidor** — ação de admin, e continua na página de
-configuração (seção 4.8). Misturar as duas na mesma tela transforma um clique de
-segurança em rotina.
+Era a etapa 5. Não é mais: **é a carteira que torna o Início correto para quem
+não é admin**. Construir a seleção supondo "admin vê e instala tudo" e só depois
+introduzir carteira significa refazer a tela e o endpoint.
+
+A etapa 2 nasce ciente de carteira, ainda que a carteira comece rasa — admin vê
+tudo, operador sem atribuição não instala nada — e a UI de gestão do gestor venha
+depois (§6).
 
 ---
 
@@ -345,10 +430,15 @@ todos eles.
 
 ---
 
-## 6. Etapa 5 — Gestor / operador *(futuro)*
+## 6. Etapa 5 — Gestor / operador: a UI de gestão
 
-Não implementar agora. Registrado porque **duas decisões das etapas anteriores
-dependem disto**, e refazer sai caro.
+**Deixou de ser "futuro" em 15/08.** O modelo de carteira subiu para a etapa 2
+(§3.5), porque é ele que torna o Início correto para quem não é admin. O que
+sobra aqui é a **interface de gestão** e a hierarquia propriamente dita: o gestor
+montando carteiras, e o histórico de instalação por usuário.
+
+Os pré-requisitos abaixo, porém, **antecipam-se junto com a carteira** — não dá
+para ter carteira por `user_id` sem resolver o modelo de usuário primeiro.
 
 ### 6.1 O modelo de `role` atual não comporta hierarquia
 
@@ -368,12 +458,13 @@ existirem gestores, essa migration mexe em vínculos e o risco cresce.
 associação, e o caso "dois gestores para a mesma pessoa" não existe hoje —
 resolver o problema que se tem.
 
-### 6.3 Liberação de certificados: já existe meia tabela
+### 6.3 Liberação de certificados: ver §3.3
 
-`colaborador_cert_selecoes` (`user_email`, `documentos`, 1 linha) é quase a
-tabela de liberação. **Mas está chaveada por `user_email`, não por `user_id`** —
-e-mail muda, e quando mudar a liberação se desprende silenciosamente da pessoa.
-Corrigir a chave antes de construir governança em cima.
+A carteira foi detalhada na etapa 2. O que fica aqui é a tela do gestor —
+atribuir e revogar documentos por operador — e a **trilha**, que deixou de ser
+opcional: com o gestor podendo atribuir qualquer cliente do acervo (decisão de
+15/08), quem atribuiu o quê a quem e quando é a única forma de reconstruir o que
+aconteceu se uma conta de gestor for comprometida.
 
 Boa notícia: `install_log` já tem `user_id` preenchido em **25 de 25** linhas. O
 histórico por usuário nasce correto.
@@ -401,27 +492,44 @@ declare.
 
 ## 7. Ordem de execução e dependências
 
+A definição do modelo em 15/08 reordenou o meio do plano: a carteira, que era a
+última etapa, virou pré-requisito da segunda.
+
 ```
-Etapa 0  sidebar em partial            ← pré-requisito de tudo
+Etapa 0  sidebar em partial            ✅ aplicada
    ↓
-Etapa 1  Dashboard → Início            (barato, isolado)
+Etapa 1  Dashboard → Início            ✅ aplicada
    ↓
-Etapa 2  Início: seleção + flutuante   ← precisa do estado de instalabilidade (§3.2)
+Etapa 2a modelo de usuário             ← role vs ativo (§6.1) + gestor_id (§6.2)
+   ↓                                      a carteira depende de user_id estável
+Etapa 2b custódia: opt-in → opt-out    ← fail-closed ESTRUTURAL (§3.2a)
+   ↓                                      exclui vencido e ilegível (§3.2b)
+Etapa 2c carteira + barreira no server ← a tela filtra, o servidor decide (§3.4.5)
    ↓
-Etapa 3  /instalador só configuração   ← só depois que a operação saiu para o Início
+Etapa 2d Início: seleção + flutuante   ← já nasce ciente de carteira (§3.5)
+   ↓
+Etapa 3  /instalador só configuração   ← recebe o painel de desativação (§3.2c)
    ↓
 Etapa 4  /dashboard novo               ← decidir agregação ANTES do 1º endpoint (§5.4)
-         + tabela user_activity        ← pré-requisito da etapa 5
+         + tabela user_activity
    ↓
-Etapa 5  gestor / operador             ← exige role/ativo separados (§6.1)
-                                          e chave por user_id (§6.3)
+Etapa 5  UI do gestor + trilha         ← trilha obrigatória pelo alcance total (§6.3)
 ```
+
+**Por que 2a antes de 2b/2c:** a carteira é chaveada por `user_id`, e enquanto
+`disabled` for um *papel* em vez de um estado, desativar um gestor apaga o
+registro de que era gestor — e junto o sentido das carteiras que ele criou. São
+10 usuários hoje; a mesma migration com hierarquia montada é outro problema.
+
+**Por que 2b antes de 2c:** não faz sentido conceder carteira sobre um cofre que
+tem 6% do acervo. Inverter a custódia primeiro faz a carteira nascer sobre um
+conjunto realista.
 
 **Consertos pequenos que valem antes de tudo**, porque ficam mais caros depois:
 
-1. Login devolvendo 500 em credencial inválida (§0.5) — uma linha
-2. `role` vs `ativo` em `users` (§6.1) — enquanto são 10 usuários
-3. `colaborador_cert_selecoes` chaveada por `user_id` (§6.3) — enquanto é 1 linha
+1. Login devolvendo 500 em credencial inválida (§0.5) — uma linha, e a etapa 2a
+   mexe exatamente nesse handler
+2. `colaborador_cert_selecoes` chaveada por `user_id` — enquanto é 1 linha
 
 ---
 
