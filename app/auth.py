@@ -44,6 +44,12 @@ def _get_secret_key() -> str:
 class TokenData(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
+    # Preenchido por `main._sessao_do_token`, que já leu a linha em `users` para
+    # validar a sessão. Não vem do JWT e não é assinado: é só o `id` da conta
+    # que acabou de ser conferida, carregado para as rotas não repetirem a
+    # consulta. Fica None quando não houve leitura — sem Supabase configurado,
+    # e no agente por X-API-Key, que não tem conta no portal.
+    user_id: Optional[str] = None
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:

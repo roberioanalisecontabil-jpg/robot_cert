@@ -154,7 +154,23 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
     return auth.TokenData(
         email=conta.get("email") or token_data.email,
         role=conta.get("role"),
+        user_id=str(conta["id"]) if conta.get("id") is not None else None,
     )
+
+
+def _user_id_da_sessao(token: auth.TokenData) -> Optional[str]:
+    """
+    O UUID de quem está na requisição.
+
+    `_sessao_do_token` já leu a linha inteira em `users` para validar a sessão, e
+    o `id` veio junto. Reaproveitá-lo poupa repetir a MESMA consulta poucas
+    linhas depois — foi o que pagou a leitura extra que a revogação introduziu.
+
+    O `_resolve_user_id` continua como saída para quando não houve leitura: sem
+    Supabase configurado, e no agente por X-API-Key. Nesses casos ele devolve o
+    mesmo `None` de antes, e as rotas seguem respondendo 404 como respondiam.
+    """
+    return token.user_id or _resolve_user_id(token.email or "")
 
 
 async def require_auth(
@@ -2870,7 +2886,7 @@ def atribuir_carteira(
         gravados = cert_installer.atribuir_carteira(
             user_id=body.user_id,
             documentos=body.documentos,
-            atribuido_por=_resolve_user_id(token.email),
+            atribuido_por=_user_id_da_sessao(token),
             atribuido_por_email=token.email or "desconhecido",
         )
         return {"status": "ok", "gravados": gravados}
@@ -3091,7 +3107,7 @@ def instalabilidade(
     não convidar o usuário a marcar o que o servidor vai recusar depois, com o
     erro chegando só na máquina dele.
     """
-    user_id = _resolve_user_id(token.email)
+    user_id = _user_id_da_sessao(token)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     try:
@@ -3279,7 +3295,7 @@ def preparar_download(
     if not body.certificate_ids:
         raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
 
-    user_id = _resolve_user_id(token.email)
+    user_id = _user_id_da_sessao(token)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 

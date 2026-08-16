@@ -229,3 +229,66 @@ def test_sem_supabase_o_token_ainda_vale(
     """
     monkeypatch.setattr("app.settings_state._supabase", lambda: None)
     assert client.get("/api/users", headers=_h()).status_code == 200
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7. O `id` que a validação já leu não é lido de novo
+# ──────────────────────────────────────────────────────────────────────────
+#
+# A revogação custa uma leitura em `users` por requisição. Três rotas chamavam
+# `_resolve_user_id(token.email)` logo depois, que é a MESMA consulta. Estes
+# testes existem porque o proveito é invisível: sem eles, alguém "simplificando"
+# `_user_id_da_sessao` de volta para `_resolve_user_id` não veria diferença
+# nenhuma no vermelho da suíte, só na conta do banco.
+
+
+def test_sessao_carrega_o_id_da_conta(banco: _Fake) -> None:
+    """A validação já tem a linha em mãos; o `id` vem junto de graça."""
+    from app import main as m
+
+    sessao = m._sessao_do_token(auth.TokenData(email="chefe@x.com", role="admin"))
+    assert sessao.user_id == "u-adm"
+
+
+def test_id_da_sessao_nao_reconsulta_o_banco(
+    banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Com o `id` já na sessão, `_resolve_user_id` não deve ser tocado. O duplo
+    explode se for — é a única forma de a repetição aparecer como falha.
+    """
+    from app import main as m
+
+    def _nao_deveria(_email: str) -> str:
+        raise AssertionError("consultou users de novo; o id já estava na sessão")
+
+    monkeypatch.setattr(m, "_resolve_user_id", _nao_deveria)
+    token = auth.TokenData(email="chefe@x.com", role="admin", user_id="u-adm")
+    assert m._user_id_da_sessao(token) == "u-adm"
+
+
+def test_id_da_sessao_recorre_a_consulta_quando_nao_houve_leitura(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    O caso sem Supabase e o do agente por X-API-Key: ninguém leu conta nenhuma,
+    então `user_id` vem None e a consulta antiga ainda é o caminho. Sem esta
+    saída, as três rotas passariam a responder 404 em ambiente sem banco.
+    """
+    from app import main as m
+
+    monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-vindo-da-consulta")
+    token = auth.TokenData(email="chefe@x.com", role="admin")
+    assert m._user_id_da_sessao(token) == "u-vindo-da-consulta"
+
+
+def test_id_nao_vem_do_token_assinado() -> None:
+    """
+    `user_id` é campo de transporte interno, preenchido depois da validação.
+    Se um dia passar a ser lido do JWT, quem tiver a chave escolhe de quem é a
+    carteira que vai usar — e `atribuir_carteira` grava esse valor como autor.
+    """
+    tok = auth.create_access_token(
+        {"sub": "chefe@x.com", "role": "admin", "user_id": "u-de-outra-pessoa"}
+    )
+    assert auth.decode_access_token(tok).user_id is None

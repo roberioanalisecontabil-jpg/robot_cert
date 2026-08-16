@@ -673,10 +673,16 @@ Escolhas que o código não conta sozinho:
 - **Sem diretório configurado, vale o token.** É dev e teste; em produção sem
   Supabase o `/api/login` já responde 503 e ninguém obtém token.
 
-**Preço:** uma leitura em `users` por requisição autenticada. Ainda dá para
-abatê-lo: `_resolve_user_id(token.email)` (3 chamadas) repete essa mesma leitura
-logo depois, e o `id` já está em mãos em `_sessao_do_token`. Não foi feito junto
-para a etapa não misturar duas coisas.
+**Preço:** uma leitura em `users` por requisição autenticada — em parte já
+abatido. `_sessao_do_token` carrega o `id` da conta que acabou de conferir em
+`TokenData.user_id`, e as 3 rotas que chamavam `_resolve_user_id(token.email)`
+passaram a `_user_id_da_sessao(token)`, que só consulta quando não houve leitura
+(sem Supabase, e o agente por X-API-Key). Nessas rotas a revogação saiu de graça:
+a consulta que ela adicionou é a que elas já faziam.
+
+`user_id` **não** vem do JWT, e há teste fixando isso. Se um dia passar a ser
+lido do token, quem tiver a `JWT_SECRET_KEY` escolhe de quem é a carteira que
+vai usar — e `atribuir_carteira` grava esse valor como autor da atribuição.
 
 ---
 
