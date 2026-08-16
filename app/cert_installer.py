@@ -1134,6 +1134,217 @@ def ttl_do_token() -> int:
     return max(TTL_TOKEN_MIN, min(TTL_TOKEN_MAX, valor))
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Expurgo do cofre
+#
+# Até 16/08/2026 a custódia tinha só metade da proteção: certificado vencido
+# não ENTRAVA no cofre, mas nada TIRAVA o que já estava lá quando venceu. Dois
+# certificados vencidos em 15/08 seguiam com a chave privada guardada.
+#
+# Os dois gatilhos têm riscos opostos, e por isso são tratados de formas
+# diferentes:
+#
+#   VENCIDO é seguro — a data está na própria linha, não depende de mais nada
+#   estar correto. Apaga na hora.
+#
+#   REMOVIDO DA PASTA é perigoso — apagar por ausência no inventário significa
+#   que uma varredura que falhe pela metade apagaria chaves em massa. É a mesma
+#   armadilha de falha-aberta da etapa 2b, agora na direção destrutiva. Daí as
+#   três guardas abaixo e o prazo de carência.
+#
+# Atenua o risco o fato de o cofre ser derivado: se o arquivo ainda existir na
+# origem, a varredura seguinte o traz de volta. Mas "dá para refazer" não é
+# desculpa para apagar por engano — o reenvio custa uma janela de indisponi-
+# bilidade e 5 MB de tráfego.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Varredura mais velha que isto não serve para decidir ausência: o agente pode
+# estar parado, e o inventário dele é de outra era.
+MAX_HORAS_VARREDURA = 36
+
+# Queda brusca entre duas varreduras seguidas = varredura suspeita. Uma pasta
+# temporariamente inacessível reporta poucos itens sem erro nenhum.
+QUEDA_SUSPEITA_PCT = 30
+
+# Ausência precisa persistir. Uma varredura ruim isolada não apaga nada.
+CARENCIA_AUSENCIA_DIAS = 3
+
+
+def expurgar_cofre(machine_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Tira do cofre a chave que não faz mais sentido guardar.
+
+    Devolve o que fez **e o que deixou de fazer, com o motivo** — um expurgo
+    que se recusa a agir em silêncio seria indistinguível de um expurgo
+    quebrado, e é justamente nas varreduras suspeitas que ele não age.
+    """
+    client = _supabase()
+    if not client:
+        return {"executado": False, "motivo": "Supabase não configurado"}
+
+    agora = datetime.now(timezone.utc)
+    resultado: Dict[str, Any] = {"executado": True, "vencidos_apagados": 0, "maquinas": []}
+
+    # ── 1. Vencidos ────────────────────────────────────────────────────────
+    # Sem guarda nenhuma de propósito: a validade é intrínseca à linha.
+    try:
+        alvo = client.table("cert_pfx_store").select("id, fingerprint, machine_id, not_after")
+        if machine_id:
+            alvo = alvo.eq("machine_id", machine_id)
+        linhas = alvo.execute().data or []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao listar o cofre para expurgo")
+        return {"executado": False, "motivo": str(e)}
+
+    def _venceu(valor: Any) -> bool:
+        if not valor:
+            # Sem data não dá para afirmar que venceu. Não apaga: na dúvida,
+            # guardar a mais é desperdício; apagar a mais é perda.
+            return False
+        try:
+            d = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+            if not d.tzinfo:
+                d = d.replace(tzinfo=timezone.utc)
+            return d < agora
+        except (ValueError, TypeError):
+            return False
+
+    for linha in [l for l in linhas if _venceu(l.get("not_after"))]:
+        try:
+            client.table("cert_pfx_store").delete().eq("id", linha["id"]).execute()
+            resultado["vencidos_apagados"] += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("Falha ao apagar vencido %s do cofre", linha.get("fingerprint"))
+
+    # ── 2. Removidos da pasta ──────────────────────────────────────────────
+    maquinas = {str(l.get("machine_id") or "") for l in linhas if l.get("machine_id")}
+    if machine_id:
+        maquinas = {machine_id}
+
+    for maq in sorted(maquinas):
+        resultado["maquinas"].append(_conciliar_ausentes(client, maq, agora))
+
+    return resultado
+
+
+def _conciliar_ausentes(client: Any, maq: str, agora: datetime) -> Dict[str, Any]:
+    """
+    Marca, desmarca e apaga por ausência — com as três guardas.
+
+    Separada porque a lógica de guarda é o que importa aqui, e misturá-la ao
+    expurgo de vencidos esconderia que só uma das duas metades é arriscada.
+    """
+    saida: Dict[str, Any] = {"machine_id": maq}
+    try:
+        snaps = (
+            client.table("cert_snapshots")
+            .select("items, scanned_at")
+            .eq("machine_id", maq)
+            .order("scanned_at", desc=True)
+            .limit(2)
+            .execute()
+        ).data or []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao ler varreduras de %s", maq)
+        return {**saida, "agiu": False, "motivo": str(e)}
+
+    if not snaps:
+        return {**saida, "agiu": False, "motivo": "sem varredura para esta máquina"}
+
+    # GUARDA 1 — varredura recente.
+    quando = snaps[0].get("scanned_at")
+    try:
+        d = datetime.fromisoformat(str(quando).replace("Z", "+00:00"))
+        if not d.tzinfo:
+            d = d.replace(tzinfo=timezone.utc)
+        horas = (agora - d).total_seconds() / 3600
+    except (ValueError, TypeError):
+        return {**saida, "agiu": False, "motivo": "varredura sem data legível"}
+
+    if horas > MAX_HORAS_VARREDURA:
+        return {
+            **saida, "agiu": False,
+            "motivo": f"última varredura há {horas:.0f}h — agente pode estar parado",
+        }
+
+    atuais = {
+        str(i.get("fingerprint_sha256") or "")
+        for i in (snaps[0].get("items") or [])
+        if i.get("fingerprint_sha256")
+    }
+
+    # GUARDA 2 — inventário vazio nunca apaga. Uma pasta inacessível reporta
+    # zero itens sem erro nenhum, e isso limparia o cofre inteiro.
+    if not atuais:
+        return {**saida, "agiu": False, "motivo": "inventário vazio — recusando agir"}
+
+    # GUARDA 3 — queda brusca entre varreduras seguidas.
+    if len(snaps) > 1:
+        anteriores = len([i for i in (snaps[1].get("items") or []) if i.get("fingerprint_sha256")])
+        if anteriores and len(atuais) < anteriores * (1 - QUEDA_SUSPEITA_PCT / 100):
+            return {
+                **saida, "agiu": False,
+                "motivo": (
+                    f"inventário caiu de {anteriores} para {len(atuais)} — "
+                    "varredura suspeita, nada foi apagado"
+                ),
+            }
+
+    try:
+        no_cofre = (
+            client.table("cert_pfx_store")
+            .select("id, fingerprint, ausente_desde")
+            .eq("machine_id", maq)
+            .execute()
+        ).data or []
+    except Exception as e:  # noqa: BLE001
+        return {**saida, "agiu": False, "motivo": str(e)}
+
+    marcados = desmarcados = apagados = 0
+    limite = agora - timedelta(days=CARENCIA_AUSENCIA_DIAS)
+
+    for linha in no_cofre:
+        fp = str(linha.get("fingerprint") or "")
+        ausente = linha.get("ausente_desde")
+
+        if fp in atuais:
+            # Reapareceu: zera o relógio. Sem isto, um certificado que sumisse
+            # por um dia e voltasse seria apagado depois, já presente.
+            if ausente:
+                client.table("cert_pfx_store").update({"ausente_desde": None}).eq(
+                    "id", linha["id"]
+                ).execute()
+                desmarcados += 1
+            continue
+
+        if not ausente:
+            client.table("cert_pfx_store").update(
+                {"ausente_desde": agora.isoformat()}
+            ).eq("id", linha["id"]).execute()
+            marcados += 1
+            continue
+
+        try:
+            d = datetime.fromisoformat(str(ausente).replace("Z", "+00:00"))
+            if not d.tzinfo:
+                d = d.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            continue
+        if d <= limite:
+            client.table("cert_pfx_store").delete().eq("id", linha["id"]).execute()
+            apagados += 1
+
+    return {
+        **saida,
+        "agiu": True,
+        "no_inventario": len(atuais),
+        "marcados_ausentes": marcados,
+        "reapareceram": desmarcados,
+        "apagados_por_ausencia": apagados,
+        "carencia_dias": CARENCIA_AUSENCIA_DIAS,
+    }
+
+
 def expurgar_install_log(dias: Optional[int] = None) -> Dict[str, Any]:
     """
     Apaga registros de `install_log` mais antigos que a retenção configurada.

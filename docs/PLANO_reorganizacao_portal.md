@@ -214,8 +214,22 @@ Mitigações, em ordem de custo-benefício:
    erro de leitura, 31 fora do padrão — **68 certificados** que são passivo puro,
    sem utilidade nenhuma. "Tudo por padrão" deve significar **todo certificado
    válido e legível**, não todo arquivo da pasta.
-2. **Expurgo por vencimento.** Certificado que venceu sai do cofre. Sem isso o
-   acervo só cresce, e cresce em chave privada.
+2. **Expurgo por vencimento** ✅ *(aplicado em 16/08)*. Certificado que venceu
+   sai do cofre; sem isso o acervo só crescia, e crescia em chave privada.
+   Confirmado antes de implementar: dois certificados vencidos em 15/08 seguiam
+   guardados no dia seguinte.
+
+   Junto veio o segundo gatilho — **removido da pasta** —, e ele tem risco
+   oposto. Vencido é seguro (a data está na própria linha). Ausência no
+   inventário **não é**: uma varredura que falhe pela metade apagaria chaves em
+   massa, que é a armadilha de falha-aberta da §3.2a na direção destrutiva.
+
+   Daí três guardas e um prazo de carência (`ausente_desde`): só age sobre
+   varredura de menos de 36h, recusa inventário vazio (pasta inacessível
+   reporta zero **sem erro**), recusa queda de mais de 30% entre varreduras
+   seguidas, e a ausência precisa persistir 3 dias. Reaparecer zera o relógio.
+   O expurgo relata o que fez **e o que se recusou a fazer, com o motivo** —
+   recusar em silêncio seria indistinguível de estar quebrado.
 3. As chaves distintas para PFX e senha já existem (feito em 11/08).
 
 #### (c) O painel de desativação é do admin, e fica na configuração

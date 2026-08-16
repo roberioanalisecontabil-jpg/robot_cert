@@ -1139,6 +1139,10 @@ def cron_alerts(request: Request) -> dict:
         expurgo = {
             "install_log": cert_installer.expurgar_install_log(),
             "user_activity": atividade.expurgar(),
+            # O cofre entra no mesmo ciclo: chave privada de certificado
+            # vencido ou removido da pasta é passivo puro, e o acervo só
+            # crescia porque nada a tirava.
+            "cofre": cert_installer.expurgar_cofre(),
         }
     except Exception as e:  # noqa: BLE001
         logger.exception("Falha no expurgo da trilha")
@@ -2686,6 +2690,7 @@ def expurgar_log_agora() -> dict:
     return {
         "install_log": cert_installer.expurgar_install_log(),
         "user_activity": atividade.expurgar(),
+        "cofre": cert_installer.expurgar_cofre(),
     }
 
 

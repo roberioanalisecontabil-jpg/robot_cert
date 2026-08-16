@@ -248,13 +248,18 @@ def test_expurgo_relata_falha_em_vez_de_levantar(banco: _Fake) -> None:
     assert r["executado"] is False
 
 
-def test_cron_expurga_as_duas_tabelas(client: TestClient, banco: _Fake, monkeypatch) -> None:
+def test_cron_expurga_toda_a_trilha_e_o_cofre(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    """
+    O cron diário carrega três expurgos. O do cofre entrou em 16/08: chave
+    privada de certificado vencido ou removido da pasta é passivo puro, e o
+    acervo só crescia porque nada a tirava.
+    """
     monkeypatch.setenv("CRON_SECRET", "s3gr3d0")
     monkeypatch.setattr(m, "trigger_all_alerts", lambda: {"enviados": 0})
 
     r = client.get("/api/cron/alerts", headers={"Authorization": "Bearer s3gr3d0"})
     assert r.status_code == 200, r.text
-    assert set(r.json()["expurgo"]) == {"install_log", "user_activity"}
+    assert set(r.json()["expurgo"]) == {"install_log", "user_activity", "cofre"}
 
 
 # ──────────────────────────────────────────────────────────────────────────
