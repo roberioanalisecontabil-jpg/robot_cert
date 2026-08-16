@@ -695,9 +695,11 @@
 
       function badgeDesfecho(d) {
         const mapa = {
-          concluido: ["CONCLUÍDO", "rgba(46,125,50,0.15)", "#2e7d32"],
-          falhou: ["FALHOU", "rgba(198,40,40,0.15)", "#c62828"],
-          incompleto: ["INCOMPLETO", "rgba(237,108,2,0.15)", "#ed6c02"],
+          // Tokens, não hex: os do projeto têm contraste medido e variante
+          // escura. Hex fixo aqui quebrava no modo escuro (achado M2).
+          concluido: ["CONCLUÍDO", "var(--ok-bg)", "var(--ok-text)"],
+          falhou: ["FALHOU", "var(--expired-bg)", "var(--expired-text)"],
+          incompleto: ["INCOMPLETO", "var(--warning-bg)", "var(--warning-text)"],
         };
         const [rot, bg, fg] = mapa[d] || ["?", "var(--bg)", "var(--text-muted)"];
         return `<span class="badge" style="background:${bg};color:${fg}">${rot}</span>`;

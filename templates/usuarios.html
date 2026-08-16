@@ -35,7 +35,9 @@
         .role-badge { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
         .role-admin { background-color: var(--expired-bg); color: var(--expired-text); }
         .role-user { background-color: var(--ok-bg); color: var(--ok-text); }
-        .role-gestor { background-color: var(--expiring-bg, var(--ok-bg)); color: var(--expiring-text, var(--ok-text)); }
+        /* --expiring-* nunca existiu: o badge caía no fallback e ficava idêntico
+           ao de usuário comum. O token certo é --warning-*, com contraste medido. */
+        .role-gestor { background-color: var(--warning-bg); color: var(--warning-text); }
         .role-disabled { background-color: var(--border); color: var(--text-muted); }
         .row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
         .btn-action { 
@@ -161,11 +163,7 @@
     <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
 
-        function esc(v) {
-            const d = document.createElement('div');
-            d.textContent = v == null ? '' : String(v);
-            return d.innerHTML;
-        }
+        // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
 
         // Papel e estado da conta são colunas separadas desde 15/08. Espelha
         // `auth.conta_ativa`: 'disabled' era o único jeito antigo de desativar e
@@ -381,7 +379,7 @@
                 loadUsers();
             } else {
                 msg.textContent = "Erro ao criar: " + (await mensagemCorpoErro(r));
-                msg.style.color = "var(--danger)";
+                msg.style.color = "var(--danger-text)";
             }
         });
 
@@ -392,7 +390,7 @@
             const f = input.files && input.files[0];
             if (!f) {
                 msg.textContent = 'Selecione um arquivo CSV.';
-                msg.style.color = 'var(--danger)';
+                msg.style.color = 'var(--danger-text)';
                 return;
             }
             const fd = new FormData();
@@ -405,7 +403,7 @@
             });
             if (!r.ok) {
                 msg.textContent = 'Erro na importação: ' + (await mensagemCorpoErro(r));
-                msg.style.color = 'var(--danger)';
+                msg.style.color = 'var(--danger-text)';
                 return;
             }
             const j = await r.json();

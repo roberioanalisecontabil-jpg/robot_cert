@@ -294,12 +294,7 @@
         }
       }
 
-      function esc(s) {
-        if (!s) return "";
-        const d = document.createElement("div");
-        d.textContent = s;
-        return d.innerHTML;
-      }
+      // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
 
       function apenasDigitos(v) {
         return String(v || "").replace(/\D+/g, "");

@@ -205,7 +205,7 @@
             <td style="text-align:center;color:${u.instalacoes_concluidas ? "var(--ok-text)" : "var(--text-muted)"}">${u.instalacoes_concluidas}</td>
             <td style="text-align:center;color:${u.instalacoes_falhadas ? "var(--expired-text)" : "var(--text-muted)"}">${u.instalacoes_falhadas}</td>
             <td style="font-size:0.8rem">${quando}</td>
-            <td>${travado ? '<span class="badge" style="background:rgba(237,108,2,0.15);color:#ed6c02">TRAVADO</span>' : ""}</td>
+            <td>${travado ? '<span class="badge" style="background:var(--warning-bg);color:var(--warning-text)">TRAVADO</span>' : ""}</td>
           </tr>`;
         }).join("");
 

@@ -118,11 +118,7 @@
       }
     }
 
-    function esc(v) {
-      const d = document.createElement("div");
-      d.textContent = v == null ? "" : String(v);
-      return d.innerHTML;
-    }
+    // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
 
     function fmtData(iso) {
       if (!iso) return "—";

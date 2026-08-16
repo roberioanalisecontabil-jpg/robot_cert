@@ -151,7 +151,7 @@
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
-    function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
+    // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
     function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }); }
     const LS_PER_PAGE_COLAB_P = "cg_per_page_colab_painel";
     const LS_PER_PAGE_COLAB_S = "cg_per_page_colab_selecao";

@@ -268,6 +268,29 @@ function _toastDuracao(message) {
  * @param {number} [duration] - ms antes do auto-dismiss; 0 = não fecha sozinho.
  *                              Omitido = calculado pelo tamanho da mensagem.
  */
+/**
+ * Escapa texto para interpolação segura em HTML.
+ *
+ * Mora aqui, e não em cada página, por dois motivos que se confirmaram na
+ * prática em 16/08/2026:
+ *
+ * 1. Estava duplicada em SEIS templates, e três páginas mais novas
+ *    (dashboard, carteiras e os painéis novos do instalador) a **usavam sem
+ *    definir** — `ReferenceError` em todo caminho de render. Não quebrou nos
+ *    testes porque eles leem o HTML de origem, não executam o JavaScript.
+ * 2. Os dados vêm do CN do certificado, controlado por quem gera o `.pfx`.
+ *    A CSP com nonce bloqueia script inline, mas markup injetado ainda
+ *    desfigura a tela — e depender só da CSP é ter uma camada de defesa.
+ *
+ * `textContent` + `innerHTML` faz o navegador escapar: mais curto que uma
+ * cadeia de `.replace()` e sem risco de esquecer um caractere.
+ */
+function esc(v) {
+  const d = document.createElement("div");
+  d.textContent = v == null ? "" : String(v);
+  return d.innerHTML;
+}
+
 function showToast(message, type = "info", duration) {
   let container = document.getElementById("toast-container");
   if (!container) {
@@ -524,12 +547,15 @@ function renderEmptyState(target, { title = "Nenhum registro encontrado", descri
   const container = typeof target === 'string' ? document.getElementById(target) : target;
   if (!container) return;
 
+  // `icon` fica sem escape de propósito: é entidade HTML vinda do código
+  // (&#128269;), não dado de usuário. O resto passa por `esc` -- título e
+  // descrição chegam a carregar nome de titular em algumas telas.
   const html = `
     <div class="empty-state-card">
       <div class="empty-state-icon">${icon}</div>
-      <h3 class="empty-state-title">${title}</h3>
-      <p class="empty-state-desc">${description}</p>
-      ${actionText ? `<button type="button" class="primary empty-state-btn">${actionText}</button>` : ''}
+      <h3 class="empty-state-title">${esc(title)}</h3>
+      <p class="empty-state-desc">${esc(description)}</p>
+      ${actionText ? `<button type="button" class="primary empty-state-btn">${esc(actionText)}</button>` : ''}
     </div>
   `;
   container.innerHTML = html;
