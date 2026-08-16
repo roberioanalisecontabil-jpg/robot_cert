@@ -396,6 +396,40 @@ def _dashboard_resumo_counts(rows: List[dict]) -> dict[str, int]:
     }
 
 
+def chave_alfabetica(item: dict) -> tuple:
+    """
+    Chave de ordenação por titular, insensível a caixa e acento.
+
+    `(1, "")` para quem não tem nome legível: vai para o fim. Ordenar por
+    string vazia os jogaria para o topo, e a primeira página da lista seria
+    justamente o que o robô não conseguiu ler — o oposto do útil.
+    """
+    bruto = str(item.get("nome") or item.get("display_name") or item.get("file_name") or "").strip()
+    if not bruto:
+        return (1, "")
+    sem_acento = "".join(
+        c for c in unicodedata.normalize("NFD", bruto) if unicodedata.category(c) != "Mn"
+    )
+    return (0, sem_acento.casefold())
+
+
+def ordenar_por_titular(itens: List[dict]) -> List[dict]:
+    """
+    Ordena a listagem de certificados pelo nome do titular.
+
+    **Precisa acontecer aqui, no servidor, e antes da paginação.** A tabela
+    pagina no servidor: ordenar no navegador ordenaria só os 10 ou 25 itens da
+    página visível, e a lista *pareceria* certa enquanto continuasse errada
+    entre páginas — que é pior que estar visivelmente errada.
+
+    Não havia ordenação nenhuma antes. A lista saía na ordem em que o agente
+    varre o disco, e ele percorre pasta por pasta: o resultado eram vários
+    blocos alfabéticos emendados (um por subpasta, mais os vencidos no fim),
+    que de longe parece ordem alfabética e de perto não é.
+    """
+    return sorted(itens, key=chave_alfabetica)
+
+
 def _list_certificados_payload(
     sets: PortalSettings,
     snap: Optional[dict],
@@ -1223,6 +1257,7 @@ def listar_certificados(
         sets = load_settings()
         snap = get_latest_snapshot()
         base = _list_certificados_payload(sets, snap, fonte)
+        base["itens"] = ordenar_por_titular(base.get("itens") or [])
 
         paged = pagina is not None and por_pagina is not None
         if not paged and not todas_filtradas:
