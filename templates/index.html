@@ -213,15 +213,6 @@
           <span id="selAviso" class="barra-selecao__aviso"></span>
         </div>
         <div class="barra-selecao__acoes">
-          <!-- "Enviar para estação" só aparece para quem administra: o alvo é
-               uma máquina que já roda o agente, não a máquina de quem clicou.
-               Para o operador, o caminho é baixar e executar. -->
-          <span id="grupoEstacao" style="display: none; gap: 0.5rem; align-items: center;">
-            <label for="inputEstacao" class="cg-sr-only">Máquina destino</label>
-            <input type="text" id="inputEstacao" class="form-control"
-                   placeholder="Máquina destino" style="width: 180px;" />
-            <button id="btnEnviarEstacao" class="btn btn-secondary" type="button">Enviar para estação</button>
-          </span>
           <button id="btnLimparSel" class="btn btn-secondary" type="button">Limpar</button>
           <button id="btnBaixarSel" class="btn btn-primary" type="button">Baixar instalador</button>
         </div>
@@ -496,47 +487,6 @@
           _instalabilidade = {};
           _instalIndisponivel = true;
           showToast("Não foi possível verificar quais certificados estão disponíveis.", "error");
-        }
-      }
-
-      async function enviarParaEstacao() {
-        const maquina = (document.getElementById("inputEstacao").value || "").trim();
-        if (!maquina) {
-          showToast("Informe a máquina destino.", "warning");
-          return;
-        }
-        const escolhidos = Array.from(_selecao.entries());
-        if (!escolhidos.length) return;
-
-        const btn = document.getElementById("btnEnviarEstacao");
-        btn.disabled = true;
-        const rotulo = btn.textContent;
-        btn.textContent = "Enviando...";
-        try {
-          const r = await fetch("/api/cert-installer/prepare", {
-            method: "POST",
-            headers: getHeaders(true),
-            body: JSON.stringify({
-              certificate_ids: escolhidos.map(([, v]) => v.id),
-              target_machine: maquina,
-            }),
-          });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.detail || "Falha ao enfileirar a instalação");
-          // O agente só busca a fila no próximo poll — dizer isso evita que
-          // alguém fique olhando a tela esperando confirmação imediata.
-          showToast(
-            `Comando enfileirado para ${maquina}. O agente instala no próximo ciclo.`,
-            "success"
-          );
-          _selecao.clear();
-          sincronizarCheckboxesDaPagina();
-          atualizarBarraSelecao();
-        } catch (e) {
-          showToast("Não foi possível enviar: " + e.message, "error");
-        } finally {
-          btn.textContent = rotulo;
-          btn.disabled = false;
         }
       }
 
@@ -966,14 +916,6 @@
         });
 
         document.getElementById("btnBaixarSel").addEventListener("click", baixarSelecionados);
-        document.getElementById("btnEnviarEstacao").addEventListener("click", enviarParaEstacao);
-
-        // Mesma decisão de visibilidade dos itens de admin da sidebar: quem
-        // decide é o cliente, e o servidor barra de qualquer forma — o operador
-        // que forjasse a chamada esbarra na carteira em `prepare`.
-        if (role === "admin" || role === "gestor") {
-          document.getElementById("grupoEstacao").style.display = "inline-flex";
-        }
 
         initPerPageDashboard();
         await carregarTabela();

@@ -281,37 +281,26 @@ def test_instalador_nao_instala_mais() -> None:
     assert "Para instalar, use o Início" in html
 
 
-def test_enviar_para_estacao_tem_destino_no_inicio() -> None:
+def test_inicio_nao_oferece_instalacao_em_estacao() -> None:
     """
-    A capacidade não foi descartada junto com a tela: `prepare` continua
-    existindo, agora acionado da seleção do Início.
+    O "Enviar para estação" saiu em 16/08 a pedido do cliente: no modelo dele o
+    operador baixa o `.exe` e instala na própria máquina, e instalar no servidor
+    via agente não tem uso.
+
+    A rota que emitia o token saiu junto — endpoint que entrega chave privada
+    sem ninguém usar é superfície de ataque sem contrapartida.
     """
     html = _html("/")
-    assert "btnEnviarEstacao" in html
-    assert "/api/cert-installer/prepare" in html
+    assert "btnEnviarEstacao" not in html
+    assert "/api/cert-installer/prepare" not in html
+    assert "grupoEstacao" not in html
 
-
-def test_envio_para_estacao_nasce_escondido_e_so_admin_revela() -> None:
-    """
-    O padrão seguro é não aparecer.
-
-    O alvo é uma máquina que já roda o agente — para o operador, o caminho é
-    baixar e executar. Um botão visível que devolve 403 é pior que botão
-    nenhum: parece defeito do portal, não falta de permissão.
-
-    Este teste lê o template, então garante a forma, não o comportamento no
-    navegador. O que segura de verdade é a barreira de carteira em `prepare`.
-    """
-    import re
-
-    html = _html("/")
-    m = re.search(r'<span id="grupoEstacao"[^>]*style="([^"]*)"', html)
-    assert m, "grupo de envio para estação não encontrado"
-    assert "display: none" in m.group(1), "tem de nascer oculto"
-    assert 'role === "admin" || role === "gestor"' in html, "só esses dois revelam"
-    assert 'getElementById("grupoEstacao").style.display = "inline-flex"' in html, (
-        "a condição existe mas nada revela o grupo — o botão ficaria oculto "
-        "também para admin"
+    from app.main import app
+    caminhos = {getattr(r, "path", "") for r in app.routes}
+    assert "/api/cert-installer/prepare" not in caminhos
+    assert "/api/cert-installer/preparar-download" in caminhos, (
+        "o caminho do instalador avulso é o que fica — removê-lo tiraria a "
+        "única forma de instalar"
     )
 
 

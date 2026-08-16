@@ -103,8 +103,11 @@ CERT_MEU = "id-cert-meu"
 CERT_ALHEIO = "id-cert-alheio"
 CERT_SEM_DOC = "id-cert-sem-doc"
 
+# Sobrou uma rota emissora depois que /prepare (instalação via agente numa
+# estação) foi removida em 16/08 — o cliente não usa esse caminho. A lista
+# continua sendo lista de propósito: se outra rota emissora nascer, ela entra
+# aqui, e `test_toda_rota_que_cria_token_passa_pela_carteira` cobra isso.
 ROTAS = [
-    ("/api/cert-installer/prepare", {"target_machine": "PC-01"}),
     ("/api/cert-installer/preparar-download", {"nome": "ACME"}),
 ]
 
@@ -129,7 +132,6 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
                         lambda **kw: ("tok", "tid", __import__("datetime").datetime.now(
                             __import__("datetime").timezone.utc)))
     monkeypatch.setattr(ci, "log_event", lambda **kw: None)
-    monkeypatch.setattr(ci, "enqueue_install_command", lambda **kw: "cmd-1")
     return fake
 
 
@@ -143,7 +145,11 @@ def _pedir(client: TestClient, rota: str, extra: dict, ids: List[str], headers: 
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 1. A barreira existe nas DUAS rotas que emitem token
+# 1. A barreira existe em toda rota que emite token
+#
+# Eram duas até 16/08; sobrou a do instalador avulso. O parametrize continua
+# porque o número volta a crescer no dia em que outro caminho de instalação
+# existir — e é aí que esquecer a barreira fica fácil.
 # ──────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("rota,extra", ROTAS)
@@ -248,7 +254,7 @@ def test_falha_de_banco_recusa_com_503_e_nao_403(
     banco.quebrado[tabela] = True
     chamou = []
     with patch.object(ci, "create_install_token", lambda **kw: chamou.append(kw) or ("t", "i", None)):
-        r = _pedir(client, "/api/cert-installer/prepare", {"target_machine": "PC-01"},
+        r = _pedir(client, "/api/cert-installer/preparar-download", {"nome": "ACME"},
                    [CERT_MEU], _h("user", "operador@x.com"))
     assert r.status_code == 503, r.text
     assert not chamou
@@ -280,7 +286,7 @@ def test_documento_formatado_na_carteira_ainda_casa(
         {"user_id": "u-operador", "documento": "33.706.943/0001-93",
          "atribuido_por": None, "atribuido_por_email": "x@x.com"},
     ]
-    r = _pedir(client, "/api/cert-installer/prepare", {"target_machine": "PC-01"},
+    r = _pedir(client, "/api/cert-installer/preparar-download", {"nome": "ACME"},
                [CERT_MEU], _h("user", "operador@x.com"))
     assert r.status_code == 200, r.text
 
@@ -332,7 +338,7 @@ def test_remover_da_carteira_tira_o_acesso(client: TestClient, banco: _Fake) -> 
     r = client.delete(f"/api/carteira/u-operador/{DOC_MEU}", headers=_h("gestor"))
     assert r.status_code == 200, r.text
 
-    r = _pedir(client, "/api/cert-installer/prepare", {"target_machine": "PC-01"},
+    r = _pedir(client, "/api/cert-installer/preparar-download", {"nome": "ACME"},
                [CERT_MEU], _h("user", "operador@x.com"))
     assert r.status_code == 403, "o acesso tinha de cair junto"
 
@@ -401,4 +407,7 @@ def test_o_teste_estrutural_realmente_encontra_as_rotas() -> None:
             for c in ast.walk(no)
         )
     ]
-    assert len(emissoras) >= 2, f"esperado ao menos 2 rotas emissoras, achei {emissoras}"
+    # Era 2 até 16/08; /prepare foi removida. O mínimo é 1: com zero, o teste
+    # acima passaria por vácuo e não protegeria nada — que é o ponto desta
+    # contraprova.
+    assert len(emissoras) >= 1, f"nenhuma rota emissora encontrada: {emissoras}"

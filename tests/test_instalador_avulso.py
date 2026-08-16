@@ -125,10 +125,11 @@ def _token_valido(client: TestClient) -> str:
     """Cria um token real pela rota de admin e devolve o valor cru."""
     h = {"Authorization": "Bearer " + auth.create_access_token(
         {"sub": "admin@x.com", "role": "admin"})}
-    with patch.object(ci, "enqueue_install_command", lambda **kw: "cmd-1"):
-        r = client.post("/api/cert-installer/prepare",
-                        json={"certificate_ids": ["c-1"], "target_machine": "PC"},
-                        headers=h)
+    # Usa a rota do instalador avulso: /prepare (instalação via agente) foi
+    # removida em 16/08, e o token que este teste precisa é o mesmo objeto.
+    r = client.post("/api/cert-installer/preparar-download",
+                    json={"certificate_ids": ["c-1"], "nome": "ACME"},
+                    headers=h)
     assert r.status_code == 200, r.text
     # O token cru não volta na resposta (por desenho); pega-se do enqueue.
     return _ULTIMO_TOKEN["valor"]

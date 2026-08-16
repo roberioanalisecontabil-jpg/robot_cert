@@ -2880,78 +2880,22 @@ def instalabilidade(
     }
 
 
-class PrepareInstallRequest(BaseModel):
-    """Quem instala seleciona certificados e máquina destino."""
-    certificate_ids: List[str]
-    target_machine: str
-
-
-@app.post("/api/cert-installer/prepare")
-def prepare_install(
-    body: PrepareInstallRequest,
-    request: Request,
-    token: auth.TokenData = Depends(require_auth),
-):
-    """
-    Gera token de uso único e enfileira comando de instalação na fila do agente.
-
-    Deixou de ser exclusivo de admin em 15/08: o operador instala o que estiver
-    na carteira dele. Quem decide isso é `assegurar_carteira`, no servidor —
-    a tela filtrar é conveniência, e uma chamada forjada não passa por ela.
-    """
-    if not body.certificate_ids:
-        raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
-
-    # Buscar user_id real (para tokens criados com JWT)
-    user_id = _resolve_user_id(token.email)
-    if not user_id:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
-
-    client_ip = request.client.host if request.client else None
-
-    try:
-        # 1. Criar token
-        token_raw, token_id, expires_at = cert_installer.create_install_token(
-            user_id=user_id,
-            user_email=token.email,
-            target_machine=body.target_machine,
-            certificate_ids=body.certificate_ids,
-            client_ip=client_ip,
-        )
-
-        # 2. Log SOLICITADO para cada certificado
-        for cid in body.certificate_ids:
-            cert_installer.log_event(
-                event="SOLICITADO",
-                user_id=user_id,
-                user_email=token.email,
-                token_id=token_id,
-                certificate_id=cid,
-                target_machine=body.target_machine,
-                client_ip=client_ip,
-            )
-
-        # 3. Enfileirar comando na agent_command_queue
-        cmd_id = cert_installer.enqueue_install_command(
-            target_machine=body.target_machine,
-            token_raw=token_raw,
-        )
-
-        return {
-            "status": "ok",
-            "token_id": token_id,
-            "command_id": cmd_id,
-            "target_machine": body.target_machine,
-            "certificates_count": len(body.certificate_ids),
-            "expires_at": expires_at.isoformat(),
-        }
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception:
-        logger.exception("Erro ao preparar instalação")
-        raise HTTPException(status_code=500, detail="Erro interno ao preparar instalação")
+# A rota POST /api/cert-installer/prepare foi removida em 16/08/2026.
+#
+# Ela instalava numa máquina que já roda o agente: enfileirava um comando, o
+# agente pegava no poll seguinte e instalava lá. O cliente não usa esse caminho
+# -- o operador baixa o .exe e instala na própria máquina --, e endpoint que
+# emite token de instalação sem ninguém usar é superfície de ataque sem
+# contrapartida: um token É a entrega da chave privada.
+#
+# `cert_installer.enqueue_install_command` continua existindo e o agente
+# continua entendendo o comando `instalar_certificados`. Mexer no agente exige
+# recompilar e reinstalar o .exe no ANALISESRV -- custo operacional real por
+# zero benefício, já que sem quem enfileire o comando ele nunca chega.
+#
+# Se o caminho voltar a fazer sentido, o que falta é a rota: a barreira de
+# carteira e a trilha já existem, e `tests/test_carteira.py` obriga qualquer
+# rota nova que emita token a passar por elas.
 
 
 class RedeemRequest(BaseModel):

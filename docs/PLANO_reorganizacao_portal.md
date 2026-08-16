@@ -336,10 +336,16 @@ depois (§6).
 >   `portal_settings` e rota de gravação parcial.
 > - **3c ✅ (15/08)** — trilha e limpeza: pontos **1, 6, 8** e a saída da operação.
 >
-> **A seção "2 · Instalar Certificados" saiu na 3c**, depois que o "Enviar para
-> Estação" ganhou destino: virou ação secundária da barra de seleção do Início,
-> visível só a admin e gestor. A capacidade não foi descartada junto com a tela
-> — `prepare` continua existindo, agora atrás da mesma barreira de carteira.
+> **A seção "2 · Instalar Certificados" saiu na 3c**, e o "Enviar para Estação"
+> foi **removido de vez em 16/08**, a pedido do cliente: no modelo dele o
+> operador baixa o `.exe` e instala na própria máquina, e instalar no servidor
+> via agente não tem uso. A rota `POST /api/cert-installer/prepare` saiu junto —
+> endpoint que emite token de instalação sem ninguém usar é superfície de ataque
+> sem contrapartida, porque um token **é** a entrega da chave privada.
+>
+> O agente continua entendendo o comando `instalar_certificados`. Mexer nele
+> exigiria recompilar e reinstalar o `.exe` no ANALISESRV: custo operacional
+> real por zero benefício, já que sem quem enfileire o comando ele nunca chega.
 
 Hoje a página tem três seções: autorizar ao cofre, instalar, e trilha de
 auditoria. As de operação saem para o Início. O que fica, e o que falta:
