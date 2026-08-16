@@ -781,8 +781,14 @@ async def import_users(file: UploadFile = File(...)) -> dict:
                 }
             )
             continue
-        if len(senha) < 6:
-            erros.append({"linha": linha, "email": email, "erro": "Senha deve ter no mínimo 6 caracteres."})
+        if len(senha) < SENHA_MINIMA:
+            erros.append({"linha": linha, "email": email,
+                          "erro": f"Senha deve ter no mínimo {SENHA_MINIMA} caracteres."})
+            continue
+        # O CSV era o caminho que escapava de tudo: nem o formulário HTML o
+        # cobre, nem a API validava.
+        if not _EMAIL_PLAUSIVEL.match(email):
+            erros.append({"linha": linha, "email": email, "erro": "E-mail inválido."})
             continue
         try:
             existe = sb.table("users").select("id").eq("email", email).limit(1).execute()
@@ -804,6 +810,52 @@ async def import_users(file: UploadFile = File(...)) -> dict:
     return {"ok": True, "criados": criados, "ignorados": ignorados, "erros": erros}
 
 
+# Validação deliberadamente frouxa: exige um "@" com algo dos dois lados e um
+# ponto no domínio, e nada além disso. Regex de e-mail "completo" rejeita
+# endereços válidos e dá falsa sensação de rigor — o que prova que um e-mail
+# funciona é uma mensagem chegar nele.
+_EMAIL_PLAUSIVEL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+
+# O mesmo mínimo que `reset_user_password` já exigia. Antes, criar era mais
+# permissivo que redefinir: dava para nascer com senha de um caractere e só
+# descobrir o rigor ao trocá-la.
+SENHA_MINIMA = 6
+
+
+def _validar_email(email: str) -> str:
+    limpo = (email or "").strip().lower()
+    if not _EMAIL_PLAUSIVEL.match(limpo):
+        raise HTTPException(status_code=422, detail=f"E-mail inválido: {email!r}")
+    return limpo
+
+
+def _garantir_email_livre(sb: Any, email: str, ignorar_id: Optional[str] = None) -> None:
+    """
+    Recusa e-mail já usado por outra conta.
+
+    O índice único no banco é quem fecha de verdade — esta checagem tem janela
+    de corrida e existe para a mensagem ser legível em vez de um 400 cru do
+    PostgREST. As duas camadas servem a coisas diferentes.
+    """
+    try:
+        existentes = sb.table("users").select("id, email").execute().data or []
+    except Exception:
+        logger.exception("Falha ao verificar e-mail duplicado")
+        raise HTTPException(
+            status_code=503, detail="Não foi possível verificar o e-mail agora."
+        )
+    for u in existentes:
+        if str(u.get("email") or "").strip().lower() == email and str(u.get("id")) != str(ignorar_id):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Já existe uma conta com o e-mail {email}. O e-mail identifica "
+                    "a pessoa no login — duas contas com o mesmo endereço deixam "
+                    "uma delas inacessível."
+                ),
+            )
+
+
 @app.post("/api/users", dependencies=[Depends(require_admin)])
 def create_user(body: UserCreateBody) -> dict:
     from app.settings_state import _supabase
@@ -820,10 +872,18 @@ def create_user(body: UserCreateBody) -> dict:
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
 
+    email = _validar_email(body.email)
+    if len((body.password or "").strip()) < SENHA_MINIMA:
+        raise HTTPException(
+            status_code=422,
+            detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
+        )
+    _garantir_email_livre(sb, email)
+
     hash_pw = auth.get_password_hash(body.password)
     try:
         sb.table("users").insert({
-            "email": body.email,
+            "email": email,
             "password_hash": hash_pw,
             "full_name": body.full_name,
             "role": role,
@@ -913,10 +973,12 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
 
+    email = _validar_email(body.email)
+    _garantir_email_livre(sb, email, ignorar_id=user_id)
     _garantir_que_sobra_admin(sb, user_id, novo_role=role, novo_ativo=ativo)
 
     campos: Dict[str, Any] = {
-        "email": body.email.strip().lower(),
+        "email": email,
         "full_name": body.full_name.strip(),
     }
     if role is not None:

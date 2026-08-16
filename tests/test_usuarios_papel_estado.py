@@ -443,3 +443,98 @@ def test_falha_ao_verificar_recusa_em_vez_de_liberar(
     monkeypatch.setattr("app.settings_state._supabase", lambda: _Quebrado())
     r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
     assert r.status_code == 503, r.text
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7. Integridade: e-mail identifica a pessoa
+#
+# Nada impedia duas contas com o mesmo e-mail. O login faz
+# `.eq("email", ...).limit(1)` e pega UMA arbitrariamente — a outra pessoa
+# nunca mais entra, sem mensagem nenhuma. E `_resolve_user_id` passa a
+# resolver para a conta errada, levando junto a carteira (quem pode instalar
+# o quê) e a trilha (quem instalou).
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_nao_cria_com_email_ja_usado(client: TestClient, banco: _FakeSupabase) -> None:
+    r = client.post(
+        "/api/users",
+        json={"email": "CHEFE@empresa.com", "password": SENHA,
+              "full_name": "Impostor", "role": "user"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 409, r.text
+    assert sum(1 for u in banco.tabelas["users"] if "chefe@" in u["email"]) == 1
+
+
+def test_nao_edita_para_email_de_outro(client: TestClient, banco: _FakeSupabase) -> None:
+    r = client.put(
+        "/api/users/u-gestor",
+        json={"email": "chefe@empresa.com", "full_name": "Gestor", "role": "gestor"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 409, r.text
+    assert _linha(banco, "u-gestor")["email"] == "gestor@empresa.com"
+
+
+def test_manter_o_proprio_email_na_edicao_e_permitido(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    A checagem tem de ignorar a própria linha — senão salvar sem mexer no
+    e-mail acusaria duplicata contra si mesmo, e editar o nome viraria
+    impossível.
+    """
+    r = client.put(
+        "/api/users/u-gestor",
+        json={"email": "gestor@empresa.com", "full_name": "Gestor Editado", "role": "gestor"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 200, r.text
+    assert _linha(banco, "u-gestor")["full_name"] == "Gestor Editado"
+
+
+def test_email_e_normalizado_para_minusculas(client: TestClient, banco: _FakeSupabase) -> None:
+    """
+    O login compara normalizado. Gravar "Fulano@x.com" cru deixaria a conta
+    inacessível — e abriria espaço para uma segunda com o mesmo endereço.
+    """
+    r = client.post(
+        "/api/users",
+        json={"email": "  NOVO@Empresa.COM  ", "password": SENHA,
+              "full_name": "Novo", "role": "user"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 200, r.text
+    assert any(u["email"] == "novo@empresa.com" for u in banco.tabelas["users"])
+
+
+@pytest.mark.parametrize("email", ["sem-arroba", "@semlocal.com", "sem@dominio", "a b@x.com", ""])
+def test_email_implausivel_e_recusado(
+    client: TestClient, banco: _FakeSupabase, email: str
+) -> None:
+    """
+    Validação frouxa de propósito: "@" com algo dos dois lados e ponto no
+    domínio. Regex de e-mail "completo" rejeita endereço válido e dá falsa
+    sensação de rigor — o que prova que um e-mail funciona é chegar mensagem.
+    """
+    r = client.post(
+        "/api/users",
+        json={"email": email, "password": SENHA, "full_name": "X", "role": "user"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 422, r.text
+
+
+def test_senha_curta_e_recusada_ao_criar(client: TestClient, banco: _FakeSupabase) -> None:
+    """
+    `reset_user_password` já exigia 6. Criar era mais permissivo que
+    redefinir: dava para nascer com senha de um caractere e só descobrir o
+    rigor ao trocá-la.
+    """
+    r = client.post(
+        "/api/users",
+        json={"email": "z@empresa.com", "password": "12345", "full_name": "Z", "role": "user"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 422, r.text
+    assert "6" in r.json()["detail"]
