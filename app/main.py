@@ -834,6 +834,63 @@ def create_user(body: UserCreateBody) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _garantir_que_sobra_admin(
+    sb: Any,
+    user_id: str,
+    *,
+    novo_role: Optional[str] = None,
+    novo_ativo: Optional[bool] = None,
+    apagar: bool = False,
+) -> None:
+    """
+    Recusa a operação se ela deixaria o portal **sem nenhum administrador ativo**.
+
+    A regra é "tem de sobrar um", e não "não mexa em si mesmo". A segunda
+    formulação parece equivalente e não é: com dois admins, um poderia
+    rebaixar o outro e depois sair, e nenhuma das duas ações seria sobre si
+    mesmo. E com um admin só — que é o caso do portal hoje — a versão correta
+    também bloqueia desativar, rebaixar e apagar, que são três caminhos para o
+    mesmo buraco.
+
+    O buraco é sem fundo: a tela de Usuários é `require_admin`, então sem admin
+    ativo **não há como voltar pela interface**. Só SQL direto no banco.
+
+    Simula a mudança e conta o que restaria — assim as três rotas usam a mesma
+    regra e não há como uma delas divergir.
+    """
+    try:
+        us = sb.table("users").select("id, role, ativo").execute().data or []
+    except Exception:
+        # Não dá para afirmar que sobra admin. Recusar é o lado seguro: o custo
+        # é uma operação adiada; o do contrário é um portal sem dono.
+        logger.exception("Falha ao verificar administradores restantes")
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível verificar os administradores agora. Tente novamente.",
+        )
+
+    restantes = 0
+    for u in us:
+        if str(u.get("id")) == str(user_id):
+            if apagar:
+                continue
+            papel = novo_role if novo_role is not None else (u.get("role") or "")
+            ativo = novo_ativo if novo_ativo is not None else u.get("ativo")
+            u = {**u, "role": papel, "ativo": ativo}
+        if (u.get("role") or "").strip().lower() == "admin" and auth.conta_ativa(u):
+            restantes += 1
+
+    if restantes == 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Esta é a única conta de administrador ativa. Promova outro "
+                "administrador antes de desativar, rebaixar ou apagar esta — "
+                "sem nenhum admin, não há como voltar pela tela."
+            ),
+        )
+
+
 @app.put("/api/users/{user_id}", dependencies=[Depends(require_admin)])
 def update_user(user_id: str, body: UserUpdateBody) -> dict:
     from app.settings_state import _supabase
@@ -855,6 +912,8 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
             status_code=422,
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
+
+    _garantir_que_sobra_admin(sb, user_id, novo_role=role, novo_ativo=ativo)
 
     campos: Dict[str, Any] = {
         "email": body.email.strip().lower(),
@@ -907,6 +966,7 @@ def deactivate_user(user_id: str) -> dict:
     sb = _supabase()
     if not sb:
         raise HTTPException(status_code=503)
+    _garantir_que_sobra_admin(sb, user_id, novo_ativo=False)
     try:
         sb.table("users").update({"ativo": False}).eq("id", user_id).execute()
         return {"ok": True}
@@ -943,6 +1003,7 @@ def delete_user(user_id: str) -> dict:
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb: raise HTTPException(status_code=503)
+    _garantir_que_sobra_admin(sb, user_id, apagar=True)
     sb.table("users").delete().eq("id", user_id).execute()
     return {"ok": True}
 

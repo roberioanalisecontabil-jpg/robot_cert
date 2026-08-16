@@ -102,6 +102,12 @@ def _users() -> List[Dict[str, Any]]:
     return [
         {"id": "u-admin", "email": "chefe@empresa.com", "full_name": "Chefe",
          "role": "admin", "ativo": True, "password_hash": h},
+        # Segundo admin ativo de propósito: sem ele, desativar ou rebaixar o
+        # primeiro esbarraria na regra do último administrador (409), e os
+        # testes de "o papel é preservado" não chegariam a exercitar o que
+        # querem. A regra em si é testada à parte, na seção 6.
+        {"id": "u-admin2", "email": "chefe2@empresa.com", "full_name": "Chefe 2",
+         "role": "admin", "ativo": True, "password_hash": h},
         {"id": "u-gestor", "email": "gestor@empresa.com", "full_name": "Gestor",
          "role": "gestor", "ativo": True, "password_hash": h},
         {"id": "u-off", "email": "saiu@empresa.com", "full_name": "Saiu",
@@ -322,3 +328,118 @@ def test_tela_oferece_reativar() -> None:
     assert "'disabled'" not in html.split("function estaAtivo")[1].split("function roleLabel")[0].replace(
         "String(u.role || '').toLowerCase() === 'disabled'", ""
     ), "o estado saiu do papel; 'disabled' só sobrevive como leitura do legado"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 6. Não pode sobrar zero administrador ativo
+#
+# O buraco é sem fundo: a tela de Usuários é `require_admin`, então sem admin
+# ativo **não há como voltar pela interface** — só SQL direto no banco. E não
+# é hipótese: em produção há UM administrador ativo.
+#
+# A regra é "tem de sobrar um", e não "não mexa em si mesmo". A segunda parece
+# equivalente e não é: com dois admins, um poderia rebaixar o outro e depois
+# sair, e nenhuma das duas ações seria sobre si mesmo.
+# ──────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def unico_admin(banco: _FakeSupabase) -> _FakeSupabase:
+    """Deixa `u-admin` como o único administrador ativo."""
+    for u in banco.tabelas["users"]:
+        if u["id"] == "u-admin2":
+            u["role"] = "user"
+    return banco
+
+
+def test_ultimo_admin_nao_pode_se_desativar(
+    client: TestClient, unico_admin: _FakeSupabase
+) -> None:
+    r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
+    assert r.status_code == 409, r.text
+    assert _linha(unico_admin, "u-admin")["ativo"] is True
+
+
+def test_ultimo_admin_nao_pode_se_rebaixar(
+    client: TestClient, unico_admin: _FakeSupabase
+) -> None:
+    """
+    Rebaixar é o caminho menos óbvio para o mesmo buraco, e por isso o mais
+    perigoso: quem faz não está pensando em perder acesso.
+    """
+    r = client.put(
+        "/api/users/u-admin",
+        json={"email": "chefe@empresa.com", "full_name": "Chefe", "role": "user"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 409, r.text
+    assert _linha(unico_admin, "u-admin")["role"] == "admin"
+
+
+def test_ultimo_admin_nao_pode_ser_apagado(
+    client: TestClient, unico_admin: _FakeSupabase
+) -> None:
+    r = client.delete("/api/users/u-admin", headers=_admin_headers())
+    assert r.status_code == 409, r.text
+    assert any(u["id"] == "u-admin" for u in unico_admin.tabelas["users"])
+
+
+def test_role_disabled_legado_tambem_esbarra_na_regra(
+    client: TestClient, unico_admin: _FakeSupabase
+) -> None:
+    """
+    O cliente antigo desativa mandando `role="disabled"`. Se esse caminho não
+    passasse pela verificação, sobraria uma porta aberta para o mesmo buraco.
+    """
+    r = client.put(
+        "/api/users/u-admin",
+        json={"email": "chefe@empresa.com", "full_name": "Chefe", "role": "disabled"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 409, r.text
+    assert _linha(unico_admin, "u-admin")["ativo"] is True
+
+
+def test_com_dois_admins_desativar_um_e_permitido(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    A regra não pode virar "administrador é intocável" — isso impediria a
+    rotina normal de desligar alguém que saiu da empresa.
+    """
+    r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
+    assert r.status_code == 200, r.text
+    assert _linha(banco, "u-admin")["ativo"] is False
+
+
+def test_admin_inativo_nao_conta_como_administrador(
+    client: TestClient, banco: _FakeSupabase
+) -> None:
+    """
+    `u-off` tem role='admin' e está inativo. Contá-lo deixaria o portal sem
+    ninguém que possa entrar — o número certo é o de admins que conseguem
+    fazer login.
+    """
+    for u in banco.tabelas["users"]:
+        if u["id"] == "u-admin2":
+            u["role"] = "user"
+    assert _linha(banco, "u-off")["role"] == "admin"
+    assert _linha(banco, "u-off")["ativo"] is False
+
+    r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
+    assert r.status_code == 409, "o admin inativo não deveria ter contado"
+
+
+def test_falha_ao_verificar_recusa_em_vez_de_liberar(
+    client: TestClient, banco: _FakeSupabase, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Não dá para afirmar que sobra admin → recusa. O custo é uma operação
+    adiada; o do contrário é um portal sem dono.
+    """
+    class _Quebrado:
+        def table(self, _n):
+            raise RuntimeError("banco fora do ar")
+
+    monkeypatch.setattr("app.settings_state._supabase", lambda: _Quebrado())
+    r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
+    assert r.status_code == 503, r.text
