@@ -647,11 +647,36 @@ conjunto realista.
    que mexia no mesmo handler
 2. `colaborador_cert_selecoes` chaveada por `user_id` — enquanto é 1 linha
 
-**Aberto, descoberto na 2a:** o JWT dura 24h e é stateless, então desativar
+~~**Aberto, descoberto na 2a:** o JWT dura 24h e é stateless, então desativar
 alguém **não invalida o token que já está no navegador dele** — o acesso cai só
-na expiração. Era irrelevante quando desativar era raro; com a hierarquia, passa
-a ser a operação de revogação principal. Resolver exige checagem por requisição
-ou versionamento de token, e merece etapa própria.
+na expiração.~~ ✅ *(resolvido em 2026-08-16 — checagem por requisição)*
+
+`require_auth` passou a reler a conta em `users` a cada requisição autenticada:
+confere se ela ainda existe, aplica `auth.conta_ativa` e monta o `TokenData` com
+o papel **do banco**. O papel que vem dentro do token é ignorado.
+
+Ao escrever a etapa apareceu um segundo efeito, pior que o registrado aqui e que
+ninguém tinha notado: como `require_admin` decidia com `token.role`, **rebaixar
+um administrador também não valia na hora** — ele seguia administrando até o
+token expirar. E esse não dava sintoma nenhum, porque a conta continuava ativa.
+
+Escolhas que o código não conta sozinho:
+
+- **Checagem por requisição, não `token_version`.** O versionamento faria a
+  mesma leitura em `users` por requisição, e ainda pediria migration. Só ganharia
+  se houvesse cache, e não há.
+- **401 para sessão morta, 403 para papel insuficiente.** `static/ui-common.js`
+  intercepta todo 401 e chama `logout()`; quem foi desativado volta ao login
+  sozinho, e quem foi rebaixado continua no portal, apenas sem as rotas de admin.
+- **503 quando a leitura falha**, e não 401 nem "deixa passar". Fail-closed, como
+  em `CustodiaIndisponivel` — mas sem deslogar meio portal numa oscilação do banco.
+- **Sem diretório configurado, vale o token.** É dev e teste; em produção sem
+  Supabase o `/api/login` já responde 503 e ninguém obtém token.
+
+**Preço:** uma leitura em `users` por requisição autenticada. Ainda dá para
+abatê-lo: `_resolve_user_id(token.email)` (3 chamadas) repete essa mesma leitura
+logo depois, e o `id` já está em mãos em `_sessao_do_token`. Não foi feito junto
+para a etapa não misturar duas coisas.
 
 ---
 

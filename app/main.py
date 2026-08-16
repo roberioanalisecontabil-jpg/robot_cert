@@ -51,6 +51,112 @@ security = HTTPBearer(auto_error=False)
 # Rotas sensíveis devem recusá-la — é o oposto de "autenticado".
 ANONYMOUS_IDENTITY_EMAIL = "anonymous@local"
 
+# Mensagem única para "este token não vale mais". Não distingue conta excluída
+# de conta desativada de propósito: quem está do outro lado já perdeu o acesso,
+# e a diferença só serviria para dizer a um ex-usuário em que estado a conta
+# dele ficou.
+SESSAO_ENCERRADA = "Sessão encerrada. Entre novamente."
+
+
+class ContaIndisponivel(RuntimeError):
+    """O diretório de usuários existe, mas não respondeu."""
+
+
+class ContaInvalida(RuntimeError):
+    """A conta que o token nomeia não existe mais no diretório."""
+
+
+def _conta_da_sessao(email: str) -> Optional[dict]:
+    """
+    Relê a conta a cada requisição, para o token não congelar a permissão.
+
+    Devolve `None` quando **não há** diretório de usuários configurado — dev e
+    testes sem Supabase. Aí não existe conta contra a qual conferir, e o token é
+    a única informação disponível. Isso não abre brecha em produção: sem
+    Supabase o `/api/login` responde 503 e ninguém chega a ter um token para
+    apresentar.
+
+    Levanta `ContaInvalida` quando a conta sumiu — excluída, ou com o e-mail
+    alterado, porque aí o `sub` do token deixa de casar com qualquer linha.
+    Levanta `ContaIndisponivel` quando a leitura falha. Barrar no segundo caso é
+    deliberado: "não consegui verificar" não é "está tudo certo". É a mesma
+    escolha já feita em `CustodiaIndisponivel`, e pela mesma razão — a variante
+    permissiva não daria sintoma nenhum.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        return None
+    try:
+        r = (
+            sb.table("users")
+            .select("id, email, role, ativo")
+            .eq("email", email)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        logger.warning("Não foi possível verificar a conta da sessão: %s", e)
+        raise ContaIndisponivel(str(e)) from e
+    if not r.data:
+        raise ContaInvalida(email)
+    return r.data[0]
+
+
+def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
+    """
+    O papel que vale é o do banco, não o que veio dentro do token.
+
+    Sem isto, `require_admin` decidia com `token.role` — gravado no login e
+    válido por 24h (`auth.ACCESS_TOKEN_EXPIRE_MINUTES`). Duas consequências, e a
+    segunda é a pior: desativar alguém não derrubava a sessão aberta dele, e
+    **rebaixar um administrador não tirava o poder de administrador**; os dois
+    efeitos só chegavam quando o token expirasse.
+
+    Era tolerável enquanto desativar era operação rara. Com a hierarquia
+    gestor/operador de 15/08, desativar passou a ser a forma principal de
+    revogar acesso — e revogação que leva um dia para valer não é revogação.
+
+    Custa uma leitura em `users` por requisição autenticada. É o preço honesto:
+    a alternativa por `token_version` faria a mesma leitura, só que precisando
+    também de migration.
+    """
+    try:
+        conta = _conta_da_sessao(token_data.email)
+    except ContaInvalida:
+        raise HTTPException(
+            status_code=401,
+            detail=SESSAO_ENCERRADA,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except ContaIndisponivel:
+        # 503, e não 401: o front derruba a sessão em todo 401
+        # (`static/ui-common.js`), e uma instabilidade do banco não deve
+        # deslogar quem está trabalhando.
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível confirmar a sua sessão. Tente novamente.",
+        )
+
+    if conta is None:
+        return token_data
+    if not auth.conta_ativa(conta):
+        raise HTTPException(
+            status_code=401,
+            detail=SESSAO_ENCERRADA,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Reconstruído a partir da linha, nunca do token: é o ponto inteiro daqui.
+    # Com `.get`, e não `[...]`: papel ausente vira None, que `require_admin`
+    # reprova. Indexar levantaria KeyError, e a rota responderia 500 — falha
+    # aberta na cara do usuário onde cabia uma recusa silenciosa.
+    return auth.TokenData(
+        email=conta.get("email") or token_data.email,
+        role=conta.get("role"),
+    )
+
+
 async def require_auth(
     auth_creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
@@ -60,12 +166,13 @@ async def require_auth(
     1. Se houver Token JWT (Navegador), valida o usuário.
     2. Se houver X-API-Key (Agente Windows), valida a chave estática.
     """
-    # 1. Tentar JWT
+    # 1. Tentar JWT. Assinatura válida ainda não é sessão válida: `_sessao_do_token`
+    #    confere no banco se a conta segue existindo, ativa, e com qual papel.
     if auth_creds:
         token_data = auth.decode_access_token(auth_creds.credentials)
         if token_data:
-            return token_data
-    
+            return _sessao_do_token(token_data)
+
     # 2. Se API_KEY estiver ativa, aceitar a chave estática para o agente.
     if config.API_KEY:
         if x_api_key and x_api_key == config.API_KEY:

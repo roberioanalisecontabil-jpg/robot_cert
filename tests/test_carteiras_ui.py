@@ -106,6 +106,16 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
              "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
             {"id": "u-gest", "email": "gestor@x.com", "full_name": "Gestor", "role": "gestor",
              "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
+            # As contas que `_h("admin")` e `_h("user")` apresentam. Desde 16/08
+            # o `require_auth` relê a conta a cada requisição, então um token
+            # cujo `sub` não existe no banco é 401 — sessão de conta excluída.
+            # Sem estas linhas, `test_operadores_e_de_admin_ou_gestor` mediria a
+            # recusa errada: 401 por identidade desconhecida em vez do 403 por
+            # papel insuficiente, que é o que ele existe para provar.
+            {"id": "u-adm", "email": "admin@x.com", "full_name": "Admin", "role": "admin",
+             "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
+            {"id": "u-op3", "email": "user@x.com", "full_name": "Operador", "role": "user",
+             "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
         ],
         "carteira": [
             {"user_id": "u-op1", "documento": DOC_ACME,

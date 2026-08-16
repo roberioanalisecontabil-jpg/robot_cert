@@ -114,7 +114,12 @@ class _Fake:
 @pytest.fixture
 def banco(monkeypatch):
     fake = _Fake()
-    fake.tabelas["users"] = [{"id": "u-1", "email": "admin@x.com"}]
+    # `role` e `ativo` na linha, e não só no token: desde 16/08 o `require_auth`
+    # relê a conta a cada requisição e usa o papel do BANCO. Uma linha sem papel
+    # é conta sem privilégio, e a rota de admin recusaria — como deve.
+    fake.tabelas["users"] = [
+        {"id": "u-1", "email": "admin@x.com", "role": "admin", "ativo": True}
+    ]
     monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
     # O limitador é global ao processo; zerar evita um teste contaminar o outro.
     app_main._claim_tentativas.clear()
