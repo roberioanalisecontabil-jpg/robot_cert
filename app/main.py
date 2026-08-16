@@ -1074,6 +1074,58 @@ def _garantir_que_sobra_admin(
         )
 
 
+def _mover_selecoes_de_email(sb, antigo: str, novo: str) -> None:
+    """
+    Leva as seleções de alerta junto quando o e-mail da conta muda.
+
+    `colaborador_cert_selecoes` tem `user_email` como chave primária, e nada
+    liga a linha ao `id` da pessoa. Trocar o e-mail de alguém deixava a linha
+    para trás, e o estrago era mudo dos dois lados: as escolhas sumiam da tela
+    de acompanhamento, e `alert_state._get_todos_colaboradores_selecoes` passava
+    a descartar a órfã por não achar aquele endereço em `users` — no caminho que
+    existe justamente para não mandar e-mail para quem não deve. Sem erro, sem
+    aviso; o alerta de vencimento apenas parava de chegar.
+
+    Best-effort de propósito: a troca de e-mail em si já foi gravada, e derrubar
+    a resposta agora diria ao admin que a operação falhou quando ela funcionou.
+    Mas o aviso sai nominal — o defeito aqui é o silêncio, não a falha.
+    """
+    try:
+        r = (
+            sb.table("colaborador_cert_selecoes")
+            .select("documentos")
+            .eq("user_email", antigo)
+            .limit(1)
+            .execute()
+        )
+        linhas = r.data or []
+        if not linhas:
+            return
+        docs = linhas[0].get("documentos")
+        if not isinstance(docs, list):
+            docs = []
+        # Apaga antes de gravar: as duas linhas ao mesmo tempo fariam a pessoa
+        # receber em duplicidade se a antiga voltasse a casar com alguma conta.
+        sb.table("colaborador_cert_selecoes").delete().eq("user_email", antigo).execute()
+        sb.table("colaborador_cert_selecoes").upsert(
+            {
+                "user_email": novo,
+                "documentos": docs,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            on_conflict="user_email",
+        ).execute()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "E-mail alterado de %s para %s, mas as seleções de alerta não "
+            "acompanharam: %s. A pessoa deixa de receber aviso de vencimento "
+            "até refazer a seleção em Acompanhamento.",
+            antigo,
+            novo,
+            e,
+        )
+
+
 @app.put("/api/users/{user_id}", dependencies=[Depends(require_admin)])
 def update_user(user_id: str, body: UserUpdateBody) -> dict:
     from app.settings_state import _supabase
@@ -1100,6 +1152,16 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
     _garantir_email_livre(sb, email, ignorar_id=user_id)
     _garantir_que_sobra_admin(sb, user_id, novo_role=role, novo_ativo=ativo)
 
+    # Lido ANTES do update: depois de gravar, o endereço antigo não existe mais
+    # em lugar nenhum, e a linha de seleções ficaria órfã sem forma de achá-la.
+    anterior = ""
+    try:
+        r = sb.table("users").select("email").eq("id", user_id).limit(1).execute()
+        if r.data:
+            anterior = str(r.data[0].get("email") or "").strip().lower()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Não foi possível ler o e-mail atual de %s: %s", user_id, e)
+
     campos: Dict[str, Any] = {
         "email": email,
         "full_name": body.full_name.strip(),
@@ -1116,9 +1178,12 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
 
     try:
         sb.table("users").update(campos).eq("id", user_id).execute()
-        return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    if anterior and anterior != email:
+        _mover_selecoes_de_email(sb, anterior, email)
+    return {"ok": True}
 
 
 @app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_admin)])

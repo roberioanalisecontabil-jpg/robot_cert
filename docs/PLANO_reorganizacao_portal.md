@@ -645,7 +645,31 @@ conjunto realista.
 
 1. ~~Login devolvendo 500 em credencial inválida (§0.5)~~ — feito na etapa 2a,
    que mexia no mesmo handler
-2. `colaborador_cert_selecoes` chaveada por `user_id` — enquanto é 1 linha
+2. `colaborador_cert_selecoes` chaveada por `user_id` — **não feito, e o motivo
+   mudou.** Em 16/08 fui atrás disto e o item não é o "conserto pequeno" que esta
+   lista supõe. A premissa era o volume de dados ("enquanto é 1 linha"), e essa
+   parte continua verdadeira; o que cresceu foi o *código em volta*.
+   `_get_todos_colaboradores_selecoes` devolve `email → documentos` e cruza com
+   `_emails_ativos()`, um conjunto de e-mails. Rechavear por `user_id` obriga a
+   mexer no caminho dos alertas — o mesmo que em 09/08 mandava dado de cliente
+   para `certguard.com` e `example.com`, e que hoje é o que impede isso.
+
+   Some-se o sequenciamento: já há uma migration aplicada mas não conferida
+   (`users_email_unico`) segurando o push. Empilhar sobre ela um `drop column`
+   no caminho dos alertas, sem eu conseguir verificar schema, é onde o erro sai
+   caro. E teria de ser em duas fases (adicionar+backfill → subir código →
+   remover a coluna), porque o código em produção ainda lê `user_email`.
+
+   **O que foi feito em vez disso:** `_mover_selecoes_de_email`, chamado por
+   `update_user` quando o endereço muda. Fecha o defeito concreto — a seleção
+   que se desprendia da pessoa em silêncio — sem migration, sem tocar no
+   caminho dos alertas, e sem impedir o rechaveamento depois.
+
+   É remendo sobre um problema de modelagem, e vale dizer o que ele **não**
+   cobre: a linha continua chaveada por e-mail, então quem escrever ali por
+   fora do `update_user` reintroduz a órfã. O rechaveamento continua sendo a
+   solução certa; o que mudou é que ele deixou de ser barato, e o momento de
+   pagar não é com outra migration pendente na fila.
 
 ~~**Aberto, descoberto na 2a:** o JWT dura 24h e é stateless, então desativar
 alguém **não invalida o token que já está no navegador dele** — o acesso cai só
