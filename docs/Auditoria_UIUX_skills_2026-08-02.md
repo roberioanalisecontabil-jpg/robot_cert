@@ -286,7 +286,9 @@ e reordenar para `font-family: "Inter", -apple-system, …`. Se não é, remover
 
 ## 🟡 MÉDIO
 
-### M1 · Tokens de cor duplicados em dois blocos
+### M1 · Tokens de cor duplicados em dois blocos ✅ RESOLVIDO 17/08 — **por trava, não por desduplicação.**
+
+A duplicação continua: o tema escuro é declarado em `:root[data-theme="dark"]` e de novo dentro de `@media (prefers-color-scheme: dark)`. Desduplicar exigiria mexer na cascata dos dois seletores, com risco visual que a suíte não consegue ver — ela lê o CSS e nunca renderiza. O que machuca não é a duplicação, é a **divergência**: quem escolhe "escuro" no seletor veria uma cor e quem segue o sistema veria outra, sem erro em nenhum dos dois caminhos. `test_os_dois_blocos_de_tema_escuro_definem_os_mesmos_tokens` trava isso.
 **Skill:** `02 §5` (arquitetura de tokens em 3 camadas)
 
 `style.css:74-111` (`:root[data-theme="dark"]`) e `style.css:113-152` (`@media prefers-color-scheme: dark`) são **40 linhas idênticas copiadas**. Qualquer ajuste de cor no escuro precisa ser feito em dois lugares — e um deles (C2) nem está ativo hoje.
@@ -300,7 +302,9 @@ Não é possível agrupar seletor e media query diretamente; a saída limpa é d
 
 ---
 
-### M2 · Cores hardcoded que quebram no modo escuro
+### M2 · Cores hardcoded que quebram no modo escuro ✅ CORRIGIDO — **em duas etapas.**
+
+A primeira (02/08) limpou os templates. Faltou o próprio `style.css`, e a varredura da época não olhou lá. Fechado em 17/08: `.tag` tinha fundo claro FIXO com `color: var(--text-muted)` — texto claro sobre fundo claro no tema escuro, etiqueta ilegível; `.path-value` virava um retângulo branco na página escura; e `.card-erros` usava cor de mão enquanto o cartão ao lado já usava tokens. Entraram `--fora-padrao-bg`/`--fora-padrao-text` para o roxo de "fora do padrão", que não tinha par no escuro. Restam três literais, todas legítimas: `#ffffff` do `.skip-to-content` (texto em botão preenchido) e o `.cmd-pre`, bloco de código escuro nos dois temas.
 **Skill:** `02 §5`, `08 §2` ("nunca hardcode de cores repetido em múltiplos lugares")
 
 12 declarações fora dos tokens, todas assumindo fundo claro:
@@ -367,7 +371,9 @@ Existem `--radius-xs/sm/md/lg/pill`, mas há 20 declarações com pixels literai
 
 ---
 
-### M8 · `innerHTML` com dados do servidor sem escape
+### M8 · `innerHTML` com dados do servidor sem escape ✅ CORRIGIDO
+
+Os três pontos citados foram resolvidos por caminhos diferentes, e o melhor deles não é escapar: `showToast` e a lista de notificações passaram a montar o DOM com `textContent`, que não interpreta markup nenhum. `renderEmptyState`, que precisa de HTML, usa `esc()` em cada interpolação. A função vive em `ui-common.js` e é usada por 9 templates.
 **Skill:** `08 §6`
 
 `ui-common.js:481-490` monta notificações interpolando `it.mensagem` e `it.documento` direto em template string; `showToast()` (`:225`) e `renderEmptyState()` (`:259`) fazem o mesmo com seus parâmetros. Como esses dados derivam do CN de certificados (controlado por quem gera o `.pfx`), um CN com markup é injetável.
@@ -426,7 +432,7 @@ document.addEventListener("visibilitychange", () => {
 |---|---|---|---|
 | B1 | 16 usos de `!important` no CSS — a skill pede evitá-lo como regra geral | `08 §2` | `style.css` |
 | B2 | ~~115 atributos `style=` inline~~ ⚖️ **MEDIDO E DESACONSELHADO em 17/08.** São 201 hoje, mas **um único** tem cor literal — o M2 já limpou. O resto é layout (`font-size`, `margin`, `display`). Converter seria churn caro sem melhorar o tema escuro em nada. | `08 §2` | `templates/*` |
-| B3 | Logo sem `width`/`height` explícitos nas 8 telas → risco de CLS | `08 §7` | todos os templates |
+| B3 | ~~Logo sem `width`/`height`~~ ✅ **CORRIGIDO 17/08, com a premissa corrigida junto.** Não eram 8 telas: a sidebar virou partial na Etapa 0, então havia **duas** `<img>` no projeto. E não há CLS — `.brand-icon` e `.login-logo` já reservam a caixa por CSS. Os atributos entraram por outro motivo: se o `style.css` não carregar, o PNG de 512px renderiza em tamanho natural. | `08 §7` | `_sidebar.html`, `login.html` |
 | B4 | Sem `<meta name="description">` (páginas são privadas, então o impacto de SEO é nulo — só relevante se `/login` for indexável) | `08 §8` | todos os templates |
 | B5 | ~~`.cg-page-link:focus` usa `:focus` puro~~ ✅ **CORRIGIDO 17/08.** Virou `:focus-visible`. As demais regras `:focus` do arquivo ficam: realçam o CAMPO (borda/sombra ao clicar dentro), não desenham anel. `.skip-to-content:focus` precisa de `:focus` mesmo. | `04 §5` | `style.css` |
 | B6 | ~~`cursor: help` sem `aria-describedby`~~ ✅ **CORRIGIDO 17/08, e era maior que isto.** Não faltava rótulo: o balão de caminhos só respondia a `mouseover`, então quem navega por teclado nunca chegava à informação. As linhas ganharam `tabindex`, `aria-describedby`, tratamento de foco e Esc (WCAG 2.2 §1.4.13). Vale para os dois balões. | `01 §9` | `duplicidades.html`, `style.css` |
