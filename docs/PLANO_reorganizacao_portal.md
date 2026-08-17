@@ -671,8 +671,21 @@ conjunto realista.
    |---|---|---|
    | 1 | coluna `user_id` anulável + FK `ON DELETE CASCADE` + backfill + índice único parcial | ✅ 17/08 (`20260817120000`) |
    | 2 | código lê pela identidade e grava nas **duas** colunas | ✅ 17/08 |
-   | 3 | `DROP COLUMN user_email`; `user_id` vira chave primária | pendente |
-   | 4 | parar de gravar `user_email`; apagar `_mover_selecoes_de_email` | pendente |
+   | 3a | `UNIQUE (user_id)` como *constraint* | pendente |
+   | 3b | código para de gravar/ler `user_email`; `on_conflict` → `user_id`; apaga `_mover_selecoes_de_email` | pendente |
+   | 3c | derruba a PK e a coluna `user_email`; `user_id` vira `NOT NULL` e PK | pendente |
+
+   **Correção de rota (17/08).** A versão anterior desta tabela dizia *"fase 3:
+   `DROP COLUMN user_email`; fase 4: código para de gravar `user_email`"*. Nessa
+   ordem **as gravações quebram na hora**: o código da fase 2 ainda grava
+   `user_email` e a usa como alvo do `on_conflict`. É o mesmo erro de
+   sequenciamento que esta seção inteira existe para evitar — e ele entrou aqui
+   por eu ter escrito o plano antes de olhar de onde o `on_conflict` aponta.
+
+   Daí os três passos em vez de dois, e daí a 3a existir: o índice da fase 1 é
+   PARCIAL (`WHERE user_id IS NOT NULL`), e índice parcial não serve para o
+   `ON CONFLICT` inferir alvo. Sem uma constraint `UNIQUE` de verdade, a 3b não
+   tem para onde apontar.
 
    **A ordem é o ponto inteiro.** O código em produção lê `user_email`; derrubar
    a coluna antes da fase 2 faria a leitura levantar exceção, o `except` cairia
