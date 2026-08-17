@@ -409,7 +409,12 @@
             const j = await r.json();
             const nErros = (j.erros || []).length;
             msg.textContent = `Importação concluída. Criados: ${j.criados || 0}. Ignorados: ${j.ignorados || 0}. Erros: ${nErros}.`;
-            msg.style.color = nErros ? '#b45309' : 'var(--ok)';
+            // Token, e não o âmbar literal que estava aqui. Ele sobreviveu ao
+            // M2 por estar dentro de um ternário em JavaScript, onde a
+            // varredura por `style="..."` não olhava — um ramo tokenizado e o
+            // outro não, na mesma linha. Em tema escuro ficava com contraste
+            // baixo, logo na mensagem que diz quantas linhas do CSV falharam.
+            msg.style.color = nErros ? 'var(--warning-text)' : 'var(--ok)';
             e.target.reset();
             await loadUsers();
         });

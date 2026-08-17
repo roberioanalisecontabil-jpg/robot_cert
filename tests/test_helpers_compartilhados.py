@@ -220,3 +220,42 @@ def test_ui_nao_mistura_pt_br_com_pt_pt() -> None:
         if encontrados:
             achados[f.name] = encontrados
     assert not achados, f"texto de UI em pt-PT: {achados}"
+
+
+def test_js_nao_atribui_cor_literal_a_style() -> None:
+    """
+    Cor literal atribuída por JavaScript (`el.style.color = '#b45309'`) escapa
+    de toda revisão de tema: não está no CSS, não está num `style="..."` do
+    HTML, e o tema escuro não a alcança.
+
+    Foi assim que a última cor escrita à mão sobreviveu ao M2 da auditoria —
+    dentro de um ternário, com um ramo tokenizado e o outro não, na mesma
+    linha: `nErros ? '#b45309' : 'var(--ok)'`. Em tema escuro ela ficava com
+    contraste baixo, justamente na mensagem que diz quantas linhas do CSV
+    falharam.
+
+    **Alcance estreito de propósito.** Não proíbe cor literal em qualquer
+    lugar: os documentos de exportação montados com `window.open()` +
+    `document.write()` usam cinzas fixos e estão certos — vão para papel ou
+    PDF, sem acesso a `style.css` nem aos tokens. Tintas com alfa
+    (`rgba(255, 59, 48, 0.25)`) no CSS das telas também ficam de fora, porque
+    trocá-las mudaria a aparência. O que este teste cobre é o caso em que a
+    cor é claramente indevida e não há motivo legítimo para escrevê-la.
+    """
+    padrao = re.compile(
+        r"\.style\.[A-Za-z]+\s*=\s*[^;\n]*?"
+        r"(#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d)"
+    )
+    achados = {}
+    for f in sorted(TEMPLATES.glob("*.html")) + sorted((RAIZ / "static").glob("*.js")):
+        linhas = [
+            f"{n}: {linha.strip()[:90]}"
+            for n, linha in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
+            if padrao.search(linha)
+        ]
+        if linhas:
+            achados[f.name] = linhas
+    assert not achados, (
+        "cor literal atribuída por JavaScript — use um token var(--...): "
+        f"{achados}"
+    )
