@@ -672,7 +672,8 @@ conjunto realista.
    | 1 | coluna `user_id` anulável + FK `ON DELETE CASCADE` + backfill + índice único parcial | ✅ 17/08 (`20260817120000`) |
    | 2 | código lê pela identidade e grava nas **duas** colunas | ✅ 17/08 |
    | 3a | SQL: `UNIQUE (user_id)` como *constraint* | ✅ 17/08 |
-   | 3b | SQL: `UNIQUE (user_email)` e **remove a chave primária** | pendente |
+   | 3b | SQL: `UNIQUE (user_email)` e **remove a chave primária** | ✅ 17/08 |
+   | 3b-2 | SQL: `ALTER COLUMN user_email DROP NOT NULL` | pendente |
    | 3c | código para de gravar/ler `user_email`; `on_conflict` → `user_id`; apaga `_mover_selecoes_de_email` | pendente |
    | 3d | SQL: derruba a coluna `user_email`; `user_id` vira `NOT NULL` e PK | pendente |
 
@@ -690,6 +691,19 @@ conjunto realista.
 
    Daí a 3a existir: o índice da fase 1 é PARCIAL (`WHERE user_id IS NOT
    NULL`), e índice parcial não serve para o `ON CONFLICT` inferir alvo.
+
+   **Terceira correção, e esta foi a verificação fazendo o trabalho dela.** Eu
+   escrevi na 3b que, removida a PK, `user_email` ficaria `is_nullable = YES`.
+   O passo de verificação devolveu **`NO`**. No PostgreSQL o `NOT NULL` é um
+   atributo próprio da coluna (`attnotnull`), que a `PRIMARY KEY` **define** ao
+   ser criada mas **não desfaz** ao ser removida — é preciso um
+   `ALTER COLUMN ... DROP NOT NULL` explícito. Daí a 3b-2.
+
+   Sem esse passo, a 3b tinha atingido metade do objetivo: `user_email` deixou
+   de ser chave, mas continuava obrigatória, então o código ainda não poderia
+   parar de gravá-la — exatamente o bloqueio que a 3b existia para abrir. Se a
+   verificação fosse só "rodou sem erro", isso teria passado, e o defeito
+   apareceria na 3c como falha de gravação em produção.
 
    **A tabela fica sem chave primária entre a 3b e a 3d**, de propósito.
    `user_id` só vira PK depois de ser `NOT NULL`, e isso só deve ser exigido
