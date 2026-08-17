@@ -673,8 +673,8 @@ conjunto realista.
    | 2 | código lê pela identidade e grava nas **duas** colunas | ✅ 17/08 |
    | 3a | SQL: `UNIQUE (user_id)` como *constraint* | ✅ 17/08 |
    | 3b | SQL: `UNIQUE (user_email)` e **remove a chave primária** | ✅ 17/08 |
-   | 3b-2 | SQL: `ALTER COLUMN user_email DROP NOT NULL` | pendente |
-   | 3c | código para de gravar/ler `user_email`; `on_conflict` → `user_id`; apaga `_mover_selecoes_de_email` | pendente |
+   | 3b-2 | SQL: `ALTER COLUMN user_email DROP NOT NULL` | ✅ 17/08 |
+   | 3c | código para de gravar/ler `user_email`; `on_conflict` → `user_id`; apaga `_mover_selecoes_de_email` | ✅ 17/08 |
    | 3d | SQL: derruba a coluna `user_email`; `user_id` vira `NOT NULL` e PK | pendente |
 
    **Duas correções de rota, no mesmo dia, e vale registrar as duas** — cada
@@ -742,6 +742,20 @@ conjunto realista.
    **Ruga conhecida:** o fallback em ficheiro (`_load_colaborador_file_dict`)
    continua chaveado por e-mail. Nesse modo não existe tabela `users`, então
    ali a identidade *é* o endereço. Os dois backends divergem de propósito.
+
+   **Perda consciente na 3c, e é a única.** Antes, a linha de seleção guardava
+   o endereço, então uma falha ao ler `users` só tirava o *filtro* — as
+   seleções passavam inteiras e o alerta saía. Agora o endereço só existe em
+   `users`: sem essa leitura não há para quem mandar. Não é "não sei filtrar",
+   é "não sei endereçar", e não há fallback honesto.
+
+   Essa redundância **era** o defeito (endereço que envelhecia junto da linha),
+   então perdê-la é o preço do conserto. A contrapartida é que a falha grita:
+   `logger.error` com a contagem de seleções lidas, e o job tenta de novo no
+   ciclo seguinte. Uma rodada morrendo em silêncio é o pior modo de falhar para
+   um sistema cuja função é avisar sobre vencimento — daí o `ERROR`, e daí
+   `test_users_ilegivel_deixa_a_rodada_sem_destinatario` exigir a mensagem, e
+   não só o `{}`.
 
 ~~**Aberto, descoberto na 2a:** o JWT dura 24h e é stateless, então desativar
 alguém **não invalida o token que já está no navegador dele** — o acesso cai só

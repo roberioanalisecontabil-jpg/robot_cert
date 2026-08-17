@@ -1083,58 +1083,6 @@ def _garantir_que_sobra_admin(
         )
 
 
-def _mover_selecoes_de_email(sb, antigo: str, novo: str) -> None:
-    """
-    Leva as seleções de alerta junto quando o e-mail da conta muda.
-
-    `colaborador_cert_selecoes` tem `user_email` como chave primária, e nada
-    liga a linha ao `id` da pessoa. Trocar o e-mail de alguém deixava a linha
-    para trás, e o estrago era mudo dos dois lados: as escolhas sumiam da tela
-    de acompanhamento, e `alert_state._get_todos_colaboradores_selecoes` passava
-    a descartar a órfã por não achar aquele endereço em `users` — no caminho que
-    existe justamente para não mandar e-mail para quem não deve. Sem erro, sem
-    aviso; o alerta de vencimento apenas parava de chegar.
-
-    Best-effort de propósito: a troca de e-mail em si já foi gravada, e derrubar
-    a resposta agora diria ao admin que a operação falhou quando ela funcionou.
-    Mas o aviso sai nominal — o defeito aqui é o silêncio, não a falha.
-    """
-    try:
-        r = (
-            sb.table("colaborador_cert_selecoes")
-            .select("documentos")
-            .eq("user_email", antigo)
-            .limit(1)
-            .execute()
-        )
-        linhas = r.data or []
-        if not linhas:
-            return
-        docs = linhas[0].get("documentos")
-        if not isinstance(docs, list):
-            docs = []
-        # Apaga antes de gravar: as duas linhas ao mesmo tempo fariam a pessoa
-        # receber em duplicidade se a antiga voltasse a casar com alguma conta.
-        sb.table("colaborador_cert_selecoes").delete().eq("user_email", antigo).execute()
-        sb.table("colaborador_cert_selecoes").upsert(
-            {
-                "user_email": novo,
-                "documentos": docs,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
-            on_conflict="user_email",
-        ).execute()
-    except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "E-mail alterado de %s para %s, mas as seleções de alerta não "
-            "acompanharam: %s. A pessoa deixa de receber aviso de vencimento "
-            "até refazer a seleção em Acompanhamento.",
-            antigo,
-            novo,
-            e,
-        )
-
-
 @app.put("/api/users/{user_id}", dependencies=[Depends(require_admin)])
 def update_user(user_id: str, body: UserUpdateBody) -> dict:
     from app.settings_state import _supabase
@@ -1161,16 +1109,6 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
     _garantir_email_livre(sb, email, ignorar_id=user_id)
     _garantir_que_sobra_admin(sb, user_id, novo_role=role, novo_ativo=ativo)
 
-    # Lido ANTES do update: depois de gravar, o endereço antigo não existe mais
-    # em lugar nenhum, e a linha de seleções ficaria órfã sem forma de achá-la.
-    anterior = ""
-    try:
-        r = sb.table("users").select("email").eq("id", user_id).limit(1).execute()
-        if r.data:
-            anterior = str(r.data[0].get("email") or "").strip().lower()
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Não foi possível ler o e-mail atual de %s: %s", user_id, e)
-
     campos: Dict[str, Any] = {
         "email": email,
         "full_name": body.full_name.strip(),
@@ -1185,13 +1123,15 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
             raise HTTPException(status_code=422, detail="Um usuário não pode ser gestor de si mesmo.")
         campos["gestor_id"] = gid or None
 
+    # Nada a fazer com as seleções de alerta ao trocar o e-mail: desde a fase
+    # 3c elas são chaveadas por `user_id`, então a identidade não se move. O
+    # `_mover_selecoes_de_email` que existia aqui, e a leitura do endereço
+    # anterior que o alimentava, viraram código morto e saíram — poder apagar
+    # aquele helper era o sinal de que o rechaveamento tinha terminado.
     try:
         sb.table("users").update(campos).eq("id", user_id).execute()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    if anterior and anterior != email:
-        _mover_selecoes_de_email(sb, anterior, email)
     return {"ok": True}
 
 
@@ -2576,17 +2516,22 @@ def delete_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
     
     # 1. Apagar seleções (Ações do usuário no app)
     if sb:
-        # Pelas DUAS colunas, e não só pela identidade. Enquanto a fase 3 não
-        # vier, podem coexistir linha com `user_id` e linha criada pelo código
-        # anterior sem ele. Apagar só por uma delas deixaria dado para trás —
-        # numa rota cujo objeto é justamente não deixar. Rodar as duas custa
-        # uma consulta a mais e não tem como errar para menos.
+        # Pela identidade. O apagamento por `user_email` que acompanhava este
+        # daqui saiu na fase 3c: a coluna deixou de ser escrita e some na 3d,
+        # então continuar filtrando por ela seria apagar por um valor que o
+        # portal já não grava — e daria a impressão de cobertura que não há.
+        #
+        # Sem `user_id` não dá para apagar nada com segurança, e numa rota de
+        # LGPD isso não pode passar calado.
         uid = _user_id_da_sessao(token)
         if uid:
             sb.table("colaborador_cert_selecoes").delete().eq("user_id", uid).execute()
-        chave = (email or "").strip().lower()
-        if chave:
-            sb.table("colaborador_cert_selecoes").delete().eq("user_email", chave).execute()
+        else:
+            logger.error(
+                "Pedido de eliminação de %s não removeu as seleções: sessão sem "
+                "user_id. O dado continua no banco.",
+                email,
+            )
     else:
         # Modo arquivo local: limpa a entrada
         from app.settings_state import save_colaborador_selecao

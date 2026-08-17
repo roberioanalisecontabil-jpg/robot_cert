@@ -369,39 +369,41 @@ def load_colaborador_selecao(email: str, user_id: Optional[str] = None) -> List[
     """
     Documentos (CNPJ/CPF só dígitos) que o utilizador escolheu para acompanhar.
 
-    Com Supabase, a linha é procurada por `user_id` — a identidade — e só
-    depois por `user_email`. A queda para o e-mail não é zelo: entre a fase 1
-    da migration e este deploy, o código anterior podia criar linha nova sem
-    `user_id`, e sem a queda essa pessoa abriria Acompanhamento e veria a
-    seleção vazia. O `save` seguinte grava as duas colunas e cura a linha. A
-    queda some na fase 4, quando `user_email` deixa de existir.
+    Com Supabase, a linha é procurada **só** por `user_id`. A queda para
+    `user_email` existiu na fase 2 para curar linhas criadas antes dela; saiu
+    na 3c depois de a produção confirmar 1 linha, 1 ligada, 0 órfãs, e porque
+    a fase 3d remove a coluna — código que ainda a lesse quebraria ali.
 
-    Sem Supabase é o ficheiro local, que continua chaveado por e-mail — nesse
-    modo não existe tabela `users`, então ali a identidade *é* o endereço.
+    Sem Supabase é o ficheiro local, que continua chaveado por e-mail: nesse
+    modo não existe tabela `users`, então ali a identidade *é* o endereço. Os
+    dois backends divergem de propósito.
     """
     key = (email or "").strip().lower()
     uid = (user_id or "").strip() or None
-    if not key and not uid:
-        return []
     client = _supabase()
     if client:
+        if not uid:
+            # Sem identidade não há o que procurar, e devolver [] calado faria
+            # a pessoa ver a seleção vazia e concluir que perdeu o trabalho.
+            logger.warning(
+                "Seleção pedida sem user_id (email=%s); nenhum chamador deveria "
+                "chegar aqui assim desde a fase 2 do rechaveamento.",
+                key or "?",
+            )
+            return []
         try:
-            for coluna, valor in (("user_id", uid), ("user_email", key)):
-                if not valor:
-                    continue
-                r = (
-                    client.table("colaborador_cert_selecoes")
-                    .select("documentos")
-                    .eq(coluna, valor)
-                    .limit(1)
-                    .execute()
-                )
-                rows = r.data or []
-                if rows:
-                    docs = rows[0].get("documentos")
-                    if isinstance(docs, list):
-                        return [str(x).strip() for x in docs if str(x).strip()]
-                    return []
+            r = (
+                client.table("colaborador_cert_selecoes")
+                .select("documentos")
+                .eq("user_id", uid)
+                .limit(1)
+                .execute()
+            )
+            rows = r.data or []
+            if rows:
+                docs = rows[0].get("documentos")
+                if isinstance(docs, list):
+                    return [str(x).strip() for x in docs if str(x).strip()]
             return []
         except Exception:  # noqa: BLE001
             logger.exception(
@@ -414,16 +416,16 @@ def save_colaborador_selecao(
     email: str, docs: List[str], user_id: Optional[str] = None
 ) -> None:
     """
-    Grava sempre no ficheiro local; com Supabase faz upsert.
+    Grava sempre no ficheiro local; com Supabase faz upsert por identidade.
 
-    Escreve as DUAS colunas enquanto a fase 3 não vier. `user_email` continua
-    obrigatório porque ainda é a chave primária — é ela que o `on_conflict`
-    usa para decidir entre inserir e atualizar. `user_id` entra junto para a
-    linha passar a apontar para a identidade, e é o que sobra no fim.
+    Desde a fase 3c a linha guarda **só** `user_id`. `user_email` deixou de ser
+    escrita — ela virou coluna anulável na 3b-2 justamente para isto, e sai de
+    vez na 3d.
 
-    O `on_conflict` só muda para `user_id` na fase 4: hoje o índice sobre
-    `user_id` é PARCIAL (`WHERE user_id IS NOT NULL`), e índice parcial não
-    serve para o `ON CONFLICT` inferir o alvo.
+    O `on_conflict` é `user_id`, o que só passou a ser possível na 3a: o índice
+    da fase 1 era PARCIAL (`WHERE user_id IS NOT NULL`), e índice parcial não
+    serve para o `ON CONFLICT` inferir alvo. A 3a trocou-o por uma constraint
+    `UNIQUE` de verdade.
     """
     key = (email or "").strip().lower()
     uid = (user_id or "").strip() or None
@@ -436,12 +438,24 @@ def save_colaborador_selecao(
     client = _supabase()
     if not client:
         return
+    if not uid:
+        # A seleção ficou no ficheiro local, mas em produção esse ficheiro é
+        # efêmero. Gravar sem identidade não é opção: `user_id` é o alvo do
+        # `on_conflict`, e uma linha sem ele seria órfã de nascença.
+        logger.error(
+            "Seleção de %s não foi gravada: chamada sem user_id. A escolha "
+            "dela se perde no próximo reinício.",
+            key,
+        )
+        return
     now = datetime.now(timezone.utc).isoformat()
-    row: Dict[str, Any] = {"user_email": key, "documentos": clean, "updated_at": now}
-    if uid:
-        row["user_id"] = uid
+    row: Dict[str, Any] = {
+        "user_id": uid,
+        "documentos": clean,
+        "updated_at": now,
+    }
     try:
-        client.table("colaborador_cert_selecoes").upsert(row, on_conflict="user_email").execute()
+        client.table("colaborador_cert_selecoes").upsert(row, on_conflict="user_id").execute()
     except Exception:  # noqa: BLE001
         logger.exception(
             "Falha ao gravar colaborador_cert_selecoes no Supabase; seleção ficou em %s",

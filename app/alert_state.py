@@ -294,7 +294,7 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
     try:
         r = (
             client.table("colaborador_cert_selecoes")
-            .select("user_id, user_email, documentos")
+            .select("user_id, documentos")
             .execute()
         )
         linhas = r.data or []
@@ -304,47 +304,63 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
 
     ativas = _linhas_ativas()
     if ativas is None:
-        # "Não sei filtrar": devolve tudo pelo endereço gravado, como antes.
-        # Silenciar todos os alertas por causa de uma falha de leitura seria
-        # trocar um risco por outro pior.
-        cru: Dict[str, List[str]] = {}
-        for row in linhas:
-            email = str(row.get("user_email") or "").lower().strip()
-            docs = row.get("documentos")
-            if email and isinstance(docs, list):
-                cru[email] = [str(x).strip() for x in docs if str(x).strip()]
-        return cru
+        # Consequência real do rechaveamento, e não vou escondê-la atrás de um
+        # fallback que fingiria funcionar: a linha de seleção não guarda mais
+        # endereço nenhum. Sem conseguir ler `users`, não há de onde tirar para
+        # quem mandar — não é "não sei filtrar", é "não sei endereçar".
+        #
+        # Antes da fase 3c o endereço estava duplicado na própria linha, e isto
+        # aqui devolvia tudo por ele. Essa redundância era exatamente o defeito
+        # (endereço que envelhece junto da linha), então perdê-la é o preço, e
+        # é consciente.
+        #
+        # ERROR, e não warning: uma rodada inteira de alertas deixa de sair. O
+        # job roda por cron e tenta de novo no ciclo seguinte, mas ninguém vai
+        # notar sozinho que não recebeu.
+        logger.error(
+            "Alertas de colaboradores não serão enviados nesta rodada: %d seleção(ões) "
+            "lidas, mas `users` não respondeu e o endereço de destino só existe lá.",
+            len(linhas),
+        )
+        return {}
 
     contas = _por_id(ativas)
-    enderecos_ativos = _por_email(ativas)
     permitidas: Dict[str, List[str]] = {}
     descartadas: List[str] = []
+    sem_identidade = 0
 
     for row in linhas:
         docs = row.get("documentos")
         if not isinstance(docs, list):
             continue
-        gravado = str(row.get("user_email") or "").lower().strip()
         uid = str(row.get("user_id") or "").strip()
 
-        if uid:
-            # A identidade manda, e `contas` traz o endereço ATUAL: e-mail
-            # trocado depois da seleção deixa de perder o destinatário.
-            destino = contas.get(uid)
-        else:
-            # Linha anterior à fase 2, sem `user_id`. Casa pelo endereço, como
-            # sempre foi. Deixa de existir na fase 3.
-            destino = gravado if gravado in enderecos_ativos else None
+        if not uid:
+            # Não deveria existir: a produção foi conferida em 17/08 com 0
+            # linhas assim antes de a 3c ir ao ar, e a gravação recusa criar
+            # linha sem identidade. Contado em vez de ignorado — se voltar a
+            # aparecer, é sinal de que algo grava por fora do código.
+            sem_identidade += 1
+            continue
 
+        # `contas` traz o endereço ATUAL da pessoa. E-mail trocado depois da
+        # seleção deixa de perder o destinatário — é o ganho todo.
+        destino = contas.get(uid)
         if not destino:
-            descartadas.append(gravado or uid or "?")
+            descartadas.append(uid)
             continue
         permitidas[destino] = [str(x).strip() for x in docs if str(x).strip()]
 
     if descartadas:
         logger.info(
-            "Seleções ignoradas por usuário inativo ou inexistente: %s",
+            "Seleções ignoradas por usuário inativo ou inexistente (user_id): %s",
             ", ".join(sorted(descartadas)),
+        )
+    if sem_identidade:
+        logger.warning(
+            "%d seleção(ões) sem user_id foram ignoradas; alguém grava em "
+            "colaborador_cert_selecoes por fora do portal.",
+            sem_identidade,
         )
     return permitidas
 

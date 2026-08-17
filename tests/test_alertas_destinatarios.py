@@ -55,19 +55,26 @@ def _banco(users: list, selecoes: list) -> _FakeSupabase:
 # forma ANTIGA, de antes de 15/08, quando desativar sobrescrevia o papel. As duas
 # precisam barrar: a segunda porque bases sem a migration aplicada ainda a têm.
 USERS = [
-    {"email": "ativo@empresa.com", "role": "user", "ativo": True},
-    {"email": "chefe@empresa.com", "role": "admin", "ativo": True},
-    {"email": "saiu@empresa.com", "role": "user", "ativo": False},
-    {"email": "legado@empresa.com", "role": "disabled"},
+    {"id": "u-ativo", "email": "ativo@empresa.com", "role": "user", "ativo": True},
+    {"id": "u-chefe", "email": "chefe@empresa.com", "role": "admin", "ativo": True},
+    {"id": "u-saiu", "email": "saiu@empresa.com", "role": "user", "ativo": False},
+    {"id": "u-legado", "email": "legado@empresa.com", "role": "disabled"},
 ]
 
+# Desde a fase 3c do rechaveamento a seleção é chaveada por `user_id`, e o
+# endereço de destino sai de `users` — a linha não guarda mais e-mail nenhum.
+#
+# As duas últimas são as órfãs que motivaram este arquivo, na forma que passam
+# a ter depois da migration: `user_id` apontando para conta que não existe. O
+# que garantia o descarte antes era o endereço não casar; agora é a identidade
+# não resolver. A proteção tem de valer igual pelos dois caminhos.
 SELECOES = [
-    {"user_email": "ativo@empresa.com", "documentos": ["27049257000194"]},
-    {"user_email": "chefe@empresa.com", "documentos": ["37894958000183"]},
-    {"user_email": "saiu@empresa.com", "documentos": ["27049257000194"]},
-    {"user_email": "legado@empresa.com", "documentos": ["27049257000194"]},
-    {"user_email": "agent@internal", "documentos": ["12345678000190"]},
-    {"user_email": "fantasma@outrodominio.com", "documentos": ["27049257000194"]},
+    {"user_id": "u-ativo", "documentos": ["27049257000194"]},
+    {"user_id": "u-chefe", "documentos": ["37894958000183"]},
+    {"user_id": "u-saiu", "documentos": ["27049257000194"]},
+    {"user_id": "u-legado", "documentos": ["27049257000194"]},
+    {"user_id": "u-agente-apagado", "documentos": ["12345678000190"]},
+    {"user_id": "u-fantasma", "documentos": ["27049257000194"]},
 ]
 
 
@@ -118,14 +125,24 @@ def test_usuarios_ativos_continuam_recebendo() -> None:
     assert r["ativo@empresa.com"] == ["27049257000194"]
 
 
-def test_falha_ao_listar_usuarios_nao_silencia_os_alertas() -> None:
+def test_falha_ao_listar_usuarios_deixa_a_rodada_sem_destinatario(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """
-    Se a consulta a `users` falhar, o filtro não se aplica e as seleções
-    passam inteiras.
+    **Este teste mudou de sinal na fase 3c, e a mudança é uma perda consciente.**
 
-    A alternativa — tratar erro como "ninguém está ativo" — transformaria uma
-    falha de leitura em silêncio total dos alertas, que é o pior modo de
-    falhar para um sistema cuja função é avisar sobre vencimento.
+    Antes, a seleção guardava o endereço, então uma falha ao ler `users` só
+    tirava o filtro — as seleções passavam inteiras e o alerta saía. Era o
+    comportamento certo para um sistema cuja função é avisar.
+
+    Depois do rechaveamento a linha não guarda mais endereço: ele só existe em
+    `users`. Sem conseguir ler essa tabela não há para quem mandar. Não é "não
+    sei filtrar", é "não sei endereçar", e não há fallback honesto.
+
+    Essa redundância era exatamente o defeito que o rechaveamento removeu — um
+    endereço que envelhecia junto da linha. Perdê-la é o preço, e a
+    contrapartida é que a falha grita: sai `ERROR` com a contagem, e o job
+    tenta de novo no ciclo seguinte.
     """
     class BancoQueFalhaEmUsers(_FakeSupabase):
         def table(self, nome: str):
@@ -134,10 +151,14 @@ def test_falha_ao_listar_usuarios_nao_silencia_os_alertas() -> None:
             return super().table(nome)
 
     banco = BancoQueFalhaEmUsers({"colaborador_cert_selecoes": SELECOES})
-    with patch.object(als, "_supabase", lambda: banco):
-        r = als._get_todos_colaboradores_selecoes()
+    with caplog.at_level("ERROR"):
+        with patch.object(als, "_supabase", lambda: banco):
+            r = als._get_todos_colaboradores_selecoes()
 
-    assert set(r) == {s["user_email"] for s in SELECOES}
+    assert r == {}
+    assert "não serão enviados" in caplog.text, (
+        "a rodada morreu em silêncio; é justamente o que não pode acontecer"
+    )
 
 
 def test_sem_supabase_usa_arquivo_local_sem_filtrar() -> None:
@@ -150,12 +171,20 @@ def test_sem_supabase_usa_arquivo_local_sem_filtrar() -> None:
     assert r == local
 
 
-def test_comparacao_de_email_ignora_caixa() -> None:
-    """`users` e as seleções podem divergir na capitalização."""
-    users = [{"email": "Fulano@Empresa.com", "role": "user"}]
-    selecoes = [{"user_email": "fulano@empresa.com", "documentos": ["1"]}]
+def test_endereco_de_destino_sai_normalizado() -> None:
+    """
+    Uma classe inteira de erro que o rechaveamento apagou.
+
+    Este teste nasceu porque `users` e as seleções podiam divergir na
+    capitalização, e o cruzamento por texto cortava o alerta. Agora o
+    cruzamento é por uuid — não há caixa a divergir. O que sobra a garantir é
+    que o endereço **de saída** venha normalizado, porque quem consome usa a
+    chave para deduplicar destinatário.
+    """
+    users = [{"id": "u-1", "email": "  Fulano@Empresa.com ", "role": "user"}]
+    selecoes = [{"user_id": "u-1", "documentos": ["1"]}]
 
     with patch.object(als, "_supabase", lambda: _banco(users, selecoes)):
         r = als._get_todos_colaboradores_selecoes()
 
-    assert "fulano@empresa.com" in r, "divergência de caixa não pode cortar o alerta"
+    assert r == {"fulano@empresa.com": ["1"]}
