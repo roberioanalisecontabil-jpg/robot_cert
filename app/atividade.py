@@ -36,7 +36,11 @@ logger = logging.getLogger(__name__)
 # a agregação passaria a mentir por diferença de acento.
 EVENTO_LOGIN = "login"
 EVENTO_LOGIN_NEGADO = "login_negado"
-EVENTOS_VALIDOS = (EVENTO_LOGIN, EVENTO_LOGIN_NEGADO)
+# Redefinição pelo próprio usuário, via código enviado por e-mail. Fica na
+# trilha porque é o único caminho em que alguém troca a senha de uma conta sem
+# estar autenticado nela — se aparecer sem a pessoa ter pedido, é incidente.
+EVENTO_SENHA_REDEFINIDA = "senha_redefinida"
+EVENTOS_VALIDOS = (EVENTO_LOGIN, EVENTO_LOGIN_NEGADO, EVENTO_SENHA_REDEFINIDA)
 
 
 def registrar(

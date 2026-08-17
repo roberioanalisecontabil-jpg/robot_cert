@@ -15,7 +15,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             background-color: var(--bg);
             margin: 0;
             padding: var(--sp-4);
@@ -93,9 +93,12 @@
             background-color: var(--accent-hover);
             opacity: 0.95;
         }
-        #login-error {
-            color: var(--expired-text);
-            background-color: var(--expired-bg);
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #login-error,
+        #rec-msg {
             padding: var(--sp-3);
             border-radius: var(--radius-md);
             margin-bottom: var(--sp-4);
@@ -104,42 +107,199 @@
             text-align: center;
             font-weight: 500;
         }
+        #login-error,
+        .msg-erro {
+            color: var(--expired-text);
+            background-color: var(--expired-bg);
+        }
+        /* Sucesso e erro precisam diferir por mais do que a cor: quem não
+           distingue vermelho de verde leria as duas do mesmo jeito. O texto de
+           cada mensagem já diz o que aconteceu, e o ícone reforça. */
+        .msg-ok {
+            color: var(--ok-text);
+            background-color: var(--ok-bg);
+        }
+
+        /* Campo de senha com o botão de mostrar/ocultar dentro. */
+        .campo-senha {
+            position: relative;
+        }
+        .campo-senha input {
+            padding-right: 3rem;
+        }
+        .btn-olho {
+            position: absolute;
+            right: 0.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            /* 44px é o mínimo de alvo de toque cobrado no A6 da auditoria. */
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+        .btn-olho:hover { color: var(--text); }
+
+        .link-discreto {
+            display: block;
+            width: 100%;
+            margin-top: var(--sp-4);
+            padding: var(--sp-2);
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: center;
+        }
+        .link-discreto:hover { text-decoration: underline; }
+
+        #campo-codigo {
+            text-align: center;
+            font-size: 1.5rem;
+            letter-spacing: 0.5em;
+            font-weight: 600;
+            /* O letter-spacing empurra o texto para a direita; o padding
+               compensa para o número parecer centrado de verdade. */
+            padding-left: 0.5em;
+        }
+        .passo-dica {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin: 0 0 var(--sp-4);
+            text-align: center;
+            line-height: 1.5;
+        }
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body>
     <main class="login-container" id="main-content" style="width: 100%; display: flex; justify-content: center; align-items: center;">
     <div class="login-card">
         <div class="login-header">
-            <img src="/static/logo.png?v=brand-gold-v1" alt="Analise Certificado" class="login-logo">
+            <img src="/static/logo.png?v=brand-gold-v1" alt="Analise Certificado" class="login-logo" width="80" height="80">
             <h1>Analise Certificado</h1>
-            <p>Faça login para acessar o monitor</p>
+            <p id="subtitulo">Faça login para acessar o monitor</p>
         </div>
-        
-        <div id="login-error" role="alert" aria-live="assertive">E-mail ou senha incorretos.</div>
-        
-        <form id="login-form">
-            <div class="form-group">
-                <label for="email">E-mail</label>
-                <input type="email" id="email" required autocomplete="username" placeholder="exemplo@email.com">
-            </div>
-            <div class="form-group">
-                <label for="password">Senha</label>
-                <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
-            </div>
-            <button type="submit" class="login-btn" id="btn-entrar">Entrar</button>
-        </form>
+
+        <!-- ── Entrar ────────────────────────────────────────────────── -->
+        <section id="view-login">
+            <div id="login-error" role="alert" aria-live="assertive">E-mail ou senha incorretos.</div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">E-mail</label>
+                    <input type="email" id="email" required autocomplete="username" placeholder="exemplo@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha</label>
+                    <div class="campo-senha">
+                        <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+                        <button type="button" class="btn-olho" id="btn-olho"
+                                aria-controls="password" aria-pressed="false"
+                                aria-label="Mostrar senha">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="login-btn" id="btn-entrar">Acessar o painel</button>
+            </form>
+
+            <button type="button" class="link-discreto" id="btn-esqueci">Esqueci minha senha</button>
+        </section>
+
+        <!-- ── Recuperar ─────────────────────────────────────────────── -->
+        <section id="view-recuperar" hidden>
+            <div id="rec-msg" role="alert" aria-live="polite"></div>
+
+            <!-- Passo 1: pedir o código -->
+            <form id="form-pedir">
+                <p class="passo-dica">Informe seu e-mail e enviaremos um código de 6 dígitos.</p>
+                <div class="form-group">
+                    <label for="rec-email">E-mail</label>
+                    <input type="email" id="rec-email" required autocomplete="username" placeholder="exemplo@email.com">
+                </div>
+                <button type="submit" class="login-btn" id="btn-pedir">Enviar código</button>
+            </form>
+
+            <!-- Passo 2: conferir o código -->
+            <form id="form-codigo" hidden>
+                <p class="passo-dica">
+                    Digite o código que enviamos.<br>
+                    Ele vale por 15 minutos e permite 3 tentativas.
+                </p>
+                <div class="form-group">
+                    <label for="campo-codigo">Código de 6 dígitos</label>
+                    <input type="text" id="campo-codigo" required
+                           inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                           autocomplete="one-time-code" placeholder="000000">
+                </div>
+                <button type="submit" class="login-btn" id="btn-conferir">Continuar</button>
+            </form>
+
+            <!-- Passo 3: nova senha -->
+            <form id="form-senha" hidden>
+                <p class="passo-dica">Escolha a senha nova.</p>
+                <div class="form-group">
+                    <label for="nova-senha">Nova senha</label>
+                    <div class="campo-senha">
+                        <input type="password" id="nova-senha" required minlength="6"
+                               autocomplete="new-password" placeholder="mínimo 6 caracteres">
+                        <button type="button" class="btn-olho" id="btn-olho-nova"
+                                aria-controls="nova-senha" aria-pressed="false"
+                                aria-label="Mostrar senha">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="login-btn" id="btn-salvar">Salvar e entrar</button>
+            </form>
+
+            <button type="button" class="link-discreto" id="btn-voltar">Voltar para o login</button>
+        </section>
     </div>
     </main>
 
     <script nonce="{{ request.state.nonce }}">
         const KEY_STORAGE = "cert_robot_api_key"; // Manter o mesmo nome por enquanto ou mudar para token
 
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
+        const $ = (id) => document.getElementById(id);
+
+        /**
+         * Alterna mostrar/ocultar de um campo de senha.
+         *
+         * `aria-pressed` e `aria-label` acompanham o estado: sem isso, o leitor
+         * de tela anuncia sempre "Mostrar senha", inclusive quando a senha já
+         * está visível — e a pessoa não tem como saber em que estado está.
+         */
+        function ligarOlho(btnId, campoId) {
+            const btn = $(btnId), campo = $(campoId);
+            btn.addEventListener('click', () => {
+                const revelado = campo.type === 'text';
+                campo.type = revelado ? 'password' : 'text';
+                btn.setAttribute('aria-pressed', String(!revelado));
+                btn.setAttribute('aria-label', revelado ? 'Mostrar senha' : 'Ocultar senha');
+                btn.textContent = revelado ? '👁' : '🙈';
+                campo.focus();
+            });
+        }
+        ligarOlho('btn-olho', 'password');
+        ligarOlho('btn-olho-nova', 'nova-senha');
+
+        // ── Entrar ─────────────────────────────────────────────────────
+        $('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const btn = document.getElementById('btn-entrar');
-            const errorDiv = document.getElementById('login-error');
+            // Normalizado aqui também: o servidor compara em minúsculas desde
+            // 17/08, e guardar "Ana@X.com" no localStorage faria a tela e a
+            // sessão discordarem sobre quem está logado.
+            const email = $('email').value.trim().toLowerCase();
+            const password = $('password').value;
+            const btn = $('btn-entrar');
+            const errorDiv = $('login-error');
 
             btn.disabled = true;
             btn.textContent = 'Autenticando...';
@@ -168,7 +328,144 @@
                 errorDiv.style.display = 'block';
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Entrar';
+                btn.textContent = 'Acessar o painel';
+            }
+        });
+
+        // ── Recuperar ──────────────────────────────────────────────────
+        function mostrarMsg(texto, ok) {
+            const el = $('rec-msg');
+            el.textContent = (ok ? '✅ ' : '⚠️ ') + texto;
+            el.className = ok ? 'msg-ok' : 'msg-erro';
+            el.style.display = 'block';
+        }
+
+        function trocarView(paraRecuperar) {
+            $('view-login').hidden = paraRecuperar;
+            $('view-recuperar').hidden = !paraRecuperar;
+            $('subtitulo').textContent = paraRecuperar
+                ? 'Recuperação de senha'
+                : 'Faça login para acessar o monitor';
+            if (paraRecuperar) {
+                $('rec-email').value = $('email').value.trim().toLowerCase();
+                $('rec-email').focus();
+            }
+        }
+
+        $('btn-esqueci').addEventListener('click', () => trocarView(true));
+        $('btn-voltar').addEventListener('click', () => {
+            trocarView(false);
+            // Volta ao passo 1: reabrir a recuperação depois de sair no meio
+            // não pode reaproveitar um código que já pode ter expirado.
+            $('form-pedir').hidden = false;
+            $('form-codigo').hidden = true;
+            $('form-senha').hidden = true;
+            $('rec-msg').style.display = 'none';
+            $('campo-codigo').value = '';
+            $('nova-senha').value = '';
+        });
+
+        async function postar(url, corpo) {
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(corpo)
+            });
+            let dados = {};
+            try { dados = await r.json(); } catch (e) { /* corpo vazio */ }
+            return { ok: r.ok, dados };
+        }
+
+        // Passo 1 — pedir o código
+        $('form-pedir').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = $('btn-pedir');
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            try {
+                const { ok, dados } = await postar('/api/senha/codigo', {
+                    email: $('rec-email').value.trim().toLowerCase()
+                });
+                if (ok) {
+                    // A resposta é a MESMA exista ou não a conta — de propósito,
+                    // para a tela não virar detector de quem tem cadastro. Por
+                    // isso avançamos para o passo do código de qualquer jeito.
+                    mostrarMsg(dados.message || 'Código enviado.', true);
+                    $('form-pedir').hidden = true;
+                    $('form-codigo').hidden = false;
+                    $('campo-codigo').focus();
+                } else {
+                    mostrarMsg(dados.detail || 'Não foi possível enviar agora.', false);
+                }
+            } catch (err) {
+                mostrarMsg('Erro de conexão com o servidor.', false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Enviar código';
+            }
+        });
+
+        // Passo 2 — conferir o código
+        $('form-codigo').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = $('btn-conferir');
+            btn.disabled = true;
+            btn.textContent = 'Conferindo...';
+            try {
+                const { ok, dados } = await postar('/api/senha/verificar', {
+                    email: $('rec-email').value.trim().toLowerCase(),
+                    codigo: $('campo-codigo').value.trim()
+                });
+                if (ok) {
+                    $('rec-msg').style.display = 'none';
+                    $('form-codigo').hidden = true;
+                    $('form-senha').hidden = false;
+                    $('nova-senha').focus();
+                } else {
+                    mostrarMsg(dados.detail || 'Código inválido.', false);
+                }
+            } catch (err) {
+                mostrarMsg('Erro de conexão com o servidor.', false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Continuar';
+            }
+        });
+
+        // Passo 3 — salvar a senha nova e entrar
+        $('form-senha').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = $('btn-salvar');
+            const email = $('rec-email').value.trim().toLowerCase();
+            const senha = $('nova-senha').value;
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+            try {
+                const { ok, dados } = await postar('/api/senha/redefinir', {
+                    email, codigo: $('campo-codigo').value.trim(), password: senha
+                });
+                if (!ok) {
+                    mostrarMsg(dados.detail || 'Não foi possível redefinir.', false);
+                    return;
+                }
+                // Entra direto com a senha recém-criada: pedir para digitá-la
+                // de novo agora seria cerimônia — ela acabou de ser escolhida
+                // nesta tela, e o código já provou quem é a pessoa.
+                const login = await postar('/api/login', { email, password: senha });
+                if (login.ok) {
+                    localStorage.setItem(KEY_STORAGE, login.dados.access_token);
+                    localStorage.setItem('user_role', login.dados.role);
+                    localStorage.setItem('user_email', email);
+                    window.location.href = '/';
+                } else {
+                    mostrarMsg('Senha alterada. Entre com a nova senha.', true);
+                    trocarView(false);
+                }
+            } catch (err) {
+                mostrarMsg('Erro de conexão com o servidor.', false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Salvar e entrar';
             }
         });
     </script>

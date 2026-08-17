@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import csv
+import html
 import io
 import json
 import os
@@ -24,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import atividade, auth, config
+from app import atividade, auth, config, senha_reset
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -91,7 +92,13 @@ def _conta_da_sessao(email: str) -> Optional[dict]:
     try:
         r = (
             sb.table("users")
-            .select("id, email, role, ativo")
+            # `senha_alterada_em` PRECISA estar aqui: é o que
+            # `_senha_trocada_depois_do_token` compara. Omiti-la não daria erro
+            # — a chave chegaria ausente, seria lida como "nunca trocou", e a
+            # invalidação de sessão simplesmente nunca dispararia. Fixado por
+            # `test_sessao_le_a_coluna_da_troca_de_senha`, porque o fake dos
+            # testes devolve a linha inteira e não pega isto sozinho.
+            .select("id, email, role, ativo, senha_alterada_em")
             .eq("email", email)
             .limit(1)
             .execute()
@@ -102,6 +109,35 @@ def _conta_da_sessao(email: str) -> Optional[dict]:
     if not r.data:
         raise ContaInvalida(email)
     return r.data[0]
+
+
+def _senha_trocada_depois_do_token(
+    conta: dict, token_data: auth.TokenData
+) -> bool:
+    """
+    A senha mudou depois de este token ter sido emitido?
+
+    Devolve False quando falta informação — coluna nula (conta que nunca trocou
+    a senha), token sem instante de emissão, ou data ilegível. É o único ponto
+    fail-OPEN do `_sessao_do_token`, e é deliberado: um erro de leitura aqui
+    deslogaria o portal inteiro de uma vez, e a ausência de dado significa
+    literalmente "não houve troca a invalidar".
+
+    A margem de 5s absorve relógios ligeiramente fora de sincronia entre o
+    processo que emitiu o token e o que gravou a troca. Sem ela, uma diferença
+    de milissegundos poderia derrubar a sessão de quem acabou de entrar.
+    """
+    marca = conta.get("senha_alterada_em")
+    if not marca or not token_data.emitido_em:
+        return False
+    try:
+        trocada = _parse_iso_utc(str(marca))
+    except Exception:  # noqa: BLE001
+        logger.warning("senha_alterada_em ilegível para %s", conta.get("email"))
+        return False
+    if trocada is None:
+        return False
+    return token_data.emitido_em < (trocada - timedelta(seconds=5))
 
 
 def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
@@ -147,6 +183,15 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
             detail=SESSAO_ENCERRADA,
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if _senha_trocada_depois_do_token(conta, token_data):
+        # Trocar a senha derruba as sessões abertas. Sem isto, quem redefine a
+        # senha por suspeitar que alguém entrou continuaria com esse alguém
+        # dentro por até 24h — exatamente enquanto acredita ter resolvido.
+        raise HTTPException(
+            status_code=401,
+            detail=SESSAO_ENCERRADA,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     # Reconstruído a partir da linha, nunca do token: é o ponto inteiro daqui.
     # Com `.get`, e não `[...]`: papel ausente vira None, que `require_admin`
     # reprova. Indexar levantaria KeyError, e a rota responderia 500 — falha
@@ -155,6 +200,7 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
         email=conta.get("email") or token_data.email,
         role=conta.get("role"),
         user_id=str(conta["id"]) if conta.get("id") is not None else None,
+        emitido_em=token_data.emitido_em,
     )
 
 
@@ -1340,6 +1386,244 @@ def put_settings(body: SettingsBody) -> dict:
     )
     save_settings(s)
     return _settings_dict(s)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Recuperação de senha por código (A8 da auditoria de UI/UX)
+# ══════════════════════════════════════════════════════════════════════════
+
+# Resposta única para todos os desfechos do pedido: e-mail inexistente, conta
+# desativada, envio bem-sucedido e até estouro do teto de pedidos. Distinguir
+# transformaria a tela num detector de quem tem conta no sistema — e a lista de
+# quem tem conta aqui é a lista de quem administra certificados de clientes.
+RESPOSTA_GENERICA = (
+    "Se houver uma conta com esse e-mail, enviamos um código de 6 dígitos. "
+    "Ele vale por 15 minutos."
+)
+
+CODIGO_INVALIDO = "Código inválido ou expirado. Peça um novo se precisar."
+
+
+class SenhaCodigoBody(BaseModel):
+    email: str
+
+
+class SenhaVerificarBody(BaseModel):
+    email: str
+    codigo: str
+
+
+class SenhaRedefinirBody(BaseModel):
+    email: str
+    codigo: str
+    password: str
+
+
+def _conta_para_reset(sb, email: str) -> Optional[dict]:
+    """
+    A conta que pode receber código: existe e está ativa.
+
+    Desativada não recebe — redefinir senha não pode ser caminho de volta para
+    quem foi removido do portal. De fora não dá para distinguir, porque a
+    resposta é a mesma.
+    """
+    try:
+        r = (
+            sb.table("users")
+            .select("id, email, full_name, role, ativo")
+            .eq("email", email)
+            .limit(1)
+            .execute()
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao procurar conta para recuperação de senha")
+        return None
+    linhas = r.data or []
+    if not linhas:
+        return None
+    conta = linhas[0]
+    return conta if auth.conta_ativa(conta) else None
+
+
+def _enviar_codigo_por_email(conta: dict, codigo: str) -> None:
+    """Manda o código. Levanta se o SMTP falhar — o chamador decide o que fazer."""
+    s = load_settings()
+    if not s.smtp_host:
+        raise RuntimeError("SMTP não configurado")
+
+    base = (os.getenv("PORTAL_BASE_URL") or "").strip().rstrip("/")
+    # Link só de conveniência, e só se o endereço vier de configuração. Nunca
+    # do cabeçalho `Host`: ele é controlado por quem chama, e um Host forjado
+    # faria o portal mandar a própria vítima para o site do atacante.
+    atalho = (
+        f'<p style="margin:16px 0 0;">'
+        f'<a href="{base}/login">Abrir o portal</a></p>' if base else ""
+    )
+    nome = html.escape(str(conta.get("full_name") or "").strip() or "Olá")
+
+    smtp_service.send_smtp_email(
+        host=s.smtp_host,
+        port=s.smtp_port,
+        user=s.smtp_user,
+        password_enc=s.smtp_password_encrypted,
+        use_tls=s.smtp_use_tls,
+        use_ssl=s.smtp_use_ssl,
+        from_email=s.smtp_from_email,
+        to_email=str(conta["email"]),
+        subject="Código para redefinir sua senha",
+        html_content=(
+            f"<p>{nome},</p>"
+            "<p>Recebemos um pedido para redefinir a senha da sua conta no "
+            "Monitor de Certificados. Use o código abaixo:</p>"
+            f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;'
+            f'margin:24px 0;">{codigo}</p>'
+            f"<p>Ele vale por {senha_reset.VALIDADE_MIN} minutos e só pode ser "
+            "usado uma vez.</p>"
+            "<p><strong>Se não foi você que pediu</strong>, ignore este e-mail: "
+            "sua senha continua a mesma. Ninguém consegue trocá-la sem este "
+            "código.</p>"
+            f"{atalho}"
+        ),
+    )
+
+
+@app.post("/api/senha/codigo")
+def senha_pedir_codigo(body: SenhaCodigoBody, request: Request) -> dict:
+    """
+    Pede um código de redefinição. **Responde sempre a mesma coisa.**
+
+    O 200 genérico é o ponto: qualquer variação de mensagem, status ou tempo
+    de resposta entre "existe" e "não existe" vira enumeração de contas.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+
+    ip = request.client.host if request and request.client else None
+    email = (body.email or "").strip().lower()
+    if not email:
+        return {"ok": True, "message": RESPOSTA_GENERICA}
+
+    conta = _conta_para_reset(sb, email)
+    if not conta:
+        # Log em nível de info, sem alarde: e-mail digitado errado é o caso
+        # comum, e não um incidente.
+        logger.info("Pedido de código para e-mail sem conta ativa.")
+        return {"ok": True, "message": RESPOSTA_GENERICA}
+
+    try:
+        codigo = senha_reset.criar_codigo(str(conta["id"]), client_ip=ip)
+    except senha_reset.LimiteDePedidos:
+        # Mesma resposta de propósito: dizer "você pediu demais" confirmaria
+        # que a conta existe, que é justamente o que o genérico esconde.
+        logger.warning(
+            "Teto de %d pedidos/hora atingido para uma conta.",
+            senha_reset.MAX_PEDIDOS_HORA,
+        )
+        return {"ok": True, "message": RESPOSTA_GENERICA}
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao criar código de redefinição")
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível gerar o código agora. Tente de novo em instantes.",
+        )
+
+    try:
+        _enviar_codigo_por_email(conta, codigo)
+    except Exception:  # noqa: BLE001
+        # ERROR e não warning: a pessoa está olhando para uma tela que diz que
+        # o código foi enviado, e ele não foi. Sem este log ninguém descobre.
+        logger.exception(
+            "Código gerado mas NÃO enviado — a pessoa vai esperar um e-mail que não chega."
+        )
+
+    return {"ok": True, "message": RESPOSTA_GENERICA}
+
+
+@app.post("/api/senha/verificar")
+def senha_verificar_codigo(body: SenhaVerificarBody) -> dict:
+    """
+    Confere o código **sem consumi-lo**, para a tela avançar antes de a pessoa
+    digitar a senha nova.
+
+    Sem este passo, um código errado só apareceria depois de ela preencher a
+    senha duas vezes — e já teria queimado uma das três tentativas à toa.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+
+    conta = _conta_para_reset(sb, (body.email or "").strip().lower())
+    if not conta:
+        # Sem conta, não há código. Recusa com a mesma mensagem de código
+        # errado, para não distinguir os dois casos.
+        raise HTTPException(status_code=400, detail=CODIGO_INVALIDO)
+
+    ok, _ = senha_reset.conferir(str(conta["id"]), body.codigo or "")
+    if not ok:
+        raise HTTPException(status_code=400, detail=CODIGO_INVALIDO)
+    return {"ok": True}
+
+
+@app.post("/api/senha/redefinir")
+def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
+    """
+    Consome o código e grava a senha nova.
+
+    Reconfere o código aqui em vez de confiar no `/verificar`: aquele passo é
+    conveniência de tela, não credencial. Quem chamar esta rota direto tem de
+    apresentar o código do mesmo jeito.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+
+    nova = (body.password or "").strip()
+    if len(nova) < SENHA_MINIMA:
+        raise HTTPException(
+            status_code=422,
+            detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
+        )
+
+    email = (body.email or "").strip().lower()
+    conta = _conta_para_reset(sb, email)
+    if not conta:
+        raise HTTPException(status_code=400, detail=CODIGO_INVALIDO)
+
+    if not senha_reset.consumir(str(conta["id"]), body.codigo or ""):
+        raise HTTPException(status_code=400, detail=CODIGO_INVALIDO)
+
+    agora = datetime.now(timezone.utc).isoformat()
+    try:
+        sb.table("users").update(
+            {
+                "password_hash": auth.get_password_hash(nova),
+                # Carimbado na MESMA gravação da senha: separá-los abriria uma
+                # janela em que a senha já mudou mas as sessões antigas ainda
+                # valem — que é exatamente o que esta coluna existe para fechar.
+                "senha_alterada_em": agora,
+            }
+        ).eq("id", conta["id"]).execute()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao gravar a senha nova")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    atividade.registrar(
+        atividade.EVENTO_SENHA_REDEFINIDA,
+        user_id=str(conta["id"]),
+        user_email=email,
+        client_ip=request.client.host if request and request.client else None,
+    )
+    return {
+        "ok": True,
+        "message": "Senha alterada. Entre com a nova senha.",
+    }
 
 
 class SmtpTestBody(BaseModel):

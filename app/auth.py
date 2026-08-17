@@ -50,6 +50,10 @@ class TokenData(BaseModel):
     # consulta. Fica None quando não houve leitura — sem Supabase configurado,
     # e no agente por X-API-Key, que não tem conta no portal.
     user_id: Optional[str] = None
+    # Instante de emissão, este SIM vindo do token assinado. Comparado com
+    # `users.senha_alterada_em` para uma troca de senha derrubar as sessões
+    # abertas. None só em identidade sem JWT (agente, anônimo).
+    emitido_em: Optional[datetime] = None
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -83,7 +87,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         "exp": expire,
         "iss": "robot_cert_portal",
         "aud": "robot_cert_users",
-        "nbf": now
+        "nbf": now,
+        # `iat` é o claim padrão para "quando este token nasceu", e
+        # `main._sessao_do_token` o compara com `users.senha_alterada_em` para
+        # derrubar sessão aberta depois de uma troca de senha. O `nbf` acima
+        # carrega o mesmo instante e serve de queda para tokens emitidos antes
+        # de 17/08 — sem ela, todo mundo seria deslogado no deploy.
+        "iat": now,
     })
     encoded_jwt = jwt.encode(to_encode, _get_secret_key(), algorithm=ALGORITHM)
     return encoded_jwt
@@ -101,6 +111,13 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         role: str = payload.get("role")
         if email is None:
             return None
-        return TokenData(email=email, role=role)
-    except (JWTError, RuntimeError):
+        # `iat` primeiro, `nbf` como queda: tokens emitidos antes de 17/08 não
+        # têm `iat`, e sem a queda eles ficariam sem instante de emissão — o
+        # que faria a comparação com `senha_alterada_em` não ter o que comparar.
+        bruto = payload.get("iat") or payload.get("nbf")
+        emitido = (
+            datetime.fromtimestamp(int(bruto), tz=timezone.utc) if bruto else None
+        )
+        return TokenData(email=email, role=role, emitido_em=emitido)
+    except (JWTError, RuntimeError, TypeError, ValueError, OSError, OverflowError):
         return None
