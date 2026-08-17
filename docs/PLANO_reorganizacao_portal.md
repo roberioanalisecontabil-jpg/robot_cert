@@ -645,10 +645,13 @@ conjunto realista.
 
 1. ~~Login devolvendo 500 em credencial inválida (§0.5)~~ — feito na etapa 2a,
    que mexia no mesmo handler
-2. `colaborador_cert_selecoes` chaveada por `user_id` — **não feito, e o motivo
-   mudou.** Em 16/08 fui atrás disto e o item não é o "conserto pequeno" que esta
-   lista supõe. A premissa era o volume de dados ("enquanto é 1 linha"), e essa
-   parte continua verdadeira; o que cresceu foi o *código em volta*.
+2. `colaborador_cert_selecoes` chaveada por `user_id` — ✅ **concluído em
+   17/08/2026, em sete passos.** O histórico abaixo fica porque as três
+   correções de rota que apareceram no meio valem mais que o resultado.
+
+   Em 16/08 fui atrás disto e o item não era o "conserto pequeno" que esta
+   lista supunha. A premissa era o volume de dados ("enquanto é 1 linha"), e
+   essa parte era verdadeira; o que tinha crescido era o *código em volta*.
    `_get_todos_colaboradores_selecoes` devolve `email → documentos` e cruza com
    `_emails_ativos()`, um conjunto de e-mails. Rechavear por `user_id` obriga a
    mexer no caminho dos alertas — o mesmo que em 09/08 mandava dado de cliente
@@ -675,7 +678,13 @@ conjunto realista.
    | 3b | SQL: `UNIQUE (user_email)` e **remove a chave primária** | ✅ 17/08 |
    | 3b-2 | SQL: `ALTER COLUMN user_email DROP NOT NULL` | ✅ 17/08 |
    | 3c | código para de gravar/ler `user_email`; `on_conflict` → `user_id`; apaga `_mover_selecoes_de_email` | ✅ 17/08 |
-   | 3d | SQL: derruba a coluna `user_email`; `user_id` vira `NOT NULL` e PK | pendente |
+   | 3d | SQL: derruba a coluna `user_email`; `user_id` vira `NOT NULL` e PK | ✅ 17/08 |
+
+   **Encerrado em 17/08/2026.** Estado final verificado em produção:
+   `PRIMARY KEY (user_id)`, `FOREIGN KEY (user_id) REFERENCES users(id) ON
+   DELETE CASCADE`, nenhuma `UNIQUE` avulsa, 1 linha preservada. Com `user_id
+   NOT NULL`, **o banco passa a recusar linha sem identidade** — até então isso
+   dependia de o código se comportar.
 
    **Duas correções de rota, no mesmo dia, e vale registrar as duas** — cada
    vez que olhei um nível abaixo apareceu a restrição seguinte:

@@ -38,9 +38,21 @@ create table if not exists public.agent_command_queue (
 create index if not exists agent_cmd_pending_idx
   on public.agent_command_queue (created_at) where (status = 'pending');
 
--- Seleção de certificados (CNPJ/CPF) por utilizador na área Acompanhamento (persistido no servidor)
+-- Seleção de certificados (CNPJ/CPF) por utilizador na área Acompanhamento
+-- (persistido no servidor).
+--
+-- Chaveada por `user_id`, e não pelo e-mail, desde 17/08/2026. E-mail é
+-- atributo mutável, não identidade: com ele como chave, trocar o endereço de
+-- alguém desprendia a linha da pessoa SEM ERRO NENHUM — a seleção sumia da
+-- tela e o alerta de vencimento parava de chegar, mudo dos dois lados.
+--
+-- O `on delete cascade` é a outra metade: apagar a conta leva a seleção junto,
+-- sem depender de a rota de LGPD lembrar de fazê-lo.
+--
+-- O endereço de destino do alerta sai de `users` pela identidade, e não daqui
+-- — é o que faz e-mail trocado depois da escolha não perder o destinatário.
 create table if not exists public.colaborador_cert_selecoes (
-  user_email text primary key,
+  user_id uuid primary key references public.users(id) on delete cascade,
   documentos jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
