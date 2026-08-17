@@ -124,7 +124,10 @@ def test_usuario_comum_ve_apenas_o_que_selecionou(certificados) -> None:
     with patch.object(ns, "load_settings", lambda: None), patch.object(
         ns, "get_latest_snapshot", lambda: None
     ), patch("app.main._list_certificados_payload", lambda *a, **k: {"itens": certificados}):
-        with patch.object(ns, "load_colaborador_selecao", lambda e: ["12345678000199"]):
+        # O duplo recebe (email, user_id): desde a fase 2 do rechaveamento de
+        # colaborador_cert_selecoes a seleção é procurada pela identidade, e o
+        # e-mail é só a queda enquanto `user_email` existir.
+        with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: ["12345678000199"]):
             assert len(ns.get_active_alerts("user@exemplo.com", "user")) == 5
-        with patch.object(ns, "load_colaborador_selecao", lambda e: []):
+        with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: []):
             assert ns.get_active_alerts("user@exemplo.com", "user") == []

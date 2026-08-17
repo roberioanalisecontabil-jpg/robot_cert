@@ -660,16 +660,50 @@ conjunto realista.
    caro. E teria de ser em duas fases (adicionar+backfill → subir código →
    remover a coluna), porque o código em produção ainda lê `user_email`.
 
-   **O que foi feito em vez disso:** `_mover_selecoes_de_email`, chamado por
-   `update_user` quando o endereço muda. Fecha o defeito concreto — a seleção
-   que se desprendia da pessoa em silêncio — sem migration, sem tocar no
-   caminho dos alertas, e sem impedir o rechaveamento depois.
+   **O que foi feito em 16/08:** `_mover_selecoes_de_email`, chamado por
+   `update_user` quando o endereço muda. Fechou o defeito concreto sem
+   migration e sem tocar no caminho dos alertas — mas é remendo no *chamador*:
+   um UPDATE direto, uma rota nova ou uma importação reintroduziriam a órfã.
 
-   É remendo sobre um problema de modelagem, e vale dizer o que ele **não**
-   cobre: a linha continua chaveada por e-mail, então quem escrever ali por
-   fora do `update_user` reintroduz a órfã. O rechaveamento continua sendo a
-   solução certa; o que mudou é que ele deixou de ser barato, e o momento de
-   pagar não é com outra migration pendente na fila.
+   **Retomado em 17/08.** ✅ *Fases 1 e 2 aplicadas; faltam a 3 e a 4.*
+
+   | Fase | O quê | Estado |
+   |---|---|---|
+   | 1 | coluna `user_id` anulável + FK `ON DELETE CASCADE` + backfill + índice único parcial | ✅ 17/08 (`20260817120000`) |
+   | 2 | código lê pela identidade e grava nas **duas** colunas | ✅ 17/08 |
+   | 3 | `DROP COLUMN user_email`; `user_id` vira chave primária | pendente |
+   | 4 | parar de gravar `user_email`; apagar `_mover_selecoes_de_email` | pendente |
+
+   **A ordem é o ponto inteiro.** O código em produção lê `user_email`; derrubar
+   a coluna antes da fase 2 faria a leitura levantar exceção, o `except` cairia
+   no fallback de ficheiro — efêmero e vazio na Vercel — e uma rodada de alertas
+   sairia **sem destinatário nenhum**, em silêncio.
+
+   O que a fase 2 mudou de fato no caminho dos alertas:
+   `_get_todos_colaboradores_selecoes` continua devolvendo `email → documentos`
+   (contrato de saída intocado, então quem consome não mudou), mas o endereço
+   agora sai de `users` pela identidade, e não da própria linha. E-mail trocado
+   depois da escolha deixa de perder o destinatário. `_linhas_ativas()` faz uma
+   leitura só e dela saem as duas visões (`_por_id`, `_por_email`).
+
+   Duas coisas deliberadas, que o código não conta sozinho:
+
+   - **A leitura ainda cai para `user_email`** se não achar por `user_id`. Não é
+     zelo: entre a fase 1 e o deploy da 2, o código anterior podia criar linha
+     sem `user_id`, e sem a queda essa pessoa veria a seleção vazia. Um `save`
+     seguinte liga a linha — a transição se resolve com o uso, sem backfill
+     manual. A queda some na fase 4.
+   - **O `on_conflict` continua `user_email`**, porque o índice sobre `user_id`
+     é PARCIAL (`WHERE user_id IS NOT NULL`) e índice parcial não serve para o
+     `ON CONFLICT` inferir alvo. Muda na fase 4.
+
+   **Sinal de conclusão:** na fase 4, `_mover_selecoes_de_email` vira código
+   morto. Poder apagá-lo é a prova de que o rechaveamento funcionou — enquanto
+   ele for necessário, a causa ainda está lá.
+
+   **Ruga conhecida:** o fallback em ficheiro (`_load_colaborador_file_dict`)
+   continua chaveado por e-mail. Nesse modo não existe tabela `users`, então
+   ali a identidade *é* o endereço. Os dois backends divergem de propósito.
 
 ~~**Aberto, descoberto na 2a:** o JWT dura 24h e é stateless, então desativar
 alguém **não invalida o token que já está no navegador dele** — o acesso cai só

@@ -365,29 +365,43 @@ def _save_colaborador_file_dict(data: Dict[str, List[str]]) -> None:
     COLAB_SELECAO_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_colaborador_selecao(email: str) -> List[str]:
+def load_colaborador_selecao(email: str, user_id: Optional[str] = None) -> List[str]:
     """
     Documentos (CNPJ/CPF só dígitos) que o utilizador escolheu para acompanhar.
-    Com Supabase, lê da tabela `colaborador_cert_selecoes`; senão do ficheiro local.
+
+    Com Supabase, a linha é procurada por `user_id` — a identidade — e só
+    depois por `user_email`. A queda para o e-mail não é zelo: entre a fase 1
+    da migration e este deploy, o código anterior podia criar linha nova sem
+    `user_id`, e sem a queda essa pessoa abriria Acompanhamento e veria a
+    seleção vazia. O `save` seguinte grava as duas colunas e cura a linha. A
+    queda some na fase 4, quando `user_email` deixa de existir.
+
+    Sem Supabase é o ficheiro local, que continua chaveado por e-mail — nesse
+    modo não existe tabela `users`, então ali a identidade *é* o endereço.
     """
     key = (email or "").strip().lower()
-    if not key:
+    uid = (user_id or "").strip() or None
+    if not key and not uid:
         return []
     client = _supabase()
     if client:
         try:
-            r = (
-                client.table("colaborador_cert_selecoes")
-                .select("documentos")
-                .eq("user_email", key)
-                .limit(1)
-                .execute()
-            )
-            rows = r.data or []
-            if rows:
-                docs = rows[0].get("documentos")
-                if isinstance(docs, list):
-                    return [str(x).strip() for x in docs if str(x).strip()]
+            for coluna, valor in (("user_id", uid), ("user_email", key)):
+                if not valor:
+                    continue
+                r = (
+                    client.table("colaborador_cert_selecoes")
+                    .select("documentos")
+                    .eq(coluna, valor)
+                    .limit(1)
+                    .execute()
+                )
+                rows = r.data or []
+                if rows:
+                    docs = rows[0].get("documentos")
+                    if isinstance(docs, list):
+                        return [str(x).strip() for x in docs if str(x).strip()]
+                    return []
             return []
         except Exception:  # noqa: BLE001
             logger.exception(
@@ -396,9 +410,23 @@ def load_colaborador_selecao(email: str) -> List[str]:
     return _load_colaborador_file_dict().get(key, [])
 
 
-def save_colaborador_selecao(email: str, docs: List[str]) -> None:
-    """Grava sempre no ficheiro local; com Supabase faz upsert por e-mail."""
+def save_colaborador_selecao(
+    email: str, docs: List[str], user_id: Optional[str] = None
+) -> None:
+    """
+    Grava sempre no ficheiro local; com Supabase faz upsert.
+
+    Escreve as DUAS colunas enquanto a fase 3 não vier. `user_email` continua
+    obrigatório porque ainda é a chave primária — é ela que o `on_conflict`
+    usa para decidir entre inserir e atualizar. `user_id` entra junto para a
+    linha passar a apontar para a identidade, e é o que sobra no fim.
+
+    O `on_conflict` só muda para `user_id` na fase 4: hoje o índice sobre
+    `user_id` é PARCIAL (`WHERE user_id IS NOT NULL`), e índice parcial não
+    serve para o `ON CONFLICT` inferir o alvo.
+    """
     key = (email or "").strip().lower()
+    uid = (user_id or "").strip() or None
     if not key:
         return
     clean = [str(x).strip() for x in docs if str(x).strip()]
@@ -409,7 +437,9 @@ def save_colaborador_selecao(email: str, docs: List[str]) -> None:
     if not client:
         return
     now = datetime.now(timezone.utc).isoformat()
-    row = {"user_email": key, "documentos": clean, "updated_at": now}
+    row: Dict[str, Any] = {"user_email": key, "documentos": clean, "updated_at": now}
+    if uid:
+        row["user_id"] = uid
     try:
         client.table("colaborador_cert_selecoes").upsert(row, on_conflict="user_email").execute()
     except Exception:  # noqa: BLE001

@@ -197,27 +197,79 @@ def registrar_execucao_job() -> None:
     _save_job_state(state)
 
 
-def _emails_ativos() -> Optional[set]:
+def _linhas_ativas() -> Optional[List[Dict[str, Any]]]:
     """
-    E-mails que podem receber alerta: existem em `users` e não estão desativados.
+    Contas que podem receber alerta: existem em `users` e não estão desativadas.
 
     Devolve None se a lista não puder ser obtida — o chamador interpreta como
     "não sei filtrar" e mantém o comportamento anterior, em vez de silenciar
     todos os alertas por causa de uma falha de leitura.
+
+    Existe para `_get_todos_colaboradores_selecoes` tirar daqui as DUAS visões
+    que precisa (por id e por e-mail) com uma leitura só.
     """
     client = _supabase()
     if not client:
         return None
     try:
-        r = client.table("users").select("email, role, ativo").execute()
-        return {
-            str(row.get("email") or "").strip().lower()
+        r = client.table("users").select("id, email, role, ativo").execute()
+        return [
+            row
             for row in (r.data or [])
             if str(row.get("email") or "").strip() and conta_ativa(row)
-        }
+        ]
     except Exception as e:
         logger.warning(f"Não foi possível listar usuários ativos para filtrar alertas: {e}")
         return None
+
+
+def _por_id(linhas: List[Dict[str, Any]]) -> Dict[str, str]:
+    """
+    `user_id` -> e-mail ATUAL. É aqui que mora o ganho da fase 2: o endereço
+    sai da conta, e não da linha de seleção, então e-mail trocado depois da
+    escolha deixa de perder o destinatário.
+    """
+    return {
+        str(row.get("id")): str(row.get("email") or "").strip().lower()
+        for row in linhas
+        if row.get("id")
+    }
+
+
+def _por_email(linhas: List[Dict[str, Any]]) -> set:
+    return {str(row.get("email") or "").strip().lower() for row in linhas}
+
+
+def _emails_ativos() -> Optional[set]:
+    """
+    E-mails ativos, para o caminho do ficheiro local — que não tem `user_id`
+    para cruzar. **Não** exige `id`: em produção ele é a chave primária e
+    sempre existe, mas fazer o casamento por e-mail depender dele seria
+    inventar um jeito novo de a lista vir vazia, e lista vazia aqui significa
+    "ninguém recebe".
+    """
+    linhas = _linhas_ativas()
+    return None if linhas is None else _por_email(linhas)
+
+
+def _so_de_ativos(selecoes: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    """
+    Filtro do caminho do ficheiro local, que não tem `user_id` para cruzar.
+
+    Extraído sem mudança de comportamento: é a regra que valia para as duas
+    origens antes da fase 2, e continua valendo para esta.
+    """
+    ativos = _emails_ativos()
+    if ativos is None:
+        return selecoes
+    permitidas = {e: d for e, d in selecoes.items() if e in ativos}
+    descartadas = sorted(set(selecoes) - set(permitidas))
+    if descartadas:
+        logger.info(
+            "Seleções ignoradas por usuário inativo ou inexistente: %s",
+            ", ".join(descartadas),
+        )
+    return permitidas
 
 
 def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
@@ -236,31 +288,63 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
     indevido a uma tela: era e-mail saindo para fora.
     """
     client = _supabase()
-    selecoes: Dict[str, List[str]] = {}
-    if client:
-        try:
-            r = client.table("colaborador_cert_selecoes").select("user_email, documentos").execute()
-            for row in (r.data or []):
-                email = str(row.get("user_email") or "").lower().strip()
-                docs = row.get("documentos")
-                if email and isinstance(docs, list):
-                    selecoes[email] = [str(x).strip() for x in docs if str(x).strip()]
-        except Exception as e:
-            logger.warning(f"Falha ao ler seleções de colaboradores no Supabase, usando local: {e}")
-            selecoes = _load_colaborador_file_dict()
-    else:
-        selecoes = _load_colaborador_file_dict()
+    if not client:
+        return _so_de_ativos(_load_colaborador_file_dict())
 
-    ativos = _emails_ativos()
-    if ativos is None:
-        return selecoes
+    try:
+        r = (
+            client.table("colaborador_cert_selecoes")
+            .select("user_id, user_email, documentos")
+            .execute()
+        )
+        linhas = r.data or []
+    except Exception as e:
+        logger.warning(f"Falha ao ler seleções de colaboradores no Supabase, usando local: {e}")
+        return _so_de_ativos(_load_colaborador_file_dict())
 
-    permitidas = {e: d for e, d in selecoes.items() if e in ativos}
-    descartadas = sorted(set(selecoes) - set(permitidas))
+    ativas = _linhas_ativas()
+    if ativas is None:
+        # "Não sei filtrar": devolve tudo pelo endereço gravado, como antes.
+        # Silenciar todos os alertas por causa de uma falha de leitura seria
+        # trocar um risco por outro pior.
+        cru: Dict[str, List[str]] = {}
+        for row in linhas:
+            email = str(row.get("user_email") or "").lower().strip()
+            docs = row.get("documentos")
+            if email and isinstance(docs, list):
+                cru[email] = [str(x).strip() for x in docs if str(x).strip()]
+        return cru
+
+    contas = _por_id(ativas)
+    enderecos_ativos = _por_email(ativas)
+    permitidas: Dict[str, List[str]] = {}
+    descartadas: List[str] = []
+
+    for row in linhas:
+        docs = row.get("documentos")
+        if not isinstance(docs, list):
+            continue
+        gravado = str(row.get("user_email") or "").lower().strip()
+        uid = str(row.get("user_id") or "").strip()
+
+        if uid:
+            # A identidade manda, e `contas` traz o endereço ATUAL: e-mail
+            # trocado depois da seleção deixa de perder o destinatário.
+            destino = contas.get(uid)
+        else:
+            # Linha anterior à fase 2, sem `user_id`. Casa pelo endereço, como
+            # sempre foi. Deixa de existir na fase 3.
+            destino = gravado if gravado in enderecos_ativos else None
+
+        if not destino:
+            descartadas.append(gravado or uid or "?")
+            continue
+        permitidas[destino] = [str(x).strip() for x in docs if str(x).strip()]
+
     if descartadas:
         logger.info(
             "Seleções ignoradas por usuário inativo ou inexistente: %s",
-            ", ".join(descartadas),
+            ", ".join(sorted(descartadas)),
         )
     return permitidas
 

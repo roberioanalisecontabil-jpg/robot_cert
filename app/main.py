@@ -1510,7 +1510,9 @@ def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dic
     try:
         # Devolve lista limitada + totais separados: antes eram 519 itens
         # (167 KB) a cada poll de 60s, com os acionáveis no fim da lista.
-        return build_notifications_payload(token.email, token.role)
+        return build_notifications_payload(
+            token.email, token.role, _user_id_da_sessao(token)
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2005,7 +2007,7 @@ def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_aut
 @app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
 def colaborador_get_selecionados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
-    docs = load_colaborador_selecao(email)
+    docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     return {"documentos": docs, "total": len(docs)}
 
 
@@ -2015,14 +2017,14 @@ def colaborador_put_selecionados(
 ) -> dict:
     email = (token.email or "").strip().lower()
     docs = sorted({_doc_norm(x) for x in body.documentos if _doc_norm(x)})
-    save_colaborador_selecao(email, docs)
+    save_colaborador_selecao(email, docs, _user_id_da_sessao(token))
     return {"ok": True, "documentos": docs, "total": len(docs)}
 
 
 @app.get("/api/colaborador/certificados/painel", dependencies=[Depends(require_auth)])
 def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
-    docs = load_colaborador_selecao(email)
+    docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     itens = _painel_docs_selecionados(docs)
     return {"itens": itens, "total": len(itens)}
 
@@ -2555,7 +2557,7 @@ def export_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
     """[LGPD] Portabilidade e Consulta de Dados (Art. 18, incisos II e X)"""
     from app.settings_state import load_colaborador_selecao
     email = token.email
-    docs = load_colaborador_selecao(email)
+    docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     
     return {
         "titular": email,
@@ -2574,7 +2576,17 @@ def delete_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
     
     # 1. Apagar seleções (Ações do usuário no app)
     if sb:
-        sb.table("colaborador_cert_selecoes").delete().eq("user_email", email.lower()).execute()
+        # Pelas DUAS colunas, e não só pela identidade. Enquanto a fase 3 não
+        # vier, podem coexistir linha com `user_id` e linha criada pelo código
+        # anterior sem ele. Apagar só por uma delas deixaria dado para trás —
+        # numa rota cujo objeto é justamente não deixar. Rodar as duas custa
+        # uma consulta a mais e não tem como errar para menos.
+        uid = _user_id_da_sessao(token)
+        if uid:
+            sb.table("colaborador_cert_selecoes").delete().eq("user_id", uid).execute()
+        chave = (email or "").strip().lower()
+        if chave:
+            sb.table("colaborador_cert_selecoes").delete().eq("user_email", chave).execute()
     else:
         # Modo arquivo local: limpa a entrada
         from app.settings_state import save_colaborador_selecao

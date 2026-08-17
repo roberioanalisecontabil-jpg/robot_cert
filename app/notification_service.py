@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.settings_state import load_settings, load_colaborador_selecao, get_latest_snapshot
 
@@ -35,7 +35,9 @@ def _chave_dedup(item: Dict[str, Any]) -> str:
     )
 
 
-def get_active_alerts(user_email: str, user_role: str) -> List[Dict[str, Any]]:
+def get_active_alerts(
+    user_email: str, user_role: str, user_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     Lista de alertas ativos (expirando ou vencidos) para o sino do portal,
     deduplicada por certificado e ordenada por urgência real.
@@ -57,7 +59,7 @@ def get_active_alerts(user_email: str, user_role: str) -> List[Dict[str, Any]]:
 
     selected_docs = []
     if not is_admin:
-        selected_docs = load_colaborador_selecao(user_email_clean)
+        selected_docs = load_colaborador_selecao(user_email_clean, user_id)
         selected_docs = ["".join(c for c in d if c.isdigit()) for d in selected_docs]
 
     alerts: List[Dict[str, Any]] = []
@@ -143,14 +145,16 @@ def get_active_alerts(user_email: str, user_role: str) -> List[Dict[str, Any]]:
     return alerts
 
 
-def build_notifications_payload(user_email: str, user_role: str) -> Dict[str, Any]:
+def build_notifications_payload(
+    user_email: str, user_role: str, user_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Monta a resposta de /api/colaborador/notificacoes: lista limitada + totais.
 
     Os totais vão separados dos itens para que o portal possa mostrar
     "33 expirando · 486 vencidos" sem receber os 519 registros.
     """
-    alerts = get_active_alerts(user_email, user_role)
+    alerts = get_active_alerts(user_email, user_role, user_id)
 
     total_expirando = sum(1 for a in alerts if a.get("tipo") == "expiring")
     total_vencidos = sum(1 for a in alerts if a.get("tipo") == "expired")
