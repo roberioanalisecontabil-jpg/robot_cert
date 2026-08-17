@@ -272,20 +272,19 @@
         it._isExpiredByDate = expiredByDate;
       };
 
-      // Novo sistema de badges
+      // A aparência do badge vem de `badgeStatus` (ui-common.js); aqui fica só
+      // a RESOLUÇÃO do estado, que é específica desta tela — `_isExpiredByDate`
+      // e `_isExpiringSoon` são calculados no cliente e não existem lá.
+      //
+      // Antes, o mapeamento estado→aparência estava escrito aqui e de novo em
+      // `colaborador_certificados.html`. Duas cópias da mesma regra divergem.
       const badge = (it) => {
         const s = it.status;
-        const expiredByDate = it._isExpiredByDate;
-        if (s === "expirado" || expiredByDate) {
-          return '<span class="badge badge-expired">Vencido</span>';
-        }
+        if (s === "expirado" || it._isExpiredByDate) return badgeStatus("vencido");
         if (s === "ok") {
-          if (it._isExpiringSoon) return '<span class="badge badge-warning">Expirando</span>';
-          return '<span class="badge badge-ok">Ativo</span>';
+          return badgeStatus(it._isExpiringSoon ? "expirando" : "ativo");
         }
-        if (s === "fora_do_padrao") return '<span class="badge badge-bad">Falha ( Sem padrão)</span>';
-        if (s === "erro") return '<span class="badge badge-bad">Erro</span>';
-        return '<span class="badge badge-bad">' + s + '</span>';
+        return badgeStatus(s);
       };
 
       function toggleLoading(show, text) {

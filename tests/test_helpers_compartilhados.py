@@ -348,3 +348,61 @@ def test_linhas_com_tooltip_sao_alcancaveis_por_teclado() -> None:
         "WCAG 2.2 §1.4.13: conteúdo mostrado por foco tem de ser dispensável "
         "com Esc, sem tirar o foco do lugar"
     )
+
+
+def test_status_de_certificado_nao_e_montado_a_mao_no_template() -> None:
+    """
+    O mapeamento estado→badge estava escrito duas vezes, em `index.html` e
+    `colaborador_certificados.html`. Duas cópias da mesma regra divergem — foi
+    assim que os textos de UI acabaram misturando pt-BR e pt-PT, uma tela por
+    vez, sem nada acusando.
+
+    Desde 17/08 a aparência mora em `badgeStatus` (ui-common.js), e os
+    templates só resolvem QUAL é o estado. Este teste impede a terceira cópia.
+
+    **Não proíbe `badge-ok`/`badge-bad` em geral.** `instalador.html` os usa
+    para custódia ativa/desativada, que não é estado de certificado e monta o
+    elemento com `createElement` + `textContent`. O que se proíbe é montar a
+    STRING HTML do badge no template, que é a forma que as duas cópias tinham.
+    """
+    ofensores = {}
+    for f in _paginas():
+        achados = re.findall(
+            r"""class=["']badge\s+badge-[a-z]+["']""", f.read_text(encoding="utf-8")
+        )
+        if achados:
+            ofensores[f.name] = sorted(set(achados))
+    assert not ofensores, (
+        "badge de status montado à mão no template — use `badgeStatus()` de "
+        f"ui-common.js: {ofensores}"
+    )
+
+
+def test_badge_de_status_tem_glifo_de_forma() -> None:
+    """
+    A2 da auditoria. O texto do badge ("Ativo"/"Vencido") já cumpre o WCAG
+    1.4.1 — cor não é o único meio —, então o glifo **não é conformidade**: é
+    leitura à distância. Numa tabela de centenas de linhas a forma se reconhece
+    antes da palavra, e com deuteranopia (~8% dos homens) o verde e o laranja
+    convergem, deixando só a leitura como saída.
+
+    Ele também desfaz uma ambiguidade real: `erro` e `fora_do_padrao` dividem a
+    classe `badge-bad` e eram visualmente idênticos.
+
+    O `aria-hidden` é a outra metade: sem ele o leitor de tela anunciaria
+    "marca de seleção Ativo", lendo duas vezes a mesma informação.
+    """
+    src = UI_COMMON.read_text(encoding="utf-8")
+
+    bloco = src[src.index("const BADGE_STATUS"):src.index("function badgeStatus")]
+    sem_glifo = [
+        chave for chave in re.findall(r"^\s*(\w+):\s*\{", bloco, re.M)
+        if "glifo" not in bloco.split(chave + ":")[1].split("},")[0]
+    ]
+    assert not sem_glifo, f"estado sem glifo de forma: {sem_glifo}"
+
+    corpo = src[src.index("function badgeStatus"):]
+    assert 'aria-hidden="true"' in corpo.split("\n}")[0], (
+        "o glifo perdeu aria-hidden; o leitor de tela passa a anunciá-lo junto "
+        "do texto, repetindo a informação"
+    )

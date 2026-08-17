@@ -678,6 +678,25 @@ tbody tr:hover {
   border: none;
 }
 
+/* Glifo de forma do badge (A2 da auditoria). O texto ao lado já cumpre o
+   WCAG 1.4.1 — cor não é o único meio —, então isto é leitura à distância:
+   numa tabela de centenas de linhas a forma se reconhece antes da palavra, e
+   com deuteranopia o verde e o laranja convergem.
+
+   Herda `currentColor`, então acompanha o token de texto de cada variante e
+   não vira mais uma cor a manter sincronizada.
+
+   `aria-hidden` no elemento (ver `badgeStatus`) evita que o leitor de tela
+   anuncie "marca de seleção Ativo" — ele já lê o texto. */
+.badge-glifo {
+  margin-right: 0.35em;
+  font-weight: 700;
+  /* O ✕ e o ⚠ têm alturas diferentes na fonte; travar a largura mantém os
+     textos alinhados entre linhas da mesma tabela. */
+  min-width: 1em;
+  text-align: center;
+}
+
 .badge-ok {
   background-color: var(--ok-bg);
   color: var(--ok-text);

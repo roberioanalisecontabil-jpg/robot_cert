@@ -162,7 +162,13 @@ Pendente (fora do Sprint 1): `.card-erros` ícone `#ea580c`/`#fff7ed` a 3.35:1 �
 
 ---
 
-### A2 · Status transmitido apenas por cor ⚠️ ACHADO SUPERDIMENSIONADO
+### A2 · Status transmitido apenas por cor ✅ FEITO 17/08 — **mas o achado estava errado, e não só superdimensionado**
+
+Medido antes de mexer: os cartões do Início têm **três** diferenciadores, não um — título em texto ("Total", "Ativo", "Expirando", "Erro", "Falha"), ícone SVG distinto por forma (documento, check, relógio, exclamação, interrogação) e cor. E os badges da tabela já carregam o texto do estado. Pelo WCAG 1.4.1 isso já conformava: cor nunca foi o único meio.
+
+O que a correção proposta de fato entrega é **leitura à distância**, e por isso foi feita mesmo assim: numa tabela de centenas de linhas a forma se reconhece antes da palavra, e com deuteranopia o verde e o laranja convergem. Os badges ganharam glifo (`✓ ⚠ ✕ ! ?`) com `aria-hidden` — sem ele o leitor de tela anunciaria "marca de seleção Ativo".
+
+**Ganho maior que o previsto:** o mapeamento estado→badge estava escrito duas vezes, em `index.html` e `colaborador_certificados.html`. Virou `badgeStatus()` em `ui-common.js`, com teste impedindo a terceira cópia. E o glifo separa `erro` de `fora_do_padrao`, que dividiam a classe `badge-bad` e eram visualmente idênticos.
 **Skill:** `04 §9` ("nunca usar cor como único diferenciador"), `02 §1.1`
 
 Os badges se distinguem por cor + texto ("Ativo"/"Expirando"/"Vencido") — o texto salva a acessibilidade **na tabela**. Mas nos cards do dashboard (`index.html:85-145`) a única diferenciação entre Total/Ativo/Expirando/Erro/Falha é a cor do `.card-icon`. Com deuteranopia (~8% dos homens), verde e laranja convergem.

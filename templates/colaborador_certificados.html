@@ -204,13 +204,17 @@
       });
     }
 
-    function badgeStatus(v) {
-      if (v === "vencido") return "<span class='badge badge-expired'>Vencido</span>";
-      if (v === "ativo") return "<span class='badge badge-ok'>Ativo</span>";
-      if (v === "expirando") return "<span class='badge badge-warning'>Expirando</span>";
-      if (v === "erro") return "<span class='badge badge-bad'>Erro</span>";
-      if (v === "fora_do_padrao") return "<span class='badge badge-bad'>Falha ( Sem padrão)</span>";
-      return "<span class='badge badge-bad'>Não encontrado</span>";
+    // Nome DIFERENTE do helper compartilhado, de propósito: chamava-se
+    // `badgeStatus` e passou a delegar para o `badgeStatus` de ui-common.js —
+    // que é ele mesmo, e a chamada virava recursão infinita. Foi o
+    // `test_nenhum_template_redefine_helper_compartilhado` que acusou.
+    //
+    // A aparência mora no helper compartilhado; o que sobra aqui é a regra
+    // desta tela: valor desconhecido vira "Não encontrado", e não o texto cru,
+    // porque a lista do colaborador mostra o que ele selecionou — um documento
+    // pode simplesmente não estar no inventário.
+    function badgeDoColaborador(v) {
+      return BADGE_STATUS[v] ? badgeStatus(v) : badgeStatus("nao_encontrado");
     }
 
     function renderSelecao() {
@@ -252,7 +256,7 @@
           <td role="cell" data-label="Selecionar"><input type="checkbox" aria-label="Acompanhar ${esc(it.nome || it.documento || "certificado")}" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
           <td role="cell" data-label="Nome">${esc(it.nome || "—")}</td>
           <td role="cell" data-label="CNPJ/CPF">${esc(it.documento || "—")}</td>
-          <td role="cell" data-label="Status">${badgeStatus(it.status)}</td>
+          <td role="cell" data-label="Status">${badgeDoColaborador(it.status)}</td>
           <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
         </tr>`;
       }).join("");
@@ -343,7 +347,7 @@
           <td role="cell" data-label="CNPJ/CPF">${esc(it.documento)}</td>
           <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
           <td role="cell" data-label="Dias restantes">${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
-          <td role="cell" data-label="Status">${badgeStatus(it.status)}</td>
+          <td role="cell" data-label="Status">${badgeDoColaborador(it.status)}</td>
         </tr>`;
       }).join("");
       }

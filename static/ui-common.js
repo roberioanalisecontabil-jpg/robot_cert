@@ -285,6 +285,55 @@ function _toastDuracao(message) {
  * `textContent` + `innerHTML` faz o navegador escapar: mais curto que uma
  * cadeia de `.replace()` e sem risco de esquecer um caractere.
  */
+/**
+ * Estado de um certificado -> como ele aparece na tabela.
+ *
+ * Mora aqui porque o mesmo mapeamento estava escrito DUAS vezes, em
+ * `index.html` e `colaborador_certificados.html`. Duas cópias da mesma regra
+ * divergem — foi assim que os textos de UI acabaram misturando pt-BR e pt-PT,
+ * uma tela por vez, sem nada acusando.
+ *
+ * O `glifo` é o A2 da auditoria de UI/UX. O texto já bastava para o WCAG 1.4.1
+ * (cor não é o único meio: "Ativo"/"Vencido" estão escritos), então isto não é
+ * conformidade — é leitura à distância. Numa tabela de centenas de linhas,
+ * forma se reconhece antes de palavra, e com deuteranopia (~8% dos homens) o
+ * verde e o laranja convergem, deixando só a leitura como saída.
+ *
+ * Também desfaz uma ambiguidade: `erro` e `fora_do_padrao` dividem a classe
+ * `badge-bad`, então eram visualmente idênticos. Agora `!` e `?` os separam.
+ */
+const BADGE_STATUS = {
+  ativo:          { classe: "badge-ok",      texto: "Ativo",               glifo: "✓" },
+  expirando:      { classe: "badge-warning", texto: "Expirando",           glifo: "⚠" },
+  vencido:        { classe: "badge-expired", texto: "Vencido",             glifo: "✕" },
+  erro:           { classe: "badge-bad",     texto: "Erro",                glifo: "!" },
+  fora_do_padrao: { classe: "badge-bad",     texto: "Falha ( Sem padrão)", glifo: "?" },
+  nao_encontrado: { classe: "badge-bad",     texto: "Não encontrado", glifo: "?" },
+};
+
+/**
+ * HTML do badge de status. `chave` é uma das de `BADGE_STATUS`.
+ *
+ * Chave desconhecida vira um badge neutro com o próprio valor escapado — o
+ * comportamento que as duas cópias já tinham, e que existe porque `status` vem
+ * do servidor e pode ganhar valores novos antes de a tela saber deles.
+ *
+ * O glifo leva `aria-hidden="true"`: o leitor de tela já lê o texto ao lado, e
+ * sem isso anunciaria "marca de seleção Ativo".
+ */
+function badgeStatus(chave) {
+  const d = BADGE_STATUS[chave];
+  if (!d) {
+    return '<span class="badge badge-bad">' + esc(chave) + "</span>";
+  }
+  return (
+    '<span class="badge ' + d.classe + '">' +
+    '<span class="badge-glifo" aria-hidden="true">' + d.glifo + "</span>" +
+    esc(d.texto) +
+    "</span>"
+  );
+}
+
 function esc(v) {
   const d = document.createElement("div");
   d.textContent = v == null ? "" : String(v);
