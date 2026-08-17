@@ -5,16 +5,20 @@
 -- COMO USAR: rode um PASSO de cada vez. Se algum der erro, PARE e me mande a
 -- mensagem exata. Sem BEGIN/COMMIT -- o SQL Editor ja roda numa transacao.
 --
+-- APLICADA EM PRODUCAO EM 17/08/2026, antes do deploy do codigo.
+-- Verificado: users.senha_alterada_em existe, timestamptz, anulavel.
+--
 -- ADITIVA: cria uma tabela nova e uma coluna nova; nada existente e alterado.
 --
--- >>> ESTA MIGRATION TEM DE RODAR ANTES DO DEPLOY DO CODIGO. <<<
+-- >>> A ORDEM ERA OBRIGATORIA, e vale registrar por que. <<<
 --     O commit 3b165a8 faz `_conta_da_sessao` pedir `senha_alterada_em` no
---     select. Se o codigo subir antes da coluna existir, o PostgREST recusa a
---     consulta e TODA REQUISICAO AUTENTICADA VIRA 503 -- o portal inteiro
---     para. Por isso o push esta segurado ate o passo 5 voltar.
+--     select. Codigo antes da coluna faria o PostgREST recusar a consulta, e
+--     TODA REQUISICAO AUTENTICADA viraria 503 -- o portal inteiro parando,
+--     nao so a funcionalidade nova. Foi a unica migration desta serie com
+--     esse alcance, e por isso o push ficou segurado ate a verificacao voltar.
 --
---     Rodar esta migration ANTES do deploy nao quebra nada: o codigo que esta
---     em producao hoje nao conhece nem a tabela nem a coluna.
+--     O contrario era seguro: o codigo em producao na epoca nao conhecia nem
+--     a tabela nem a coluna.
 --
 -- ── Codigo, e nao link ───────────────────────────────────────────────────
 --
