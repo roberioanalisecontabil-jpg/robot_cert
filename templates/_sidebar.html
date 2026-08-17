@@ -20,7 +20,16 @@
 <aside class="sidebar">
   <div class="sidebar-header">
     <div class="brand-icon">
-      <img src="/static/logo.png?v=brand-gold-v1" alt="Analise Certificado">
+      {# `width`/`height` batem com a caixa de `.brand-icon` (2.25rem = 36px), e
+         a proporção é a do arquivo (512×512, quadrado).
+
+         Não é contra CLS, ao contrário do que o B3 da auditoria supunha: o
+         espaço já está reservado, porque `.brand-icon` tem largura e altura
+         fixas e a imagem preenche 100%. Serve para o caso em que o `style.css`
+         não carrega — sem os atributos, o PNG de 512px renderiza em tamanho
+         natural e estoura a página inteira. #}
+      <img src="/static/logo.png?v=brand-gold-v1" alt="Analise Certificado"
+           width="36" height="36">
     </div>
     <div class="brand-text">
       <h2>Analise Certificado</h2>

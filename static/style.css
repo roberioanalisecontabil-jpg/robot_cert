@@ -58,6 +58,11 @@
      acompanhado do badge com texto na coluna Status (04 §9). */
   --row-tint-danger: #FEF2F2;
   --row-tint-warning: #FFFBEB;
+  /* "Fora do padrão" tinha roxo escrito à mão em `.card-sem-padrao`, sem par
+     no tema escuro. Vira token porque o roxo é a linguagem visual desse
+     status: trocá-lo por azul ou cinza apagaria a distinção que ele carrega. */
+  --fora-padrao-bg: #F5F3FF;
+  --fora-padrao-text: #6D28D9;
 
   /* Border Radii */
   --radius-xs: 4px;
@@ -135,6 +140,8 @@
   --sidebar-danger: #FF6B6B; /* 6.80:1 sobre --sidebar-bg */
   --row-tint-danger: rgba(255, 69, 58, 0.10);
   --row-tint-warning: rgba(255, 159, 10, 0.10);
+  --fora-padrao-bg: rgba(139, 92, 246, 0.18);
+  --fora-padrao-text: #C4B5FD;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -184,6 +191,8 @@
     --sidebar-danger: #FF6B6B;
     --row-tint-danger: rgba(255, 69, 58, 0.10);
     --row-tint-warning: rgba(255, 159, 10, 0.10);
+    --fora-padrao-bg: rgba(139, 92, 246, 0.18);
+    --fora-padrao-text: #C4B5FD;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -520,13 +529,16 @@ textarea:focus-visible {
 }
 
 .card-erros .card-icon {
-  background-color: #fff7ed;
-  color: #ea580c;
+  /* Era #fff7ed/#ea580c. O `--warning-bg` e praticamente a mesma cor no tema
+     claro (#FFF7EB), e o irmao `.card-vencidos` logo acima ja usava tokens —
+     dois cartoes lado a lado, um seguindo o tema e o outro nao. */
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .card-sem-padrao .card-icon {
-  background-color: #f5f3ff;
-  color: #7c3aed;
+  background-color: var(--fora-padrao-bg);
+  color: var(--fora-padrao-text);
 }
 
 /* Table Area */
@@ -824,20 +836,25 @@ select:focus {
 
 .path-value {
   display: block;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  /* Caixa clara fixa com texto escuro fixo: no tema escuro continuava clara,
+     virando um retangulo branco no meio da pagina. */
+  background: var(--bg);
+  border: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
   font-family: monospace;
   font-size: 0.85rem;
-  color: #1f2937;
+  color: var(--text);
   word-break: break-all;
 }
 
 .tag {
+  /* O pior dos casos: fundo claro FIXO com `color: var(--text-muted)`, que no
+     tema escuro vira cinza-claro. Texto claro sobre fundo claro — a etiqueta
+     ficava praticamente ilegivel. */
   display: inline-block;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--border);
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -852,8 +869,11 @@ select:focus {
 
 .hint-warn {
   background: var(--expired-bg);
-  border: 1px solid #fecaca;
-  color: #991b1b;
+  /* Mesma forma que `.btn-danger` ja usava para borda avermelhada: o vermelho
+     de `--expired` com alfa. Funciona nos dois temas porque compoe com o fundo
+     em vez de substitui-lo. */
+  border: 1px solid rgba(255, 59, 48, 0.25);
+  color: var(--expired-text);
   padding: 0.75rem;
   border-radius: 8px;
 }
@@ -988,7 +1008,9 @@ body.sidebar-collapsed .sidebar-nav a {
 }
 
 .dup-igual-status {
-  color: #b45309;
+  /* Mesmo ambar literal que estava em `usuarios.html`; escapou da varredura
+     anterior por estar na folha de estilo, e nao num template. */
+  color: var(--warning-text);
   font-size: 0.95rem;
 }
 

@@ -259,3 +259,46 @@ def test_js_nao_atribui_cor_literal_a_style() -> None:
         "cor literal atribuída por JavaScript — use um token var(--...): "
         f"{achados}"
     )
+
+
+def test_os_dois_blocos_de_tema_escuro_definem_os_mesmos_tokens() -> None:
+    """
+    O tema escuro é declarado DUAS vezes: em `:root[data-theme="dark"]`, para a
+    escolha manual, e dentro de `@media (prefers-color-scheme: dark)`, para
+    quem segue o sistema. O `style.css` já traz um comentário pedindo "MANTER
+    SINCRONIZADO" — e comentário pedindo disciplina é uma tarefa que ninguém
+    executa quando está com pressa.
+
+    O sintoma de dessincronizar é sutil e enganoso: quem escolhe "escuro" no
+    seletor vê uma cor, quem deixa no automático vê outra, e ambos os caminhos
+    "funcionam". Não há erro, e quem reportar vai descrever uma tela que a
+    outra pessoa não consegue reproduzir.
+
+    Este teste é a resposta ao M1 da auditoria ("tokens de cor duplicados em
+    dois blocos"). Não desduplica — desduplicar exigiria mexer na cascata dos
+    dois seletores, com risco visual que a suíte não consegue ver, porque ela
+    lê o CSS e nunca renderiza nada. Trava a divergência, que é o que de fato
+    machuca.
+    """
+    css = (RAIZ / "static" / "style.css").read_text(encoding="utf-8")
+
+    ini_manual = css.index(':root[data-theme="dark"]')
+    ini_auto = css.index("@media (prefers-color-scheme: dark)")
+    manual = css[ini_manual:ini_auto]
+    # O bloco do @media termina no fecho do seletor interno; pegar até o
+    # próximo seletor de nível superior basta e evita depender de contagem de
+    # chaves.
+    auto = css[ini_auto:css.index("\n* {", ini_auto)]
+
+    def tokens(trecho: str) -> set:
+        return set(re.findall(r"(--[a-z0-9-]+)\s*:", trecho))
+
+    so_manual = sorted(tokens(manual) - tokens(auto))
+    so_auto = sorted(tokens(auto) - tokens(manual))
+
+    assert not so_manual and not so_auto, (
+        "os dois blocos de tema escuro divergiram — quem escolhe 'escuro' no "
+        "seletor veria cores diferentes de quem segue o sistema.\n"
+        f"  só em :root[data-theme=dark]: {so_manual}\n"
+        f"  só em @media prefers-color-scheme: {so_auto}"
+    )
