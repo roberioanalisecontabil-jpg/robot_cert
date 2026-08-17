@@ -732,8 +732,17 @@ def login(body: LoginBody, request: Request) -> dict:
         raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado para login.")
 
     ip = request.client.host if request and request.client else None
+    # Normalizado ANTES da consulta. A coluna guarda tudo em minúsculas (o
+    # portal grava assim, e o índice único é sobre `lower(email)`), mas a
+    # consulta usava o valor cru do formulário: quem digitasse "Ana@X.com" não
+    # casava com linha nenhuma e levava 401 "E-mail ou senha incorretos" —
+    # mensagem que manda a pessoa caçar a senha por causa de uma maiúscula.
+    #
+    # O `trim` está aqui pelo mesmo motivo: colar o e-mail de um e-mail
+    # costuma trazer espaço junto.
+    email_login = (body.email or "").strip().lower()
     try:
-        r = sb.table("users").select("*").eq("email", body.email).limit(1).execute()
+        r = sb.table("users").select("*").eq("email", email_login).limit(1).execute()
         user = r.data[0] if r.data else None
         if not user or not auth.verify_password(body.password, user["password_hash"]):
             # Só registra quando a conta EXISTE: e-mail inexistente viraria
@@ -744,7 +753,7 @@ def login(body: LoginBody, request: Request) -> dict:
                 atividade.registrar(
                     atividade.EVENTO_LOGIN_NEGADO,
                     user_id=str(user.get("id") or "") or None,
-                    user_email=body.email,
+                    user_email=email_login,
                     client_ip=ip,
                     contexto={"motivo": "senha_incorreta"},
                 )
@@ -753,7 +762,7 @@ def login(body: LoginBody, request: Request) -> dict:
             atividade.registrar(
                 atividade.EVENTO_LOGIN_NEGADO,
                 user_id=str(user.get("id") or "") or None,
-                user_email=body.email,
+                user_email=email_login,
                 client_ip=ip,
                 contexto={"motivo": "conta_desativada"},
             )
