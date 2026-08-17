@@ -642,7 +642,7 @@ function cgPageNavRefresh(opts) {
   metaEl.textContent =
     typeof opts.metaFormatter === "function"
       ? opts.metaFormatter(synthetic)
-      : `Página ${synthetic.pagina} de ${synthetic.total_paginas} · ${synthetic.total_itens} registo(s)`;
+      : `Página ${synthetic.pagina} de ${synthetic.total_paginas} · ${synthetic.total_itens} registro(s)`;
 
   ul.querySelectorAll("li[data-cg-page-num]").forEach((node) => node.remove());
 

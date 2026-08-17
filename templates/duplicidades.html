@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <p id="sem-dup" class="hint" style="display:none; margin-bottom:1rem;">Nenhuma duplicidade detetada com os critérios atuais.</p>
+      <p id="sem-dup" class="hint" style="display:none; margin-bottom:1rem;">Nenhuma duplicidade detectada com os critérios atuais.</p>
 
       <div id="sec-crypto-wrap" style="display:none;">
 
@@ -67,7 +67,7 @@
                 </li>
               </ul>
               <div>
-                <label for="pag-perpage-dup-ig" class="cg-sr-only">Registos por página</label>
+                <label for="pag-perpage-dup-ig" class="cg-sr-only">Registros por página</label>
                 <select id="pag-perpage-dup-ig" class="cg-page-perpage-select" title="Itens por página">
                   <option value="10">10 por página</option>
                   <option value="25">25 por página</option>
@@ -82,7 +82,7 @@
 
       <section id="sec-documento" class="dup-crypto-table-block" style="display:none;" aria-labelledby="tit-doc-dup">
         <h2 id="tit-doc-dup" style="font-size:1.1rem; margin-bottom:0.75rem;">Certificados com mesmo nome ( diferente assinatura única de segurança)</h2>
-        <p class="hint" style="margin-bottom:0.75rem;">Apenas quando o mesmo CPF/CNPJ aparece em mais de um ficheiro e os certificados não podem ser identificados como iguais pela assinatura de segurança.</p>
+        <p class="hint" style="margin-bottom:0.75rem;">Apenas quando o mesmo CPF/CNPJ aparece em mais de um arquivo e os certificados não podem ser identificados como iguais pela assinatura de segurança.</p>
         <div class="dup-crypto-table-wrap table-scroll-anchor">
           <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados com mesmo documento">
             <table role="table">
@@ -109,7 +109,7 @@
               </li>
             </ul>
             <div>
-              <label for="pag-perpage-dup-doc" class="cg-sr-only">Registos por página</label>
+              <label for="pag-perpage-dup-doc" class="cg-sr-only">Registros por página</label>
               <select id="pag-perpage-dup-doc" class="cg-page-perpage-select" title="Itens por página">
                 <option value="10">10 por página</option>
                 <option value="25">25 por página</option>
@@ -149,7 +149,7 @@
               </li>
             </ul>
             <div>
-              <label for="pag-perpage-dup-nome" class="cg-sr-only">Registos por página</label>
+              <label for="pag-perpage-dup-nome" class="cg-sr-only">Registros por página</label>
               <select id="pag-perpage-dup-nome" class="cg-page-perpage-select" title="Itens por página">
                 <option value="10">10 por página</option>
                 <option value="25">25 por página</option>
@@ -221,7 +221,7 @@
     }
 
     const HINT_CRYPTO_VAZIO_IGUAL = `
-      <p class="hint" style="margin:0;">Não foi detetado nenhum par de ficheiros com o <strong>mesmo fingerprint</strong> (SHA-256 do certificado, DER idêntico).</p>
+      <p class="hint" style="margin:0;">Não foi detectado nenhum par de arquivos com o <strong>mesmo fingerprint</strong> (SHA-256 do certificado, DER idêntico).</p>
       <p class="hint" style="margin:0.5rem 0 0;">Se o <strong>envio do agente</strong> for antigo, o inventário pode não incluir o fingerprint — <strong>atualize o agente</strong> e reenvie, ou use o <strong>scan local</strong> no servidor.</p>`;
 
     const LS_PER_PAGE_DUP = "cg_per_page_duplicidades";
@@ -729,7 +729,7 @@
       const rows = _rowsNome;
       const psz = porPagDup();
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="hint-only cg-state-row"><td colspan="2">Nenhum ficheiro listado.</td></tr>`;
+        tbody.innerHTML = `<tr class="hint-only cg-state-row"><td colspan="2">Nenhum arquivo listado.</td></tr>`;
         cgPageNavHide("paginacao-toolbar-dup-nome", "pag-ul-dup-nome", "pag-meta-dup-nome");
         return;
       }
@@ -797,7 +797,7 @@
         const j = await r.json();
         st.textContent = "";
         const origem = j.origem_dados === "ultimo_snapshot" ? "Agente Windows" : "Scan local no servidor";
-        meta.textContent = `${origem} · ${j.total_itens_analisados || 0} ficheiro(s) · atualizado: ${j.scanned_at || "—"}`;
+        meta.textContent = `${origem} · ${j.total_itens_analisados || 0} arquivo(s) · atualizado: ${j.scanned_at || "—"}`;
 
       const gci = j.grupos_certificado_igual || [];
       const gd = j.grupos_documento || [];

@@ -97,7 +97,7 @@ def enqueue(machine_id: str, command: str, payload: Optional[str] = None) -> str
 def pop_next_for_agent(machine_id: str) -> Optional[QueuedCommand]:
     """
     Retira e devolve o próximo comando em fila para este agente, ou None.
-    Tenta Supabase primeiro; se vazio, consome a fila em ficheiro (enfileiramentos de fallback).
+    Tenta Supabase primeiro; se vazio, consome a fila em arquivo (enfileiramentos de fallback).
     """
     agent = (machine_id or "").strip() or "default"
     client = _supabase()

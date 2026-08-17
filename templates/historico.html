@@ -70,7 +70,7 @@
             </li>
           </ul>
           <div>
-            <label for="pag-perpage-hist" class="cg-sr-only">Registos por página</label>
+            <label for="pag-perpage-hist" class="cg-sr-only">Registros por página</label>
             <select id="pag-perpage-hist" class="cg-page-perpage-select" title="Itens por página">
               <option value="10">10 por página</option>
               <option value="25">25 por página</option>
@@ -141,7 +141,7 @@
         next: "btn-hist-next",
         pg: pg,
         metaFormatter: (p) =>
-          "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " registo(s)",
+          "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " registro(s)",
         hideWhenSingle: true,
         goToPage: (pn) => {
           paginaAtualHist = pn;
@@ -354,8 +354,8 @@
         renderLinhasHistorico(rows);
         document.getElementById("count-hint").textContent =
           typeof j.total === "number"
-            ? j.total + " registo(s)"
-            : rows.length + " registo(s) nesta página";
+            ? j.total + " registro(s)"
+            : rows.length + " registro(s) nesta página";
       } catch (e) {
         st.textContent = "Falha de conexão.";
         showToast("Falha de conexão com o servidor: " + e, "error");

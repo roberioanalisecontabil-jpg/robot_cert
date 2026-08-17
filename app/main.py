@@ -1848,7 +1848,7 @@ def listar_certificados(
                     "total_itens": total,
                     "por_pagina": pp,
                     # Permite ao portal avisar sobre truncamento ANTES de exportar,
-                    # em vez de só depois que o ficheiro já foi gerado.
+                    # em vez de só depois que o arquivo já foi gerado.
                     "export_max": LISTAGEM_EXPORT_MAX,
                 },
                 "supabase": supabase_configured(),
@@ -1865,7 +1865,7 @@ def listar_certificados(
 
 
 def _escape_ilike_pattern(val: str) -> str:
-    """Evita que % e _ do utilizador interfiram com ILIKE."""
+    """Evita que % e _ do usuário interfiram com ILIKE."""
     return val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -1951,7 +1951,7 @@ def _fingerprint_hex_resumo(m: dict) -> str:
 
 def _filtrar_grupo_documento_apos_fingerprint(members: List[dict]) -> List[dict]:
     """
-    Remove da lista «mesmo documento» os ficheiros que já entram no agrupamento
+    Remove da lista «mesmo documento» os arquivos que já entram no agrupamento
     por fingerprint (2+ com o mesmo SHA-256). A duplicidade criptográfica é a
     validação definitiva; o grupo por documento fica para CPF/CNPJ igual sem
     fingerprint ou com certificados distintos (ex.: renovação).
@@ -1977,9 +1977,9 @@ def _agrupar_duplicidades(
 ) -> Tuple[List[dict], List[dict], List[dict]]:
     """
     Deteta duplicidades no mesmo inventário (último snapshot ou scan local):
-    - mesmo CNPJ/CPF (11+ dígitos) em mais de um ficheiro (exceto quando a duplicidade
+    - mesmo CNPJ/CPF (11+ dígitos) em mais de um arquivo (exceto quando a duplicidade
       já é explicada só por fingerprint — aí fica só em certificados idênticos);
-    - certificados idênticos: mesmo fingerprint (SHA-256 do DER) em mais de um ficheiro;
+    - certificados idênticos: mesmo fingerprint (SHA-256 do DER) em mais de um arquivo;
     - nomes muito semelhantes (SequenceMatcher) só quando não existe fingerprint
       no inventário (export antigo do agente ou leitura falhou).
     """
@@ -2313,7 +2313,7 @@ def _historico_merge_snapshot_into_agregados(snap: dict[str, Any], agregados: Di
 
 def _historico_carregar_agregados(limite_snapshots: int) -> Tuple[Dict[str, dict], int]:
     """
-    Percorre snapshots (Supabase em lotes ou ficheiro local) e devolve agregação por file_name.
+    Percorre snapshots (Supabase em lotes ou arquivo local) e devolve agregação por file_name.
     Resultado pode vir de cache em RAM (TTL configurável) por (Supabase ativo, limite).
     """
     from app.settings_state import _supabase
@@ -2570,7 +2570,7 @@ def historico_certificados_http(
         description="Máximo de snapshots no fallback (quando cert_history está vazio)",
     ),
     pagina: int = Query(1, ge=1, description="Página (1-based)"),
-    por_pagina: int = Query(20, ge=1, le=2000, description="Registos por página"),
+    por_pagina: int = Query(20, ge=1, le=2000, description="Registros por página"),
     todas_filtradas: bool = Query(
         False,
         description="Quando true, devolve toda a lista filtrada (exportação; pode truncar)",
@@ -2578,7 +2578,7 @@ def historico_certificados_http(
     busca: Optional[str] = Query(
         None,
         max_length=200,
-        description="Filtro parcial em nome, ficheiro ou documento",
+        description="Filtro parcial em nome, arquivo ou documento",
     ),
 ) -> dict:
     b = busca.strip() if busca else None
@@ -2743,7 +2743,7 @@ def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
 @app.post("/api/mover-vencidos", dependencies=[Depends(require_auth)])
 def mover_vencidos() -> JSONResponse:
     """
-    Só move arquivos no **mesmo** sistema de ficheiros que corre o API (servidor acessa as pastas).
+    Só move arquivos no **mesmo** sistema de arquivos que corre o API (servidor acessa as pastas).
     Se a interface mostrar dados "remotos" vindos do agente, use o agendador no Windows
     (agente com --mover) para mover aí o disco local.
     """

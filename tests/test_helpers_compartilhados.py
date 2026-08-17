@@ -174,3 +174,49 @@ def test_templates_so_usam_tokens_que_existem() -> None:
         if fora:
             faltando[f.name] = fora
     assert not faltando, f"tokens usados e nunca definidos: {faltando}"
+
+
+# Termos de pt-PT que apareciam nos textos de UI até 17/08/2026 (B8 da
+# auditoria de 02/08). Radical, e não a palavra inteira, para pegar plural e a
+# forma "registo(s)" que a paginação usava.
+TERMOS_PT_PT = {
+    "registo": "registro",
+    "ficheiro": "arquivo",
+    "detetad": "detectad",
+    "utilizador": "usuário",
+    "ecrã": "tela",
+    "; a usar": "; usando o",
+}
+
+
+def test_ui_nao_mistura_pt_br_com_pt_pt() -> None:
+    """
+    Os textos de UI misturavam as duas normas: "registos", "ficheiro" e
+    "detetada" convivendo com "registros", "arquivo" e "detectada", em 19
+    pontos de 8 arquivos.
+
+    Não é preciosismo de idioma. O usuário final lê "Registos por página" numa
+    tela e "registros" na seguinte, e a inconsistência é o tipo de coisa que
+    faz o produto parecer montado por pessoas que não se falam.
+
+    Existe como teste, e não como correção pontual, porque a mistura não chegou
+    de uma vez: entrou aos poucos, uma tela por vez, sem nada acusando. Sem uma
+    trava, volta pelo mesmo caminho.
+
+    Alcance: templates, CSS e JS — o que o usuário lê. Comentários e docstrings
+    do Python foram normalizados junto, mas não são vigiados aqui: travá-los
+    daria falso positivo em cada citação de nome de arquivo.
+    """
+    achados = {}
+    alvos = sorted(TEMPLATES.glob("*.html")) + sorted((RAIZ / "static").glob("*.js")) \
+        + sorted((RAIZ / "static").glob("*.css"))
+    for f in alvos:
+        texto = f.read_text(encoding="utf-8")
+        baixo = texto.lower()
+        encontrados = sorted(
+            f"{termo} → {troca}" for termo, troca in TERMOS_PT_PT.items()
+            if termo.lower() in baixo
+        )
+        if encontrados:
+            achados[f.name] = encontrados
+    assert not achados, f"texto de UI em pt-PT: {achados}"

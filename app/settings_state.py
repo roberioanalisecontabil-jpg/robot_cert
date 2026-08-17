@@ -127,7 +127,7 @@ def load_settings() -> PortalSettings:
             rows = r.data
             if rows:
                 supa = _from_row(rows[0])
-                # Se o Supabase tem pastas vazias, tenta complementar com o ficheiro local
+                # Se o Supabase tem pastas vazias, tenta complementar com o arquivo local
                 if not supa.source_folder.strip() and not supa.expired_folder.strip():
                     local = _load_file()
                     if local:
@@ -145,7 +145,7 @@ def load_settings() -> PortalSettings:
                             supa.smtp_alerts_enabled = local.smtp_alerts_enabled
                 return supa
         except Exception:  # noqa: BLE001
-            logger.exception("Falha ao ler portal_settings no Supabase; a usar ficheiro local")
+            logger.exception("Falha ao ler portal_settings no Supabase; usando o arquivo local")
     s = _load_file()
     if s:
         return s
@@ -202,7 +202,7 @@ def _save_snapshot_to_file(
     scanned_iso: str,
     items: List[dict[str, Any]],
 ) -> None:
-    """Grava o snapshot em ficheiro local (fallback ou modo sem Supabase)."""
+    """Grava o snapshot em arquivo local (fallback ou modo sem Supabase)."""
     INGEST_FILE.parent.mkdir(parents=True, exist_ok=True)
     INGEST_FILE.write_text(
         json.dumps(
@@ -367,14 +367,14 @@ def _save_colaborador_file_dict(data: Dict[str, List[str]]) -> None:
 
 def load_colaborador_selecao(email: str, user_id: Optional[str] = None) -> List[str]:
     """
-    Documentos (CNPJ/CPF só dígitos) que o utilizador escolheu para acompanhar.
+    Documentos (CNPJ/CPF só dígitos) que o usuário escolheu para acompanhar.
 
     Com Supabase, a linha é procurada **só** por `user_id`. A queda para
     `user_email` existiu na fase 2 para curar linhas criadas antes dela; saiu
     na 3c depois de a produção confirmar 1 linha, 1 ligada, 0 órfãs, e porque
     a fase 3d remove a coluna — código que ainda a lesse quebraria ali.
 
-    Sem Supabase é o ficheiro local, que continua chaveado por e-mail: nesse
+    Sem Supabase é o arquivo local, que continua chaveado por e-mail: nesse
     modo não existe tabela `users`, então ali a identidade *é* o endereço. Os
     dois backends divergem de propósito.
     """
@@ -407,7 +407,7 @@ def load_colaborador_selecao(email: str, user_id: Optional[str] = None) -> List[
             return []
         except Exception:  # noqa: BLE001
             logger.exception(
-                "Falha ao ler colaborador_cert_selecoes no Supabase; a usar ficheiro local"
+                "Falha ao ler colaborador_cert_selecoes no Supabase; usando o arquivo local"
             )
     return _load_colaborador_file_dict().get(key, [])
 
@@ -416,7 +416,7 @@ def save_colaborador_selecao(
     email: str, docs: List[str], user_id: Optional[str] = None
 ) -> None:
     """
-    Grava sempre no ficheiro local; com Supabase faz upsert por identidade.
+    Grava sempre no arquivo local; com Supabase faz upsert por identidade.
 
     Desde a fase 3c a linha guarda **só** `user_id`. `user_email` deixou de ser
     escrita — ela virou coluna anulável na 3b-2 justamente para isto, e sai de
@@ -439,7 +439,7 @@ def save_colaborador_selecao(
     if not client:
         return
     if not uid:
-        # A seleção ficou no ficheiro local, mas em produção esse ficheiro é
+        # A seleção ficou no arquivo local, mas em produção esse arquivo é
         # efêmero. Gravar sem identidade não é opção: `user_id` é o alvo do
         # `on_conflict`, e uma linha sem ele seria órfã de nascença.
         logger.error(

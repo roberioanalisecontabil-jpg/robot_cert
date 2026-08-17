@@ -242,7 +242,7 @@ def _por_email(linhas: List[Dict[str, Any]]) -> set:
 
 def _emails_ativos() -> Optional[set]:
     """
-    E-mails ativos, para o caminho do ficheiro local — que não tem `user_id`
+    E-mails ativos, para o caminho do arquivo local — que não tem `user_id`
     para cruzar. **Não** exige `id`: em produção ele é a chave primária e
     sempre existe, mas fazer o casamento por e-mail depender dele seria
     inventar um jeito novo de a lista vir vazia, e lista vazia aqui significa
@@ -254,7 +254,7 @@ def _emails_ativos() -> Optional[set]:
 
 def _so_de_ativos(selecoes: Dict[str, List[str]]) -> Dict[str, List[str]]:
     """
-    Filtro do caminho do ficheiro local, que não tem `user_id` para cruzar.
+    Filtro do caminho do arquivo local, que não tem `user_id` para cruzar.
 
     Extraído sem mudança de comportamento: é a regra que valia para as duas
     origens antes da fase 2, e continua valendo para esta.

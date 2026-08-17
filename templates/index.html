@@ -190,7 +190,7 @@
               </li>
             </ul>
             <div>
-              <label for="pag-perpage-dash" class="cg-sr-only">Registos por página</label>
+              <label for="pag-perpage-dash" class="cg-sr-only">Registros por página</label>
               <select id="pag-perpage-dash" class="cg-page-perpage-select" title="Itens por página">
                 <option value="10">10 por página</option>
                 <option value="25">25 por página</option>
@@ -799,7 +799,7 @@
             items.forEach((it) => aplicarFlagsDatasCert(it, now, thirtyDaysFromNow));
             atualizarCards(items);
           }
-          // Aviso ANTES de exportar, não depois que o ficheiro já saiu incompleto.
+          // Aviso ANTES de exportar, não depois que o arquivo já saiu incompleto.
           setBannerAviso("table-container-dash", mensagemLimiteExportacao(d.paginacao));
           itensOriginais = items;
           itensVisiveis = items;

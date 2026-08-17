@@ -1008,7 +1008,7 @@ body.sidebar-collapsed .sidebar-nav a {
   padding: 0.9rem 0.75rem;
 }
 
-/* Tooltip — ficheiros duplicados (mesma linha) */
+/* Tooltip — arquivos duplicados (mesma linha) */
 .dup-path-tooltip {
   position: fixed;
   z-index: 2000;
