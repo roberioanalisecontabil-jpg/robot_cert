@@ -250,7 +250,7 @@ Exige adicionar `data-label="Vencimento"` etc. nos `<td>` gerados em `renderTabe
 
 ---
 
-### A8 · Tela de login sem recuperação de senha nem toggle de visibilidade
+### A8 · Tela de login sem recuperação de senha nem toggle de visibilidade ✅ CORRIGIDO
 **Skill:** `07 §1` (estrutura e problemas comuns do padrão Login)
 
 `templates/login.html` acerta o essencial (`autocomplete="username"`/`"current-password"`, `role="alert"`, erro genérico que não revela qual campo falhou — `07 §1` cumprido). Faltam dois itens que a skill lista explicitamente como **problemas comuns**:
@@ -425,13 +425,13 @@ document.addEventListener("visibilitychange", () => {
 | # | Achado | Skill | Local |
 |---|---|---|---|
 | B1 | 16 usos de `!important` no CSS — a skill pede evitá-lo como regra geral | `08 §2` | `style.css` |
-| B2 | 115 atributos `style=` inline nos templates, incluindo cores e paddings que já são tokens | `08 §2` | `templates/*` |
+| B2 | ~~115 atributos `style=` inline~~ ⚖️ **MEDIDO E DESACONSELHADO em 17/08.** São 201 hoje, mas **um único** tem cor literal — o M2 já limpou. O resto é layout (`font-size`, `margin`, `display`). Converter seria churn caro sem melhorar o tema escuro em nada. | `08 §2` | `templates/*` |
 | B3 | Logo sem `width`/`height` explícitos nas 8 telas → risco de CLS | `08 §7` | todos os templates |
 | B4 | Sem `<meta name="description">` (páginas são privadas, então o impacto de SEO é nulo — só relevante se `/login` for indexável) | `08 §8` | todos os templates |
-| B5 | `.cg-page-link:focus` usa `:focus` puro (`style.css:1270`) enquanto o resto do projeto usa `:focus-visible` — anel aparece em clique de mouse | `04 §5` | `style.css:1270` |
+| B5 | ~~`.cg-page-link:focus` usa `:focus` puro~~ ✅ **CORRIGIDO 17/08.** Virou `:focus-visible`. As demais regras `:focus` do arquivo ficam: realçam o CAMPO (borda/sombra ao clicar dentro), não desenham anel. `.skip-to-content:focus` precisa de `:focus` mesmo. | `04 §5` | `style.css` |
 | B6 | Ícone de status usa `cursor: help` em `.dup-igual-row` sem `title` ou `aria-describedby` correspondente em todas as linhas | `01 §9` | `style.css:933` |
-| B7 | Toast tem `duration = 4000` como padrão — no limite mínimo da skill; mensagens longas de erro precisam de mais | `07 §15` | `ui-common.js:204` |
-| B8 | Textos de UI misturam pt-BR e pt-PT ("registos", "ficheiro", "separador" vs "registros", "arquivo", "aba") | `01 §10` (linguagem do usuário) | `index.html:556, 624`, `vencidos.html`, `historico.html` |
+| B7 | ~~Toast com `duration = 4000` fixo~~ ✅ **JÁ ESTAVA CORRIGIDO** (constatado em 17/08, item estava desatualizado). `_toastDuracao()` escala de 4s a 12s por tamanho da mensagem. | `07 §15` | `ui-common.js` |
+| B8 | ~~Textos de UI misturam pt-BR e pt-PT~~ ✅ **CORRIGIDO 17/08.** 38 trocas em 12 arquivos, travado por `test_ui_nao_mistura_pt_br_com_pt_pt`. | `01 §10` (linguagem do usuário) | vários |
 
 O B8 aparece em pelo menos 8 pontos e é o mais visível para o usuário final desta lista.
 

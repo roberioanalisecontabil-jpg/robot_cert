@@ -1318,7 +1318,17 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   z-index: 1;
 }
 
-.cg-page-link:focus {
+/* `:focus-visible`, e não `:focus`: esta regra desenha um ANEL de foco, e anel
+   é para navegação por teclado. Com `:focus` puro ele aparecia também ao
+   clicar com o mouse — ruído visual a cada troca de página, num controle que
+   se clica o tempo todo.
+
+   As outras regras `:focus` do arquivo ficam como estão, e a diferença é o que
+   elas fazem: `.path-input`, `.form-group input`, `select` e
+   `.cg-page-perpage-select` mudam borda e sombra do CAMPO, que é realce
+   esperado ao clicar dentro dele. E `.skip-to-content:focus` precisa de
+   `:focus` mesmo — é o que faz o link pular para a tela quando recebe foco. */
+.cg-page-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   z-index: 2;
