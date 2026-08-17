@@ -429,7 +429,7 @@ document.addEventListener("visibilitychange", () => {
 | B3 | Logo sem `width`/`height` explícitos nas 8 telas → risco de CLS | `08 §7` | todos os templates |
 | B4 | Sem `<meta name="description">` (páginas são privadas, então o impacto de SEO é nulo — só relevante se `/login` for indexável) | `08 §8` | todos os templates |
 | B5 | ~~`.cg-page-link:focus` usa `:focus` puro~~ ✅ **CORRIGIDO 17/08.** Virou `:focus-visible`. As demais regras `:focus` do arquivo ficam: realçam o CAMPO (borda/sombra ao clicar dentro), não desenham anel. `.skip-to-content:focus` precisa de `:focus` mesmo. | `04 §5` | `style.css` |
-| B6 | Ícone de status usa `cursor: help` em `.dup-igual-row` sem `title` ou `aria-describedby` correspondente em todas as linhas | `01 §9` | `style.css:933` |
+| B6 | ~~`cursor: help` sem `aria-describedby`~~ ✅ **CORRIGIDO 17/08, e era maior que isto.** Não faltava rótulo: o balão de caminhos só respondia a `mouseover`, então quem navega por teclado nunca chegava à informação. As linhas ganharam `tabindex`, `aria-describedby`, tratamento de foco e Esc (WCAG 2.2 §1.4.13). Vale para os dois balões. | `01 §9` | `duplicidades.html`, `style.css` |
 | B7 | ~~Toast com `duration = 4000` fixo~~ ✅ **JÁ ESTAVA CORRIGIDO** (constatado em 17/08, item estava desatualizado). `_toastDuracao()` escala de 4s a 12s por tamanho da mensagem. | `07 §15` | `ui-common.js` |
 | B8 | ~~Textos de UI misturam pt-BR e pt-PT~~ ✅ **CORRIGIDO 17/08.** 38 trocas em 12 arquivos, travado por `test_ui_nao_mistura_pt_br_com_pt_pt`. | `01 §10` (linguagem do usuário) | vários |
 

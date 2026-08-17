@@ -495,6 +495,31 @@
         if (to && (tip.contains(to) || tbody.contains(to))) return;
         schedHideDupTip();
       });
+
+      // Teclado. Sem isto, os caminhos dos arquivos duplicados só existiam
+      // para quem usa mouse: a linha tem `cursor: help`, mas nada aqui
+      // respondia a foco. Quem navega por Tab nunca chegava à informação —
+      // não era tooltip faltando rótulo, era funcionalidade inacessível.
+      tbody.addEventListener("focusin", (e) => {
+        const tr = e.target.closest("tr.dup-igual-row");
+        if (!tr) return;
+        clearTipHide();
+        showDupTipFromTr(tr);
+      });
+      tbody.addEventListener("focusout", (e) => {
+        const tr = e.target.closest("tr.dup-igual-row");
+        if (!tr) return;
+        const to = e.relatedTarget;
+        if (to && (tr.contains(to) || tip.contains(to))) return;
+        schedHideDupTip();
+      });
+      // WCAG 2.2 §1.4.13 exige que conteúdo mostrado por foco ou hover seja
+      // dispensável sem tirar o foco do lugar. Sem Esc, o balão fica cobrindo
+      // as linhas de baixo e a única saída é sair da linha.
+      tbody.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") hideDupTip();
+      });
+
       window.addEventListener("scroll", hideDupTip, true);
       window.addEventListener("resize", hideDupTip);
     }
@@ -591,6 +616,27 @@
         if (to && (tip.contains(to) || tbody.contains(to))) return;
         schedHideDocTip();
       });
+
+      // Mesmo tratamento do balão de caminhos acima: este também era só de
+      // mouse, e é o que mostra vencimento e arquivo de cada certificado que
+      // divide o mesmo CNPJ/CPF.
+      tbody.addEventListener("focusin", (e) => {
+        const tr = e.target.closest("tr.dup-doc-row");
+        if (!tr) return;
+        clearTipHide();
+        showDocTipFromTr(tr);
+      });
+      tbody.addEventListener("focusout", (e) => {
+        const tr = e.target.closest("tr.dup-doc-row");
+        if (!tr) return;
+        const to = e.relatedTarget;
+        if (to && (tr.contains(to) || tip.contains(to))) return;
+        schedHideDocTip();
+      });
+      tbody.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") hideDocTip();
+      });
+
       window.addEventListener("scroll", hideDocTip, true);
       window.addEventListener("resize", hideDocTip);
     }
@@ -599,7 +645,12 @@
       const st = it._statusDup != null ? it._statusDup : "—";
       const enc = encodeURIComponent(JSON.stringify(it._pathsList || []));
       return `
-        <tr role="row" class="dup-igual-row" data-dup-paths="${enc}">
+        <!-- `tabindex="0"` põe a linha na ordem de Tab: é o que faz o balão de
+             caminhos existir para quem não usa mouse. `aria-describedby` liga a
+             linha ao balão, então o leitor de tela anuncia os caminhos ao
+             chegar nela, em vez de só ler as células e seguir. -->
+        <tr role="row" class="dup-igual-row" data-dup-paths="${enc}"
+            tabindex="0" aria-describedby="dup-path-tooltip">
           <td role="cell" data-label="Nome" style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>
           <td role="cell" data-label="Documento"><span style="white-space:nowrap;">${esc(it.documento || "—")}</span></td>
           <td role="cell" data-label="Status" class="dup-igual-status" style="max-width:16rem;">${esc(st)}</td>
@@ -630,7 +681,8 @@
     function trDocRow(it) {
       const enc = encodeURIComponent(JSON.stringify(it._linhasVencPath || []));
       return `
-        <tr role="row" class="dup-data-row dup-doc-row" data-dup-doc-lines="${enc}">
+        <tr role="row" class="dup-data-row dup-doc-row" data-dup-doc-lines="${enc}"
+            tabindex="0" aria-describedby="dup-doc-tooltip">
           <td role="cell" data-label="Nome" style="max-width:22rem; word-break:break-word;">${esc(it.nome || "—")}</td>
           <td role="cell" data-label="Documento"><span style="white-space:nowrap;">${esc(it.documento || "—")}</span></td>
           <td role="cell" data-label="Status" class="dup-igual-status" style="max-width:16rem;">${esc(it._statusDup || "—")}</td>

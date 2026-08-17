@@ -302,3 +302,49 @@ def test_os_dois_blocos_de_tema_escuro_definem_os_mesmos_tokens() -> None:
         f"  só em :root[data-theme=dark]: {so_manual}\n"
         f"  só em @media prefers-color-scheme: {so_auto}"
     )
+
+
+def test_linhas_com_tooltip_sao_alcancaveis_por_teclado() -> None:
+    """
+    As linhas de duplicidade mostram, num balão, os caminhos dos arquivos —
+    a informação que responde "quais arquivos são esses". Até 17/08/2026 o
+    balão só respondia a `mouseover`: a linha tinha `cursor: help`, sugerindo
+    "passe o mouse para entender", e quem navega por teclado nunca chegava lá.
+
+    A auditoria classificou isso como B6, "`cursor: help` sem `title`". É menor
+    do que o problema real: não faltava um rótulo, faltava a funcionalidade
+    inteira para quem não usa mouse.
+
+    **O que este teste garante e o que não garante.** Ele confere a FORMA — que
+    as linhas entram na ordem de Tab, que apontam para o balão que as descreve,
+    e que há tratamento de foco e de Esc. Não confere que funciona: a suíte lê
+    o HTML e nunca executa JavaScript nem renderiza. Um teste de verdade exigiria
+    navegador (o `playwright` está no venv, mas sem navegadores baixados).
+
+    Vale mesmo assim porque a regressão provável é de forma: alguém reescreve o
+    `<tr>` gerado e o `tabindex` não volta junto — e aí some em silêncio, do
+    mesmo jeito que estava.
+    """
+    fonte = (TEMPLATES / "duplicidades.html").read_text(encoding="utf-8")
+
+    for classe, balao in (("dup-igual-row", "dup-path-tooltip"),
+                          ("dup-doc-row", "dup-doc-tooltip")):
+        # A tag <tr> inteira, que é gerada por template literal em várias linhas.
+        m = re.search(r"<tr[^>]*" + re.escape(classe) + r"[^>]*>", fonte, re.S)
+        assert m, f"não achei o <tr> de {classe}"
+        tag = m.group(0)
+        assert 'tabindex="0"' in tag, (
+            f"a linha .{classe} saiu da ordem de Tab; o balão volta a ser só de mouse"
+        )
+        assert f'aria-describedby="{balao}"' in tag, (
+            f"a linha .{classe} não aponta para {balao}; o leitor de tela lê as "
+            "células e segue, sem os caminhos"
+        )
+
+    assert fonte.count('addEventListener("focusin"') >= 2, (
+        "faltou tratar foco em um dos dois balões"
+    )
+    assert fonte.count('e.key === "Escape"') >= 2, (
+        "WCAG 2.2 §1.4.13: conteúdo mostrado por foco tem de ser dispensável "
+        "com Esc, sem tirar o foco do lugar"
+    )

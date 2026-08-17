@@ -1002,7 +1002,13 @@ body.sidebar-collapsed .sidebar-nav a {
   cursor: help;
 }
 
+/* `:focus-visible` junto do `:hover`: as linhas passaram a ser focáveis
+   (`tabindex="0"`) para o balão de caminhos existir sem mouse, e quem chega
+   por Tab precisa do mesmo sinal de "é esta linha que está falando". O anel de
+   foco global diz onde o foco está; a tinta diz qual linha o balão descreve. */
 .dup-igual-row:hover,
+.dup-igual-row:focus-visible,
+.dup-doc-row:focus-visible,
 .dup-crypto-table-wrap tbody tr.dup-data-row:hover {
   background: rgba(59, 130, 246, 0.06);
 }
