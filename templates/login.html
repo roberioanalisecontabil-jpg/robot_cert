@@ -120,32 +120,10 @@
             background-color: var(--ok-bg);
         }
 
-        /* Campo de senha com o botão de mostrar/ocultar dentro. */
-        .campo-senha {
-            position: relative;
-        }
-        .campo-senha input {
-            padding-right: 3rem;
-        }
-        .btn-olho {
-            position: absolute;
-            right: 0.25rem;
-            top: 50%;
-            transform: translateY(-50%);
-            /* 44px é o mínimo de alvo de toque cobrado no A6 da auditoria. */
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: none;
-            border: none;
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            color: var(--text-muted);
-            font-size: 1rem;
-        }
-        .btn-olho:hover { color: var(--text); }
+        /* `.campo-senha` e `.btn-olho` migraram para o style.css global em
+           18/08: a redefinição de senha em /usuarios passou a usá-las, e
+           regra de duas telas dentro do <style> de uma delas é a forma como
+           `esc()` acabou duplicada em seis arquivos. */
 
         .link-discreto {
             display: block;

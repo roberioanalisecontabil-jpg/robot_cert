@@ -406,3 +406,67 @@ def test_badge_de_status_tem_glifo_de_forma() -> None:
         "o glifo perdeu aria-hidden; o leitor de tela passa a anunciá-lo junto "
         "do texto, repetindo a informação"
     )
+
+
+# Telas que ainda usam `confirm()` nativo. A lista ENCOLHE: ao converter uma,
+# remova-a daqui. Deixá-la crescer é o sinal de que a conversão parou.
+DIALOGOS_NATIVOS_PENDENTES = {"carteiras.html", "instalador.html"}
+
+
+def _sem_comentarios(texto: str) -> str:
+    """Remove comentário HTML, de bloco e de linha — senão o próprio texto que
+    explica por que `confirm()` saiu faria o teste acusar."""
+    texto = re.sub(r"<!--.*?-->", "", texto, flags=re.S)
+    texto = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
+    return re.sub(r"//[^\n]*", "", texto)
+
+
+def test_nenhuma_tela_nova_usa_alert_confirm_ou_prompt() -> None:
+    """
+    `alert()`, `confirm()` e `prompt()` travam a aba inteira, não aceitam
+    estilo, e o `prompt()` ainda mostra o que se digita — inclusive senha — em
+    texto claro.
+
+    Existe como teste porque a auditoria de 02/08 registrou "os 17 `alert()`
+    eliminados" e ninguém notou que `prompt()` e `confirm()` continuaram sendo
+    o **fluxo principal** de `/usuarios`: editar um usuário eram três `prompt()`
+    encadeados, com o nível digitado como texto livre, e redefinir senha era um
+    `prompt()` mostrando a senha na tela. Contar uma família e esquecer as
+    outras duas é o tipo de coisa que só um teste percebe.
+
+    Substitutos em `ui-common.js`: `showToast` para avisar, `confirmarAcao`
+    para perguntar, e `<dialog class="modal">` para formulário.
+    """
+    ofensores = {}
+    for f in _paginas() + [UI_COMMON]:
+        if f.name in DIALOGOS_NATIVOS_PENDENTES:
+            continue
+        achados = re.findall(
+            r"(?<![\w.])(alert|confirm|prompt)\s*\(", _sem_comentarios(f.read_text(encoding="utf-8"))
+        )
+        # `confirmarAcao` contém "confirmar", não "confirm(" — o lookbehind já
+        # separa, mas a asserção lista o que achou para o erro ser acionável.
+        if achados:
+            ofensores[f.name] = sorted(set(achados))
+    assert not ofensores, (
+        "diálogo nativo do navegador em tela já convertida — use showToast, "
+        f"confirmarAcao ou <dialog class=\"modal\">: {ofensores}"
+    )
+
+
+def test_a_lista_de_pendentes_nao_mente() -> None:
+    """
+    Trava do teste acima: se alguém converter `carteiras.html` e esquecer de
+    tirá-la da lista, a exceção some sem ninguém saber — e a próxima tela a
+    usar `confirm()` passaria batida por herdar a isenção.
+    """
+    ainda_usam = {
+        f.name for f in _paginas()
+        if re.search(r"(?<![\w.])(alert|confirm|prompt)\s*\(",
+                     _sem_comentarios(f.read_text(encoding="utf-8")))
+    }
+    sobrando = sorted(DIALOGOS_NATIVOS_PENDENTES - ainda_usam)
+    assert not sobrando, (
+        f"{sobrando} não usa mais diálogo nativo — remova de "
+        "DIALOGOS_NATIVOS_PENDENTES para a tela passar a ser vigiada"
+    )

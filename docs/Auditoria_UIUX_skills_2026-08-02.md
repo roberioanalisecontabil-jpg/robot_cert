@@ -343,31 +343,6 @@ Nenhuma delas tem variante escura. Duas (`#f59e0b`, `#dc2626`) já reprovam em c
 
 ---
 
-### M4 · Escala tipográfica não segue razão modular
-**Skill:** `02 §2` ("usar razão modular em vez de valores arbitrários")
-
-As classes `.text-*` (`style.css:203-251`) usam 56 / 32 / 22 / 18 / 16 / 12 / 11px. As razões entre passos: 1.75, 1.45, 1.22, 1.13, 1.33, 1.09 — sem progressão consistente. Fora isso, valores soltos aparecem espalhados: `10.5px` (`.card-title`), `0.7rem`, `0.82rem`, `0.85rem`, `0.875rem`, `0.8125rem`, `0.95rem`.
-
-O `10.5px` do `.card-title` (`style.css:416`) merece atenção à parte: uppercase, `letter-spacing: 0.03em`, em `--text-muted`. Tecnicamente passa em contraste (5.07:1), mas 10,5px é pequeno demais para o rótulo que identifica o KPI.
-
-**Correção:** adotar 1.25 (major third) a partir de 16px → 12.8 / 16 / 20 / 25 / 31 / 39 / 49px, registrar como `--font-size-*` e substituir os valores soltos. Elevar `.card-title` para 12px.
-
----
-
-### M5 · Border-radius fora da escala
-**Skill:** `02 §10` ("componentes do mesmo nível devem compartilhar o mesmo radius")
-
-Existem `--radius-xs/sm/md/lg/pill`, mas há 20 declarações com pixels literais: `12px` (`.panel--nested`, `.side-card`), `10px` (`.dup-crypto-table-wrap`, `.dup-path-tooltip`), `8px` (`.sidebar-toggle-btn` na 1ª definição, `.card-icon`, `.cmd-pre`, `.hint-warn`), `6px`, `4px`. Cards nominalmente do mesmo nível hierárquico (`.dashboard-card` com `--radius-lg` = 18px vs `.side-card` com 12px literal) têm cantos visivelmente diferentes.
-
----
-
-### M6 · Regras CSS duplicadas
-**Skill:** `08 §2`
-
-`.topbar-actions` é definida duas vezes — `style.css:821` e `style.css:1608` — com `justify-content` conflitante (`flex-start` implícito vs `space-between`). `.sidebar-toggle-btn` idem: `style.css:828` (40×36px, `border-radius: 8px`) e `style.css:1616` (40×40px, `var(--radius-md)`). A segunda vence pela ordem da cascata, deixando ~35 linhas mortas que confundem manutenção futura.
-
----
-
 ### M7 · Exportações usam `alert()` para avisar sobre truncamento ✅ CORRIGIDO
 **Skill:** `01 §1.9`, `07 §16` (alertas/banners)
 
@@ -416,13 +391,6 @@ document.addEventListener("visibilitychange", () => {
 
 ---
 
-### M11 · `body { display: flex }` redundante com sidebar `position: fixed`
-**Skill:** `08 §2`
-
-`style.css:165` põe o body em flex, mas `.sidebar` é `position: fixed` (`:262`) — fora do fluxo, portanto não participa do flex. O alinhamento vem de `margin-left: 250px` no `.main-content` (`:351`). O `display: flex` não faz nada além de tornar o layout mais difícil de raciocinar. Em `login.html:10-18` o body é redeclarado como flex centralizado, e depois há um `<main>` com `display:flex` inline fazendo a mesma centralização — três camadas para centrar um card.
-
----
-
 ### M12 · Nenhum estado `:active` nem `:disabled` visual nos botões ✅ CORRIGIDO
 **Skill:** `02 §8` ("todo componente interativo precisa definir Default, Hover, Focus, Active, Disabled, Loading, Error")
 
@@ -436,10 +404,8 @@ document.addEventListener("visibilitychange", () => {
 
 | # | Achado | Skill | Local |
 |---|---|---|---|
-| B1 | 16 usos de `!important` no CSS — a skill pede evitá-lo como regra geral | `08 §2` | `style.css` |
 | B2 | ~~115 atributos `style=` inline~~ ⚖️ **MEDIDO E DESACONSELHADO em 17/08.** São 201 hoje, mas **um único** tem cor literal — o M2 já limpou. O resto é layout (`font-size`, `margin`, `display`). Converter seria churn caro sem melhorar o tema escuro em nada. | `08 §2` | `templates/*` |
 | B3 | ~~Logo sem `width`/`height`~~ ✅ **CORRIGIDO 17/08, com a premissa corrigida junto.** Não eram 8 telas: a sidebar virou partial na Etapa 0, então havia **duas** `<img>` no projeto. E não há CLS — `.brand-icon` e `.login-logo` já reservam a caixa por CSS. Os atributos entraram por outro motivo: se o `style.css` não carregar, o PNG de 512px renderiza em tamanho natural. | `08 §7` | `_sidebar.html`, `login.html` |
-| B4 | Sem `<meta name="description">` (páginas são privadas, então o impacto de SEO é nulo — só relevante se `/login` for indexável) | `08 §8` | todos os templates |
 | B5 | ~~`.cg-page-link:focus` usa `:focus` puro~~ ✅ **CORRIGIDO 17/08.** Virou `:focus-visible`. As demais regras `:focus` do arquivo ficam: realçam o CAMPO (borda/sombra ao clicar dentro), não desenham anel. `.skip-to-content:focus` precisa de `:focus` mesmo. | `04 §5` | `style.css` |
 | B6 | ~~`cursor: help` sem `aria-describedby`~~ ✅ **CORRIGIDO 17/08, e era maior que isto.** Não faltava rótulo: o balão de caminhos só respondia a `mouseover`, então quem navega por teclado nunca chegava à informação. As linhas ganharam `tabindex`, `aria-describedby`, tratamento de foco e Esc (WCAG 2.2 §1.4.13). Vale para os dois balões. | `01 §9` | `duplicidades.html`, `style.css` |
 | B7 | ~~Toast com `duration = 4000` fixo~~ ✅ **JÁ ESTAVA CORRIGIDO** (constatado em 17/08, item estava desatualizado). `_toastDuracao()` escala de 4s a 12s por tamanho da mensagem. | `07 §15` | `ui-common.js` |
@@ -676,3 +642,22 @@ Conforme `08 §10` e `04 §11`:
 Os contrastes foram calculados por luminância relativa segundo a fórmula do WCAG, não estimados visualmente (`04 §2`: "nunca confiar apenas em preview visual"). Os três achados críticos foram verificados por leitura da cascata CSS e do fluxo de execução do JS — não são inferências de padrão. Os achados C2, C3 e A3 se manifestam apenas em condições específicas (sistema em modo escuro, `prefers-reduced-motion` ativo, tabela mais alta que a viewport) e recomendo reproduzi-los antes de corrigir, para confirmar o diagnóstico.
 
 Conforme `00 §10`, esta auditoria é uma hipótese informada por heurísticas — não substitui teste de usabilidade com os operadores reais do sistema.
+
+---
+
+## Itens retirados em 18/08/2026
+
+**M4** (escala tipográfica), **M5** (border-radius fora da escala), **M6**
+(regras CSS duplicadas), **M11** (`body { display: flex }` redundante), **B1**
+(`!important`) e **B4** (`meta description`) foram **removidos deste
+documento** — não serão feitos.
+
+Cada um foi medido antes da decisão, e o resumo é: nenhum muda algo que o
+usuário veja, todos mexem em muita linha de CSS, e a suíte lê o CSS sem nunca
+renderizar — então uma regressão visual passaria inteira. No caso do B1, a
+medição foi mais direta ainda: 13 dos 16 `!important` estão exatamente nos
+casos em que ele é correto (anel de foco e o bloco de `prefers-reduced-motion`,
+onde é o padrão canônico do W3C). O B4 não tem efeito em páginas privadas.
+
+Ficam registrados aqui em vez de simplesmente apagados para que a decisão não
+seja retomada do zero — e o texto original de cada um está no histórico do git.

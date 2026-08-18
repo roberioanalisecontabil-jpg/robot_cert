@@ -159,6 +159,117 @@
         </section>
     </main>
 
+    <!-- Editar usuário.
+
+         Substitui três `prompt()` encadeados (nome, e-mail, nível). Além de
+         feios, eles tinham dois defeitos concretos: o nível era digitado como
+         TEXTO LIVRE — "Admin" com maiúscula, ou "adm", já eram recusados pelo
+         servidor sem a pessoa entender por quê — e cancelar no segundo prompt
+         descartava o primeiro sem aviso.
+
+         `<dialog>` nativo: prende o foco, torna o resto da página inerte,
+         fecha no Esc e empilha acima da sidebar sem disputa de z-index. -->
+    <dialog id="modal-editar" class="modal" aria-labelledby="modal-editar-titulo">
+      <form id="form-editar" class="modal__form" method="dialog">
+        <div class="modal__head">
+          <h2 id="modal-editar-titulo">Editar usuário</h2>
+          <p class="modal__sub" id="modal-editar-quem"></p>
+        </div>
+
+        <div class="modal__body">
+          <div class="modal__erro" id="modal-editar-erro" role="alert"></div>
+
+          <div class="modal__campo">
+            <label for="ed-nome">Nome completo</label>
+            <input type="text" id="ed-nome" required autocomplete="name">
+          </div>
+
+          <div class="modal__campo">
+            <label for="ed-email">E-mail</label>
+            <input type="email" id="ed-email" required autocomplete="email">
+            <span class="modal__dica">
+              É por ele que a pessoa entra. Alterar encerra a sessão aberta dela.
+            </span>
+          </div>
+
+          <div class="modal__campo">
+            <label for="ed-nivel">Nível</label>
+            <!-- Select, e não texto livre: os três valores são os que
+                 `PAPEIS_VALIDOS` aceita no servidor. -->
+            <select id="ed-nivel">
+              <option value="user">Operador</option>
+              <option value="gestor">Gestor</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <span class="modal__dica" id="ed-nivel-dica"></span>
+          </div>
+
+          <div class="modal__campo">
+            <label for="ed-gestor">Gestor responsável</label>
+            <!-- Primeira vez que este campo é editável em qualquer tela. A API
+                 aceita `gestor_id` desde a Etapa 5 e `/carteiras` já o exibe,
+                 mas não havia como atribuí-lo — só por SQL direto. -->
+            <select id="ed-gestor">
+              <option value="">Sem gestor</option>
+            </select>
+            <span class="modal__dica">
+              Só se aplica a operadores; admin e gestor têm alcance total.
+            </span>
+          </div>
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn-action" id="ed-cancelar">Cancelar</button>
+          <button type="submit" class="primary" id="ed-salvar">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Redefinir senha.
+
+         O `prompt()` que estava aqui mostrava a senha em TEXTO CLARO na caixa
+         do navegador, enquanto era digitada, à vista de quem passasse atrás —
+         e sem campo de conferência, então um erro de digitação virava uma
+         senha que ninguém conhecia. -->
+    <dialog id="modal-senha" class="modal" aria-labelledby="modal-senha-titulo">
+      <form id="form-senha-admin" class="modal__form">
+        <div class="modal__head">
+          <h2 id="modal-senha-titulo">Redefinir senha</h2>
+          <p class="modal__sub" id="modal-senha-quem"></p>
+        </div>
+
+        <div class="modal__body">
+          <div class="modal__erro" id="modal-senha-erro" role="alert"></div>
+
+          <div class="modal__campo">
+            <label for="sn-nova">Nova senha</label>
+            <div class="campo-senha">
+              <input type="password" id="sn-nova" required minlength="6"
+                     autocomplete="new-password" placeholder="mínimo 6 caracteres">
+              <button type="button" class="btn-olho" id="sn-olho"
+                      aria-controls="sn-nova" aria-pressed="false"
+                      aria-label="Mostrar senha">&#128065;</button>
+            </div>
+          </div>
+
+          <div class="modal__campo">
+            <label for="sn-conf">Repita a senha</label>
+            <input type="password" id="sn-conf" required minlength="6"
+                   autocomplete="new-password">
+            <span class="modal__dica">
+              A pessoa continua conectada; trocar a senha por aqui não derruba a
+              sessão dela.
+            </span>
+          </div>
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn-action" id="sn-cancelar">Cancelar</button>
+          <button type="submit" class="primary" id="sn-salvar">Redefinir</button>
+        </div>
+      </form>
+    </dialog>
+
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
@@ -284,50 +395,215 @@
             }
         }
 
-        async function editarUsuario(id) {
+        // Id de quem está sendo editado. Mora fora da função porque o `submit`
+        // do formulário é ligado uma vez só — religar a cada abertura empilharia
+        // handlers e a mesma gravação sairia N vezes.
+        let editandoId = null;
+
+        function erroDoModal(texto) {
+            const el = document.getElementById('modal-editar-erro');
+            el.textContent = texto || '';
+            el.setAttribute('data-visivel', texto ? '1' : '0');
+        }
+
+        /** Preenche o select de gestor com os candidatos possíveis. */
+        function preencherGestores(user) {
+            const sel = document.getElementById('ed-gestor');
+            sel.textContent = '';
+            const vazio = document.createElement('option');
+            vazio.value = '';
+            vazio.textContent = 'Sem gestor';
+            sel.appendChild(vazio);
+
+            usersCache
+                // Só quem pode chefiar, e nunca a própria pessoa: o servidor
+                // recusa `gestor_id === user_id` com 422, e oferecer a opção
+                // seria convidar ao erro. Desativado também sai da lista —
+                // atribuir alguém a um gestor que não entra mais no portal
+                // deixa a carteira sem dono operacional.
+                .filter((u) => {
+                    const papel = String(u.role || '').toLowerCase();
+                    return u.id !== user.id && estaAtivo(u) && (papel === 'gestor' || papel === 'admin');
+                })
+                .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                .forEach((u) => {
+                    const op = document.createElement('option');
+                    op.value = u.id;
+                    op.textContent = `${u.full_name || u.email} (${roleLabel(u.role)})`;
+                    sel.appendChild(op);
+                });
+
+            sel.value = user.gestor_id || '';
+        }
+
+        function ajustarDicaDeNivel() {
+            const nivel = document.getElementById('ed-nivel').value;
+            const dica = document.getElementById('ed-nivel-dica');
+            const campoGestor = document.getElementById('ed-gestor').closest('.modal__campo');
+            const textos = {
+                user: 'Instala apenas os certificados da carteira dele.',
+                gestor: 'Monta carteiras de operadores e vê a trilha de atribuições.',
+                admin: 'Alcance total, incluindo gestão de usuários e configuração.',
+            };
+            dica.textContent = textos[nivel] || '';
+            // Gestor só faz sentido para operador — some em vez de ficar
+            // habilitado e ser silenciosamente ignorado.
+            campoGestor.style.display = nivel === 'user' ? '' : 'none';
+        }
+
+        function editarUsuario(id) {
             const user = usersCache.find((u) => u.id === id);
             if (!user) return;
-            const full_name = prompt('Nome completo:', user.full_name || '');
-            if (full_name === null) return;
-            const email = prompt('E-mail:', user.email || '');
-            if (email === null) return;
-            const roleAtual = String(user.role || 'user').toLowerCase();
-            const role = prompt('Nível (admin | gestor | user):', roleAtual);
-            if (role === null) return;
-            const r = await fetch(`/api/users/${id}`, {
-                method: 'PUT',
-                headers: getHeaders(true),
-                body: JSON.stringify({
-                    full_name: full_name.trim(),
-                    email: email.trim(),
-                    role: role.trim().toLowerCase(),
-                }),
-            });
-            if (!r.ok) {
-                showToast('Não foi possível editar o usuário: ' + (await mensagemCorpoErro(r)), 'error');
-                return;
-            }
-            await loadUsers();
-            showToast('Usuário atualizado.', 'success');
+            editandoId = id;
+
+            document.getElementById('modal-editar-quem').textContent = user.email || '';
+            document.getElementById('ed-nome').value = user.full_name || '';
+            document.getElementById('ed-email').value = user.email || '';
+            document.getElementById('ed-nivel').value = String(user.role || 'user').toLowerCase();
+            preencherGestores(user);
+            ajustarDicaDeNivel();
+            erroDoModal('');
+
+            abrirModal('modal-editar');
+            document.getElementById('ed-nome').focus();
         }
 
-        async function redefinirSenha(id) {
-            const nova = prompt('Digite a nova senha (mínimo 6 caracteres):');
-            if (nova === null) return;
-            const r = await fetch(`/api/users/${id}/reset-password`, {
-                method: 'POST',
-                headers: getHeaders(true),
-                body: JSON.stringify({ password: nova }),
-            });
-            if (!r.ok) {
-                showToast('Não foi possível redefinir a senha: ' + (await mensagemCorpoErro(r)), 'error');
+        document.getElementById('ed-nivel').addEventListener('change', ajustarDicaDeNivel);
+        document.getElementById('ed-cancelar').addEventListener('click', () => {
+            document.getElementById('modal-editar').close();
+        });
+
+        document.getElementById('form-editar').addEventListener('submit', async (e) => {
+            // `method="dialog"` fecharia o diálogo no submit, antes de sabermos
+            // se a gravação deu certo — e o erro do servidor não teria onde
+            // aparecer. O fechamento passa a ser nosso, só depois do 200.
+            e.preventDefault();
+            if (!editandoId) return;
+
+            const btn = document.getElementById('ed-salvar');
+            const nivel = document.getElementById('ed-nivel').value;
+            const corpo = {
+                full_name: document.getElementById('ed-nome').value.trim(),
+                email: document.getElementById('ed-email').value.trim().toLowerCase(),
+                role: nivel,
+                // Só operador tem gestor. Enviar o campo para admin/gestor
+                // gravaria um vínculo que nenhuma tela mostra.
+                gestor_id: nivel === 'user' ? (document.getElementById('ed-gestor').value || '') : '',
+            };
+
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+            erroDoModal('');
+            try {
+                const r = await fetch(`/api/users/${editandoId}`, {
+                    method: 'PUT',
+                    headers: getHeaders(true),
+                    body: JSON.stringify(corpo),
+                });
+                if (!r.ok) {
+                    // Dentro do diálogo, e não em toast: o toast fica atrás do
+                    // backdrop e some sozinho, levando junto a única explicação
+                    // de por que a gravação falhou.
+                    erroDoModal(await mensagemCorpoErro(r));
+                    return;
+                }
+                document.getElementById('modal-editar').close();
+                await loadUsers();
+                showToast('Usuário atualizado.', 'success');
+            } catch (err) {
+                erroDoModal('Erro de conexão com o servidor.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Salvar';
+            }
+        });
+
+        let senhaDeId = null;
+
+        function erroDaSenha(texto) {
+            const el = document.getElementById('modal-senha-erro');
+            el.textContent = texto || '';
+            el.setAttribute('data-visivel', texto ? '1' : '0');
+        }
+
+        function redefinirSenha(id) {
+            const user = usersCache.find((u) => u.id === id);
+            if (!user) return;
+            senhaDeId = id;
+            document.getElementById('modal-senha-quem').textContent = user.email || '';
+            document.getElementById('sn-nova').value = '';
+            document.getElementById('sn-conf').value = '';
+            erroDaSenha('');
+            abrirModal('modal-senha');
+            document.getElementById('sn-nova').focus();
+        }
+
+        // Mesmo comportamento do olho do login: `aria-pressed` e `aria-label`
+        // acompanham o estado, senão o leitor de tela anuncia sempre "Mostrar
+        // senha", inclusive quando ela já está visível.
+        document.getElementById('sn-olho').addEventListener('click', () => {
+            const campo = document.getElementById('sn-nova');
+            const btn = document.getElementById('sn-olho');
+            const revelado = campo.type === 'text';
+            campo.type = revelado ? 'password' : 'text';
+            btn.setAttribute('aria-pressed', String(!revelado));
+            btn.setAttribute('aria-label', revelado ? 'Mostrar senha' : 'Ocultar senha');
+            campo.focus();
+        });
+
+        document.getElementById('sn-cancelar').addEventListener('click', () => {
+            document.getElementById('modal-senha').close();
+        });
+
+        document.getElementById('form-senha-admin').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!senhaDeId) return;
+            const nova = document.getElementById('sn-nova').value;
+            const conf = document.getElementById('sn-conf').value;
+
+            // Conferência no cliente: o servidor não tem como saber que houve
+            // erro de digitação — as duas senhas chegariam iguais a nada.
+            if (nova !== conf) {
+                erroDaSenha('As duas senhas não são iguais.');
+                document.getElementById('sn-conf').focus();
                 return;
             }
-            showToast('Senha redefinida com sucesso.', 'success');
-        }
+
+            const btn = document.getElementById('sn-salvar');
+            btn.disabled = true;
+            btn.textContent = 'Redefinindo...';
+            erroDaSenha('');
+            try {
+                const r = await fetch(`/api/users/${senhaDeId}/reset-password`, {
+                    method: 'POST',
+                    headers: getHeaders(true),
+                    body: JSON.stringify({ password: nova }),
+                });
+                if (!r.ok) {
+                    erroDaSenha(await mensagemCorpoErro(r));
+                    return;
+                }
+                document.getElementById('modal-senha').close();
+                showToast('Senha redefinida com sucesso.', 'success');
+            } catch (err) {
+                erroDaSenha('Erro de conexão com o servidor.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Redefinir';
+            }
+        });
 
         async function desativarUsuario(id) {
-            if (!confirm('Deseja realmente desativar este usuário?')) return;
+            const u = usersCache.find((x) => x.id === id);
+            const ok = await confirmarAcao({
+                titulo: 'Desativar usuário',
+                // Diz DE QUEM se trata: o `confirm()` perguntava "este
+                // usuário?" sobre uma tabela de dezenas de linhas.
+                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} perde o acesso ao portal na próxima requisição. O nível de acesso é preservado, então reativar depois devolve o mesmo papel.`,
+                textoConfirmar: 'Desativar',
+                perigo: true,
+            });
+            if (!ok) return;
             const r = await fetch(`/api/users/${id}/deactivate`, {
                 method: 'POST',
                 headers: getHeaders(true),
@@ -343,7 +619,12 @@
         async function reativarUsuario(id) {
             const u = usersCache.find((x) => x.id === id);
             const nivel = roleLabel(u && u.role);
-            if (!confirm(`Reativar este usuário como ${nivel}?`)) return;
+            const ok = await confirmarAcao({
+                titulo: 'Reativar usuário',
+                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} volta a entrar no portal como ${nivel}.`,
+                textoConfirmar: 'Reativar',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/users/${id}/reactivate`, {
                 method: 'POST',
                 headers: getHeaders(true),

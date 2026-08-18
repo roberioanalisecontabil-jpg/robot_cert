@@ -1232,3 +1232,103 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Diálogos
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Substituto de `confirm()`, em `<dialog>` nativo.
+ *
+ * O `confirm()` do navegador trava a aba inteira, não aceita estilo, não diz
+ * QUAL item está sendo afetado sem repetir tudo na mensagem, e em algumas
+ * configurações o usuário pode marcar "não mostrar mais" e perder a pergunta.
+ *
+ * Devolve uma Promise<boolean>. Fechar no Esc ou no backdrop resolve `false` —
+ * o padrão seguro: cancelar nunca deve ser mais difícil que confirmar.
+ *
+ * @param {{titulo:string, mensagem:string, textoConfirmar?:string,
+ *          textoCancelar?:string, perigo?:boolean}} opcoes
+ */
+function confirmarAcao(opcoes) {
+  const o = opcoes || {};
+  return new Promise((resolve) => {
+    const dlg = document.createElement("dialog");
+    dlg.className = "modal";
+
+    const head = document.createElement("div");
+    head.className = "modal__head";
+    const h2 = document.createElement("h2");
+    // `textContent`, nunca innerHTML: o título costuma carregar nome ou e-mail
+    // vindos do servidor, que derivam do CN do certificado.
+    h2.textContent = o.titulo || "Confirmar";
+    head.appendChild(h2);
+
+    const body = document.createElement("div");
+    body.className = "modal__body";
+    const p = document.createElement("p");
+    p.style.margin = "0";
+    p.textContent = o.mensagem || "";
+    body.appendChild(p);
+
+    const foot = document.createElement("div");
+    foot.className = "modal__foot";
+    const btnNao = document.createElement("button");
+    btnNao.type = "button";
+    btnNao.className = "btn-action";
+    btnNao.textContent = o.textoCancelar || "Cancelar";
+    const btnSim = document.createElement("button");
+    btnSim.type = "button";
+    btnSim.className = o.perigo ? "btn-action btn-danger" : "primary";
+    btnSim.textContent = o.textoConfirmar || "Confirmar";
+    foot.appendChild(btnNao);
+    foot.appendChild(btnSim);
+
+    dlg.appendChild(head);
+    dlg.appendChild(body);
+    dlg.appendChild(foot);
+    document.body.appendChild(dlg);
+
+    let resposta = false;
+    btnSim.addEventListener("click", () => { resposta = true; dlg.close(); });
+    btnNao.addEventListener("click", () => dlg.close());
+    // Clique no backdrop: o alvo é o próprio <dialog> só quando o clique cai
+    // fora do conteúdo, porque os filhos capturam o resto.
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+    dlg.addEventListener("close", () => {
+      dlg.remove();
+      resolve(resposta);
+    });
+
+    dlg.showModal();
+    // Foco no cancelar, e não no confirmar: com o foco no botão de ação, um
+    // Enter reflexo — de quem estava digitando — executaria a operação.
+    btnNao.focus();
+  });
+}
+
+/**
+ * Abre um `<dialog class="modal">` que já existe no HTML da página.
+ *
+ * Existe para centralizar duas coisas que é fácil esquecer: fechar no clique
+ * do backdrop (o `<dialog>` nativo NÃO faz isso sozinho) e devolver o foco a
+ * quem abriu quando fecha — sem isso o foco volta para o começo da página e
+ * quem navega por teclado se perde depois de cada edição.
+ */
+function abrirModal(id) {
+  const dlg = document.getElementById(id);
+  if (!dlg || typeof dlg.showModal !== "function") return null;
+  const origem = document.activeElement;
+
+  if (!dlg.dataset.ligado) {
+    dlg.dataset.ligado = "1";
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  }
+  dlg.addEventListener("close", function devolveFoco() {
+    dlg.removeEventListener("close", devolveFoco);
+    if (origem && typeof origem.focus === "function") origem.focus();
+  });
+
+  dlg.showModal();
+  return dlg;
+}

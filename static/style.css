@@ -2283,3 +2283,160 @@ body.sidebar-open .sidebar-backdrop {
     max-height: none;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Diálogos (modais)
+
+   `<dialog>` nativo, e não uma div com `position: fixed`. O elemento nativo
+   entrega de graça o que uma implementação à mão erra: prende o foco dentro do
+   diálogo, torna o resto da página inerte para leitor de tela, fecha no Esc, e
+   empilha na top layer — acima de qualquer `z-index`, incluindo a sidebar
+   fixa e o dropdown de notificações.
+
+   Antes disto a página de usuários editava com três `prompt()` em sequência.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+dialog.modal {
+  padding: 0;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  width: min(92vw, 460px);
+  /* `max-height` + o corpo rolável abaixo: em 320px de largura com zoom 200%
+     o formulário não cabe, e sem isto o botão de confirmar sai da viewport
+     sem forma de alcançá-lo. */
+  max-height: min(88vh, 720px);
+  overflow: hidden;
+}
+
+dialog.modal::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.modal__form {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+
+.modal__head {
+  padding: var(--sp-5) var(--sp-6) var(--sp-3);
+  border-bottom: 0.5px solid var(--border);
+}
+
+.modal__head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.modal__sub {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.modal__body {
+  padding: var(--sp-5) var(--sp-6);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.modal__foot {
+  padding: var(--sp-4) var(--sp-6) var(--sp-5);
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.modal__campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.modal__campo label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.modal__campo input,
+.modal__campo select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.modal__dica {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* Erro do servidor mostrado DENTRO do diálogo, não como toast: o toast
+   aparece atrás do backdrop e some sozinho, então a pessoa perderia a única
+   explicação de por que a gravação falhou — justamente enquanto olha o
+   formulário que a causou. */
+.modal__erro {
+  display: none;
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--expired-bg);
+  color: var(--expired-text);
+  border: 1px solid rgba(255, 59, 48, 0.25);
+  font-size: 0.85rem;
+}
+
+.modal__erro[data-visivel="1"] {
+  display: block;
+}
+
+/* Campo de senha com o botão de mostrar/ocultar dentro.
+
+   Usado pelo login e pela redefinição de senha em /usuarios. Vive aqui, e não
+   no <style> de uma das telas, porque regra compartilhada escondida dentro de
+   uma página é como `esc()` acabou duplicada em seis arquivos — e o sintoma,
+   quando a segunda tela a usa, é o botão aparecer sem estilo nenhum: solto ao
+   lado do campo em vez de dentro dele, e sem alvo de toque. */
+.campo-senha {
+  position: relative;
+}
+
+.campo-senha input {
+  padding-right: 3rem;
+}
+
+.btn-olho {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  /* 44px é o mínimo de alvo de toque cobrado no A6 da auditoria. */
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.btn-olho:hover {
+  color: var(--text);
+}
