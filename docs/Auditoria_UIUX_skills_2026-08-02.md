@@ -629,7 +629,23 @@ Conforme `08 §10` e `04 §11`:
 
 - [ ] Lighthouse ≥ 90 em Acessibilidade nas 5 telas principais
 - [ ] Navegação completa por teclado no dashboard (Tab → filtro → busca → tabela → paginação), sem armadilha de foco
-- [ ] Contraste revalidado nos **dois** temas (a skill `04 §2` alerta que escuro não é inversão do claro)
+- [x] Contraste revalidado nos **dois** temas ✅ **18/08 — e a skill `04 §2` tinha razão: o escuro não é inversão do claro.**
+  Recalculados 33 pares por luminância relativa, com composição de alpha nos
+  fundos `rgba` do escuro. **Quatro reprovações reais, três só no tema escuro:**
+  `--text-muted` sobre `--surface` (4.27:1), branco sobre `--sidebar-active-bg`
+  #0A84FF (3.65:1 — item ativo da sidebar E `button.primary`), e `--accent`
+  usado como TEXTO (3.82:1 sobre surface; no claro também reprovava sobre
+  `--total-bg`, 4.10:1 — paginação e selo de sincronismo). A correção seguiu o
+  padrão `--ok-text`: nasceram `--accent-text` (texto azul: #0066CC claro /
+  #5AA9FF escuro) e `--accent-solid` (fundo sólido com texto branco: #0071E3
+  nos dois temas); `--text-muted` escuro subiu para #98989D e
+  `--sidebar-active-bg` escuro voltou a #0071E3. **A causa de ter escapado:**
+  os contrastes calculados em 02/08 viraram comentários no CSS, e comentário
+  ninguém confere. Agora `tests/test_contraste_tokens.py` recalcula os pares
+  reais de uso nos dois temas (4.5:1 texto, 3:1 gráfico) e exige os dois blocos
+  escuros idênticos — o "MANTER SINCRONIZADO" deixou de ser só um pedido.
+  Cache-buster: `?v=a11y-contraste-2026-08`, incluindo o `instalador.html`,
+  que estava para trás em `cg-v2-fluid` desde antes do Sprint 1.
 - [ ] Teste em 320 / 768 / 1024 / 1440px + uma ultrawide (`03 §11`)
 - [ ] Zoom 200% sem quebra de layout (`04 §10` — reflow)
 - [ ] Simulador de deuteranopia nos cards e badges (`04 §9`)

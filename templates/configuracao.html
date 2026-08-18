@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=s6-stacking-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=a11y-contraste-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -35,7 +35,7 @@
         color: var(--text);
       }
       .tab-btn.active {
-        color: var(--accent);
+        color: var(--accent-text);
         font-weight: 600;
       }
       .tab-btn.active::after {
@@ -210,7 +210,7 @@
             </div>
             <div class="row-inline" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
               <input type="checkbox" id="chk-smtp-alerts-enabled" style="margin-right: 0.5rem;" />
-              <label for="chk-smtp-alerts-enabled" style="display: inline; font-weight: bold; color: var(--accent);">Habilitar Disparo de Alertas Automáticos</label>
+              <label for="chk-smtp-alerts-enabled" style="display: inline; font-weight: bold; color: var(--accent-text);">Habilitar Disparo de Alertas Automáticos</label>
             </div>
             <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
               <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>

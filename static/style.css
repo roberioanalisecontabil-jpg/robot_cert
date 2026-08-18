@@ -28,6 +28,18 @@
   --accent: #0071E3;
   --accent-hover: #0051A2;
 
+  /* Azul de marca em TEXTO — par do padrão --ok-text: --accent continua sendo
+     a identidade (bordas, ícones, anel de foco, barras), onde 3:1 basta; este
+     token é para texto corrido, que exige 4.5:1. O próprio --accent passa
+     sobre --surface (4.70:1), mas reprova sobre --total-bg (4.10:1), onde a
+     paginação e o selo de sincronismo o usam como texto. */
+  --accent-text: #0066CC;   /* 5.57:1 sobre --surface; 4.86:1 sobre --total-bg */
+
+  /* Fundo sólido que carrega texto branco (botão primário, skip-link, item
+     ativo da sidebar). Existe porque no tema escuro o accent vira #0A84FF,
+     que com branco dá 3.65:1 — o token não muda entre temas de propósito. */
+  --accent-solid: #0071E3;  /* branco sobre ele: 4.70:1 */
+
   /* Status Colors */
   --total: #007AFF;
   --total-bg: #E8F0FE;
@@ -104,16 +116,21 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-focus: #0A84FF;
   --text: #F5F5F7;
-  --text-muted: #8E8E93;
+  /* #8E8E93 dava 4.27:1 sobre --surface — passava sobre --bg (5.22:1), mas o
+     texto secundário vive nos cards e nas tabelas, que são --surface. */
+  --text-muted: #98989D;    /* 4.85:1 sobre --surface */
   --accent: #0A84FF;
   --accent-hover: #0066CC;
+  --accent-text: #5AA9FF;   /* 5.68:1 sobre --surface; 4.81:1 sobre --total-bg */
 
   /* Sidebar - Sleek Contrast */
   --sidebar-bg: #111112;
   --sidebar-text: #8E8E93;
   --sidebar-text-active: #FFFFFF;
   --sidebar-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-active-bg: #0A84FF;
+  /* #0A84FF reprovava com o texto branco do item ativo (3.65:1). A sidebar é
+     escura nos dois temas, então vale o mesmo azul do tema claro. */
+  --sidebar-active-bg: #0071E3;
 
   /* Status Colors */
   --total: #0A84FF;
@@ -156,16 +173,17 @@
     --border: rgba(255, 255, 255, 0.08);
     --border-focus: #0A84FF;
     --text: #F5F5F7;
-    --text-muted: #8E8E93;
+    --text-muted: #98989D;
     --accent: #0A84FF;
     --accent-hover: #0066CC;
+    --accent-text: #5AA9FF;
 
     /* Sidebar - Sleek Contrast */
     --sidebar-bg: #111112;
     --sidebar-text: #8E8E93;
     --sidebar-text-active: #FFFFFF;
     --sidebar-hover: rgba(255, 255, 255, 0.06);
-    --sidebar-active-bg: #0A84FF;
+    --sidebar-active-bg: #0071E3;
 
     /* Status Colors */
     --total: #0A84FF;
@@ -220,7 +238,7 @@ body {
   position: absolute;
   top: -100px;
   left: 1rem;
-  background: var(--accent);
+  background: var(--accent-solid);
   color: #ffffff;
   padding: 0.75rem 1.25rem;
   border-radius: var(--radius-sm);
@@ -604,9 +622,9 @@ button:disabled {
 }
 
 button.primary {
-  background-color: var(--accent);
+  background-color: var(--accent-solid);
   color: white;
-  border-color: var(--accent);
+  border-color: var(--accent-solid);
 }
 
 button.primary:hover:not(:disabled) {
@@ -616,8 +634,8 @@ button.primary:hover:not(:disabled) {
 }
 
 button.primary:disabled {
-  background-color: var(--accent);
-  border-color: var(--accent);
+  background-color: var(--accent-solid);
+  border-color: var(--accent-solid);
 }
 
 button.danger {
@@ -723,7 +741,7 @@ tbody tr:hover {
 
 .doc-type-label {
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   display: block;
 }
 
@@ -931,7 +949,7 @@ select:focus {
 .sidebar-toggle-btn:hover {
   background: var(--bg);
   border-color: var(--border-focus);
-  color: var(--accent);
+  color: var(--accent-text);
   transform: translateY(-1px);
 }
 
@@ -1085,7 +1103,7 @@ body.sidebar-collapsed .sidebar-nav a {
   margin: 0 0 0.45rem;
   font-weight: 600;
   font-size: 0.8rem;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: 0.01em;
 }
 
@@ -1402,7 +1420,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .cg-page-link--current {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--total-bg);
   border-color: var(--accent);
 }
@@ -1608,7 +1626,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   font-size: 0.7rem;
   font-weight: 500;
   background: var(--total-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   text-transform: uppercase;
@@ -1718,7 +1736,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .notif-footer__link {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -2503,7 +2521,7 @@ dialog.modal::backdrop {
 }
 
 .aba.ativa {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
