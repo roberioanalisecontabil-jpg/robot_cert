@@ -5,6 +5,14 @@
 -- COMO USAR: rode um PASSO de cada vez. Se algum der erro, PARE e me mande a
 -- mensagem exata. Sem BEGIN/COMMIT -- o SQL Editor ja roda numa transacao.
 --
+-- APLICADA EM PRODUCAO EM 18/08/2026, antes do deploy do codigo.
+-- Verificado: departamento_id (uuid, anulavel) e deve_trocar_senha
+-- (boolean, NOT NULL) existem em users.
+--
+-- A ORDEM ERA OBRIGATORIA: o select de _conta_da_sessao pede
+-- deve_trocar_senha. Codigo antes da coluna faria toda requisicao
+-- autenticada virar 503 -- o portal inteiro parando.
+--
 -- ADITIVA: duas tabelas novas e duas colunas novas. Nada existente e alterado,
 -- e o codigo em producao hoje nao conhece nada disto -- entao rodar agora nao
 -- muda comportamento nenhum.
