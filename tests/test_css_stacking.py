@@ -75,3 +75,34 @@ def test_dropdown_de_notificacoes_tem_z_index(css: str) -> None:
 
 def test_chaves_balanceadas(css: str) -> None:
     assert css.count("{") == css.count("}")
+
+
+def test_reduced_motion_nao_zera_transform_globalmente(css: str) -> None:
+    """
+    C3 da auditoria: neste projeto transform também é LAYOUT — o drawer mobile
+    se esconde com translateX(-100%). Um `transform: none !important` global
+    dentro de prefers-reduced-motion deixava a sidebar aberta sobre o conteúdo
+    justamente para quem a regra deveria proteger. O bloco pode zerar transform
+    apenas em seletores específicos (hover decorativo), nunca no universal.
+    """
+    m = re.search(r"@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{(.*)", css, flags=re.S)
+    assert m, "bloco prefers-reduced-motion não encontrado"
+    # Fecha o bloco da media query contando chaves.
+    corpo, nivel = [], 1
+    for ch in m.group(1):
+        if ch == "{":
+            nivel += 1
+        elif ch == "}":
+            nivel -= 1
+            if nivel == 0:
+                break
+        corpo.append(ch)
+    bloco = "".join(corpo)
+    universal = re.search(r"(?:^|\})\s*\*\s*,[^{]*\{([^}]*)\}", bloco)
+    assert universal, "grupo universal (*, ::before, ::after) não encontrado no bloco"
+    assert "transform" not in universal.group(1), (
+        "transform no grupo universal de prefers-reduced-motion quebra o drawer mobile"
+    )
+    # E as durações continuam curtas, não zero: removeToast() depende do
+    # transitionend, que não dispara com duration 0s.
+    assert "transition-duration: 0.01ms" in universal.group(1)
