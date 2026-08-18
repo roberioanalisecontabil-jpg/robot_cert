@@ -58,6 +58,17 @@ ANONYMOUS_IDENTITY_EMAIL = "anonymous@local"
 # dele ficou.
 SESSAO_ENCERRADA = "Sessão encerrada. Entre novamente."
 
+# Rotas que continuam funcionando com senha provisória. Lista fechada, e
+# curta de propósito: tudo o mais é recusado. Fosse uma lista de bloqueio em
+# vez de liberação, cada rota nova nasceria acessível por omissão — e o
+# esquecimento não daria sintoma nenhum.
+ROTAS_COM_SENHA_PROVISORIA = frozenset({"/api/senha/trocar"})
+
+ERRO_SENHA_PROVISORIA = (
+    "Sua senha foi definida por outra pessoa. Escolha uma senha própria para "
+    "continuar."
+)
+
 
 class ContaIndisponivel(RuntimeError):
     """O diretório de usuários existe, mas não respondeu."""
@@ -98,7 +109,7 @@ def _conta_da_sessao(email: str) -> Optional[dict]:
             # invalidação de sessão simplesmente nunca dispararia. Fixado por
             # `test_sessao_le_a_coluna_da_troca_de_senha`, porque o fake dos
             # testes devolve a linha inteira e não pega isto sozinho.
-            .select("id, email, role, ativo, senha_alterada_em")
+            .select("id, email, role, ativo, senha_alterada_em, deve_trocar_senha")
             .eq("email", email)
             .limit(1)
             .execute()
@@ -201,6 +212,7 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
         role=conta.get("role"),
         user_id=str(conta["id"]) if conta.get("id") is not None else None,
         emitido_em=token_data.emitido_em,
+        deve_trocar_senha=bool(conta.get("deve_trocar_senha")),
     )
 
 
@@ -220,6 +232,7 @@ def _user_id_da_sessao(token: auth.TokenData) -> Optional[str]:
 
 
 async def require_auth(
+    request: Request,
     auth_creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ) -> auth.TokenData:
@@ -233,7 +246,20 @@ async def require_auth(
     if auth_creds:
         token_data = auth.decode_access_token(auth_creds.credentials)
         if token_data:
-            return _sessao_do_token(token_data)
+            sessao = _sessao_do_token(token_data)
+            # A barreira mora AQUI, e não na tela. Um modal pode ser fechado
+            # pelo Esc, pelo devtools, ou simplesmente ignorado por quem chama
+            # a API direto — e a senha provisória é conhecida por outra pessoa.
+            if sessao.deve_trocar_senha and request.url.path not in ROTAS_COM_SENHA_PROVISORIA:
+                raise HTTPException(
+                    status_code=403,
+                    detail=ERRO_SENHA_PROVISORIA,
+                    # Cabeçalho, e não texto: o front precisa reconhecer este
+                    # caso entre todos os 403 possíveis, e casar por string de
+                    # mensagem quebraria ao reescrever a frase.
+                    headers={"X-Senha-Provisoria": "1"},
+                )
+            return sessao
 
     # 2. Se API_KEY estiver ativa, aceitar a chave estática para o agente.
     if config.API_KEY:
@@ -1061,6 +1087,10 @@ def create_user(body: UserCreateBody) -> dict:
     hash_pw = auth.get_password_hash(body.password)
     try:
         sb.table("users").insert({
+            # Quem cadastrou sabe a senha que digitou. Ela serve para o primeiro
+            # acesso e nada mais — `require_auth` recusa o resto do portal até a
+            # pessoa escolher uma própria.
+            "deve_trocar_senha": True,
             "email": email,
             "password_hash": hash_pw,
             "full_name": body.full_name,
@@ -1192,7 +1222,11 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
         raise HTTPException(status_code=422, detail="Senha deve ter no mínimo 6 caracteres.")
     hash_pw = auth.get_password_hash(new_pw)
     try:
-        sb.table("users").update({"password_hash": hash_pw}).eq("id", user_id).execute()
+        # Mesma razão do cadastro: o admin conhece a senha que acabou de
+        # digitar. Sem isto ela valeria indefinidamente.
+        sb.table("users").update(
+            {"password_hash": hash_pw, "deve_trocar_senha": True}
+        ).eq("id", user_id).execute()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1608,6 +1642,9 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
                 # janela em que a senha já mudou mas as sessões antigas ainda
                 # valem — que é exatamente o que esta coluna existe para fechar.
                 "senha_alterada_em": agora,
+                # Aqui foi a própria pessoa quem escolheu, com um código que só
+                # ela recebeu. Não há nada a cobrar depois.
+                "deve_trocar_senha": False,
             }
         ).eq("id", conta["id"]).execute()
     except Exception as e:  # noqa: BLE001
@@ -1624,6 +1661,89 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
         "ok": True,
         "message": "Senha alterada. Entre com a nova senha.",
     }
+
+
+class SenhaTrocarBody(BaseModel):
+    senha_atual: str
+    nova_senha: str
+
+
+@app.post("/api/senha/trocar")
+def senha_trocar(
+    body: SenhaTrocarBody,
+    request: Request,
+    token: auth.TokenData = Depends(require_auth),
+) -> dict:
+    """
+    A própria pessoa troca a senha. É a única rota que responde com senha
+    provisória — ver `ROTAS_COM_SENHA_PROVISORIA`.
+
+    Exige a senha atual mesmo já estando autenticada. Parece redundante, e não
+    é: com a sessão aberta e a máquina destravada, qualquer um que sente na
+    cadeira definiria a senha nova sem saber a antiga, e a pessoa perderia a
+    conta para quem passou por ali.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+
+    nova = (body.nova_senha or "").strip()
+    if len(nova) < SENHA_MINIMA:
+        raise HTTPException(
+            status_code=422,
+            detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
+        )
+
+    uid = _user_id_da_sessao(token)
+    if not uid:
+        raise HTTPException(status_code=401, detail=SESSAO_ENCERRADA)
+
+    try:
+        r = sb.table("users").select("password_hash").eq("id", uid).limit(1).execute()
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler a conta para troca de senha")
+        raise HTTPException(status_code=503, detail="Não foi possível trocar a senha agora.")
+
+    linhas = r.data or []
+    if not linhas or not auth.verify_password(body.senha_atual or "", linhas[0]["password_hash"]):
+        raise HTTPException(status_code=400, detail="A senha atual não confere.")
+
+    if auth.verify_password(nova, linhas[0]["password_hash"]):
+        # Sem isto, "trocar a senha" seria satisfeito repetindo a provisória —
+        # e a senha que outra pessoa conhece continuaria valendo, agora com a
+        # flag desligada e ninguém mais cobrando a troca.
+        raise HTTPException(
+            status_code=422,
+            detail="A senha nova precisa ser diferente da atual.",
+        )
+
+    agora = datetime.now(timezone.utc).isoformat()
+    try:
+        sb.table("users").update(
+            {
+                "password_hash": auth.get_password_hash(nova),
+                "senha_alterada_em": agora,
+                "deve_trocar_senha": False,
+            }
+        ).eq("id", uid).execute()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao gravar a senha nova")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    atividade.registrar(
+        atividade.EVENTO_SENHA_REDEFINIDA,
+        user_id=uid,
+        user_email=token.email or "",
+        client_ip=request.client.host if request and request.client else None,
+        contexto={"origem": "troca_propria"},
+    )
+    # `senha_alterada_em` acabou de ser carimbado, então o token que fez esta
+    # chamada morre na requisição seguinte — de propósito, é a mesma regra que
+    # derruba sessão aberta em qualquer troca de senha. O front reconhece o 401
+    # e manda para o login.
+    return {"ok": True, "message": "Senha alterada. Entre novamente com a nova senha."}
 
 
 class SmtpTestBody(BaseModel):

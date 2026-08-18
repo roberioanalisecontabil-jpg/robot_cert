@@ -720,12 +720,152 @@ function cgPageNavRefresh(opts) {
   btnNext.disabled = synthetic.pagina >= synthetic.total_paginas;
 }
 
-// Interceptar todas as requisições para verificar 401
+/* ══════════════════════════════════════════════════════════════════════════
+   Troca de senha obrigatória
+
+   Vive aqui, e não numa tela, porque precisa existir em TODAS: a pessoa entra
+   e cai onde estava antes, ou digita uma URL direto. Amarrar isto ao login
+   deixaria qualquer outra porta aberta.
+
+   Quem manda é o servidor. `require_auth` responde 403 com o cabeçalho
+   `X-Senha-Provisoria` em qualquer rota que não seja a da troca, e o
+   interceptor abaixo reage. A tela não decide nada — só reage ao que já foi
+   recusado. Um modal que a própria página decidisse mostrar seria contornável
+   fechando o modal.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+let _senhaModalAberto = false;
+
+function _fecharSessaoPorSenhaTrocada() {
+  // Trocar a senha carimba `senha_alterada_em`, e o token atual passa a ser
+  // anterior a isso — ele morre na requisição seguinte. Levar ao login é o
+  // desfecho honesto, e não um efeito colateral a esconder.
+  showToastAfterRedirect("Senha alterada. Entre com a nova senha.", "success");
+  logout();
+}
+
+function abrirTrocaDeSenhaObrigatoria() {
+  if (_senhaModalAberto) return;
+  _senhaModalAberto = true;
+
+  const dlg = document.createElement("dialog");
+  dlg.className = "modal";
+  dlg.id = "modal-senha-obrigatoria";
+  dlg.innerHTML = `
+    <form class="modal__form" id="form-senha-obrigatoria">
+      <div class="modal__head">
+        <h2>Defina sua senha</h2>
+        <p class="modal__sub">
+          A senha atual foi definida por outra pessoa. Escolha uma que só você
+          saiba para continuar usando o portal.
+        </p>
+      </div>
+      <div class="modal__body">
+        <div class="modal__erro" id="so-erro" role="alert"></div>
+        <div class="modal__campo">
+          <label for="so-atual">Senha atual</label>
+          <input type="password" id="so-atual" required autocomplete="current-password">
+        </div>
+        <div class="modal__campo">
+          <label for="so-nova">Nova senha</label>
+          <div class="campo-senha">
+            <input type="password" id="so-nova" required minlength="6"
+                   autocomplete="new-password" placeholder="mínimo 6 caracteres">
+            <button type="button" class="btn-olho" id="so-olho"
+                    aria-controls="so-nova" aria-pressed="false"
+                    aria-label="Mostrar senha">&#128065;</button>
+          </div>
+        </div>
+        <div class="modal__campo">
+          <label for="so-conf">Repita a nova senha</label>
+          <input type="password" id="so-conf" required minlength="6" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn-action" id="so-sair">Sair</button>
+        <button type="submit" class="primary" id="so-salvar">Definir senha</button>
+      </div>
+    </form>`;
+  document.body.appendChild(dlg);
+
+  const erro = (t) => {
+    const el = dlg.querySelector("#so-erro");
+    el.textContent = t || "";
+    el.setAttribute("data-visivel", t ? "1" : "0");
+  };
+
+  // NÃO há botão de fechar, e o Esc é bloqueado: a alternativa a definir a
+  // senha é sair, não é ficar. Deixar fechar devolveria a pessoa a um portal
+  // em que nada responde — todas as rotas recusam com 403 — e o sintoma seria
+  // "o sistema não carrega nada", sem dizer por quê.
+  dlg.addEventListener("cancel", (e) => e.preventDefault());
+  dlg.querySelector("#so-sair").addEventListener("click", () => logout());
+
+  dlg.querySelector("#so-olho").addEventListener("click", () => {
+    const campo = dlg.querySelector("#so-nova");
+    const btn = dlg.querySelector("#so-olho");
+    const revelado = campo.type === "text";
+    campo.type = revelado ? "password" : "text";
+    btn.setAttribute("aria-pressed", String(!revelado));
+    btn.setAttribute("aria-label", revelado ? "Mostrar senha" : "Ocultar senha");
+    campo.focus();
+  });
+
+  dlg.querySelector("#form-senha-obrigatoria").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const atual = dlg.querySelector("#so-atual").value;
+    const nova = dlg.querySelector("#so-nova").value;
+    const conf = dlg.querySelector("#so-conf").value;
+    if (nova !== conf) {
+      erro("As duas senhas não são iguais.");
+      dlg.querySelector("#so-conf").focus();
+      return;
+    }
+    const btn = dlg.querySelector("#so-salvar");
+    btn.disabled = true;
+    btn.textContent = "Salvando...";
+    erro("");
+    try {
+      // `originalFetch`, e não `fetch`: o interceptor abaixo reabriria este
+      // mesmo modal ao ver o 403 de uma senha atual errada.
+      const r = await originalFetch("/api/senha/trocar", {
+        method: "POST",
+        headers: getHeaders(true),
+        body: JSON.stringify({ senha_atual: atual, nova_senha: nova }),
+      });
+      if (!r.ok) {
+        let d = {};
+        try { d = await r.json(); } catch (_) {}
+        erro(d.detail || "Não foi possível trocar a senha.");
+        return;
+      }
+      dlg.close();
+      dlg.remove();
+      _fecharSessaoPorSenhaTrocada();
+    } catch (_) {
+      erro("Erro de conexão com o servidor.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Definir senha";
+    }
+  });
+
+  dlg.showModal();
+  dlg.querySelector("#so-atual").focus();
+}
+
+// Interceptar todas as requisições para verificar 401 e senha provisória
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
     const response = await originalFetch(...args);
     if (response.status === 401 && !window.location.pathname.includes('/login')) {
         logout();
+    }
+    // Cabeçalho, e não o texto da mensagem: casar por string quebraria assim
+    // que alguém reescrevesse a frase, e o modal simplesmente pararia de
+    // aparecer — sem erro, com a pessoa vendo um portal que não responde.
+    if (response.status === 403 && response.headers.get("X-Senha-Provisoria")) {
+        abrirTrocaDeSenhaObrigatoria();
     }
     return response;
 };

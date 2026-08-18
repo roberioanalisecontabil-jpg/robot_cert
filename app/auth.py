@@ -54,6 +54,10 @@ class TokenData(BaseModel):
     # `users.senha_alterada_em` para uma troca de senha derrubar as sessões
     # abertas. None só em identidade sem JWT (agente, anônimo).
     emitido_em: Optional[datetime] = None
+    # A senha atual foi definida por outra pessoa — cadastro ou redefinição
+    # pelo admin. Enquanto for True, `require_auth` recusa toda rota que não
+    # seja a de trocar a senha. Vem do banco, nunca do token.
+    deve_trocar_senha: bool = False
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
