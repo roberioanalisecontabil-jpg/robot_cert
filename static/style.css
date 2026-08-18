@@ -11,6 +11,11 @@
   /* Font Family - Fallback to system fonts and Inter */
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
+  /* Sem isto, controles nativos (select, input) seguem o tema do SISTEMA e
+     ignoram o data-theme: quem força claro numa máquina escura via o texto
+     de --text claro sobre o fundo escuro do UA — 1.01:1 no #dashDias. */
+  color-scheme: light;
+
   /* Sidebar Defaults */
   --sidebar-bg: #1C1C1E;
   --sidebar-text: #8E8E93;
@@ -39,6 +44,11 @@
      ativo da sidebar). Existe porque no tema escuro o accent vira #0A84FF,
      que com branco dá 3.65:1 — o token não muda entre temas de propósito. */
   --accent-solid: #0071E3;  /* branco sobre ele: 4.70:1 */
+
+  /* Fundo sólido vermelho com texto branco (badge de contagem). --expired é
+     a identidade do vencido, mas com branco dá 3.54:1 (claro) e 3.40:1
+     (escuro) — e o número do badge é texto pequeno, que exige 4.5:1. */
+  --expired-solid: #C1121C; /* branco sobre ele: 6.23:1 */
 
   /* Status Colors */
   --total: #007AFF;
@@ -111,6 +121,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #1C1C1E;
   --surface: #2C2C2E;
   --border: rgba(255, 255, 255, 0.08);
@@ -168,6 +179,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #1C1C1E;
     --surface: #2C2C2E;
     --border: rgba(255, 255, 255, 0.08);
@@ -1539,7 +1551,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   position: absolute;
   top: -4px;
   right: -4px;
-  background-color: var(--expired);
+  background-color: var(--expired-solid);
   color: white;
   border-radius: 50%;
   padding: 0.15rem 0.35rem;

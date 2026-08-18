@@ -766,7 +766,7 @@
               </tr>`;
           }).join("");
         } catch (err) {
-          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--sidebar-danger); padding: 2rem;">Falha ao carregar a trilha: ${esc(err.message)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--danger-text); padding: 2rem;">Falha ao carregar a trilha: ${esc(err.message)}</td></tr>`;
         }
       }
 

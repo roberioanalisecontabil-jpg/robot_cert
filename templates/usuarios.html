@@ -38,7 +38,9 @@
         /* --expiring-* nunca existiu: o badge caía no fallback e ficava idêntico
            ao de usuário comum. O token certo é --warning-*, com contraste medido. */
         .role-gestor { background-color: var(--warning-bg); color: var(--warning-text); }
-        .role-disabled { background-color: var(--border); color: var(--text-muted); }
+        /* Contorno em vez de fundo: --text-muted sobre --border dava 4.25:1
+           no claro (11px exige 4.5:1); sobre a surface passa nos dois temas. */
+        .role-disabled { background-color: transparent; border: 1px solid var(--border); color: var(--text-muted); }
         .row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
         .btn-action { 
             border: 1.5px solid var(--border); 

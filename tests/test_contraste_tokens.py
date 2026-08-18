@@ -114,6 +114,7 @@ PARES = [
     ("--accent-text", "--surface", 4.5, ".doc-type-label, .aba.ativa, links"),
     ("--accent-text", "--total-bg", 4.5, ".cg-page-link--current, .notif-sync-mode"),
     (BRANCO, "--accent-solid", 4.5, "button.primary, .skip-to-content, .login-btn"),
+    (BRANCO, "--expired-solid", 4.5, ".notification-badge"),
     (BRANCO, "--accent-hover", 4.5, "button.primary:hover"),
     ("--accent", "--surface", 3.0, "anel de foco, .toast-info .toast-icon"),
     ("--total", "--total-bg", 3.0, ".card-total .card-icon"),
