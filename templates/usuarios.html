@@ -66,40 +66,11 @@
             <p>Adicione ou remova membros da equipe com acesso ao portal.</p>
         </header>
 
-        <section class="doc-block">
-            <h2>Novo Usuário</h2>
-            <div class="panel--nested">
-                <form id="create-user-form" class="row-inline" style="flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
-                    <div class="form-field" style="flex: 1; min-width: 200px;">
-                        <label for="new-name">Nome completo</label>
-                        <input type="text" id="new-name" placeholder="Ex.: Maria Silva" required class="path-input"
-                               autocomplete="off">
-                    </div>
-                    <div class="form-field" style="flex: 1; min-width: 200px;">
-                        <label for="new-email">E-mail</label>
-                        <input type="email" id="new-email" placeholder="exemplo@empresa.com" required class="path-input"
-                               autocomplete="off">
-                    </div>
-                    <div class="form-field" style="flex: 1; min-width: 150px;">
-                        <label for="new-password">Senha inicial</label>
-                        <!-- autocomplete="new-password" impede o navegador de preencher
-                             a senha do próprio admin que está cadastrando outra pessoa -->
-                        <input type="password" id="new-password" placeholder="Mínimo 6 caracteres" required
-                               class="path-input" autocomplete="new-password" minlength="6">
-                    </div>
-                    <div class="form-field" style="min-width: 120px;">
-                        <label for="new-role">Nível de acesso</label>
-                        <select id="new-role" class="path-input">
-                            <option value="user">Usuário</option>
-                            <option value="gestor">Gestor</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="primary">Adicionar</button>
-                </form>
-                <p id="msg-create" class="hint" style="margin-top: 1rem;"></p>
-            </div>
-        </section>
+        <!-- O formulário de cadastro que ficava aqui saiu em 18/08. Criar e
+             editar a MESMA entidade por dois desenhos diferentes — um em linha
+             no topo da página, outro em diálogo — faz a pessoa duvidar de qual
+             é o certo, e os dois divergem: o de cima nunca teve o campo de
+             gestor que o de edição ganhou. Agora é o mesmo diálogo. -->
 
         <section class="doc-block">
             <h2>Importar Usuários (CSV)</h2>
@@ -113,11 +84,22 @@
                 </form>
                 <p class="hint" style="margin-top: 0.6rem;">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel/role</code>, use exatamente: <code>admin</code>, <code>gestor</code> ou <code>user</code>.</p>
                 <p id="msg-import" class="hint" style="margin-top: 0.8rem;"></p>
+                <!-- O servidor sempre devolveu `erros[]` com linha e motivo; a
+                     tela mostrava só a contagem. Quem importava 50 pessoas e
+                     lia "Erros: 3" não sabia quais três, e a saída era abrir a
+                     planilha e conferir uma a uma. -->
+                <div id="erros-import" class="import-erros" hidden>
+                  <p class="import-erros__titulo"></p>
+                  <ul class="import-erros__lista"></ul>
+                </div>
             </div>
         </section>
 
         <section class="doc-block">
             <h2>Usuários Ativos</h2>
+            <p style="margin: 0 0 1rem;">
+              <button type="button" class="primary" id="btn-novo-usuario">Novo usuário</button>
+            </p>
             <div class="users-toolbar">
                 <label for="user-search" class="cg-sr-only">Pesquisar usuários por nome ou e-mail</label>
                 <input type="search" id="user-search" class="path-input" style="max-width: 320px;" placeholder="Pesquisar por nome ou e-mail" />
@@ -145,7 +127,11 @@
                                     <th role="columnheader">Nome</th>
                                     <th role="columnheader">E-mail</th>
                                     <th role="columnheader">Nível</th>
-                                    <th role="columnheader">Criado em</th>
+                                    <!-- "Criado em" saiu daqui em 18/08: a data de cadastro
+                                         quase nunca decide alguma coisa, e desde que `gestor_id`
+                                         passou a ser atribuível não havia como ver a quem cada
+                                         operador responde sem abrir o modal de um por um. -->
+                                    <th role="columnheader">Gestor</th>
                                     <th role="columnheader">Ações</th>
                                 </tr>
                             </thead>
@@ -190,6 +176,21 @@
             <span class="modal__dica">
               É por ele que a pessoa entra. Alterar encerra a sessão aberta dela.
             </span>
+          </div>
+
+          <!-- Só no cadastro: quem já existe troca a senha pelo botão
+               "Redefinir senha" da linha, que é outro fluxo e outra permissão. -->
+          <div class="modal__campo" id="ed-campo-senha" hidden>
+            <label for="ed-senha">Senha inicial</label>
+            <div class="campo-senha">
+              <!-- `new-password` impede o navegador de oferecer a senha do
+                   próprio admin que está cadastrando outra pessoa. -->
+              <input type="password" id="ed-senha" minlength="6"
+                     autocomplete="new-password" placeholder="mínimo 6 caracteres">
+              <button type="button" class="btn-olho" id="ed-olho"
+                      aria-controls="ed-senha" aria-pressed="false"
+                      aria-label="Mostrar senha">&#128065;</button>
+            </div>
           </div>
 
           <div class="modal__campo">
@@ -299,6 +300,24 @@
             return 'role-user';
         }
 
+        /**
+         * Nome do gestor de um operador, para a coluna da tabela.
+         *
+         * Admin e gestor têm alcance total e não respondem a ninguém — mostrar
+         * "—" para eles seria ambíguo com "operador ainda sem gestor", que é
+         * uma pendência de verdade. Por isso o traço só aparece para operador.
+         */
+        function nomeDoGestor(u) {
+            const papel = String(u.role || '').toLowerCase();
+            if (papel !== 'user') return '';
+            if (!u.gestor_id) return '— sem gestor';
+            const g = usersCache.find((x) => x.id === u.gestor_id);
+            // Gestor que não está mais na lista: conta apagada, ou desativada e
+            // filtrada. Melhor dizer isso do que mostrar um traço igual ao de
+            // quem nunca teve gestor.
+            return g ? (g.full_name || g.email) : 'gestor não encontrado';
+        }
+
         function renderUsers() {
             const body = document.getElementById('user-list-body');
             const q = (document.getElementById('user-search').value || '').trim().toLowerCase();
@@ -348,7 +367,7 @@
                         <span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span>
                         ${estaAtivo(u) ? '' : '<span class="role-badge role-disabled" style="margin-left: 0.35rem;">INATIVO</span>'}
                     </td>
-                    <td role="cell" data-label="Criado em">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                    <td role="cell" data-label="Gestor">${esc(nomeDoGestor(u))}</td>
                     <td role="cell">
                         <div class="row-actions">
                             <button class="btn-action" data-action="editar" data-id="${u.id}">Editar</button>
@@ -451,10 +470,58 @@
             campoGestor.style.display = nivel === 'user' ? '' : 'none';
         }
 
+        /**
+         * Abre o diálogo em modo CADASTRO.
+         *
+         * Mesmo diálogo da edição: os campos são os mesmos, e manter dois
+         * formulários para a mesma entidade foi o que deixou o de cadastro sem
+         * o campo de gestor por semanas.
+         */
+        function novoUsuario() {
+            editandoId = null;
+            document.getElementById('modal-editar-titulo').textContent = 'Novo usuário';
+            document.getElementById('modal-editar-quem').textContent =
+                'A pessoa entra com o e-mail e a senha definidos aqui.';
+            document.getElementById('ed-nome').value = '';
+            document.getElementById('ed-email').value = '';
+            document.getElementById('ed-senha').value = '';
+            document.getElementById('ed-nivel').value = 'user';
+            document.getElementById('ed-campo-senha').hidden = false;
+            document.getElementById('ed-senha').required = true;
+            document.getElementById('ed-salvar').textContent = 'Cadastrar';
+            // Objeto vazio: `preencherGestores` só usa `id` (para não se
+            // oferecer como gestor de si mesma) e `gestor_id`.
+            preencherGestores({ id: null, gestor_id: '' });
+            ajustarDicaDeNivel();
+            erroDoModal('');
+            abrirModal('modal-editar');
+            document.getElementById('ed-nome').focus();
+        }
+
+        document.getElementById('btn-novo-usuario').addEventListener('click', novoUsuario);
+
+        document.getElementById('ed-olho').addEventListener('click', () => {
+            const campo = document.getElementById('ed-senha');
+            const btn = document.getElementById('ed-olho');
+            const revelado = campo.type === 'text';
+            campo.type = revelado ? 'password' : 'text';
+            btn.setAttribute('aria-pressed', String(!revelado));
+            btn.setAttribute('aria-label', revelado ? 'Mostrar senha' : 'Ocultar senha');
+            campo.focus();
+        });
+
         function editarUsuario(id) {
             const user = usersCache.find((u) => u.id === id);
             if (!user) return;
             editandoId = id;
+
+            // O diálogo é compartilhado: sem devolver estes três ao estado de
+            // edição, abrir "Editar" depois de um cadastro mostraria o campo de
+            // senha e o botão escrito "Cadastrar".
+            document.getElementById('modal-editar-titulo').textContent = 'Editar usuário';
+            document.getElementById('ed-campo-senha').hidden = true;
+            document.getElementById('ed-senha').required = false;
+            document.getElementById('ed-salvar').textContent = 'Salvar';
 
             document.getElementById('modal-editar-quem').textContent = user.email || '';
             document.getElementById('ed-nome').value = user.full_name || '';
@@ -478,9 +545,10 @@
             // se a gravação deu certo — e o erro do servidor não teria onde
             // aparecer. O fechamento passa a ser nosso, só depois do 200.
             e.preventDefault();
-            if (!editandoId) return;
+            const criando = editandoId === null;
 
             const btn = document.getElementById('ed-salvar');
+            const rotuloBtn = btn.textContent;
             const nivel = document.getElementById('ed-nivel').value;
             const corpo = {
                 full_name: document.getElementById('ed-nome').value.trim(),
@@ -491,15 +559,31 @@
                 gestor_id: nivel === 'user' ? (document.getElementById('ed-gestor').value || '') : '',
             };
 
+            if (criando) {
+                const senha = document.getElementById('ed-senha').value;
+                // Checado aqui além do `minlength` porque o campo fica oculto
+                // na edição, e campo oculto não entra na validação nativa do
+                // formulário — o cadastro passaria com senha vazia.
+                if (senha.length < 6) {
+                    erroDoModal('A senha inicial precisa ter no mínimo 6 caracteres.');
+                    document.getElementById('ed-senha').focus();
+                    return;
+                }
+                corpo.password = senha;
+            }
+
             btn.disabled = true;
-            btn.textContent = 'Salvando...';
+            btn.textContent = criando ? 'Cadastrando...' : 'Salvando...';
             erroDoModal('');
             try {
-                const r = await fetch(`/api/users/${editandoId}`, {
-                    method: 'PUT',
-                    headers: getHeaders(true),
-                    body: JSON.stringify(corpo),
-                });
+                const r = await fetch(
+                    criando ? '/api/users' : `/api/users/${editandoId}`,
+                    {
+                        method: criando ? 'POST' : 'PUT',
+                        headers: getHeaders(true),
+                        body: JSON.stringify(corpo),
+                    }
+                );
                 if (!r.ok) {
                     // Dentro do diálogo, e não em toast: o toast fica atrás do
                     // backdrop e some sozinho, levando junto a única explicação
@@ -509,12 +593,12 @@
                 }
                 document.getElementById('modal-editar').close();
                 await loadUsers();
-                showToast('Usuário atualizado.', 'success');
+                showToast(criando ? 'Usuário cadastrado.' : 'Usuário atualizado.', 'success');
             } catch (err) {
                 erroDoModal('Erro de conexão com o servidor.');
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Salvar';
+                btn.textContent = rotuloBtn;
             }
         });
 
@@ -637,32 +721,46 @@
             showToast(`Usuário reativado como ${nivel}.`, 'success');
         }
 
-        document.getElementById('create-user-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const msg = document.getElementById('msg-create');
-            const data = {
-                full_name: document.getElementById('new-name').value,
-                email: document.getElementById('new-email').value,
-                password: document.getElementById('new-password').value,
-                role: document.getElementById('new-role').value
-            };
+        /**
+         * Lista as linhas do CSV que o servidor recusou.
+         *
+         * A importação é parcial de propósito: linha ruim não aborta o lote, as
+         * boas entram. Isso só é uma boa decisão se a pessoa souber QUAIS
+         * ficaram de fora — senão ela reimporta a planilha inteira e as que já
+         * entraram voltam como "ignorado", escondendo o problema mais uma vez.
+         *
+         * Monta no DOM em vez de `innerHTML`: o motivo do erro pode conter o
+         * e-mail digitado, que veio de um arquivo que o usuário escolheu.
+         */
+        function mostrarErrosImport(erros) {
+            const cx = document.getElementById('erros-import');
+            const titulo = cx.querySelector('.import-erros__titulo');
+            const lista = cx.querySelector('.import-erros__lista');
+            lista.textContent = '';
 
-            const r = await fetch('/api/users', {
-                method: 'POST',
-                headers: getHeaders(true),
-                body: JSON.stringify(data)
-            });
-
-            if (r.ok) {
-                msg.textContent = "Usuário criado com sucesso!";
-                msg.style.color = "var(--ok)";
-                e.target.reset();
-                loadUsers();
-            } else {
-                msg.textContent = "Erro ao criar: " + (await mensagemCorpoErro(r));
-                msg.style.color = "var(--danger-text)";
+            if (!erros.length) {
+                cx.hidden = true;
+                return;
             }
-        });
+
+            titulo.textContent = erros.length === 1
+                ? '1 linha não foi importada:'
+                : `${erros.length} linhas não foram importadas:`;
+
+            erros.forEach((e) => {
+                const li = document.createElement('li');
+                const onde = document.createElement('strong');
+                // O número da linha é o da PLANILHA, contando o cabeçalho —
+                // é assim que a pessoa vai procurar no arquivo dela.
+                onde.textContent = `Linha ${e.linha}`;
+                li.appendChild(onde);
+                li.appendChild(document.createTextNode(
+                    `${e.email ? ' (' + e.email + ')' : ''}: ${e.erro || 'motivo não informado'}`
+                ));
+                lista.appendChild(li);
+            });
+            cx.hidden = false;
+        }
 
         document.getElementById('import-users-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -685,10 +783,15 @@
             if (!r.ok) {
                 msg.textContent = 'Erro na importação: ' + (await mensagemCorpoErro(r));
                 msg.style.color = 'var(--danger-text)';
+                // Sem isto, os erros da tentativa ANTERIOR continuariam na tela
+                // ao lado da mensagem nova, como se fossem desta.
+                mostrarErrosImport([]);
                 return;
             }
             const j = await r.json();
-            const nErros = (j.erros || []).length;
+            const erros = j.erros || [];
+            const nErros = erros.length;
+            mostrarErrosImport(erros);
             msg.textContent = `Importação concluída. Criados: ${j.criados || 0}. Ignorados: ${j.ignorados || 0}. Erros: ${nErros}.`;
             // Token, e não o âmbar literal que estava aqui. Ele sobreviveu ao
             // M2 por estar dentro de um ternário em JavaScript, onde a

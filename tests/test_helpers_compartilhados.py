@@ -470,3 +470,39 @@ def test_a_lista_de_pendentes_nao_mente() -> None:
         f"{sobrando} não usa mais diálogo nativo — remova de "
         "DIALOGOS_NATIVOS_PENDENTES para a tela passar a ser vigiada"
     )
+
+
+def test_nenhum_getelementbyid_aponta_para_id_inexistente() -> None:
+    """
+    `getElementById` de um id que não existe devolve `null`, e o erro só
+    aparece na linha seguinte, como "cannot read property of null" — longe da
+    causa, e só quando aquele caminho do código roda.
+
+    Escrito depois da reforma de `/usuarios` em 18/08, que removeu o formulário
+    de cadastro da página inteiro. Sobraram seis referências a `new-name`,
+    `new-email`, `msg-create` e afins; conferi à mão e não sobrou nenhuma, mas
+    "conferi à mão" é exatamente o que falha na próxima reforma.
+
+    Segue o `{% include %}` da sidebar, senão os `nav-*` do partial apareceriam
+    como órfãos em todas as telas.
+    """
+    partial = (TEMPLATES / "_sidebar.html").read_text(encoding="utf-8")
+    ids_do_partial = set(re.findall(r"""\bid=["']([A-Za-z0-9_-]+)["']""", partial))
+
+    orfaos = {}
+    for f in _paginas():
+        txt = f.read_text(encoding="utf-8")
+        existentes = set(re.findall(r"""\bid=["']([A-Za-z0-9_-]+)["']""", txt))
+        if "_sidebar.html" in txt:
+            existentes |= ids_do_partial
+        usados = set(
+            re.findall(r"""getElementById\(\s*["']([A-Za-z0-9_-]+)["']\s*\)""", txt)
+        )
+        fora = sorted(usados - existentes)
+        if fora:
+            orfaos[f.name] = fora
+
+    assert not orfaos, (
+        "getElementById aponta para id que não existe no template: "
+        f"{orfaos}"
+    )

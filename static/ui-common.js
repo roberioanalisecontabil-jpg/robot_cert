@@ -307,7 +307,7 @@ const BADGE_STATUS = {
   expirando:      { classe: "badge-warning", texto: "Expirando",           glifo: "⚠" },
   vencido:        { classe: "badge-expired", texto: "Vencido",             glifo: "✕" },
   erro:           { classe: "badge-bad",     texto: "Erro",                glifo: "!" },
-  fora_do_padrao: { classe: "badge-bad",     texto: "Falha ( Sem padrão)", glifo: "?" },
+  fora_do_padrao: { classe: "badge-bad",     texto: "Falha (sem padrão)", glifo: "?" },
   nao_encontrado: { classe: "badge-bad",     texto: "Não encontrado", glifo: "?" },
 };
 

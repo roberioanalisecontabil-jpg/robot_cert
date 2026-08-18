@@ -2440,3 +2440,35 @@ dialog.modal::backdrop {
 .btn-olho:hover {
   color: var(--text);
 }
+
+/* Lista de linhas recusadas na importação de CSV.
+
+   Fundo de aviso, e não de erro: a importação é PARCIAL de propósito — as
+   linhas boas entraram. Pintar de vermelho sugeriria que o lote inteiro
+   falhou, e a pessoa reimportaria tudo. */
+.import-erros {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  border: 1px solid rgba(255, 159, 10, 0.3);
+}
+
+.import-erros__titulo {
+  margin: 0 0 var(--sp-2);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--warning-text);
+}
+
+.import-erros__lista {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text);
+  /* Um CSV de centenas de linhas com metade recusada empurraria a tabela de
+     usuários para fora da tela. */
+  max-height: 220px;
+  overflow-y: auto;
+}

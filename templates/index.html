@@ -102,7 +102,7 @@
 
         <div class="dashboard-card card-sem-padrao">
           <div class="card-info">
-            <span class="card-title">Falha ( Sem padrão)</span>
+            <span class="card-title">Falha (sem padrão)</span>
             <span class="card-number" id="n-sem-padrao">0</span>
           </div>
           <div class="card-icon">
@@ -128,7 +128,7 @@
               <option value="validos">Ativo</option>
               <option value="prestes_vencer">Expirando</option>
               <option value="erros">Erro</option>
-              <option value="sem_padrao">Falha ( Sem padrão)</option>
+              <option value="sem_padrao">Falha (sem padrão)</option>
             </select>
             <label for="busca-cert" class="cg-sr-only">Buscar certificado por nome, CNPJ ou CPF</label>
             <input
@@ -592,7 +592,7 @@
         if (it.status === "expirado" || it._isExpiredByDate) return "Vencido";
         if (it.status === "ok" && it._isExpiringSoon) return "Expirando";
         if (it.status === "ok") return "Ativo";
-        if (it.status === "fora_do_padrao") return "Falha ( Sem padrão)";
+        if (it.status === "fora_do_padrao") return "Falha (sem padrão)";
         if (it.status === "erro") return "Erro";
         return String(it.status || "");
       }
