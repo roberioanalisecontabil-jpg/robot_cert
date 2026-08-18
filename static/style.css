@@ -434,6 +434,11 @@ textarea:focus-visible {
   margin-left: 250px;
   padding: 2.25rem 2.25rem;
   min-height: 100vh;
+  /* Item flex tem min-width:auto — o min-content de um filho (a tabela, a
+     toolbar) empurrava o main além do viewport entre ~900 e ~1050px, criando
+     scroll horizontal NA PÁGINA. Com 0, quem rola é o .table-scroll, que
+     existe para isso. */
+  min-width: 0;
 }
 
 .page-header {
@@ -1352,6 +1357,12 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   justify-content: center;
   flex-wrap: wrap;
   gap: 1rem;
+  /* Em 320px a fila de botões (controle segmentado, que não pode quebrar
+     linha) é mais larga que a tela. Sem o teto, a LINHA inflava para caber
+     nela e alargava a página inteira; com ele, a rolagem fica aqui dentro. */
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .cg-page-nav__ul {
@@ -1360,6 +1371,9 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   padding: 0;
   display: inline-flex;
   flex-direction: row;
+  /* nowrap é deliberado: os botões formam um controle segmentado emendado
+     por margin -1px, e quebrar linha romperia as bordas. Quem impede a fila
+     de alargar a página é o max-width/overflow da .cg-page-nav__row. */
   flex-wrap: nowrap;
   align-items: stretch;
   width: auto;
@@ -1882,7 +1896,9 @@ body.sidebar-open .sidebar-backdrop {
   }
 
   .cards-grid {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    /* min(140px, 100%) pela mesma razão do bloco base: sem a guarda, o
+       mínimo fixo estoura o contêiner em 320px. */
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
     gap: 0.75rem;
   }
 
@@ -2025,7 +2041,10 @@ body.sidebar-open .sidebar-backdrop {
 /* Responsividade: Dispositivos Móveis Muito Pequenos (< 480px) */
 @media (max-width: 480px) {
   .cards-grid {
-    grid-template-columns: 1fr 1fr;
+    /* minmax(0, 1fr), não 1fr: `1fr` sozinho é minmax(auto, 1fr), e o piso
+       `auto` é o min-content do card — o rótulo "FALHA (SEM PADRÃO)" alargava
+       a coluna além do viewport em 320px e a página inteira rolava de lado. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .card-title {

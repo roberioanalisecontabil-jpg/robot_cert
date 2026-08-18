@@ -10,7 +10,12 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="/static/style.css?v=a11y-contraste-2026-08" />
     <style nonce="{{ request.state.nonce }}">
-      .painel-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+      /* min(320px, 100%): sem a guarda, o mínimo fixo estoura a página em
+         telas de 320px (mesma razão do .cards-grid global). */
+      .painel-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+      /* A tabela de atividade rola no próprio contêiner, como as demais
+         tabelas fazem via .table-scroll — sem isto ela alarga a página. */
+      .painel .table-container { overflow-x: auto; }
       .painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
       .painel h2 { font-size: 1rem; margin-bottom: 0.75rem; }
       .painel__nota { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.6rem; line-height: 1.45; }
