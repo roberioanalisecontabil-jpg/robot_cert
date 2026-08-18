@@ -205,11 +205,25 @@ def test_id_do_cofre_acompanha_o_estado_ok(client: TestClient, banco: _Fake) -> 
 def test_admin_e_gestor_nao_veem_fora_da_carteira(
     client: TestClient, banco: _Fake, papel: str
 ) -> None:
+    """
+    **Só o admin, desde 18/08/2026** — quando o departamento passou a recortar
+    o alcance do gestor.
+
+    O gestor perdeu o alcance total e passou a ver "fora da carteira" como
+    qualquer operador. É a contrapartida honesta do recorte: se ele atribui só
+    dentro do setor mas continua instalando tudo, o recorte não vale nada.
+    """
     r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQUINA}", headers=_h(papel))
-    assert r.json()["alcance_total"] is True
-    estados = {fp: v["estado"] for fp, v in r.json()["itens"].items()}
-    assert "fora_da_carteira" not in estados.values()
-    assert estados[FP_ALHEIO] == "ok"
+    corpo = r.json()
+    estados = {fp: v["estado"] for fp, v in corpo["itens"].items()}
+
+    if papel == "admin":
+        assert corpo["alcance_total"] is True
+        assert "fora_da_carteira" not in estados.values()
+        assert estados[FP_ALHEIO] == "ok"
+    else:
+        assert corpo["alcance_total"] is False, "gestor voltou a ter alcance total"
+        assert estados[FP_ALHEIO] == "fora_da_carteira"
 
 
 def test_operador_nao_tem_alcance_total(client: TestClient, banco: _Fake) -> None:

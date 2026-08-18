@@ -101,11 +101,11 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake = _Fake({
         "users": [
             {"id": "u-op1", "email": "ana@x.com", "full_name": "Ana Silva", "role": "user",
-             "ativo": True, "gestor_id": "u-gest", "password_hash": "NAO PODE VAZAR"},
+             "ativo": True, "gestor_id": "u-gest", "departamento_id": "dep-1", "password_hash": "NAO PODE VAZAR"},
             {"id": "u-op2", "email": "bruno@x.com", "full_name": "Bruno", "role": "user",
-             "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
+             "ativo": True, "gestor_id": None, "departamento_id": "dep-1", "password_hash": "NAO PODE VAZAR"},
             {"id": "u-gest", "email": "gestor@x.com", "full_name": "Gestor", "role": "gestor",
-             "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
+             "ativo": True, "gestor_id": None, "departamento_id": "dep-1", "password_hash": "NAO PODE VAZAR"},
             # As contas que `_h("admin")` e `_h("user")` apresentam. Desde 16/08
             # o `require_auth` relê a conta a cada requisição, então um token
             # cujo `sub` não existe no banco é 401 — sessão de conta excluída.
@@ -115,8 +115,14 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             {"id": "u-adm", "email": "admin@x.com", "full_name": "Admin", "role": "admin",
              "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
             {"id": "u-op3", "email": "user@x.com", "full_name": "Operador", "role": "user",
-             "ativo": True, "gestor_id": None, "password_hash": "NAO PODE VAZAR"},
+             "ativo": True, "gestor_id": None, "departamento_id": "dep-1", "password_hash": "NAO PODE VAZAR"},
         ],
+        # Desde 18/08 o alcance vem da liderança, não do papel: o gestor só
+        # enxerga e mexe em quem está num setor que ele lidera. Sem estas duas
+        # tabelas ele não alcança ninguém, e estes testes mediriam "gestor sem
+        # setor" em vez da tela.
+        "departamento": [{"id": "dep-1", "nome": "Fiscal"}],
+        "departamento_lider": [{"departamento_id": "dep-1", "user_id": "u-gest"}],
         "carteira": [
             {"user_id": "u-op1", "documento": DOC_ACME,
              "atribuido_por_email": "gestor@x.com", "atribuido_em": "2026-08-15T10:00:00Z"},

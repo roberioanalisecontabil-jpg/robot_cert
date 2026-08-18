@@ -1322,7 +1322,7 @@ def _nome_de_departamento(nome: str) -> str:
     return limpo
 
 
-# `require_admin`, e nao `require_admin_ou_gestor`: a unica tela que consome
+# `require_admin`, e nao `require_admin_ou_lider`: a unica tela que consome
 # isto hoje e /usuarios, que ja e de admin. Quando o lider precisar ver os
 # proprios setores (etapa 4), a rota certa e outra, escopada a ele -- esta
 # devolve TODOS os departamentos, e alcance total nao e o do lider.
@@ -3399,13 +3399,68 @@ def _validar_pedido_de_instalacao(
         )
 
 
-async def require_admin_ou_gestor(
+ERRO_SEM_ALCANCE = (
+    "Você não lidera nenhum departamento, então não há para quem liberar "
+    "certificados. Peça a um administrador para incluí-lo como líder."
+)
+
+
+async def require_admin_ou_lider(
     token: auth.TokenData = Depends(require_auth),
 ) -> auth.TokenData:
-    """Quem pode montar carteira. O gestor tem alcance total por decisão de 15/08."""
-    if (token.role or "").strip().lower() not in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+    """
+    Quem pode montar carteira: admin, ou quem lidera ao menos um departamento.
+
+    Mudou em 18/08/2026. Antes bastava o papel `gestor`, e o alcance era total
+    — qualquer gestor liberava qualquer cliente para qualquer operador. Agora o
+    papel abre a porta e a LIDERANÇA define até onde se vai; cada rota confere
+    o alvo com `cert_installer.pode_gerir`.
+
+    Gestor sem liderança nenhuma é recusado aqui mesmo, com uma mensagem que
+    diz o que fazer. Deixá-lo entrar numa tela onde toda ação falha depois
+    seria pior: o sintoma viraria "não consigo salvar nada".
+    """
+    papel = (token.role or "").strip().lower()
+    if papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        return token
+    if papel != "gestor":
         raise HTTPException(status_code=403, detail="Acesso restrito a gestores e administradores.")
-    return token
+
+    uid = _user_id_da_sessao(token)
+    try:
+        if uid and cert_installer.departamentos_que_lidera(uid):
+            return token
+    except cert_installer.AlcanceIndisponivel:
+        # 503, e não 403: "não consegui verificar" não é "você não pode". Um
+        # 403 aqui faria o líder acreditar que perdeu a permissão.
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível verificar seus departamentos. Tente de novo.",
+        )
+    raise HTTPException(status_code=403, detail=ERRO_SEM_ALCANCE)
+
+
+def _exigir_alcance(token: auth.TokenData, alvo_id: str) -> None:
+    """
+    Barreira por PESSOA. `require_admin_ou_lider` só diz que o ator pode montar
+    carteiras; esta diz de quem.
+
+    Sem ela, um líder do Fiscal montaria a carteira de alguém do Contábil
+    apenas trocando o `user_id` na chamada — a tela filtra, mas a tela não é a
+    barreira.
+    """
+    try:
+        if cert_installer.pode_gerir(_user_id_da_sessao(token) or "", token.role or "", alvo_id):
+            return
+    except cert_installer.AlcanceIndisponivel:
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível verificar seu alcance. Tente de novo.",
+        )
+    raise HTTPException(
+        status_code=403,
+        detail="Esta pessoa não está em um departamento que você lidera.",
+    )
 
 
 class CarteiraRequest(BaseModel):
@@ -3413,8 +3468,10 @@ class CarteiraRequest(BaseModel):
     documentos: List[str]
 
 
-@app.get("/api/carteira/operadores", dependencies=[Depends(require_admin_ou_gestor)])
-def listar_operadores() -> dict:
+@app.get("/api/carteira/operadores")
+def listar_operadores(
+    token: auth.TokenData = Depends(require_admin_ou_lider),
+) -> dict:
     """
     Quem pode receber carteira, com quantos documentos cada um já tem.
 
@@ -3428,13 +3485,40 @@ def listar_operadores() -> dict:
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase não configurado")
     try:
-        us = sb.table("users").select("id, email, full_name, role, ativo, gestor_id").execute().data or []
+        us = sb.table("users").select(
+            "id, email, full_name, role, ativo, gestor_id, departamento_id"
+        ).execute().data or []
         cart = sb.table("carteira").select("user_id").execute().data or []
     except Exception:
         logger.exception("Falha ao listar operadores")
         raise HTTPException(status_code=503, detail="Não foi possível listar os operadores.")
 
     from collections import Counter
+
+    # O líder vê apenas quem ele alcança. Mostrar a lista inteira e recusar
+    # depois seria a pior combinação: ele monta a carteira de alguém do outro
+    # setor, clica em salvar, e só aí descobre — sem entender o critério.
+    #
+    # Filtrado aqui e conferido de novo em cada rota que age: esta é a tela, e
+    # tela não é barreira. Quem chamar a API direto com outro `user_id` esbarra
+    # em `_exigir_alcance`.
+    eu = _user_id_da_sessao(token) or ""
+    papel = (token.role or "").strip().lower()
+    if papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        visiveis = us
+    else:
+        try:
+            meus = cert_installer.departamentos_que_lidera(eu)
+        except cert_installer.AlcanceIndisponivel:
+            raise HTTPException(
+                status_code=503,
+                detail="Não foi possível verificar seus departamentos. Tente de novo.",
+            )
+        visiveis = [
+            u for u in us
+            if str(u.get("id")) == eu
+            or (u.get("departamento_id") and str(u["departamento_id"]) in meus)
+        ]
 
     quantos = Counter(str(c.get("user_id")) for c in cart)
     return {
@@ -3446,14 +3530,15 @@ def listar_operadores() -> dict:
                 "role": u.get("role"),
                 "ativo": auth.conta_ativa(u),
                 "gestor_id": u.get("gestor_id"),
+                "departamento_id": u.get("departamento_id"),
                 "documentos": quantos.get(str(u.get("id")), 0),
             }
-            for u in us
+            for u in visiveis
         ]
     }
 
 
-@app.get("/api/carteira/documentos", dependencies=[Depends(require_admin_ou_gestor)])
+@app.get("/api/carteira/documentos", dependencies=[Depends(require_admin_ou_lider)])
 def listar_documentos_atribuiveis(
     q: Optional[str] = Query(None, max_length=120),
     limite: int = Query(100, ge=1, le=500),
@@ -3477,9 +3562,19 @@ def listar_documentos_atribuiveis(
     return {"total": len(todos), "documentos": todos[:limite]}
 
 
-@app.get("/api/carteira/{user_id}", dependencies=[Depends(require_admin_ou_gestor)])
-def obter_carteira(user_id: str) -> dict:
-    """Documentos que este operador pode instalar, com a trilha de atribuição."""
+@app.get("/api/carteira/{user_id}")
+def obter_carteira(
+    user_id: str,
+    token: auth.TokenData = Depends(require_admin_ou_lider),
+) -> dict:
+    """
+    Documentos que este operador pode instalar, com a trilha de atribuição.
+
+    A dependência saiu do decorador e virou parâmetro porque agora o token é
+    USADO: `_exigir_alcance` precisa saber quem está perguntando. A trilha diz
+    quem liberou o quê — informação de dentro do setor.
+    """
+    _exigir_alcance(token, user_id)
     try:
         linhas = cert_installer.detalhar_carteira(user_id)
     except cert_installer.CarteiraIndisponivel as e:
@@ -3508,7 +3603,7 @@ def obter_carteira(user_id: str) -> dict:
 @app.post("/api/carteira")
 def atribuir_carteira(
     body: CarteiraRequest,
-    token: auth.TokenData = Depends(require_admin_ou_gestor),
+    token: auth.TokenData = Depends(require_admin_ou_lider),
 ) -> dict:
     """
     Acrescenta documentos à carteira de um operador.
@@ -3518,6 +3613,7 @@ def atribuir_carteira(
     forma de reconstruir o que houve se uma conta de gestor for comprometida;
     guardar só o UUID a perderia no dia em que a conta fosse apagada.
     """
+    _exigir_alcance(token, body.user_id)
     try:
         gravados = cert_installer.atribuir_carteira(
             user_id=body.user_id,
@@ -3537,8 +3633,9 @@ def atribuir_carteira(
 def remover_carteira(
     user_id: str,
     documento: str,
-    _token: auth.TokenData = Depends(require_admin_ou_gestor),
+    token: auth.TokenData = Depends(require_admin_ou_lider),
 ) -> dict:
+    _exigir_alcance(token, user_id)
     try:
         cert_installer.remover_da_carteira(user_id, documento)
         return {"status": "ok", "user_id": user_id, "documento": documento}

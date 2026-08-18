@@ -560,7 +560,93 @@ def bloquear_custodia(
 # liberar a mais é vazamento.
 # ──────────────────────────────────────────────────────────────────────────
 
-PAPEIS_COM_ALCANCE_TOTAL = ("admin", "gestor")
+# Só `admin`. O `gestor` saiu em 18/08/2026, quando o departamento passou a
+# recortar quem cada líder alcança.
+#
+# A decisão de 15/08 dizia o contrário, e a razão dela está registrada em
+# `assegurar_carteira`: "quem pode atribuir qualquer cliente a qualquer
+# operador pode atribuir a si mesmo, então limitá-lo seria teatro". O
+# raciocínio estava certo — e INVERTE com o recorte. Agora o gestor atribui
+# apenas dentro do setor que lidera; se continuasse instalando qualquer coisa,
+# o recorte é que seria teatro.
+PAPEIS_COM_ALCANCE_TOTAL = ("admin",)
+
+
+class AlcanceIndisponivel(RuntimeError):
+    """Não deu para saber quem o líder alcança."""
+
+
+def departamentos_que_lidera(user_id: str) -> Set[str]:
+    """
+    Setores em que esta pessoa é líder.
+
+    **Levanta** `AlcanceIndisponivel` em vez de devolver conjunto vazio quando
+    a leitura falha. É a mesma escolha de `listar_bloqueios`, e pela mesma
+    razão: aqui "vazio" significa *não alcança ninguém*, e uma falha de leitura
+    viraria uma recusa que parece decisão — o líder veria "acesso restrito" e
+    concluiria que perdeu a permissão, não que o banco não respondeu.
+    """
+    client = _supabase()
+    if not client:
+        raise AlcanceIndisponivel("Supabase não configurado")
+    try:
+        r = (
+            client.table("departamento_lider")
+            .select("departamento_id")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao ler as lideranças de %s", user_id)
+        raise AlcanceIndisponivel(str(e)) from e
+    return {str(l["departamento_id"]) for l in (r.data or []) if l.get("departamento_id")}
+
+
+def pode_gerir(ator_id: str, ator_role: str, alvo_id: str) -> bool:
+    """
+    O ator pode montar a carteira do alvo?
+
+    - `admin`: qualquer pessoa.
+    - Líder: quem estiver num setor que ele lidera, **e ele mesmo**. Sem a
+      segunda parte, um líder que não pertence ao próprio setor não teria como
+      liberar nada para si — e não haveria ninguém abaixo dele que pudesse
+      fazê-lo, porque só líder libera.
+    - Os demais: ninguém.
+    """
+    if (ator_role or "").strip().lower() in PAPEIS_COM_ALCANCE_TOTAL:
+        return True
+    if not ator_id or not alvo_id:
+        return False
+    if str(ator_id) == str(alvo_id):
+        return bool(departamentos_que_lidera(str(ator_id)))
+
+    meus = departamentos_que_lidera(str(ator_id))
+    if not meus:
+        return False
+
+    client = _supabase()
+    if not client:
+        raise AlcanceIndisponivel("Supabase não configurado")
+    try:
+        r = (
+            client.table("users")
+            .select("departamento_id")
+            .eq("id", str(alvo_id))
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao ler o departamento de %s", alvo_id)
+        raise AlcanceIndisponivel(str(e)) from e
+
+    linhas = r.data or []
+    if not linhas:
+        return False
+    dep = linhas[0].get("departamento_id")
+    # Pessoa sem departamento não é alcançada por líder nenhum. É deliberado:
+    # o contrário — "sem setor, qualquer líder pode" — daria a todos os líderes
+    # alcance sobre quem acabou de ser cadastrado.
+    return bool(dep) and str(dep) in meus
 
 
 class CarteiraIndisponivel(RuntimeError):

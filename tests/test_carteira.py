@@ -65,6 +65,11 @@ class _Query:
         self._em = (c, list(vs))
         return self
 
+    def limit(self, _n: int) -> "_Query":
+        # O cliente real tem; sem isto, toda consulta que usa `.limit()` morre
+        # com AttributeError e o erro chega disfarçado de "banco indisponível".
+        return self
+
     def _casa(self, r: Dict[str, Any]) -> bool:
         if self._em and r.get(self._em[0]) not in self._em[1]:
             return False
@@ -123,6 +128,28 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake.tabelas["carteira"] = [
         {"user_id": "u-operador", "documento": DOC_MEU,
          "atribuido_por": "u-gestor", "atribuido_por_email": "gestor@x.com"},
+    ]
+    # Desde 18/08 o alcance vem da liderança, não do papel. Sem estas duas
+    # tabelas o gestor não alcança ninguém — que é o comportamento certo, e
+    # tornaria estes testes uma medição de "gestor sem setor", não do fluxo.
+    fake.tabelas["users"] = [
+        {"id": "u-operador", "email": "operador@x.com", "role": "user",
+         "ativo": True, "departamento_id": "dep-fiscal"},
+        {"id": "u-gestor", "email": "gestor@x.com", "role": "gestor",
+         "ativo": True, "departamento_id": "dep-fiscal"},
+        {"id": "u-admin", "email": "admin@x.com", "role": "admin",
+         "ativo": True, "departamento_id": None},
+        # Alvos das atribuições nos testes abaixo. No mesmo setor do gestor,
+        # senão o que se mediria era a recusa por alcance, não a normalização
+        # dos documentos nem a trilha.
+        {"id": "u-novo", "email": "novo@x.com", "role": "user",
+         "ativo": True, "departamento_id": "dep-fiscal"},
+        {"id": "u-chefe", "email": "chefe@x.com", "role": "gestor",
+         "ativo": True, "departamento_id": "dep-fiscal"},
+    ]
+    fake.tabelas["departamento_lider"] = [
+        {"departamento_id": "dep-fiscal", "user_id": "u-gestor"},
+        {"departamento_id": "dep-fiscal", "user_id": "u-chefe"},
     ]
     monkeypatch.setattr(ci, "_supabase", lambda: fake)
     monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-" + email.split("@")[0])
@@ -205,12 +232,23 @@ def test_admin_e_gestor_tem_alcance_total(
     client: TestClient, banco: _Fake, papel: str, rota: str, extra: dict
 ) -> None:
     """
-    Para o gestor isto é consequência da decisão de 15/08: quem pode atribuir
-    qualquer cliente a qualquer operador pode atribuir a si mesmo. Limitá-lo
-    seria teatro, e teatro de segurança confunde quem lê o código depois.
+    **Só o admin, desde 18/08/2026.**
+
+    A decisão de 15/08 dava alcance total ao gestor, e a razão era boa: quem
+    pode atribuir qualquer cliente a qualquer operador pode atribuir a si
+    mesmo, então limitá-lo seria teatro.
+
+    O departamento inverteu o argumento. O gestor passou a atribuir apenas
+    dentro do setor que lidera — e se continuasse instalando qualquer coisa, o
+    recorte é que seria teatro. Ele agora instala o que está na carteira dele,
+    como todo mundo; a diferença é que ele mesmo pode se atribuir, dentro do
+    setor.
     """
     r = _pedir(client, rota, extra, [CERT_ALHEIO, CERT_SEM_DOC], _h(papel))
-    assert r.status_code == 200, r.text
+    if papel == "admin":
+        assert r.status_code == 200, r.text
+    else:
+        assert r.status_code == 403, "gestor voltou a ter alcance total"
 
 
 @pytest.mark.parametrize("rota,extra", ROTAS)
@@ -319,9 +357,12 @@ def test_operador_nao_monta_a_propria_carteira(client: TestClient, banco: _Fake)
 
 def test_atribuicao_registra_quem_deu_o_acesso(client: TestClient, banco: _Fake) -> None:
     """
-    Com o gestor podendo atribuir qualquer cliente do acervo, a trilha é a
-    única forma de reconstruir o estrago se a conta dele for comprometida. O
-    e-mail vai junto do UUID de propósito: apagar a conta zeraria o UUID e
+    A trilha é como se reconstrói o que houve se a conta de um líder for
+    comprometida. O recorte por departamento (18/08) limitou o alcance de cada
+    um, mas não tornou a trilha dispensável: dentro do setor o líder continua
+    podendo atribuir QUALQUER cliente do acervo a qualquer pessoa.
+
+    O e-mail vai junto do UUID de propósito: apagar a conta zeraria o UUID e
     deixaria a trilha sem responsável, justo quando ela mais importa.
     """
     client.post(
