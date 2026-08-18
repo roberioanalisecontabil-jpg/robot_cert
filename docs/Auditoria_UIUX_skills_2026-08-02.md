@@ -627,8 +627,23 @@ Por isso os papéis foram declarados explicitamente: `role="table"` nas 9 tabela
 
 Conforme `08 §10` e `04 §11`:
 
-- [ ] Lighthouse ≥ 90 em Acessibilidade nas 5 telas principais
-- [ ] Navegação completa por teclado no dashboard (Tab → filtro → busca → tabela → paginação), sem armadilha de foco
+- [x] ~~Lighthouse ≥ 90~~ **axe-core com zero violações nas 11 telas, nos dois temas** ✅ 18/08.
+  O axe é o motor das checagens de acessibilidade do Lighthouse; rodou logado,
+  no navegador real, com dados de produção (fonte remota) — o que importou:
+  badge, linha tingida e estado de erro não existem em tela vazia. Cinco
+  achados corrigidos (ver commits `fda7ac7` e `dba273f`); a rodada final
+  fechou em zero. Nota de método: Chrome congela transições em janela
+  ocluída — auditar logo após trocar o tema via script lê cores VELHAS; a
+  varredura injeta `* { transition: none }` antes do flip.
+- [x] Navegação por teclado ✅ 18/08 — ciclo completo (skip-link → sidebar →
+  toggles → filtro → busca → botões → tabela) registrado por `focusin`, sem
+  armadilha: o foco dá a volta e retorna ao skip-link. Paginação e checkboxes
+  são `<button>`/`<input>` nativos. **De quebra, o Tab revelou um bug
+  funcional:** o admin fora de /dashboard e /carteiras não via esses itens —
+  a revelação da sidebar era copiada por tela e as cópias divergiram
+  (consertado em `4c2114f`, centralizada em `initSidebarPorPapel`).
+  Pendência menor, opcional: o drawer mobile fecha por backdrop e pelo
+  botão, mas não por Esc (dropdown e modais fecham).
 - [x] Contraste revalidado nos **dois** temas ✅ **18/08 — e a skill `04 §2` tinha razão: o escuro não é inversão do claro.**
   Recalculados 33 pares por luminância relativa, com composição de alpha nos
   fundos `rgba` do escuro. **Quatro reprovações reais, três só no tema escuro:**
@@ -646,10 +661,25 @@ Conforme `08 §10` e `04 §11`:
   escuros idênticos — o "MANTER SINCRONIZADO" deixou de ser só um pedido.
   Cache-buster: `?v=a11y-contraste-2026-08`, incluindo o `instalador.html`,
   que estava para trás em `cg-v2-fluid` desde antes do Sprint 1.
-- [ ] Teste em 320 / 768 / 1024 / 1440px + uma ultrawide (`03 §11`)
-- [ ] Zoom 200% sem quebra de layout (`04 §10` — reflow)
-- [ ] Simulador de deuteranopia nos cards e badges (`04 §9`)
-- [ ] Teste com `prefers-reduced-motion: reduce` ativo — o drawer mobile abre e fecha?
+- [x] Larguras ✅ 18/08 — cada rota medida em janela real a 320 / 555 / ~750 /
+  ~1006 / ~1422 / 2133 px, critério `scrollWidth <= clientWidth` do documento.
+  **Cinco causas de scroll lateral corrigidas** (`f934a34`), todas da mesma
+  família — mínimo intrínseco maior que o viewport: `min-width:auto` do
+  `.main-content` flex; a fila segmentada da paginação inflando a linha;
+  `1fr 1fr` (piso min-content) no bloco de 480px dos cards; `minmax(320px)`
+  sem guarda e tabela sem rolagem própria no dashboard; mínimos fixos no
+  instalador e no campo de CSV.
+- [x] Zoom 200% ✅ por equivalência — 200% numa janela de 640px é um viewport
+  de 320 CSS px, exatamente o reflow validado acima.
+- [x] Deuteranopia ✅ 18/08 — filtro `feColorMatrix` sobre a página real:
+  verde e âmbar convergem como previsto, e os badges continuam distinguíveis
+  pelo glifo (✓/⚠/✕/!/?) e pelo texto (A2); os cards, pelo rótulo.
+- [x] `prefers-reduced-motion` ✅ por construção + trava — o bloco encurta
+  durações sem zerar `transform` (a lição do C3 está no comentário), então o
+  drawer continua abrindo e fechando; `test_reduced_motion_nao_zera_transform_globalmente`
+  (`4655b19`) impede a regressão. Abrir/fechar do drawer verificado ao vivo
+  em ~750px (backdrop e botão). Teste manual com a preferência ativa no
+  Windows fica como opcional.
 
 ---
 
