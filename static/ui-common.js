@@ -321,6 +321,24 @@ const BADGE_STATUS = {
  * O glifo leva `aria-hidden="true"`: o leitor de tela já lê o texto ao lado, e
  * sem isso anunciaria "marca de seleção Ativo".
  */
+/**
+ * Badge de AVISO, para o que não é estado de certificado.
+ *
+ * Existe porque a etiqueta "sem líder" de um departamento tem a mesma forma
+ * visual de um badge, mas não pertence a `BADGE_STATUS` — e montar a string
+ * `class="badge badge-bad"` à mão no template é justamente o que
+ * `test_status_de_certificado_nao_e_montado_a_mao_no_template` proíbe, para a
+ * terceira cópia do mapeamento de status não nascer.
+ */
+function badgeAviso(texto) {
+  return (
+    '<span class="badge badge-bad">' +
+    '<span class="badge-glifo" aria-hidden="true">!</span>' +
+    esc(texto) +
+    "</span>"
+  );
+}
+
 function badgeStatus(chave) {
   const d = BADGE_STATUS[chave];
   if (!d) {

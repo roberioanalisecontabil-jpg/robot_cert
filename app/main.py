@@ -865,7 +865,7 @@ def list_users() -> List[dict]:
     sb = _supabase()
     if not sb: return []
     r = sb.table("users").select(
-        "id, email, full_name, role, ativo, gestor_id, created_at"
+        "id, email, full_name, role, ativo, gestor_id, departamento_id, created_at"
     ).execute()
     return r.data
 
@@ -875,6 +875,7 @@ class UserCreateBody(BaseModel):
     password: str
     full_name: str
     role: str = "user"
+    departamento_id: Optional[str] = None
 
 
 class UserUpdateBody(BaseModel):
@@ -886,6 +887,9 @@ class UserUpdateBody(BaseModel):
     # `role` — o papel deixou de ser o lugar onde o estado mora.
     ativo: Optional[bool] = None
     gestor_id: Optional[str] = None
+    # Omitir mantém o que está gravado; string vazia limpa. Sem a distinção,
+    # não haveria como tirar alguém de um setor sem inventar um valor.
+    departamento_id: Optional[str] = None
 
 
 class UserResetPasswordBody(BaseModel):
@@ -1091,6 +1095,7 @@ def create_user(body: UserCreateBody) -> dict:
             # acesso e nada mais — `require_auth` recusa o resto do portal até a
             # pessoa escolher uma própria.
             "deve_trocar_senha": True,
+            "departamento_id": (body.departamento_id or "").strip() or None,
             "email": email,
             "password_hash": hash_pw,
             "full_name": body.full_name,
@@ -1193,6 +1198,9 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
         campos["role"] = role
     if ativo is not None:
         campos["ativo"] = bool(ativo)
+    if body.departamento_id is not None:
+        did = body.departamento_id.strip()
+        campos["departamento_id"] = did or None
     if body.gestor_id is not None:
         gid = body.gestor_id.strip()
         if gid and gid == user_id:
@@ -1285,6 +1293,199 @@ def delete_user(user_id: str) -> dict:
     _garantir_que_sobra_admin(sb, user_id, apagar=True)
     sb.table("users").delete().eq("id", user_id).execute()
     return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Departamentos
+#
+# O departamento recorta quem cada líder pode liberar. Criar, renomear e
+# apagar setor é de ADMIN: quem define os setores define, por consequência, o
+# alcance de cada líder — deixar isso com o próprio líder o deixaria ampliar o
+# próprio alcance criando setores e se pondo neles.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class DepartamentoBody(BaseModel):
+    nome: str
+
+
+class DepartamentoLideresBody(BaseModel):
+    lideres: List[str] = Field(default_factory=list)
+
+
+def _nome_de_departamento(nome: str) -> str:
+    limpo = (nome or "").strip()
+    if not limpo:
+        raise HTTPException(status_code=422, detail="O nome do departamento é obrigatório.")
+    if len(limpo) > 80:
+        raise HTTPException(status_code=422, detail="Nome muito longo (máximo 80 caracteres).")
+    return limpo
+
+
+# `require_admin`, e nao `require_admin_ou_gestor`: a unica tela que consome
+# isto hoje e /usuarios, que ja e de admin. Quando o lider precisar ver os
+# proprios setores (etapa 4), a rota certa e outra, escopada a ele -- esta
+# devolve TODOS os departamentos, e alcance total nao e o do lider.
+@app.get("/api/departamentos", dependencies=[Depends(require_admin)])
+def listar_departamentos() -> List[dict]:
+    """
+    Setores com os líderes e quantas pessoas têm.
+
+    A contagem vem junto porque é o que responde "posso apagar este?" sem um
+    segundo clique — e apagar um setor com gente dentro deixa essas pessoas
+    sem departamento, o que ninguém quer descobrir depois.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        return []
+    try:
+        deps = sb.table("departamento").select("id, nome, criado_em").execute().data or []
+        lids = sb.table("departamento_lider").select("departamento_id, user_id").execute().data or []
+        pessoas = sb.table("users").select("id, full_name, email, departamento_id, ativo, role").execute().data or []
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao listar departamentos")
+        raise HTTPException(status_code=503, detail="Não foi possível listar os departamentos.")
+
+    por_id = {str(u["id"]): u for u in pessoas}
+    membros: Dict[str, int] = defaultdict(int)
+    for u in pessoas:
+        if u.get("departamento_id"):
+            membros[str(u["departamento_id"])] += 1
+
+    lideres: Dict[str, List[dict]] = defaultdict(list)
+    for l in lids:
+        u = por_id.get(str(l.get("user_id")))
+        if not u:
+            continue
+        lideres[str(l.get("departamento_id"))].append({
+            "id": str(u["id"]),
+            "nome": u.get("full_name") or u.get("email"),
+            "ativo": bool(conta_ativa(u)),
+        })
+
+    saida = []
+    for d in deps:
+        did = str(d["id"])
+        saida.append({
+            "id": did,
+            "nome": d.get("nome"),
+            "criado_em": d.get("criado_em"),
+            "lideres": sorted(lideres.get(did, []), key=lambda x: x["nome"] or ""),
+            "membros": membros.get(did, 0),
+        })
+    return sorted(saida, key=lambda x: (x["nome"] or "").lower())
+
+
+@app.post("/api/departamentos", dependencies=[Depends(require_admin)])
+def criar_departamento(body: DepartamentoBody) -> dict:
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+    nome = _nome_de_departamento(body.nome)
+    try:
+        r = sb.table("departamento").insert({"nome": nome}).execute()
+    except Exception as e:  # noqa: BLE001
+        # O índice único é sobre lower(btrim(nome)). A mensagem crua do
+        # PostgREST diria "duplicate key value violates unique constraint", que
+        # não ajuda quem está olhando um campo de texto.
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            raise HTTPException(status_code=409, detail=f"Já existe um departamento chamado {nome}.")
+        logger.exception("Falha ao criar departamento")
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "id": str((r.data or [{}])[0].get("id", ""))}
+
+
+@app.put("/api/departamentos/{dep_id}", dependencies=[Depends(require_admin)])
+def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+    nome = _nome_de_departamento(body.nome)
+    try:
+        sb.table("departamento").update({"nome": nome}).eq("id", dep_id).execute()
+    except Exception as e:  # noqa: BLE001
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            raise HTTPException(status_code=409, detail=f"Já existe um departamento chamado {nome}.")
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@app.delete("/api/departamentos/{dep_id}", dependencies=[Depends(require_admin)])
+def apagar_departamento(dep_id: str) -> dict:
+    """
+    Apaga o setor. As pessoas dele ficam SEM departamento, não são apagadas —
+    é o `ON DELETE SET NULL` da migration, e a escolha é deliberada: perder o
+    vínculo é corrigível na tela, perder as contas não.
+
+    As lideranças caem junto (`ON DELETE CASCADE`): liderança de um setor que
+    não existe mais daria alcance sobre nada e confundiria a leitura.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+    try:
+        sb.table("departamento").delete().eq("id", dep_id).execute()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@app.put("/api/departamentos/{dep_id}/lideres", dependencies=[Depends(require_admin)])
+def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
+    """
+    Substitui a lista de líderes do setor.
+
+    Substitui em vez de somar porque a tela mostra a lista inteira: se o
+    servidor só acrescentasse, tirar alguém exigiria uma rota a mais e a tela
+    passaria a mentir sobre o que salvou.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+
+    ids = [str(x).strip() for x in (body.lideres or []) if str(x).strip()]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(status_code=422, detail="A mesma pessoa aparece duas vezes na lista.")
+
+    if ids:
+        try:
+            achados = sb.table("users").select("id, role, ativo").execute().data or []
+        except Exception:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail="Não foi possível validar os líderes agora.")
+        por_id = {str(u["id"]): u for u in achados}
+        for uid in ids:
+            u = por_id.get(uid)
+            if not u:
+                raise HTTPException(status_code=422, detail="Um dos líderes escolhidos não existe.")
+            if not conta_ativa(u):
+                # Líder desativado não entra no portal, então o setor ficaria
+                # com um responsável que não consegue liberar nada — a mesma
+                # situação de não ter líder, mas parecendo resolvida.
+                raise HTTPException(
+                    status_code=422,
+                    detail="Não é possível designar uma conta desativada como líder.",
+                )
+
+    try:
+        sb.table("departamento_lider").delete().eq("departamento_id", dep_id).execute()
+        if ids:
+            sb.table("departamento_lider").insert(
+                [{"departamento_id": dep_id, "user_id": uid} for uid in ids]
+            ).execute()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao definir líderes")
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "lideres": len(ids)}
 
 
 @app.get("/api/health")

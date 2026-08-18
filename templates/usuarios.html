@@ -95,7 +95,14 @@
             </div>
         </section>
 
-        <section class="doc-block">
+        <div class="abas" role="tablist" aria-label="Seções da gestão de acesso">
+          <button type="button" class="aba ativa" id="aba-usuarios" role="tab"
+                  aria-selected="true" aria-controls="painel-usuarios">Usuários</button>
+          <button type="button" class="aba" id="aba-departamentos" role="tab"
+                  aria-selected="false" aria-controls="painel-departamentos">Departamentos</button>
+        </div>
+
+        <section class="doc-block" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios">
             <h2>Usuários Ativos</h2>
             <p style="margin: 0 0 1rem;">
               <button type="button" class="primary" id="btn-novo-usuario">Novo usuário</button>
@@ -141,6 +148,34 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </section>
+        <section class="doc-block" id="painel-departamentos" role="tabpanel"
+                 aria-labelledby="aba-departamentos" hidden>
+            <h2>Departamentos</h2>
+            <p class="hint" style="margin: 0 0 1rem;">
+              O departamento define o alcance de quem lidera: o líder libera
+              certificados apenas para quem está no setor dele.
+            </p>
+            <p style="margin: 0 0 1rem;">
+              <button type="button" class="primary" id="btn-novo-departamento">Novo departamento</button>
+            </p>
+            <div class="table-container" id="table-container-deps">
+              <div class="table-scroll-anchor">
+                <div class="table-scroll" tabindex="0" role="region" aria-label="Departamentos">
+                  <table class="user-table" role="table">
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader">Departamento</th>
+                        <th role="columnheader">Líderes</th>
+                        <th role="columnheader">Pessoas</th>
+                        <th role="columnheader">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody role="rowgroup" id="dep-list-body"></tbody>
+                  </table>
+                </div>
+              </div>
             </div>
         </section>
     </main>
@@ -203,6 +238,17 @@
               <option value="admin">Administrador</option>
             </select>
             <span class="modal__dica" id="ed-nivel-dica"></span>
+          </div>
+
+          <div class="modal__campo">
+            <label for="ed-departamento">Departamento</label>
+            <select id="ed-departamento">
+              <option value="">Sem departamento</option>
+            </select>
+            <span class="modal__dica">
+              Define quem pode liberar certificados para esta pessoa: os líderes
+              do setor.
+            </span>
           </div>
 
           <div class="modal__campo">
@@ -271,9 +317,44 @@
       </form>
     </dialog>
 
+    <dialog id="modal-dep" class="modal" aria-labelledby="modal-dep-titulo">
+      <form id="form-dep" class="modal__form">
+        <div class="modal__head">
+          <h2 id="modal-dep-titulo">Novo departamento</h2>
+          <p class="modal__sub" id="modal-dep-sub"></p>
+        </div>
+        <div class="modal__body">
+          <div class="modal__erro" id="modal-dep-erro" role="alert"></div>
+
+          <div class="modal__campo">
+            <label for="dep-nome">Nome</label>
+            <input type="text" id="dep-nome" required maxlength="80"
+                   placeholder="Ex.: Fiscal" autocomplete="off">
+          </div>
+
+          <div class="modal__campo">
+            <label for="dep-lideres">Líderes</label>
+            <!-- Múltipla escolha porque um setor pode ter mais de um: férias,
+                 turnos, redundância. Com um só, a primeira ausência do titular
+                 deixaria o setor sem quem libere. -->
+            <select id="dep-lideres" multiple size="6"></select>
+            <span class="modal__dica">
+              Segure Ctrl (ou Cmd) para escolher mais de um. Só contas ativas
+              aparecem — líder que não entra no portal não libera nada.
+            </span>
+          </div>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn-action" id="dep-cancelar">Cancelar</button>
+          <button type="submit" class="primary" id="dep-salvar">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
+        let depsCache = [];
 
         // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
 
@@ -400,6 +481,190 @@
             }
         }
 
+        // ── Abas ──────────────────────────────────────────────────────────
+        function trocarAba(qual) {
+            const ehDep = qual === 'departamentos';
+            document.getElementById('painel-usuarios').hidden = ehDep;
+            document.getElementById('painel-departamentos').hidden = !ehDep;
+            document.getElementById('aba-usuarios').classList.toggle('ativa', !ehDep);
+            document.getElementById('aba-departamentos').classList.toggle('ativa', ehDep);
+            document.getElementById('aba-usuarios').setAttribute('aria-selected', String(!ehDep));
+            document.getElementById('aba-departamentos').setAttribute('aria-selected', String(ehDep));
+        }
+        document.getElementById('aba-usuarios').addEventListener('click', () => trocarAba('usuarios'));
+        document.getElementById('aba-departamentos').addEventListener('click', () => trocarAba('departamentos'));
+
+        // ── Departamentos ─────────────────────────────────────────────────
+        function erroDoDep(texto) {
+            const el = document.getElementById('modal-dep-erro');
+            el.textContent = texto || '';
+            el.setAttribute('data-visivel', texto ? '1' : '0');
+        }
+
+        function renderDepartamentos() {
+            const body = document.getElementById('dep-list-body');
+            body.innerHTML = '';
+            if (!depsCache.length) {
+                renderEmptyRow(body, 4, {
+                    icon: '🏢',
+                    title: 'Nenhum departamento cadastrado',
+                    description: 'Crie o primeiro setor para começar a definir quem libera certificados para quem.',
+                });
+                return;
+            }
+            body.innerHTML = depsCache.map((d) => {
+                const lideres = (d.lideres || []).length
+                    ? d.lideres.map((l) => esc(l.nome)).join(', ')
+                    // Setor sem líder não é detalhe: ninguém pode liberar nada
+                    // para quem está nele, e isso precisa saltar aos olhos.
+                    : badgeAviso('sem líder');
+                return `
+                <tr role="row">
+                  <td role="cell" data-label="Departamento"><strong>${esc(d.nome)}</strong></td>
+                  <td role="cell" data-label="Líderes">${lideres}</td>
+                  <td role="cell" data-label="Pessoas">${d.membros}</td>
+                  <td role="cell">
+                    <div class="row-actions">
+                      <button class="btn-action" data-dep-acao="editar" data-id="${d.id}">Editar</button>
+                      <button class="btn-action btn-danger" data-dep-acao="apagar" data-id="${d.id}">Apagar</button>
+                    </div>
+                  </td>
+                </tr>`;
+            }).join('');
+
+            body.onclick = (e) => {
+                const btn = e.target.closest('button[data-dep-acao]');
+                if (!btn) return;
+                const id = btn.getAttribute('data-id');
+                if (btn.getAttribute('data-dep-acao') === 'editar') abrirDep(id);
+                else apagarDep(id);
+            };
+        }
+
+        async function loadDepartamentos() {
+            try {
+                const r = await fetch('/api/departamentos', { headers: getHeaders() });
+                if (!r.ok) return;
+                depsCache = await r.json();
+                renderDepartamentos();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        let depEditandoId = null;
+
+        function abrirDep(id) {
+            const d = id ? depsCache.find((x) => x.id === id) : null;
+            depEditandoId = id || null;
+
+            document.getElementById('modal-dep-titulo').textContent =
+                d ? 'Editar departamento' : 'Novo departamento';
+            document.getElementById('modal-dep-sub').textContent =
+                d ? `${d.membros} pessoa(s) neste setor` : '';
+            document.getElementById('dep-nome').value = d ? d.nome : '';
+
+            const sel = document.getElementById('dep-lideres');
+            sel.textContent = '';
+            const escolhidos = new Set((d && d.lideres || []).map((l) => l.id));
+            usersCache
+                // Só contas ativas: líder que não entra no portal não libera
+                // nada, e o setor pareceria resolvido sem estar.
+                .filter(estaAtivo)
+                .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                .forEach((u) => {
+                    const op = document.createElement('option');
+                    op.value = u.id;
+                    op.textContent = `${u.full_name || u.email} (${roleLabel(u.role)})`;
+                    op.selected = escolhidos.has(u.id);
+                    sel.appendChild(op);
+                });
+
+            erroDoDep('');
+            abrirModal('modal-dep');
+            document.getElementById('dep-nome').focus();
+        }
+
+        document.getElementById('btn-novo-departamento').addEventListener('click', () => abrirDep(null));
+        document.getElementById('dep-cancelar').addEventListener('click', () => {
+            document.getElementById('modal-dep').close();
+        });
+
+        document.getElementById('form-dep').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('dep-salvar');
+            const nome = document.getElementById('dep-nome').value.trim();
+            const lideres = Array.from(document.getElementById('dep-lideres').selectedOptions)
+                .map((o) => o.value);
+
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+            erroDoDep('');
+            try {
+                let id = depEditandoId;
+                const r = await fetch(
+                    id ? `/api/departamentos/${id}` : '/api/departamentos',
+                    {
+                        method: id ? 'PUT' : 'POST',
+                        headers: getHeaders(true),
+                        body: JSON.stringify({ nome }),
+                    }
+                );
+                if (!r.ok) { erroDoDep(await mensagemCorpoErro(r)); return; }
+                if (!id) id = (await r.json()).id;
+
+                // Segunda chamada de propósito: o nome e a lista de líderes são
+                // recursos diferentes, e juntá-los faria um erro de validação
+                // nos líderes desfazer também a renomeação.
+                const rl = await fetch(`/api/departamentos/${id}/lideres`, {
+                    method: 'PUT',
+                    headers: getHeaders(true),
+                    body: JSON.stringify({ lideres }),
+                });
+                if (!rl.ok) {
+                    erroDoDep('Departamento salvo, mas os líderes não: ' + (await mensagemCorpoErro(rl)));
+                    await loadDepartamentos();
+                    return;
+                }
+                document.getElementById('modal-dep').close();
+                await loadDepartamentos();
+                showToast('Departamento salvo.', 'success');
+            } catch (err) {
+                erroDoDep('Erro de conexão com o servidor.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Salvar';
+            }
+        });
+
+        async function apagarDep(id) {
+            const d = depsCache.find((x) => x.id === id);
+            if (!d) return;
+            const ok = await confirmarAcao({
+                titulo: 'Apagar departamento',
+                // Diz o que acontece com as pessoas: elas NÃO são apagadas, mas
+                // ficam sem setor — e sem setor ninguém pode liberar nada para
+                // elas. É a consequência que decide se vale apagar.
+                mensagem: d.membros
+                    ? `${d.nome} tem ${d.membros} pessoa(s). Elas não serão apagadas, mas ficam sem departamento — e sem ninguém que possa liberar certificados para elas até serem colocadas em outro setor.`
+                    : `${d.nome} não tem ninguém. Apagar remove o setor e as lideranças dele.`,
+                textoConfirmar: 'Apagar',
+                perigo: true,
+            });
+            if (!ok) return;
+            const r = await fetch(`/api/departamentos/${id}`, {
+                method: 'DELETE',
+                headers: getHeaders(true),
+            });
+            if (!r.ok) {
+                showToast('Não foi possível apagar: ' + (await mensagemCorpoErro(r)), 'error');
+                return;
+            }
+            await loadDepartamentos();
+            await loadUsers();
+            showToast('Departamento apagado.', 'success');
+        }
+
         async function loadUsers() {
             toggleLoading(true, "Carregando usuários...");
             try {
@@ -455,6 +720,22 @@
             sel.value = user.gestor_id || '';
         }
 
+        function preencherDepartamentos(selecionado) {
+            const sel = document.getElementById('ed-departamento');
+            sel.textContent = '';
+            const vazio = document.createElement('option');
+            vazio.value = '';
+            vazio.textContent = 'Sem departamento';
+            sel.appendChild(vazio);
+            depsCache.forEach((d) => {
+                const op = document.createElement('option');
+                op.value = d.id;
+                op.textContent = d.nome;
+                sel.appendChild(op);
+            });
+            sel.value = selecionado || '';
+        }
+
         function ajustarDicaDeNivel() {
             const nivel = document.getElementById('ed-nivel').value;
             const dica = document.getElementById('ed-nivel-dica');
@@ -492,6 +773,7 @@
             // Objeto vazio: `preencherGestores` só usa `id` (para não se
             // oferecer como gestor de si mesma) e `gestor_id`.
             preencherGestores({ id: null, gestor_id: '' });
+            preencherDepartamentos('');
             ajustarDicaDeNivel();
             erroDoModal('');
             abrirModal('modal-editar');
@@ -528,6 +810,7 @@
             document.getElementById('ed-email').value = user.email || '';
             document.getElementById('ed-nivel').value = String(user.role || 'user').toLowerCase();
             preencherGestores(user);
+            preencherDepartamentos(user.departamento_id);
             ajustarDicaDeNivel();
             erroDoModal('');
 
@@ -557,6 +840,9 @@
                 // Só operador tem gestor. Enviar o campo para admin/gestor
                 // gravaria um vínculo que nenhuma tela mostra.
                 gestor_id: nivel === 'user' ? (document.getElementById('ed-gestor').value || '') : '',
+                // String vazia limpa o vínculo; omitir manteria o que está
+                // gravado, e não haveria como tirar alguém de um setor.
+                departamento_id: document.getElementById('ed-departamento').value || '',
             };
 
             if (criando) {
@@ -819,7 +1105,11 @@
             if (elUsers) elUsers.style.display = 'flex';
             if (elConfig) elConfig.style.display = 'flex';
             if (elInst) elInst.style.display = 'flex';
-            loadUsers();
+            // Os departamentos carregam junto, e não ao abrir a aba: o modal de
+            // usuário precisa da lista para montar o select, e ele abre a
+            // partir da aba de usuários — sem isso, o campo apareceria vazio
+            // até alguém visitar a outra aba.
+            loadUsers().then(loadDepartamentos);
         }
     </script>
 </body>

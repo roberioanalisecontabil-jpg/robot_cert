@@ -2472,3 +2472,50 @@ dialog.modal::backdrop {
   max-height: 220px;
   overflow-y: auto;
 }
+
+/* Abas de seção (gestão de usuários / departamentos).
+
+   Botões, e não links: não mudam de página, e um <a href="#"> anunciaria
+   navegação que não acontece. `role="tablist"` e `aria-selected` no HTML
+   dizem ao leitor de tela o que a cor diz a quem enxerga. */
+.abas {
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.aba {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.75rem 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  position: relative;
+  box-shadow: none;
+}
+
+.aba:hover {
+  color: var(--text);
+}
+
+.aba.ativa {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* A barra é o indicador de "esta é a aba aberta". `aria-selected` no botão
+   carrega a mesma informação para quem não vê a cor nem a barra. */
+.aba.ativa::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--accent);
+  border-radius: 2px;
+}
