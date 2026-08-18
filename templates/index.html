@@ -220,7 +220,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -864,16 +864,9 @@
       });
 
       (async function init() {
-        // Controle de visibilidade do menu lateral
-        const role = localStorage.getItem('user_role');
-        if (role === 'admin') {
-            const elUsers = document.getElementById('nav-users');
-            const elConfig = document.getElementById('nav-config');
-            const elInst = document.getElementById('nav-installer');
-            if (elUsers) elUsers.style.display = 'flex';
-            if (elConfig) elConfig.style.display = 'flex';
-            if (elInst) elInst.style.display = 'flex';
-        }
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel) — era copiada
+        // por tela e as cópias divergiram: o admin no Início não via
+        // Dashboard nem Carteiras.
 
         // Delegação no tbody: a tabela é reconstruída a cada página, e ouvintes
         // por checkbox teriam de ser religados a cada render.

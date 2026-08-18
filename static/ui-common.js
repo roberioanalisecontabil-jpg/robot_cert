@@ -51,6 +51,24 @@ document.addEventListener('click', function(e) {
   }
 });
 
+function initSidebarPorPapel() {
+  // A sidebar virou partial em 15/08, mas a revelação dos itens restritos
+  // ficou copiada em cada tela — e as cópias envelheceram em ritmos
+  // diferentes: 8 telas só conheciam os itens de admin antigos, então um
+  // admin no Início não via Dashboard nem Carteiras; eles só apareciam para
+  // quem já estava NELES. A lista de quem vê o quê mora aqui, uma vez.
+  // O servidor confere de novo em cada API: isto é conveniência, não barreira.
+  const role = localStorage.getItem("user_role");
+  const porPapel = {
+    admin: ["nav-users", "nav-config", "nav-installer", "nav-dashboard", "nav-carteiras"],
+    gestor: ["nav-carteiras"],
+  };
+  (porPapel[role] || []).forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "flex";
+  });
+}
+
 async function mensagemCorpoErro(r) {
   const raw = await r.text();
   try {
@@ -1251,6 +1269,7 @@ function initNotifications() {
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
+    initSidebarPorPapel();
     initSidebarToggle();
     initThemeToggle();
     initNotifications();
@@ -1258,6 +1277,7 @@ if (document.readyState === "loading") {
     _consumirToastPendente();
   });
 } else {
+  initSidebarPorPapel();
   initSidebarToggle();
   initThemeToggle();
   initNotifications();

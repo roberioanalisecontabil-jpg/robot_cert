@@ -17,6 +17,8 @@ Dois testes daqui valem mais que os outros:
   Uma rota nova que devolva `select("*")` por conveniência desfaz isso.
 """
 
+import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -308,9 +310,18 @@ def test_menu_revela_carteiras_para_gestor(html: str) -> None:
     """
     Montar carteira é a função do gestor. Se só admin revelasse o item, o
     gestor teria a permissão e nenhum caminho até ela.
+
+    Em 18/08 a revelação saiu das telas para initSidebarPorPapel (ui-common.js):
+    era copiada por template e as cópias divergiram — 8 telas não conheciam
+    nav-dashboard/nav-carteiras, então o admin fora destas páginas não as via.
+    O invariante segue o mesmo; o lugar dele mudou.
     """
     assert 'id="nav-carteiras"' in html
-    assert '_papel === "gestor"' in html
+    js = (Path(__file__).resolve().parent.parent / "static" / "ui-common.js").read_text(
+        encoding="utf-8"
+    )
+    m = re.search(r"gestor:\s*\[([^\]]*)\]", js)
+    assert m and '"nav-carteiras"' in m.group(1)
 
 
 def test_estado_vazio_diz_a_consequencia(html: str) -> None:

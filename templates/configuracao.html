@@ -250,7 +250,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       // ── Lógica de abas ──────────────────────────────────────────────────────
       const TABS = [
@@ -526,15 +526,10 @@
 
       // ── Init ─────────────────────────────────────────────────────────────────
       (async function init() {
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
+        // o gate da página.
         const role = localStorage.getItem('user_role');
-        if (role === 'admin') {
-          const elUsers = document.getElementById('nav-users');
-          const elConfig = document.getElementById('nav-config');
-          const elInst = document.getElementById('nav-installer');
-          if (elUsers) elUsers.style.display = 'flex';
-          if (elConfig) elConfig.style.display = 'flex';
-          if (elInst) elInst.style.display = 'flex';
-        } else {
+        if (role !== 'admin') {
           // Toast na página de destino: um toast aqui sumiria junto com a
           // navegação, e um alert() bloquearia o redirecionamento.
           showToastAfterRedirect('Acesso restrito a administradores.', 'warning');

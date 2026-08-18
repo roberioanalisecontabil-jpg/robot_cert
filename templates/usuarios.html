@@ -351,7 +351,7 @@
       </form>
     </dialog>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
         let depsCache = [];
@@ -1093,18 +1093,13 @@
         document.getElementById('user-role-filter').addEventListener('change', renderUsers);
         document.getElementById('user-status-filter').addEventListener('change', renderUsers);
 
-        // Verificar permissão e visibilidade do menu
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
+        // o gate da página.
         const role = localStorage.getItem('user_role');
         if (role !== 'admin') {
             showToastAfterRedirect('Acesso restrito a administradores.', 'warning');
             window.location.href = '/';
         } else {
-            const elUsers = document.getElementById('nav-users');
-            const elConfig = document.getElementById('nav-config');
-            const elInst = document.getElementById('nav-installer');
-            if (elUsers) elUsers.style.display = 'flex';
-            if (elConfig) elConfig.style.display = 'flex';
-            if (elInst) elInst.style.display = 'flex';
             // Os departamentos carregam junto, e não ao abrir a aba: o modal de
             // usuário precisa da lista para montar o select, e ele abre a
             // partir da aba de usuários — sem isso, o campo apareceria vazio

@@ -83,7 +83,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_HIST = "cg_per_page_historico";
     const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
@@ -396,15 +396,8 @@
     });
 
     (async function init() {
-      const role = localStorage.getItem("user_role");
-      if (role === "admin") {
-        const elUsers = document.getElementById("nav-users");
-        const elConfig = document.getElementById("nav-config");
-        const elInst = document.getElementById("nav-installer");
-        if (elUsers) elUsers.style.display = "flex";
-        if (elConfig) elConfig.style.display = "flex";
-        if (elInst) elInst.style.display = "flex";
-      }
+      // A revelação da sidebar por papel mora em ui-common.js
+      // (initSidebarPorPapel) — era copiada por tela e as cópias divergiram.
       initPerPageHist();
       await carregarHistorico();
     })();

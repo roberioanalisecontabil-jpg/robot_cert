@@ -202,19 +202,13 @@
       </section>
     </main>
 
-    <script src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       document.addEventListener("DOMContentLoaded", function() {
-        // Verificar perfil Admin
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
+        // o gate da página.
         const role = localStorage.getItem("user_role");
-        if (role === "admin") {
-          const navInst = document.getElementById("nav-installer");
-          const navUsers = document.getElementById("nav-users");
-          const navConfig = document.getElementById("nav-config");
-          if (navInst) navInst.style.display = "flex";
-          if (navUsers) navUsers.style.display = "flex";
-          if (navConfig) navConfig.style.display = "flex";
-        } else {
+        if (role !== "admin") {
           window.location.href = "/";
           return;
         }

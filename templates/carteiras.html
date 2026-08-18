@@ -96,7 +96,7 @@
       </div>
     </main>
 
-    <script src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       let _operadores = [];
       let _selecionado = null;
@@ -341,16 +341,9 @@
       }
 
       (function init() {
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel), que nasceu
+        // desta cópia — era a única que já conhecia todos os itens.
         _papel = localStorage.getItem("user_role");
-        if (_papel === "admin") {
-          ["nav-users", "nav-config", "nav-installer", "nav-dashboard", "nav-carteiras"].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = "flex";
-          });
-        } else if (_papel === "gestor") {
-          const el = document.getElementById("nav-carteiras");
-          if (el) el.style.display = "flex";
-        }
 
         document.getElementById("buscaOperador").addEventListener("input", renderOperadores);
         document.getElementById("buscaDoc").addEventListener("input", () => {

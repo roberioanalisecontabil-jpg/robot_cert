@@ -130,7 +130,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
@@ -548,15 +548,7 @@
     });
 
     (async function init() {
-      const role = localStorage.getItem("user_role");
-      if (role === "admin") {
-        const elUsers = document.getElementById("nav-users");
-        const elConfig = document.getElementById("nav-config");
-        const elInst = document.getElementById("nav-installer");
-        if (elUsers) elUsers.style.display = "flex";
-        if (elConfig) elConfig.style.display = "flex";
-        if (elInst) elInst.style.display = "flex";
-      }
+      // Sidebar por papel: ui-common.js (initSidebarPorPapel).
       initPerPageVenc();
       limparCamposDatasVencidos();
       await carregarVencidos();

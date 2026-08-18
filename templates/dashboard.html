@@ -67,7 +67,7 @@
       </div>
     </main>
 
-    <script src="/static/ui-common.js?v=s6-stacking-2026-08"></script>
+    <script src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       function n(v) { return v === null || v === undefined ? "—" : String(v); }
 
@@ -282,13 +282,7 @@
       }
 
       (async function init() {
-        const role = localStorage.getItem("user_role");
-        if (role === "admin") {
-          ["nav-users", "nav-config", "nav-installer", "nav-dashboard"].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = "flex";
-          });
-        }
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel).
         document.getElementById("btnDashRefresh").addEventListener("click", carregarDashboard);
         document.getElementById("dashDias").addEventListener("change", carregarDashboard);
         await carregarDashboard();
