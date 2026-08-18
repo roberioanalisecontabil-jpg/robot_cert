@@ -143,21 +143,24 @@
      escura nos dois temas, então vale o mesmo azul do tema claro. */
   --sidebar-active-bg: #0071E3;
 
-  /* Status Colors */
+  /* Status Colors — fundos tonais OPACOS, não rgba: são a mesma cor que o
+     alpha de 0.15 produzia sobre --surface, mas fixada. Com translucidez, o
+     contraste do badge dependia do que estivesse por baixo — sobre as tints
+     de linha, --warning-text caía abaixo de 4.5:1. */
   --total: #0A84FF;
-  --total-bg: rgba(10, 132, 255, 0.15);
-  
+  --total-bg: #27394D;
+
   --ok: #30D158;
-  --ok-bg: rgba(48, 209, 88, 0.15);
+  --ok-bg: #2D4534;
 
   --expired: #FF453A;
-  --expired-bg: rgba(255, 69, 58, 0.15);
+  --expired-bg: #4C3030;
 
   --warning: #FF9F0A;
-  --warning-bg: rgba(255, 159, 10, 0.15);
+  --warning-bg: #4C3D29;
 
   --info: #0A84FF;
-  --info-bg: rgba(10, 132, 255, 0.15);
+  --info-bg: #27394D;
 
   /* Texto de status — no escuro, --ok (5.16:1) e --warning (5.09:1) já passam
      sobre o fundo tonal e são mantidos. Só --expired reprovava (3.48:1). */
@@ -168,7 +171,7 @@
   --sidebar-danger: #FF6B6B; /* 6.80:1 sobre --sidebar-bg */
   --row-tint-danger: rgba(255, 69, 58, 0.10);
   --row-tint-warning: rgba(255, 159, 10, 0.10);
-  --fora-padrao-bg: rgba(139, 92, 246, 0.18);
+  --fora-padrao-bg: #3D3552;
   --fora-padrao-text: #C4B5FD;
 
   /* Shadows */
@@ -199,19 +202,19 @@
 
     /* Status Colors */
     --total: #0A84FF;
-    --total-bg: rgba(10, 132, 255, 0.15);
-    
+    --total-bg: #27394D;
+
     --ok: #30D158;
-    --ok-bg: rgba(48, 209, 88, 0.15);
+    --ok-bg: #2D4534;
 
     --expired: #FF453A;
-    --expired-bg: rgba(255, 69, 58, 0.15);
+    --expired-bg: #4C3030;
 
     --warning: #FF9F0A;
-    --warning-bg: rgba(255, 159, 10, 0.15);
+    --warning-bg: #4C3D29;
 
     --info: #0A84FF;
-    --info-bg: rgba(10, 132, 255, 0.15);
+    --info-bg: #27394D;
 
     /* MANTER SINCRONIZADO com o bloco :root[data-theme="dark"] acima */
     --ok-text: #30D158;
@@ -221,7 +224,7 @@
     --sidebar-danger: #FF6B6B;
     --row-tint-danger: rgba(255, 69, 58, 0.10);
     --row-tint-warning: rgba(255, 159, 10, 0.10);
-    --fora-padrao-bg: rgba(139, 92, 246, 0.18);
+    --fora-padrao-bg: #3D3552;
     --fora-padrao-text: #C4B5FD;
 
     /* Shadows */
@@ -743,8 +746,11 @@ tbody tr:hover {
 }
 
 .badge-bad {
-  background-color: var(--border);
-  color: var(--text-muted);
+  /* Contorno + texto pleno, não fundo cinza + muted: este badge aparece
+     também sobre as tints de linha, onde muted cai a 4.0–4.4:1 no escuro. */
+  background-color: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 .td-doc {

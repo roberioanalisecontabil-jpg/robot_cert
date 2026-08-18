@@ -115,6 +115,8 @@ PARES = [
     ("--accent-text", "--total-bg", 4.5, ".cg-page-link--current, .notif-sync-mode"),
     (BRANCO, "--accent-solid", 4.5, "button.primary, .skip-to-content, .login-btn"),
     (BRANCO, "--expired-solid", 4.5, ".notification-badge"),
+    ("--text", "--row-tint-danger", 4.5, ".badge-bad e células sobre linha tingida"),
+    ("--text", "--row-tint-warning", 4.5, "células sobre linha tingida"),
     (BRANCO, "--accent-hover", 4.5, "button.primary:hover"),
     ("--accent", "--surface", 3.0, "anel de foco, .toast-info .toast-icon"),
     ("--total", "--total-bg", 3.0, ".card-total .card-icon"),
