@@ -78,6 +78,20 @@
 
   /* Tinta de fundo de linha de tabela — reforço visual do status, sempre
      acompanhado do badge com texto na coluna Status (04 §9). */
+  /* Véu de hover de linha. Era literal em dois lugares — a tabela padrão e as
+     tabelas de duplicidades —, e o segundo tinha ficado com um azul de outra
+     paleta (rgba(59,130,246), que não é o --accent deste projeto) e sem
+     variante de tema escuro.
+
+     Continua translúcido de propósito, ao contrário dos fundos de status: ele
+     compõe com a tint de linha que estiver por baixo, e uma cor sólida apagaria
+     o estado do certificado justamente ao passar o mouse sobre ele.
+
+     Virar token também matou a `@media (prefers-color-scheme: dark)` que o
+     `tbody tr:hover` usava. Aquela media query não tinha a guarda
+     `:root:not([data-theme="light"])` do bloco de tokens, então quem forçava
+     tema claro num sistema escuro recebia o hover escuro. */
+  --row-hover: rgba(0, 113, 227, 0.04);
   --row-tint-danger: #FEF2F2;
   --row-tint-warning: #FFFBEB;
   /* "Fora do padrão" tinha roxo escrito à mão em `.card-sem-padrao`, sem par
@@ -169,6 +183,7 @@
   --expired-text: #FF9A93;   /* 5.81:1 sobre --expired-bg */
   --danger-text: #FF9A93;
   --sidebar-danger: #FF6B6B; /* 6.80:1 sobre --sidebar-bg */
+  --row-hover: rgba(10, 132, 255, 0.06);
   --row-tint-danger: rgba(255, 69, 58, 0.10);
   --row-tint-warning: rgba(255, 159, 10, 0.10);
   --fora-padrao-bg: #3D3552;
@@ -222,6 +237,7 @@
     --expired-text: #FF9A93;
     --danger-text: #FF9A93;
     --sidebar-danger: #FF6B6B;
+    --row-hover: rgba(10, 132, 255, 0.06);
     --row-tint-danger: rgba(255, 69, 58, 0.10);
     --row-tint-warning: rgba(255, 159, 10, 0.10);
     --fora-padrao-bg: #3D3552;
@@ -705,13 +721,7 @@ tbody tr {
 }
 
 tbody tr:hover {
-  background-color: rgba(0, 113, 227, 0.04);
-}
-
-@media (prefers-color-scheme: dark) {
-  tbody tr:hover {
-    background-color: rgba(10, 132, 255, 0.06);
-  }
+  background-color: var(--row-hover);
 }
 
 .badge {
@@ -910,8 +920,8 @@ select:focus {
   background: var(--bg);
   border: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  font-family: monospace;
+  border-radius: var(--radius-xs);
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
   font-size: 0.85rem;
   color: var(--text);
   word-break: break-all;
@@ -951,8 +961,8 @@ select:focus {
   background: #111827;
   color: #e5e7eb;
   padding: 1rem;
-  border-radius: 8px;
-  font-family: monospace;
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
   font-size: 0.8rem;
   overflow-x: auto;
 }
@@ -1056,7 +1066,7 @@ body.sidebar-collapsed .sidebar-nav a {
 .dup-crypto-table-wrap {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -1079,7 +1089,7 @@ body.sidebar-collapsed .sidebar-nav a {
 .dup-igual-row:focus-visible,
 .dup-doc-row:focus-visible,
 .dup-crypto-table-wrap tbody tr.dup-data-row:hover {
-  background: rgba(59, 130, 246, 0.06);
+  background: var(--row-hover);
 }
 
 .dup-igual-status {
@@ -1115,12 +1125,12 @@ body.sidebar-collapsed .sidebar-nav a {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 10px 24px -4px rgba(15, 23, 42, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   font-size: 0.8125rem;
   line-height: 1.45;
   pointer-events: auto;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .dup-path-tooltip[hidden] {
@@ -1169,7 +1179,7 @@ body.sidebar-collapsed .sidebar-nav a {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   padding: 0.28rem 0.45rem;
   margin: 0.1rem 0 0;
   word-break: break-all;
@@ -1202,7 +1212,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 
 .dup-doc-tooltip__bloco {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--bg);
   padding: 0.32rem 0.45rem;
   min-width: 0;

@@ -280,7 +280,16 @@ def test_os_dois_blocos_de_tema_escuro_definem_os_mesmos_tokens() -> None:
     lê o CSS e nunca renderiza nada. Trava a divergência, que é o que de fato
     machuca.
     """
-    css = (RAIZ / "static" / "style.css").read_text(encoding="utf-8")
+    bruto = (RAIZ / "static" / "style.css").read_text(encoding="utf-8")
+
+    # Os comentários saem ANTES de procurar os marcadores. Sem isto, o `index`
+    # abaixo casa com a primeira ocorrência do literal no arquivo — e este
+    # projeto comenta o porquê de cada decisão, então uma frase explicando
+    # `@media (prefers-color-scheme: dark)` dentro do `:root` claro fazia
+    # `ini_auto` cair ANTES de `ini_manual`. O recorte manual virava string
+    # vazia e o teste acusava divergência total onde não havia nenhuma.
+    # Falha-aberta ao contrário: barulhenta, mas apontando para o lugar errado.
+    css = re.sub(r"/\*.*?\*/", "", bruto, flags=re.S)
 
     ini_manual = css.index(':root[data-theme="dark"]')
     ini_auto = css.index("@media (prefers-color-scheme: dark)")
