@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=ergonomia-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=campos-e-dropzone-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
       @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
@@ -45,6 +45,47 @@
       .transfer__item:last-child { border-bottom: none; }
       .transfer__item__nome { min-width: 0; overflow-wrap: anywhere; }
       .transfer__vazio { padding: 0.9rem 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+      /* Importar por planilha — faixa de arrastar e soltar.
+         Escolhida entre três desenhos em 19/08/2026: bloco centralizado, duas
+         colunas e esta. Ganhou porque abrir o painel acrescenta ~56px de
+         altura, e não um bloco que empurra os dois painéis da página para
+         baixo — que é a razão de o `details` nascer fechado. */
+      /* A busca acompanha a largura do painel: e filtro da lista abaixo, nao
+         campo de formulario solto. Fica aqui, e nao na regra `.form-control`
+         do style.css, porque largura e decisao de layout desta tela — os 6
+         campos do instalador dividem a classe e nao querem 100%. */
+      .cart-painel .form-control { width: 100%; box-sizing: border-box; }
+      .cart-importar__sumario { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+      .cart-importar__faixa { margin-top: var(--sp-3); display: flex; align-items: center;
+                              gap: var(--sp-3); flex-wrap: wrap; }
+      .cart-importar__dica { flex: 1 1 100%; margin: 0; }
+      .dropzone { position: relative; flex: 1 1 22rem; display: flex; align-items: center;
+                  gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); min-height: 56px;
+                  background: var(--bg); border: 1.5px dashed var(--border);
+                  border-radius: var(--radius-md); color: var(--text); text-align: left;
+                  transition: border-color var(--duration-fast) var(--ease-out),
+                              background-color var(--duration-fast) var(--ease-out); }
+      /* Tracejado é o mesmo sinal que o empty-state do sistema usa para "aqui
+         ainda não há conteúdo"; ele vira sólido assim que há. */
+      .dropzone__input { position: absolute; inset: 0; width: 100%; height: 100%;
+                         opacity: 0; cursor: pointer; }
+      .dropzone__icone { width: 24px; height: 24px; flex-shrink: 0; color: var(--text-muted);
+                         transition: color var(--duration-fast) var(--ease-out); }
+      .dropzone__titulo { margin: 0; font-weight: 600; font-size: 0.9rem; }
+      .dropzone__sub { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+      .dropzone__nome { margin: 0 0 0 auto; font-size: 0.85rem; font-weight: 600;
+                        color: var(--accent-text); }
+      .dropzone:hover,
+      .dropzone:has(.dropzone__input:focus-visible) { border-color: var(--accent); background: var(--surface); }
+      /* O anel de foco é desenhado na zona, não no input invisível: sem isto o
+         foco de teclado existe e não aparece em lugar nenhum. */
+      .dropzone:has(.dropzone__input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .dropzone.is-over { border-color: var(--accent); background: var(--total-bg); border-style: solid; }
+      .dropzone.is-over .dropzone__icone { color: var(--accent-text); }
+      .dropzone.is-selected { border-style: solid; border-color: var(--ok); background: var(--ok-bg); }
+      .dropzone.is-selected .dropzone__icone,
+      .dropzone.is-selected .dropzone__nome { color: var(--ok-text); }
+      .import-erros { margin-top: var(--sp-3); }
     </style>
   </head>
   <body>
@@ -61,22 +102,36 @@
 
       <!-- Recolhido: importar é ação de quem já tem a lista pronta, não o
            caminho comum. Aberto, empurraria os dois painéis para baixo. -->
-      <details class="cart-painel" style="margin-bottom: var(--sp-4);">
-        <summary style="cursor: pointer; font-weight: 600; font-size: 0.95rem;">
-          Importar carteiras por planilha
-        </summary>
-        <form id="formImportar" style="margin-top: 0.75rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
-          <div class="form-field" style="min-width: min(280px, 100%); max-width: 100%;">
-            <label for="arquivoCarteiras">Arquivo .xlsx ou .csv</label>
-            <input type="file" id="arquivoCarteiras" accept=".xlsx,.csv" class="form-control" required />
+      <!-- Recolhido: importar é ação de quem já tem a lista pronta, não o
+           caminho comum. Aberto, empurraria os dois painéis para baixo.
+
+           A faixa foi escolhida entre três desenhos em 19/08/2026 justamente
+           por isso: abrir o painel acrescenta ~56px, não um bloco inteiro. -->
+      <details class="cart-painel cart-importar">
+        <summary class="cart-importar__sumario">Importar carteiras por planilha</summary>
+        <form id="formImportar" class="cart-importar__faixa">
+          <div class="dropzone">
+            {# O <input type="file"> cobre a zona inteira com opacidade 0. Isso
+               entrega, sem uma linha de JS: clique em qualquer ponto abre o
+               seletor, DROP nativo preenche `input.files` (que é o que
+               `importarPlanilha` lê) e o foco de teclado é o do próprio input.
+               O rótulo visível é o <p> abaixo; o `aria-describedby` liga o
+               campo à linha de formato. #}
+            <input type="file" id="arquivoCarteiras" accept=".xlsx,.csv"
+                   class="dropzone__input" required aria-label="Arquivo .xlsx ou .csv"
+                   aria-describedby="dicaImportar" />
+            <svg class="dropzone__icone" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 7.5 7.5 12M12 7.5V21"/></svg>
+            <p class="dropzone__titulo">Arraste a planilha ou clique para escolher</p>
+            <p class="dropzone__sub">.xlsx ou .csv</p>
+            <p class="dropzone__nome" aria-live="polite"></p>
           </div>
           <button type="submit" class="primary">Importar</button>
+          <p class="hint cart-importar__dica" id="dicaImportar">
+            Duas colunas: <code>email</code> (do colaborador) e <code>cnpj</code> (do cliente) —
+            uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code>, <code>cpf</code>.
+            Você só consegue importar para quem está nos departamentos que lidera.
+          </p>
         </form>
-        <p class="hint" style="margin-top: 0.6rem;">
-          Duas colunas: <code>email</code> (do colaborador) e <code>cnpj</code> (do cliente) —
-          uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code>, <code>cpf</code>.
-          Você só consegue importar para quem está nos departamentos que lidera.
-        </p>
         <div id="importErros" class="import-erros" hidden>
           <p class="import-erros__titulo"></p>
           <ul class="import-erros__lista"></ul>
@@ -154,7 +209,7 @@
       </div>
     </main>
 
-    <script src="/static/ui-common.js?v=sidebar-por-papel-2026-08"></script>
+    <script src="/static/ui-common.js?v=icones-topbar-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
       let _operadores = [];
       let _selecionado = null;
@@ -535,6 +590,29 @@
         document.getElementById("buscaDoc").addEventListener("input", renderTransfer);
 
         document.getElementById("formImportar").addEventListener("submit", importarPlanilha);
+
+        // O drop e o clique são nativos do <input type="file"> que cobre a
+        // zona; isto cuida só do que o navegador não dá de graça — o realce
+        // durante o arrasto e o nome do arquivo escolhido.
+        (function ligarDropzone() {
+          const zona = document.querySelector(".dropzone");
+          if (!zona) return;
+          const input = zona.querySelector(".dropzone__input");
+          const nome = zona.querySelector(".dropzone__nome");
+          // `preventDefault` no dragover é obrigatório: sem ele o navegador
+          // recusa o drop e abre o arquivo numa aba nova, perdendo a página.
+          ["dragenter", "dragover"].forEach((ev) =>
+            zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("is-over"); })
+          );
+          ["dragleave", "drop"].forEach((ev) =>
+            zona.addEventListener(ev, () => zona.classList.remove("is-over"))
+          );
+          input.addEventListener("change", () => {
+            const f = input.files && input.files[0];
+            zona.classList.toggle("is-selected", !!f);
+            nome.textContent = f ? f.name : "";
+          });
+        })();
         carregarOperadores();
       })();
     </script>
