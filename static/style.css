@@ -439,6 +439,11 @@ textarea:focus-visible {
      scroll horizontal NA PÁGINA. Com 0, quem rola é o .table-scroll, que
      existe para isso. */
   min-width: 0;
+  /* Teto de largura: sem ele, num monitor largo o conteúdo estica até
+     ~2100px e as ações alinhadas à direita ficam a ~900px do título e do
+     dado a que se referem — o botão "afastado e pouco ergonômico". O teto
+     encurta essa distância em todas as telas de uma vez. */
+  max-width: 1280px;
 }
 
 .page-header {
@@ -1561,6 +1566,19 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .notifications-container {
   position: relative;
   display: inline-block;
+  /* Empurra o grupo da direita (sino + tema). Só UM item pode ter a margem
+     auto — se o tema também tivesse, o espaço se dividiria e o sino voltaria
+     ao centro; o seletor adjacente abaixo desfaz a do tema quando o sino
+     existe (sem login não há sino, e o tema herda o empurrão). */
+  margin-left: auto;
+}
+
+.topbar-actions #btn-theme-toggle {
+  margin-left: auto;
+}
+
+.topbar-actions .notifications-container + #btn-theme-toggle {
+  margin-left: 0;
 }
 
 .notifications-bell-btn {
@@ -1832,7 +1850,12 @@ body.sidebar-open .sidebar-backdrop {
 .topbar-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* flex-start + margin-left:auto no primeiro item do grupo da direita.
+     Era space-between com três filhos, o que deixava o SINO no centro da
+     tela — longe de qualquer canto e solto dos outros utilitários. O
+     hambúrguer fica à esquerda (é da sidebar); sino e tema, juntos à
+     direita, onde todo portal os põe. */
+  justify-content: flex-start;
   margin-bottom: 1.5rem;
   gap: 1rem;
 
