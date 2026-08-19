@@ -60,6 +60,19 @@
            ficam juntos, e só a contagem vai para a direita. */
         .users-toolbar { display: flex; justify-content: flex-start; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); flex-wrap: wrap; }
         .users-toolbar #users-count { margin-left: auto; }
+        /* Marca um campo que registra informação sem conceder permissão. */
+        .modal__tag-informativo {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 0.1rem 0.4rem;
+            margin-left: 0.35rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-pill);
+            color: var(--text-muted);
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -113,7 +126,10 @@
         </div>
 
         <section class="doc-block" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios">
-            <h2>Usuários Ativos</h2>
+            <!-- Era "Usuários Ativos", mas o filtro de status nasce em "Todos"
+                 e a lista mostra desativados junto — o título contradizia o
+                 conteúdo logo abaixo dele. -->
+            <h2>Usuários</h2>
             <div class="users-toolbar">
                 <!-- A ação primária abre a fila: era um botão solto numa linha
                      própria enquanto os filtros se espalhavam por space-between,
@@ -263,15 +279,24 @@
           </div>
 
           <div class="modal__campo">
-            <label for="ed-gestor">Gestor responsável</label>
+            <label for="ed-gestor">Gestor responsável <span class="modal__tag-informativo">informativo</span></label>
             <!-- Primeira vez que este campo é editável em qualquer tela. A API
                  aceita `gestor_id` desde a Etapa 5 e `/carteiras` já o exibe,
-                 mas não havia como atribuí-lo — só por SQL direto. -->
+                 mas não havia como atribuí-lo — só por SQL direto.
+
+                 O rótulo diz "informativo" porque ele DE FATO é: nenhuma
+                 decisão de acesso lê `gestor_id`. Quem pode liberar
+                 certificados para alguém é o líder do DEPARTAMENTO dessa
+                 pessoa (ver `_exigir_alcance`). Sem o aviso, os dois campos
+                 parecem controlar a mesma coisa, e o admin sai daqui achando
+                 que concedeu um acesso que não concedeu. -->
             <select id="ed-gestor">
               <option value="">Sem gestor</option>
             </select>
             <span class="modal__dica">
-              Só se aplica a operadores; admin e gestor têm alcance total.
+              Registra a quem a pessoa responde — <strong>não concede acesso</strong>.
+              Quem libera certificados para ela são os líderes do departamento
+              escolhido acima.
             </span>
           </div>
         </div>
