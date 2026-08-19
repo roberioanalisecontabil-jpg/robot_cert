@@ -111,7 +111,9 @@
           <div class="toolbar__actions">
             <label for="busca-selecao" class="cg-sr-only">Buscar certificados para selecionar</label>
             <input type="search" id="busca-selecao" placeholder="Buscar por nome ou documento" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
-            <button type="button" id="btn-salvar-selecao" class="primary">Salvar seleção</button>
+            <!-- "Salvar seleção" saiu daqui para a barra sticky no rodapé:
+                 quem marca checkboxes descendo pela tabela paginada não
+                 deveria voltar ao topo para salvar o que marcou. -->
           </div>
         </div>
         <div class="table-scroll-anchor">
@@ -144,6 +146,16 @@
             </div>
           </div>
         </nav>
+        <!-- Sempre visível (sem hidden, ao contrário do Início): salvar com
+             zero marcados é uma ação válida aqui — limpa o acompanhamento. -->
+        <div class="barra-selecao" role="region" aria-label="Seleção para acompanhamento">
+          <div class="barra-selecao__texto">
+            <strong id="selColabContagem">0 certificados marcados</strong>
+          </div>
+          <div class="barra-selecao__acoes">
+            <button type="button" id="btn-salvar-selecao" class="primary">Salvar seleção</button>
+          </div>
+        </div>
       </section>
     </div>
   </main>
@@ -386,12 +398,22 @@
       const js = await rs.json();
       opcoes = jo.itens || [];
       selecionados = new Set((js.documentos || []).map(String));
+      atualizarBarraColab();
       renderSelecao();
     }
 
+    function atualizarBarraColab() {
+      const n = selecionados.size;
+      document.getElementById("selColabContagem").textContent =
+        n === 1 ? "1 certificado marcado" : n + " certificados marcados";
+    }
+
     async function salvarSelecao() {
-      const checks = Array.from(document.querySelectorAll("#tbody-selecao input[type='checkbox'][data-doc]:checked"));
-      const docs = checks.map((x) => x.getAttribute("data-doc")).filter(Boolean);
+      // Do Set, não do DOM: a tabela é paginada, e ler só os checkboxes
+      // renderizados descartaria em silêncio o que foi marcado nas OUTRAS
+      // páginas — quem marcasse na página 1, fosse à 2 e salvasse perderia
+      // a página 1 sem aviso nenhum.
+      const docs = Array.from(selecionados);
       const r = await fetch("/api/colaborador/certificados/selecionados", {
         method: "PUT",
         headers: getHeaders(true),
@@ -402,6 +424,7 @@
         return;
       }
       selecionados = new Set(docs);
+      atualizarBarraColab();
       painelPagina = 1;
       await carregarPainel(true);
       showToast(
@@ -464,6 +487,7 @@
       const doc = el.getAttribute("data-doc");
       if (!doc) return;
       if (el.checked) selecionados.add(doc); else selecionados.delete(doc);
+      atualizarBarraColab();
     });
 
     (async function init() {

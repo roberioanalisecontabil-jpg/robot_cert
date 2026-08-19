@@ -1370,6 +1370,39 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   overflow-x: auto;
 }
 
+/* Barra de ação da seleção — sticky no rodapé do fluxo. Nasceu no Início
+   (baixar instalador) e em 18/08 passou a servir também à aba Seleção do
+   Acompanhamento: quem marca checkboxes descendo por uma tabela paginada
+   não deveria voltar ao topo para agir sobre o que marcou.
+   Fica no fluxo do <main>, não em position:fixed sobre a janela: fixa, ela
+   taparia a paginação no celular, que é justamente o controle para
+   continuar escolhendo. */
+.barra-selecao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+  padding: 0.9rem var(--sp-4);
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md, 10px);
+  position: sticky;
+  bottom: var(--sp-2);
+  z-index: 5;
+}
+
+.barra-selecao[hidden] { display: none; }
+
+.barra-selecao__acoes { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+.barra-selecao__aviso {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--expired-text, #b00);
+}
+
 .cg-page-nav__ul {
   list-style: none;
   margin: 0;

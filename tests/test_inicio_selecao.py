@@ -14,6 +14,7 @@ parece defeito da tela; com o motivo, o usuário sabe se espera (o agente ainda
 não enviou) ou se pede acesso (fora da carteira).
 """
 
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -308,8 +309,18 @@ def test_barra_de_selecao_nao_e_fixa_na_janela(html_inicio: str) -> None:
     """
     `position: fixed` taparia a paginação no celular — justamente o controle
     necessário para continuar escolhendo. A barra é sticky dentro do fluxo.
+
+    Em 18/08 a regra migrou do <style> do Início para o style.css, porque a
+    aba Seleção do Acompanhamento passou a usar a mesma barra — o invariante
+    é o mesmo, o endereço mudou.
     """
-    assert "position: sticky;" in html_inicio
+    css = (Path(__file__).resolve().parent.parent / "static" / "style.css").read_text(
+        encoding="utf-8"
+    )
+    m = re.search(r"\.barra-selecao\s*\{([^}]*)\}", css)
+    assert m, ".barra-selecao não encontrada no style.css"
+    assert "position: sticky;" in m.group(1)
+    assert "position: fixed" not in m.group(1)
     assert "id=\"barraSelecao\"" in html_inicio
 
 

@@ -11,30 +11,9 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="/static/style.css?v=ergonomia-2026-08" />
     <style nonce="{{ request.state.nonce }}">
-      .barra-selecao {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--sp-4);
-        flex-wrap: wrap;
-        margin-top: var(--sp-4);
-        padding: 0.9rem var(--sp-4);
-        background: var(--surface);
-        border: 1.5px solid var(--border);
-        border-radius: var(--radius-md, 10px);
-        /* `position: sticky` mantém a barra ao alcance durante a rolagem sem
-           cobrir a paginação, que fica logo acima dela. */
-        position: sticky;
-        bottom: var(--sp-2);
-        z-index: 5;
-      }
-      .barra-selecao[hidden] { display: none; }
-      .barra-selecao__acoes { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-      .barra-selecao__aviso {
-        display: block;
-        font-size: 0.8rem;
-        color: var(--expired-text, #b00);
-      }
+      /* .barra-selecao migrou para o style.css em 18/08: a aba Seleção do
+         Acompanhamento passou a usá-la, e regra compartilhada dentro do
+         <style> de uma tela é como esc() acabou duplicada em seis. */
       #tbody .chk-cert:disabled { cursor: not-allowed; opacity: 0.45; }
     </style>
   </head>
