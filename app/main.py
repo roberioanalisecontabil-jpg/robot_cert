@@ -455,10 +455,20 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     
+    # Permissão dev-only para o modo live do Impeccable, cujo picker de variantes
+    # é servido em http://localhost:8400. Só existe quando IMPECCABLE_LIVE=1 está
+    # no ambiente; a Vercel nunca define essa variável, então o header de produção
+    # sai byte a byte igual ao de antes desta linha existir.
+    _live = " http://localhost:8400" if os.getenv("IMPECCABLE_LIVE") == "1" else ""
+
     # CSP Avançado (Removido unsafe-inline/unsafe-eval de script-src e adicionado nonce)
     csp = (
         "default-src 'self'; "
-        f"script-src 'self' 'nonce-{nonce}'; "
+        f"script-src 'self' 'nonce-{nonce}'{_live}; "
+        # `connect-src` herdava de `default-src 'self'`. Declarado explicitamente
+        # com o mesmo valor para receber a permissão dev acima — com `_live`
+        # vazio, herdar e declarar dão exatamente o mesmo resultado.
+        f"connect-src 'self'{_live}; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "

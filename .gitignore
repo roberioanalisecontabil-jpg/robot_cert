@@ -47,3 +47,10 @@ logs/
 
 # Gerado por scripts/build_instalador_avulso.ps1 (endereco do portal no build)
 agent/_build_config.py
+
+# impeccable — estado de runtime do modo live: token do helper, journal da
+# sessão, anotações e o registro do que foi injetado nos templates. É estado
+# de máquina, não fonte. A config do live e o DESIGN.md/design.json ficam
+# versionados, esses sim.
+.impeccable/live/*
+!.impeccable/live/config.json
