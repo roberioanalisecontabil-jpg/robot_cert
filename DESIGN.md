@@ -512,6 +512,20 @@ há conteúdo ainda" ou "aqui termina o cabeçalho", nunca decoração.
 
 ### Named Rules
 
+**A Regra dos 55 Por Cento.** Um ícone preenche entre 50% e 55% do seu alvo. O
+ícone de card fica em 50% (18px em 36px), o item de sidebar em ~52%, e os três
+botões de 44px da topbar em 55% (24px). O tamanho mora no CSS da família de
+controle, nunca em `style=` no elemento: irmãos que precisam mudar juntos não
+podem ter três valores independentes.
+
+**A Regra da Caixa Que Não Aperta.** Controle de tamanho fixo zera o próprio
+padding, e o ícone dentro dele leva `flex-shrink: 0`. A regra base `button` dá
+`padding: 0.5rem 1.1rem`, e um `.sidebar-toggle-btn` de 44px que não a
+sobrescrevia deixava 7,2px de caixa de conteúdo: o sino de 20px renderizava
+7,2×20 — **achatado, não pequeno**. O sintoma relatado foi "o tamanho está
+errado", porque um ícone espremido na horizontal é lido como ícone pequeno, e
+ninguém procura padding num botão que mede exatamente 44px na tela.
+
 **A Regra da Pílula Acionável.** Se é clicável e cabe numa linha, é pílula. Se é
 uma superfície que carrega conteúdo, é 18px. Um botão de canto reto ou um card
 em pílula quebra a leitura do sistema inteiro.
@@ -582,7 +596,8 @@ volta ao lugar.
 - **Hover:** fundo branco a 8%, texto branco pleno. **Ativo:** fundo
   `--sidebar-active-bg` (#0071E3 nos dois temas) + `--shadow-sm`.
 - **Ícones:** Heroicons outline, `stroke-width: 1.5`, `currentColor`, inline no
-  template. Nunca `<img>`, nunca icon font.
+  template. Nunca `<img>`, nunca icon font, nunca caractere Unicode fazendo
+  papel de ícone.
 - **Mobile (≤768px):** gaveta de 270px com `translateX(-100%)`, backdrop
   escuro, transição de 0,3s.
 
@@ -634,9 +649,13 @@ conforme o tema explícito.
   Só um item pode carregar essa margem — se o botão de tema também a tivesse, o
   espaço se dividiria e o sino voltaria ao centro; por isso existe um seletor
   adjacente que desfaz a do tema quando o sino está presente.
-- **Badge de contagem:** círculo de 18px em `--expired-solid` (#C1121C) com
-  texto branco, ancorado a -4px do canto superior direito do sino, com **anel de
-  2px em `--surface`** que o recorta do ícone. Pulsa em `pulse-badge` — um halo
+- **Badge de contagem:** pílula de 16px em `--expired-solid` (#C1121C) com
+  texto branco de 10px e numeral tabular, ancorada a -3px do canto superior
+  direito do sino, com **anel de 2px em `--surface`** que a recorta do ícone.
+  Era um círculo de 18px: com dois dígitos a caixa deixava de ser quadrada, e o
+  `border-radius: 50%` desenhava uma elipse que chegava a ~26px de largura —
+  quase o tamanho do glifo, então o vermelho ganhava o olho antes do sino. O
+  badge anota o ícone; não disputa com ele. Pulsa em `pulse-badge` — um halo
   vermelho que expande de 0 a 6px a cada 2s, infinito. É o único movimento
   perpétuo do portal, e `prefers-reduced-motion` o desliga por completo
   (`animation: none`), não apenas o acelera.
@@ -741,6 +760,9 @@ Com `--row-hover` a media query desapareceu e o defeito com ela.
   quando ela tiver moldura própria.
 - **Do** reservar a fonte mono para dado literal comparável caractere a
   caractere — caminho de arquivo, impressão digital. Nunca para texto de UI.
+- **Do** lembrar que `<button>`, `<input>` e `<select>` **não herdam
+  `font-family`**: sem `font-family: inherit` o navegador impõe a fonte dele e
+  o controle sai fora da Inter.
 
 ### Don't:
 

@@ -378,9 +378,9 @@
       "name": "Sino com Badge",
       "kind": "button",
       "refersTo": "notification-badge",
-      "description": "O badge de contagem é um círculo de 18px em --expired-solid (#C1121C, 6.23:1 com branco) recortado do ícone por um anel de 2px em --surface. Pulsa a cada 2s — o único movimento perpétuo do portal, desligado por completo em prefers-reduced-motion.",
+      "description": "O badge de contagem é uma pílula de 16px em --expired-solid (#C1121C, 6.23:1 com branco) recortada do ícone por um anel de 2px em --surface, com numeral tabular para não tremer ao passar de 53 para 54. O glifo ocupa 24px num alvo de 44px (55%). Pulsa a cada 2s — o único movimento perpétuo do portal, desligado por completo em prefers-reduced-motion.",
       "html": "<button class=\"ds-bell\" aria-label=\"Notificações\"><svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0\"/></svg><span class=\"ds-bell-badge\">16</span></button>",
-      "css": ".ds-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 980px; color: var(--text); cursor: pointer; } .ds-bell svg { width: 1.25rem; height: 1.25rem; } .ds-bell:hover { background: var(--bg); } .ds-bell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-bell-badge { position: absolute; top: -4px; right: -4px; background: var(--expired-solid); color: #fff; border-radius: 50%; padding: 0.15rem 0.35rem; font-size: 0.7rem; font-weight: 700; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface); box-shadow: 0 2px 4px rgba(0,0,0,0.1); animation: ds-pulse-badge 2s infinite; } @keyframes ds-pulse-badge { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } } @media (prefers-reduced-motion: reduce) { .ds-bell-badge { animation: none; } }"
+      "css": ".ds-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 980px; color: var(--text); cursor: pointer; } .ds-bell svg { width: 24px; height: 24px; } .ds-bell:hover { background: var(--bg); } .ds-bell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-bell-badge { position: absolute; top: -3px; right: -3px; background: var(--expired-solid); color: #fff; border-radius: 980px; padding: 0 4px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface); box-shadow: var(--shadow-sm); animation: ds-pulse-badge 2s infinite; } @keyframes ds-pulse-badge { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } } @media (prefers-reduced-motion: reduce) { .ds-bell-badge { animation: none; } }"
     },
     {
       "name": "Tabela de Duplicidades",
@@ -464,6 +464,16 @@
         "section": "elevation"
       },
       {
+        "name": "A Regra dos 55 Por Cento",
+        "body": "Um ícone preenche entre 50% e 55% do seu alvo. O ícone de card fica em 50% (18px em 36px), o item de sidebar em ~52%, e os três botões de 44px da topbar em 55% (24px). O tamanho mora no CSS da família de controle, nunca em style= no elemento: irmãos que precisam mudar juntos não podem ter três valores independentes.",
+        "section": "shapes"
+      },
+      {
+        "name": "A Regra da Caixa Que Não Aperta",
+        "body": "Controle de tamanho fixo zera o próprio padding, e o ícone dentro dele leva flex-shrink: 0. A regra base `button` dá padding: 0.5rem 1.1rem, e um .sidebar-toggle-btn de 44px que não a sobrescrevia deixava 7,2px de caixa de conteúdo: o sino de 20px renderizava 7,2x20 — achatado, não pequeno. O sintoma relatado foi 'o tamanho está errado', porque um ícone espremido na horizontal é lido como ícone pequeno, e ninguém procura padding num botão que mede exatamente 44px na tela.",
+        "section": "shapes"
+      },
+      {
         "name": "A Regra da Pílula Acionável",
         "body": "Se é clicável e cabe numa linha, é pílula. Se é uma superfície que carrega conteúdo, é 18px. Um botão de canto reto ou um card em pílula quebra a leitura do sistema inteiro.",
         "section": "shapes"
@@ -479,7 +489,9 @@
       "Do pôr erro de formulário dentro do próprio formulário ou diálogo.",
       "Do revelar item de menu por papel no cliente, com display: none no template como estado inicial.",
       "Do tornar toda região rolável alcançável por teclado (tabindex=\"0\" + role=\"region\" + aria-label), com o anel de foco em outline-offset: -2px quando ela tiver moldura própria.",
-      "Do reservar a fonte mono para dado literal comparável caractere a caractere — caminho de arquivo, impressão digital. Nunca para texto de UI."
+      "Do reservar a fonte mono para dado literal comparável caractere a caractere — caminho de arquivo, impressão digital. Nunca para texto de UI.",
+      "Do lembrar que <button>, <input> e <select> NÃO herdam font-family: sem font-family: inherit o navegador impõe a fonte dele e o controle sai fora da Inter.",
+      "Do zerar o padding em controle de tamanho fixo e pôr flex-shrink: 0 no ícone dentro dele."
     ],
     "donts": [
       "Don't usar gradiente decorativo, ilustração isométrica ou herói de landing page. A anti-referência confirmada é o SaaS genérico de gradiente.",

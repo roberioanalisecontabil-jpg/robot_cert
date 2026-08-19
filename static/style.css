@@ -632,6 +632,13 @@ textarea:focus-visible {
 }
 
 button {
+  /* `<button>` NÃO herda `font-family` do documento: sem esta linha o UA
+     impõe a fonte dele (Arial no Windows) e todo botão do portal ficava fora
+     da Inter — inclusive o número do badge de notificações. `.cg-page-link` e
+     `.cg-page-perpage-select` já contornavam isso com `font: inherit` cada um
+     por si; o lugar da correção é aqui. Só a família: tamanho e peso continuam
+     sendo decididos por cada regra. */
+  font-family: inherit;
   background: var(--surface);
   border: 1.5px solid var(--border);
   color: var(--text);
@@ -855,13 +862,26 @@ tbody tr:hover {
   font-size: 0.9rem;
 }
 
+/* `.form-control` entrou aqui em 19/08/2026. Ate entao a classe estava em 9
+   campos de 3 templates (instalador 6, carteiras 2, dashboard 1) e NAO existia
+   em lugar nenhum do CSS — heranca de Bootstrap que veio no HTML sem a folha
+   de estilo junto. Os 9 desenhavam como <input> cru do navegador: Arial 13px,
+   preto puro, padding de 1px 2px, canto reto.
+
+   O conserto e este e nao uma regra nova: o campo canonico ja estava escrito,
+   faltava a classe apontar para ele. */
 .path-input,
 .form-group input,
+.form-control,
 select {
   background: var(--bg);
   border: 1.5px solid var(--border);
   padding: 0.6rem 0.9rem;
   border-radius: var(--radius-md);
+  /* Controle de formulario NAO herda a familia do documento — mesma armadilha
+     ja corrigida em `button`. Sem esta linha o UA impoe a fonte dele e todo
+     campo do portal, inclusive os que esta regra ja acertava, saia em Arial. */
+  font-family: inherit;
   font-size: 0.9rem;
   color: var(--text);
   outline: none;
@@ -870,6 +890,7 @@ select {
 
 .path-input:focus,
 .form-group input:focus,
+.form-control:focus,
 select:focus {
   border-color: var(--border-focus);
   background: var(--surface);
@@ -1634,21 +1655,29 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 
 .notification-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  /* 16px, não 18px: o badge anota o glifo, não disputa com ele. Com dois
+     dígitos ("54") o antigo chegava a ~26px de largura contra um ícone de
+     20px — o vermelho ganhava o olho antes do sino. */
+  top: -3px;
+  right: -3px;
   background-color: var(--expired-solid);
   color: white;
-  border-radius: 50%;
-  padding: 0.15rem 0.35rem;
-  font-size: 0.7rem;
+  /* Pílula, não `50%`: com mais de um dígito a caixa deixa de ser quadrada, e
+     `50%` num retângulo desenha uma elipse. */
+  border-radius: var(--radius-pill);
+  padding: 0 4px;
+  font-size: 10px;
   font-weight: 700;
-  min-width: 18px;
-  height: 18px;
+  /* Dígito de largura fixa: sem isto a contagem muda de largura ao subir de
+     53 para 54, e o badge treme no canto do sino. */
+  font-variant-numeric: tabular-nums;
+  min-width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid var(--surface);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-sm);
   animation: pulse-badge 2s infinite;
 }
 
@@ -1929,10 +1958,35 @@ body.sidebar-open .sidebar-backdrop {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* A CAUSA do sino esmagado. A regra base `button` dá `padding: 0.5rem 1.1rem`
+     e esta aqui fixava `width: 44px` sem nunca zerá-lo: sobravam 7,2px de caixa
+     de conteúdo (44 − 35,2 de padding − 1,6 de borda), e o SVG de 20px era
+     espremido para 7,2px de largura. O ícone não estava pequeno, estava achatado.
+
+     O `.theme-toggle-btn` já trazia `padding: 0`, o que escondia o defeito em um
+     dos três botões e fazia o sino parecer um caso isolado. A caixa é de tamanho
+     fixo; padding aqui não tem o que fazer. */
+  padding: 0;
   font-size: 1.2rem;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+/* 24px num alvo de 44px = 55% de preenchimento óptico. Eram 20px (45%), a
+   menor proporção glifo/caixa do sistema — o item da sidebar fica em ~52% e o
+   ícone de card em 50%, e o sino parecia encolhido ao lado dos dois.
+
+   O tamanho vive aqui, e não em `style=` no `ui-common.js`, porque os três
+   botões desta família (menu, tema, sino) têm de mudar juntos: eram três
+   valores inline, e o terceiro nem SVG era. */
+.sidebar-toggle-btn svg {
+  width: 24px;
+  height: 24px;
+  /* Item de flex encolhe por padrão. Sem isto, qualquer padding que volte a
+     esta caixa achata o ícone de novo em silêncio — foi assim que o sino
+     passou meses em 7,2px sem ninguém conseguir nomear o que estava errado. */
+  flex-shrink: 0;
 }
 
 .sidebar-toggle-btn:hover {
