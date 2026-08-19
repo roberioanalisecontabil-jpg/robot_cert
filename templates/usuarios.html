@@ -55,7 +55,11 @@
         .btn-action:hover { background: var(--bg); opacity: 0.9; }
         .btn-danger { border-color: rgba(255, 59, 48, 0.25); background-color: var(--expired-bg); color: var(--expired-text); }
         .btn-danger:hover { background-color: rgba(255, 59, 48, 0.2); border-color: rgba(255, 59, 48, 0.4); }
-        .users-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-4); flex-wrap: wrap; }
+        /* flex-start, não space-between: com poucos itens numa linha larga,
+           space-between os espalha com vãos enormes — controles relacionados
+           ficam juntos, e só a contagem vai para a direita. */
+        .users-toolbar { display: flex; justify-content: flex-start; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); flex-wrap: wrap; }
+        .users-toolbar #users-count { margin-left: auto; }
     </style>
 </head>
 <body>
@@ -74,9 +78,13 @@
              é o certo, e os dois divergem: o de cima nunca teve o campo de
              gestor que o de edição ganhou. Agora é o mesmo diálogo. -->
 
-        <section class="doc-block">
-            <h2>Importar Usuários (CSV)</h2>
-            <div class="panel--nested">
+        <!-- <details> recolhido: importar em massa é ação rara, e aberta ela
+             ocupava a posição nobre da página — acima da lista, que é o que
+             o admin veio ver. A ação comum ("Novo usuário") fica na toolbar
+             da lista. -->
+        <details class="doc-block">
+            <summary style="cursor: pointer; font-size: 1.1rem; font-weight: 600; padding: 0.25rem 0;">Importar Usuários (CSV)</summary>
+            <div class="panel--nested" style="margin-top: 0.75rem;">
                 <form id="import-users-form" class="row-inline" style="flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
                     <div class="form-field" style="min-width: min(280px, 100%); max-width: 100%;">
                         <label for="import-users-file">Arquivo CSV</label>
@@ -95,7 +103,7 @@
                   <ul class="import-erros__lista"></ul>
                 </div>
             </div>
-        </section>
+        </details>
 
         <div class="abas" role="tablist" aria-label="Seções da gestão de acesso">
           <button type="button" class="aba ativa" id="aba-usuarios" role="tab"
@@ -106,10 +114,11 @@
 
         <section class="doc-block" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios">
             <h2>Usuários Ativos</h2>
-            <p style="margin: 0 0 1rem;">
-              <button type="button" class="primary" id="btn-novo-usuario">Novo usuário</button>
-            </p>
             <div class="users-toolbar">
+                <!-- A ação primária abre a fila: era um botão solto numa linha
+                     própria enquanto os filtros se espalhavam por space-between,
+                     com vãos enormes entre busca, nível e status. -->
+                <button type="button" class="primary" id="btn-novo-usuario">Novo usuário</button>
                 <label for="user-search" class="cg-sr-only">Pesquisar usuários por nome ou e-mail</label>
                 <input type="search" id="user-search" class="path-input" style="max-width: 320px;" placeholder="Pesquisar por nome ou e-mail" />
                 <label for="user-role-filter" class="cg-sr-only">Filtrar por nível de acesso</label>
