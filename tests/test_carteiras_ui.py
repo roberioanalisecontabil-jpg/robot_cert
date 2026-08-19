@@ -336,3 +336,48 @@ def test_estado_vazio_diz_a_consequencia(html: str) -> None:
 def test_remover_pede_confirmacao(html: str) -> None:
     """Tirar acesso de alguém no meio de uma instalação merece confirmação."""
     assert "Remover este cliente da carteira?" in html
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 6. Os dois painéis (19/08)
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_tela_mostra_os_clientes_sem_exigir_busca(html: str) -> None:
+    """
+    O campo antigo só revelava algo com 2+ caracteres digitados: para achar um
+    cliente era preciso já saber o nome dele, e não havia como ver o que
+    existe. Agora os dois lados nascem povoados e a busca é filtro opcional.
+    """
+    assert 'id="listaDisponiveis"' in html
+    assert 'id="listaCarteira"' in html
+    assert "digite ao menos 2 caracteres" not in html
+    # A lista inteira vem de uma vez (491 clientes = 33 KB medidos).
+    assert "/api/carteira/documentos?limite=2000" in html
+
+
+def test_botao_de_lote_esconde_de_verdade(html: str) -> None:
+    """
+    `.btn` declara `display`, e display explícito vence o `display:none` que o
+    atributo `hidden` traz da folha do navegador. Sem a regra, o botão ficava
+    visível oferecendo "liberar os 491 filtrados" sem filtro nenhum — um
+    clique de consequência enorme onde não devia haver botão.
+    """
+    assert re.search(r"\.transfer__acao-lote\[hidden\]\s*\{[^}]*display:\s*none", html)
+
+
+def test_lote_so_aparece_com_filtro(html: str) -> None:
+    """
+    Sem filtro, "liberar todos" seria conceder o acervo inteiro num clique.
+    A ação em lote existe para o resultado de uma busca, não para o universo.
+    """
+    assert re.search(r"btnAdd\.hidden\s*=\s*!\(\s*temFiltro\s*&&", html)
+    assert re.search(r"btnRem\.hidden\s*=\s*!\(\s*temFiltro\s*&&", html)
+
+
+def test_documento_fora_do_inventario_continua_removivel(html: str) -> None:
+    """
+    Documento atribuído que saiu do inventário não está no universo. Se o
+    painel fosse montado só a partir do universo, ele sumiria da tela — e
+    ninguém conseguiria tirar um acesso que continua valendo.
+    """
+    assert "for (const doc of _carteiraAtual)" in html

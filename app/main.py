@@ -3541,14 +3541,19 @@ def listar_operadores(
 @app.get("/api/carteira/documentos", dependencies=[Depends(require_admin_ou_lider)])
 def listar_documentos_atribuiveis(
     q: Optional[str] = Query(None, max_length=120),
-    limite: int = Query(100, ge=1, le=500),
+    limite: int = Query(500, ge=1, le=2000),
 ) -> dict:
     """
     Universo de documentos para atribuir, filtrável por nome ou número.
 
-    Filtra no servidor e devolve no máximo `limite`: são centenas de clientes,
-    e mandar a lista inteira a cada tecla tornaria a busca mais lenta que
-    digitar o CNPJ na mão.
+    O teto era 500 e havia 491 clientes — a um cadastro de distância de
+    truncar em silêncio, que é como a curva de vencimento perdeu 29
+    certificados em 15/08. Subiu para 2000; a tela pede a lista inteira de
+    uma vez (medido: 491 documentos = 33 KB em ~375 ms) e monta os dois
+    painéis no cliente, então filtrar no servidor virou opcional.
+
+    `total` continua vindo separado de `documentos` justamente para a tela
+    poder dizer quando a lista foi cortada, em vez de parecer completa.
     """
     todos = cert_installer.universo_de_documentos()
     termo = (q or "").strip().lower()

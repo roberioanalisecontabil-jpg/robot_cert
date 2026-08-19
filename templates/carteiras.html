@@ -21,10 +21,30 @@
       .doc-chip { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
                   padding: 0.5rem 0.6rem; border-bottom: 0.5px solid var(--border); }
       .doc-chip__trilha { font-size: 0.72rem; color: var(--text-muted); }
-      .lista-busca { max-height: 300px; overflow-y: auto; border: 1.5px solid var(--border);
-                     border-radius: var(--radius-sm, 8px); margin-top: 0.5rem; }
-      .lista-busca__item { display: flex; justify-content: space-between; gap: 1rem; align-items: center;
-                           padding: 0.45rem 0.6rem; border-bottom: 0.5px solid var(--border); font-size: 0.85rem; }
+      /* Transfer list: disponíveis | na carteira */
+      .transfer { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: 0.75rem; }
+      /* Empilha antes do drawer mobile: dois painéis de lista lado a lado
+         viram duas colunas ilegíveis bem antes de 768px. */
+      @media (max-width: 1100px) { .transfer { grid-template-columns: 1fr; } }
+      .transfer__lado { min-width: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm, 8px); }
+      .transfer__cab { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+                       padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .transfer__cab h3 { font-size: 0.9rem; margin: 0; }
+      .transfer__cab .text-muted { font-weight: 400; font-size: 0.8rem; }
+      .transfer__acao-lote { font-size: 0.72rem; padding: 0.2rem 0.5rem; }
+      /* `.btn` declara display, e display explícito vence o `display:none` que
+         o atributo `hidden` traz da folha do navegador — sem esta regra o
+         botão de lote ficava visível dizendo "os 491 filtrados" sem filtro
+         nenhum. Mesma armadilha de `.barra-selecao[hidden]` no style.css. */
+      .transfer__acao-lote[hidden] { display: none; }
+      /* Altura fixa nos dois lados: sem ela, um painel com 480 itens e outro
+         com 3 deixariam a página com metros de rolagem e o par ilegível. */
+      .transfer__lista { height: 320px; overflow-y: auto; }
+      .transfer__item { display: flex; justify-content: space-between; gap: 0.75rem; align-items: center;
+                        padding: 0.45rem 0.6rem; border-bottom: 0.5px solid var(--border); font-size: 0.85rem; }
+      .transfer__item:last-child { border-bottom: none; }
+      .transfer__item__nome { min-width: 0; overflow-wrap: anywhere; }
+      .transfer__vazio { padding: 0.9rem 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
     </style>
   </head>
   <body>
@@ -65,23 +85,37 @@
               <span id="opAviso"></span>
             </div>
 
-            <!-- Acrescentar -->
+            <!-- Dois painéis lado a lado (transfer list). Antes era um campo de
+                 busca que exigia digitar 2 caracteres para revelar qualquer
+                 coisa: o gestor precisava SABER o nome do cliente antes de
+                 poder procurá-lo, e não tinha como ver o que existe. São 491
+                 clientes / 33 KB — a lista inteira cabe numa chamada, então a
+                 busca virou filtro opcional sobre os dois lados. -->
             <div style="margin-top: 1.25rem;">
-              <h3 style="font-size: 0.95rem; margin-bottom: 0.35rem;">Acrescentar clientes</h3>
-              <label for="buscaDoc" class="cg-sr-only">Buscar cliente por nome ou CNPJ/CPF</label>
+              <label for="buscaDoc" class="cg-sr-only">Filtrar clientes por nome ou CNPJ/CPF</label>
               <input type="search" id="buscaDoc" class="form-control"
-                     placeholder="Buscar por nome ou CNPJ/CPF — digite ao menos 2 caracteres" />
-              <div class="lista-busca" id="resultadoDocs" hidden></div>
+                     placeholder="Filtrar os dois lados por nome ou CNPJ/CPF" />
               <p class="hint" id="dicaBusca" style="margin-top: 0.4rem;"></p>
             </div>
 
-            <!-- Carteira atual -->
-            <div style="margin-top: 1.5rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="font-size: 0.95rem;">Carteira atual</h3>
-                <span id="contaDocs" class="text-muted" style="font-size: 0.8rem;"></span>
-              </div>
-              <div id="listaCarteira" style="margin-top: 0.4rem;"></div>
+            <div class="transfer">
+              <section class="transfer__lado" aria-labelledby="tit-disponiveis">
+                <header class="transfer__cab">
+                  <h3 id="tit-disponiveis">Disponíveis <span id="contaDisponiveis" class="text-muted"></span></h3>
+                  <button type="button" id="btnAddTodos" class="btn btn-secondary transfer__acao-lote" hidden></button>
+                </header>
+                <div class="transfer__lista" id="listaDisponiveis" role="list"
+                     tabindex="0" aria-label="Clientes disponíveis para liberar"></div>
+              </section>
+
+              <section class="transfer__lado" aria-labelledby="tit-carteira">
+                <header class="transfer__cab">
+                  <h3 id="tit-carteira">Na carteira <span id="contaDocs" class="text-muted"></span></h3>
+                  <button type="button" id="btnRemoverTodos" class="btn btn-secondary transfer__acao-lote" hidden></button>
+                </header>
+                <div class="transfer__lista" id="listaCarteira" role="list"
+                     tabindex="0" aria-label="Clientes na carteira desta pessoa"></div>
+              </section>
             </div>
 
             <!-- Histórico -->
@@ -102,6 +136,9 @@
       let _selecionado = null;
       let _carteiraAtual = new Set();
       let _papel = null;
+      let _universo = [];          // todos os clientes atribuíveis (491 hoje)
+      let _universoTruncado = 0;   // >0 se a rota cortou a lista
+      let _trilha = {};            // documento -> quem liberou e quando
 
       function msg(texto, tipo) {
         document.getElementById("cartMsg").innerHTML =
@@ -169,54 +206,30 @@
           ? ""
           : `<span class="badge" style="background:var(--border);color:var(--text-muted)">CONTA INATIVA</span>`;
         document.getElementById("buscaDoc").value = "";
-        document.getElementById("resultadoDocs").hidden = true;
 
         renderOperadores();
+        try {
+          await carregarUniverso();
+        } catch (e) {
+          msg("Não foi possível carregar a lista de clientes: " + e.message, "error");
+        }
         await Promise.all([carregarCarteira(), carregarHistorico()]);
       }
 
       async function carregarCarteira() {
         const el = document.getElementById("listaCarteira");
-        el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Carregando…</p>`;
+        el.innerHTML = `<p class="transfer__vazio">Carregando…</p>`;
         try {
           const r = await fetch(`/api/carteira/${encodeURIComponent(_selecionado.id)}`, { headers: getHeaders() });
           if (!r.ok) throw new Error(await mensagemCorpoErro(r));
           const d = await r.json();
           _carteiraAtual = new Set(d.documentos || []);
-          const itens = d.itens || [];
-
-          document.getElementById("contaDocs").textContent = `${itens.length} cliente(s)`;
-          if (!itens.length) {
-            // O estado vazio precisa dizer a consequência: é o comportamento
-            // correto (o acesso fecha por padrão), mas é também o que trava a
-            // pessoa sem que ela saiba por quê.
-            el.innerHTML =
-              `<p class="text-muted" style="font-size:0.85rem">Carteira vazia — ` +
-              `esta pessoa <strong>não consegue instalar nenhum certificado</strong>. ` +
-              `Use a busca acima para liberar clientes.</p>`;
-            return;
-          }
-
-          el.innerHTML = itens.map((i) => `
-            <div class="doc-chip">
-              <div>
-                <div>${esc(i.nome || "(titular desconhecido)")}</div>
-                <div class="doc-chip__trilha">
-                  ${esc(i.documento)}
-                  ${i.atribuido_por ? " · liberado por " + esc(i.atribuido_por) : ""}
-                  ${i.atribuido_em ? " em " + new Date(i.atribuido_em).toLocaleDateString("pt-BR") : ""}
-                  ${i.no_inventario ? "" : " · <em>fora do inventário atual</em>"}
-                </div>
-              </div>
-              <button type="button" class="btn btn-secondary" data-doc="${esc(i.documento)}"
-                      style="font-size:0.78rem">Remover</button>
-            </div>`).join("");
-
-          el.querySelectorAll("button[data-doc]").forEach((b) =>
-            b.addEventListener("click", () => remover(b.dataset.doc))
-          );
+          // A trilha (quem liberou, quando) fica indexada por documento: o
+          // painel a mostra na linha, como antes.
+          _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
+          renderTransfer();
         } catch (e) {
-          el.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem">${esc(e.message)}</p>`;
+          el.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem;padding:0.6rem">${esc(e.message)}</p>`;
         }
       }
 
@@ -261,66 +274,159 @@
         }
       }
 
-      // ─── Busca e atribuição ────────────────────────────────────────────
+      // ─── Os dois painéis ───────────────────────────────────────────────
 
-      let _timerBusca = null;
-
-      async function buscarDocumentos() {
-        const q = (document.getElementById("buscaDoc").value || "").trim();
-        const caixa = document.getElementById("resultadoDocs");
-        const dica = document.getElementById("dicaBusca");
-        if (q.length < 2) {
-          caixa.hidden = true;
-          dica.textContent = "";
-          return;
-        }
-        try {
-          const r = await fetch(`/api/carteira/documentos?q=${encodeURIComponent(q)}`, { headers: getHeaders() });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          const d = await r.json();
-          const docs = d.documentos || [];
-          caixa.hidden = false;
-          // Dizer quantos ficaram de fora evita a conclusão de que "só existem
-          // estes" quando na verdade a lista foi cortada.
-          dica.textContent = d.total > docs.length
-            ? `Mostrando ${docs.length} de ${d.total} — refine a busca.` : "";
-
-          caixa.innerHTML = docs.length
-            ? docs.map((x) => {
-                const tem = _carteiraAtual.has(x.documento);
-                return `<div class="lista-busca__item">
-                  <span>${esc(x.nome || "(sem nome)")} <span class="text-muted">· ${esc(x.documento)}</span></span>
-                  ${tem
-                    ? `<span class="text-muted" style="font-size:0.78rem">já na carteira</span>`
-                    : `<button type="button" class="btn btn-primary" data-add="${esc(x.documento)}"
-                               style="font-size:0.75rem;padding:0.25rem 0.6rem">Liberar</button>`}
-                </div>`;
-              }).join("")
-            : `<p class="text-muted" style="font-size:0.85rem;padding:0.6rem">Nada encontrado.</p>`;
-
-          caixa.querySelectorAll("button[data-add]").forEach((b) =>
-            b.addEventListener("click", () => atribuir(b.dataset.add))
-          );
-        } catch (e) {
-          caixa.hidden = false;
-          caixa.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem;padding:0.6rem">${esc(e.message)}</p>`;
-        }
+      /** Universo completo, carregado uma vez por sessão de tela. */
+      async function carregarUniverso() {
+        if (_universo.length) return;
+        const r = await fetch("/api/carteira/documentos?limite=2000", { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        _universo = d.documentos || [];
+        // Truncamento silencioso é o modo de falha desta rota: a lista
+        // pareceria completa e o cliente que faltasse seria "inexistente".
+        _universoTruncado = (d.total || 0) > _universo.length ? d.total : 0;
       }
 
-      async function atribuir(documento) {
+      function filtrar(docs) {
+        const q = (document.getElementById("buscaDoc").value || "").trim().toLowerCase();
+        if (!q) return docs;
+        const digitos = q.replace(/\D/g, "");
+        return docs.filter(
+          (x) => (x.nome || "").toLowerCase().includes(q) || (digitos && x.documento.includes(digitos))
+        );
+      }
+
+      function linhaTransfer(x, naCarteira) {
+        const t = naCarteira ? _trilha[x.documento] : null;
+        const trilha = t && (t.atribuido_por || t.atribuido_em)
+          ? `<div class="doc-chip__trilha">${esc(x.documento)}` +
+            (t.atribuido_por ? " · liberado por " + esc(t.atribuido_por) : "") +
+            (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
+            (t.no_inventario === false ? " · <em>fora do inventário atual</em>" : "") +
+            `</div>`
+          : `<div class="doc-chip__trilha">${esc(x.documento)}</div>`;
+        return `<div class="transfer__item" role="listitem">
+          <div class="transfer__item__nome">
+            <div>${esc(x.nome || "(sem nome)")}</div>
+            ${trilha}
+          </div>
+          <button type="button" class="btn ${naCarteira ? "btn-secondary" : "btn-primary"}"
+                  data-doc="${esc(x.documento)}" style="font-size:0.75rem;padding:0.25rem 0.6rem"
+                  aria-label="${naCarteira ? "Remover" : "Liberar"} ${esc(x.nome || x.documento)}"
+                  >${naCarteira ? "Remover" : "Liberar"}</button>
+        </div>`;
+      }
+
+      /** Redesenha os dois lados a partir do universo, da carteira e do filtro. */
+      function renderTransfer() {
+        const naCarteira = _universo.filter((x) => _carteiraAtual.has(x.documento));
+        // Documento atribuído que saiu do inventário continua na carteira e
+        // não está no universo — sem isto ele sumiria da tela e ninguém
+        // conseguiria removê-lo.
+        for (const doc of _carteiraAtual) {
+          if (!naCarteira.some((x) => x.documento === doc)) {
+            naCarteira.push({ documento: doc, nome: (_trilha[doc] || {}).nome || "" });
+          }
+        }
+        const disponiveis = _universo.filter((x) => !_carteiraAtual.has(x.documento));
+
+        const dispFiltrados = filtrar(disponiveis);
+        const cartFiltrados = filtrar(naCarteira);
+
+        document.getElementById("contaDisponiveis").textContent =
+          dispFiltrados.length === disponiveis.length
+            ? `(${disponiveis.length})`
+            : `(${dispFiltrados.length} de ${disponiveis.length})`;
+        document.getElementById("contaDocs").textContent =
+          cartFiltrados.length === naCarteira.length
+            ? `(${naCarteira.length})`
+            : `(${cartFiltrados.length} de ${naCarteira.length})`;
+
+        const elDisp = document.getElementById("listaDisponiveis");
+        const elCart = document.getElementById("listaCarteira");
+
+        elDisp.innerHTML = dispFiltrados.length
+          ? dispFiltrados.map((x) => linhaTransfer(x, false)).join("")
+          : `<p class="transfer__vazio">${disponiveis.length ? "Nenhum cliente com esse filtro." : "Todos os clientes já estão na carteira."}</p>`;
+
+        elCart.innerHTML = cartFiltrados.length
+          ? cartFiltrados.map((x) => linhaTransfer(x, true)).join("")
+          : naCarteira.length
+            ? `<p class="transfer__vazio">Nenhum cliente com esse filtro.</p>`
+            // O vazio precisa dizer a CONSEQUÊNCIA: é o comportamento correto
+            // (o acesso fecha por padrão), e é também o que trava a pessoa sem
+            // que ninguém saiba por quê.
+            : `<p class="transfer__vazio">Carteira vazia — esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
+
+        elDisp.querySelectorAll("button[data-doc]").forEach((b) =>
+          b.addEventListener("click", () => atribuir([b.dataset.doc]))
+        );
+        elCart.querySelectorAll("button[data-doc]").forEach((b) =>
+          b.addEventListener("click", () => remover(b.dataset.doc))
+        );
+
+        // Ação em lote só aparece com filtro ativo: "liberar os 491" seria um
+        // clique com consequência grande demais para ficar sempre à mão.
+        const temFiltro = !!(document.getElementById("buscaDoc").value || "").trim();
+        const btnAdd = document.getElementById("btnAddTodos");
+        btnAdd.hidden = !(temFiltro && dispFiltrados.length > 1);
+        btnAdd.textContent = `Liberar os ${dispFiltrados.length} filtrados`;
+        btnAdd.onclick = () => atribuir(dispFiltrados.map((x) => x.documento));
+
+        const btnRem = document.getElementById("btnRemoverTodos");
+        btnRem.hidden = !(temFiltro && cartFiltrados.length > 1);
+        btnRem.textContent = `Remover os ${cartFiltrados.length} filtrados`;
+        btnRem.onclick = () => removerVarios(cartFiltrados.map((x) => x.documento));
+
+        const dica = document.getElementById("dicaBusca");
+        dica.textContent = _universoTruncado
+          ? `Atenção: mostrando ${_universo.length} de ${_universoTruncado} clientes — a lista foi cortada.`
+          : "";
+      }
+
+      async function atribuir(documentos) {
+        if (!documentos.length) return;
         try {
           const r = await fetch("/api/carteira", {
             method: "POST",
             headers: getHeaders(true),
-            body: JSON.stringify({ user_id: _selecionado.id, documentos: [documento] }),
+            body: JSON.stringify({ user_id: _selecionado.id, documentos }),
           });
           if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          msg("Cliente liberado.", "success");
+          msg(documentos.length === 1 ? "Cliente liberado." : `${documentos.length} clientes liberados.`, "success");
           await Promise.all([carregarCarteira(), carregarOperadores()]);
-          buscarDocumentos();
         } catch (e) {
           msg("Não foi possível liberar: " + e.message, "error");
         }
+      }
+
+      async function removerVarios(documentos) {
+        if (!documentos.length) return;
+        if (!confirm(
+          `Remover ${documentos.length} clientes da carteira?\n\n` +
+          `A pessoa deixa de conseguir instalar os certificados deles.`
+        )) return;
+        // Uma chamada por documento: a rota de remoção é por documento, e
+        // inventar um lote no servidor só para isto abriria uma segunda porta
+        // de revogação — com a mesma checagem de alcance para manter.
+        let falhas = 0;
+        for (const doc of documentos) {
+          try {
+            const r = await fetch(
+              `/api/carteira/${encodeURIComponent(_selecionado.id)}/${encodeURIComponent(doc)}`,
+              { method: "DELETE", headers: getHeaders() }
+            );
+            if (!r.ok) falhas++;
+          } catch (_e) { falhas++; }
+        }
+        msg(
+          falhas
+            ? `${documentos.length - falhas} removido(s); ${falhas} falharam.`
+            : `${documentos.length} clientes removidos da carteira.`,
+          falhas ? "error" : "success"
+        );
+        await Promise.all([carregarCarteira(), carregarOperadores()]);
       }
 
       async function remover(documento) {
@@ -346,10 +452,9 @@
         _papel = localStorage.getItem("user_role");
 
         document.getElementById("buscaOperador").addEventListener("input", renderOperadores);
-        document.getElementById("buscaDoc").addEventListener("input", () => {
-          clearTimeout(_timerBusca);
-          _timerBusca = setTimeout(buscarDocumentos, 250);
-        });
+        // Sem debounce: o filtro roda sobre a lista já em memória, não faz
+        // requisição nenhuma — esperar 250ms a cada tecla só atrasaria.
+        document.getElementById("buscaDoc").addEventListener("input", renderTransfer);
         carregarOperadores();
       })();
     </script>
