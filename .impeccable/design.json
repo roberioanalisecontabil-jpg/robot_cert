@@ -1,0 +1,504 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-19T00:00:00Z",
+  "title": "Design System: Analise Certificado",
+  "extensions": {
+    "colorMeta": {
+      "system-blue": {
+        "role": "primary",
+        "displayName": "Azul de Sistema",
+        "canonical": "#0071E3",
+        "darkValue": "#0A84FF",
+        "note": "Navegação e interação apenas. Nunca estado de certificado. O token --accent-solid mantém #0071E3 nos dois temas porque #0A84FF com branco dá 3.65:1.",
+        "tonalRamp": [
+          "#001C3A",
+          "#003670",
+          "#0051A2",
+          "#0071E3",
+          "#3D93EB",
+          "#7AB4F2",
+          "#B8D6F8",
+          "#E8F0FE"
+        ]
+      },
+      "system-blue-text": {
+        "role": "primary",
+        "displayName": "Azul de Sistema — texto",
+        "canonical": "#0066CC",
+        "darkValue": "#5AA9FF",
+        "note": "5.57:1 sobre --surface; 4.86:1 sobre --total-bg. Texto corrido em azul usa este, não a identidade."
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "Verde Válido",
+        "canonical": "#34C759",
+        "darkValue": "#30D158",
+        "note": "Identidade do certificado válido. Fundo #EAF9EE, texto #1D7A3A (4.95:1).",
+        "tonalRamp": [
+          "#0B2A15",
+          "#14522A",
+          "#1D7A3A",
+          "#26A149",
+          "#34C759",
+          "#6FDA8B",
+          "#A9E9BC",
+          "#EAF9EE"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Âmbar Expirando",
+        "canonical": "#FF9F0A",
+        "darkValue": "#FF9F0A",
+        "note": "Identidade do certificado a vencer em 30 dias. Fundo #FFF7EB, texto #8A5200 (6.01:1).",
+        "tonalRamp": [
+          "#2B1A00",
+          "#573600",
+          "#8A5200",
+          "#B86E00",
+          "#E68A00",
+          "#FF9F0A",
+          "#FFC66B",
+          "#FFF7EB"
+        ]
+      },
+      "expired": {
+        "role": "tertiary",
+        "displayName": "Vermelho Vencido",
+        "canonical": "#FF3B30",
+        "darkValue": "#FF453A",
+        "note": "Identidade do vencido. Fundo #FDF2F2, texto #C1121C (5.68:1). O sólido #C1121C existe à parte para badge de contagem com texto branco (6.23:1).",
+        "tonalRamp": [
+          "#2E0604",
+          "#5C0C08",
+          "#8A1210",
+          "#C1121C",
+          "#FF3B30",
+          "#FF7A72",
+          "#FFB3AE",
+          "#FDF2F2"
+        ]
+      },
+      "fora-padrao-text": {
+        "role": "tertiary",
+        "displayName": "Violeta Fora-de-Padrão",
+        "canonical": "#6D28D9",
+        "darkValue": "#C4B5FD",
+        "note": "O quinto estado: arquivo que existe mas foge à convenção de nome. Fora da escala verde-âmbar-vermelho de propósito.",
+        "tonalRamp": [
+          "#1C0A38",
+          "#2E1159",
+          "#45197F",
+          "#5A20AB",
+          "#6D28D9",
+          "#9366E6",
+          "#B99CF0",
+          "#F5F3FF"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Cinza de Mesa",
+        "canonical": "#F5F5F7",
+        "darkValue": "#1C1C1E",
+        "note": "Fundo da área de trabalho. Nunca recebe conteúdo diretamente.",
+        "tonalRamp": [
+          "#111112",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#8E8E93",
+          "#C7C7CC",
+          "#E5E5EA",
+          "#F5F5F7"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Folha",
+        "canonical": "#FFFFFF",
+        "darkValue": "#2C2C2E",
+        "note": "Toda superfície que carrega conteúdo: card, tabela, modal, toast, painel lateral."
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Grafite",
+        "canonical": "#1D1D1F",
+        "darkValue": "#F5F5F7",
+        "note": "Texto corrido e números."
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Cinza Legível",
+        "canonical": "#6E6E73",
+        "darkValue": "#98989D",
+        "note": "4.85:1 sobre --surface no tema escuro — o mínimo que este sistema aceita, escolhido por medição."
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Fio",
+        "canonical": "rgba(0, 0, 0, 0.08)",
+        "darkValue": "rgba(255, 255, 255, 0.08)",
+        "note": "0.5px em superfícies e divisórias; 1.5px em controles."
+      },
+      "sidebar-bg": {
+        "role": "neutral",
+        "displayName": "Grafite de Moldura",
+        "canonical": "#1C1C1E",
+        "darkValue": "#111112",
+        "note": "No tema escuro fica MAIS escura que o conteúdo, mantendo a hierarquia de moldura em vez de fundi-la."
+      },
+      "row-hover": {
+        "role": "neutral",
+        "displayName": "Véu de Hover",
+        "canonical": "rgba(0, 113, 227, 0.04)",
+        "darkValue": "rgba(10, 132, 255, 0.06)",
+        "note": "O único token deliberadamente translúcido: precisa compor com o tom de linha que estiver por baixo. Uma cor sólida apagaria o estado do certificado justamente ao passar o mouse sobre ele. Criado em 19/08/2026 ao reconciliar o literal rgba(59,130,246,0.06) das duplicidades."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Reservado. Não aparece em nenhuma página hoje — existe para uma tela de marca ou um número único que precise dominar."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "O <h1> de cada página. Cai para 24px abaixo de 768px."
+      },
+      "title1": {
+        "displayName": "Title 1",
+        "purpose": "Título de bloco dentro de uma folha."
+      },
+      "title2": {
+        "displayName": "Title 2",
+        "purpose": "Subtítulo, cabeçalho de painel lateral."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texto corrido. Tabelas descem para 14px — varredura, não leitura."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Dica, nota de rodapé, texto de apoio."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "O único nível em caixa alta do sistema: cabeçalho de tabela, título de card de métrica, badge."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Pilha nativa, sem download. Só para dado literal comparável caractere a caractere: caminho de arquivo nos balões de duplicidades. É o único lugar onde a fonte muda."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-sm",
+        "value": "0 1px 2px rgba(0, 0, 0, 0.04)",
+        "darkValue": "0 1px 2px rgba(0, 0, 0, 0.2)",
+        "purpose": "Item ativo da sidebar, botão de paginação. Um fio de sombra, o bastante para o elemento não parecer pintado no fundo."
+      },
+      {
+        "name": "shadow-md",
+        "value": "0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03)",
+        "darkValue": "0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2)",
+        "purpose": "O repouso de toda folha: card de métrica, container de tabela."
+      },
+      {
+        "name": "shadow-lg",
+        "value": "0 12px 30px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)",
+        "darkValue": "0 12px 30px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3)",
+        "purpose": "O que flutua: modal, toast, dropdown, gaveta mobile, skip-link. E o hover do card, que sobe um nível."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-spring",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Entrada e movimento — fadeUp da página, hover do card, gaveta mobile."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Mudança de estado — cor de botão, borda de campo, hover de linha."
+      },
+      {
+        "name": "ease-in-out",
+        "value": "cubic-bezier(0.65, 0, 0.35, 1)",
+        "purpose": "Transições simétricas (abre e fecha pelo mesmo caminho)."
+      },
+      {
+        "name": "ease-default",
+        "value": "cubic-bezier(0.25, 0.1, 0.25, 1)",
+        "purpose": "Queda genérica."
+      },
+      {
+        "name": "duration-fast",
+        "value": "150ms",
+        "purpose": "Mudança de estado de controle."
+      },
+      {
+        "name": "duration-normal",
+        "value": "250ms",
+        "purpose": "Hover de card, entrada de toast."
+      },
+      {
+        "name": "duration-slow",
+        "value": "400ms",
+        "purpose": "fadeUp de entrada de página."
+      },
+      {
+        "name": "fadeUp",
+        "value": "@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }",
+        "purpose": "Entrada de todo filho direto de .main-content. SEMPRE com fill-mode `backwards`, nunca `both` — `both` deixa um transform residual que cria contexto de empilhamento e enterra os elementos flutuantes."
+      },
+      {
+        "name": "fadeInDown",
+        "value": "@keyframes fadeInDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }",
+        "purpose": "Entrada do dropdown de notificações, em 200ms com ease-out. O inverso do fadeUp: desce da âncora em vez de subir do fundo."
+      },
+      {
+        "name": "pulse-badge",
+        "value": "@keyframes pulse-badge { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }",
+        "purpose": "Halo pulsante do badge de contagem do sino, 2s infinito. O ÚNICO movimento perpétuo do portal, e prefers-reduced-motion o desliga por completo (animation: none), não apenas o acelera."
+      },
+      {
+        "name": "notif-spin",
+        "value": "@keyframes notif-spin { to { transform: rotate(360deg); } }",
+        "purpose": "Spinner de 14px do estado de carregamento do sino, 600ms linear infinito."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sidebar-icons",
+        "value": "900px",
+        "purpose": "Sidebar colapsa para 76px, só ícones. Conteúdo com margin-left: 76px."
+      },
+      {
+        "name": "drawer",
+        "value": "768px",
+        "purpose": "Sidebar vira gaveta de 270px com translateX(-100%) e backdrop. Toolbar empilha, controles a 100% de largura, h1 para 24px."
+      },
+      {
+        "name": "compact",
+        "value": "480px",
+        "purpose": "Grade de métricas em duas colunas fixas minmax(0, 1fr); ícones 36px → 32px."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão Primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "A ação principal de uma tela. Azul sólido idêntico nos dois temas, porque o azul do tema escuro reprovaria com texto branco.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Guardar alterações</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0.5rem 1.1rem; border-radius: 980px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.96); } .ds-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.45; cursor: not-allowed; } .ds-btn-primary { background: var(--accent-solid); color: #fff; border-color: var(--accent-solid); } .ds-btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); opacity: 0.95; }"
+    },
+    {
+      "name": "Botão Secundário",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A forma base. A maioria dos botões do portal é esta: folha branca, fio de 1.5px, texto grafite.",
+      "html": "<button class=\"ds-btn ds-btn-secondary\">Forçar leitura agora</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0.5rem 1.1rem; border-radius: 980px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-secondary:hover:not(:disabled) { background: var(--bg); opacity: 0.9; } .ds-btn:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.96); } .ds-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Botão de Perigo",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Ação destrutiva. Vermelho tonal, não sólido — séria, não estridente.",
+      "html": "<button class=\"ds-btn ds-btn-danger\">Mover vencidos</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0.5rem 1.1rem; border-radius: 980px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-danger { background: var(--expired-bg); color: var(--expired-text); border-color: rgba(255, 59, 48, 0.25); } .ds-btn-danger:hover { background: rgba(255, 59, 48, 0.2); border-color: rgba(255, 59, 48, 0.4); } .ds-btn:active { transform: translateY(1px); filter: brightness(0.96); } .ds-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Campo com Rótulo",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Fundo mais escuro que a folha — o campo é uma depressão. Ao focar, o fundo sobe para a folha e acende um halo de 4px. Rótulo sempre visível; placeholder nunca substitui label.",
+      "html": "<div class=\"ds-field\"><label for=\"ds-f1\">Pasta de origem</label><input id=\"ds-f1\" class=\"ds-input\" type=\"text\" value=\"C:\\\\Certs\"></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 8px; } .ds-field label { font-size: 0.85rem; font-weight: 600; color: var(--text); } .ds-input { background: var(--bg); border: 1.5px solid var(--border); padding: 0.6rem 0.9rem; border-radius: 12px; font: inherit; font-size: 0.9rem; color: var(--text); outline: none; transition: border-color 150ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-input:focus { border-color: var(--border-focus); background: var(--surface); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); }"
+    },
+    {
+      "name": "Badges de Estado",
+      "kind": "chip",
+      "refersTo": "badge-ok",
+      "description": "Os quatro estados do certificado em pílula tonal. Cada um carrega um glifo de forma antes do texto: numa tabela de centenas de linhas a forma se reconhece antes da palavra, e com deuteranopia o verde e o âmbar convergem.",
+      "html": "<div class=\"ds-badges\"><span class=\"ds-badge ds-badge-ok\"><span class=\"ds-badge-glifo\" aria-hidden=\"true\">✓</span>Válido</span><span class=\"ds-badge ds-badge-warning\"><span class=\"ds-badge-glifo\" aria-hidden=\"true\">⚠</span>Expira em 12 dias</span><span class=\"ds-badge ds-badge-expired\"><span class=\"ds-badge-glifo\" aria-hidden=\"true\">✕</span>Vencido</span><span class=\"ds-badge ds-badge-bad\"><span class=\"ds-badge-glifo\" aria-hidden=\"true\">?</span>Sem padrão</span></div>",
+      "css": ".ds-badges { display: flex; flex-wrap: wrap; gap: 8px; } .ds-badge { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 980px; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; border: none; } .ds-badge-glifo { margin-right: 0.35em; font-weight: 700; min-width: 1em; text-align: center; } .ds-badge-ok { background: var(--ok-bg); color: var(--ok-text); } .ds-badge-warning { background: var(--warning-bg); color: var(--warning-text); } .ds-badge-expired { background: var(--expired-bg); color: var(--expired-text); } .ds-badge-bad { background: transparent; border: 1px solid var(--border); color: var(--text); }"
+    },
+    {
+      "name": "Card de Métrica",
+      "kind": "card",
+      "refersTo": "card-metric",
+      "description": "A folha do dashboard: rótulo em caixa alta de 10.5px, número de 26px peso 700, e um ícone de 36px pintado com o par fundo/texto do estado. Sobe 3px no hover — o único will-change do projeto.",
+      "html": "<div class=\"ds-card-metric\"><div class=\"ds-card-info\"><span class=\"ds-card-title\">Vencidos</span><span class=\"ds-card-number\">16</span><span class=\"ds-card-sub\">de 560 certificados</span></div><div class=\"ds-card-icon\"><svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z\"/></svg></div></div>",
+      "css": ".ds-card-metric { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; padding: 0.85rem 0.95rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 0.35rem; box-shadow: var(--shadow-md); max-width: 220px; transition: transform 250ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 250ms cubic-bezier(0.25, 1, 0.5, 1); will-change: transform, box-shadow; } .ds-card-metric:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); } .ds-card-info { display: flex; flex-direction: column; min-width: 0; flex: 1; } .ds-card-title { font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; } .ds-card-number { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; color: var(--text); line-height: 1.1; } .ds-card-sub { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.35rem; } .ds-card-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--expired-bg); color: var(--expired-text); } .ds-card-icon svg { width: 18px; height: 18px; }"
+    },
+    {
+      "name": "Item de Navegação",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "A moldura escura permanente. Ícone Heroicons outline de 1.3rem com stroke-width 1.5, inline no template. O item ativo recebe o azul sólido nos dois temas.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-item-active\" href=\"#\"><svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25\"/></svg>Início</a><a class=\"ds-nav-item\" href=\"#\"><svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z\"/></svg>Vencidos</a></nav>",
+      "css": ".ds-nav { background: var(--sidebar-bg); padding: 1.25rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; width: 250px; border-radius: 8px; } .ds-nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 1rem; color: var(--sidebar-text); text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 0.95rem; transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-nav-item svg { width: 1.3rem; height: 1.3rem; } .ds-nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); } .ds-nav-item-active { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); box-shadow: var(--shadow-sm); } .ds-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Paginação",
+      "kind": "custom",
+      "refersTo": "page-link",
+      "description": "O componente mais trabalhado do sistema: fila unida com cantos externos em 8px, miolo quadrado e bordas sobrepostas por margin-left -1px. Altura de 44px porque paginação é alvo frequente em toque. Anel de foco só em :focus-visible — com :focus puro ele aparecia a cada clique de mouse.",
+      "html": "<ul class=\"ds-pag\"><li><button class=\"ds-page ds-page-rounded-s\">Anterior</button></li><li><button class=\"ds-page ds-page-square ds-page-current\">1</button></li><li><button class=\"ds-page ds-page-square\">2</button></li><li><button class=\"ds-page ds-page-square\">3</button></li><li><button class=\"ds-page ds-page-rounded-e\">Próxima</button></li></ul>",
+      "css": ".ds-pag { display: flex; list-style: none; margin: 0; padding: 0; } .ds-pag > li + li .ds-page { margin-left: -1px; } .ds-page { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0 0.85rem; min-height: 44px; font: inherit; font-size: 0.875rem; font-weight: 600; line-height: 1.25; color: var(--text); background: var(--surface); border: 1px solid var(--border); cursor: pointer; box-shadow: var(--shadow-sm); border-radius: 0; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-page:hover:not(:disabled) { background: var(--bg); z-index: 1; } .ds-page:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; } .ds-page:disabled { opacity: 0.45; cursor: not-allowed; } .ds-page-square { min-width: 44px; padding-left: 0; padding-right: 0; } .ds-page-rounded-s { border-radius: 8px 0 0 8px; } .ds-page-rounded-e { border-radius: 0 8px 8px 0; } .ds-page-current { color: var(--accent-text); background: var(--total-bg); border-color: var(--accent); }"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Canto inferior direito, folha de 12px com barra de 4px à esquerda na cor de identidade do tipo. O botão de fechar tem 44×44px com margem negativa para não inchar o toast.",
+      "html": "<div class=\"ds-toast ds-toast-success\"><span class=\"ds-toast-icon\">✓</span><span class=\"ds-toast-msg\">Configuração guardada.</span><button class=\"ds-toast-close\" aria-label=\"Fechar\">×</button></div>",
+      "css": ".ds-toast { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1.15rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); color: var(--text); font-size: 0.875rem; font-weight: 500; max-width: 400px; } .ds-toast-icon { font-weight: 700; font-size: 1.1rem; flex-shrink: 0; } .ds-toast-msg { flex: 1; line-height: 1.4; } .ds-toast-close { background: transparent; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; padding: 0; line-height: 1; border-radius: 8px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin: -0.5rem -0.5rem -0.5rem 0; } .ds-toast-close:hover { color: var(--text); } .ds-toast-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-toast-success { border-left: 4px solid var(--ok); } .ds-toast-success .ds-toast-icon { color: var(--ok-text); }"
+    },
+    {
+      "name": "Empty State",
+      "kind": "custom",
+      "refersTo": "card-surface",
+      "description": "Folha de 18px com borda tracejada — tracejado significa 'aqui não há conteúdo ainda'. Sempre acionável: ícone, título, descrição com max-width de 400px, e um botão.",
+      "html": "<div class=\"ds-empty\"><div class=\"ds-empty-icon\">📄</div><h3 class=\"ds-empty-title\">Nenhum certificado vencido</h3><p class=\"ds-empty-desc\">A última varredura do ANALISESRV foi há 12 minutos e não encontrou certificados fora da validade.</p><button class=\"ds-btn ds-btn-secondary\">Forçar leitura agora</button></div>",
+      "css": ".ds-empty { padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--surface); border-radius: 18px; border: 1px dashed var(--border); } .ds-empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.8; } .ds-empty-title { font-size: 1.1rem; font-weight: 600; color: var(--text); margin: 0 0 0.4rem; } .ds-empty-desc { font-size: 0.875rem; color: var(--text-muted); max-width: 400px; margin: 0 0 1.25rem; line-height: 1.5; } .ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0.5rem 1.1rem; border-radius: 980px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-secondary:hover { background: var(--bg); opacity: 0.9; }"
+    },
+    {
+      "name": "Central de Notificações",
+      "kind": "custom",
+      "refersTo": "notification-dropdown",
+      "description": "O único componente glassmorphic do sistema, junto da sidebar. A folha vira translúcida com blur(20px) SÓ quando o usuário escolheu um tema explicitamente — em 'seguir o sistema' fica opaca. Item com barra de 3px à esquerda na cor do estado; hover desliza 2px para o lado oposto à barra.",
+      "html": "<div class=\"ds-notif\"><div class=\"ds-notif-head\"><h3>Notificações</h3><span class=\"ds-notif-sync\">Nuvem</span></div><div class=\"ds-notif-body\"><p class=\"ds-notif-section\">Vencidos</p><div class=\"ds-notif-item ds-notif-expired\"><div class=\"ds-notif-item-head\"><span class=\"ds-notif-type\">Vencido</span><span class=\"ds-notif-date\">12/08/2026</span></div><p class=\"ds-notif-msg\">Certificado de TRANSPORTES ALVORADA LTDA venceu.</p><p class=\"ds-notif-doc\">CNPJ 12.345.678/0001-90</p></div><p class=\"ds-notif-section\">Expirando</p><div class=\"ds-notif-item ds-notif-expiring\"><div class=\"ds-notif-item-head\"><span class=\"ds-notif-type\">Expira em 9 dias</span><span class=\"ds-notif-date\">28/08/2026</span></div><p class=\"ds-notif-msg\">Certificado de PADARIA CENTRAL ME.</p><p class=\"ds-notif-doc\">CNPJ 98.765.432/0001-10</p></div><div class=\"ds-notif-foot\"><span>2 de 16</span><a class=\"ds-notif-link\" href=\"#\">Ver todos</a></div></div></div>",
+      "css": ".ds-notif { width: 320px; max-height: 400px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; animation: ds-fadeInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1); } @keyframes ds-fadeInDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } } .ds-notif-head { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); } .ds-notif-head h3 { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text); } .ds-notif-sync { font-size: 0.7rem; font-weight: 500; background: var(--total-bg); color: var(--accent-text); padding: 0.15rem 0.4rem; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; } .ds-notif-body { padding: 0.5rem; } .ds-notif-section { margin: 0.75rem 0.25rem 0.4rem; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); } .ds-notif-body > .ds-notif-section:first-child { margin-top: 0.25rem; } .ds-notif-item { padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid transparent; transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-notif-item:hover { background: rgba(0, 0, 0, 0.03); transform: translateX(2px); } .ds-notif-expired { background: var(--expired-bg); border-left-color: var(--expired); } .ds-notif-expiring { background: var(--warning-bg); border-left-color: var(--warning); } .ds-notif-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; } .ds-notif-type { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; } .ds-notif-expired .ds-notif-type { color: var(--expired-text); } .ds-notif-expiring .ds-notif-type { color: var(--warning-text); } .ds-notif-date { font-size: 0.7rem; color: var(--text-muted); } .ds-notif-msg { font-size: 0.85rem; font-weight: 500; color: var(--text); line-height: 1.3; margin: 0 0 0.2rem; } .ds-notif-doc { font-size: 0.75rem; color: var(--text-muted); margin: 0; } .ds-notif-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 0.5rem; padding: 0.65rem 0.25rem 0.25rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-muted); } .ds-notif-link { color: var(--accent-text); font-weight: 600; text-decoration: none; white-space: nowrap; } .ds-notif-link:hover { text-decoration: underline; }"
+    },
+    {
+      "name": "Sino com Badge",
+      "kind": "button",
+      "refersTo": "notification-badge",
+      "description": "O badge de contagem é um círculo de 18px em --expired-solid (#C1121C, 6.23:1 com branco) recortado do ícone por um anel de 2px em --surface. Pulsa a cada 2s — o único movimento perpétuo do portal, desligado por completo em prefers-reduced-motion.",
+      "html": "<button class=\"ds-bell\" aria-label=\"Notificações\"><svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0\"/></svg><span class=\"ds-bell-badge\">16</span></button>",
+      "css": ".ds-bell { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 980px; color: var(--text); cursor: pointer; } .ds-bell svg { width: 1.25rem; height: 1.25rem; } .ds-bell:hover { background: var(--bg); } .ds-bell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-bell-badge { position: absolute; top: -4px; right: -4px; background: var(--expired-solid); color: #fff; border-radius: 50%; padding: 0.15rem 0.35rem; font-size: 0.7rem; font-weight: 700; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface); box-shadow: 0 2px 4px rgba(0,0,0,0.1); animation: ds-pulse-badge 2s infinite; } @keyframes ds-pulse-badge { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } } @media (prefers-reduced-motion: reduce) { .ds-bell-badge { animation: none; } }"
+    },
+    {
+      "name": "Tabela de Duplicidades",
+      "kind": "custom",
+      "refersTo": "card-surface",
+      "description": "A superfície mais densa do portal. Moldura com overflow hidden, rolagem no wrapper interno focável por teclado, cabeçalho grudado cuja linha inferior é sombra (borda em th sticky se descola ao rolar), célula apertada com vertical-align top, e linha focável que dispara o balão de caminhos. O hover usa --row-hover e a moldura o raio de 12px desde a reconciliação de 19/08/2026 — o snippet abaixo é fiel ao CSS em produção.",
+      "html": "<div class=\"ds-dup-wrap\"><div class=\"ds-dup-scroll\" tabindex=\"0\" role=\"region\" aria-label=\"Certificados idênticos\"><table class=\"ds-dup-table\"><thead><tr><th>Nome</th><th>Documento (CPF/CNPJ)</th><th>Status</th></tr></thead><tbody><tr class=\"ds-dup-row\" tabindex=\"0\"><td>TRANSPORTES ALVORADA LTDA</td><td>12.345.678/0001-90</td><td class=\"ds-dup-status\">2 arquivos, mesma assinatura</td></tr><tr class=\"ds-dup-row\" tabindex=\"0\"><td>PADARIA CENTRAL ME</td><td>98.765.432/0001-10</td><td class=\"ds-dup-status\">3 arquivos, mesma assinatura</td></tr></tbody></table></div></div>",
+      "css": ".ds-dup-wrap { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); } .ds-dup-scroll { overflow: auto; max-height: min(68vh, 760px); scrollbar-gutter: stable; } .ds-dup-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; } .ds-dup-table { margin: 0; width: 100%; min-width: 420px; border-collapse: collapse; font-size: 0.875rem; } .ds-dup-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 2; box-shadow: 0 1px 0 var(--border); color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.10em; text-align: left; padding: 0.5rem 0.65rem; } .ds-dup-table td { padding: 0.5rem 0.65rem; vertical-align: top; border-bottom: 1px solid var(--border); color: var(--text); } .ds-dup-table tr:last-child td { border-bottom: none; } .ds-dup-row { cursor: help; } .ds-dup-row:hover, .ds-dup-row:focus-visible { background: var(--row-hover); } .ds-dup-status { color: var(--warning-text); font-size: 0.95rem; }"
+    },
+    {
+      "name": "Balão de Caminhos",
+      "kind": "custom",
+      "refersTo": "dup-tooltip",
+      "description": "O detalhe que a linha densa não comporta. Existe para teclado tanto quanto para mouse: a linha é focável e o aponta por aria-describedby. Cada caminho fica num bloco mono (--radius-xs) sobre --bg, quebrando por break-all para nunca alargar o balão.",
+      "html": "<div class=\"ds-tip\"><p class=\"ds-tip-head\"><svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z\"/></svg>Arquivos com esta assinatura</p><ul class=\"ds-tip-list\"><li><code class=\"ds-tip-path\">C:\\\\Certs\\\\TRANSPORTES ALVORADA senha 1234.pfx</code></li><li><code class=\"ds-tip-path\">C:\\\\Certs\\\\backup\\\\ALVORADA (copia) senha 1234.pfx</code></li></ul></div>",
+      "css": ".ds-tip { min-width: 12rem; max-width: min(92vw, 36rem); padding: 0.7rem 0.85rem 0.75rem; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); font-size: 0.8125rem; line-height: 1.45; transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-tip-head { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.45rem; font-weight: 600; font-size: 0.8rem; color: var(--accent-text); letter-spacing: 0.01em; } .ds-tip-head svg { width: 0.95rem; height: 0.95rem; flex-shrink: 0; opacity: 0.9; } .ds-tip-list { margin: 0; padding: 0 0 0 1.1rem; list-style: disc; color: var(--text-muted); } .ds-tip-list li { margin: 0.2rem 0; padding: 0; } .ds-tip-list li::marker { color: var(--border); } .ds-tip-path { display: block; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 0.8rem; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.28rem 0.45rem; margin: 0.1rem 0 0; word-break: break-all; white-space: pre-wrap; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Mesa Limpa",
+    "overview": "Uma superfície por vez, nada na tela que não seja a tarefa. O usuário primário entra para achar um certificado, baixar o instalador e sair — a visita dura menos de um minuto, e o sistema é desenhado para acabar rápido, não para prender. Tudo que não serve àquela tarefa está arquivado: fora da tela, atrás de um item de menu que o papel do usuário nem revela, ou dentro de um modal que fecha quando termina.\n\nO caráter é preciso e silencioso, confiável e institucional. Isso não é decoração: os certificados custodiados são ICP-Brasil, de clientes do escritório, e a interface responde por chave privada de terceiros. O sistema transmite isso por rigor, não por drama — sem cadeado ilustrado, sem cofre desenhado, sem vermelho de alarme onde um vermelho de estado basta. A seriedade vive no fato de que cada token de cor carrega sua razão de contraste medida no comentário ao lado, e nada entra no sistema sem ela.\n\nA moldura é o contraste entre a sidebar escura permanente (#1C1C1E) e o campo claro de trabalho (#F5F5F7 com folhas brancas). A navegação é grave e fixa; o conteúdo é leve e trocável. Esse par é a assinatura visual do produto e a única composição verdadeiramente global.",
+    "antiReference": "O SaaS genérico de gradiente — degradê roxo-azul, ilustração isométrica, cantos gordos de 24px, herói de landing page. Este produto é ferramenta interna de custódia, não pitch de startup.",
+    "keyCharacteristics": [
+      "Sidebar escura fixa de 250px + conteúdo claro com teto de 1280px.",
+      "Paleta de sistema Apple, com quatro estados de certificado em trio tonal (identidade / fundo / texto).",
+      "Toda cor de texto vem com razão de contraste medida e comentada no CSS.",
+      "Botões em pílula (980px), folhas de conteúdo em 18px, campos em 12px.",
+      "Separação tonal primeiro, sombra como reforço — nunca o contrário.",
+      "Dois temas completos, com o sistema como padrão e escolha explícita gravada em data-theme.",
+      "Movimento curto e funcional: fadeUp de 400ms na entrada, translateY(-3px) no hover do card, nada mais."
+    ],
+    "rules": [
+      {
+        "name": "A Regra do Contraste Comentado",
+        "body": "Nenhum token de cor de texto entra no sistema sem sua razão de contraste medida, escrita em comentário ao lado do valor, e o fundo contra o qual foi medida. `--ok-text: #1D7A3A; /* 4.95:1 sobre --ok-bg */` é o formato. Um token novo sem essa linha é um token não verificado.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra do Sinal Único",
+        "body": "Azul é navegação; verde, âmbar, vermelho e violeta são estado. As duas famílias nunca trocam de papel. Um botão vermelho de ação destrutiva usa o trio vencido porque destruir e vencer compartilham o mesmo alarme — mas um link jamais fica verde para dizer 'tudo certo'.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra da Guarda de Tema",
+        "body": "Toda regra sensível ao tema escuro se escreve @media (prefers-color-scheme: dark) { :root:not([data-theme=\"light\"]) { ... } } — nunca a media query crua. Sem a guarda, quem escolheu tema claro num sistema escuro recebe o valor escuro, e o seletor de tema mente. Na prática: resolva por token na camada de tema, e nenhuma regra de componente precisará da media query.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra do Par Tonal",
+        "body": "Cor de estado nunca aparece sozinha. Toda vez que um fundo tonal é usado, o texto sobre ele vem do token `-text` correspondente, nunca de --text-muted e nunca da própria cor de identidade.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra do Único Grito",
+        "body": "Caixa alta existe em exatamente um nível — o Label (11px, peso 600, tracking 0.10em). Cabeçalho de tabela, título de card e badge usam esse nível e nada mais no sistema é maiúsculo.",
+        "section": "typography"
+      },
+      {
+        "name": "A Regra do Tracking Invertido",
+        "body": "Tamanho grande fecha o espaçamento, tamanho pequeno abre. Um título novo de 32px sem -0.03em destoa de todos os outros antes que alguém saiba dizer por quê.",
+        "section": "typography"
+      },
+      {
+        "name": "A Regra do Rolar Por Dentro",
+        "body": "A página nunca rola de lado. Quem rola é o .table-scroll, que existe para isso e é focável por teclado. min-width: 0 em todo item flex que contém tabela é obrigatório.",
+        "section": "layout"
+      },
+      {
+        "name": "A Regra do Teto de 1280",
+        "body": "Conteúdo não passa de 1280px de largura, em nenhuma tela. A distância entre uma ação e o dado a que ela se refere é parte do design.",
+        "section": "layout"
+      },
+      {
+        "name": "A Regra do Tom Primeiro",
+        "body": "Se a separação entre dois planos só funciona com a sombra, o desenho está errado. Verifique com a sombra desligada: no tema escuro é quase assim que a pessoa vê.",
+        "section": "elevation"
+      },
+      {
+        "name": "A Regra dos Três Degraus",
+        "body": "Existem exatamente três sombras e elas não se misturam nem se somam. Um elemento novo escolhe um dos três — não inventa um quarto valor.",
+        "section": "elevation"
+      },
+      {
+        "name": "A Regra da Pílula Acionável",
+        "body": "Se é clicável e cabe numa linha, é pílula. Se é uma superfície que carrega conteúdo, é 18px. Um botão de canto reto ou um card em pílula quebra a leitura do sistema inteiro.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do escrever a razão de contraste medida em comentário ao lado de todo token de cor de texto novo, com o fundo contra o qual foi medida.",
+      "Do usar o trio completo de estado: fundo tonal + o token `-text` correspondente. Texto de estado nunca sai de --text-muted.",
+      "Do acompanhar toda cor de estado de um segundo canal — glifo no badge, palavra no texto, ícone no card. Cor sozinha nunca carrega a informação.",
+      "Do dar 44px de altura mínima a qualquer alvo de toque frequente (paginação, fechar toast, ações de linha).",
+      "Do usar :focus-visible para anéis de foco e :focus apenas quando o realce for do próprio campo (borda + sombra) ou for o skip-link.",
+      "Do manter min-width: 0 em todo item flex que contenha tabela.",
+      "Do pôr erro de formulário dentro do próprio formulário ou diálogo.",
+      "Do revelar item de menu por papel no cliente, com display: none no template como estado inicial.",
+      "Do tornar toda região rolável alcançável por teclado (tabindex=\"0\" + role=\"region\" + aria-label), com o anel de foco em outline-offset: -2px quando ela tiver moldura própria.",
+      "Do reservar a fonte mono para dado literal comparável caractere a caractere — caminho de arquivo, impressão digital. Nunca para texto de UI."
+    ],
+    "donts": [
+      "Don't usar gradiente decorativo, ilustração isométrica ou herói de landing page. A anti-referência confirmada é o SaaS genérico de gradiente.",
+      "Don't pintar navegação com cor de estado nem estado com o Azul de Sistema.",
+      "Don't inventar um quarto nível de sombra, um quinto raio ou um segundo nível de caixa alta.",
+      "Don't trocar `backwards` por `both` em animação de entrada — cria contexto de empilhamento e enterra os elementos flutuantes.",
+      "Don't aplicar will-change em massa; ele fica reservado aos cards de métrica, que animam transform de fato.",
+      "Don't zerar transform dentro de prefers-reduced-motion.",
+      "Don't carregar fonte com @import dentro do CSS; o <link> no <head> dispara em paralelo.",
+      "Don't usar placeholder como rótulo de campo.",
+      "Don't deixar a página rolar horizontalmente para acomodar uma tabela — quem rola é o .table-scroll.",
+      "Don't deixar um botão desabilitado sumir da tela; ele fica visível e legível.",
+      "Don't escrever cor literal em rgba() onde existe token. O véu de hover das duplicidades já foi um rgba(59,130,246,0.06) — azul de outra paleta, sem variante de tema escuro — e é exatamente assim que a deriva começa: um valor que parece certo, num arquivo que ninguém relê.",
+      "Don't repetir o material glassmorphic. Ele pertence a exatamente dois elementos — a sidebar e o dropdown de notificações — e sua raridade é o que o faz funcionar.",
+      "Don't resolver tema com @media (prefers-color-scheme: dark) cru numa regra de componente; ver A Regra da Guarda de Tema."
+    ],
+    "reconciled": {
+      "date": "2026-08-19",
+      "summary": "Cinco desvios do bloco de duplicidades passaram a usar token (véu de hover, raios de 10px/6px, sombra própria, transição de 0.12s, segunda pilha mono), mais .path-value e .cmd-pre alinhados à mesma pilha mono. A correção do hover eliminou um defeito do próprio sistema: tbody tr:hover resolvia tema com @media (prefers-color-scheme: dark) sem a guarda :root:not([data-theme=\"light\"]), então quem forçava tema claro num sistema escuro recebia o hover escuro."
+    }
+  }
+}
