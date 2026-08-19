@@ -3634,6 +3634,191 @@ def atribuir_carteira(
         raise HTTPException(status_code=500, detail="Erro interno ao atribuir carteira")
 
 
+def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
+    """
+    Lê .csv ou .xlsx e devolve as linhas como dicionários de cabeçalho→valor.
+
+    O .xlsx entra porque é o que sai do Excel sem passo extra — pedir "salve
+    como CSV" antes de cada importação é exatamente o trabalho manual que
+    esta rota existe para tirar. O `openpyxl` só é importado aqui: quem nunca
+    importa planilha não paga o custo no cold start da Vercel.
+    """
+    if nome.endswith(".xlsx"):
+        try:
+            from openpyxl import load_workbook
+        except ImportError:  # pragma: no cover - depende do ambiente de deploy
+            raise HTTPException(
+                status_code=503,
+                detail="Leitura de .xlsx indisponível no servidor. Envie o arquivo como .csv.",
+            )
+        try:
+            wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            ws = wb.active
+            linhas = list(ws.iter_rows(values_only=True))
+        except Exception:
+            raise HTTPException(status_code=422, detail="Não consegui ler a planilha .xlsx.")
+        finally:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        if not linhas:
+            raise HTTPException(status_code=422, detail="Planilha vazia.")
+        cabecalho = [str(c or "").strip() for c in linhas[0]]
+        return [
+            {cabecalho[i]: ("" if v is None else str(v).strip())
+             for i, v in enumerate(linha) if i < len(cabecalho)}
+            for linha in linhas[1:]
+        ]
+
+    # CSV: mesmo tratamento do import de usuários — BOM do Excel e separador
+    # `;` do pt-BR são a regra, não a exceção.
+    texto = raw.decode("utf-8-sig", errors="replace")
+    try:
+        delim = csv.Sniffer().sniff(texto[:2048], delimiters=",;").delimiter
+    except csv.Error:
+        delim = ";"
+    leitor = csv.DictReader(io.StringIO(texto), delimiter=delim)
+    if not leitor.fieldnames:
+        raise HTTPException(status_code=422, detail="CSV sem cabeçalho.")
+    return [{(k or ""): (v or "") for k, v in linha.items()} for linha in leitor]
+
+
+@app.post("/api/carteira/importar")
+async def importar_carteiras(
+    file: UploadFile = File(...),
+    token: auth.TokenData = Depends(require_admin_ou_lider),
+) -> dict:
+    """
+    Atribui carteiras em massa a partir de uma planilha de e-mail + documento.
+
+    Montar carteira clicando cliente a cliente não escala: quem recebe uma
+    lista pronta da operação copiava CNPJ por CNPJ na mão.
+
+    O ALCANCE É CONFERIDO POR PESSOA, e não uma vez para o arquivo: o gestor
+    importa só para quem ele lidera, exatamente como na tela. Uma linha fora
+    do alcance vira erro DAQUELA linha — recusar o arquivo inteiro por causa
+    de uma pessoa faria o gestor perder o trabalho já correto.
+
+    Nada é gravado até o arquivo inteiro ser lido e validado: um arquivo com
+    metade das linhas erradas deixaria a carteira em estado parcial, e o
+    operador não teria como saber o que entrou.
+    """
+    nome = (file.filename or "").lower()
+    if not (nome.endswith(".csv") or nome.endswith(".xlsx")):
+        raise HTTPException(
+            status_code=422,
+            detail="Formato inválido. Envie a planilha em .xlsx ou .csv.",
+        )
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Arquivo vazio.")
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Arquivo muito grande (limite de 5MB).")
+    # Executável disfarçado. O `PK` do zip é legítimo aqui — todo .xlsx começa
+    # com ele —, então a checagem é por extensão declarada.
+    if raw.startswith(b"MZ") or raw.startswith(b"\x7fELF") or raw.startswith(b"%PDF"):
+        raise HTTPException(status_code=422, detail="Conteúdo do arquivo suspeito.")
+    if nome.endswith(".xlsx") and not raw.startswith(b"PK"):
+        raise HTTPException(status_code=422, detail="Isto não é um .xlsx válido.")
+
+    linhas = _linhas_da_planilha(nome, raw)
+    if not linhas:
+        raise HTTPException(status_code=422, detail="A planilha não tem nenhuma linha de dados.")
+
+    mapa = {_norm_header(h): h for linha in linhas[:1] for h in linha}
+
+    def coluna(*aliases: str) -> Optional[str]:
+        for a in aliases:
+            k = mapa.get(_norm_header(a))
+            if k:
+                return k
+        return None
+
+    col_email = coluna("email", "e-mail", "colaborador", "email do colaborador", "usuario")
+    col_doc = coluna("documento", "cnpj", "cpf", "cnpj/cpf", "cnpj da empresa", "cliente")
+    if not col_email or not col_doc:
+        raise HTTPException(
+            status_code=422,
+            detail="A planilha precisa de duas colunas: e-mail do colaborador e CNPJ/CPF do cliente.",
+        )
+
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Supabase não configurado.")
+    try:
+        contas = sb.table("users").select("id, email").execute().data or []
+    except Exception:
+        logger.exception("Falha ao ler usuários na importação de carteiras")
+        raise HTTPException(status_code=503, detail="Não foi possível ler os usuários.")
+    por_email = {str(u.get("email") or "").strip().lower(): str(u.get("id")) for u in contas}
+
+    universo = {d["documento"] for d in cert_installer.universo_de_documentos()}
+
+    erros: List[Dict[str, Any]] = []
+    por_usuario: Dict[str, set] = {}
+    alcance: Dict[str, bool] = {}
+    ator = _user_id_da_sessao(token) or ""
+
+    for i, linha in enumerate(linhas, start=2):  # 1 é o cabeçalho
+        email = (linha.get(col_email) or "").strip().lower()
+        doc = cert_installer.so_digitos(linha.get(col_doc) or "")
+        if not email and not doc:
+            continue  # linha em branco no fim da planilha
+        if not email or not doc:
+            erros.append({"linha": i, "motivo": "Falta o e-mail ou o CNPJ/CPF."})
+            continue
+
+        user_id = por_email.get(email)
+        if not user_id:
+            erros.append({"linha": i, "motivo": f"Não existe usuário com o e-mail {email}."})
+            continue
+
+        if user_id not in alcance:
+            try:
+                alcance[user_id] = cert_installer.pode_gerir(ator, token.role or "", user_id)
+            except cert_installer.AlcanceIndisponivel:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Não foi possível verificar seu alcance. Tente de novo.",
+                )
+        if not alcance[user_id]:
+            erros.append({"linha": i, "motivo": f"{email} não está em um departamento que você lidera."})
+            continue
+
+        if doc not in universo:
+            erros.append({"linha": i, "motivo": f"O documento {doc} não está no inventário."})
+            continue
+
+        por_usuario.setdefault(user_id, set()).add(doc)
+
+    atribuidos = 0
+    pessoas = 0
+    for user_id, docs in por_usuario.items():
+        try:
+            atribuidos += cert_installer.atribuir_carteira(
+                user_id=user_id,
+                documentos=sorted(docs),
+                atribuido_por=ator,
+                atribuido_por_email=token.email or "desconhecido",
+            )
+            pessoas += 1
+        except Exception:
+            logger.exception("Falha ao gravar carteira importada")
+            erros.append({"linha": 0, "motivo": "Falha ao gravar a carteira de um dos operadores."})
+
+    return {
+        "status": "ok",
+        "atribuidos": atribuidos,
+        "pessoas": pessoas,
+        "linhas_lidas": len(linhas),
+        "erros": erros,
+    }
+
+
 @app.delete("/api/carteira/{user_id}/{documento}")
 def remover_carteira(
     user_id: str,

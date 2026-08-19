@@ -10,6 +10,10 @@ gunicorn>=21.2.0
 bcrypt>=4.1.0
 python-jose[cryptography]>=3.3.0
 python-multipart>=0.0.12
+# Importação de carteiras por planilha. O .xlsx entra porque é o que sai do
+# Excel sem passo extra; pedir "salve como CSV" antes de cada importação é o
+# trabalho manual que a rota existe para tirar. ~250 KB, importado sob demanda.
+openpyxl>=3.1.0
 
 # Removidas do servidor (são exclusivas do agente Windows):
 # watchfiles, watchdog, pystray, Pillow

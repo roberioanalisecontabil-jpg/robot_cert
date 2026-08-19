@@ -17,6 +17,7 @@ Dois testes daqui valem mais que os outros:
   Uma rota nova que devolva `select("*")` por conveniência desfaz isso.
 """
 
+import io
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -372,6 +373,129 @@ def test_lote_so_aparece_com_filtro(html: str) -> None:
     """
     assert re.search(r"btnAdd\.hidden\s*=\s*!\(\s*temFiltro\s*&&", html)
     assert re.search(r"btnRem\.hidden\s*=\s*!\(\s*temFiltro\s*&&", html)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7. Importação por planilha (19/08)
+# ──────────────────────────────────────────────────────────────────────────
+
+def _csv(linhas: str) -> dict:
+    return {"file": ("carteiras.csv", linhas.encode("utf-8"), "text/csv")}
+
+
+def _xlsx(linhas: List[tuple]) -> dict:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    for linha in linhas:
+        wb.active.append(linha)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return {"file": ("carteiras.xlsx", buf.getvalue(),
+                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+
+
+def test_importa_csv_e_grava(client: TestClient, banco: _Fake) -> None:
+    r = client.post(
+        "/api/carteira/importar",
+        files=_csv(f"email;cnpj\nbruno@x.com;{DOC_BOI}\n"),
+        headers=_h("admin"),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["atribuidos"] == 1
+    assert not r.json()["erros"]
+    assert any(
+        l["user_id"] == "u-op2" and l["documento"] == DOC_BOI
+        for l in banco.tabelas["carteira"]
+    )
+
+
+def test_importa_xlsx(client: TestClient, banco: _Fake) -> None:
+    """
+    O .xlsx é o que sai do Excel sem passo extra. O import de USUÁRIOS recusa
+    qualquer arquivo que comece com `PK` como "binário disfarçado" — e todo
+    .xlsx começa com PK, porque é um zip. Aqui a checagem é por extensão
+    declarada, senão a planilha legítima seria recusada como ameaça.
+    """
+    r = client.post(
+        "/api/carteira/importar",
+        files=_xlsx([("email", "cnpj"), ("bruno@x.com", DOC_BOI)]),
+        headers=_h("admin"),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["atribuidos"] == 1
+
+
+def test_linha_ruim_nao_derruba_o_arquivo(client: TestClient, banco: _Fake) -> None:
+    """
+    Recusar o arquivo inteiro por causa de uma linha faria o gestor perder o
+    trabalho já correto — e ele reenviaria tudo, sem saber qual linha corrigir.
+    """
+    r = client.post(
+        "/api/carteira/importar",
+        files=_csv(
+            "email;cnpj\n"
+            f"bruno@x.com;{DOC_BOI}\n"
+            f"naoexiste@x.com;{DOC_BOI}\n"
+            "bruno@x.com;99999999999999\n"
+            "bruno@x.com;\n"
+        ),
+        headers=_h("admin"),
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["atribuidos"] == 1
+    motivos = " ".join(e["motivo"] for e in d["erros"])
+    assert len(d["erros"]) == 3
+    assert "naoexiste@x.com" in motivos          # e-mail sem conta
+    assert "99999999999999" in motivos           # documento fora do inventário
+    assert "Falta o e-mail ou o CNPJ/CPF" in motivos
+    # Cada erro aponta a LINHA da planilha (1 é o cabeçalho).
+    assert [e["linha"] for e in d["erros"]] == [3, 4, 5]
+
+
+def test_gestor_nao_importa_para_fora_do_seu_setor(
+    client: TestClient, banco: _Fake
+) -> None:
+    """
+    A barreira por pessoa vale na importação exatamente como na tela — senão
+    a planilha viraria a porta dos fundos para atribuir a qualquer um.
+    """
+    banco.tabelas["users"].append({
+        "id": "u-outro", "email": "outro@x.com", "full_name": "De Outro Setor",
+        "role": "user", "ativo": True, "departamento_id": "dep-9",
+    })
+    r = client.post(
+        "/api/carteira/importar",
+        files=_csv(f"email;cnpj\nana@x.com;{DOC_BOI}\noutro@x.com;{DOC_BOI}\n"),
+        headers=_h("gestor"),
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["atribuidos"] == 1                      # a do próprio setor entrou
+    assert len(d["erros"]) == 1
+    assert "não está em um departamento que você lidera" in d["erros"][0]["motivo"]
+    assert not any(l["user_id"] == "u-outro" for l in banco.tabelas["carteira"])
+
+
+def test_planilha_sem_as_colunas_certas_e_recusada(client: TestClient, banco: _Fake) -> None:
+    r = client.post(
+        "/api/carteira/importar",
+        files=_csv("nome;telefone\nAna;9999\n"),
+        headers=_h("admin"),
+    )
+    assert r.status_code == 422
+    assert "e-mail do colaborador" in r.json()["detail"]
+
+
+def test_operador_nao_importa(client: TestClient, banco: _Fake) -> None:
+    """A rota concede acesso — quem não monta carteira não pode chamá-la."""
+    r = client.post(
+        "/api/carteira/importar",
+        files=_csv(f"email;cnpj\nana@x.com;{DOC_BOI}\n"),
+        headers=_h("user"),
+    )
+    assert r.status_code == 403
 
 
 def test_documento_fora_do_inventario_continua_removivel(html: str) -> None:

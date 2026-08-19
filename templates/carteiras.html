@@ -59,6 +59,30 @@
 
       <div id="cartMsg"></div>
 
+      <!-- Recolhido: importar é ação de quem já tem a lista pronta, não o
+           caminho comum. Aberto, empurraria os dois painéis para baixo. -->
+      <details class="cart-painel" style="margin-bottom: var(--sp-4);">
+        <summary style="cursor: pointer; font-weight: 600; font-size: 0.95rem;">
+          Importar carteiras por planilha
+        </summary>
+        <form id="formImportar" style="margin-top: 0.75rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+          <div class="form-field" style="min-width: min(280px, 100%); max-width: 100%;">
+            <label for="arquivoCarteiras">Arquivo .xlsx ou .csv</label>
+            <input type="file" id="arquivoCarteiras" accept=".xlsx,.csv" class="form-control" required />
+          </div>
+          <button type="submit" class="primary">Importar</button>
+        </form>
+        <p class="hint" style="margin-top: 0.6rem;">
+          Duas colunas: <code>email</code> (do colaborador) e <code>cnpj</code> (do cliente) —
+          uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code>, <code>cpf</code>.
+          Você só consegue importar para quem está nos departamentos que lidera.
+        </p>
+        <div id="importErros" class="import-erros" hidden>
+          <p class="import-erros__titulo"></p>
+          <ul class="import-erros__lista"></ul>
+        </div>
+      </details>
+
       <div class="cart-layout">
         <section class="cart-painel">
           <h2 style="font-size: 1rem; margin-bottom: 0.5rem;">Operadores</h2>
@@ -401,6 +425,60 @@
         }
       }
 
+      async function importarPlanilha(ev) {
+        ev.preventDefault();
+        const input = document.getElementById("arquivoCarteiras");
+        const caixaErros = document.getElementById("importErros");
+        const arquivo = input.files && input.files[0];
+        if (!arquivo) return;
+
+        const botao = ev.target.querySelector("button[type=submit]");
+        botao.disabled = true;
+        botao.textContent = "Importando…";
+        caixaErros.hidden = true;
+
+        try {
+          const fd = new FormData();
+          fd.append("file", arquivo);
+          // Sem Content-Type manual: o boundary do multipart é gerado pelo
+          // navegador, e fixá-lo aqui quebraria o parse no servidor.
+          const r = await fetch("/api/carteira/importar", {
+            method: "POST",
+            headers: getHeaders(),
+            body: fd,
+          });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+
+          const erros = d.erros || [];
+          msg(
+            `${d.atribuidos} atribuição(ões) em ${d.pessoas} pessoa(s)` +
+            (erros.length ? ` · ${erros.length} linha(s) com problema.` : "."),
+            erros.length ? "warning" : "success"
+          );
+
+          // Cada linha recusada com o motivo: "3 erros" sem dizer quais manda
+          // o gestor conferir a planilha inteira na mão.
+          if (erros.length) {
+            caixaErros.hidden = false;
+            caixaErros.querySelector(".import-erros__titulo").textContent =
+              `${erros.length} linha(s) não importada(s):`;
+            caixaErros.querySelector(".import-erros__lista").innerHTML = erros
+              .map((e) => `<li>${e.linha ? "Linha " + e.linha + ": " : ""}${esc(e.motivo)}</li>`)
+              .join("");
+          }
+
+          input.value = "";
+          await carregarOperadores();
+          if (_selecionado) await carregarCarteira();
+        } catch (e) {
+          msg("Não foi possível importar: " + e.message, "error");
+        } finally {
+          botao.disabled = false;
+          botao.textContent = "Importar";
+        }
+      }
+
       async function removerVarios(documentos) {
         if (!documentos.length) return;
         if (!confirm(
@@ -455,6 +533,8 @@
         // Sem debounce: o filtro roda sobre a lista já em memória, não faz
         // requisição nenhuma — esperar 250ms a cada tecla só atrasaria.
         document.getElementById("buscaDoc").addEventListener("input", renderTransfer);
+
+        document.getElementById("formImportar").addEventListener("submit", importarPlanilha);
         carregarOperadores();
       })();
     </script>
