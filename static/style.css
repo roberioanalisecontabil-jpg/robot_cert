@@ -609,6 +609,10 @@ textarea:focus-visible {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+  /* Quando a fila é larga e quebra para a própria linha (Vencidos, com os
+     campos de data), sem isto ela encostava à esquerda — e as telas irmãs
+     ficavam com os mesmos botões em cantos diferentes. */
+  justify-content: flex-end;
 }
 
 button {
