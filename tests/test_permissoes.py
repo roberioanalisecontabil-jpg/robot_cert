@@ -495,7 +495,10 @@ def _modulos_ligados_de_verdade() -> dict:
     fonte = Path("app/main.py").read_text(encoding="utf-8")
     achados: dict = {}
     padrao = re.compile(
-        r'require_modulo\(\s*"(\w+)"(?:\s*,\s*permissoes\.NIVEL_(\w+))?\s*\)'
+        # O  opcional entra no padrao: sem ele, uma rota de
+        # mao dupla nao seria contada e o teste acusaria divergencia falsa.
+        r'require_modulo\(\s*"(\w+)"(?:\s*,\s*permissoes\.NIVEL_(\w+))?'
+        r'(?:\s*,\s*permitir_agente=\w+)?\s*\)'
     )
     for modulo, nivel in padrao.findall(fonte):
         achados.setdefault(modulo, set()).add((nivel or "LER").lower())
@@ -556,3 +559,45 @@ def test_gravar_recusa_editar_em_modulo_sem_escrita() -> None:
     completa["gestor"]["vencidos"] = permissoes.NIVEL_EDITAR
     with pytest.raises(ValueError, match="não tem escrita"):
         permissoes.gravar(completa)
+
+
+def test_configuracao_governa_gente_e_deixa_a_maquina_passar(
+    client_com_chave, api_key: str
+) -> None:
+    """
+    `GET /api/settings` e de mao dupla, e o teste trava os dois lados.
+
+    A tela de Configuracao le dali, mas `agent/run_agent.py` tambem — e o que
+    diz ao agente quais pastas varrer. Sem a valvula `permitir_agente` so haveria
+    escolha ruim: deixar a rota fora da matriz, e ai "Nao entra" mentiria (a
+    pessoa continuaria lendo pastas e host de SMTP), ou liga-la sem ressalva e
+    parar a varredura em producao.
+    """
+    from app import auth as _auth
+
+    # Gente sem o modulo: recusada, inclusive na leitura.
+    for papel in ("user", "gestor"):
+        h = {"Authorization": "Bearer " + _auth.create_access_token(
+            {"sub": f"{papel}@exemplo.com", "role": papel})}
+        assert client_com_chave.get("/api/settings", headers=h).status_code == 403, papel
+        assert client_com_chave.put(
+            "/api/settings", json={}, headers=h
+        ).status_code == 403, papel
+
+    # A maquina passa pelo caminho dela.
+    assert client_com_chave.get(
+        "/api/settings", headers={"X-API-Key": api_key}
+    ).status_code == 200, "o agente foi barrado nas proprias configuracoes"
+
+
+def test_escrita_de_configuracao_nao_e_de_mao_dupla(client_com_chave, api_key: str) -> None:
+    """
+    A valvula vale so para a LEITURA. O agente le a configuracao; ele nao a
+    altera — e abrir a escrita para a chave transformaria a X-API-Key numa
+    credencial de administracao.
+    """
+    h = {"X-API-Key": api_key}
+    assert client_com_chave.put("/api/settings", json={}, headers=h).status_code == 403
+    assert client_com_chave.post(
+        "/api/settings/alerts/trigger", json={}, headers=h
+    ).status_code == 403

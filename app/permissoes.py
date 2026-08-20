@@ -80,11 +80,12 @@ MODULOS_GOVERNADOS = (
     "duplicidades",
     "acompanhamento",
     "usuarios",
+    "configuracao",
 )
 
 # Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
 # `ler`, e a tela nem oferece o terceiro.
-MODULOS_COM_ESCRITA = ("usuarios",)
+MODULOS_COM_ESCRITA = ("usuarios", "configuracao")
 
 
 def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:

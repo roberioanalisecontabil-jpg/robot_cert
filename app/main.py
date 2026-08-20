@@ -293,7 +293,7 @@ async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.T
 ERRO_ACESSO_MAQUINA = "Acesso restrito ao agente e a administradores."
 
 
-def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER):
+def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER, *, permitir_agente: bool = False):
     """
     Guarda por MODULO, lida da matriz de permissoes (`app/permissoes.py`).
 
@@ -302,12 +302,18 @@ def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER):
     importacao: um erro de digitacao vira erro de partida do servidor, e nao um
     403 silencioso em producao para um modulo que ninguem mexeu.
 
-    NAO SERVE para rota que o AGENTE chama. O agente autentica por X-API-Key e
-    recebe papel 'agent', que nao esta na matriz e portanto cai em `nenhum`.
-    `GET /api/settings` e o exemplo vivo: pertence ao modulo `configuracao`, mas
-    `agent/run_agent.py` o consome para saber quais pastas monitorar — liga-lo
-    aqui pararia o agente em producao. Rota de maquina fica com
-    `require_agent_or_admin`.
+    `permitir_agente=True` para rota de mao dupla: usada por gente E por maquina.
+    `GET /api/settings` e o caso — pertence ao modulo `configuracao`, e a tela de
+    Configuracao a consome, mas `agent/run_agent.py` tambem, para saber quais
+    pastas monitorar (e `scripts/diagnostico.py` idem).
+
+    Sem essa valvula so haveria escolha ruim: deixar a rota fora da matriz, e ai
+    "Nao entra" mentiria (a pessoa continuaria lendo a configuracao), ou liga-la
+    sem ressalva e parar o agente em producao. Com ela, o modulo governa a GENTE
+    e a maquina segue pelo caminho dela.
+
+    Rota EXCLUSIVA de maquina continua com `require_agent_or_admin`, que e mais
+    restrita: recusa ate a identidade anonima.
     """
     if modulo not in permissoes.MODULOS:
         raise ValueError(f"modulo desconhecido em require_modulo: {modulo!r}")
@@ -326,6 +332,11 @@ def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER):
         # fazer num modulo de gente. `require_agent_or_admin` faz a mesma
         # separacao, pelo mesmo motivo.
         if token.email == ANONYMOUS_IDENTITY_EMAIL:
+            return token
+
+        # Rota de mao dupla: a maquina passa pelo caminho dela. Papel 'agent' so
+        # existe via X-API-Key valida, entao isto nao afrouxa nada para humanos.
+        if permitir_agente and (token.role or "") == "agent":
             return token
 
         try:
@@ -1683,13 +1694,16 @@ def _settings_dict(s: PortalSettings) -> dict:
     }
 
 
-@app.get("/api/settings", dependencies=[Depends(require_auth)])
+# Mao dupla: a tela de Configuracao le daqui, e o agente tambem — e o que diz
+# a ele quais pastas varrer. `permitir_agente` mantem o robo funcionando enquanto
+# o modulo passa a governar as pessoas.
+@app.get("/api/settings", dependencies=[Depends(require_modulo("configuracao", permitir_agente=True))])
 def get_settings() -> dict:
     s = load_settings()
     return _settings_dict(s)
 
 
-@app.put("/api/settings", dependencies=[Depends(require_admin)])
+@app.put("/api/settings", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
 def put_settings(body: SettingsBody) -> dict:
     try:
         validate_smtp_config(body.smtp_use_tls, body.smtp_use_ssl)
@@ -2075,7 +2089,7 @@ class SmtpTestBody(BaseModel):
     target_email: str
 
 
-@app.post("/api/settings/smtp/test", dependencies=[Depends(require_admin)])
+@app.post("/api/settings/smtp/test", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
 def test_smtp_config(body: SmtpTestBody) -> dict:
     s = load_settings()
     if not s.smtp_host:
@@ -2101,7 +2115,7 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
     return {"ok": True, "message": "E-mail de teste enviado com sucesso!"}
 
 
-@app.post("/api/settings/alerts/trigger", dependencies=[Depends(require_admin)])
+@app.post("/api/settings/alerts/trigger", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
 def trigger_alerts_manually() -> dict:
     try:
         stats = trigger_all_alerts()

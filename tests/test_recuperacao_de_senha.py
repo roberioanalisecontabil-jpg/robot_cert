@@ -358,6 +358,15 @@ def test_troca_de_senha_invalida_o_token_ja_emitido(
     """
     h = {"Authorization": "Bearer " + auth.create_access_token(
         {"sub": EMAIL, "role": "user"})}
+    # `/api/settings` continua sendo a sonda de "esta sessao ainda vale?", mas
+    # desde 20/08 o modulo `configuracao` entrou na matriz de permissoes e um
+    # papel `user` deixou de alcancar as pastas e o host de SMTP — corretamente.
+    #
+    # A conta do teste passa a ser admin: o que esta em jogo aqui e a troca de
+    # senha derrubar a sessao, e o papel e incidental. Note que o papel vem da
+    # LINHA DO BANCO e nao do token (`main.py`, `role=conta.get("role")`), entao
+    # mudar so o JWT nao teria efeito.
+    banco.tabelas["users"][0]["role"] = "admin"
     assert client.get("/api/settings", headers=h).status_code == 200
 
     _pedir(client)
@@ -380,6 +389,7 @@ def test_sem_a_coluna_ninguem_e_deslogado(client: TestClient, banco: _Fake) -> N
     deploy da migration.
     """
     banco.tabelas["users"][0].pop("senha_alterada_em", None)
+    banco.tabelas["users"][0]["role"] = "admin"  # ver o teste acima
     h = {"Authorization": "Bearer " + auth.create_access_token(
         {"sub": EMAIL, "role": "user"})}
     assert client.get("/api/settings", headers=h).status_code == 200
