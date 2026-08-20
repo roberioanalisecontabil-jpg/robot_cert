@@ -2072,7 +2072,11 @@ def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dic
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/agent/commands", dependencies=[Depends(require_auth)])
+# Enfileirar comando para o agente e acao de operacao, e a unica chamadora e
+# `configuracao.html` — pagina que so admin ve. Estava sob `require_auth`, que
+# aceita QUALQUER autenticado: um operador comum podia mandar o servidor
+# reescanear ou mover certificados. Ver docs/PLANO_niveis_de_acesso.md §1.
+@app.post("/api/agent/commands", dependencies=[Depends(require_admin)])
 def enqueue_agent_command(body: EnqueueCommandBody) -> dict:
     """
     Enfileira um comando para o agente Windows (poll em GET /api/agent/next).
@@ -2104,7 +2108,7 @@ def agent_next_command(
     return out
 
 
-@app.get("/api/agent/queue", dependencies=[Depends(require_auth)])
+@app.get("/api/agent/queue", dependencies=[Depends(require_admin)])
 def agent_queue_list() -> dict:
     """Lista comandos ainda pendentes (monitorização no portal)."""
     return {"pendentes": list_pending(), "comandos_validos": sorted(COMMANDS)}
@@ -3071,7 +3075,10 @@ def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
     }
 
 
-@app.post("/api/mover-vencidos", dependencies=[Depends(require_auth)])
+# Move arquivo de certificado no sistema de arquivos do servidor. Estava sob
+# `require_auth` — qualquer autenticado. Nenhum template ou script do portal
+# chama esta rota; ela e acionada fora da UI, e quem a aciona e operacao.
+@app.post("/api/mover-vencidos", dependencies=[Depends(require_admin)])
 def mover_vencidos() -> JSONResponse:
     """
     Só move arquivos no **mesmo** sistema de arquivos que corre o API (servidor acessa as pastas).

@@ -415,6 +415,40 @@ def test_colaborador_endpoints_200(
     assert "itens" in r4.json()
 
 
+def test_operador_comum_nao_enfileira_comando(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    """
+    A rota de enfileirar comando exige admin, e a checagem e do SERVIDOR.
+
+    Ate 19/08/2026 ela estava sob `require_auth`: qualquer autenticado — um
+    operador comum, ou o proprio agente com a X-API-Key — podia mandar o
+    servidor reescanear ou mover certificados. A unica chamadora legitima e
+    `configuracao.html`, que so admin enxerga; mas esconder o menu nao e
+    barreira, e este teste existe para que a barreira continue no servidor.
+
+    Ver docs/PLANO_niveis_de_acesso.md §0.1 e §1.
+    """
+    from app import auth as _auth
+
+    corpo = {"machine_id": "default", "command": "ping"}
+
+    for papel in ("user", "gestor"):
+        h = {
+            "Authorization": "Bearer " + _auth.create_access_token(
+                {"sub": f"{papel}@exemplo.com", "role": papel}
+            )
+        }
+        r = client_com_chave.post("/api/agent/commands", json=corpo, headers=h)
+        assert r.status_code == 403, f"{papel} conseguiu enfileirar comando"
+
+    # A chave do agente tambem nao: quem consome a fila nao a alimenta.
+    r = client_com_chave.post(
+        "/api/agent/commands", json=corpo, headers={"X-API-Key": api_key}
+    )
+    assert r.status_code == 403, "a chave do agente conseguiu enfileirar comando"
+
+
 def test_fila_comando_ping(
     client_com_chave: TestClient, api_key: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -431,10 +465,23 @@ def test_fila_comando_ping(
         monkeypatch.setattr(command_queue, "QUEUE_FILE", p)
 
         h = {"X-API-Key": api_key}
+
+        # Enfileirar exige admin desde 19/08 (docs/PLANO_niveis_de_acesso.md §1):
+        # a rota estava sob `require_auth`, que aceita qualquer autenticado —
+        # inclusive o proprio agente, que e quem CONSOME a fila e nao tem por que
+        # alimenta-la. A unica chamadora real e `configuracao.html`, pagina de
+        # admin. Consumir (`/api/agent/next`) segue com a chave do agente, que e
+        # quem faz isso em producao.
+        from app import auth as _auth
+        h_admin = {
+            "Authorization": "Bearer " + _auth.create_access_token(
+                {"sub": "admin@exemplo.com", "role": "admin"}
+            )
+        }
         en = client_com_chave.post(
             "/api/agent/commands",
             json={"machine_id": "default", "command": "ping"},
-            headers=h,
+            headers=h_admin,
         )
         assert en.status_code == 200
         assert en.json().get("ok") is True
