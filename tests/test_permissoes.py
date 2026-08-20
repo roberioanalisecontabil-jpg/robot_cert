@@ -844,3 +844,50 @@ def test_vault_optin_deixa_o_agente_passar(client_com_chave, api_key: str) -> No
     assert client_com_chave.get(
         "/api/cert-installer/vault-optin", headers={"X-API-Key": api_key}
     ).status_code != 403
+
+
+# ── O menu ──────────────────────────────────────────────────────────────────
+
+def test_minhas_permissoes_e_de_qualquer_autenticado(client) -> None:
+    """
+    Cada um lê a própria linha; a matriz inteira continua sendo de admin.
+
+    O menu precisa saber o que ESTE usuário alcança, e exigir admin para isso
+    deixaria o menu quebrado justamente para quem tem menos acesso.
+    """
+    for papel in ("user", "gestor", "admin"):
+        r = client.get("/api/permissoes/minhas", headers=_token(papel))
+        assert r.status_code == 200, papel
+        modulos = r.json()["modulos"]
+        assert set(modulos) == set(permissoes.MODULOS)
+        assert modulos == permissoes.matriz_para_papel(papel)
+
+    # E a matriz dos OUTROS continua fechada para quem não é admin.
+    assert client.get("/api/permissoes", headers=_token("gestor")).status_code == 403
+
+
+def test_o_mapa_do_menu_cobre_todos_os_modulos() -> None:
+    """
+    Um módulo sem item de menu ficaria invisível para sempre — e um item de
+    menu sem módulo nunca seria escondido.
+
+    O mapa vive no `ui-common.js` porque é vocabulário de tela, mas ele tem que
+    cobrir exatamente os módulos que o servidor conhece. Este teste é a única
+    coisa que liga os dois arquivos.
+    """
+    import re
+    from pathlib import Path
+
+    js = (Path("static/ui-common.js")).read_text(encoding="utf-8")
+    bloco = re.search(r"MENU_POR_MODULO\s*=\s*\{([^}]*)\}", js, re.S)
+    assert bloco, "o mapa de módulo para item de menu sumiu"
+
+    mapeados = dict(re.findall(r'(\w+):\s*"([\w-]+)"', bloco.group(1)))
+    assert set(mapeados) == set(permissoes.MODULOS), (
+        f"mapa cobre {sorted(mapeados)}, módulos são {sorted(permissoes.MODULOS)}"
+    )
+
+    # E cada id existe no partial da sidebar.
+    sidebar = Path("templates/_sidebar.html").read_text(encoding="utf-8")
+    for modulo, ident in mapeados.items():
+        assert f'id="{ident}"' in sidebar, f"{modulo} aponta para {ident}, que nao existe na sidebar"

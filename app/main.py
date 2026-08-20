@@ -1625,6 +1625,21 @@ def get_permissoes() -> dict:
         raise HTTPException(status_code=503, detail=f"Nao foi possivel ler as permissoes: {e}")
 
 
+# `require_auth`, e nao `require_admin`: cada um le a PROPRIA linha, e e o que o
+# menu precisa para se montar. Nao expoe a matriz dos outros papeis — quem quer
+# ver a matriz inteira usa `GET /api/permissoes`, que exige admin.
+@app.get("/api/permissoes/minhas", dependencies=[Depends(require_auth)])
+def get_minhas_permissoes(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """O que o papel de quem chama alcanca, modulo a modulo."""
+    try:
+        return {"modulos": permissoes.matriz_para_papel(token.role or "")}
+    except permissoes.PermissoesIndisponiveis as e:
+        # 503, e nao um dicionario vazio: vazio faria o menu sumir inteiro e
+        # parecer que a pessoa perdeu todos os acessos. O front trata o erro
+        # mantendo o menu que ja estava.
+        raise HTTPException(status_code=503, detail=f"Nao foi possivel ler suas permissoes: {e}")
+
+
 @app.put("/api/permissoes", dependencies=[Depends(require_admin)])
 def put_permissoes(body: PermissoesBody, token: auth.TokenData = Depends(require_auth)) -> dict:
     """Grava a matriz inteira. Ver `permissoes.gravar` para o porque de inteira."""

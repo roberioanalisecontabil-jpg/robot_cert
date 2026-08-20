@@ -316,13 +316,26 @@ def test_menu_revela_carteiras_para_gestor(html: str) -> None:
     era copiada por template e as cópias divergiram — 8 telas não conheciam
     nav-dashboard/nav-carteiras, então o admin fora destas páginas não as via.
     O invariante segue o mesmo; o lugar dele mudou.
+
+    Em 20/08 mudou de novo: o menu passou a ler a MATRIZ DE PERMISSÕES em vez de
+    um literal no JS. O invariante segue o mesmo pela terceira vez, e agora ele
+    é verificado onde a decisão realmente mora — se `carteiras` virar `nenhum`
+    para gestor, o item some do menu E as rotas recusam, junto.
     """
+    from app import permissoes
+
     assert 'id="nav-carteiras"' in html
+
+    # 1. O gestor alcança Carteiras por padrão.
+    assert permissoes.PADRAO["gestor"]["carteiras"] != permissoes.NIVEL_NENHUM
+
+    # 2. E o menu sabe qual item corresponde a esse módulo.
     js = (Path(__file__).resolve().parent.parent / "static" / "ui-common.js").read_text(
         encoding="utf-8"
     )
-    m = re.search(r"gestor:\s*\[([^\]]*)\]", js)
-    assert m and '"nav-carteiras"' in m.group(1)
+    assert re.search(r'carteiras:\s*"nav-carteiras"', js), (
+        "o mapa de módulo para item de menu perdeu Carteiras"
+    )
 
 
 def test_estado_vazio_diz_a_consequencia(html: str) -> None:

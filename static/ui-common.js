@@ -56,17 +56,46 @@ function initSidebarPorPapel() {
   // ficou copiada em cada tela — e as cópias envelheceram em ritmos
   // diferentes: 8 telas só conheciam os itens de admin antigos, então um
   // admin no Início não via Dashboard nem Carteiras; eles só apareciam para
-  // quem já estava NELES. A lista de quem vê o quê mora aqui, uma vez.
-  // O servidor confere de novo em cada API: isto é conveniência, não barreira.
-  const role = localStorage.getItem("user_role");
-  const porPapel = {
-    admin: ["nav-users", "nav-config", "nav-installer", "nav-dashboard", "nav-carteiras"],
-    gestor: ["nav-carteiras"],
+  // quem já estava NELES. A lista passou a morar num lugar só.
+  //
+  // Desde 20/08 esse lugar é a MATRIZ DE PERMISSÕES, e não mais um literal
+  // aqui: o mesmo dado que governa as rotas monta o menu, então marcar
+  // "Dashboard: Não entra" na tela de Níveis de acesso some com o item de
+  // verdade. Antes disso a tela configurava o servidor e o menu continuava
+  // mostrando tudo — a pessoa clicava e levava 403.
+  //
+  // Continua sendo CONVENIÊNCIA, e não barreira: o servidor confere de novo em
+  // cada API. Esconder o menu não protege nada; protege é `require_modulo`.
+  const MENU_POR_MODULO = {
+    inicio: "nav-inicio",
+    dashboard: "nav-dashboard",
+    historico: "nav-historico",
+    vencidos: "nav-vencidos",
+    duplicidades: "nav-duplicidades",
+    acompanhamento: "nav-acompanhamento",
+    carteiras: "nav-carteiras",
+    instalador: "nav-installer",
+    usuarios: "nav-users",
+    configuracao: "nav-config",
   };
-  (porPapel[role] || []).forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = "flex";
-  });
+
+  fetch("/api/permissoes/minhas", { headers: getHeaders() })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((dados) => {
+      for (const [modulo, id] of Object.entries(MENU_POR_MODULO)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const alcanca = (dados.modulos || {})[modulo] !== "nenhum";
+        el.style.display = alcanca ? "flex" : "none";
+      }
+    })
+    .catch(() => {
+      // Falha de rede ou 503: NÃO mexe em nada, e o menu fica como o HTML o
+      // entregou — itens restritos escondidos (`display: none` no partial) e
+      // itens abertos visíveis. É exatamente o comportamento anterior a esta
+      // mudança, então uma indisponibilidade degrada para o menu de ontem em
+      // vez de para um menu vazio, que pareceria perda de acesso.
+    });
 }
 
 async function mensagemCorpoErro(r) {
