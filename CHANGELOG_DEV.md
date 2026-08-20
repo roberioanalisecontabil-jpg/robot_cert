@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-19                  |
-| **Branch ativa**   | `main`, sincronizada com o origin (último: `79c165a`) |
+| **Data da última atualização** | 2026-08-20                  |
+| **Branch ativa**   | `main`, sincronizada com o origin (último: `c41782b`) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Sistema visual documentado (`PRODUCT.md` / `DESIGN.md`) e quatro defeitos de origem comum corrigidos — 693 testes |
-| **Próxima tarefa** | Níveis de acesso por papel: começar pelo mapa de rotas × papel, não pela tela. Enforcement no servidor é o item que importa; a sidebar hoje esconde por papel só no cliente. Segue pendente: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) e obter a `API_KEY` real |
+| **Última tarefa concluída** | Níveis de acesso por papel, ponta a ponta: matriz papel × módulo × nível, 46 rotas ligadas em 9 módulos, tela em `/usuarios` e o menu lendo a mesma matriz — 733 testes |
+| **Próxima tarefa** | Responder as três perguntas de `docs/PLANO_niveis_de_acesso.md` §5 (papel ou usuário; `editar` separado de `apagar`; trilha de auditoria da concessão) — nenhuma bloqueia, todas mudam a tabela. Segue pendente: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) e obter a `API_KEY` real |
 
 ---
 
@@ -41,6 +41,218 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-20 — A promessa que o servidor não cumpria
+
+**Objetivo da sessão:** os níveis de acesso por papel — o item deixado pendente
+em 19/08 com a razão escrita junto: *"uma tela que promete 'o gestor não vê
+Instalador' enquanto o servidor continua respondendo para ele é teatro de
+segurança"*.
+
+Dezesseis commits, começando às 22h46 de 19/08. A ordem foi a do plano e é o fio
+da sessão inteira: **mapa → enforcement → tela → menu**. A tela, que era o pedido
+literal, ficou em nono lugar de propósito.
+
+---
+
+#### Parte 1 — O mapa, e o censo que estava errado (`0065e29`, `9a388e0`)
+
+`docs/PLANO_niveis_de_acesso.md`: 13 rotas HTML, 4 guardas, 10 módulos, tudo
+contado por script. Dois fatos mudaram o escopo do pedido.
+
+**As páginas não são protegidas, e não precisam ser.** As 13 rotas HTML não têm
+guarda nenhuma — e as 11 chamadas de `TemplateResponse` passam **exclusivamente**
+`{"pagina_ativa": "..."}`. Nenhuma carrega usuário, certificado, carteira ou
+configuração. O portal é **dado protegido, casca pública**: quem digitar
+`/usuarios` recebe a página e uma tabela vazia. Constrangedor, não vazamento.
+
+Isso rebaixa "definir quais páginas aparecem" de buraco de segurança para
+**ergonomia** — e é bom, porque significa que a parte cara já estava feita.
+
+**O censo saiu errado na primeira tentativa.** Contei as guardas por substring, e
+`require_admin` é substring de `require_admin_ou_lider`. Cinco rotas de carteiras
+foram atribuídas à guarda errada e **uma guarda inteira sumiu do documento** —
+justamente a que já dava alcance real ao gestor. O documento afirmava "o gestor
+não tem alcance nenhum hoje" enquanto o código dizia o contrário havia semanas.
+Corrigido em `9a388e0`, com o erro de método registrado no próprio documento.
+
+---
+
+#### Parte 2 — Cinco rotas que qualquer autenticado alcançava (`f2133a0`, `b6132e3`)
+
+O mapa expôs `require_auth` em lugares onde ele significava "qualquer conta
+logada", inclusive a do colaborador:
+
+- `POST /api/ingest` — **um usuário comum podia sobrescrever o inventário
+  inteiro.** É a rota que o agente usa para publicar a varredura; nada nela
+  checava que quem chamava era o agente.
+- `GET /api/agent/next` — a fila de comandos do agente, lida por qualquer um.
+- Três rotas de operação que saíram para `require_admin`.
+
+Foram consertadas **antes** de a matriz existir, e não junto com ela: são
+defeitos de hoje, não requisitos da tela nova. Misturá-los teria escondido os
+dois.
+
+---
+
+#### Parte 3 — A matriz (`cce33f8`, `1f56db3`, `036d2d4`, `b58c9a4`, `00dce8d`, `8eec49f`)
+
+`app/permissoes.py` (351 linhas) e a migration
+`20260820100000_permissoes_por_papel.sql`. Papel × módulo × nível
+(`nenhum` / `ler` / `editar`), com `require_modulo(modulo, minimo)` como guarda.
+
+O primeiro commit **não ligou rota nenhuma**. A camada nasceu com testes e sem
+consumidor, e o dashboard veio depois como primeira prova — uma rota, para que
+um erro de desenho aparecesse com um caso, e não com quarenta.
+
+Ao fim, **46 aplicações da guarda em 9 módulos**: usuários 14, instalador 11,
+carteiras 7, acompanhamento 5, configuração 4, dashboard 2, e uma cada em
+histórico, vencidos e duplicidades.
+
+**Três decisões que sustentam o resto:**
+
+**(1) O `admin` não tem linha na tabela.** `nivel_de("admin", …)` devolve
+`editar` sem consultar nada, e `gravar` recusa uma matriz que traga `admin`. Não
+é validação que pode falhar — é ausência de dado. A classe inteira de engano "o
+administrador se trancou para fora" deixa de existir.
+
+**(2) Falha não vira negação.** `PermissoesIndisponiveis` responde **503, nunca
+403** — espelhando o que `cert_installer.AlcanceIndisponivel` já fazia. *"Não
+consegui verificar"* e *"você não pode"* são frases diferentes, e trocar a
+primeira pela segunda faria um Supabase fora do ar parecer revogação em massa de
+acesso. A exceção é a tabela **ausente**: `PGRST205` cai no padrão embutido, para
+que um deploy sem a migration suba funcionando.
+
+**(3) Quem concede está acima do que concede.** `GET/PUT /api/permissoes` são
+`require_admin`, e não `usuarios=editar`. Gatear a tela de permissões pela
+própria matriz deixaria um gestor com escrita em Usuários se autoconceder tudo —
+o módulo cuja edição vale mais do que ele mesmo.
+
+**As carteiras foram a única ligação de duas camadas.** A matriz decide **se o
+gestor alcança o módulo**; `_exigir_alcance` continua decidindo **de quais
+departamentos**. São perguntas diferentes, e uma não substitui a outra: um gestor
+com `carteiras=editar` continua limitado à sua liderança.
+
+**O instalador foi a única separação de público dentro do mesmo prefixo.**
+`instalabilidade` e `preparar-download` vivem sob `/api/cert-installer/` e
+pertencem ao **Início** — é onde o colaborador instala o próprio certificado.
+Gateá-las por "Instalador" tiraria de todo operador a capacidade de instalar, e o
+sintoma apareceria como *"o botão de instalar sumiu"* numa tela que ninguém
+tocou. O menu "Instalador" é o **diagnóstico**, não o ato.
+
+---
+
+#### Parte 4 — A tela (`6174ba1`, `b93c99b`)
+
+Terceira aba em `/usuarios`. A troca de abas era um `if` para duas — a terceira
+exigiria um segundo booleano e a quarta um terceiro; virou uma lista.
+
+**A tela só oferece o nível que o módulo realmente tem.** Cinco módulos não
+possuem rota de escrita: oferecer "Ver e editar" neles seria um controle que não
+muda nada — exatamente o defeito que esta tela existe para não repetir. As opções
+passam a vir do módulo, então no dia em que um deles ganhar escrita a terceira
+opção aparece sozinha.
+
+---
+
+#### Parte 5 — O menu, que era a promessa vazia que sobrou (`c41782b`)
+
+Até aqui a tela configurava o **servidor** e a sidebar continuava mostrando tudo,
+a partir de um literal de cinco linhas no `ui-common.js`. A pessoa clicava num
+item que não alcançava e levava 403.
+
+`GET /api/permissoes/minhas` sob `require_auth` — cada um lê a **própria** linha;
+a matriz dos outros papéis segue fechada em `GET /api/permissoes`. Exigir admin
+ali deixaria o menu quebrado justamente para quem tem menos acesso.
+
+Cinco dos dez itens não tinham `id`: eram sempre visíveis e por isso nunca foram
+endereçáveis. Sem `id` não há como esconder Histórico de quem não o alcança.
+
+**A degradação foi escolhida, não herdada.** Se a chamada falhar, o `catch` **não
+mexe em nada**: o menu fica como o HTML o entregou. É exatamente o comportamento
+anterior à mudança — uma indisponibilidade degrada para o menu de ontem, e não
+para um menu vazio, que pareceria perda total de acesso.
+
+Continua sendo conveniência: esconder item de menu não protege nada, quem protege
+é `require_modulo`. O comentário diz isso, e agora com mais razão, porque a tela
+pode dar a impressão de que configurar o menu é configurar o acesso.
+
+---
+
+#### O defeito que 726 testes não viram — e a tela viu
+
+Um `replace` acertou `MODULOS` em vez de `MODULOS_GOVERNADOS` (as duas listas
+terminam com as mesmas duas linhas), deixando `carteiras` **duplicado** na lista
+canônica. A suíte inteira passou. Quem acusou foi o navegador, renderizando **11
+linhas para 10 módulos**.
+
+Nenhum teste falhava porque nenhum afirmava que a lista não tem repetição — é o
+tipo de invariante que ninguém escreve porque parece óbvia demais. Duas linhas de
+teste depois, deixou de ser.
+
+---
+
+#### "Só ver" em Acompanhamento estava mentindo (`f264c20`, `a689923`)
+
+O módulo entrou como leitura pura. Mas o colaborador **edita o próprio perfil**
+ali — a rota existia e estava sob a guarda.
+
+**A primeira correção foi pior do que o defeito:** acrescentei uma nota na tela
+explicando a exceção, ou seja, **documentei a mentira em vez de desfazê-la**. Foi
+o cliente que percebeu, perguntando se fazia sentido continuar dizendo "só ver".
+O conserto certo era o caro: três níveis de verdade, mais a migration
+`20260820150000_acompanhamento_editar.sql`.
+
+Essa migration é **dependente de ordem** — ela promove quem está em `ler`, então
+precisa rodar **antes** do deploy. A de `20260820100000` é ordem-independente por
+desenho; esta não é, e o commit `a689923` registra a aplicação em produção
+justamente porque a diferença importa.
+
+---
+
+#### Armadilhas registradas
+
+- **Teste que passava pelo motivo errado.** Os casos positivos de carteiras
+  respondem **503** (a guarda passa, o corpo morre no Supabase), então `!= 403`
+  era trivialmente verdadeiro e **as duas mutações escaparam**. Reescrito: os
+  negativos por HTTP, os positivos chamando a corrotina da guarda direto.
+- **Mutação que mentiu.** `uid = _user_id_da_sessao(token)` aparece 3× no
+  `main.py`, e o `replace(..., 1)` mutou a função errada. Uma mutação que não
+  mata o teste pode significar teste fraco **ou mutação no lugar errado** — a
+  segunda hipótese não é opcional.
+- **Regex de assinatura.** `def NOME\([^)]*\)` para no primeiro `)`, que
+  costuma ser o de um `Query(None, ...)` — o recorte sai pela metade, sem o
+  `Depends` que interessava. Passou a contar parênteses.
+- **Fixtures que brigam.** Um teste pedindo `client` e `client_com_chave` junto:
+  as duas mexem em `config.API_KEY`, e o ambiente sem chave deixa de existir (401
+  em vez de 403). Separados em dois testes.
+- **`--reload` no Windows.** O WatchFiles registrou "Reloading…" e nunca
+  concluiu: o worker antigo seguiu servindo código velho enquanto a tela mostrava
+  dado errado. Passei a reiniciar na mão.
+- **`getComputedStyle` pela ponte da extensão devolveu valor obsoleto de novo** —
+  a mesma armadilha registrada em 19/08, e caí nela pela segunda vez. Registrar
+  não basta; o screenshot é que resolve.
+
+---
+
+#### Estado ao fim
+
+`main` em `c41782b`, deploy em produção, **733 testes** (38 novos em
+`tests/test_permissoes.py`). Verificado no navegador: como admin, os 10 itens com
+todos os módulos em `editar`; com a resposta de um operador, o menu fica em
+Início, Histórico, Vencidos, Duplicidades, Acompanhamento e Sair — sem buraco no
+layout e sem item morto.
+
+**`inicio` ficou fora da matriz de propósito.** É onde todo mundo aterrissa, e o
+`scripts/diagnostico.py` consome a rota dela.
+
+**Pendente — as três perguntas da §5 do plano**, nenhuma bloqueante e todas
+capazes de mudar a tabela: permissão por **usuário** e não por papel; `editar`
+separado de `apagar`; e a **trilha de auditoria** de quem mudou qual permissão. A
+última incomoda mais: este portal registra a concessão de acesso ao cofre com
+cuidado, e a tabela de permissões é hoje a única concessão sem rastro.
 
 ---
 
