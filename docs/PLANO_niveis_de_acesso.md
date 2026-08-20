@@ -224,7 +224,8 @@ comportamento de então; a conferência do PASSO 4 bateu com a semente papel por
 papel. `app/permissoes.py` resolve a matriz, e `require_modulo(modulo, nivel)`
 em `main.py` é a dependência.
 
-**Ligado até agora: só `dashboard`** (2 rotas). Era `require_admin` e a matriz
+**Ligado até agora: `dashboard`, `usuarios`, `historico`, `vencidos`,
+`duplicidades` e `acompanhamento`** — 24 rotas. Era `require_admin` e a matriz
 dá `nenhum` a gestor e user — comportamento idêntico, que é o motivo de começar
 por ele.
 
@@ -233,6 +234,30 @@ de um módulo pode ir para a matriz: `GET /api/settings` pertence a
 `configuracao`, mas quem o consome é o **agente**, para saber quais pastas
 monitorar. O agente autentica por X-API-Key e recebe papel `agent`, que não está
 na matriz e cairia em `nenhum` — ligá-lo pararia a ingestão em produção.
+
+**Três carve-outs que o modelo precisou, e cada uma vale uma regra:**
+
+1. **Rota sobre a própria conta não entra na matriz.** `/api/users/me/export` e
+   `/api/users/me/delete` são LGPD; amarrá-las à permissão do módulo Usuários
+   tiraria de um operador o direito de exportar os próprios dados. Pelo mesmo
+   motivo, o `PUT` de Acompanhamento fica em `ler` e não em `editar`: ele salva
+   a seleção do próprio chamador (`token.email`).
+
+2. **`/api/certificados` fica fora.** `scripts/diagnostico.py` a consome com
+   X-API-Key — ligá-la faria a ferramenta reportar "-1 itens" em silêncio, e
+   quebrar o termômetro é pior que a febre. E `inicio` é onde todo mundo
+   aterrissa: desligá-lo para um papel deixaria a pessoa entrar e não ver nada.
+
+3. **Identidade anônima passa; agente de verdade não.** Sem `API_KEY`,
+   `require_auth` devolve `anonymous@local` e o portal fica aberto — a
+   compatibilidade que ele mesmo documenta. `require_modulo` não pode ser mais
+   estrito que ela, senão o portal para em dev. Já `agent@internal` continua
+   barrado: o agente não tem o que fazer num módulo de gente. **A distinção é
+   por e-mail, não por papel** — os dois chegam com role `agent`.
+
+**Falta ligar:** `carteiras` (5 rotas, compõe com `require_admin_ou_lider`),
+`instalador` (18 rotas, 7 tocadas pelo agente) e `configuracao` (4 rotas, 2
+tocadas pelo agente). São os três delicados, e por isso ficaram por último.
 
 Regra que sai daí: **rota que uma máquina chama fica com
 `require_agent_or_admin`; `require_modulo` é para rota que só gente usa.** Antes

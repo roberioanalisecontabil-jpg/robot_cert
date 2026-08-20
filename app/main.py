@@ -315,6 +315,19 @@ def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER):
         raise ValueError(f"nivel desconhecido em require_modulo: {minimo!r}")
 
     async def _guarda(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+        # Ambiente sem API_KEY: `require_auth` devolve a identidade ANONIMA com
+        # papel 'agent' e o portal inteiro fica aberto — compatibilidade
+        # documentada no proprio `require_auth`. Esta guarda nao pode ser MAIS
+        # estrita que ela nesse modo, senao o portal para de funcionar em dev e
+        # em qualquer instalacao que ainda nao configurou a chave.
+        #
+        # A distincao e por e-mail e nao por papel: o agente DE VERDADE chega
+        # como `agent@internal` e continua barrado aqui, porque nao tem o que
+        # fazer num modulo de gente. `require_agent_or_admin` faz a mesma
+        # separacao, pelo mesmo motivo.
+        if token.email == ANONYMOUS_IDENTITY_EMAIL:
+            return token
+
         try:
             if permissoes.pode(token.role or "", modulo, minimo):
                 return token
@@ -909,7 +922,15 @@ def login(body: LoginBody, request: Request) -> dict:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/users", dependencies=[Depends(require_admin)])
+# Modulo `usuarios` na matriz de permissoes desde 20/08. Leitura e escrita
+# separadas de proposito: e o que torna "so visualizar" configuravel depois. As
+# 13 rotas eram `require_admin`, e a matriz da `nenhum` a gestor e user — entao
+# o comportamento nao muda hoje.
+#
+# `/api/users/me/export` e `/api/users/me/delete` NAO entram: sao LGPD sobre a
+# propria conta, e amarra-las a permissao do modulo Usuarios tiraria de um
+# operador o direito de exportar os proprios dados.
+@app.get("/api/users", dependencies=[Depends(require_modulo("usuarios"))])
 def list_users() -> List[dict]:
     from app.settings_state import _supabase
     sb = _supabase()
@@ -952,7 +973,7 @@ def _norm_header(v: str) -> str:
     return s
 
 
-@app.post("/api/users/import", dependencies=[Depends(require_admin)])
+@app.post("/api/users/import", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 async def import_users(file: UploadFile = File(...)) -> dict:
     from app.settings_state import _supabase
 
@@ -1114,7 +1135,7 @@ def _garantir_email_livre(sb: Any, email: str, ignorar_id: Optional[str] = None)
             )
 
 
-@app.post("/api/users", dependencies=[Depends(require_admin)])
+@app.post("/api/users", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def create_user(body: UserCreateBody) -> dict:
     from app.settings_state import _supabase
     sb = _supabase()
@@ -1214,7 +1235,7 @@ def _garantir_que_sobra_admin(
         )
 
 
-@app.put("/api/users/{user_id}", dependencies=[Depends(require_admin)])
+@app.put("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def update_user(user_id: str, body: UserUpdateBody) -> dict:
     from app.settings_state import _supabase
     sb = _supabase()
@@ -1269,7 +1290,7 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
     return {"ok": True}
 
 
-@app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_admin)])
+@app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
     from app.settings_state import _supabase
     sb = _supabase()
@@ -1290,7 +1311,7 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_admin)])
+@app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def deactivate_user(user_id: str) -> dict:
     """
     Desativa a conta **preservando o papel**.
@@ -1311,7 +1332,7 @@ def deactivate_user(user_id: str) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_admin)])
+@app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def reactivate_user(user_id: str) -> dict:
     """
     Reativa a conta, devolvendo o papel que ela sempre teve.
@@ -1335,7 +1356,7 @@ def reactivate_user(user_id: str) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.delete("/api/users/{user_id}", dependencies=[Depends(require_admin)])
+@app.delete("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def delete_user(user_id: str) -> dict:
     from app.settings_state import _supabase
     sb = _supabase()
@@ -1376,7 +1397,7 @@ def _nome_de_departamento(nome: str) -> str:
 # isto hoje e /usuarios, que ja e de admin. Quando o lider precisar ver os
 # proprios setores (etapa 4), a rota certa e outra, escopada a ele -- esta
 # devolve TODOS os departamentos, e alcance total nao e o do lider.
-@app.get("/api/departamentos", dependencies=[Depends(require_admin)])
+@app.get("/api/departamentos", dependencies=[Depends(require_modulo("usuarios"))])
 def listar_departamentos() -> List[dict]:
     """
     Setores com os líderes e quantas pessoas têm.
@@ -1428,7 +1449,7 @@ def listar_departamentos() -> List[dict]:
     return sorted(saida, key=lambda x: (x["nome"] or "").lower())
 
 
-@app.post("/api/departamentos", dependencies=[Depends(require_admin)])
+@app.post("/api/departamentos", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def criar_departamento(body: DepartamentoBody) -> dict:
     from app.settings_state import _supabase
 
@@ -1449,7 +1470,7 @@ def criar_departamento(body: DepartamentoBody) -> dict:
     return {"ok": True, "id": str((r.data or [{}])[0].get("id", ""))}
 
 
-@app.put("/api/departamentos/{dep_id}", dependencies=[Depends(require_admin)])
+@app.put("/api/departamentos/{dep_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
     from app.settings_state import _supabase
 
@@ -1466,7 +1487,7 @@ def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
     return {"ok": True}
 
 
-@app.delete("/api/departamentos/{dep_id}", dependencies=[Depends(require_admin)])
+@app.delete("/api/departamentos/{dep_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def apagar_departamento(dep_id: str) -> dict:
     """
     Apaga o setor. As pessoas dele ficam SEM departamento, não são apagadas —
@@ -1488,7 +1509,7 @@ def apagar_departamento(dep_id: str) -> dict:
     return {"ok": True}
 
 
-@app.put("/api/departamentos/{dep_id}/lideres", dependencies=[Depends(require_admin)])
+@app.put("/api/departamentos/{dep_id}/lideres", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
     """
     Substitui a lista de líderes do setor.
@@ -2100,7 +2121,15 @@ def cron_alerts(request: Request) -> dict:
     return {"ok": True, "stats": stats, "expurgo": expurgo}
 
 
-@app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_auth)])
+# Modulo `acompanhamento` na matriz desde 20/08. TODAS as cinco rotas ficam em
+# `ler`, inclusive o PUT — e a excecao merece explicacao: aquele PUT salva a
+# selecao do PROPRIO chamador (`token.email`), nao dado de outra pessoa. Exigir
+# `editar` ali tiraria de um operador o direito de escolher os proprios
+# certificados, que e a funcao inteira da tela.
+#
+# O nivel aqui governa SE a pessoa alcanca o modulo; o que esta dentro e dela.
+# Mesma carve-out de `/api/users/me/*`.
+@app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_modulo("acompanhamento"))])
 def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dict:
     try:
         # Devolve lista limitada + totais separados: antes eram 519 itens
@@ -2154,6 +2183,17 @@ def agent_queue_list() -> dict:
     return {"pendentes": list_pending(), "comandos_validos": sorted(COMMANDS)}
 
 
+# `/api/certificados` fica FORA da matriz, de proposito. Duas razoes:
+#
+# 1. `scripts/diagnostico.py` a consome com X-API-Key. Liga-la faria a
+#    ferramenta de diagnostico reportar "-1 itens" em silencio — quebrar o
+#    termometro e pior do que a febre.
+# 2. `inicio` e onde todo mundo aterrissa depois do login. Desligar esse modulo
+#    para um papel deixaria a pessoa entrar e nao ver nada, sem lugar para ir.
+#
+# As telas de consulta especificas (historico, vencidos, duplicidades) SAO
+# governadas pela matriz; so a listagem geral fica aberta a quem esta
+# autenticado, como sempre esteve.
 @app.get("/api/certificados", dependencies=[Depends(require_auth)])
 def listar_certificados(
     fonte: str = Query(
@@ -2574,7 +2614,7 @@ class ColaboradorSelecaoBody(BaseModel):
     documentos: List[str] = Field(default_factory=list)
 
 
-@app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_auth)])
+@app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_auth)) -> dict:
     itens = _lista_base_docs_historico()
     now = datetime.now(timezone.utc)
@@ -2603,14 +2643,14 @@ def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_aut
     return {"itens": out, "total": len(out)}
 
 
-@app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
+@app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_get_selecionados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
     docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     return {"documentos": docs, "total": len(docs)}
 
 
-@app.put("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_auth)])
+@app.put("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_put_selecionados(
     body: ColaboradorSelecaoBody, token: auth.TokenData = Depends(require_auth)
 ) -> dict:
@@ -2620,7 +2660,7 @@ def colaborador_put_selecionados(
     return {"ok": True, "documentos": docs, "total": len(docs)}
 
 
-@app.get("/api/colaborador/certificados/painel", dependencies=[Depends(require_auth)])
+@app.get("/api/colaborador/certificados/painel", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
     docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
@@ -2628,7 +2668,7 @@ def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth
     return {"itens": itens, "total": len(itens)}
 
 
-@app.get("/api/certificados/duplicidades", dependencies=[Depends(require_auth)])
+@app.get("/api/certificados/duplicidades", dependencies=[Depends(require_modulo("duplicidades"))])
 def certificados_duplicidades() -> dict[str, Any]:
     """
     Analisa o último snapshot recebido (dados atuais do agente) ou, na ausência,
@@ -2936,7 +2976,7 @@ def historico_certificados(
     }
 
 
-@app.get("/api/certificados/historico", dependencies=[Depends(require_auth)])
+@app.get("/api/certificados/historico", dependencies=[Depends(require_modulo("historico"))])
 def historico_certificados_http(
     limite_snapshots: int = Query(
         500,
@@ -2990,7 +3030,7 @@ def historico_certificados_http(
     return out
 
 
-@app.get("/api/certificados/vencidos", dependencies=[Depends(require_auth)])
+@app.get("/api/certificados/vencidos", dependencies=[Depends(require_modulo("vencidos"))])
 def vencidos_certificados(
     data_inicio: Optional[str] = Query(None, description="Data inicial (YYYY-MM-DD) pelo vencimento"),
     data_fim: Optional[str] = Query(None, description="Data final (YYYY-MM-DD) pelo vencimento"),

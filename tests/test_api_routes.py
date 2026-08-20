@@ -4,6 +4,30 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+
+def _headers_portal(api_key: str, papel: str = "user") -> dict:
+    """
+    Cabecalhos como o PORTAL manda, e nao como o agente.
+
+    `getHeaders()` em `static/ui-common.js` envia SO o `Authorization: Bearer`;
+    a X-API-Key e credencial do agente. Estes testes usavam a chave por
+    conveniencia, e passaram a falhar em 20/08 quando os modulos de consulta
+    entraram na matriz de permissoes — o agente (`agent@internal`) nao alcanca
+    modulo de gente, corretamente.
+
+    A chave continua no dicionario para o caso de a rota ainda a aceitar; o que
+    manda e o JWT, como em producao.
+    """
+    from app import auth as _auth
+
+    return {
+        "X-API-Key": api_key,
+        "Authorization": "Bearer " + _auth.create_access_token(
+            {"sub": f"{papel}@exemplo.com", "role": papel}
+        ),
+    }
+
+
 def test_health(client: TestClient) -> None:
     r = client.get("/api/health")
     assert r.status_code == 200
@@ -153,7 +177,7 @@ def test_certificados_dashboard_paginacao(
 def test_historico_certificados_200(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key)
     r = client_com_chave.get("/api/certificados/historico", headers=h)
     assert r.status_code == 200
     j = r.json()
@@ -165,7 +189,7 @@ def test_historico_certificados_200(
 def test_vencidos_certificados_200(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key)
     r = client_com_chave.get("/api/certificados/vencidos", headers=h)
     assert r.status_code == 200
     j = r.json()
@@ -179,7 +203,7 @@ def test_vencidos_certificados_200(
 def test_historico_certificados_paginacao(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key)
     r = client_com_chave.get(
         "/api/certificados/historico?pagina=1&por_pagina=5", headers=h
     )
@@ -194,7 +218,7 @@ def test_historico_certificados_paginacao(
 def test_vencidos_certificados_paginacao(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key)
     r = client_com_chave.get("/api/certificados/vencidos?pagina=1&por_pagina=5", headers=h)
     assert r.status_code == 200
     j = r.json()
@@ -205,7 +229,7 @@ def test_vencidos_certificados_paginacao(
 def test_duplicidades_api_200(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key)
     r = client_com_chave.get("/api/certificados/duplicidades", headers=h)
     assert r.status_code == 200
     j = r.json()
@@ -245,7 +269,7 @@ def test_duplicidades_detecta_mesmo_documento(
 
     monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
-        "/api/certificados/duplicidades", headers={"X-API-Key": api_key}
+        "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
     assert r.status_code == 200
     j = r.json()
@@ -281,7 +305,7 @@ def test_duplicidades_nome_sem_documento_distinto(
 
     monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
-        "/api/certificados/duplicidades", headers={"X-API-Key": api_key}
+        "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
     assert r.status_code == 200
     j = r.json()
@@ -323,7 +347,7 @@ def test_duplicidades_mesmo_documento_nao_duplica_quando_so_fingerprint_igual(
 
     monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
-        "/api/certificados/duplicidades", headers={"X-API-Key": api_key}
+        "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
     assert r.status_code == 200
     j = r.json()
@@ -384,7 +408,7 @@ def test_duplicidades_certificado_igual_por_fingerprint(
 
     monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
-        "/api/certificados/duplicidades", headers={"X-API-Key": api_key}
+        "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
     assert r.status_code == 200
     j = r.json()
@@ -398,7 +422,7 @@ def test_duplicidades_certificado_igual_por_fingerprint(
 def test_colaborador_endpoints_200(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key)
     r1 = client_com_chave.get("/api/colaborador/certificados/opcoes", headers=h)
     assert r1.status_code == 200
     r2 = client_com_chave.get("/api/colaborador/certificados/selecionados", headers=h)

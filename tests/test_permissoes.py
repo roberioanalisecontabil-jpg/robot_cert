@@ -311,3 +311,96 @@ def test_require_modulo_recusa_nome_invalido_na_importacao() -> None:
         require_modulo("dashbaord")
     with pytest.raises(ValueError):
         require_modulo("dashboard", "editarr")
+
+
+def test_usuarios_respeita_a_matriz(client) -> None:
+    """As 13 rotas de Usuários saíram de `require_admin` para a matriz."""
+    for papel in ("user", "gestor"):
+        h = _token(papel)
+        assert client.get("/api/users", headers=h).status_code == 403
+        assert client.get("/api/departamentos", headers=h).status_code == 403
+        assert client.post("/api/users", json={}, headers=h).status_code == 403
+        assert client.delete("/api/users/qualquer", headers=h).status_code == 403
+
+    assert client.get("/api/users", headers=_token("admin")).status_code != 403
+
+
+def test_ler_deixa_ver_e_nao_deixa_mexer(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    O eixo que o cliente pediu: "editar ou só visualizar".
+
+    Este é o teste que prova que a promessa da tela é real. Um papel com `ler`
+    em Usuários enxerga a lista e é recusado em toda escrita — sem ele, a
+    separação leitura/escrita seria só nome de variável.
+    """
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "usuarios": permissoes.NIVEL_LER}},
+    )
+    h = _token("gestor")
+
+    # Vê.
+    assert client.get("/api/users", headers=h).status_code != 403
+    assert client.get("/api/departamentos", headers=h).status_code != 403
+
+    # Não mexe — nem criando, nem alterando, nem apagando.
+    assert client.post("/api/users", json={}, headers=h).status_code == 403
+    assert client.put("/api/users/x", json={}, headers=h).status_code == 403
+    assert client.delete("/api/users/x", headers=h).status_code == 403
+    assert client.post("/api/users/x/deactivate", headers=h).status_code == 403
+    assert client.post("/api/departamentos", json={}, headers=h).status_code == 403
+
+
+def test_lgpd_da_propria_conta_nao_depende_do_modulo_usuarios(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Exportar e apagar os PRÓPRIOS dados é direito de quem está logado.
+
+    Amarrar isso à permissão do módulo Usuários tiraria de um operador comum o
+    direito de exportar os próprios dados — que é exatamente o oposto do que a
+    LGPD pede. As duas rotas ficam em `require_auth`, e este teste impede que
+    alguém as "padronize" junto com as outras 13.
+    """
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"user": {**permissoes.PADRAO["user"], "usuarios": permissoes.NIVEL_NENHUM}},
+    )
+    r = client.get("/api/users/me/export", headers=_token("user"))
+    assert r.status_code != 403, "operador foi barrado ao exportar os próprios dados"
+
+
+def test_agente_de_verdade_nao_alcanca_modulo_de_gente(client_com_chave, api_key: str) -> None:
+    """
+    `agent@internal` e barrado nos modulos humanos; `anonymous@local` nao.
+
+    A distincao e por E-MAIL, nao por papel — os dois chegam com role 'agent'.
+    O agente de verdade nao tem o que fazer em Histórico ou Acompanhamento; já a
+    identidade anônima é a compatibilidade documentada de ambiente sem API_KEY,
+    e barrá-la pararia o portal em dev e em instalação ainda sem chave.
+    """
+    h = {"X-API-Key": api_key}
+    for rota in ("/api/certificados/historico",
+                 "/api/certificados/vencidos",
+                 "/api/certificados/duplicidades",
+                 "/api/colaborador/certificados/painel"):
+        assert client_com_chave.get(rota, headers=h).status_code == 403, rota
+
+    # `/api/certificados` ficou FORA da matriz de propósito — `diagnostico.py` a
+    # consome com a chave, e Início é onde todo mundo aterrissa.
+    assert client_com_chave.get(
+        "/api/certificados", headers=h
+    ).status_code != 403
+
+
+def test_ambiente_sem_api_key_continua_aberto(client) -> None:
+    """
+    A guarda nova não pode ser mais estrita que `require_auth`.
+
+    Sem API_KEY, `require_auth` devolve identidade anônima e o portal inteiro
+    fica aberto — compatibilidade que o próprio `require_auth` documenta. Se
+    `require_modulo` barrasse aí, o portal pararia em dev e em qualquer
+    instalação que ainda não configurou a chave.
+    """
+    for rota in ("/api/certificados/historico", "/api/colaborador/certificados/painel"):
+        assert client.get(rota).status_code != 403, rota
