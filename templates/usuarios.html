@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=campos-e-dropzone-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=usuarios-linhas-2026-08" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -41,7 +41,57 @@
         /* Contorno em vez de fundo: --text-muted sobre --border dava 4.25:1
            no claro (11px exige 4.5:1); sobre a surface passa nos dois temas. */
         .role-disabled { background-color: transparent; border: 1px solid var(--border); color: var(--text-muted); }
-        .row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+        /* A coluna Ações quebrava em duas ou três linhas: `flex-wrap: wrap`
+           com três botões, um deles longo ("Redefinir senha"). A altura de
+           cada linha da tabela passava a depender do texto do botão.
+
+           Desde 19/08 a terceira ação (desativar/reativar) mora num menu, e a
+           coluna se dimensiona pelo conteúdo em vez de ser espremida:
+           `width: 1%` + `nowrap` é o par que faz uma coluna de tabela encolher
+           até o necessário e não além. */
+        .td-acoes, .th-acoes { white-space: nowrap; width: 1%; }
+        /* Mesmo defeito, uma coluna ao lado: quem esta INATIVO carrega DOIS
+           badges na celula de Nivel, e eles quebravam em duas linhas — as 5
+           linhas de inativo mediam 73px contra 60px das demais. A altura da
+           linha nao pode depender do dado que ela carrega. */
+        .user-table td[data-label="Nível"] { white-space: nowrap; }
+        .row-actions { display: flex; flex-wrap: nowrap; gap: var(--sp-2);
+                       align-items: center; justify-content: flex-end; }
+        .btn-action { white-space: nowrap; }
+
+        /* Menu da terceira ação. `<details>` nativo: fecha no Esc, abre por
+           teclado e não precisa de uma linha de JS. */
+        .acoes-menu { position: relative; }
+        .acoes-menu > summary {
+            list-style: none; cursor: pointer;
+            width: 32px; height: 32px; border-radius: var(--radius-sm);
+            border: 1.5px solid var(--border); background: var(--surface);
+            display: inline-flex; align-items: center; justify-content: center;
+            color: var(--text-muted);
+            transition: background-color var(--duration-fast) var(--ease-out),
+                        color var(--duration-fast) var(--ease-out);
+        }
+        .acoes-menu > summary::-webkit-details-marker { display: none; }
+        .acoes-menu > summary:hover { background: var(--bg); color: var(--text); }
+        .acoes-menu > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .acoes-menu > summary svg { width: 18px; height: 18px; }
+        .acoes-menu__lista {
+            position: absolute; right: 0; top: calc(100% + 4px); z-index: 5;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+            padding: var(--sp-1); min-width: 10rem;
+        }
+        .acoes-menu__lista .btn-action {
+            width: 100%; text-align: left; border-color: transparent; background: transparent;
+        }
+        .acoes-menu__lista .btn-action:hover { background: var(--bg); }
+
+        /* Coluna Gestor: três estados que antes se pareciam. "—" mudo para
+           admin e gestor (não respondem a ninguém), badge contornado para a
+           pendência — mesmo idioma do INATIVO da coluna ao lado —, e o nome em
+           texto normal quando existe de verdade. */
+        .gestor-na { color: var(--text-muted); }
+        .gestor-pendente { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
         .btn-action { 
             border: 1.5px solid var(--border); 
             background: var(--surface); 
@@ -166,7 +216,7 @@
                                          passou a ser atribuível não havia como ver a quem cada
                                          operador responde sem abrir o modal de um por um. -->
                                     <th role="columnheader">Gestor</th>
-                                    <th role="columnheader">Ações</th>
+                                    <th role="columnheader" class="th-acoes">Ações</th>
                                 </tr>
                             </thead>
                             <tbody role="rowgroup" id="user-list-body">
@@ -424,10 +474,29 @@
          * "—" para eles seria ambíguo com "operador ainda sem gestor", que é
          * uma pendência de verdade. Por isso o traço só aparece para operador.
          */
+        /**
+         * A célula de gestor pronta, com forma.
+         *
+         * Existe separada de `nomeDoGestor` porque devolve HTML, e o valor
+         * dinâmico (o nome, vindo do banco) continua passando por `esc`. Trocar
+         * a chamada por `${esc(nomeDoGestor(u))}` de novo faria o badge aparecer
+         * como texto literal `<span ...>` na tela.
+         */
+        function celulaGestor(u) {
+            const papel = String(u.role || '').toLowerCase();
+            if (papel !== 'user') {
+                return '<span class="gestor-na" title="Admin e gestor têm alcance total e não respondem a ninguém">—</span>';
+            }
+            if (!u.gestor_id) {
+                return '<span class="role-badge gestor-pendente">SEM GESTOR</span>';
+            }
+            return esc(nomeDoGestor(u));
+        }
+
         function nomeDoGestor(u) {
             const papel = String(u.role || '').toLowerCase();
             if (papel !== 'user') return '';
-            if (!u.gestor_id) return '— sem gestor';
+            if (!u.gestor_id) return 'SEM GESTOR';
             const g = usersCache.find((x) => x.id === u.gestor_id);
             // Gestor que não está mais na lista: conta apagada, ou desativada e
             // filtrada. Melhor dizer isso do que mostrar um traço igual ao de
@@ -484,14 +553,21 @@
                         <span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span>
                         ${estaAtivo(u) ? '' : '<span class="role-badge role-disabled" style="margin-left: 0.35rem;">INATIVO</span>'}
                     </td>
-                    <td role="cell" data-label="Gestor">${esc(nomeDoGestor(u))}</td>
-                    <td role="cell">
+                    <td role="cell" data-label="Gestor">${celulaGestor(u)}</td>
+                    <td role="cell" class="td-acoes">
                         <div class="row-actions">
                             <button class="btn-action" data-action="editar" data-id="${u.id}">Editar</button>
                             <button class="btn-action" data-action="redefinir" data-id="${u.id}">Redefinir senha</button>
-                            ${estaAtivo(u)
-                                ? `<button class="btn-action btn-danger" data-action="desativar" data-id="${u.id}">Desativar</button>`
-                                : `<button class="btn-action" data-action="reativar" data-id="${u.id}">Reativar</button>`}
+                            <details class="acoes-menu">
+                                <summary aria-label="Mais ações para ${esc(u.full_name || u.email)}">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm6 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm6 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                                </summary>
+                                <div class="acoes-menu__lista">
+                                    ${estaAtivo(u)
+                                        ? `<button class="btn-action btn-danger" data-action="desativar" data-id="${u.id}">Desativar</button>`
+                                        : `<button class="btn-action" data-action="reativar" data-id="${u.id}">Reativar</button>`}
+                                </div>
+                            </details>
                         </div>
                     </td>
                 </tr>
