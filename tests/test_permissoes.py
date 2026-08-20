@@ -764,3 +764,83 @@ def test_acompanhamento_ler_ve_mas_nao_escolhe(client, monkeypatch: pytest.Monke
         "/api/colaborador/certificados/selecionados",
         json={"documentos": []}, headers=h,
     ).status_code != 403
+
+
+def test_instalar_o_proprio_certificado_nao_depende_do_modulo_instalador(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    O menu "Instalador" é a tela de DIAGNÓSTICO, não o ato de instalar.
+
+    `instalabilidade` e `preparar-download` moram sob `/api/cert-installer/`,
+    mas quem as chama é o `index.html` — é a pessoa instalando o próprio
+    certificado pelo Início. Gateá-las pelo módulo tiraria de TODO operador a
+    capacidade de instalar, e o sintoma apareceria como "o botão de instalar
+    sumiu" numa tela que ninguém mexeu.
+
+    Prefixo de rota compartilhado não é público compartilhado.
+    """
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"user": {**permissoes.PADRAO["user"], "instalador": permissoes.NIVEL_NENHUM},
+                 "gestor": permissoes.PADRAO["gestor"]},
+    )
+    h = _token("user")
+    for rota in ("/api/cert-installer/instalabilidade",):
+        assert client.get(rota, headers=h).status_code != 403, rota
+    assert client.post(
+        "/api/cert-installer/preparar-download", json={}, headers=h
+    ).status_code != 403
+
+
+def test_tela_de_diagnostico_respeita_o_modulo(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """As rotas da tela de Instalador, essas sim, obedecem à matriz."""
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "instalador": permissoes.NIVEL_LER},
+                 "user": permissoes.PADRAO["user"]},
+    )
+    h = _token("gestor")
+    # `ler` abre o diagnostico...
+    assert client.get("/api/cert-installer/diagnostico", headers=h).status_code != 403
+    assert client.get("/api/cert-installer/trilha", headers=h).status_code != 403
+    # ...e nao abre a escrita.
+    assert client.post(
+        "/api/cert-installer/revalidar-cofre", json={}, headers=h
+    ).status_code == 403
+    assert client.post(
+        "/api/cert-installer/expurgar-log", json={}, headers=h
+    ).status_code == 403
+
+    # Sem o modulo, nem o diagnostico.
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "instalador": permissoes.NIVEL_NENHUM},
+                 "user": permissoes.PADRAO["user"]},
+    )
+    assert client.get("/api/cert-installer/diagnostico", headers=h).status_code == 403
+
+
+def test_vault_optin_recusa_a_identidade_anonima(client) -> None:
+    """
+    A rota diz quais certificados estão no cofre.
+
+    Estava em `require_agent_or_admin` justamente porque aquela guarda recusa
+    `anonymous@local` — a identidade que aparece quando não há API_KEY e que
+    deixa o resto do portal aberto. Governar o módulo sem `recusar_anonimo`
+    teria AFROUXADO a rota, trocando uma proteção deliberada por uma
+    configurável.
+
+    Note que este teste usa SÓ o `client`: pedir `client` e `client_com_chave`
+    juntos faz as duas fixtures disputarem `config.API_KEY`, e o ambiente "sem
+    chave" simplesmente deixa de existir — a primeira versão daqui recebeu 401
+    em vez de 403 por isso.
+    """
+    assert client.get("/api/cert-installer/vault-optin").status_code == 403
+
+
+def test_vault_optin_deixa_o_agente_passar(client_com_chave, api_key: str) -> None:
+    """O outro lado da válvula: a máquina segue pelo caminho dela."""
+    assert client_com_chave.get(
+        "/api/cert-installer/vault-optin", headers={"X-API-Key": api_key}
+    ).status_code != 403

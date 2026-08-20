@@ -293,7 +293,13 @@ async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.T
 ERRO_ACESSO_MAQUINA = "Acesso restrito ao agente e a administradores."
 
 
-def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER, *, permitir_agente: bool = False):
+def require_modulo(
+    modulo: str,
+    minimo: str = permissoes.NIVEL_LER,
+    *,
+    permitir_agente: bool = False,
+    recusar_anonimo: bool = False,
+):
     """
     Guarda por MODULO, lida da matriz de permissoes (`app/permissoes.py`).
 
@@ -312,8 +318,14 @@ def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER, *, permitir_
     sem ressalva e parar o agente em producao. Com ela, o modulo governa a GENTE
     e a maquina segue pelo caminho dela.
 
-    Rota EXCLUSIVA de maquina continua com `require_agent_or_admin`, que e mais
-    restrita: recusa ate a identidade anonima.
+    `recusar_anonimo=True` fecha a porta de compatibilidade para rotas que
+    entregam material sensivel. `GET /api/cert-installer/vault-optin` diz quais
+    certificados estao no cofre, e estava em `require_agent_or_admin` justamente
+    porque aquela guarda recusa `anonymous@local` — a identidade que aparece
+    quando nao ha API_KEY configurada. Governar o modulo sem esta opcao teria
+    AFROUXADO a rota, trocando uma protecao deliberada por uma configuravel.
+
+    Rota EXCLUSIVA de maquina continua com `require_agent_or_admin`.
     """
     if modulo not in permissoes.MODULOS:
         raise ValueError(f"modulo desconhecido em require_modulo: {modulo!r}")
@@ -332,6 +344,8 @@ def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER, *, permitir_
         # fazer num modulo de gente. `require_agent_or_admin` faz a mesma
         # separacao, pelo mesmo motivo.
         if token.email == ANONYMOUS_IDENTITY_EMAIL:
+            if recusar_anonimo:
+                raise HTTPException(status_code=403, detail=ERRO_ACESSO_MAQUINA)
             return token
 
         # Rota de mao dupla: a maquina passa pelo caminho dela. Papel 'agent' so
@@ -3421,7 +3435,7 @@ class VaultOptinRequest(BaseModel):
 @app.get("/api/cert-installer/vault-optin")
 def listar_vault_optin(
     machine_id: Optional[str] = Query(None),
-    _token: auth.TokenData = Depends(require_agent_or_admin),
+    _token: auth.TokenData = Depends(require_modulo("instalador", permitir_agente=True, recusar_anonimo=True)),
 ):
     """
     Fingerprints que esta máquina pode enviar ao cofre.
@@ -3454,7 +3468,7 @@ def listar_vault_optin(
         )
 
 
-@app.post("/api/cert-installer/vault-optin", dependencies=[Depends(require_admin)])
+@app.post("/api/cert-installer/vault-optin", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
 def reativar_vault_custodia(
     body: VaultOptinRequest,
     _token: auth.TokenData = Depends(require_admin),
@@ -3482,7 +3496,7 @@ def reativar_vault_custodia(
         raise HTTPException(status_code=500, detail="Erro interno ao reativar custódia")
 
 
-@app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_admin)])
+@app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
 def bloquear_vault_custodia(
     fingerprint: str,
     machine_id: str = Query(..., min_length=1),
@@ -4027,7 +4041,7 @@ class ConfigInstaladorBody(BaseModel):
     trilha_retencao_dias: int = 0
 
 
-@app.put("/api/cert-installer/configuracao", dependencies=[Depends(require_admin)])
+@app.put("/api/cert-installer/configuracao", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
 def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     """
     Grava **só** as três configurações do módulo instalador.
@@ -4067,7 +4081,7 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     return _settings_dict(atual)
 
 
-@app.post("/api/cert-installer/expurgar-log", dependencies=[Depends(require_admin)])
+@app.post("/api/cert-installer/expurgar-log", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
 def expurgar_log_agora() -> dict:
     """
     Roda o expurgo sob demanda, sem esperar o cron.
@@ -4132,7 +4146,28 @@ def pagina_dashboard(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_admin)])
+# Modulo `instalador` na matriz desde 20/08 — mas SO as rotas da tela de
+# diagnostico e do cofre. Tres grupos ficaram FORA, e a distincao e a coisa mais
+# importante deste bloco:
+#
+#   1. Maquina pura (`upload-pfx`, `redeem`, `report`, `claim`,
+#      `report-avulso`) segue com a guarda propria. O agente nao tem papel na
+#      matriz.
+#
+#   2. FLUXO DO COLABORADOR (`instalabilidade`, `preparar-download`) fica de
+#      fora. Sao chamadas pelo `index.html`, ou seja pertencem ao Inicio, onde a
+#      pessoa instala o proprio certificado. Gatea-las por "Instalador" tiraria
+#      de TODO operador a capacidade de instalar — e o sintoma apareceria como
+#      "o botao de instalar sumiu" numa tela que ninguem mexeu.
+#
+#      O menu "Instalador" e a tela de DIAGNOSTICO, nao o ato de instalar. Os
+#      dois compartilham o prefixo `/api/cert-installer/` e nao compartilham
+#      publico.
+#
+#   3. `GET vault-optin` e de mao dupla e leva `recusar_anonimo`: ela diz quais
+#      certificados estao no cofre, e estava em `require_agent_or_admin`
+#      justamente porque aquela guarda recusa a identidade anonima.
+@app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_modulo("instalador"))])
 def diagnostico_do_instalador() -> dict:
     """
     Estado do módulo instalador, num lugar só.
@@ -4184,7 +4219,7 @@ def diagnostico_do_instalador() -> dict:
     return out
 
 
-@app.post("/api/cert-installer/revalidar-cofre", dependencies=[Depends(require_admin)])
+@app.post("/api/cert-installer/revalidar-cofre", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
 def revalidar_cofre() -> dict:
     """
     Prova que a chave em vigor decifra o que está guardado.
@@ -4589,7 +4624,7 @@ def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
 @app.get("/api/cert-installer/available")
 def list_available_certificates(
     machine_id: Optional[str] = Query(None),
-    token: auth.TokenData = Depends(require_admin),
+    token: auth.TokenData = Depends(require_modulo("instalador")),
 ):
     """Lista certificados PFX disponíveis para instalação (sem dados cifrados)."""
     certs = cert_installer.list_available_pfx(machine_id=machine_id)
@@ -4616,14 +4651,14 @@ def list_available_certificates(
 @app.get("/api/cert-installer/logs")
 def list_installer_logs(
     limit: int = Query(100, ge=1, le=500),
-    token: auth.TokenData = Depends(require_admin),
+    token: auth.TokenData = Depends(require_modulo("instalador")),
 ):
     """Lista logs de auditoria de instalação."""
     logs = cert_installer.list_install_logs(limit=limit)
     return {"logs": logs}
 
 
-@app.get("/api/cert-installer/trilha", dependencies=[Depends(require_admin)])
+@app.get("/api/cert-installer/trilha", dependencies=[Depends(require_modulo("instalador"))])
 def trilha_de_instalacao(
     dias: int = Query(30, ge=1, le=365),
     user_email: Optional[str] = Query(None),
@@ -4650,7 +4685,7 @@ def trilha_de_instalacao(
 
 
 @app.post("/api/cert-installer/cleanup")
-def cleanup_tokens(token: auth.TokenData = Depends(require_admin)):
+def cleanup_tokens(token: auth.TokenData = Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))):
     """Remove tokens de instalação expirados (manutenção)."""
     count = cert_installer.cleanup_expired_tokens()
     return {"status": "ok", "removed": count}
