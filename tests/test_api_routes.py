@@ -415,6 +415,49 @@ def test_colaborador_endpoints_200(
     assert "itens" in r4.json()
 
 
+def test_operador_comum_nao_ingere_inventario(
+    client_com_chave: TestClient, api_key: str
+) -> None:
+    """
+    Ingestao e consumo da fila sao do AGENTE, nao de qualquer autenticado.
+
+    Ate 19/08/2026 as duas rotas estavam sob `require_auth`, que aceita papel
+    'user'. Um operador comum podia sobrescrever o inventario inteiro — e
+    `renderTransfer`, os alertas e o dashboard leem dali.
+
+    `require_agent_or_admin` e a mesma guarda que `upload-pfx`, `redeem` e
+    `report` ja usavam; o agente ja passava por ela, entao apertar aqui nao
+    muda nada para quem legitimamente chama.
+
+    Ver docs/PLANO_niveis_de_acesso.md §1, etapa 1b.
+    """
+    from app import auth as _auth
+
+    for papel in ("user", "gestor"):
+        h = {
+            "Authorization": "Bearer " + _auth.create_access_token(
+                {"sub": f"{papel}@exemplo.com", "role": papel}
+            )
+        }
+        r = client_com_chave.post("/api/ingest", json={"items": []}, headers=h)
+        assert r.status_code == 403, f"{papel} conseguiu ingerir inventario"
+
+        n = client_com_chave.get("/api/agent/next?machine_id=default", headers=h)
+        assert n.status_code == 403, f"{papel} conseguiu consumir a fila"
+
+    # O agente, esse sim, passa nas duas. A asserção é "não barrado", e não
+    # "200": um corpo incompleto responde 422, que já prova a passagem pela
+    # guarda — validação roda DEPOIS da autenticação. Exigir 200 amarraria este
+    # teste ao schema do ingest, que não é o que ele mede.
+    h_agente = {"X-API-Key": api_key}
+    assert client_com_chave.post(
+        "/api/ingest", json={"items": []}, headers=h_agente
+    ).status_code != 403, "o agente foi barrado no ingest"
+    assert client_com_chave.get(
+        "/api/agent/next?machine_id=default", headers=h_agente
+    ).status_code == 200
+
+
 def test_operador_comum_nao_enfileira_comando(
     client_com_chave: TestClient, api_key: str
 ) -> None:

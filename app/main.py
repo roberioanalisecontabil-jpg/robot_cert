@@ -2089,7 +2089,7 @@ def enqueue_agent_command(body: EnqueueCommandBody) -> dict:
     return {"ok": True, "id": cid, "command": body.command.strip()}
 
 
-@app.get("/api/agent/next", dependencies=[Depends(require_auth)])
+@app.get("/api/agent/next", dependencies=[Depends(require_agent_or_admin)])
 def agent_next_command(
     machine_id: str = Query("default", description="ID da máquina do agente"),
 ) -> dict:
@@ -3044,7 +3044,12 @@ def vencidos_certificados(
     }
 
 
-@app.post("/api/ingest", dependencies=[Depends(require_auth)])
+# Ingestao de inventario: quem alimenta e o agente (`agent/run_agent.py`), e
+# `require_auth` aceitava qualquer autenticado — um operador comum podia
+# sobrescrever o inventario inteiro. `require_agent_or_admin` e a mesma guarda
+# que `upload-pfx`, `redeem` e `report` ja usam, e o agente ja passa por ela em
+# producao (o cofre tem 491 certificados que so chegaram por `upload-pfx`).
+@app.post("/api/ingest", dependencies=[Depends(require_agent_or_admin)])
 def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
     """
     Recebe o resultado de um scan feito no Windows (agente em segundo plano).

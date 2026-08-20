@@ -161,10 +161,25 @@ ter tela, porque cria confiança falsa.
 
 Cada etapa entrega valor sozinha e pode parar aí.
 
-**Etapa 1 — fechar as guardas coarse (sem tela, sem migration).**
-Trocar `require_auth` por guarda de papel nas 4 rotas de `agente`, `ingest` e
-`mover-vencidos`. É a correção de segurança real deste levantamento, e não
-depende de nada do resto.
+**Etapa 1 — fechar as guardas coarse (sem tela, sem migration). ✅ FEITA em 19/08.**
+
+- `POST /api/agent/commands`, `GET /api/agent/queue`, `POST /api/mover-vencidos`
+  → `require_admin`. Chamadas só por `configuracao.html` (página de admin); a
+  terceira não tem chamador no portal.
+- `POST /api/ingest`, `GET /api/agent/next` → `require_agent_or_admin`.
+
+A segunda parte esperava confirmação de que a `API_KEY` está configurada em
+produção — `require_agent_or_admin` recusa a identidade anônima que
+`require_auth` cria na ausência dela, e apertar sem a chave pararia a ingestão
+de inventário em silêncio.
+
+**A confirmação veio por evidência, não por consulta:** o agente já chama
+`upload-pfx`, `redeem` e `report`, as três sob `require_agent_or_admin`, e o
+cofre de produção tem 491 certificados do ANALISESRV que só chegam por
+`upload-pfx`. Se a chave não estivesse lá, essas três já estariam quebradas.
+
+Dois testes de barreira novos, ambos verificados por mutação: afrouxar a guarda
+faz o teste falhar.
 
 **Etapa 2 — dar poder ao `gestor` (sem tela).**
 Hoje o papel existe e não concede nada além do menu de Carteiras. Definir o que
