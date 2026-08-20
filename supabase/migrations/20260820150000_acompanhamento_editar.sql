@@ -5,7 +5,10 @@
 -- COMO USAR: rode um PASSO de cada vez. Se algum der erro, PARE e me mande a
 -- mensagem exata. Sem BEGIN/COMMIT -- o SQL Editor ja roda numa transacao.
 --
--- NAO APLICADA.
+-- APLICADA EM PRODUCAO EM 20/08/2026, ANTES do deploy do codigo — que era a
+-- ordem obrigatoria. Conferencia do PASSO 3: gestor e user em 'editar',
+-- nenhuma linha restante em 'ler'. Com isso o deploy do codigo que exige
+-- `editar` para salvar a selecao nao tira nada de ninguem.
 --
 -- ── A ORDEM IMPORTA AQUI, ao contrario da migration anterior ─────────────
 --
