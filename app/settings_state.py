@@ -582,5 +582,59 @@ def save_preferencia_alerta(
         raise GravacaoNaoPersistida(str(e)) from e
 
 
+# ── Notificações lidas no sino (20/08/2026) ────────────────────────────────
+#
+# Sem fallback em arquivo, ao contrário das seleções. É deliberado: em produção
+# o disco é efêmero, e um "li todos" que volta atrás no próximo reinício seria
+# pior do que um botão que assumidamente não funciona sem banco. Sem Supabase,
+# ler devolve conjunto vazio e marcar não faz nada — o sino se comporta como
+# antes de o botão existir.
+
+def carregar_notificacoes_lidas(user_id: Optional[str]) -> set:
+    """Chaves que esta pessoa já marcou como lidas."""
+    uid = (user_id or "").strip()
+    client = _supabase()
+    if not client or not uid:
+        return set()
+    try:
+        r = (
+            client.table("notificacao_lida")
+            .select("chave")
+            .eq("user_id", uid)
+            .execute()
+        )
+        return {str(row.get("chave") or "") for row in (r.data or []) if row.get("chave")}
+    except Exception:  # noqa: BLE001
+        # Silencioso a ponto de não sumir com alerta: falhar aqui devolve
+        # "nada lido", e o pior que acontece é o sino mostrar de novo algo que
+        # a pessoa já viu. O inverso — esconder um vencimento por erro de
+        # leitura — é que não pode acontecer.
+        logger.warning("Falha ao ler notificacao_lida; tratando como nada lido")
+        return set()
+
+
+def marcar_notificacoes_lidas(user_id: Optional[str], chaves: List[str]) -> int:
+    """Marca as chaves como lidas. Devolve quantas foram gravadas."""
+    uid = (user_id or "").strip()
+    limpas = sorted({str(c).strip() for c in chaves if str(c).strip()})
+    client = _supabase()
+    if not client or not uid or not limpas:
+        return 0
+    agora = datetime.now(timezone.utc).isoformat()
+    linhas = [{"user_id": uid, "chave": c, "lida_em": agora} for c in limpas]
+    try:
+        # `on_conflict` na PK composta: marcar de novo o que já estava marcado
+        # é o caso NORMAL (a pessoa clica "li todos" duas vezes), e não um erro.
+        (
+            client.table("notificacao_lida")
+            .upsert(linhas, on_conflict="user_id,chave")
+            .execute()
+        )
+        return len(limpas)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao marcar notificações como lidas para %s", uid)
+        raise GravacaoNaoPersistida(str(e)) from e
+
+
 def supabase_configured() -> bool:
     return bool(config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY)

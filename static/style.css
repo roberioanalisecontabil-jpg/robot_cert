@@ -1872,6 +1872,23 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   color: var(--text);
 }
 
+/* "Li todos". Discreto de propósito: divide o cabeçalho com o título e é uma
+   ação de arrumação, não o assunto do painel. Herda a família da regra base de
+   `button`, e só reescreve o que precisa ser menor. */
+.notif-lidas-btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent-text);
+}
+
+.notif-lidas-btn:hover:not(:disabled) {
+  background: var(--bg);
+}
+
 .notif-sync-mode {
   font-size: 0.7rem;
   font-weight: 500;

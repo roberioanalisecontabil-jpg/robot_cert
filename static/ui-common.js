@@ -1052,6 +1052,11 @@ function _aplicarBadgeNotificacoes(dados) {
     badge.style.display = "none";
   }
 
+  // Sem nada para ler, o botão não aparece: "Li todos" sobre zero avisos é
+  // uma ação sem efeito, e o lugar dele é ao lado de uma lista cheia.
+  const btnLidas = document.getElementById("btn-notif-lidas");
+  if (btnLidas) btnLidas.hidden = n === 0;
+
   if (btn) {
     // A contagem precisa chegar ao leitor de tela: o aria-label era fixo.
     btn.setAttribute(
@@ -1120,6 +1125,44 @@ function _criarSecaoNotificacoes(titulo, total, itens) {
 
   itens.forEach((it) => frag.appendChild(_criarItemNotificacao(it)));
   return frag;
+}
+
+/**
+ * "Li todos": esconde os avisos que estão no sino agora.
+ *
+ * QUEM decide o que marcar é o servidor. Mandar as chaves daqui marcaria como
+ * lido um aviso que apareceu entre a abertura do dropdown e o clique — e ele
+ * sumiria sem nunca ter sido visto.
+ *
+ * O certificado volta quando cruzar o próximo prazo: a marca é por (aviso), e
+ * não por (certificado). É a mesma chave que o e-mail usa para decidir se
+ * reforça, então as duas coisas concordam sobre o que é "um aviso".
+ */
+async function marcarNotificacoesLidas() {
+  const btn = document.getElementById("btn-notif-lidas");
+  if (!btn) return;
+  const rotulo = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    const r = await fetch("/api/colaborador/notificacoes/lidas", {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    // Recarrega em vez de esvaziar a lista na mão: o servidor é quem sabe o
+    // que sobrou, e limpar aqui inventaria um estado que ele não confirmou.
+    await fetchNotifications();
+  } catch (e) {
+    btn.textContent = "Não foi possível";
+    setTimeout(() => {
+      btn.textContent = rotulo;
+      btn.disabled = false;
+    }, 2500);
+    return;
+  }
+  btn.textContent = rotulo;
+  btn.disabled = false;
 }
 
 async function fetchNotifications() {
@@ -1232,7 +1275,7 @@ function initNotifications() {
     <div class="notifications-dropdown" id="notifications-dropdown" style="display: none;">
       <div class="notifications-header">
         <h3>Notificações</h3>
-        <span class="notif-sync-mode" title="A lista é atualizada automaticamente enquanto esta aba está aberta">Automático</span>
+        <button type="button" id="btn-notif-lidas" class="notif-lidas-btn" hidden>Li todos</button>
       </div>
       <div class="notifications-body" id="notifications-body">
         <div class="notif-loading">Carregando...</div>
@@ -1267,6 +1310,16 @@ function initNotifications() {
     e.stopPropagation();
     definirDropdownAberto(dropdown.style.display !== "block", false);
   });
+
+  const btnLidas = document.getElementById("btn-notif-lidas");
+  if (btnLidas) {
+    btnLidas.addEventListener("click", (e) => {
+      // O botão vive DENTRO do dropdown, que fecha ao clique de fora. Sem
+      // isto, o clique borbulha e fecha o painel no mesmo gesto.
+      e.stopPropagation();
+      void marcarNotificacoesLidas();
+    });
+  }
 
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#notifications-container") && dropdown.style.display === "block") {

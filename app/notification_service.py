@@ -2,7 +2,13 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
-from app.settings_state import load_settings, load_colaborador_selecao, get_latest_snapshot
+from app import alertas_config
+from app.settings_state import (
+    carregar_notificacoes_lidas,
+    get_latest_snapshot,
+    load_colaborador_selecao,
+    load_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +55,8 @@ def get_active_alerts(
 
     settings = load_settings()
     now = datetime.now(timezone.utc)
+    # Os marcos do portal, uma leitura só para a lista inteira.
+    marcos = alertas_config.marcos_efetivos(getattr(settings, "alertas_marcos", ""))
 
     snap = get_latest_snapshot()
     payload = _list_certificados_payload(settings, snap, "auto")
@@ -104,8 +112,17 @@ def get_active_alerts(
         else:
             continue
 
+        # MESMA chave do antispam de e-mail (`alert_state`), de propósito: o
+        # sino e o e-mail passam a concordar sobre o que é "um aviso". Marcar
+        # como lido esconde ESTE limiar; ao cruzar o próximo, o certificado
+        # reaparece sozinho — que é a diferença entre "li isso" e "não me avise
+        # mais sobre este certificado".
+        marco = "expired" if tipo == "expired" else f"expiring:{alertas_config.marco_de(dias, marcos)}"
+        chave = f"{it.get('fingerprint_sha256') or nome}|{marco}"
+
         alerts.append(
             {
+                "chave": chave,
                 "fingerprint_sha256": it.get("fingerprint_sha256"),
                 "nome": nome,
                 "documento": it.get("documento_formatado") or it.get("documento_numero") or "Sem documento",
@@ -153,8 +170,16 @@ def build_notifications_payload(
 
     Os totais vão separados dos itens para que o portal possa mostrar
     "33 expirando · 486 vencidos" sem receber os 519 registros.
+
+    O que a pessoa já marcou como lido sai da lista E dos totais. Deixá-lo nos
+    totais faria o badge continuar aceso depois de "li todos" — que é
+    exatamente o que o botão existe para resolver.
     """
     alerts = get_active_alerts(user_email, user_role, user_id)
+
+    lidas = carregar_notificacoes_lidas(user_id)
+    if lidas:
+        alerts = [a for a in alerts if a.get("chave") not in lidas]
 
     total_expirando = sum(1 for a in alerts if a.get("tipo") == "expiring")
     total_vencidos = sum(1 for a in alerts if a.get("tipo") == "expired")

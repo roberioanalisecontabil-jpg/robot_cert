@@ -34,10 +34,12 @@ from app import alertas_config
 from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente
-from app.notification_service import build_notifications_payload
+from app.notification_service import build_notifications_payload, get_active_alerts
 from app.settings_state import (
     GravacaoNaoPersistida,
     PortalSettings,
+    carregar_notificacoes_lidas,
+    marcar_notificacoes_lidas,
     load_preferencia_alerta,
     save_preferencia_alerta,
     get_latest_snapshot,
@@ -2856,6 +2858,39 @@ def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth
     docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     itens = _painel_docs_selecionados(docs)
     return {"itens": itens, "total": len(itens)}
+
+
+@app.post(
+    "/api/colaborador/notificacoes/lidas",
+    dependencies=[Depends(require_modulo("acompanhamento"))],
+)
+def marcar_notificacoes_como_lidas(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """"Li todos": esconde os avisos que estão no sino AGORA.
+
+    O servidor decide o que marcar, e não a tela. Se a lista viesse do cliente,
+    um aviso que apareceu entre o carregamento do dropdown e o clique seria
+    marcado como lido sem nunca ter sido visto — e some sem deixar rastro.
+
+    `require_modulo("acompanhamento")` no nível de leitura: marcar como lido é
+    uma preferência de exibição de quem está lendo, não uma edição de dado do
+    portal. Exigir `editar` tiraria o botão de quem só consulta, que é
+    justamente quem mais acumula aviso.
+    """
+    uid = _user_id_da_sessao(token)
+    # `get_active_alerts` e não o payload: o payload corta em 50 itens para o
+    # dropdown, e marcar só os 50 deixaria o badge aceso depois de "li todos" —
+    # o botão pareceria não ter funcionado. O badge conta o acionável inteiro,
+    # então é o acionável inteiro que precisa ser marcado.
+    alertas = get_active_alerts(token.email or "", token.role or "", uid)
+    chaves = [a.get("chave") for a in alertas if a.get("chave") and a.get("acionavel")]
+    try:
+        marcadas = marcar_notificacoes_lidas(uid, chaves)
+    except GravacaoNaoPersistida as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível marcar como lido. Detalhe: " + str(e),
+        )
+    return {"marcadas": marcadas}
 
 
 class PreferenciaAlertaBody(BaseModel):
