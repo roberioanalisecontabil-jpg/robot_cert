@@ -37,6 +37,15 @@ class PortalSettings:
     install_token_ttl_min: int = 0
     trilha_retencao_dias: int = 0
 
+    # ── Alertas por e-mail (20/08/2026) ────────────────────────────────────
+    # Mesma convenção acima, e aqui ela é a diferença entre "ninguém recebe" e
+    # "recebe quem sempre recebeu": vazio em `alertas_destinatarios` manda o
+    # resumo a todo administrador ativo, como antes desta tela existir.
+    # A leitura e a validação moram em `app/alertas_config.py`.
+    alertas_destinatarios: str = ""
+    alertas_marcos: str = ""
+    alertas_intervalo_horas: int = 0
+
     def effective_source(self) -> Path:
         p = (self.source_folder or "").strip()
         if p:
@@ -63,6 +72,12 @@ def _from_row(row: dict) -> PortalSettings:
         smtp_use_ssl=bool(row.get("smtp_use_ssl") if row.get("smtp_use_ssl") is not None else False),
         smtp_from_email=str(row.get("smtp_from_email", "") or ""),
         smtp_alerts_enabled=bool(row.get("smtp_alerts_enabled") if row.get("smtp_alerts_enabled") is not None else False),
+        # `row.get` com default: se a migration ainda não rodou, a coluna não
+        # vem no PostgREST e o padrão do código continua valendo. É o que torna
+        # a migration ordem-independente.
+        alertas_destinatarios=str(row.get("alertas_destinatarios", "") or ""),
+        alertas_marcos=str(row.get("alertas_marcos", "") or ""),
+        alertas_intervalo_horas=int(row.get("alertas_intervalo_horas") or 0),
         instalador_nome_template=str(row.get("instalador_nome_template", "") or ""),
         install_token_ttl_min=int(row.get("install_token_ttl_min") or 0),
         trilha_retencao_dias=int(row.get("trilha_retencao_dias") or 0),
@@ -86,6 +101,9 @@ def _load_file() -> Optional[PortalSettings]:
             smtp_use_ssl=bool(raw.get("smtp_use_ssl", False)),
             smtp_from_email=str(raw.get("smtp_from_email", "")),
             smtp_alerts_enabled=bool(raw.get("smtp_alerts_enabled", False)),
+            alertas_destinatarios=str(raw.get("alertas_destinatarios", "") or ""),
+            alertas_marcos=str(raw.get("alertas_marcos", "") or ""),
+            alertas_intervalo_horas=int(raw.get("alertas_intervalo_horas") or 0),
             instalador_nome_template=str(raw.get("instalador_nome_template", "")),
             install_token_ttl_min=int(raw.get("install_token_ttl_min", 0) or 0),
             trilha_retencao_dias=int(raw.get("trilha_retencao_dias", 0) or 0),
@@ -143,6 +161,9 @@ def load_settings() -> PortalSettings:
                             supa.smtp_use_ssl = local.smtp_use_ssl
                             supa.smtp_from_email = local.smtp_from_email
                             supa.smtp_alerts_enabled = local.smtp_alerts_enabled
+                            supa.alertas_destinatarios = local.alertas_destinatarios
+                            supa.alertas_marcos = local.alertas_marcos
+                            supa.alertas_intervalo_horas = local.alertas_intervalo_horas
                 return supa
         except Exception:  # noqa: BLE001
             logger.exception("Falha ao ler portal_settings no Supabase; usando o arquivo local")
@@ -156,15 +177,35 @@ def load_settings() -> PortalSettings:
     )
 
 
-def save_settings(s: PortalSettings) -> None:
+class GravacaoNaoPersistida(RuntimeError):
+    """O arquivo local recebeu, o Supabase não.
+
+    Existe porque as duas coisas NÃO são equivalentes: `load_settings` prefere
+    o Supabase quando ele está configurado, então uma gravação que só chegou ao
+    arquivo é uma gravação que ninguém vai ler. Engolir isso fazia a tela
+    responder "salvo com sucesso" sobre um valor que a próxima leitura
+    descartaria — inclusive numa instalação a que faltasse uma migration.
+    """
+
+
+def save_settings(s: PortalSettings, *, exigir_supabase: bool = False) -> bool:
     """
     Grava em data/portal_settings.json sempre. Com Supabase, faz upsert (insert ou update)
     para a linha id=1, pois update em linha inexistente não grava nada.
+
+    Devolve True quando a gravação chegou onde será lida. Com
+    `exigir_supabase=True`, levanta `GravacaoNaoPersistida` em vez de devolver
+    False — para quem responde a uma tela e precisa transformar isso em erro.
+
+    O padrão continua sendo o antigo (registrar e seguir): o ingest do agente
+    chama isto no meio de uma varredura, e derrubá-la por causa da configuração
+    seria trocar um problema pequeno por um grande.
     """
     _save_file(s)
     client = _supabase()
     if not client:
-        return
+        # Sem Supabase, o arquivo local É a fonte de verdade.
+        return True
     now = datetime.now(timezone.utc).isoformat()
     row = {
         "id": 1,
@@ -182,14 +223,21 @@ def save_settings(s: PortalSettings) -> None:
         "instalador_nome_template": s.instalador_nome_template,
         "install_token_ttl_min": s.install_token_ttl_min,
         "trilha_retencao_dias": s.trilha_retencao_dias,
+        "alertas_destinatarios": s.alertas_destinatarios,
+        "alertas_marcos": s.alertas_marcos,
+        "alertas_intervalo_horas": s.alertas_intervalo_horas,
         "updated_at": now,
     }
     try:
         client.table("portal_settings").upsert(row, on_conflict="id").execute()
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         logger.exception(
             "Falha ao gravar no Supabase; a configuração foi guardada em %s", DATA_FILE
         )
+        if exigir_supabase:
+            raise GravacaoNaoPersistida(str(e)) from e
+        return False
+    return True
 
 
 INGEST_FILE = config.ROOT / "data" / "last_ingest.json"

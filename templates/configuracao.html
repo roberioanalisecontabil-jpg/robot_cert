@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=menu-exportar-e-indicadores-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=alertas-configuraveis-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -176,7 +176,7 @@
         <section id="sec-smtp" style="display: none;">
           <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
           <p class="hint">
-            Configure um servidor SMTP para enviar e-mails de alerta automáticos sobre certificados expirados ou prestes a vencer (até 30 dias).
+            Configure o servidor SMTP e, abaixo, para quem os alertas vão e com que antecedência.
           </p>
           <div class="panel--nested">
             <div class="row">
@@ -211,6 +211,55 @@
             <div class="row-inline" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
               <input type="checkbox" id="chk-smtp-alerts-enabled" style="margin-right: 0.5rem;" />
               <label for="chk-smtp-alerts-enabled" style="display: inline; font-weight: bold; color: var(--accent-text);">Habilitar Disparo de Alertas Automáticos</label>
+            </div>
+
+            <!-- Entrega, e não credencial. Acima é COMO o portal fala com o
+                 servidor de e-mail; daqui para baixo é PARA QUEM e QUANDO. As
+                 duas coisas dividiam um bloco só e nenhum título as separava. -->
+            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+              <h3 style="font-size: 0.95rem; margin: 0 0 0.35rem;">Para quem, e quando</h3>
+              <p class="hint" style="margin-top: 0;">
+                Vale para o resumo do portal — a lista com os certificados a vencer e os vencidos.
+                Os avisos que cada pessoa recebe dos certificados que acompanha continuam indo para ela.
+              </p>
+
+              <div class="row" style="margin-top: 1rem;">
+                <label for="inp-alertas-dest">Destinatários do resumo</label>
+                <input type="text" id="inp-alertas-dest" class="path-input"
+                       placeholder="Deixe vazio para enviar a todos os administradores" />
+                <span class="hint" id="alertas-dest-efetivo" style="margin-top: 0.35rem;"></span>
+                <!-- O aviso não é decorativo: em 09/08/2026 quatro linhas
+                     órfãs recebiam nome de titular, CNPJ/CPF e vencimento de
+                     certificados de clientes. Um endereço digitado aqui não
+                     tem conta para ser desativada. -->
+                <span class="hint" style="margin-top: 0.35rem; color: var(--warning-text);">
+                  Um endereço que não pertence a uma conta do portal continua recebendo
+                  mesmo que a pessoa saia da empresa — não há conta para desativar.
+                  O resumo traz nome, CNPJ/CPF e vencimento de certificados de clientes.
+                </span>
+              </div>
+
+              <div class="row" style="margin-top: 1rem;">
+                <label for="inp-alertas-marcos">Avisar quando faltarem (dias)</label>
+                <input type="text" id="inp-alertas-marcos" class="path-input"
+                       placeholder="30, 15, 5" inputmode="numeric" />
+                <span class="hint" id="alertas-marcos-efetivo" style="margin-top: 0.35rem;"></span>
+              </div>
+
+              <div class="row" style="margin-top: 1rem;">
+                <label for="sel-alertas-intervalo">Com que frequência verificar</label>
+                <select id="sel-alertas-intervalo" class="path-input">
+                  <option value="0">Padrão (a cada 20 horas)</option>
+                  <option value="12">Duas vezes por dia</option>
+                  <option value="24">Uma vez por dia</option>
+                  <option value="168">Uma vez por semana</option>
+                </select>
+                <span class="hint" style="margin-top: 0.35rem;">
+                  É o intervalo entre duas verificações, e não um horário de disparo.
+                  Cada certificado só gera um e-mail por marco — verificar mais vezes
+                  não multiplica mensagens, apenas encurta a espera até o aviso sair.
+                </span>
+              </div>
             </div>
             <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
               <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
@@ -351,6 +400,7 @@
           document.getElementById("chk-smtp-tls").checked = s.smtp_use_tls !== false;
           document.getElementById("chk-smtp-ssl").checked = !!s.smtp_use_ssl;
           document.getElementById("chk-smtp-alerts-enabled").checked = !!s.smtp_alerts_enabled;
+          preencherAlertas(s);
 
           const inputAgentBaseUrl = document.getElementById("inp-agent-base-url");
           if (inputAgentBaseUrl) {
@@ -377,6 +427,41 @@
         syncPathsFromApi();
       });
 
+      // ── Alertas: para quem, e quando ─────────────────────────────────────────
+      //
+      // Os dois formulários desta tela mandam o objeto inteiro para o mesmo
+      // PUT. Enquanto o servidor tratava campo ausente como "apague", isso
+      // significava que salvar as pastas zerava o que a outra aba tinha
+      // configurado. O servidor passou a preservar o omitido, e aqui os dois
+      // mandam os mesmos campos — as duas metades da mesma correção.
+      function corpoAlertas() {
+        return {
+          alertas_destinatarios: document.getElementById("inp-alertas-dest").value || "",
+          alertas_marcos: document.getElementById("inp-alertas-marcos").value || "",
+          alertas_intervalo_horas:
+            parseInt(document.getElementById("sel-alertas-intervalo").value, 10) || 0,
+        };
+      }
+
+      function preencherAlertas(s) {
+        document.getElementById("inp-alertas-dest").value = s.alertas_destinatarios || "";
+        document.getElementById("inp-alertas-marcos").value = s.alertas_marcos || "";
+        document.getElementById("sel-alertas-intervalo").value =
+          String(s.alertas_intervalo_horas || 0);
+
+        // Campo em branco não é "desligado", é "usar o padrão" — e sem dizer
+        // qual é o padrão a tela deixaria a pessoa adivinhando. O servidor
+        // manda o valor já resolvido justamente para isto.
+        const dest = document.getElementById("alertas-dest-efetivo");
+        dest.textContent = s.alertas_destinatarios_origem === "lista"
+          ? "Enviando para a lista acima."
+          : "Vazio: enviando para todos os administradores ativos.";
+
+        const marcos = (s.alertas_marcos_efetivos || []).join(", ");
+        document.getElementById("alertas-marcos-efetivo").textContent =
+          "Em uso: " + marcos + " dias antes, mais um aviso quando vencer.";
+      }
+
       // ── Salvar pastas ────────────────────────────────────────────────────────
       document.getElementById("btn-save-cfg").addEventListener("click", async () => {
         const st = document.getElementById("cfg-msg");
@@ -394,6 +479,7 @@
             smtp_use_ssl: document.getElementById("chk-smtp-ssl").checked,
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoAlertas(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
           if (r.status === 401) { st.textContent = "401: chave incompatível com API_KEY."; return; }
@@ -453,6 +539,7 @@
             smtp_use_ssl: document.getElementById("chk-smtp-ssl").checked,
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoAlertas(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
           if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }

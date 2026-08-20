@@ -30,11 +30,13 @@ from app.historico_agg_cache import get_or_build as _historico_cache_get_or_buil
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
+from app import alertas_config
 from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente
 from app.notification_service import build_notifications_payload
 from app.settings_state import (
+    GravacaoNaoPersistida,
     PortalSettings,
     get_latest_snapshot,
     load_colaborador_selecao,
@@ -780,11 +782,27 @@ class SettingsBody(BaseModel):
     smtp_use_ssl: bool = Field(default=False)
     smtp_from_email: str = Field(default="")
     smtp_alerts_enabled: bool = Field(default=False)
-    # Módulo instalador. Vazio/zero = usar o padrão do código, e não "desligado":
-    # uma configuração nunca tocada tem de se comportar como antes de existir.
-    instalador_nome_template: str = Field(default="")
-    install_token_ttl_min: int = Field(default=0)
-    trilha_retencao_dias: int = Field(default=0)
+    # ── Campos que este PUT não "possui" ───────────────────────────────────
+    #
+    # `None` = NÃO MEXE; qualquer outro valor grava — inclusive vazio, que aqui
+    # significa "voltar ao padrão do código". É a mesma semântica que
+    # `smtp_password` já usava neste modelo, agora estendida aos campos que
+    # nenhum dos formulários desta tela envia.
+    #
+    # Sem isso, o PUT remonta o `PortalSettings` inteiro a partir do corpo: os
+    # dois formulários de /configuracao mandam 11 campos, e os que faltam
+    # voltavam ao default. Salvar as PASTAS apagava o template de nome do
+    # instalador, o TTL do token e a retenção da trilha — configurados em outra
+    # tela, por outra rota, e zerados aqui sem nenhum aviso.
+    #
+    # O sintoma aparece longe da causa: o instalador volta a gerar o nome
+    # padrão, e nada na tela de Configuração sugere que foi ela.
+    instalador_nome_template: Optional[str] = Field(default=None)
+    install_token_ttl_min: Optional[int] = Field(default=None)
+    trilha_retencao_dias: Optional[int] = Field(default=None)
+    alertas_destinatarios: Optional[str] = Field(default=None)
+    alertas_marcos: Optional[str] = Field(default=None)
+    alertas_intervalo_horas: Optional[int] = Field(default=None)
 
 
 class IngestBody(BaseModel):
@@ -1720,6 +1738,26 @@ def _settings_dict(s: PortalSettings) -> dict:
         "trilha_retencao_dias": s.trilha_retencao_dias,
         "smtp_from_email": s.smtp_from_email,
         "smtp_alerts_enabled": s.smtp_alerts_enabled,
+        # Alertas. O par `campo` + `campo_efetivo` segue o que o instalador já
+        # fazia acima: a tela mostra o campo em branco E o que vale de fato,
+        # senão "vazio" pareceria "desligado".
+        "alertas_destinatarios": s.alertas_destinatarios,
+        "alertas_marcos": s.alertas_marcos,
+        "alertas_marcos_efetivos": list(
+            alertas_config.marcos_efetivos(s.alertas_marcos)
+        ),
+        "alertas_intervalo_horas": s.alertas_intervalo_horas,
+        "alertas_intervalo_efetivo": alertas_config.intervalo_efetivo_horas(
+            s.alertas_intervalo_horas
+        ),
+        # "lista" ou "admins" em vez da lista de admins resolvida: montá-la
+        # aqui custaria uma consulta ao Supabase numa rota que o agente também
+        # chama, e que precisa responder mesmo com o banco ruim.
+        "alertas_destinatarios_origem": (
+            "lista"
+            if alertas_config.destinatarios_configurados(s.alertas_destinatarios)
+            else "admins"
+        ),
     }
 
 
@@ -1734,6 +1772,11 @@ def get_settings() -> dict:
 
 @app.put("/api/settings", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
 def put_settings(body: SettingsBody) -> dict:
+    # Lido ANTES de validar: campo omitido é validado a partir do que já está
+    # gravado, e não do default. Validar o default e gravar o valor antigo
+    # deixaria os dois em desacordo.
+    old = load_settings()
+
     try:
         validate_smtp_config(body.smtp_use_tls, body.smtp_use_ssl)
     except ValueError as e:
@@ -1743,11 +1786,18 @@ def put_settings(body: SettingsBody) -> dict:
     # template sem {token} produz um .exe que abre e não instala nada, e o
     # sintoma aparece na máquina do usuário final.
     try:
-        template = cert_installer.validar_template_nome(body.instalador_nome_template)
+        template = cert_installer.validar_template_nome(
+            old.instalador_nome_template
+            if body.instalador_nome_template is None
+            else body.instalador_nome_template
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    ttl = int(body.install_token_ttl_min or 0)
+    ttl = int(
+        (old.install_token_ttl_min if body.install_token_ttl_min is None
+         else body.install_token_ttl_min) or 0
+    )
     if ttl and not (cert_installer.TTL_TOKEN_MIN <= ttl <= cert_installer.TTL_TOKEN_MAX):
         raise HTTPException(
             status_code=422,
@@ -1757,12 +1807,38 @@ def put_settings(body: SettingsBody) -> dict:
             ),
         )
 
-    retencao = int(body.trilha_retencao_dias or 0)
+    retencao = int(
+        (old.trilha_retencao_dias if body.trilha_retencao_dias is None
+         else body.trilha_retencao_dias) or 0
+    )
     if retencao < 0:
         raise HTTPException(status_code=422, detail="Retenção não pode ser negativa.")
 
-    
-    old = load_settings()
+    # Alertas: recusar aqui é a única defesa. O job roda sem ninguém olhando e
+    # trata valor ilegível caindo no padrão — o que é a decisão certa PARA O
+    # JOB e péssima como resposta à tela, porque a pessoa salvaria "30,15,cinco"
+    # e receberia "salvo" enquanto o portal seguisse com 30,15,7,1.
+    try:
+        marcos = alertas_config.formatar_marcos(
+            alertas_config.parse_marcos(
+                old.alertas_marcos if body.alertas_marcos is None else body.alertas_marcos
+            )
+        )
+        destinatarios = alertas_config.formatar_destinatarios(
+            alertas_config.parse_destinatarios(
+                old.alertas_destinatarios
+                if body.alertas_destinatarios is None
+                else body.alertas_destinatarios
+            )
+        )
+        intervalo = alertas_config.validar_intervalo(
+            old.alertas_intervalo_horas
+            if body.alertas_intervalo_horas is None
+            else body.alertas_intervalo_horas
+        )
+    except alertas_config.ConfiguracaoInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     enc_password = old.smtp_password_encrypted
     if body.smtp_password is not None and body.smtp_password.strip() != "":
         try:
@@ -1785,8 +1861,24 @@ def put_settings(body: SettingsBody) -> dict:
         instalador_nome_template=template,
         install_token_ttl_min=ttl,
         trilha_retencao_dias=retencao,
+        alertas_destinatarios=destinatarios,
+        alertas_marcos=marcos,
+        alertas_intervalo_horas=intervalo,
     )
-    save_settings(s)
+    # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
+    # prefere o Supabase — a próxima leitura devolveria o valor antigo. Dizer
+    # "salvo" aqui seria a tela mentindo sobre um dado que ela mesma vai
+    # recarregar diferente.
+    try:
+        save_settings(s, exigir_supabase=True)
+    except GravacaoNaoPersistida as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Não foi possível gravar no banco; nada foi alterado para o portal. "
+                "A cópia local ficou guardada. Detalhe: " + str(e)
+            ),
+        )
     return _settings_dict(s)
 
 
@@ -4092,7 +4184,20 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     atual.instalador_nome_template = template
     atual.install_token_ttl_min = ttl
     atual.trilha_retencao_dias = retencao
-    save_settings(atual)
+    # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
+    # prefere o Supabase — a próxima leitura devolveria o valor antigo. Dizer
+    # "salvo" aqui seria a tela mentindo sobre um dado que ela mesma vai
+    # recarregar diferente.
+    try:
+        save_settings(atual, exigir_supabase=True)
+    except GravacaoNaoPersistida as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Não foi possível gravar no banco; nada foi alterado para o portal. "
+                "A cópia local ficou guardada. Detalhe: " + str(e)
+            ),
+        )
     return _settings_dict(atual)
 
 

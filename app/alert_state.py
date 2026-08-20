@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 
 from app import config
 from app.auth import conta_ativa
+from app import alertas_config
 from app.settings_state import load_settings, _supabase, _load_colaborador_file_dict
 from app.cert_scanner import scan_folder, cert_to_public_dict
 from app.smtp_service import send_smtp_email
@@ -21,18 +22,27 @@ JOB_STATE_FILE = config.ROOT / "data" / "alerts_job_state.json"
 # antispam era (certificado, "expiring", destinatário, validade), então um
 # certificado entrando na janela de 30 dias recebia UM e-mail no dia 30 e
 # silêncio até vencer. Com marcos, cada limiar dispara uma vez.
-MARCOS_EXPIRACAO = [30, 15, 7, 1]
+# Os marcos e o intervalo agora vem da tela (Configuracao > Alertas). Estes
+# nomes seguem existindo como o PADRAO — o valor que vale quando ninguem
+# configurou nada — e por isso continuam sendo a fonte para os testes que
+# afirmam o comportamento de fabrica.
+MARCOS_EXPIRACAO = list(alertas_config.MARCOS_PADRAO)
 
 # Intervalo mínimo entre execuções do job. Necessário porque o Procfile usa
 # `--max-requests 500`: o worker recicla várias vezes ao dia e o job dispara em
 # boot+60s a cada reinício, então "diário" nunca foi diário de fato.
-INTERVALO_MINIMO_JOB_HORAS = 20
+INTERVALO_MINIMO_JOB_HORAS = alertas_config.INTERVALO_PADRAO_HORAS
 
 
-def _marco_expiracao(dias: int) -> int:
-    """Menor marco ainda não ultrapassado — 25 dias -> 30, 12 -> 15, 5 -> 7, 0 -> 1."""
-    candidatos = [m for m in MARCOS_EXPIRACAO if m >= dias]
-    return min(candidatos) if candidatos else MARCOS_EXPIRACAO[-1]
+def _marco_expiracao(dias: int, marcos=None) -> int:
+    """Menor marco ainda não ultrapassado — 25 dias -> 30, 12 -> 15, 5 -> 7, 0 -> 1.
+
+    `marcos` omitido usa o padrão, e não a configuração: quem chama sem passar
+    nada está perguntando pelo comportamento de fábrica. Deixar o default ler o
+    banco tornaria uma função pura dependente de I/O sem que a assinatura
+    dissesse isso.
+    """
+    return alertas_config.marco_de(dias, marcos or MARCOS_EXPIRACAO)
 
 def _load_local_sent_alerts() -> List[Dict[str, Any]]:
     if not SENT_ALERTS_FILE.is_file():
@@ -176,8 +186,25 @@ def _save_job_state(state: Dict[str, Any]) -> None:
         logger.warning(f"Não foi possível gravar o estado do job de alertas: {e}")
 
 
-def job_ja_executado_recentemente() -> bool:
-    """True se o job rodou há menos de INTERVALO_MINIMO_JOB_HORAS."""
+def job_ja_executado_recentemente(horas: Optional[int] = None) -> bool:
+    """True se o job rodou há menos que o intervalo configurado.
+
+    `horas` omitido lê a configuração. É I/O dentro de uma função que parece
+    barata, e é deliberado: o laço chama isto de hora em hora, e sem ler aqui
+    uma mudança de periodicidade só valeria no próximo reinício do worker —
+    ou seja, a tela salvaria e nada aconteceria.
+    """
+    if horas is None:
+        try:
+            horas = alertas_config.intervalo_efetivo_horas(
+                load_settings().alertas_intervalo_horas
+            )
+        except Exception as e:  # noqa: BLE001
+            # Configuração ilegível não pode virar "roda toda hora": cairia em
+            # e-mail repetido. O padrão é o comportamento conhecido.
+            logger.warning("Intervalo de alertas ilegível (%s); usando o padrão.", e)
+            horas = INTERVALO_MINIMO_JOB_HORAS
+
     ultimo = _load_job_state().get("ultima_execucao")
     if not ultimo:
         return False
@@ -188,7 +215,7 @@ def job_ja_executado_recentemente() -> bool:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     delta = datetime.now(timezone.utc) - dt
-    return delta < timedelta(hours=INTERVALO_MINIMO_JOB_HORAS)
+    return delta < timedelta(hours=horas)
 
 
 def registrar_execucao_job() -> None:
@@ -392,9 +419,26 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
     conteúdo do sino: totais, mais a lista do que ainda dá para evitar.
     """
     out = {"admin_resumos_enviados": 0, "admin_resumos_ignorados": 0}
-    admins = _get_admin_emails()
+
+    # Lista fixa da tela quando houver; senão, todo administrador ativo — que é
+    # como sempre funcionou.
+    #
+    # A diferença entre as duas NÃO é cosmética. Um e-mail que pertence a uma
+    # conta do portal para de receber quando a conta é desativada; um endereço
+    # digitado aqui não para, porque não há conta para desativar. Em 09/08/2026
+    # foram encontradas quatro linhas órfãs recebendo nome de titular, CNPJ/CPF
+    # e vencimento de certificados de clientes — o mesmo conteúdo deste resumo.
+    # A tela avisa disso; este comentário é para quem mexer no código depois.
+    fixos = alertas_config.destinatarios_configurados(
+        getattr(settings, "alertas_destinatarios", "")
+    )
+    admins = list(fixos) if fixos else _get_admin_emails()
     if not admins:
         return out
+
+    marcos = alertas_config.marcos_efetivos(getattr(settings, "alertas_marcos", ""))
+    janela = alertas_config.janela_dias(marcos)
+    lista_fixa = bool(fixos)
 
     expirando, vencidos_recentes = [], []
     for it in itens:
@@ -406,9 +450,9 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
         except Exception:
             continue
         dias = (v_dt.date() - now.date()).days
-        if v_dt >= now and 0 <= dias <= MARCOS_EXPIRACAO[0]:
+        if v_dt >= now and 0 <= dias <= janela:
             expirando.append((it, dias))
-        elif v_dt < now and abs(dias) <= MARCOS_EXPIRACAO[0]:
+        elif v_dt < now and abs(dias) <= janela:
             vencidos_recentes.append((it, dias))
 
     # Deduplica pelo mesmo critério do sino: o certificado em N arquivos é 1 item.
@@ -447,6 +491,16 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
             {linhas}
           </table>"""
 
+    # "Você recebe porque é administrador" vira mentira assim que existe uma
+    # lista fixa — e é a única linha do e-mail que diz a quem reclamar de estar
+    # recebendo. Quem está numa lista digitada precisa saber que é isso.
+    motivo_do_envio = (
+        "Você recebe este resumo porque seu endereço está na lista de "
+        "destinatários configurada em Configuração &rsaquo; Alertas."
+        if lista_fixa
+        else "Você recebe este resumo porque tem perfil de administrador no portal."
+    )
+
     html_content = f"""
     <html>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f5f5f7; padding:20px; color:#1d1d1f;">
@@ -454,13 +508,13 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
           <h2 style="margin-top:0;">Resumo de certificados</h2>
           <p style="color:#6e6e73;margin-top:0;">
             Situação em {now.strftime('%d/%m/%Y')} — {len(vencidos_recentes)} vencido(s) nos últimos
-            {MARCOS_EXPIRACAO[0]} dias e {len(expirando)} a vencer nos próximos {MARCOS_EXPIRACAO[0]}.
+            {janela} dias e {len(expirando)} a vencer nos próximos {janela}.
           </p>
           {_bloco("Vencidos recentemente", linhas_venc, len(vencidos_recentes))}
           {_bloco("A vencer", linhas_exp, len(expirando))}
           <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
-            Você recebe este resumo porque tem perfil de administrador no portal.
-            Certificados vencidos há mais de {MARCOS_EXPIRACAO[0]} dias não entram aqui —
+            {motivo_do_envio}
+            Certificados vencidos há mais de {janela} dias não entram aqui —
             consulte a página Vencidos para a lista completa.
           </p>
         </div>
@@ -533,6 +587,10 @@ def trigger_all_alerts() -> Dict[str, Any]:
     
     # 4. Inicia processamento
     now = datetime.now(timezone.utc)
+    # Uma leitura só para o laço inteiro: os marcos não mudam no meio de uma
+    # execução, e reler por certificado seriam centenas de idas ao banco.
+    marcos = alertas_config.marcos_efetivos(getattr(settings, "alertas_marcos", ""))
+    janela = alertas_config.janela_dias(marcos)
     for it in itens:
         stats["processed_certs"] += 1
         fingerprint = it.get("fingerprint_sha256")
@@ -559,9 +617,9 @@ def trigger_all_alerts() -> Dict[str, Any]:
         if v_dt < now:
             tipo_alerta = "expired"
             chave_antispam = "expired"
-        elif 0 <= dias <= MARCOS_EXPIRACAO[0]:
+        elif 0 <= dias <= janela:
             tipo_alerta = "expiring"
-            chave_antispam = f"expiring:{_marco_expiracao(dias)}"
+            chave_antispam = f"expiring:{_marco_expiracao(dias, marcos)}"
 
         if not tipo_alerta:
             continue
