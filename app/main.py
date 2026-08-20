@@ -2717,7 +2717,7 @@ def colaborador_get_selecionados(token: auth.TokenData = Depends(require_auth)) 
     return {"documentos": docs, "total": len(docs)}
 
 
-@app.put("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_modulo("acompanhamento"))])
+@app.put("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_modulo("acompanhamento", permissoes.NIVEL_EDITAR))])
 def colaborador_put_selecionados(
     body: ColaboradorSelecaoBody, token: auth.TokenData = Depends(require_auth)
 ) -> dict:

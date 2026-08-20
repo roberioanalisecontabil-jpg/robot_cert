@@ -86,7 +86,7 @@ MODULOS_GOVERNADOS = (
 
 # Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
 # `ler`, e a tela nem oferece o terceiro.
-MODULOS_COM_ESCRITA = ("usuarios", "configuracao", "carteiras")
+MODULOS_COM_ESCRITA = ("usuarios", "configuracao", "carteiras", "acompanhamento")
 
 
 def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:
@@ -115,7 +115,14 @@ PADRAO: Dict[str, Dict[str, str]] = {
         "historico": NIVEL_LER,
         "vencidos": NIVEL_LER,
         "duplicidades": NIVEL_LER,
-        "acompanhamento": NIVEL_LER,
+        # `editar`, e nao `ler`: esta tela TEM escrita — a pessoa marca quais
+        # certificados quer acompanhar. Ate 20/08 o PUT ficava em `ler` porque a
+        # escrita e sobre ela mesma, e o resultado era um nivel chamado "So ver"
+        # que deixava editar. O nome mentia.
+        #
+        # Agora `ler` significa o que diz (ve os proprios certificados, nao muda
+        # a selecao) e o padrao concede `editar`, que e o comportamento de hoje.
+        "acompanhamento": NIVEL_EDITAR,
         # Editar porque montar carteira é a função do papel. O alcance — de quem
         # ele monta — continua sendo decidido pela liderança de departamento.
         "carteiras": NIVEL_EDITAR,
@@ -129,7 +136,14 @@ PADRAO: Dict[str, Dict[str, str]] = {
         "historico": NIVEL_LER,
         "vencidos": NIVEL_LER,
         "duplicidades": NIVEL_LER,
-        "acompanhamento": NIVEL_LER,
+        # `editar`, e nao `ler`: esta tela TEM escrita — a pessoa marca quais
+        # certificados quer acompanhar. Ate 20/08 o PUT ficava em `ler` porque a
+        # escrita e sobre ela mesma, e o resultado era um nivel chamado "So ver"
+        # que deixava editar. O nome mentia.
+        #
+        # Agora `ler` significa o que diz (ve os proprios certificados, nao muda
+        # a selecao) e o padrao concede `editar`, que e o comportamento de hoje.
+        "acompanhamento": NIVEL_EDITAR,
         "carteiras": NIVEL_NENHUM,
         "instalador": NIVEL_NENHUM,
         "usuarios": NIVEL_NENHUM,

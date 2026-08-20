@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=carteiras-na-matriz-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=nota-acompanhamento-2026-08" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -696,7 +696,7 @@
             historico:      ['Histórico', 'as varreduras anteriores'],
             vencidos:       ['Vencidos', 'os certificados fora da validade'],
             duplicidades:   ['Duplicidades', 'certificados repetidos'],
-            acompanhamento: ['Acompanhamento', 'os certificados da própria pessoa'],
+            acompanhamento: ['Acompanhamento', 'em "Só ver" a pessoa acompanha, mas não escolhe quais'],
             carteiras:      ['Carteiras', 'quais clientes cada operador instala'],
             instalador:     ['Instalador', 'o diagnóstico e o cofre'],
             usuarios:       ['Usuários', 'contas, departamentos e esta tela'],
@@ -765,7 +765,8 @@
                 const aviso = info.governado ? '' :
                     '<small class="perm-pendente">ainda não governado por esta tela</small>';
                 const soLeitura = (info.governado && info.niveis.length < 3) ?
-                    '<small class="perm-nota">só consulta — não há o que editar</small>' : '';
+                    '<small class="perm-nota">' +
+                    esc(par[2] || 'só consulta — não há o que editar') + '</small>' : '';
                 return '<tr role="row"><td class="perm-modulo">' + esc(par[0]) +
                        '<small>' + esc(par[1]) + '</small>' + soLeitura + aviso +
                        '</td>' + celulas + '</tr>';

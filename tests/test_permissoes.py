@@ -104,8 +104,15 @@ def test_padrao_reproduz_o_comportamento_de_hoje() -> None:
 
     # As telas de consulta ficam abertas a quem está autenticado, como hoje.
     for papel in ("gestor", "user"):
-        for modulo in ("inicio", "historico", "vencidos", "duplicidades", "acompanhamento"):
+        for modulo in ("inicio", "historico", "vencidos", "duplicidades"):
             assert permissoes.nivel_de(papel, modulo) == permissoes.NIVEL_LER
+
+    # Acompanhamento e a excecao, e o padrao concede `editar`: aquela tela tem
+    # escrita (a pessoa marca quais certificados acompanha) e o comportamento de
+    # hoje e poder marcar. Conceder so `ler` no padrao tiraria isso de todo
+    # mundo no deploy.
+    for papel in ("gestor", "user"):
+        assert permissoes.nivel_de(papel, "acompanhamento") == permissoes.NIVEL_EDITAR
 
 
 def test_matriz_para_papel_devolve_todos_os_modulos() -> None:
@@ -244,40 +251,60 @@ def test_semente_da_migration_e_identica_ao_padrao_do_codigo() -> None:
     """
     O SQL e o Python não podem divergir.
 
-    Se a semente da migration disser uma coisa e `PADRAO` outra, o portal se
-    comporta de um jeito antes de rodar a migration e de outro depois — e a
-    diferença apareceria como "mudou sozinho" para quem usa. Este teste é a
-    única coisa que amarra os dois arquivos.
+    Se o banco disser uma coisa e `PADRAO` outra, o portal se comporta de um
+    jeito antes de rodar a migration e de outro depois — e a diferença apareceria
+    como "mudou sozinho" para quem usa.
+
+    O que se compara é o ESTADO FINAL pretendido: a semente, mais os `update`
+    das migrations posteriores. A primeira versão comparava só a semente e
+    quebrou legitimamente quando `acompanhamento` passou de `ler` para `editar`
+    numa migration de correção — o alvo certo nunca foi o INSERT, e sim o que o
+    banco vai dizer quando tudo tiver rodado.
     """
     import re
     from pathlib import Path
 
-    sql_path = Path("supabase/pendentes/20260820100000_permissoes_por_papel.sql")
-    if not sql_path.is_file():  # migration já aplicada e movida para migrations/
-        sql_path = Path("supabase/migrations/20260820100000_permissoes_por_papel.sql")
-    assert sql_path.is_file(), "migration de permissões sumiu"
+    arquivos = sorted(
+        list(Path("supabase/migrations").glob("*permissoes*.sql"))
+        + list(Path("supabase/migrations").glob("*acompanhamento*.sql"))
+        + list(Path("supabase/pendentes").glob("*permissoes*.sql"))
+        + list(Path("supabase/pendentes").glob("*acompanhamento*.sql"))
+    )
+    assert arquivos, "as migrations de permissões sumiram"
 
-    sql = sql_path.read_text(encoding="utf-8")
-
-    semente: dict = {}
-    for papel, modulo, nivel in re.findall(r"\('(gestor|user)',\s*'(\w+)',\s*'(\w+)'", sql):
-        semente.setdefault(papel, {})[modulo] = nivel
+    estado: dict = {}
+    for caminho in arquivos:
+        sql = caminho.read_text(encoding="utf-8")
+        for papel, modulo, nivel in re.findall(
+            r"\('(gestor|user)',\s*'(\w+)',\s*'(\w+)'", sql
+        ):
+            estado.setdefault(papel, {})[modulo] = nivel
+        # `update ... set nivel = 'X' ... where modulo = 'Y' and nivel = 'Z'`
+        for novo, modulo, antigo in re.findall(
+            r"update\s+public\.permissoes\s+set\s+nivel\s*=\s*'(\w+)'"
+            r"[\s\S]*?where\s+modulo\s*=\s*'(\w+)'\s+and\s+nivel\s*=\s*'(\w+)'",
+            sql, re.I,
+        ):
+            for papel in estado:
+                if estado[papel].get(modulo) == antigo:
+                    estado[papel][modulo] = novo
 
     for papel in ("gestor", "user"):
         for modulo in permissoes.MODULOS:
-            assert semente[papel][modulo] == permissoes.PADRAO[papel][modulo], (
-                f"{papel}/{modulo}: SQL diz {semente[papel][modulo]!r}, "
+            assert estado[papel][modulo] == permissoes.PADRAO[papel][modulo], (
+                f"{papel}/{modulo}: SQL termina em {estado[papel][modulo]!r}, "
                 f"código diz {permissoes.PADRAO[papel][modulo]!r}"
             )
 
     # E o `check` do banco tem que aceitar exatamente os módulos que o código
     # conhece — nem mais (aceitaria lixo), nem menos (recusaria valor legítimo).
-    bloco = re.search(r"modulo\s+text not null check \(modulo in \(([^)]*)\)", sql, re.S)
+    base = next(c for c in arquivos if "permissoes_por_papel" in c.name)
+    bloco = re.search(
+        r"modulo\s+text not null check \(modulo in \(([^)]*)\)",
+        base.read_text(encoding="utf-8"), re.S,
+    )
     assert bloco, "o check de modulo sumiu da migration"
     assert set(re.findall(r"'(\w+)'", bloco.group(1))) == set(permissoes.MODULOS)
-
-
-# ── A guarda ligada em rota de verdade ──────────────────────────────────────
 
 def _token(papel: str) -> dict:
     from app import auth
@@ -702,3 +729,38 @@ def test_carteiras_mantem_os_dois_eixos(client, monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(HTTPException) as erro:
         _roda_guarda(_main.require_admin_ou_lider, "user")
     assert erro.value.status_code == 403
+
+
+def test_acompanhamento_ler_ve_mas_nao_escolhe(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    O nivel `ler` de Acompanhamento virou um controle de verdade.
+
+    Ate 20/08 o PUT dessa tela ficava em `ler`, porque a escrita e sobre a
+    propria pessoa — e o resultado era um nivel chamado "So ver" que deixava
+    editar. O cliente apontou que o nome mentia.
+
+    Agora `ler` significa o que diz: a pessoa acompanha os proprios
+    certificados e nao muda quais. `editar` e o padrao, para o comportamento de
+    hoje nao mudar.
+    """
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"user": {**permissoes.PADRAO["user"], "acompanhamento": permissoes.NIVEL_LER},
+                 "gestor": permissoes.PADRAO["gestor"]},
+    )
+    h = _token("user")
+    assert client.get("/api/colaborador/certificados/painel", headers=h).status_code != 403
+    assert client.put(
+        "/api/colaborador/certificados/selecionados",
+        json={"documentos": []}, headers=h,
+    ).status_code == 403, "`ler` deixou escolher — o nivel voltou a mentir"
+
+    # E com `editar`, escolhe.
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {"user": permissoes.PADRAO["user"], "gestor": permissoes.PADRAO["gestor"]},
+    )
+    assert client.put(
+        "/api/colaborador/certificados/selecionados",
+        json={"documentos": []}, headers=h,
+    ).status_code != 403
