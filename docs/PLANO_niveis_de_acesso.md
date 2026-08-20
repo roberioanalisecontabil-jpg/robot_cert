@@ -264,9 +264,16 @@ Regra que sai daí: **rota que uma máquina chama fica com
 de ligar cada módulo, conferir os chamadores em `agent/`, e não só em
 `templates/`.
 
-**Etapa 4 — a tela.**
-Aba em `/usuarios`, matriz 3 × 12, alimentada pela API da etapa 3. É a parte
-mais visível e a mais barata; vem por último de propósito.
+**Etapa 4 — a tela. ✅ FEITA em 20/08.**
+Aba "Níveis de acesso" em `/usuarios`: matriz **10 módulos × 2 papéis** (não 3 —
+admin não tem linha). Rótulos em português corrente ("Não entra", "Só ver",
+"Ver e editar"), célula alterada e não salva marcada em âmbar, e um aviso
+explicando por que o admin não aparece.
+
+`GET/PUT /api/permissoes` sob **`require_admin`**, e não sob o módulo Usuários:
+quem edita a matriz pode se dar qualquer acesso, então amarrá-la ao próprio
+módulo deixaria um gestor com escrita em Usuários se autoconceder Configuração e
+Instalador. Quem concede tem que estar acima do que concede.
 
 **Etapa 5 — o menu passa a ler da API** em vez do literal de
 `ui-common.js:62`, com o mesmo fallback de hoje se a chamada falhar (falha

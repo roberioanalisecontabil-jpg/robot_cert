@@ -1559,6 +1559,47 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
     return {"ok": True, "lideres": len(ids)}
 
 
+class PermissoesBody(BaseModel):
+    matriz: Dict[str, Dict[str, str]]
+
+
+# `require_admin`, e NAO `require_modulo("usuarios", editar)`. A diferenca e
+# elevacao de privilegio: quem edita a matriz pode se dar qualquer acesso, entao
+# amarrar isto ao proprio modulo Usuarios deixaria um gestor com escrita em
+# Usuarios se autoconceder Configuracao e Instalador. Quem concede tem que estar
+# acima do que concede.
+@app.get("/api/permissoes", dependencies=[Depends(require_admin)])
+def get_permissoes() -> dict:
+    """A matriz para a tela: o que cada papel configuravel alcanca hoje."""
+    try:
+        return {
+            "modulos": list(permissoes.MODULOS),
+            "niveis": list(permissoes.NIVEIS),
+            "papeis": list(permissoes.PAPEIS_CONFIGURAVEIS),
+            # Informativo: a tela mostra a coluna de admin travada, para
+            # responder "cade o admin?" antes de alguem perguntar.
+            "papeis_totais": list(permissoes.PAPEIS_TOTAIS),
+            "matriz": {
+                papel: permissoes.matriz_para_papel(papel)
+                for papel in permissoes.PAPEIS_CONFIGURAVEIS
+            },
+        }
+    except permissoes.PermissoesIndisponiveis as e:
+        raise HTTPException(status_code=503, detail=f"Nao foi possivel ler as permissoes: {e}")
+
+
+@app.put("/api/permissoes", dependencies=[Depends(require_admin)])
+def put_permissoes(body: PermissoesBody, token: auth.TokenData = Depends(require_auth)) -> dict:
+    """Grava a matriz inteira. Ver `permissoes.gravar` para o porque de inteira."""
+    try:
+        salva = permissoes.gravar(body.matriz, alterado_por=(token.email or ""))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except permissoes.PermissoesIndisponiveis as e:
+        raise HTTPException(status_code=503, detail=f"Nao foi possivel gravar: {e}")
+    return {"ok": True, "matriz": salva}
+
+
 @app.get("/api/health")
 def health() -> dict:
     """

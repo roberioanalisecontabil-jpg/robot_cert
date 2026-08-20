@@ -404,3 +404,74 @@ def test_ambiente_sem_api_key_continua_aberto(client) -> None:
     """
     for rota in ("/api/certificados/historico", "/api/colaborador/certificados/painel"):
         assert client.get(rota).status_code != 403, rota
+
+
+# ── A API da tela ───────────────────────────────────────────────────────────
+
+def test_editar_permissoes_exige_admin_e_nao_o_modulo_usuarios(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Quem concede tem que estar ACIMA do que concede.
+
+    Se a rota fosse `require_modulo("usuarios", "editar")`, um gestor com
+    escrita em Usuários se autoconcederia Configuração e Instalador em dois
+    cliques.
+
+    O teste dá a esse gestor exatamente esse acesso — `usuarios: editar` — e
+    exige 403 mesmo assim. Sem essa preparação o teste não provaria nada: com a
+    semente atual o gestor tem `usuarios: nenhum`, e as DUAS guardas recusam
+    igualmente. Foi o que uma verificação por mutação mostrou.
+    """
+    monkeypatch.setattr(
+        permissoes, "_matriz",
+        lambda: {
+            "gestor": {**permissoes.PADRAO["gestor"], "usuarios": permissoes.NIVEL_EDITAR},
+            "user": {**permissoes.PADRAO["user"], "usuarios": permissoes.NIVEL_EDITAR},
+        },
+    )
+    for papel in ("user", "gestor"):
+        h = _token(papel)
+        assert client.get("/api/permissoes", headers=h).status_code == 403, papel
+        assert client.put(
+            "/api/permissoes", json={"matriz": {}}, headers=h
+        ).status_code == 403, f"{papel} editou a matriz de permissoes"
+
+
+def test_get_permissoes_entrega_o_que_a_tela_precisa(client) -> None:
+    r = client.get("/api/permissoes", headers=_token("admin"))
+    assert r.status_code == 200
+    d = r.json()
+    assert set(d["modulos"]) == set(permissoes.MODULOS)
+    assert d["papeis"] == list(permissoes.PAPEIS_CONFIGURAVEIS)
+    assert d["papeis_totais"] == list(permissoes.PAPEIS_TOTAIS)
+    # `admin` nao vem como linha editavel: e o que impede a tela de oferecer
+    # uma coluna que trancaria o proprio administrador para fora.
+    assert "admin" not in d["matriz"]
+    for papel in permissoes.PAPEIS_CONFIGURAVEIS:
+        assert set(d["matriz"][papel]) == set(permissoes.MODULOS)
+
+
+def test_gravar_recusa_admin_modulo_invalido_e_matriz_incompleta() -> None:
+    with pytest.raises(ValueError, match="não configurável"):
+        permissoes.gravar({"admin": {m: "editar" for m in permissoes.MODULOS}})
+    with pytest.raises(ValueError, match="desconhecido"):
+        permissoes.gravar({"user": {"modulo-fantasma": "ler"}})
+    with pytest.raises(ValueError, match="incompleta"):
+        permissoes.gravar({"user": {"inicio": "ler"}, "gestor": {"inicio": "ler"}})
+
+
+def test_gravar_sem_banco_avisa_em_vez_de_fingir_que_salvou(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Sem Supabase nao ha onde gravar — e a tela precisa saber.
+
+    Retornar sucesso aqui seria pior que o erro: a pessoa fecharia a tela
+    achando que configurou, e a matriz continuaria a de antes.
+    """
+    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: False)
+    completa = {p: {m: "nenhum" for m in permissoes.MODULOS}
+                for p in permissoes.PAPEIS_CONFIGURAVEIS}
+    with pytest.raises(permissoes.PermissoesIndisponiveis):
+        permissoes.gravar(completa)

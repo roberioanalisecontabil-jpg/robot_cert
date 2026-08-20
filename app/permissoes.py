@@ -224,3 +224,63 @@ def matriz_para_papel(papel: str) -> Dict[str, str]:
         return {m: NIVEL_EDITAR for m in MODULOS}
     linha = _matriz().get(p, {})
     return {m: linha.get(m, NIVEL_NENHUM) for m in MODULOS}
+
+
+# ── Escrita ────────────────────────────────────────────────────────────────
+
+PAPEIS_CONFIGURAVEIS = ("gestor", "user")
+
+
+def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[str, Dict[str, str]]:
+    """
+    Grava a matriz inteira e devolve o que ficou valendo.
+
+    Recebe TUDO, e não só o que mudou. Escrita parcial abriria a possibilidade
+    de a tela mostrar dez linhas e gravar oito — e a diferença só apareceria
+    quando alguém reclamasse de um acesso que "não salvou".
+
+    `admin` é recusado explicitamente: ele não tem linha na tabela, e aceitar
+    uma aqui reabriria o engano que a ausência dela fecha (o administrador
+    tirando o próprio acesso a Usuários e ficando sem como voltar).
+    """
+    from app.settings_state import _supabase, supabase_configured
+
+    limpa: Dict[str, Dict[str, str]] = {}
+    for papel, linha in (matriz or {}).items():
+        p = str(papel).strip().lower()
+        if p not in PAPEIS_CONFIGURAVEIS:
+            raise ValueError(f"papel não configurável: {papel!r}")
+        for modulo, nivel in (linha or {}).items():
+            m, n = str(modulo).strip().lower(), str(nivel).strip().lower()
+            if m not in MODULOS:
+                raise ValueError(f"módulo desconhecido: {modulo!r}")
+            if n not in NIVEIS:
+                raise ValueError(f"nível desconhecido: {nivel!r}")
+            limpa.setdefault(p, {})[m] = n
+
+    faltando = [
+        f"{p}/{m}" for p in PAPEIS_CONFIGURAVEIS for m in MODULOS
+        if m not in limpa.get(p, {})
+    ]
+    if faltando:
+        raise ValueError("matriz incompleta: faltam " + ", ".join(faltando[:5]))
+
+    if not supabase_configured():
+        raise PermissoesIndisponiveis("sem Supabase configurado: não há onde gravar")
+    sb = _supabase()
+    if sb is None:
+        raise PermissoesIndisponiveis("cliente Supabase indisponível")
+
+    linhas = [
+        {"papel": p, "modulo": m, "nivel": n, "alterado_por": (alterado_por or "")[:120]}
+        for p, cols in limpa.items() for m, n in cols.items()
+    ]
+    try:
+        sb.table("permissoes").upsert(linhas, on_conflict="papel,modulo").execute()
+    except Exception as e:
+        raise PermissoesIndisponiveis(str(e)) from e
+
+    # Sem isto a mudança só valeria depois do TTL do cache — a pessoa salvaria,
+    # recarregaria a tela e veria o valor antigo por até 30 segundos.
+    invalidar_cache()
+    return {p: dict(cols) for p, cols in limpa.items()}

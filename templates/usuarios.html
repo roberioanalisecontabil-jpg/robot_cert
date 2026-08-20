@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=usuarios-linhas-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=niveis-de-acesso-2026-08" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -55,6 +55,20 @@
            linhas de inativo mediam 73px contra 60px das demais. A altura da
            linha nao pode depender do dado que ela carrega. */
         .user-table td[data-label="Nível"] { white-space: nowrap; }
+        /* Matriz de niveis de acesso. Modulos nas LINHAS e papeis nas colunas:
+           sao 10 modulos para 2 papeis, e a orientacao contraria daria uma
+           tabela de 10 colunas que nao cabe sem rolagem horizontal. */
+        .perm-tabela td, .perm-tabela th { vertical-align: middle; }
+        .perm-col { width: 12rem; }
+        .perm-modulo { font-weight: 600; }
+        .perm-modulo small { display: block; font-weight: 400; font-size: 0.78rem; color: var(--text-muted); }
+        .perm-tabela select { width: 100%; }
+        /* Celula alterada e nao salva: o amarelo de "expirando" reaproveitado
+           como "pendente", que e o mesmo sentido — algo que ainda vai acontecer. */
+        .perm-tabela select[data-sujo="1"] {
+            border-color: var(--warning);
+            background: var(--warning-bg);
+        }
         .row-actions { display: flex; flex-wrap: nowrap; gap: var(--sp-2);
                        align-items: center; justify-content: flex-end; }
         .btn-action { white-space: nowrap; }
@@ -173,6 +187,8 @@
                   aria-selected="true" aria-controls="painel-usuarios">Usuários</button>
           <button type="button" class="aba" id="aba-departamentos" role="tab"
                   aria-selected="false" aria-controls="painel-departamentos">Departamentos</button>
+          <button type="button" class="aba" id="aba-permissoes" role="tab"
+                  aria-selected="false" aria-controls="painel-permissoes">Níveis de acesso</button>
         </div>
 
         <section class="doc-block" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios">
@@ -255,6 +271,55 @@
               </div>
             </div>
         </section>
+
+        <section class="doc-block" id="painel-permissoes" role="tabpanel"
+                 aria-labelledby="aba-permissoes" hidden>
+          <h2>Níveis de acesso</h2>
+          <p class="hint" style="margin-bottom: var(--sp-4);">
+            O que cada perfil alcança, e até onde. <strong>Isto governa o servidor</strong>,
+            não só o menu: um perfil sem acesso recebe recusa mesmo digitando o endereço.
+          </p>
+
+          <div class="cg-banner cg-banner--info" style="margin-bottom: var(--sp-4);">
+            <span class="cg-banner__icon" aria-hidden="true">🔒</span>
+            <span class="cg-banner__text">
+              <strong>Administrador alcança tudo, sempre.</strong> Não aparece como coluna
+              editável de propósito — se aparecesse, seria possível remover o próprio acesso
+              a esta tela e não haveria como voltar.
+            </span>
+          </div>
+
+          <div id="permMsg"></div>
+
+          <div class="table-container" id="table-container-permissoes">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Matriz de níveis de acesso">
+              <table class="user-table perm-tabela" role="table">
+                <thead role="rowgroup">
+                  <tr role="row">
+                    <th role="columnheader">Módulo</th>
+                    <th role="columnheader" class="perm-col">Gestor</th>
+                    <th role="columnheader" class="perm-col">Operador</th>
+                  </tr>
+                </thead>
+                <tbody role="rowgroup" id="perm-corpo">
+                  <tr><td colspan="3" class="text-muted" style="font-size:0.85rem">Carregando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="toolbar__actions" style="margin-top: var(--sp-4);">
+            <button type="button" class="btn-action" id="perm-desfazer" disabled>Desfazer alterações</button>
+            <button type="button" class="btn-action primary" id="perm-salvar" disabled>Salvar</button>
+          </div>
+
+          <p class="hint" style="margin-top: var(--sp-3);">
+            <strong>Não entra</strong>: o módulo some do menu e as rotas recusam.
+            <strong>Só ver</strong>: entra e consulta, não altera nada.
+            <strong>Ver e editar</strong>: entra e altera.
+          </p>
+        </section>
+
     </main>
 
     <!-- Editar usuário.
@@ -594,17 +659,162 @@
         }
 
         // ── Abas ──────────────────────────────────────────────────────────
+        // Uma lista, e nao um `if` por aba: a versao anterior comparava com
+        // 'departamentos' e alternava dois paineis na mao. A terceira aba
+        // exigiria um segundo booleano, a quarta um terceiro, e cada uma
+        // acrescentaria quatro linhas que envelhecem juntas.
+        const ABAS = ['usuarios', 'departamentos', 'permissoes'];
+
         function trocarAba(qual) {
-            const ehDep = qual === 'departamentos';
-            document.getElementById('painel-usuarios').hidden = ehDep;
-            document.getElementById('painel-departamentos').hidden = !ehDep;
-            document.getElementById('aba-usuarios').classList.toggle('ativa', !ehDep);
-            document.getElementById('aba-departamentos').classList.toggle('ativa', ehDep);
-            document.getElementById('aba-usuarios').setAttribute('aria-selected', String(!ehDep));
-            document.getElementById('aba-departamentos').setAttribute('aria-selected', String(ehDep));
+            for (const nome of ABAS) {
+                const ativa = nome === qual;
+                document.getElementById('painel-' + nome).hidden = !ativa;
+                const botao = document.getElementById('aba-' + nome);
+                botao.classList.toggle('ativa', ativa);
+                botao.setAttribute('aria-selected', String(ativa));
+            }
+            if (qual === 'permissoes') carregarPermissoes();
         }
-        document.getElementById('aba-usuarios').addEventListener('click', () => trocarAba('usuarios'));
-        document.getElementById('aba-departamentos').addEventListener('click', () => trocarAba('departamentos'));
+        for (const nome of ABAS) {
+            document.getElementById('aba-' + nome)
+                .addEventListener('click', () => trocarAba(nome));
+        }
+
+        // ── Niveis de acesso ──────────────────────────────────────────────
+        //
+        // Os rotulos dos modulos vivem AQUI e nao na API: a API fala o
+        // vocabulario do codigo ('acompanhamento'), a tela fala o da sidebar
+        // ('Acompanhamento'). Traduzir no servidor misturaria as duas coisas, e
+        // renomear um item de menu viraria mudanca de contrato.
+        const PERM_ROTULOS = {
+            inicio:         ['Início', 'a listagem geral de certificados'],
+            dashboard:      ['Dashboard', 'os gráficos e a análise'],
+            historico:      ['Histórico', 'as varreduras anteriores'],
+            vencidos:       ['Vencidos', 'os certificados fora da validade'],
+            duplicidades:   ['Duplicidades', 'certificados repetidos'],
+            acompanhamento: ['Acompanhamento', 'os certificados da própria pessoa'],
+            carteiras:      ['Carteiras', 'quais clientes cada operador instala'],
+            instalador:     ['Instalador', 'o diagnóstico e o cofre'],
+            usuarios:       ['Usuários', 'contas, departamentos e esta tela'],
+            configuracao:   ['Configuração', 'pastas, alertas e SMTP'],
+        };
+        const PERM_NIVEIS = {
+            nenhum: 'Não entra',
+            ler: 'Só ver',
+            editar: 'Ver e editar',
+        };
+
+        let _permOriginal = null;   // o que veio do servidor
+        let _permAtual = null;      // o que esta na tela
+
+        function permMsg(texto, tipo) {
+            const el = document.getElementById('permMsg');
+            if (!texto) { el.innerHTML = ''; return; }
+            const classe = tipo === 'error' ? 'cg-banner--error'
+                         : tipo === 'success' ? 'cg-banner--info' : 'cg-banner--warning';
+            el.innerHTML = '<div class="cg-banner ' + classe + '" role="status">' +
+                '<span class="cg-banner__text">' + esc(texto) + '</span></div>';
+        }
+
+        async function carregarPermissoes() {
+            // Ja carregado: nao recarrega ao voltar para a aba, senao uma
+            // alteracao ainda nao salva seria descartada em silencio.
+            if (_permOriginal) return;
+            try {
+                const r = await fetch('/api/permissoes', { headers: getHeaders() });
+                if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+                const dados = await r.json();
+                _permOriginal = dados.matriz;
+                _permAtual = JSON.parse(JSON.stringify(dados.matriz));
+                renderPermissoes(dados);
+            } catch (e) {
+                permMsg('Não foi possível carregar os níveis de acesso: ' + e.message, 'error');
+                document.getElementById('perm-corpo').innerHTML =
+                    '<tr><td colspan="3" class="text-muted" style="font-size:0.85rem">—</td></tr>';
+            }
+        }
+
+        function renderPermissoes(dados) {
+            const corpo = document.getElementById('perm-corpo');
+            corpo.innerHTML = dados.modulos.map(function (mod) {
+                const par = PERM_ROTULOS[mod] || [mod, ''];
+                const celulas = dados.papeis.map(function (papel) {
+                    const atual = (_permAtual[papel] || {})[mod] || 'nenhum';
+                    const opcoes = dados.niveis.map(function (n) {
+                        return '<option value="' + n + '"' + (n === atual ? ' selected' : '') +
+                               '>' + (PERM_NIVEIS[n] || n) + '</option>';
+                    }).join('');
+                    return '<td><select class="form-control" data-papel="' + papel +
+                           '" data-modulo="' + mod + '" aria-label="' + esc(par[0]) +
+                           ' para ' + papel + '">' + opcoes + '</select></td>';
+                }).join('');
+                return '<tr role="row"><td class="perm-modulo">' + esc(par[0]) +
+                       '<small>' + esc(par[1]) + '</small></td>' + celulas + '</tr>';
+            }).join('');
+
+            corpo.querySelectorAll('select').forEach(function (sel) {
+                sel.addEventListener('change', function () {
+                    _permAtual[sel.dataset.papel][sel.dataset.modulo] = sel.value;
+                    marcarSujos();
+                });
+            });
+            marcarSujos();
+        }
+
+        /** Quais celulas mudaram e ainda nao foram salvas. */
+        function marcarSujos() {
+            let sujas = 0;
+            document.querySelectorAll('#perm-corpo select').forEach(function (sel) {
+                const mudou = _permOriginal[sel.dataset.papel][sel.dataset.modulo] !== sel.value;
+                // Atributo, e nao classe: o CSS ja seleciona por `data-sujo`, e
+                // o valor fica visivel no inspetor na hora de depurar.
+                if (mudou) { sel.setAttribute('data-sujo', '1'); sujas++; }
+                else { sel.removeAttribute('data-sujo'); }
+            });
+            document.getElementById('perm-salvar').disabled = sujas === 0;
+            document.getElementById('perm-desfazer').disabled = sujas === 0;
+            permMsg(sujas ? (sujas + ' alteração(ões) ainda não salva(s).') : '');
+            return sujas;
+        }
+
+        async function salvarPermissoes() {
+            const botao = document.getElementById('perm-salvar');
+            botao.disabled = true;
+            const rotulo = botao.textContent;
+            botao.textContent = 'Salvando…';
+            try {
+                const r = await fetch('/api/permissoes', {
+                    method: 'PUT',
+                    headers: getHeaders(true),
+                    body: JSON.stringify({ matriz: _permAtual }),
+                });
+                if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+                const dados = await r.json();
+                // O que o SERVIDOR devolveu vira a nova referencia, e nao o que
+                // a tela mandou: se ele normalizar algo, a tela passa a mostrar
+                // o que de fato vale.
+                _permOriginal = dados.matriz;
+                _permAtual = JSON.parse(JSON.stringify(dados.matriz));
+                marcarSujos();
+                permMsg('Níveis de acesso salvos. Quem já está logado passa a ver a mudança em até 30 segundos.', 'success');
+            } catch (e) {
+                permMsg('Não foi possível salvar: ' + e.message, 'error');
+                botao.disabled = false;
+            } finally {
+                botao.textContent = rotulo;
+            }
+        }
+
+        function desfazerPermissoes() {
+            _permAtual = JSON.parse(JSON.stringify(_permOriginal));
+            document.querySelectorAll('#perm-corpo select').forEach(function (sel) {
+                sel.value = _permOriginal[sel.dataset.papel][sel.dataset.modulo];
+            });
+            marcarSujos();
+        }
+
+        document.getElementById('perm-salvar').addEventListener('click', salvarPermissoes);
+        document.getElementById('perm-desfazer').addEventListener('click', desfazerPermissoes);
 
         // ── Departamentos ─────────────────────────────────────────────────
         function erroDoDep(texto) {
