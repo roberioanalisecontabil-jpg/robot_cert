@@ -8,16 +8,47 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=campos-e-dropzone-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=usuarios-linhas-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
       @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
       .cart-painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
-      .op-item { display: block; width: 100%; text-align: left; border: 1.5px solid transparent; background: transparent;
-                 border-radius: var(--radius-sm, 8px); padding: 0.6rem 0.7rem; cursor: pointer; color: var(--text); }
-      .op-item:hover { background: var(--bg); }
-      .op-item[aria-current="true"] { border-color: var(--ok-text); background: var(--bg); }
-      .op-item__meta { display: block; font-size: 0.76rem; color: var(--text-muted); margin-top: 0.15rem; }
+      /* Lista de operadores — reformulada em 19/08/2026 a partir de "as linhas
+         parecem flutuar". Elas flutuavam mesmo: eram oito <button> transparentes,
+         sem borda, sem divisoria e sem nada que as alinhasse entre si.
+
+         A resposta escolhida entre tres foi dar BORDAS AO CONTEINER: a lista
+         vira uma caixa com fio e rolagem propria, espelhando o `.transfer__lista`
+         que ja existe nesta mesma folha. Resolve o flutuar e o comprimento de
+         uma vez — 480 operadores nao esticam mais a pagina. */
+      .op-titulo { font-size: 1rem; margin: 0 0 var(--sp-3); }
+      .op-lista {
+        margin-top: var(--sp-3);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        max-height: 340px;
+        overflow-y: auto;
+        background: var(--bg);
+      }
+      .op-item {
+        display: block; width: 100%; text-align: left;
+        border: none; border-bottom: 0.5px solid var(--border); border-radius: 0;
+        background: transparent; color: var(--text); cursor: pointer;
+        font-family: inherit;
+        padding: 0.6rem 0.7rem;
+        transition: background-color var(--duration-fast) var(--ease-out);
+      }
+      .op-item:last-child { border-bottom: none; }
+      .op-item strong { display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 2px; }
+      .op-item__meta { display: block; font-size: 0.74rem; color: var(--text-muted); }
+      .op-item:hover { background: var(--surface); }
+      /* Selecionado em `--total-bg`, nao mais com borda `--ok-text`: verde e
+         estado de certificado neste sistema, e "o operador que estou vendo" e
+         navegacao. Ver "A Regra do Sinal Unico" no DESIGN.md. */
+      .op-item[aria-current="true"] { background: var(--total-bg); }
+      /* Offset NEGATIVO: dentro de uma caixa com rolagem, um anel para fora
+         fica cortado pela borda do conteiner. */
+      .op-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
       .doc-chip { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
                   padding: 0.5rem 0.6rem; border-bottom: 0.5px solid var(--border); }
       .doc-chip__trilha { font-size: 0.72rem; color: var(--text-muted); }
@@ -45,6 +76,32 @@
       .transfer__item:last-child { border-bottom: none; }
       .transfer__item__nome { min-width: 0; overflow-wrap: anywhere; }
       .transfer__vazio { padding: 0.9rem 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+      /* Selecao multipla + acoes de lote (19/08/2026). A linha inteira e o
+         alvo: clicar em qualquer ponto marca, e a marca aparece como ✓ à
+         esquerda. Nao ha mais botao por linha — mover UM agora custa dois
+         cliques (marcar, acionar) em troca de mover N com os mesmos dois. */
+      .transfer__item { cursor: pointer; user-select: none; }
+      .transfer__item:hover { background: var(--row-hover); }
+      .transfer__item.is-sel { background: var(--total-bg); }
+      .transfer__item.is-sel::before {
+        content: "✓"; color: var(--accent-text); font-weight: 700;
+        margin-right: var(--sp-2); flex-shrink: 0;
+      }
+      .transfer__item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+      .transfer__rodape {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: var(--sp-2); flex-wrap: wrap;
+        padding: var(--sp-2) 0.6rem; border-top: 1px solid var(--border);
+      }
+      .transfer__selecao { font-size: 0.72rem; font-weight: 600; color: var(--accent-text); }
+      .transfer__rodape__acoes { display: flex; gap: var(--sp-1); margin-left: auto; }
+      .transfer__acao { font-size: 0.72rem; padding: 0.25rem 0.6rem; display: inline-flex;
+                        align-items: center; gap: 4px; }
+      .transfer__acao svg { width: 14px; height: 14px; flex-shrink: 0; }
+      /* Desabilitado, e nao escondido: some so quando nao ha o que mover, e a
+         pessoa continua vendo que a acao existe. */
+      .transfer__acao:disabled { opacity: 0.4; cursor: not-allowed; }
+      .transfer__acao--todos { color: var(--text-muted); }
       /* Importar por planilha — faixa de arrastar e soltar.
          Escolhida entre três desenhos em 19/08/2026: bloco centralizado, duas
          colunas e esta. Ganhou porque abrir o painel acrescenta ~56px de
@@ -55,6 +112,16 @@
          do style.css, porque largura e decisao de layout desta tela — os 6
          campos do instalador dividem a classe e nao querem 100%. */
       .cart-painel .form-control { width: 100%; box-sizing: border-box; }
+      /* Reposta em 19/08/2026. O `<details>` tinha `style="margin-bottom:
+         var(--sp-4)"` e eu a perdi ao trocar o inline por classes no carbonize
+         anterior — os dois paineis ficaram encostados, e foi essa a queixa.
+
+         Volta em `--sp-6` e nao `--sp-4`: 16px era exatamente o padding INTERNO
+         dos cartoes, entao a distancia entre dois cartoes era igual ao respiro
+         dentro de cada um e nada dizia onde um acabava. Mora aqui, e nao na
+         secao de baixo, porque este elemento esta ACIMA da grade: empurrar por
+         ele desce as duas colunas juntas, e nao so a da esquerda. */
+      .cart-importar { margin-bottom: var(--sp-6); }
       .cart-importar__sumario { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
       .cart-importar__faixa { margin-top: var(--sp-3); display: flex; align-items: center;
                               gap: var(--sp-3); flex-wrap: wrap; }
@@ -101,8 +168,6 @@
       <div id="cartMsg"></div>
 
       <!-- Recolhido: importar é ação de quem já tem a lista pronta, não o
-           caminho comum. Aberto, empurraria os dois painéis para baixo. -->
-      <!-- Recolhido: importar é ação de quem já tem a lista pronta, não o
            caminho comum. Aberto, empurraria os dois painéis para baixo.
 
            A faixa foi escolhida entre três desenhos em 19/08/2026 justamente
@@ -140,10 +205,10 @@
 
       <div class="cart-layout">
         <section class="cart-painel">
-          <h2 style="font-size: 1rem; margin-bottom: 0.5rem;">Operadores</h2>
+          <h2 class="op-titulo">Operadores</h2>
           <label for="buscaOperador" class="cg-sr-only">Buscar operador</label>
           <input type="search" id="buscaOperador" class="form-control" placeholder="Buscar por nome ou e-mail" />
-          <div id="listaOperadores" style="margin-top: 0.6rem;">
+          <div id="listaOperadores" class="op-lista">
             <p class="text-muted" style="font-size: 0.85rem;">Carregando…</p>
           </div>
         </section>
@@ -181,19 +246,35 @@
               <section class="transfer__lado" aria-labelledby="tit-disponiveis">
                 <header class="transfer__cab">
                   <h3 id="tit-disponiveis">Disponíveis <span id="contaDisponiveis" class="text-muted"></span></h3>
-                  <button type="button" id="btnAddTodos" class="btn btn-secondary transfer__acao-lote" hidden></button>
                 </header>
-                <div class="transfer__lista" id="listaDisponiveis" role="list"
+                <div class="transfer__lista" id="listaDisponiveis" role="listbox" aria-multiselectable="true"
                      tabindex="0" aria-label="Clientes disponíveis para liberar"></div>
+                <footer class="transfer__rodape">
+                  <span class="transfer__selecao" id="selDisponiveis" hidden></span>
+                  <div class="transfer__rodape__acoes">
+                    <button type="button" id="btnLiberarSel" class="btn transfer__acao" data-lote="disponiveis:selecionados">
+                      Liberar<span data-conta></span> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg></button>
+                    <button type="button" id="btnAddTodos" class="btn transfer__acao transfer__acao--todos" data-lote="disponiveis:todos">
+                      Todos<span data-conta></span> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 19l7-7-7-7M4 19l7-7-7-7"/></svg></button>
+                  </div>
+                </footer>
               </section>
 
               <section class="transfer__lado" aria-labelledby="tit-carteira">
                 <header class="transfer__cab">
                   <h3 id="tit-carteira">Na carteira <span id="contaDocs" class="text-muted"></span></h3>
-                  <button type="button" id="btnRemoverTodos" class="btn btn-secondary transfer__acao-lote" hidden></button>
                 </header>
-                <div class="transfer__lista" id="listaCarteira" role="list"
+                <div class="transfer__lista" id="listaCarteira" role="listbox" aria-multiselectable="true"
                      tabindex="0" aria-label="Clientes na carteira desta pessoa"></div>
+                <footer class="transfer__rodape">
+                  <span class="transfer__selecao" id="selCarteira" hidden></span>
+                  <div class="transfer__rodape__acoes">
+                    <button type="button" id="btnRemoverSel" class="btn transfer__acao" data-lote="carteira:selecionados">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg><span data-conta></span> Remover</button>
+                    <button type="button" id="btnRemoverTodos" class="btn transfer__acao transfer__acao--todos" data-lote="carteira:todos">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 5l-7 7 7 7M20 5l-7 7 7 7"/></svg><span data-conta></span> Todos</button>
+                  </div>
+                </footer>
               </section>
             </div>
 
@@ -385,16 +466,66 @@
             (t.no_inventario === false ? " · <em>fora do inventário atual</em>" : "") +
             `</div>`
           : `<div class="doc-chip__trilha">${esc(x.documento)}</div>`;
-        return `<div class="transfer__item" role="listitem">
+        // Sem botao por linha desde 19/08: a LINHA e o alvo de selecao, e a
+        // acao vive no rodape do painel. `role="option"` + `aria-selected` e o
+        // par correto para uma lista de selecao multipla (o container e
+        // `role="listbox" aria-multiselectable`).
+        return `<div class="transfer__item" role="option" aria-selected="false" tabindex="0"
+                     data-doc="${esc(x.documento)}">
           <div class="transfer__item__nome">
             <div>${esc(x.nome || "(sem nome)")}</div>
             ${trilha}
           </div>
-          <button type="button" class="btn ${naCarteira ? "btn-secondary" : "btn-primary"}"
-                  data-doc="${esc(x.documento)}" style="font-size:0.75rem;padding:0.25rem 0.6rem"
-                  aria-label="${naCarteira ? "Remover" : "Liberar"} ${esc(x.nome || x.documento)}"
-                  >${naCarteira ? "Remover" : "Liberar"}</button>
         </div>`;
+      }
+
+      /** Documentos marcados em um dos lados. */
+      function selecionados(el) {
+        return [...el.querySelectorAll(".transfer__item.is-sel")].map((it) => it.dataset.doc);
+      }
+
+      /** Marca/desmarca uma linha e repinta os rotulos de lote. */
+      function alternarLinha(item) {
+        const ligado = !item.classList.contains("is-sel");
+        item.classList.toggle("is-sel", ligado);
+        item.setAttribute("aria-selected", ligado ? "true" : "false");
+        atualizarLote();
+      }
+
+      /**
+       * Reescreve contagem e estado dos quatro botoes de lote.
+       *
+       * Chamada sem argumentos quando so a selecao mudou; `renderTransfer`
+       * passa as listas filtradas, que sao a base do "Todos".
+       */
+      let _dispFiltrados = [];
+      let _cartFiltrados = [];
+      function atualizarLote(disp, cart) {
+        if (disp) _dispFiltrados = disp;
+        if (cart) _cartFiltrados = cart;
+
+        const elDisp = document.getElementById("listaDisponiveis");
+        const elCart = document.getElementById("listaCarteira");
+        const selD = selecionados(elDisp);
+        const selC = selecionados(elCart);
+
+        const rotulo = (id, n) => {
+          const b = document.getElementById(id);
+          b.disabled = !n;
+          b.querySelector("[data-conta]").textContent = n ? ` (${n})` : "";
+        };
+        rotulo("btnLiberarSel", selD.length);
+        rotulo("btnAddTodos", _dispFiltrados.length);
+        rotulo("btnRemoverSel", selC.length);
+        rotulo("btnRemoverTodos", _cartFiltrados.length);
+
+        const conta = (id, n) => {
+          const e = document.getElementById(id);
+          e.hidden = !n;
+          e.textContent = n ? `${n} selecionado${n > 1 ? "s" : ""}` : "";
+        };
+        conta("selDisponiveis", selD.length);
+        conta("selCarteira", selC.length);
       }
 
       /** Redesenha os dois lados a partir do universo, da carteira e do filtro. */
@@ -438,25 +569,12 @@
             // que ninguém saiba por quê.
             : `<p class="transfer__vazio">Carteira vazia — esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
 
-        elDisp.querySelectorAll("button[data-doc]").forEach((b) =>
-          b.addEventListener("click", () => atribuir([b.dataset.doc]))
-        );
-        elCart.querySelectorAll("button[data-doc]").forEach((b) =>
-          b.addEventListener("click", () => remover(b.dataset.doc))
-        );
-
-        // Ação em lote só aparece com filtro ativo: "liberar os 491" seria um
-        // clique com consequência grande demais para ficar sempre à mão.
-        const temFiltro = !!(document.getElementById("buscaDoc").value || "").trim();
-        const btnAdd = document.getElementById("btnAddTodos");
-        btnAdd.hidden = !(temFiltro && dispFiltrados.length > 1);
-        btnAdd.textContent = `Liberar os ${dispFiltrados.length} filtrados`;
-        btnAdd.onclick = () => atribuir(dispFiltrados.map((x) => x.documento));
-
-        const btnRem = document.getElementById("btnRemoverTodos");
-        btnRem.hidden = !(temFiltro && cartFiltrados.length > 1);
-        btnRem.textContent = `Remover os ${cartFiltrados.length} filtrados`;
-        btnRem.onclick = () => removerVarios(cartFiltrados.map((x) => x.documento));
+        // A acao em lote deixou de ser escondida atras do filtro e passou a
+        // dizer o tamanho do que faz: cada botao imprime a contagem que vai
+        // mover e desabilita quando nao ha nada. A guarda antiga existia para
+        // que "liberar os 491" nao fosse um clique distraido — o que a protegia
+        // era a MAGNITUDE ficar visivel, e ela agora esta no proprio rotulo.
+        atualizarLote(dispFiltrados, cartFiltrados);
 
         const dica = document.getElementById("dicaBusca");
         dica.textContent = _universoTruncado
@@ -466,6 +584,15 @@
 
       async function atribuir(documentos) {
         if (!documentos.length) return;
+        // Liberar em lote confirma; liberar um nao. A guarda antiga escondia o
+        // botao "liberar os 491" atras do filtro justamente para que a concessao
+        // em massa nao fosse um clique distraido — o botao agora e permanente,
+        // entao a protecao migrou para ca. A revogacao ja confirmava; sem isto,
+        // TIRAR acesso pediria confirmacao e DAR acesso a centenas nao pediria.
+        if (documentos.length > 1 && !confirm(
+          `Liberar ${documentos.length} clientes para esta pessoa?` +
+          `\n\nEla passa a conseguir instalar os certificados deles.`
+        )) return;
         try {
           const r = await fetch("/api/carteira", {
             method: "POST",
@@ -536,9 +663,15 @@
 
       async function removerVarios(documentos) {
         if (!documentos.length) return;
+        // Singular/plural: desde 19/08 a remocao de UM item tambem passa por
+        // aqui (a linha virou alvo de selecao e o botao por linha saiu), entao
+        // "Remover 1 clientes" seria o texto do caso mais comum.
+        const um = documentos.length === 1;
         if (!confirm(
-          `Remover ${documentos.length} clientes da carteira?\n\n` +
-          `A pessoa deixa de conseguir instalar os certificados deles.`
+          (um
+            ? `Remover este cliente da carteira?`
+            : `Remover ${documentos.length} clientes da carteira?`) +
+          `\n\nA pessoa deixa de conseguir instalar os certificados ${um ? "dele" : "deles"}.`
         )) return;
         // Uma chamada por documento: a rota de remoção é por documento, e
         // inventar um lote no servidor só para isto abriria uma segunda porta
@@ -562,22 +695,6 @@
         await Promise.all([carregarCarteira(), carregarOperadores()]);
       }
 
-      async function remover(documento) {
-        // Remover tira acesso de alguém que talvez esteja no meio de uma
-        // instalação — merece confirmação, como qualquer revogação.
-        if (!confirm(`Remover este cliente da carteira?\n\nA pessoa deixa de conseguir instalar os certificados dele.`)) return;
-        try {
-          const r = await fetch(
-            `/api/carteira/${encodeURIComponent(_selecionado.id)}/${encodeURIComponent(documento)}`,
-            { method: "DELETE", headers: getHeaders() }
-          );
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          msg("Cliente removido da carteira.", "success");
-          await Promise.all([carregarCarteira(), carregarOperadores()]);
-        } catch (e) {
-          msg("Não foi possível remover: " + e.message, "error");
-        }
-      }
 
       (function init() {
         // Sidebar por papel: ui-common.js (initSidebarPorPapel), que nasceu
@@ -585,6 +702,33 @@
         _papel = localStorage.getItem("user_role");
 
         document.getElementById("buscaOperador").addEventListener("input", renderOperadores);
+
+        // Delegacao: as linhas sao recriadas a cada `renderTransfer`, entao o
+        // listener mora no container e nao em cada uma.
+        ["listaDisponiveis", "listaCarteira"].forEach((id) => {
+          const el = document.getElementById(id);
+          el.addEventListener("click", (e) => {
+            const item = e.target.closest(".transfer__item");
+            if (item) alternarLinha(item);
+          });
+          // Espaco e Enter alternam, como num listbox de verdade.
+          el.addEventListener("keydown", (e) => {
+            if (e.key !== " " && e.key !== "Enter") return;
+            const item = e.target.closest(".transfer__item");
+            if (!item) return;
+            e.preventDefault();
+            alternarLinha(item);
+          });
+        });
+
+        document.getElementById("btnLiberarSel").addEventListener("click", () =>
+          atribuir(selecionados(document.getElementById("listaDisponiveis"))));
+        document.getElementById("btnAddTodos").addEventListener("click", () =>
+          atribuir(_dispFiltrados.map((x) => x.documento)));
+        document.getElementById("btnRemoverSel").addEventListener("click", () =>
+          removerVarios(selecionados(document.getElementById("listaCarteira"))));
+        document.getElementById("btnRemoverTodos").addEventListener("click", () =>
+          removerVarios(_cartFiltrados.map((x) => x.documento)));
         // Sem debounce: o filtro roda sobre a lista já em memória, não faz
         // requisição nenhuma — esperar 250ms a cada tecla só atrasaria.
         document.getElementById("buscaDoc").addEventListener("input", renderTransfer);

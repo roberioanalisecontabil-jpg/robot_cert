@@ -366,13 +366,27 @@ def test_botao_de_lote_esconde_de_verdade(html: str) -> None:
     assert re.search(r"\.transfer__acao-lote\[hidden\]\s*\{[^}]*display:\s*none", html)
 
 
-def test_lote_so_aparece_com_filtro(html: str) -> None:
+def test_lote_em_massa_nao_e_um_clique(html: str) -> None:
     """
-    Sem filtro, "liberar todos" seria conceder o acervo inteiro num clique.
-    A ação em lote existe para o resultado de uma busca, não para o universo.
+    Sem guarda, "liberar todos" seria conceder o acervo inteiro num clique.
+
+    Até 19/08/2026 a guarda era **esconder** o botão até haver filtro ativo. O
+    cliente pediu os botões de lote permanentes (setas de incluir/remover
+    todos), e a proteção migrou de esconder para *dizer e confirmar*. Este
+    teste trava as três afirmações que substituem a antiga:
+
+      1. `atribuir` confirma quando move mais de um documento — conceder acesso
+         em massa não pode ser um clique distraído;
+      2. `removerVarios` continua confirmando — revogar já pedia confirmação, e
+         seria incoerente tirar acesso com pergunta e dar sem nenhuma;
+      3. cada botão de lote imprime a contagem do que vai mover, então a
+         magnitude é legível ANTES do clique.
+
+    Trocar o mecanismo é permitido; ficar sem nenhum dos três não é.
     """
-    assert re.search(r"btnAdd\.hidden\s*=\s*!\(\s*temFiltro\s*&&", html)
-    assert re.search(r"btnRem\.hidden\s*=\s*!\(\s*temFiltro\s*&&", html)
+    assert re.search(r"documentos\.length\s*>\s*1\s*&&\s*!confirm\(", html),         "liberar em lote deixou de confirmar"
+    assert re.search(r"async function removerVarios[\s\S]{0,500}?!confirm\(", html),         "remover em lote deixou de confirmar"
+    assert re.search(r'querySelector\("\[data-conta\]"\)\.textContent', html),         "os botões de lote deixaram de imprimir a contagem do que movem"
 
 
 # ──────────────────────────────────────────────────────────────────────────
