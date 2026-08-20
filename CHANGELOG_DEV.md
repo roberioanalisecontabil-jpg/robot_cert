@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-20                  |
-| **Branch ativa**   | `main`, sincronizada com o origin (último: `c41782b`) |
+| **Data da última atualização** | 2026-08-20 (2ª sessão)      |
+| **Branch ativa**   | `main` (último: `8059ad9`; a migration de `notificacao_lida` precisa rodar antes do push) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Níveis de acesso por papel, ponta a ponta: matriz papel × módulo × nível, 46 rotas ligadas em 9 módulos, tela em `/usuarios` e o menu lendo a mesma matriz — 733 testes |
-| **Próxima tarefa** | Responder as três perguntas de `docs/PLANO_niveis_de_acesso.md` §5 (papel ou usuário; `editar` separado de `apagar`; trilha de auditoria da concessão) — nenhuma bloqueia, todas mudam a tabela. Segue pendente: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) e obter a `API_KEY` real |
+| **Última tarefa concluída** | Os 8 pontos do `Notificação.txt`: destinatários/marcos/periodicidade configuráveis, resumo único por colaborador, preferência por pessoa e "Li todos" no sino — 781 testes |
+| **Próxima tarefa** | Aplicar a migration `20260820220000_notificacao_lida.sql` e dar push. Depois: as três perguntas de `docs/PLANO_niveis_de_acesso.md` §5 (papel ou usuário; `editar` separado de `apagar`; trilha de auditoria). Segue pendente: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) e obter a `API_KEY` real |
 
 ---
 
@@ -41,6 +41,165 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-20 (2ª sessão) — A tela que dizia "salvo"
+
+**Objetivo da sessão:** os oito pontos de um `Notificação.txt` na área de
+trabalho do cliente. Quatro commits.
+
+**Dois dos oito já estavam prontos**, e dizer isso foi metade do valor da
+leitura. O envio de alerta por certificado acompanhado existe desde sempre em
+`trigger_all_alerts`; e "pesquisar sem perder a seleção" já funcionava — a
+seleção mora num `Set`, não nos checkboxes. Verificado na tela: marquei 3,
+busquei `zzzz` (zero resultados), o rodapé continuou em "3 certificados
+marcados".
+
+O fio da sessão foi outro, e não estava no arquivo: **três defeitos em que a
+interface afirmava algo que o servidor não tinha feito.**
+
+---
+
+#### Parte 1 — Ergonomia, e o `hidden` que não escondia (`a155fd3`)
+
+"Exportar PDF" e "Exportar Excel" viraram um gatilho com as opções num menu —
+`.menu-suspenso` no `style.css`, `<details>` nativo. E o painel de
+Acompanhamento ganhou os indicadores de vencidos / a vencer / ativos.
+
+Acrescentei um quarto card, **"Sem leitura"**, que só aparece quando há
+certificado em erro ou fora do padrão: sem ele a soma dos cards não fecharia
+com o total logo abaixo, e o certificado ilegível — o que mais precisa de
+atenção — seria o único invisível.
+
+**O teste que escrevi para isso encontrou um defeito antigo.** `[hidden]` vem
+da folha do navegador com especificidade ZERO: qualquer `.classe { display }`
+vence, e o atributo vira decoração. O projeto já tinha remendado isso **três
+vezes**, uma classe por vez — `.barra-selecao`, `.dup-path-tooltip` e agora os
+cards. A quarta vítima apareceu na varredura dos templates: o campo **"Senha
+inicial"** do modal de usuários, desenhado também ao EDITAR alguém.
+
+Medido no navegador: `offsetHeight` de **68px** com o atributo presente. O autor
+escreveu `hidden = true` e um comentário explicando o porquê — e a linha nunca
+teve efeito. Um segundo comentário, sobre validação nativa "porque o campo fica
+oculto na edição", raciocinava sobre um estado que não existia.
+
+Não muda senha de ninguém (o `PUT` não envia o campo), e é por isso que é ruim:
+quem digitasse uma senha nova ali receberia "Usuário atualizado" e acreditaria.
+
+Uma regra global `[hidden] { display: none !important }` no lugar dos três
+remendos. O `!important` **é** a razão de ela existir.
+
+---
+
+#### Parte 2 — Os alertas saem do código para a tela (`1c834b6`)
+
+Os pontos 1 e 8 do arquivo eram o mesmo pedido. `app/alertas_config.py` guarda
+as regras como funções puras: a validação que a tela usa para RECUSAR é a mesma
+que o job usa para INTERPRETAR.
+
+**Vazio é "padrão", nunca "desligado"** — convenção herdada de
+`PortalSettings`. Valor ilegível também cai no padrão, mas **só no job**: a tela
+recusa com 422 e diz qual pedaço está errado. Cair no padrão é a decisão certa
+para quem roda sem ninguém olhando, e péssima como resposta a quem acabou de
+digitar `30,15,cinco`.
+
+Os marcos passaram de fixos a configuráveis por escolha do cliente, entre três
+opções apresentadas. O padrão continua 30/15/7/1.
+
+**Dois defeitos encontrados no caminho.**
+
+**(1) Campo omitido no PUT significava "apague".** O `test_config_instalador.py`
+já previa a direção inversa — uma rota parcial zerando o SMTP — e resolveu com
+uma rota própria. Ninguém olhou o espelho: os dois formulários de
+`/configuracao` mandam 11 campos e nenhum manda os três do instalador, então
+**salvar as PASTAS devolvia template de nome, TTL e retenção ao padrão**. `None`
+passa a significar "não mexe" — a mesma semântica que `smtp_password` já usava
+neste modelo.
+
+**(2) A tela dizia "salvo" sobre gravação que falhou.** `save_settings` escrevia
+o arquivo local e só REGISTRAVA a falha do Supabase — mas `load_settings`
+prefere o Supabase, então o valor ia para um arquivo que ninguém lê.
+
+Encontrado aplicando esta própria funcionalidade: `PGRST204`, migration ausente,
+e a tela anunciando "Configurações SMTP salvas com sucesso!". Agora **503 com o
+motivo real**.
+
+---
+
+#### Parte 3 — Um resumo por pessoa, e a preferência dela (`2d7ef25`)
+
+O administrador ganhou resumo consolidado em 09/08 com a justificativa escrita
+na própria função: *"enviar um e-mail por certificado geraria centenas de
+mensagens"*. O colaborador continuou recebendo **um por certificado**.
+
+Não era decisão de desenho: **o código que agrupa morava dentro da função dos
+admins**, e o colaborador não passava por lá. Extraí o construtor primeiro, com
+a suíte verde antes e depois, e só então mudei o comportamento.
+
+Doze certificados no mesmo dia: antes doze mensagens, agora uma — e o teste
+confirma que ela contém os doze.
+
+**A preferência guarda as RECUSAS, não as aceitações.** Guardar o que a pessoa
+aceita pareceria mais direto e teria um defeito silencioso: marco acrescentado
+depois nunca chegaria a quem já tivesse salvo, sem nada indicando isso. Pelo
+mesmo motivo `notificar_email` nasce TRUE — se nascesse desmarcado, toda a base
+pararia de receber no dia do deploy, em silêncio.
+
+---
+
+#### Parte 4 — "Li todos" (`8059ad9`)
+
+Esconde **o aviso**, não o certificado. A marca é por par (certificado, marco),
+com a mesma chave que o e-mail usa para decidir se manda reforço: quem lê
+"faltam 30 dias" volta a ver o certificado aos 15 e no vencimento.
+
+Um "li todos" que silencia para sempre desliga um alarme sem a pessoa perceber.
+É o teste que justifica o desenho inteiro.
+
+Quem decide o que marcar é o **servidor**, e marca o acionável INTEIRO e não os
+50 do dropdown — senão o badge ficaria aceso e o botão pareceria quebrado.
+
+**O sino do admin continua mostrando tudo**, por decisão do cliente entre três
+opções. A alternativa deixaria o portal sem ninguém vendo os certificados
+vencendo caso o admin não selecionasse nada. Registrado em código, para não
+parecer descuido depois.
+
+---
+
+#### Armadilhas registradas
+
+- **Mutação que não matou nenhum teste.** Parecia teste fraco; tinha caído em
+  `_enviar_resumo_admins`, não na função sob teste. No lugar certo, mata. É a
+  segunda vez que isto acontece em duas sessões — a hipótese "a mutação está no
+  lugar errado" não é opcional.
+- **`retencao = int(...)` e `validar_template_nome(body...)` existem DUAS vezes
+  no `main.py`.** O `count == 1` dos scripts pegou as duas. Passei a recortar a
+  fatia da função antes de substituir.
+- **Medi o painel com o navegador reportando viewport 0×0:** caixa de 2px,
+  prazos empilhados, tudo transbordando. Só não saí consertando CSS porque medi
+  um vizinho antes — a página inteira estava colapsada. Em aba nova: 1149px, os
+  quatro prazos na mesma linha. **Medir um elemento que se sabe correto é o que
+  separa "meu componente quebrou" de "a medição quebrou".**
+- **A ponte do navegador falhou de três formas diferentes** numa sessão:
+  screenshots com erro de parâmetro, renderer congelado, e o viewport zerado.
+  Nenhuma delas se anuncia como falha da ferramenta.
+
+---
+
+#### Estado ao fim
+
+`main` em `8059ad9`, **781 testes**. Três migrations nesta sessão; duas
+aplicadas, e `20260820220000_notificacao_lida.sql` **pendente** — o push está
+segurado até ela rodar.
+
+**Duas das três migrations EXIGEM rodar antes do deploy**, e a razão não é a
+leitura: `save_settings` e `save_colaborador_selecao` fazem upsert da linha
+INTEIRA, e o PostgREST recusa o upsert todo se uma coluna não existir
+(`PGRST204`). Sem elas, salvar QUALQUER configuração — e salvar SELEÇÃO DE
+CERTIFICADO — para de funcionar. A de `20260820180000` nasceu com o cabeçalho
+dizendo "ordem-independente"; **o cabeçalho estava errado e foi corrigido no
+próprio arquivo.**
 
 ---
 

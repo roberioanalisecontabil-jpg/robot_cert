@@ -50,6 +50,16 @@ def get_active_alerts(
 
     - Admins: alertas de todos os certificados do sistema.
     - Users: apenas dos certificados que selecionaram para acompanhar.
+
+    A assimetria é DELIBERADA, e foi reconfirmada em 20/08/2026 quando o
+    "Li todos" foi implementado. A alternativa — o sino do admin seguir a
+    seleção dele em Acompanhamento — foi considerada e recusada: um admin que
+    não selecionou nada ficaria com o sino vazio, e ninguém no portal veria os
+    certificados vencendo. A visão geral é o que faz este sino servir para
+    administrar o portal em vez de só a própria carteira.
+
+    O acúmulo que motivou a dúvida (58 itens) é problema de leitura, e quem
+    resolve isso é o "Li todos" — não estreitar o escopo.
     """
     from app.main import _list_certificados_payload, _parse_iso_utc
 
