@@ -254,6 +254,27 @@
   box-sizing: border-box;
 }
 
+/* `hidden` esconde de verdade — em qualquer elemento, de qualquer classe.
+
+   O `[hidden] { display: none }` da folha do NAVEGADOR tem especificidade zero:
+   qualquer `.classe { display: flex }` o vence, e o atributo vira decoração. O
+   elemento continua desenhado, o JS que o "escondeu" não reclama, e o defeito
+   só aparece para quem olha a tela.
+
+   Este projeto já remendou isso três vezes, uma classe por vez —
+   `.barra-selecao`, `.dup-path-tooltip` e os cards do painel —, e da quarta a
+   vítima foi o campo "Senha inicial", que aparecia ao EDITAR um usuário: o
+   autor escreveu `hidden = true` e um comentário explicando por quê, e a linha
+   nunca teve efeito nenhum.
+
+   O `!important` é a razão de a regra existir: sem ele ela perde para as mesmas
+   classes de novo e não resolve nada. É o remédio padrão dos resets conhecidos,
+   e o critério para usá-lo aqui é simples — `hidden` não é sugestão de estilo,
+   é a declaração de que o elemento não está na página. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -629,6 +650,107 @@ textarea:focus-visible {
      campos de data), sem isto ela encostava à esquerda — e as telas irmãs
      ficavam com os mesmos botões em cantos diferentes. */
   justify-content: flex-end;
+}
+
+/* Menu suspenso de barra de ferramentas.
+
+   `<details>` nativo, e não um popover em JS: abre por teclado, fecha no Esc e
+   participa da ordem de foco sem uma linha de script. O mesmo raciocínio da
+   `.acoes-menu` de /usuarios, que é este componente em escala de linha de
+   tabela — quando aparecer um terceiro caso, os dois viram um só.
+
+   Fechar ao escolher e ao clicar fora continua sendo trabalho do JS: nenhuma
+   das duas coisas o `<details>` faz sozinho. */
+.menu-suspenso {
+  position: relative;
+}
+
+.menu-suspenso > summary {
+  list-style: none;
+  cursor: pointer;
+  /* `summary` não é `<button>`: NADA da regra base abaixo chega até aqui, e a
+     caixa precisa ser escrita inteira — inclusive o `font-family`, sem o qual
+     o gatilho sairia em Arial ao lado de botões em Inter. */
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+/* Os dois seletores do triângulo padrão: WebKit usa o pseudo-elemento antigo,
+   o resto usa `::marker`. Faltando um, o glifo reaparece em metade dos
+   navegadores. */
+.menu-suspenso > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-suspenso > summary::marker {
+  content: "";
+}
+
+.menu-suspenso > summary:hover {
+  background-color: var(--bg);
+  opacity: 0.9;
+}
+
+.menu-suspenso > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.menu-suspenso > summary:active {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+}
+
+.menu-suspenso__seta {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.menu-suspenso[open] > summary .menu-suspenso__seta {
+  transform: rotate(180deg);
+}
+
+.menu-suspenso__lista {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  /* Acima do cabeçalho fixo da tabela (9) e da barra de seleção (5); abaixo do
+     dropdown do sino (100), que é da topbar e nunca divide espaço com este. */
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-1);
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-suspenso__lista button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  border-radius: var(--radius-sm);
+}
+
+.menu-suspenso__lista button:hover:not(:disabled) {
+  background: var(--bg);
 }
 
 button {
@@ -1155,7 +1277,8 @@ body.sidebar-collapsed .sidebar-nav a {
 }
 
 .dup-path-tooltip[hidden] {
-  display: none !important;
+  /* `display: none !important` saiu: virou regra global. `pointer-events` fica,
+     porque é sobre o estado NÃO escondido do tooltip. */
   pointer-events: none;
 }
 
@@ -1428,7 +1551,8 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   z-index: 5;
 }
 
-.barra-selecao[hidden] { display: none; }
+/* `display` saiu daqui: a regra global `[hidden]` acima resolve, e manter a
+   cópia local sugeriria que este componente tem uma necessidade própria. */
 
 .barra-selecao__acoes { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 

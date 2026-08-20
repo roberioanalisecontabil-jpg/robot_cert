@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=instalador-na-matriz-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=menu-exportar-e-indicadores-2026-08" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -65,6 +65,68 @@
       </div>
 
       <section id="sec-painel">
+        <!-- Os mesmos cards do Inicio, com os mesmos tokens: quem acompanha 8
+             certificados nao deveria ter de contar linhas para saber quantos
+             ja venceram. Seguem o filtro de busca, como os do Inicio seguem o
+             deles — com a busca vazia, que e o caso normal, o numero e o da
+             selecao inteira. -->
+        <div class="cards-grid" id="painel-indicadores">
+          <div class="dashboard-card card-vencidos">
+            <div class="card-info">
+              <span class="card-title">Vencidos</span>
+              <span class="card-number" id="ind-vencidos">0</span>
+            </div>
+            <div class="card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="dashboard-card card-expirando">
+            <div class="card-info">
+              <span class="card-title">A vencer</span>
+              <span class="card-number" id="ind-expirando">0</span>
+              <span class="card-subtitle">Próximos 30 dias</span>
+            </div>
+            <div class="card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="dashboard-card card-validos">
+            <div class="card-info">
+              <span class="card-title">Ativos</span>
+              <span class="card-number" id="ind-ativos">0</span>
+            </div>
+            <div class="card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Quarto card, escondido enquanto for zero. Erro, fora do padrao e
+               "nao encontrado no inventario" nao cabem em nenhum dos tres
+               acima; sem ele a soma dos cards nao fecharia com o total da linha
+               abaixo, e o certificado ilegivel — o que MAIS precisa de atencao —
+               seria o unico invisivel. -->
+          <div class="dashboard-card card-sem-padrao" id="card-ind-sem-leitura" hidden>
+            <div class="card-info">
+              <span class="card-title">Sem leitura</span>
+              <span class="card-number" id="ind-sem-leitura">0</span>
+              <span class="card-subtitle">Erro ou fora do padrão</span>
+            </div>
+            <div class="card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
         <div class="toolbar">
           <div class="toolbar__actions">
             <label for="busca-painel" class="cg-sr-only">Buscar no painel por nome ou documento</label>
@@ -298,6 +360,34 @@
       });
     }
 
+    /**
+     * Os quatro indicadores acima da tabela.
+     *
+     * Conta a partir do `status` que o SERVIDOR ja calculou (`vencido`,
+     * `expirando`, `ativo`, ...) e nao de `dias_restantes`: a regra dos 30 dias
+     * e de `_painel_docs_selecionados`, e recalcula-la aqui criaria uma segunda
+     * definicao de "a vencer" que envelheceria em ritmo proprio — o portal ja
+     * teve esse defeito com o filtro do Inicio.
+     */
+    function atualizarIndicadores(itens) {
+      let vencidos = 0, expirando = 0, ativos = 0, semLeitura = 0;
+      for (const it of itens) {
+        switch (it.status) {
+          case "vencido": vencidos++; break;
+          case "expirando": expirando++; break;
+          case "ativo": ativos++; break;
+          // erro, fora_do_padrao e nao_encontrado: o certificado existe na
+          // selecao mas o inventario nao consegue ler a validade dele.
+          default: semLeitura++; break;
+        }
+      }
+      document.getElementById("ind-vencidos").textContent = vencidos;
+      document.getElementById("ind-expirando").textContent = expirando;
+      document.getElementById("ind-ativos").textContent = ativos;
+      document.getElementById("ind-sem-leitura").textContent = semLeitura;
+      document.getElementById("card-ind-sem-leitura").hidden = semLeitura === 0;
+    }
+
     async function carregarPainel(refetch) {
       if (refetch !== false) {
         const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
@@ -313,6 +403,10 @@
             onAction: () => void carregarPainel(true),
           });
           cgPageNavHide("paginacao-toolbar-colab-painel", "pag-ul-colab-painel", "pag-meta-colab-painel");
+          // Esconder, e nao zerar: "0 vencidos" numa tela que falhou em
+          // carregar afirma algo que ninguem verificou. O mesmo criterio do
+          // badge do sino, que limpa a contagem em vez de manter a anterior.
+          document.getElementById("painel-indicadores").hidden = true;
           return;
         }
         const j = await r.json();
@@ -328,6 +422,8 @@
       const start = (painelPagina - 1) * psz;
       const pageRows = filteredPainelItens.slice(start, start + psz);
       document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados` + (q ? " (filtrado)" : "");
+      document.getElementById("painel-indicadores").hidden = false;
+      atualizarIndicadores(filteredPainelItens);
 
       if (!pageRows.length) {
         renderEmptyRow("tbody-painel", 5, q ? {

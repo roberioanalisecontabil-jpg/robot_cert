@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=instalador-na-matriz-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=menu-exportar-e-indicadores-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       /* .barra-selecao migrou para o style.css em 18/08: a aba Seleção do
          Acompanhamento passou a usá-la, e regra compartilhada dentro do
@@ -118,8 +118,19 @@
               style="padding: 0.55rem 0.7rem; min-width: 260px; border: 1px solid var(--border); border-radius: 8px;"
             />
             <button type="button" id="btn-refresh" class="primary">Atualizar tabela</button>
-            <button type="button" id="btn-export-pdf">Exportar PDF</button>
-            <button type="button" id="btn-export-excel">Exportar Excel</button>
+            <!-- Um gatilho no lugar de dois. Exportar é UMA intenção; o formato
+                 é detalhe dela, e ocupava metade da fila de ações competindo em
+                 peso com "Atualizar tabela", que é o que se usa o tempo todo. -->
+            <details class="menu-suspenso" id="menu-exportar">
+              <summary aria-haspopup="menu">
+                Exportar
+                <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </summary>
+              <div class="menu-suspenso__lista" role="menu">
+                <button type="button" role="menuitem" id="btn-export-excel">Planilha (Excel)</button>
+                <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -811,8 +822,20 @@
         paginaAtual = 1;
         carregarTabela();
       });
-      document.getElementById("btn-export-excel").addEventListener("click", () => void exportarExcelVisivel());
-      document.getElementById("btn-export-pdf").addEventListener("click", () => void exportarPdfVisivel());
+      // `<details>` abre e fecha no gatilho, mas NAO fecha ao escolher uma
+      // opcao nem ao clicar fora — as duas coisas ficam por conta daqui. Sem a
+      // primeira, o menu seguiria aberto por cima da tabela enquanto o download
+      // acontece, e pareceria que o clique nao foi registrado.
+      const menuExportar = document.getElementById("menu-exportar");
+      function exportarPor(fn) {
+        menuExportar.open = false;
+        void fn();
+      }
+      document.getElementById("btn-export-excel").addEventListener("click", () => exportarPor(exportarExcelVisivel));
+      document.getElementById("btn-export-pdf").addEventListener("click", () => exportarPor(exportarPdfVisivel));
+      document.addEventListener("click", (ev) => {
+        if (menuExportar.open && !menuExportar.contains(ev.target)) menuExportar.open = false;
+      });
       document.getElementById("filtro-status").addEventListener("change", () => {
         paginaAtual = 1;
         carregarTabela();
