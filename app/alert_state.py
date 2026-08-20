@@ -299,9 +299,45 @@ def _so_de_ativos(selecoes: Dict[str, List[str]]) -> Dict[str, List[str]]:
     return permitidas
 
 
-def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
+class PreferenciaDeAlerta:
+    """O que uma pessoa acompanha e como quer ser avisada.
+
+    Nasce com o comportamento de sempre — recebe, e recebe todos os marcos —
+    porque a instalação que nunca abriu a tela precisa continuar igual. Ver
+    a migration 20260820200000 para o porquê do default e do "ignorados".
     """
-    Mapeia user_email -> lista de documentos (dígitos), só de usuários ativos.
+
+    __slots__ = ("documentos", "notificar", "ignorados")
+
+    def __init__(
+        self,
+        documentos: List[str],
+        notificar: bool = True,
+        ignorados: tuple = (),
+    ) -> None:
+        self.documentos = documentos
+        self.notificar = notificar
+        self.ignorados = ignorados
+
+    def aceita_marco(self, marco: int) -> bool:
+        return self.notificar and marco not in self.ignorados
+
+
+def _envolver(selecoes: Dict[str, List[str]]) -> Dict[str, "PreferenciaDeAlerta"]:
+    """Arquivo local não guarda preferência: tudo com o padrão de fábrica.
+
+    É o caminho de quando não há Supabase — instalação pequena ou banco fora
+    do ar. Ninguém deixa de receber por isso.
+    """
+    return {email: PreferenciaDeAlerta(docs) for email, docs in selecoes.items()}
+
+
+def _get_selecoes_com_preferencia() -> Dict[str, "PreferenciaDeAlerta"]:
+    """
+    Mapeia user_email -> o que a pessoa acompanha e como quer ser avisada.
+
+    Uma leitura só: separar a preferência numa segunda consulta dobraria as
+    idas ao banco num job que já é o mais pesado do portal.
 
     O filtro por usuário ativo é a parte que faltava. Os destinatários dos
     alertas de vencimento saíam desta tabela sem nenhuma consulta a `users`:
@@ -316,18 +352,18 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
     """
     client = _supabase()
     if not client:
-        return _so_de_ativos(_load_colaborador_file_dict())
+        return _envolver(_so_de_ativos(_load_colaborador_file_dict()))
 
     try:
         r = (
             client.table("colaborador_cert_selecoes")
-            .select("user_id, documentos")
+            .select("user_id, documentos, notificar_email, alerta_marcos_ignorados")
             .execute()
         )
         linhas = r.data or []
     except Exception as e:
         logger.warning(f"Falha ao ler seleções de colaboradores no Supabase, usando local: {e}")
-        return _so_de_ativos(_load_colaborador_file_dict())
+        return _envolver(_so_de_ativos(_load_colaborador_file_dict()))
 
     ativas = _linhas_ativas()
     if ativas is None:
@@ -376,7 +412,15 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
         if not destino:
             descartadas.append(uid)
             continue
-        permitidas[destino] = [str(x).strip() for x in docs if str(x).strip()]
+        permitidas[destino] = PreferenciaDeAlerta(
+            documentos=[str(x).strip() for x in docs if str(x).strip()],
+            # `.get` com default: a coluna pode não existir ainda (migration
+            # pendente), e ausência tem de significar o comportamento antigo.
+            notificar=bool(row.get("notificar_email", True)),
+            ignorados=alertas_config.marcos_ignorados(
+                str(row.get("alerta_marcos_ignorados") or "")
+            ),
+        )
 
     if descartadas:
         logger.info(
@@ -390,6 +434,15 @@ def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
             sem_identidade,
         )
     return permitidas
+
+
+def _get_todos_colaboradores_selecoes() -> Dict[str, List[str]]:
+    """Só os documentos, para quem não se importa com a preferência."""
+    return {
+        email: pref.documentos
+        for email, pref in _get_selecoes_com_preferencia().items()
+    }
+
 
 def _linha_resumo(cert: Dict[str, Any], dias: int, cor: str) -> str:
     nome = html.escape(str(cert.get("nome") or cert.get("display_name") or "Sem nome"))
@@ -408,6 +461,92 @@ def _linha_resumo(cert: Dict[str, Any], dias: int, cor: str) -> str:
         f'<td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;color:{cor};'
         f'white-space:nowrap;">{quando}</td></tr>'
     )
+
+
+def _dedup_por_certificado(pares):
+    """O certificado em N arquivos vira 1 item — mesmo critério do sino."""
+    vistos, saida = set(), []
+    for it, d in pares:
+        k = it.get("fingerprint_sha256") or f"{it.get('nome')}|{it.get('not_after')}"
+        if k in vistos:
+            continue
+        vistos.add(k)
+        saida.append((it, d))
+    return saida
+
+
+def _separar_por_situacao(itens, now: datetime, janela: int):
+    """Divide em (a vencer, vencidos recentes), já deduplicado e ordenado."""
+    expirando, vencidos = [], []
+    for it in itens:
+        venc_iso = it.get("not_after")
+        if not venc_iso:
+            continue
+        try:
+            v_dt = datetime.fromisoformat(str(venc_iso).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        dias = (v_dt.date() - now.date()).days
+        if v_dt >= now and 0 <= dias <= janela:
+            expirando.append((it, dias))
+        elif v_dt < now and abs(dias) <= janela:
+            vencidos.append((it, dias))
+    return (
+        sorted(_dedup_por_certificado(expirando), key=lambda p: p[1]),
+        sorted(_dedup_por_certificado(vencidos), key=lambda p: -p[1]),
+    )
+
+
+def _montar_resumo(expirando, vencidos, now: datetime, janela: int, motivo: str):
+    """(assunto, html) do resumo — o mesmo para o admin e para o colaborador.
+
+    Estava dentro de `_enviar_resumo_admins`, e foi de lá que veio a diferença
+    de tratamento que este commit corrige: o admin recebia UM e-mail com tudo,
+    e o colaborador recebia UM POR CERTIFICADO. Não por decisão de desenho —
+    porque o código que agrupa morava num lugar onde só o admin passava.
+    """
+    linhas_venc = "".join(_linha_resumo(c, d, "#ff3b30") for c, d in vencidos)
+    linhas_exp = "".join(_linha_resumo(c, d, "#b35c00") for c, d in expirando)
+
+    def _bloco(titulo: str, linhas: str, total: int) -> str:
+        if not linhas:
+            return ""
+        return f"""
+          <h3 style="font-size:15px;margin:22px 0 8px;">{titulo} ({total})</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Nome</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">CNPJ/CPF</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Situação</th>
+            </tr>
+            {linhas}
+          </table>"""
+
+    html_content = f"""
+    <html>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f5f5f7; padding:20px; color:#1d1d1f;">
+        <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid #e5e5ea;">
+          <h2 style="margin-top:0;">Resumo de certificados</h2>
+          <p style="color:#6e6e73;margin-top:0;">
+            Situação em {now.strftime('%d/%m/%Y')} — {len(vencidos)} vencido(s) nos últimos
+            {janela} dias e {len(expirando)} a vencer nos próximos {janela}.
+          </p>
+          {_bloco("Vencidos recentemente", linhas_venc, len(vencidos))}
+          {_bloco("A vencer", linhas_exp, len(expirando))}
+          <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
+            {motivo}
+            Certificados vencidos há mais de {janela} dias não entram aqui —
+            consulte a página Vencidos para a lista completa.
+          </p>
+        </div>
+      </body>
+    </html>
+    """
+    subject = (
+        f"Resumo de certificados — {len(expirando)} a vencer, "
+        f"{len(vencidos)} vencidos recentemente"
+    )
+    return subject, html_content
 
 
 def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) -> Dict[str, Any]:
@@ -440,56 +579,13 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
     janela = alertas_config.janela_dias(marcos)
     lista_fixa = bool(fixos)
 
-    expirando, vencidos_recentes = [], []
-    for it in itens:
-        venc_iso = it.get("not_after")
-        if not venc_iso:
-            continue
-        try:
-            v_dt = datetime.fromisoformat(str(venc_iso).replace("Z", "+00:00"))
-        except Exception:
-            continue
-        dias = (v_dt.date() - now.date()).days
-        if v_dt >= now and 0 <= dias <= janela:
-            expirando.append((it, dias))
-        elif v_dt < now and abs(dias) <= janela:
-            vencidos_recentes.append((it, dias))
-
-    # Deduplica pelo mesmo critério do sino: o certificado em N arquivos é 1 item.
-    def _dedup(pares):
-        vistos, saida = set(), []
-        for it, d in pares:
-            k = it.get("fingerprint_sha256") or f"{it.get('nome')}|{it.get('not_after')}"
-            if k in vistos:
-                continue
-            vistos.add(k)
-            saida.append((it, d))
-        return saida
-
-    expirando = sorted(_dedup(expirando), key=lambda p: p[1])
-    vencidos_recentes = sorted(_dedup(vencidos_recentes), key=lambda p: -p[1])
+    expirando, vencidos_recentes = _separar_por_situacao(itens, now, janela)
 
     if not expirando and not vencidos_recentes:
         logger.info("Resumo para administradores não enviado: nada dentro da janela de ação.")
         return out
 
     hoje = now.date().isoformat()
-    linhas_venc = "".join(_linha_resumo(c, d, "#ff3b30") for c, d in vencidos_recentes)
-    linhas_exp = "".join(_linha_resumo(c, d, "#b35c00") for c, d in expirando)
-
-    def _bloco(titulo: str, linhas: str, total: int) -> str:
-        if not linhas:
-            return ""
-        return f"""
-          <h3 style="font-size:15px;margin:22px 0 8px;">{titulo} ({total})</h3>
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <tr>
-              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Nome</th>
-              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">CNPJ/CPF</th>
-              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Situação</th>
-            </tr>
-            {linhas}
-          </table>"""
 
     # "Você recebe porque é administrador" vira mentira assim que existe uma
     # lista fixa — e é a única linha do e-mail que diz a quem reclamar de estar
@@ -500,30 +596,8 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
         if lista_fixa
         else "Você recebe este resumo porque tem perfil de administrador no portal."
     )
-
-    html_content = f"""
-    <html>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f5f5f7; padding:20px; color:#1d1d1f;">
-        <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid #e5e5ea;">
-          <h2 style="margin-top:0;">Resumo de certificados</h2>
-          <p style="color:#6e6e73;margin-top:0;">
-            Situação em {now.strftime('%d/%m/%Y')} — {len(vencidos_recentes)} vencido(s) nos últimos
-            {janela} dias e {len(expirando)} a vencer nos próximos {janela}.
-          </p>
-          {_bloco("Vencidos recentemente", linhas_venc, len(vencidos_recentes))}
-          {_bloco("A vencer", linhas_exp, len(expirando))}
-          <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
-            {motivo_do_envio}
-            Certificados vencidos há mais de {janela} dias não entram aqui —
-            consulte a página Vencidos para a lista completa.
-          </p>
-        </div>
-      </body>
-    </html>
-    """
-    subject = (
-        f"Resumo de certificados — {len(expirando)} a vencer, "
-        f"{len(vencidos_recentes)} vencidos recentemente"
+    subject, html_content = _montar_resumo(
+        expirando, vencidos_recentes, now, janela, motivo_do_envio
     )
 
     for admin_email in admins:
@@ -564,6 +638,8 @@ def trigger_all_alerts() -> Dict[str, Any]:
         "alerts_sent": 0,
         "skipped_already_sent": 0,
         "skipped_no_recipient_email": 0,
+        "skipped_optout": 0,
+        "skipped_marco_dispensado": 0,
         "errors": 0,
         "alerts_disabled": not settings.smtp_alerts_enabled,
         "smtp_configured": bool(settings.smtp_host and settings.smtp_user)
@@ -583,7 +659,7 @@ def trigger_all_alerts() -> Dict[str, Any]:
     itens = payload.get("itens") or []
     
     # 3. Carrega seleções de colaboradores
-    selecoes = _get_todos_colaboradores_selecoes()
+    selecoes = _get_selecoes_com_preferencia()
     
     # 4. Inicia processamento
     now = datetime.now(timezone.utc)
@@ -591,141 +667,116 @@ def trigger_all_alerts() -> Dict[str, Any]:
     # execução, e reler por certificado seriam centenas de idas ao banco.
     marcos = alertas_config.marcos_efetivos(getattr(settings, "alertas_marcos", ""))
     janela = alertas_config.janela_dias(marcos)
+    # ── O que sai para cada pessoa ─────────────────────────────────────────
+    #
+    # Antes: um e-mail POR CERTIFICADO. Quem acompanha 12 e via todos cruzarem
+    # os 30 dias no mesmo dia recebia 12 mensagens — enquanto o administrador,
+    # desde 09/08, recebe UMA com tudo. Não era decisão de desenho: o código
+    # que agrupa morava dentro do resumo dos admins, e o colaborador não
+    # passava por lá.
+    #
+    # A chave do antispam continua sendo por (certificado, marco, destinatário):
+    # o agrupamento muda quantos e-mails saem, não o que faz um aviso repetir.
+    # Um resumo é enviado quando há pelo menos um par ainda não avisado, e
+    # TODOS os pares daquele resumo são marcados de uma vez.
+    pendentes: Dict[str, List[tuple]] = {}
+
     for it in itens:
         stats["processed_certs"] += 1
         fingerprint = it.get("fingerprint_sha256")
         if not fingerprint:
             continue
-            
+
         venc_iso = it.get("not_after")
         if not venc_iso:
             continue
-            
+
         try:
-            # Parsing data de validade
             v_dt = datetime.fromisoformat(venc_iso.replace("Z", "+00:00"))
         except Exception:
             continue
-            
-        # Determina tipo de alerta e a chave antispam.
-        # Para "expiring" a chave inclui o marco (30/15/7/1), de modo que cada
-        # limiar dispara um reforço. Para "expired" continua uma única chave:
-        # um certificado vencido há dois anos não deve cobrar todo dia.
+
+        # Determina o marco e a chave antispam.
+        # Para "expiring" a chave inclui o marco, de modo que cada limiar
+        # dispara um reforço. Para "expired" continua uma única chave: um
+        # certificado vencido há dois anos não deve cobrar todo dia.
         dias = (v_dt.date() - now.date()).days
-        tipo_alerta = None
-        chave_antispam = None
         if v_dt < now:
-            tipo_alerta = "expired"
+            marco = 0  # "vencido" não é um marco de antecedência
             chave_antispam = "expired"
         elif 0 <= dias <= janela:
-            tipo_alerta = "expiring"
-            chave_antispam = f"expiring:{_marco_expiracao(dias, marcos)}"
-
-        if not tipo_alerta:
+            marco = _marco_expiracao(dias, marcos)
+            chave_antispam = f"expiring:{marco}"
+        else:
             continue
-            
-        # Acha todos os destinatários monitorando este documento
+
         doc_digitos = "".join(c for c in (it.get("documento_numero") or "") if c.isdigit())
         if not doc_digitos:
-            # Caso o CNPJ/CPF não esteja em formato puro
             doc_digitos = "".join(c for c in (it.get("documento_formatado") or "") if c.isdigit())
-            
-        destinatarios = []
-        for email, docs in selecoes.items():
-            # Limpa cada documento para comparar apenas os dígitos
-            docs_clean = ["".join(c for c in d if c.isdigit()) for d in docs]
-            if doc_digitos in docs_clean:
-                destinatarios.append(email)
-                
-        # Se não há destinatários
-        if not destinatarios:
-            continue
-            
-        for dest in destinatarios:
-            email_dest = dest.strip()
+
+        for email, pref in selecoes.items():
+            email_dest = (email or "").strip()
             if not email_dest:
                 stats["skipped_no_recipient_email"] += 1
-                logger.warning(f"Certificado {it.get('nome')} exige alerta mas o destinatário está sem e-mail.")
                 continue
-                
-            # Verifica antispam
+
+            docs_clean = ["".join(c for c in d if c.isdigit()) for d in pref.documentos]
+            if doc_digitos not in docs_clean:
+                continue
+
+            # Preferência da pessoa. O vencido (marco 0) só depende do opt-in:
+            # dispensar o aviso de "faltam 15 dias" é razoável, e nunca saber
+            # que venceu é outra coisa — quem não quiser nada desliga tudo.
+            if not pref.notificar:
+                stats["skipped_optout"] += 1
+                continue
+            if marco and marco in pref.ignorados:
+                stats["skipped_marco_dispensado"] += 1
+                continue
+
             if _is_alert_already_sent(fingerprint, chave_antispam, email_dest, venc_iso):
                 stats["skipped_already_sent"] += 1
                 continue
 
-            # Prepara e-mail.
-            # `nome`/`documento` vêm do CN do certificado — conteúdo controlado
-            # por quem gera o .pfx. Escapado antes de entrar no HTML.
-            nome_cert = html.escape(
-                str(it.get("nome") or it.get("display_name") or "Certificado Digital")
+            pendentes.setdefault(email_dest, []).append(
+                (it, dias, fingerprint, chave_antispam, venc_iso)
             )
-            doc_fmt = html.escape(
-                str(it.get("documento_formatado") or it.get("documento_numero") or "Sem documento")
+
+    # ── Um resumo por pessoa ───────────────────────────────────────────────
+    for email_dest, pares in pendentes.items():
+        expirando, vencidos = _separar_por_situacao([p[0] for p in pares], now, janela)
+        if not expirando and not vencidos:
+            continue
+
+        subject, html_content = _montar_resumo(
+            expirando,
+            vencidos,
+            now,
+            janela,
+            "Você recebe este resumo pelos certificados que escolheu acompanhar. "
+            "Para mudar isso, use a página Acompanhamento do portal.",
+        )
+        try:
+            send_smtp_email(
+                host=settings.smtp_host,
+                port=settings.smtp_port,
+                user=settings.smtp_user,
+                password_enc=settings.smtp_password_encrypted,
+                use_tls=settings.smtp_use_tls,
+                use_ssl=settings.smtp_use_ssl,
+                from_email=settings.smtp_from_email,
+                to_email=email_dest,
+                subject=subject,
+                html_content=html_content,
             )
-            subject = ""
-            html_content = ""
-            
-            if tipo_alerta == "expired":
-                subject = f"⚠️ ALERTA: Certificado Vencido - {nome_cert}"
-                html_content = f"""
-                <html>
-                  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f7; padding: 20px; color: #1d1d1f;">
-                    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e5e5ea;">
-                      <h2 style="color: #ff3b30; margin-top: 0;">⚠️ Certificado Vencido</h2>
-                      <p>Olá,</p>
-                      <p>Identificamos que o certificado digital que você está acompanhando venceu.</p>
-                      <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
-                      <table style="width: 100%; border-collapse: collapse;">
-                        <tr><td style="padding: 6px 0; font-weight: 600;">Nome:</td><td>{nome_cert}</td></tr>
-                        <tr><td style="padding: 6px 0; font-weight: 600;">CNPJ/CPF:</td><td>{doc_fmt}</td></tr>
-                        <tr><td style="padding: 6px 0; font-weight: 600; color: #ff3b30;">Vencimento:</td><td style="color: #ff3b30;">{v_dt.strftime('%d/%m/%Y')}</td></tr>
-                      </table>
-                      <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
-                      <p style="font-size: 13px; color: #86868b; margin-bottom: 0;">Por favor, providencie a renovação do certificado o quanto antes para evitar interrupção nos serviços.</p>
-                    </div>
-                  </body>
-                </html>
-                """
-            else:
-                subject = f"⏳ ALERTA: Certificado Expirando em {dias} dias - {nome_cert}"
-                html_content = f"""
-                <html>
-                  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f7; padding: 20px; color: #1d1d1f;">
-                    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e5e5ea;">
-                      <h2 style="color: #ff9500; margin-top: 0;">⏳ Certificado Próximo ao Vencimento</h2>
-                      <p>Olá,</p>
-                      <p>O certificado digital que você acompanha está prestes a expirar.</p>
-                      <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
-                      <table style="width: 100%; border-collapse: collapse;">
-                        <tr><td style="padding: 6px 0; font-weight: 600;">Nome:</td><td>{nome_cert}</td></tr>
-                        <tr><td style="padding: 6px 0; font-weight: 600;">CNPJ/CPF:</td><td>{doc_fmt}</td></tr>
-                        <tr><td style="padding: 6px 0; font-weight: 600; color: #ff9500;">Vencimento:</td><td style="color: #ff9500;">{v_dt.strftime('%d/%m/%Y')} ({dias} dias restantes)</td></tr>
-                      </table>
-                      <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
-                      <p style="font-size: 13px; color: #86868b; margin-bottom: 0;">Recomendamos iniciar o processo de renovação em breve.</p>
-                    </div>
-                  </body>
-                </html>
-                """
-                
-            try:
-                send_smtp_email(
-                    host=settings.smtp_host,
-                    port=settings.smtp_port,
-                    user=settings.smtp_user,
-                    password_enc=settings.smtp_password_encrypted,
-                    use_tls=settings.smtp_use_tls,
-                    use_ssl=settings.smtp_use_ssl,
-                    from_email=settings.smtp_from_email,
-                    to_email=email_dest,
-                    subject=subject,
-                    html_content=html_content
-                )
-                stats["alerts_sent"] += 1
-                _record_sent_alert(fingerprint, chave_antispam, email_dest, venc_iso)
-            except Exception as e:
-                stats["errors"] += 1
-                logger.error(f"Falha ao enviar e-mail de alerta para {email_dest}: {e}")
+            stats["alerts_sent"] += 1
+            # Só depois do envio bem-sucedido: marcar antes faria uma falha de
+            # SMTP silenciar aquele certificado até o próximo marco.
+            for _it, _dias, fp, chave, venc in pares:
+                _record_sent_alert(fp, chave, email_dest, venc)
+        except Exception as e:
+            stats["errors"] += 1
+            logger.error(f"Falha ao enviar resumo de alerta para {email_dest}: {e}")
 
     # Resumo consolidado para administradores.
     stats.update(_enviar_resumo_admins(settings, itens, now))

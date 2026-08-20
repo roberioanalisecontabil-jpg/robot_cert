@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=alertas-configuraveis-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=preferencia-do-colaborador-2026-08" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -45,6 +45,61 @@
       height: 2px;
       background-color: var(--accent);
       border-radius: 2px;
+    }
+
+    /* Preferência de aviso. `<details>` fechado por padrão: é uma decisão que
+       se toma uma vez, e aberta empurraria a tabela — que é o que a pessoa
+       veio ver. */
+    .pref-alerta {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      margin-bottom: 1.25rem;
+    }
+    .pref-alerta > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding: 0.7rem 0.9rem;
+      border-radius: var(--radius-md);
+    }
+    .pref-alerta > summary::-webkit-details-marker { display: none; }
+    .pref-alerta > summary::marker { content: ""; }
+    .pref-alerta > summary:hover { background: var(--bg); }
+    .pref-alerta > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .pref-alerta__titulo { font-weight: 600; font-size: 0.9rem; }
+    .pref-alerta__estado { font-size: 0.8rem; color: var(--text-muted); }
+    .pref-alerta__corpo {
+      padding: 0 0.9rem 0.9rem;
+      border-top: 1px dashed var(--border);
+      padding-top: 0.9rem;
+    }
+    .pref-alerta__linha {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.9rem; cursor: pointer;
+    }
+    .pref-alerta__marcos {
+      border: 0; padding: 0.9rem 0 0; margin: 0;
+    }
+    .pref-alerta__marcos legend {
+      font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.03em; padding: 0;
+    }
+    #pref-marcos {
+      display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0.5rem 0;
+    }
+    #pref-marcos label {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.88rem; cursor: pointer;
+    }
+    /* Desabilitado quando o aviso está desligado: as caixas de prazo não
+       significam nada nesse estado, e deixá-las clicáveis sugeriria que sim. */
+    .pref-alerta__marcos[disabled] { opacity: 0.5; }
+    .pref-alerta__acoes {
+      display: flex; align-items: center; gap: 0.75rem;
+      flex-wrap: wrap; margin-top: 0.9rem;
     }
   </style>
 </head>
@@ -126,6 +181,37 @@
             </div>
           </div>
         </div>
+
+        <!-- A preferência mora ao lado da lista a que se refere: é sobre
+             ESTES certificados, e não uma configuração geral do portal. -->
+        <details class="pref-alerta" id="pref-alerta">
+          <summary>
+            <span class="pref-alerta__titulo">Aviso por e-mail</span>
+            <span class="pref-alerta__estado" id="pref-estado">—</span>
+          </summary>
+          <div class="pref-alerta__corpo">
+            <p class="hint" id="pref-indisponivel" hidden></p>
+
+            <label class="pref-alerta__linha">
+              <input type="checkbox" id="chk-pref-notificar" />
+              <span>Quero receber aviso dos certificados que acompanho</span>
+            </label>
+
+            <fieldset class="pref-alerta__marcos" id="pref-marcos-campo">
+              <legend>Avisar quando faltarem</legend>
+              <div id="pref-marcos"></div>
+              <p class="hint">
+                O aviso de vencimento chega de qualquer forma enquanto a caixa acima
+                estiver marcada — desmarcar um prazo dispensa só o lembrete de antecedência.
+              </p>
+            </fieldset>
+
+            <div class="pref-alerta__acoes">
+              <button type="button" id="btn-pref-salvar" class="primary" disabled>Salvar preferência</button>
+              <span class="hint" id="pref-msg" role="status"></span>
+            </div>
+          </div>
+        </details>
 
         <div class="toolbar">
           <div class="toolbar__actions">
@@ -388,6 +474,121 @@
       document.getElementById("card-ind-sem-leitura").hidden = semLeitura === 0;
     }
 
+    // ── Preferência de aviso por e-mail ──────────────────────────────────
+    //
+    // A tela monta uma caixa por marco QUE O PORTAL DISPARA, e não uma lista
+    // fixa: se o administrador mudar 30/15/7/1 para 30/15/5, é isso que
+    // aparece aqui. E o que se grava são os prazos DISPENSADOS — assim um
+    // marco novo entra ligado para quem já tinha salvo a preferência, em vez
+    // de nunca chegar.
+    let _prefOriginal = null;
+
+    async function carregarPreferencia() {
+      try {
+        const r = await fetch("/api/colaborador/alertas/preferencia", { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        _prefOriginal = d;
+        renderPreferencia(d);
+      } catch (e) {
+        // Some em vez de mostrar um controle que não salva. Não é a tarefa da
+        // página, e um formulário quebrado ao lado da tabela sugeriria que o
+        // acompanhamento inteiro está com problema.
+        document.getElementById("pref-alerta").hidden = true;
+      }
+    }
+
+    function renderPreferencia(d) {
+      document.getElementById("chk-pref-notificar").checked = !!d.notificar_email;
+
+      const ignorados = new Set(
+        String(d.marcos_ignorados || "").split(",").map((x) => x.trim()).filter(Boolean)
+      );
+      document.getElementById("pref-marcos").innerHTML = (d.marcos_do_portal || [])
+        .map(function (m) {
+          const marcado = ignorados.has(String(m)) ? "" : " checked";
+          return '<label><input type="checkbox" data-marco="' + m + '"' + marcado +
+                 '> ' + m + (m === 1 ? " dia" : " dias") + "</label>";
+        })
+        .join("");
+
+      // Sem SMTP configurado a preferência é guardada, mas não produz e-mail
+      // nenhum — dizer isso é mais honesto do que deixar a pessoa esperando.
+      const aviso = document.getElementById("pref-indisponivel");
+      aviso.hidden = !!d.envio_ativo;
+      aviso.textContent = d.envio_ativo
+        ? ""
+        : "O envio automático está desligado no portal. Sua escolha fica guardada e passa a valer quando um administrador ligar.";
+
+      atualizarEstadoPref();
+    }
+
+    function atualizarEstadoPref() {
+      const liga = document.getElementById("chk-pref-notificar").checked;
+      document.getElementById("pref-marcos-campo").disabled = !liga;
+
+      const marcados = Array.from(
+        document.querySelectorAll("#pref-marcos input[data-marco]")
+      ).filter((c) => c.checked).length;
+
+      document.getElementById("pref-estado").textContent = !liga
+        ? "desligado"
+        : marcados + (marcados === 1 ? " prazo" : " prazos") + " + vencimento";
+
+      document.getElementById("btn-pref-salvar").disabled = !sujoPref();
+    }
+
+    function ignoradosDaTela() {
+      return Array.from(document.querySelectorAll("#pref-marcos input[data-marco]"))
+        .filter((c) => !c.checked)
+        .map((c) => c.getAttribute("data-marco"))
+        .join(",");
+    }
+
+    function sujoPref() {
+      if (!_prefOriginal) return false;
+      const notificar = document.getElementById("chk-pref-notificar").checked;
+      if (notificar !== !!_prefOriginal.notificar_email) return true;
+      // Compara como conjunto: a ordem das caixas não é uma alteração.
+      const atual = new Set(ignoradosDaTela().split(",").filter(Boolean));
+      const antes = new Set(
+        String(_prefOriginal.marcos_ignorados || "").split(",").map((x) => x.trim()).filter(Boolean)
+      );
+      if (atual.size !== antes.size) return true;
+      for (const v of atual) if (!antes.has(v)) return true;
+      return false;
+    }
+
+    async function salvarPreferencia() {
+      const btn = document.getElementById("btn-pref-salvar");
+      const msg = document.getElementById("pref-msg");
+      btn.disabled = true;
+      msg.textContent = "Salvando…";
+      try {
+        const r = await fetch("/api/colaborador/alertas/preferencia", {
+          method: "PUT",
+          headers: getHeaders(true),
+          body: JSON.stringify({
+            notificar_email: document.getElementById("chk-pref-notificar").checked,
+            marcos_ignorados: ignoradosDaTela(),
+          }),
+        });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        // O que o SERVIDOR devolveu vira a nova referência: se ele normalizar
+        // algo, a tela passa a mostrar o que de fato vale.
+        _prefOriginal = await r.json();
+        renderPreferencia(_prefOriginal);
+        msg.textContent = "Preferência salva.";
+      } catch (e) {
+        msg.textContent = "Não foi possível salvar: " + e.message;
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("chk-pref-notificar").addEventListener("change", atualizarEstadoPref);
+    document.getElementById("pref-marcos").addEventListener("change", atualizarEstadoPref);
+    document.getElementById("btn-pref-salvar").addEventListener("click", salvarPreferencia);
+
     async function carregarPainel(refetch) {
       if (refetch !== false) {
         const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
@@ -594,6 +795,9 @@
       try {
         await carregarSelecao();
         await carregarPainel(true);
+        // Depois da tabela, e sem `await` no caminho crítico: a preferência é
+        // acessória, e uma demora nela não deve segurar o que a pessoa veio ver.
+        void carregarPreferencia();
       } finally {
         toggleLoading(false);
       }

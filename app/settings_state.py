@@ -511,5 +511,76 @@ def save_colaborador_selecao(
         )
 
 
+# ── Preferência de alerta do colaborador (20/08/2026) ──────────────────────
+
+def load_preferencia_alerta(user_id: Optional[str]) -> Dict[str, Any]:
+    """Como a pessoa quer ser avisada. Ausência = o padrão de sempre.
+
+    Devolve sempre um dicionário utilizável: sem Supabase, sem linha ou sem as
+    colunas (migration pendente), o resultado é "recebe tudo" — que é o que
+    acontecia antes desta preferência existir.
+    """
+    padrao = {"notificar_email": True, "alerta_marcos_ignorados": ""}
+    uid = (user_id or "").strip()
+    client = _supabase()
+    if not client or not uid:
+        return padrao
+    try:
+        r = (
+            client.table("colaborador_cert_selecoes")
+            .select("notificar_email, alerta_marcos_ignorados")
+            .eq("user_id", uid)
+            .limit(1)
+            .execute()
+        )
+        linhas = r.data or []
+        if not linhas:
+            return padrao
+        row = linhas[0]
+        return {
+            "notificar_email": bool(row.get("notificar_email", True)),
+            "alerta_marcos_ignorados": str(row.get("alerta_marcos_ignorados") or ""),
+        }
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler preferência de alerta; usando o padrão")
+        return padrao
+
+
+def save_preferencia_alerta(
+    user_id: Optional[str], notificar: bool, ignorados: str
+) -> None:
+    """Grava só as duas colunas da preferência.
+
+    UPDATE e não upsert, de propósito: a linha pertence à SELEÇÃO, e criá-la
+    aqui produziria uma linha com `documentos` vazio que a tela de seleção
+    depois sobrescreveria. Quem ainda não selecionou nada também não tem o que
+    ser avisado — a preferência dele é gravada quando ele selecionar.
+
+    Levanta `GravacaoNaoPersistida` se o banco recusar: esta função só é
+    chamada por uma tela, e tela que diz "salvo" sobre gravação que falhou é o
+    defeito que 20/08 passou o dia corrigindo.
+    """
+    uid = (user_id or "").strip()
+    client = _supabase()
+    if not client or not uid:
+        return
+    try:
+        (
+            client.table("colaborador_cert_selecoes")
+            .update(
+                {
+                    "notificar_email": bool(notificar),
+                    "alerta_marcos_ignorados": ignorados,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            .eq("user_id", uid)
+            .execute()
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao gravar preferência de alerta de %s", uid)
+        raise GravacaoNaoPersistida(str(e)) from e
+
+
 def supabase_configured() -> bool:
     return bool(config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY)

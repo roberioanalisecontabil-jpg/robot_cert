@@ -38,6 +38,8 @@ from app.notification_service import build_notifications_payload
 from app.settings_state import (
     GravacaoNaoPersistida,
     PortalSettings,
+    load_preferencia_alerta,
+    save_preferencia_alerta,
     get_latest_snapshot,
     load_colaborador_selecao,
     load_settings,
@@ -2854,6 +2856,63 @@ def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth
     docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     itens = _painel_docs_selecionados(docs)
     return {"itens": itens, "total": len(itens)}
+
+
+class PreferenciaAlertaBody(BaseModel):
+    notificar_email: bool = Field(default=True)
+    # Marcos que a pessoa DISPENSA. Ver a migration 20260820200000 para o
+    # porquê de guardar as recusas em vez das aceitações.
+    marcos_ignorados: str = Field(default="")
+
+
+@app.get(
+    "/api/colaborador/alertas/preferencia",
+    dependencies=[Depends(require_modulo("acompanhamento"))],
+)
+def obter_preferencia_alerta(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """A preferência da pessoa, mais os marcos que o portal realmente dispara.
+
+    Os dois juntos numa resposta só: a tela monta uma caixa por marco DO
+    PORTAL, e não uma lista fixa. Marco que o administrador acrescentar aparece
+    para todo mundo, ligado — porque o que se guarda é a recusa.
+    """
+    pref = load_preferencia_alerta(_user_id_da_sessao(token))
+    s = load_settings()
+    marcos = alertas_config.marcos_efetivos(s.alertas_marcos)
+    return {
+        "notificar_email": pref["notificar_email"],
+        "marcos_ignorados": pref["alerta_marcos_ignorados"],
+        "marcos_do_portal": list(marcos),
+        # Sem SMTP configurado, nenhuma preferência muda nada — e a tela
+        # precisa dizer isso em vez de prometer e-mails que não saem.
+        "envio_ativo": bool(s.smtp_alerts_enabled and s.smtp_host),
+    }
+
+
+@app.put(
+    "/api/colaborador/alertas/preferencia",
+    dependencies=[Depends(require_modulo("acompanhamento", permissoes.NIVEL_EDITAR))],
+)
+def salvar_preferencia_alerta(
+    body: PreferenciaAlertaBody, token: auth.TokenData = Depends(require_auth)
+) -> dict:
+    try:
+        ignorados = alertas_config.formatar_marcos(
+            alertas_config.parse_marcos(body.marcos_ignorados)
+        )
+    except alertas_config.ConfiguracaoInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    try:
+        save_preferencia_alerta(
+            _user_id_da_sessao(token), body.notificar_email, ignorados
+        )
+    except GravacaoNaoPersistida as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível gravar a preferência. Detalhe: " + str(e),
+        )
+    return obter_preferencia_alerta(token)
 
 
 @app.get("/api/certificados/duplicidades", dependencies=[Depends(require_modulo("duplicidades"))])

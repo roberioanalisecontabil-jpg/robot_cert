@@ -117,6 +117,20 @@ def janela_dias(marcos: Sequence[int]) -> int:
     return max(marcos) if marcos else MARCOS_PADRAO[0]
 
 
+def marcos_ignorados(texto: str) -> Tuple[int, ...]:
+    """Marcos que uma pessoa dispensou. Nunca levanta.
+
+    Roda dentro do job, para cada colaborador. Um valor estragado aqui não pode
+    virar exceção no meio do laço de envio — nem, pior, ser lido como "ignora
+    tudo", que silenciaria a pessoa sem ela ter pedido. Ilegível vira "não
+    ignora nada", que é o comportamento de quem nunca mexeu na tela.
+    """
+    try:
+        return parse_marcos(texto)
+    except ConfiguracaoInvalida:
+        return ()
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Destinatários do resumo
 # ══════════════════════════════════════════════════════════════════════════
