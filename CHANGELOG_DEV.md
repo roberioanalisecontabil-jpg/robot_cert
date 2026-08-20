@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-15                  |
-| **Branch ativa**   | `main`, sincronizada com o origin (último: `40785f2`) |
+| **Data da última atualização** | 2026-08-19                  |
+| **Branch ativa**   | `main`, sincronizada com o origin (último: `79c165a`) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Chave composta `(machine_id, fingerprint)` no cofre — migration aplicada em produção, código no ar, 258 testes |
-| **Próxima tarefa** | Validar a coexistência em duas estações de verdade (passo 5 de `docs/PLANO_chave_composta_cofre.md`) — hoje só existe `ANALISESRV` no cofre. E obter a `API_KEY` real para destravar o agente |
+| **Última tarefa concluída** | Sistema visual documentado (`PRODUCT.md` / `DESIGN.md`) e quatro defeitos de origem comum corrigidos — 693 testes |
+| **Próxima tarefa** | Níveis de acesso por papel: começar pelo mapa de rotas × papel, não pela tela. Enforcement no servidor é o item que importa; a sidebar hoje esconde por papel só no cliente. Segue pendente: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) e obter a `API_KEY` real |
 
 ---
 
@@ -41,6 +41,104 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-19 — O conserto local que esconde a causa
+
+**Objetivo da sessão:** documentar o sistema visual (`/impeccable init` + `document`) e, a partir daí, iterar na interface com o modo live.
+
+Oito commits. O achado que organiza a sessão inteira **não foi planejado**: quatro defeitos independentes, em arquivos diferentes, com o mesmo formato — *alguém consertou um caso e a causa continuou lá*. Nenhum deles quebrava nada. Era essa a dificuldade.
+
+---
+
+#### Parte 1 — Documentação (`2b46c74`)
+
+`PRODUCT.md` e `DESIGN.md` na raiz, mais `.impeccable/design.json`.
+
+O `style.css` já era um design system maduro — 68 custom properties, dois temas, escala de sete níveis, razão de contraste medida ao lado de cada token de texto. Nada disso estava num lugar onde uma decisão futura pudesse consultar; vivia em comentários espalhados.
+
+North star escolhido: **"A Mesa Limpa"** — uma superfície por vez, nada na tela que não seja a tarefa. Amarra ao fato medido em 15/08 de que a tarefa do colaborador dura menos de um minuto.
+
+Anti-referência confirmada pelo cliente: SaaS genérico de gradiente. Deliberadamente em aberto: a linguagem visual atual é evidência do estado atual, **não** compromisso de marca.
+
+---
+
+#### Parte 2 — Os quatro defeitos de origem comum
+
+**(1) O véu de hover, e o seletor de tema que mentia** (`90c067f`)
+
+As tabelas de duplicidades usavam `rgba(59,130,246,0.06)` no hover — azul do Tailwind, não o `--accent` do projeto — e sem variante de tema escuro.
+
+Criar o token `--row-hover` expôs um defeito no *próprio sistema*: `tbody tr:hover` resolvia tema com `@media (prefers-color-scheme: dark)` **sem** a guarda `:root:not([data-theme="light"])` que a camada de tokens usa. Quem forçava tema claro num Windows escuro recebia o hover escuro — o seletor de tema mentia naquela regra. Com o token, a media query desapareceu e o defeito com ela.
+
+**(2) O sino não estava pequeno; estava achatado** (`bc63a20`)
+
+Medido no navegador: o SVG do sino renderizava **7,2 × 20px**. `.sidebar-toggle-btn` fixa `width: 44px` e nunca sobrescrevia o `padding: 0.5rem 1.1rem` da regra base `button` — sobravam 7,2px de caixa de conteúdo, e o ícone, sendo item de flex, encolhia para caber.
+
+`.theme-toggle-btn` já trazia `padding: 0`. **Um dos três botões estava certo por um remendo local**, o que fazia o sino parecer caso isolado.
+
+**(3) `.form-control` não existia** (`bc63a20`)
+
+Nenhuma linha no CSS, e a classe estava em **9 campos de 3 templates** (instalador 6, carteiras 2, dashboard 1). Herança de Bootstrap que veio no HTML sem a folha junto. Os nove desenhavam como `<input>` cru: Arial 13px, preto puro, `padding: 1px 2px`, canto reto.
+
+O conserto não foi regra nova — foi a classe passar a apontar para o campo canônico que já estava escrito.
+
+**(4) Controle de formulário não herda `font-family`** (`bc63a20`)
+
+Sem `font-family: inherit`, o navegador impõe a fonte dele: **todo botão, campo e select do portal saía em Arial**, inclusive os que as regras já acertavam no resto. `.cg-page-link` e `.cg-page-perpage-select` já contornavam isso cada um por si — de novo, o remendo local escondendo a causa.
+
+Junto: ícones da topbar 20→24px (55% do alvo de 44px), badge de notificação 18→16px em pílula com numeral tabular, e o hambúrguer `&#9776;` virou Heroicons — era um caractere de texto fazendo papel de ícone.
+
+---
+
+#### Parte 3 — Três entregas pelo modo live (`f476545`, `5cd0066`, `8e16181`)
+
+**Importação por arrastar e soltar** em `/carteiras`. Implementação deliberadamente magra: o `<input type="file">` cobre a zona com opacidade 0 — clique, DROP nativo preenchendo `input.files` e foco de teclado saem de graça. O script cuida só do realce durante o arrasto e do nome do arquivo.
+
+Escolhida entre três desenhos pela razão que já estava no comentário do template: o `details` nasce fechado para não empurrar os painéis, e a faixa acrescenta ~56px em vez de um bloco.
+
+**Lista de operadores** com bordas e rolagem própria, espelhando o `.transfer__lista` que já existia na mesma folha. E o item selecionado deixou de usar `border-color: var(--ok-text)` — verde é estado de certificado; "o operador que estou olhando" é navegação.
+
+**Seleção múltipla na transfer list.** A linha virou o alvo; saiu o botão por linha e entraram quatro ações no rodapé de cada painel. Mover um passou a custar dois cliques; mover vinte custa os mesmos dois.
+
+**Coluna Ações e "sem gestor"** em `/usuarios`. `flex-wrap: wrap` com três botões quebrava em duas linhas e fazia a altura da linha depender do texto do botão. A terceira ação foi para um menu `<details>` nativo. E "— sem gestor" saía como texto comum, no mesmo peso de um nome real — virou badge contornado, no idioma do INATIVO ao lado.
+
+---
+
+#### Parte 4 — A guarda que mudou de forma
+
+`#btnAddTodos` e `#btnRemoverTodos` já existiam, escondidos até haver filtro, com o porquê escrito: *"liberar os 491 seria um clique com consequência grande demais para ficar sempre à mão"*.
+
+O cliente pediu os botões permanentes. A proteção **não foi removida — mudou de trancar para dizer**: cada botão imprime a contagem que vai mover, desabilita quando não há nada, e `atribuir` passa a confirmar acima de um documento.
+
+Isso fechou uma assimetria que já existia: `removerVarios` confirmava e `atribuir` não. **Tirar** acesso pedia confirmação; **dar** acesso a centenas não pedia nada — num portal cujo modelo é acesso como decisão do gestor, com falha fechada.
+
+---
+
+#### Dois testes quebraram, os dois por motivo legítimo
+
+**`test_os_dois_blocos_de_tema_escuro`** — acusou divergência total entre os blocos de tema. Não havia nenhuma: o teste usa `css.index("@media (prefers-color-scheme: dark)")`, que casa com a **primeira** ocorrência do literal, e este projeto comenta o porquê de cada decisão. Uma frase explicando a guarda de tema, escrita dentro do `:root` claro, fazia o recorte virar string vazia. Passou a remover comentários antes de procurar os marcadores.
+
+**`test_lote_so_aparece_com_filtro`** — travava a implementação (`btnAdd.hidden = !(temFiltro &&`) que o cliente pediu para mudar. Reescrito como `test_lote_em_massa_nao_e_um_clique`, travando a **intenção** do docstring original em três afirmações: liberar em lote confirma, remover em lote confirma, e os botões imprimem a contagem.
+
+Os dois foram verificados por mutação: neutralizar a proteção faz o teste falhar; restaurar faz passar. Teste que passa não prova que morde.
+
+---
+
+#### Armadilhas registradas
+
+- **`?v=` nos templates.** Duas vezes recarreguei a página, vi o defeito ainda lá e quase reabri investigação encerrada — o navegador servia a folha antiga. Girar o token junto com toda alteração de estilo virou regra sem exceção.
+- **`getComputedStyle` pela ponte da extensão devolveu valores obsoletos** por quatro medições seguidas, inclusive para um `style.background` inline (impossível de ignorar sem `!important`). Quando o número diz o impossível, o número é que está errado — o screenshot resolveu em uma tentativa.
+- **A `<main>` inteira é ambígua para o modo live:** os 11 templates compartilham `main.main-content`, e o andaime resolveu para `carteiras.html` enquanto a página era `/usuarios`. Selecionar sempre um elemento interno.
+
+---
+
+#### Estado ao fim
+
+`main` em `79c165a`, deploy em produção, **693 testes**. `/usuarios` e `/carteiras` verificadas contra dados reais no navegador (489 disponíveis, 2 na carteira, seleção e contagens corretas).
+
+**Pendente:** níveis de acesso por papel. Não foi feito de propósito — uma tela que promete "o gestor não vê Instalador" enquanto o servidor continua respondendo `/instalador` para ele é teatro de segurança. O trabalho real é o enforcement; a tela é a parte barata. Começar pelo mapa de rotas × papel.
 
 ---
 
