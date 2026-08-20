@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -171,7 +171,7 @@
             </select>
             <label for="trilhaEmail" class="cg-sr-only">Filtrar por solicitante</label>
             <input type="search" id="trilhaEmail" class="form-control" placeholder="Filtrar por e-mail" style="width: 220px;" />
-            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem;">
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: var(--fs-ui-sm);">
               <input type="checkbox" id="trilhaSoFalhas" /> só falhas
             </label>
             <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
@@ -339,8 +339,8 @@
         return (
           "<div style='display:flex;justify-content:space-between;gap:1rem;padding:0.35rem 0;" +
           "border-bottom:0.5px solid var(--border)'>" +
-          "<span class='text-muted' style='font-size:0.85rem'>" + esc(rotulo) + "</span>" +
-          "<span style='font-size:0.85rem;text-align:right;color:" + cor + "'>" + valor + "</span>" +
+          "<span class='text-muted' style='font-size: var(--fs-ui-sm)'>" + esc(rotulo) + "</span>" +
+          "<span style='font-size: var(--fs-ui-sm);text-align:right;color:" + cor + "'>" + valor + "</span>" +
           "</div>"
         );
       }
@@ -462,7 +462,7 @@
         const btn = document.getElementById("btnRevalidarCofre");
         const area = document.getElementById("revalidarArea");
         btn.disabled = true;
-        area.innerHTML = "<p class='text-muted' style='font-size:0.85rem'>Decifrando uma amostra de cada versão...</p>";
+        area.innerHTML = "<p class='text-muted' style='font-size: var(--fs-ui-sm)'>Decifrando uma amostra de cada versão...</p>";
         try {
           const r = await fetch("/api/cert-installer/revalidar-cofre", {
             method: "POST", headers: getHeaders(true),
@@ -476,7 +476,7 @@
                 "<span class='cg-banner__text'>Chave v" + esc(String(x.key_version)) + ": " +
                 (x.ok ? "decifrou a amostra" : "FALHOU") + " — " + esc(x.detalhe) + "</span></div>"
               ).join("")
-            : "<p class='text-muted' style='font-size:0.85rem'>Cofre vazio: nada a revalidar.</p>";
+            : "<p class='text-muted' style='font-size: var(--fs-ui-sm)'>Cofre vazio: nada a revalidar.</p>";
         } catch (e) {
           area.innerHTML = "<p style='color:var(--expired-text);font-size:0.875rem'>" + esc(e.message) + "</p>";
         } finally {
@@ -757,7 +757,7 @@
             const motivo = (c.motivos || []).join(" · ");
             return `
               <tr>
-                <td style="font-size:0.85rem">${quando}</td>
+                <td style="font-size: var(--fs-ui-sm)">${quando}</td>
                 <td>${esc(c.user_email || "—")}</td>
                 <td><strong>${esc(c.target_machine || "—")}</strong></td>
                 <td style="text-align:center">${c.certificados}</td>

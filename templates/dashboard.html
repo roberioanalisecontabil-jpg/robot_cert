@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
     <style nonce="{{ request.state.nonce }}">
       /* min(320px, 100%): sem a guarda, o mínimo fixo estoura a página em
          telas de 320px (mesma razão do .cards-grid global). */
@@ -22,8 +22,8 @@
       .numerao { font-size: 2.1rem; font-weight: 700; line-height: 1.1; }
       .numerao--alerta { color: var(--expired-text); }
       .numerao--ok { color: var(--ok-text); }
-      .linha-dado { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 0.5px solid var(--border); font-size: 0.85rem; }
-      .barra { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 0.35rem; }
+      .linha-dado { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 0.5px solid var(--border); font-size: var(--fs-ui-sm); }
+      .barra { height: 6px; border-radius: var(--radius-xs); background: var(--border); overflow: hidden; margin-top: 0.35rem; }
       .barra > span { display: block; height: 100%; background: var(--ok-text); }
       .painel--carregando { opacity: 0.55; }
     </style>
@@ -85,7 +85,7 @@
 
       function erroPainel(el, msg) {
         document.getElementById(el).innerHTML =
-          `<p style="color:var(--expired-text);font-size:0.85rem">${esc(msg)}</p>`;
+          `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm)">${esc(msg)}</p>`;
       }
 
       function renderInstalacao(d) {

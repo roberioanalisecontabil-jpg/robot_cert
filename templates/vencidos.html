@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
   <style>
     .ano-progress-wrap {
       margin-top: 0.65rem;
@@ -21,10 +21,19 @@
     }
     .ano-progress-bar {
       height: 100%;
-      width: 0%;
+      /* Largura cheia e `scaleX(0)` de partida, em vez de `width: 0%`.
+
+         O contador escreve neste elemento a cada 100ms por 5 segundos: com
+         `width`, sao 50 passagens de layout + paint. `transform` roda no
+         compositor e nao toca no layout nenhuma vez.
+
+         O `transform-origin` ja estava aqui — alguem comecou essa troca e nao
+         terminou. */
+      width: 100%;
       background: var(--accent);
+      transform: scaleX(0);
       transform-origin: left center;
-      transition: width 0.1s linear;
+      transition: transform 0.1s linear;
     }
   </style>
 </head>
@@ -76,7 +85,7 @@
         </div>
         <div class="toolbar__actions">
           <label for="busca-vencidos" class="cg-sr-only">Buscar vencidos por nome, documento ou data</label>
-          <input type="search" id="busca-vencidos" placeholder="Buscar por nome, documento ou data" style="padding: 0.55rem 0.7rem; min-width: 280px; border: 1px solid var(--border); border-radius: 8px;" />
+          <input class="form-control campo-busca" type="search" id="busca-vencidos" placeholder="Buscar por nome, documento ou data" />
           <label for="dt-inicio" class="hint">De</label>
           <input type="date" id="dt-inicio" class="path-input" style="max-width: 170px;" />
           <label for="dt-fim" class="hint">Até</label>
@@ -318,7 +327,7 @@
         clearInterval(anosProgressTimer);
         anosProgressTimer = null;
       }
-      bar.style.width = "0%";
+      bar.style.transform = "scaleX(0)";
       if (anosResumo.length <= 1) return;
       let decorrido = 0;
       const total = 5000;
@@ -326,7 +335,7 @@
       anosProgressTimer = setInterval(() => {
         decorrido += passo;
         const pct = Math.min((decorrido / total) * 100, 100);
-        bar.style.width = `${pct}%`;
+        bar.style.transform = `scaleX(${pct / 100})`;
         if (decorrido >= total) {
           clearInterval(anosProgressTimer);
           anosProgressTimer = null;

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
 </head>
 <body>
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -697,7 +697,7 @@
       return `
         <tr role="row" class="dup-data-row"${titleAttr}>
           <td role="cell" data-label="Nome" style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>
-          <td role="cell" data-label="Arquivo" style="max-width:22rem; word-break:break-all;"><code style="font-size:0.85rem;">${esc(pathDisp)}</code></td>
+          <td role="cell" data-label="Arquivo" style="max-width:22rem; word-break:break-all;"><code style="font-size: var(--fs-ui-sm);">${esc(pathDisp)}</code></td>
         </tr>`;
     }
 

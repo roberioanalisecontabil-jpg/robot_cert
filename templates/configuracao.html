@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -46,7 +46,7 @@
         right: 0;
         height: 2px;
         background-color: var(--accent);
-        border-radius: 2px;
+        border-radius: var(--radius-xs);
       }
     </style>
   </head>
@@ -160,12 +160,12 @@
               <p class="side-text">
                 Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code> e <code>CERT_ROBOT_API_KEY</code> (se houver chave).
               </p>
-              <p class="side-text" style="background: var(--bg); padding: 0.5rem; border-radius: 6px; font-family: monospace;">python agent\run_agent.py</p>
+              <p class="side-text" style="background: var(--bg); padding: 0.5rem; border-radius: var(--radius-sm); font-family: monospace;">python agent\run_agent.py</p>
             </div>
             <div class="side-card" style="flex: 1; min-width: 220px;">
               <h3>Nome dos arquivos</h3>
               <p class="side-text">O sistema interpreta os arquivos usando a palavra-chave "senha".</p>
-              <p class="side-text" style="font-family: monospace; background: var(--bg); padding: 0.5rem; border-radius: 6px;">
+              <p class="side-text" style="font-family: monospace; background: var(--bg); padding: 0.5rem; border-radius: var(--radius-sm);">
                 MeuNome certificado senha aMinhaSenha.pfx
               </p>
             </div>
@@ -264,7 +264,7 @@
             <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
               <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
               <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
-              <input type="email" id="inp-smtp-test-dest" placeholder="Destinatário teste" style="padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; max-width: 200px;" />
+              <input type="email" id="inp-smtp-test-dest" class="form-control" placeholder="Destinatário teste" style="max-width: 200px;" />
               <button type="button" id="btn-test-smtp">Enviar Teste</button>
               <button type="button" id="btn-trigger-alerts" style="background-color: var(--warning-text); color: #FFFFFF; border: none; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
             </div>

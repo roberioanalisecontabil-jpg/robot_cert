@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
     <style nonce="{{ request.state.nonce }}">
       .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
       @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
@@ -60,7 +60,7 @@
       .transfer__lado { min-width: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm, 8px); }
       .transfer__cab { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
                        padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-      .transfer__cab h3 { font-size: 0.9rem; margin: 0; }
+      .transfer__cab h3 { font-size: var(--fs-ui); margin: 0; }
       .transfer__cab .text-muted { font-weight: 400; font-size: 0.8rem; }
       .transfer__acao-lote { font-size: 0.72rem; padding: 0.2rem 0.5rem; }
       /* `.btn` declara display, e display explícito vence o `display:none` que
@@ -72,10 +72,10 @@
          com 3 deixariam a página com metros de rolagem e o par ilegível. */
       .transfer__lista { height: 320px; overflow-y: auto; }
       .transfer__item { display: flex; justify-content: space-between; gap: 0.75rem; align-items: center;
-                        padding: 0.45rem 0.6rem; border-bottom: 0.5px solid var(--border); font-size: 0.85rem; }
+                        padding: 0.45rem 0.6rem; border-bottom: 0.5px solid var(--border); font-size: var(--fs-ui-sm); }
       .transfer__item:last-child { border-bottom: none; }
       .transfer__item__nome { min-width: 0; overflow-wrap: anywhere; }
-      .transfer__vazio { padding: 0.9rem 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+      .transfer__vazio { padding: 0.9rem 0.6rem; font-size: var(--fs-ui-sm); color: var(--text-muted); }
       /* Selecao multipla + acoes de lote (19/08/2026). A linha inteira e o
          alvo: clicar em qualquer ponto marca, e a marca aparece como ✓ à
          esquerda. Nao ha mais botao por linha — mover UM agora custa dois
@@ -138,9 +138,9 @@
                          opacity: 0; cursor: pointer; }
       .dropzone__icone { width: 24px; height: 24px; flex-shrink: 0; color: var(--text-muted);
                          transition: color var(--duration-fast) var(--ease-out); }
-      .dropzone__titulo { margin: 0; font-weight: 600; font-size: 0.9rem; }
+      .dropzone__titulo { margin: 0; font-weight: 600; font-size: var(--fs-ui); }
       .dropzone__sub { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
-      .dropzone__nome { margin: 0 0 0 auto; font-size: 0.85rem; font-weight: 600;
+      .dropzone__nome { margin: 0 0 0 auto; font-size: var(--fs-ui-sm); font-weight: 600;
                         color: var(--accent-text); }
       .dropzone:hover,
       .dropzone:has(.dropzone__input:focus-visible) { border-color: var(--accent); background: var(--surface); }
@@ -209,13 +209,13 @@
           <label for="buscaOperador" class="cg-sr-only">Buscar operador</label>
           <input type="search" id="buscaOperador" class="form-control" placeholder="Buscar por nome ou e-mail" />
           <div id="listaOperadores" class="op-lista">
-            <p class="text-muted" style="font-size: 0.85rem;">Carregando…</p>
+            <p class="text-muted" style="font-size: var(--fs-ui-sm);">Carregando…</p>
           </div>
         </section>
 
         <section class="cart-painel">
           <div id="semSelecao">
-            <p class="text-muted" style="font-size: 0.9rem;">
+            <p class="text-muted" style="font-size: var(--fs-ui);">
               Escolha um operador à esquerda para ver e montar a carteira dele.
             </p>
           </div>
@@ -224,7 +224,7 @@
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
               <div>
                 <h2 id="opNome" style="font-size: 1.1rem; margin-bottom: 0.15rem;"></h2>
-                <p id="opEmail" class="text-muted" style="font-size: 0.85rem;"></p>
+                <p id="opEmail" class="text-muted" style="font-size: var(--fs-ui-sm);"></p>
               </div>
               <span id="opAviso"></span>
             </div>
@@ -282,7 +282,7 @@
             <div style="margin-top: 1.5rem;">
               <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">Instalações desta pessoa</h3>
               <div id="historicoOperador">
-                <p class="text-muted" style="font-size: 0.85rem;">—</p>
+                <p class="text-muted" style="font-size: var(--fs-ui-sm);">—</p>
               </div>
             </div>
           </div>
@@ -319,7 +319,7 @@
 
         const el = document.getElementById("listaOperadores");
         if (!lista.length) {
-          el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Nenhum operador encontrado.</p>`;
+          el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">Nenhum operador encontrado.</p>`;
           return;
         }
         el.innerHTML = lista.map((o) => `
@@ -348,7 +348,7 @@
           renderOperadores();
         } catch (e) {
           document.getElementById("listaOperadores").innerHTML =
-            `<p style="color:var(--expired-text);font-size:0.85rem">${esc(e.message)}</p>`;
+            `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm)">${esc(e.message)}</p>`;
         }
       }
 
@@ -389,7 +389,7 @@
           _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
           renderTransfer();
         } catch (e) {
-          el.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem;padding:0.6rem">${esc(e.message)}</p>`;
+          el.innerHTML = `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm);padding:0.6rem">${esc(e.message)}</p>`;
         }
       }
 
@@ -398,11 +398,11 @@
         // A trilha é de admin; para o gestor a seção some em vez de mostrar um
         // erro que ele não pode resolver.
         if (_papel !== "admin") {
-          el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">` +
+          el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">` +
             `Disponível para administradores.</p>`;
           return;
         }
-        el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Carregando…</p>`;
+        el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">Carregando…</p>`;
         try {
           const r = await fetch(
             `/api/cert-installer/trilha?dias=365&user_email=${encodeURIComponent(_selecionado.email)}`,
@@ -412,12 +412,12 @@
           const d = await r.json();
           const cadeias = d.cadeias || [];
           if (!cadeias.length) {
-            el.innerHTML = `<p class="text-muted" style="font-size:0.85rem">Nenhuma instalação registrada.</p>`;
+            el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">Nenhuma instalação registrada.</p>`;
             return;
           }
           const r2 = d.resumo || {};
           el.innerHTML =
-            `<p class="text-muted" style="font-size:0.85rem;margin-bottom:0.4rem">` +
+            `<p class="text-muted" style="font-size: var(--fs-ui-sm);margin-bottom:0.4rem">` +
             `${r2.total} tentativa(s) · ${r2.concluidas} concluída(s) · ${r2.falhadas} com falha</p>` +
             cadeias.slice(0, 10).map((c) => `
               <div class="doc-chip">
@@ -430,7 +430,7 @@
                 }">${esc(c.desfecho)}</span>
               </div>`).join("");
         } catch (e) {
-          el.innerHTML = `<p style="color:var(--expired-text);font-size:0.85rem">${esc(e.message)}</p>`;
+          el.innerHTML = `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm)">${esc(e.message)}</p>`;
         }
       }
 

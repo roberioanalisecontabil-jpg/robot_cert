@@ -31,6 +31,10 @@ colors:
   row-hover: "rgba(0, 113, 227, 0.04)"
   row-tint-danger: "#FEF2F2"
   row-tint-warning: "#FFFBEB"
+  accent-soft: "rgba(0, 113, 227, 0.18)"
+  scrim-forte: "rgba(0, 0, 0, 0.45)"
+  scrim-leve: "rgba(0, 0, 0, 0.28)"
+  scrim-tabela: "rgba(255, 255, 255, 0.65)"
 typography:
   display:
     fontFamily: "-apple-system, BlinkMacSystemFont, Inter, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"
@@ -57,6 +61,16 @@ typography:
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.6
+    letterSpacing: "0"
+  ui:
+    fontSize: "0.9rem"
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: "0"
+  ui-sm:
+    fontSize: "0.85rem"
+    fontWeight: 400
+    lineHeight: 1.45
     letterSpacing: "0"
   caption:
     fontSize: "12px"
@@ -792,3 +806,13 @@ Com `--row-hover` a media query desapareceu e o defeito com ela.
 - **Don't** repetir o material *glassmorphic*. Ele pertence a exatamente dois
   elementos — a sidebar e o dropdown de notificações — e sua raridade é o que o
   faz funcionar.
+
+  **Véu não é material.** `backdrop-filter: blur(1–4px)` sobre um scrim escuro
+  — atrás de diálogo, atrás da gaveta mobile, sobre a tabela que carrega — é
+  outra técnica, com outro propósito: apagar o que está atrás, não apresentar o
+  que está na frente. O material *glass* usa 20px e você lê conteúdo sobre ele;
+  o véu usa 1–4px e você não lê nada sobre ele. Os quatro véus do portal não
+  contam contra a regra dos dois.
+
+  A distinção não estava escrita, e um audit externo leu os quatro véus como
+  deriva do material. Cor de véu sai de `--scrim-*`, nunca de `rgba()` literal.

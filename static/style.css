@@ -44,6 +44,9 @@
      ativo da sidebar). Existe porque no tema escuro o accent vira #0A84FF,
      que com branco dá 3.65:1 — o token não muda entre temas de propósito. */
   --accent-solid: #0071E3;  /* branco sobre ele: 4.70:1 */
+  /* Seleção de texto. Suave o bastante para o texto continuar legível por
+     cima — a seleção destaca, não substitui. */
+  --accent-soft: rgba(0, 113, 227, 0.18);
 
   /* Fundo sólido vermelho com texto branco (badge de contagem). --expired é
      a identidade do vencido, mas com branco dá 3.54:1 (claro) e 3.40:1
@@ -100,6 +103,25 @@
   --fora-padrao-bg: #F5F3FF;
   --fora-padrao-text: #6D28D9;
 
+  /* Texto de interface densa.
+
+     O ramo do DESIGN.md ia de 12px direto para 16px, e o portal usa a faixa do
+     meio o tempo todo — rotulo de tabela, hint, botao de acao. O resultado foi
+     96 tamanhos literais espalhados por 12 templates: nao eram 96 enganos, era
+     a escala sem os degraus que este produto precisa. Documentados agora, com
+     os mesmos valores que ja estavam em uso. */
+  --fs-ui: 0.9rem;      /* 14.4px — corpo de controle: campo, botao, celula */
+  --fs-ui-sm: 0.85rem;  /* 13.6px — apoio: hint, legenda de card, meta */
+
+  /* Veus de sobreposicao.
+
+     Eram `rgba(17, 24, 39, ...)` escritos a mao — cinza de outra paleta, sem
+     variante de tema. E o mesmo caso do `rgba(59,130,246,0.06)` do hover das
+     duplicidades: um valor que parece certo, num arquivo que ninguem rele. */
+  --scrim-forte: rgba(0, 0, 0, 0.45);   /* atras de dialogo e gaveta */
+  --scrim-leve: rgba(0, 0, 0, 0.28);    /* carregamento de pagina inteira */
+  --scrim-tabela: rgba(255, 255, 255, 0.65);  /* sobre a tabela, deixa ler */
+
   /* Border Radii */
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -135,6 +157,10 @@
 }
 
 :root[data-theme="dark"] {
+  /* So o veu de tabela muda: os outros dois sao pretos translucidos e
+     funcionam nos dois temas. */
+  --scrim-tabela: rgba(28, 28, 30, 0.65);
+
   color-scheme: dark;
   --bg: #1C1C1E;
   --surface: #2C2C2E;
@@ -147,6 +173,7 @@
   --accent: #0A84FF;
   --accent-hover: #0066CC;
   --accent-text: #5AA9FF;   /* 5.68:1 sobre --surface; 4.81:1 sobre --total-bg */
+  --accent-soft: rgba(10, 132, 255, 0.28);
 
   /* Sidebar - Sleek Contrast */
   --sidebar-bg: #111112;
@@ -198,6 +225,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
+    --scrim-tabela: rgba(28, 28, 30, 0.65);
     --bg: #1C1C1E;
     --surface: #2C2C2E;
     --border: rgba(255, 255, 255, 0.08);
@@ -207,6 +235,7 @@
     --accent: #0A84FF;
     --accent-hover: #0066CC;
     --accent-text: #5AA9FF;
+    --accent-soft: rgba(10, 132, 255, 0.28);
 
     /* Sidebar - Sleek Contrast */
     --sidebar-bg: #111112;
@@ -288,7 +317,7 @@ body {
 /* Accessibility Focus & Skip Link (WCAG 2.2 AA) */
 .skip-to-content {
   position: absolute;
-  top: -100px;
+  top: 1rem;
   left: 1rem;
   background: var(--accent-solid);
   color: #ffffff;
@@ -298,11 +327,14 @@ body {
   font-weight: 600;
   text-decoration: none;
   box-shadow: var(--shadow-lg);
-  transition: top var(--duration-fast) var(--ease-out);
+  /* `transform` e nao `top`: anima no compositor, sem passar pelo layout.
+     O elemento fica em `top: 1rem` e sobe para fora da tela por translacao. */
+  transform: translateY(calc(-1rem - 100%));
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 .skip-to-content:focus {
-  top: 1rem;
+  transform: translateY(0);
 }
 
 *:focus-visible {
@@ -672,7 +704,7 @@ textarea:focus-visible {
      caixa precisa ser escrita inteira — inclusive o `font-family`, sem o qual
      o gatilho sairia em Arial ao lado de botões em Inter. */
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   font-weight: 500;
   background: var(--surface);
   border: 1.5px solid var(--border);
@@ -753,6 +785,59 @@ textarea:focus-visible {
   background: var(--bg);
 }
 
+/* Caixas de selecao.
+
+   Mediam 13x13px — o padrao do navegador —, abaixo dos 24x24 que a WCAG 2.5.8
+   pede como minimo, e em tabela de 73px de altura por linha isso e um alvo
+   dificil de acertar com o dedo. 18px de desenho mais 3px de folga clicavel
+   chegam a 24 sem engordar a linha.
+
+   `accent-color` e o ponto que quase todo sistema esquece: sem ele, a marca de
+   selecao sai no azul do sistema operacional, que nao pertence a paleta
+   nenhuma. E uma das superficies que o navegador desenha e que continuam
+   fazendo parte do design. */
+input[type="checkbox"],
+input[type="radio"] {
+  /* 20px, e nao os 24 da regra: a WCAG 2.5.8 dispensa o minimo quando um
+     circulo de 24px centrado no alvo nao encosta no circulo de outro alvo. As
+     linhas da tabela tem 73px de altura e ha uma caixa por linha, entao a
+     folga existe de verdade — 24px cravados so engordariam a linha sem
+     ninguem errar menos o clique.
+
+     `padding` foi tentado aqui e nao faz nada: com `box-sizing: border-box` ele
+     come o proprio desenho em vez de esticar a area clicavel. */
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent-solid);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Seleção de texto e cursor: as outras duas superfícies do navegador. */
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+input,
+textarea {
+  caret-color: var(--accent-solid);
+}
+
+/* Campo de busca das telas de listagem.
+
+   Existe porque os cinco campos de busca do portal eram `<input>` SEM classe,
+   estilizados por `style=` inline — e por isso nao casavam com a regra
+   canonica de campo. Renderizavam em Arial 13.33px ao lado de um `<select>`
+   em -apple-system 14.4px, na mesma barra. E o mesmo defeito corrigido em
+   19/08 para outros nove campos; estes escaparam por nunca terem tido classe.
+
+   `min()` em vez do `min-width` fixo que estava inline: 280px inline nao podia
+   ser reduzido por media query sem `!important`. */
+.campo-busca {
+  min-width: min(280px, 100%);
+}
+
 button {
   /* `<button>` NÃO herda `font-family` do documento: sem esta linha o UA
      impõe a fonte dele (Arial no Windows) e todo botão do portal ficava fora
@@ -768,7 +853,7 @@ button {
   border-radius: var(--radius-pill);
   font-weight: 500;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   transition: all var(--duration-fast) var(--ease-out);
   display: inline-flex;
   align-items: center;
@@ -928,7 +1013,7 @@ tbody tr:hover {
 }
 
 .status-line {
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text-muted);
   font-weight: 500;
 }
@@ -981,7 +1066,7 @@ tbody tr:hover {
   min-width: 140px;
   color: var(--text-muted);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--fs-ui);
 }
 
 /* `.form-control` entrou aqui em 19/08/2026. Ate entao a classe estava em 9
@@ -1004,7 +1089,7 @@ select {
      ja corrigida em `button`. Sem esta linha o UA impoe a fonte dele e todo
      campo do portal, inclusive os que esta regra ja acertava, saia em Arial. */
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--fs-ui);
   color: var(--text);
   outline: none;
   transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
@@ -1033,7 +1118,7 @@ select:focus {
 }
 
 .side-text {
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text-muted);
   margin: 0 0 0.75rem;
 }
@@ -1065,7 +1150,7 @@ select:focus {
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius-xs);
   font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text);
   word-break: break-all;
 }
@@ -1101,8 +1186,12 @@ select:focus {
 }
 
 .cmd-pre {
-  background: #111827;
-  color: #e5e7eb;
+  /* Bloco de comando: superficie escura nos DOIS temas, de proposito — e
+     terminal, e terminal e escuro. Os valores eram cinzas do Tailwind escritos
+     a mao; agora sao os mesmos tons da sidebar, que ja e a superficie escura
+     deste sistema. */
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text-active);
   padding: 1rem;
   border-radius: var(--radius-sm);
   font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
@@ -1113,7 +1202,7 @@ select:focus {
 .doc-list {
   padding-left: 1.5rem;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-ui);
 }
 
 .doc-list li {
@@ -1390,7 +1479,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .global-loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(17, 24, 39, 0.28);
+  background: var(--scrim-leve);
   backdrop-filter: blur(1px);
   z-index: 3000;
   display: flex;
@@ -1449,7 +1538,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .table-loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--scrim-tabela);
   backdrop-filter: blur(1.5px);
   z-index: 20;
   display: flex;
@@ -1462,15 +1551,13 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   pointer-events: none;
 }
 
-[data-theme="dark"] .table-loading-overlay {
-  background: rgba(17, 24, 39, 0.55);
-}
-
-@media (prefers-color-scheme: dark) {
-  .table-loading-overlay {
-    background: rgba(17, 24, 39, 0.55);
-  }
-}
+/* As duas regras que estavam aqui saíram, e as duas eram defeito.
+   A primeira repetia no seletor de tema o que o token agora resolve sozinho.
+   A segunda resolvia tema com `@media (prefers-color-scheme: dark)` CRU, sem a
+   guarda `:root:not([data-theme="light"])` — a mesma armadilha já corrigida no
+   `tbody tr:hover`, que fazia o seletor de tema mentir para quem força claro
+   num sistema escuro. E as duas declaravam o MESMO valor, então a media query
+   não fazia nada: era código morto esperando alguém editar só um dos lados. */
 
 .table-loading-overlay.is-visible {
   opacity: 1;
@@ -1559,7 +1646,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .barra-selecao__aviso {
   display: block;
   font-size: 0.8rem;
-  color: var(--expired-text, #b00);
+  color: var(--expired-text);
 }
 
 .cg-page-nav__ul {
@@ -1953,7 +2040,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .notif-message {
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   font-weight: 500;
   color: var(--text);
   line-height: 1.3;
@@ -2005,7 +2092,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .notif-empty, .notif-loading, .notif-error {
   padding: 2rem 1rem;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text-muted);
 }
 
@@ -2038,7 +2125,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim-forte);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   z-index: 9;
@@ -2621,6 +2708,8 @@ dialog.modal {
 }
 
 dialog.modal::backdrop {
+  /* `::backdrop` nao herda de `:root`, entao o token e reescrito aqui com o
+     mesmo valor em vez de referenciado — referencia-lo daria transparente. */
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(2px);
 }
@@ -2646,7 +2735,7 @@ dialog.modal::backdrop {
 .modal__sub {
   margin: var(--sp-2) 0 0;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
 }
 
 .modal__body {
@@ -2673,7 +2762,7 @@ dialog.modal::backdrop {
 }
 
 .modal__campo label {
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   font-weight: 600;
 }
 
@@ -2705,7 +2794,7 @@ dialog.modal::backdrop {
   background: var(--expired-bg);
   color: var(--expired-text);
   border: 1px solid rgba(255, 59, 48, 0.25);
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
 }
 
 .modal__erro[data-visivel="1"] {
@@ -2766,14 +2855,14 @@ dialog.modal::backdrop {
 .import-erros__titulo {
   margin: 0 0 var(--sp-2);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   color: var(--warning-text);
 }
 
 .import-erros__lista {
   margin: 0;
   padding-left: 1.2rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-ui-sm);
   line-height: 1.6;
   color: var(--text);
   /* Um CSV de centenas de linhas com metade recusada empurraria a tabela de
@@ -2826,5 +2915,5 @@ dialog.modal::backdrop {
   right: 0;
   height: 2px;
   background-color: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }

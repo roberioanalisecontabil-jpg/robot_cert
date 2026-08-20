@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -24,13 +24,19 @@
         .user-table tbody tr {
             transition: background-color var(--duration-fast) var(--ease-out);
         }
+        /* `--row-hover` existe exatamente para isto.
+
+           Este bloco era uma COPIA VERBATIM do defeito corrigido em 19/08 no
+           `tbody tr:hover` do style.css: os mesmos dois valores literais, e uma
+           `@media (prefers-color-scheme: dark)` sem a guarda
+           `:root:not([data-theme="light"])`. Quem forcava tema claro num
+           Windows escuro recebia o hover escuro nesta tabela, e so nela.
+
+           O conserto de 19/08 criou o token e arrumou a folha global — e nao
+           alcancou esta copia, porque ela mora inline num template. E a terceira
+           vez que o mesmo erro aparece num lugar novo. */
         .user-table tbody tr:hover {
-            background-color: rgba(0, 113, 227, 0.04);
-        }
-        @media (prefers-color-scheme: dark) {
-            .user-table tbody tr:hover {
-                background-color: rgba(10, 132, 255, 0.06);
-            }
+            background-color: var(--row-hover);
         }
         .role-badge { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
         .role-admin { background-color: var(--expired-bg); color: var(--expired-text); }
@@ -80,7 +86,7 @@
         .perm-trilha__lista li {
             display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem;
             padding: 0.45rem 0; border-bottom: 1px solid var(--border);
-            font-size: 0.85rem;
+            font-size: var(--fs-ui-sm);
         }
         .perm-trilha__quando { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
         .perm-trilha__quem { color: var(--text-muted); }
@@ -335,7 +341,7 @@
                   </tr>
                 </thead>
                 <tbody role="rowgroup" id="perm-corpo">
-                  <tr><td colspan="3" class="text-muted" style="font-size:0.85rem">Carregando…</td></tr>
+                  <tr><td colspan="3" class="text-muted" style="font-size: var(--fs-ui-sm)">Carregando…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -776,7 +782,7 @@
             } catch (e) {
                 permMsg('Não foi possível carregar os níveis de acesso: ' + e.message, 'error');
                 document.getElementById('perm-corpo').innerHTML =
-                    '<tr><td colspan="3" class="text-muted" style="font-size:0.85rem">—</td></tr>';
+                    '<tr><td colspan="3" class="text-muted" style="font-size: var(--fs-ui-sm)">—</td></tr>';
             }
         }
 
