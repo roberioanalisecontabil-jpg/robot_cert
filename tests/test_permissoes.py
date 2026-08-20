@@ -442,7 +442,15 @@ def test_get_permissoes_entrega_o_que_a_tela_precisa(client) -> None:
     r = client.get("/api/permissoes", headers=_token("admin"))
     assert r.status_code == 200
     d = r.json()
-    assert set(d["modulos"]) == set(permissoes.MODULOS)
+    # `modulos` deixou de ser lista de nomes e passou a carregar, por modulo,
+    # os niveis que ele aceita e se ja e governado — e o que a tela precisa
+    # para nao oferecer controle inerte.
+    assert [m["id"] for m in d["modulos"]] == list(permissoes.MODULOS)
+    por_id = {m["id"]: m for m in d["modulos"]}
+    assert por_id["usuarios"]["niveis"] == list(permissoes.NIVEIS)
+    assert permissoes.NIVEL_EDITAR not in por_id["vencidos"]["niveis"]
+    assert por_id["usuarios"]["governado"] is True
+    assert por_id["carteiras"]["governado"] is False
     assert d["papeis"] == list(permissoes.PAPEIS_CONFIGURAVEIS)
     assert d["papeis_totais"] == list(permissoes.PAPEIS_TOTAIS)
     # `admin` nao vem como linha editavel: e o que impede a tela de oferecer
@@ -474,4 +482,77 @@ def test_gravar_sem_banco_avisa_em_vez_de_fingir_que_salvou(
     completa = {p: {m: "nenhum" for m in permissoes.MODULOS}
                 for p in permissoes.PAPEIS_CONFIGURAVEIS}
     with pytest.raises(permissoes.PermissoesIndisponiveis):
+        permissoes.gravar(completa)
+
+
+# ── A declaracao nao pode mentir ────────────────────────────────────────────
+
+def _modulos_ligados_de_verdade() -> dict:
+    """Le `main.py` e devolve {modulo: {niveis usados}} a partir das rotas."""
+    import re
+    from pathlib import Path
+
+    fonte = Path("app/main.py").read_text(encoding="utf-8")
+    achados: dict = {}
+    padrao = re.compile(
+        r'require_modulo\(\s*"(\w+)"(?:\s*,\s*permissoes\.NIVEL_(\w+))?\s*\)'
+    )
+    for modulo, nivel in padrao.findall(fonte):
+        achados.setdefault(modulo, set()).add((nivel or "LER").lower())
+    return achados
+
+
+def test_modulos_governados_bate_com_as_rotas() -> None:
+    """
+    `MODULOS_GOVERNADOS` tem que ser a verdade, e não uma intenção.
+
+    A tela desabilita o controle dos módulos fora dessa lista e diz "ainda não
+    governado". Se a lista dissesse que um módulo é governado e nenhuma rota o
+    usasse, a tela ofereceria um controle inerte — exatamente o defeito que ela
+    existe para não repetir. E o inverso é pior: um módulo ligado de verdade
+    apareceria travado, e ninguém conseguiria configurá-lo.
+    """
+    reais = _modulos_ligados_de_verdade()
+    assert set(reais) == set(permissoes.MODULOS_GOVERNADOS), (
+        f"declarado {sorted(permissoes.MODULOS_GOVERNADOS)}, "
+        f"ligado de verdade {sorted(reais)}"
+    )
+
+
+def test_modulos_com_escrita_bate_com_as_rotas() -> None:
+    """
+    `MODULOS_COM_ESCRITA` decide se a tela oferece "Ver e editar".
+
+    Declarar escrita onde não há faria a opção voltar a ser promessa vazia — o
+    que o cliente apontou. Deixar de declarar onde há tornaria impossível
+    conceder uma escrita que existe.
+    """
+    reais = _modulos_ligados_de_verdade()
+    com_escrita = {m for m, niveis in reais.items() if "editar" in niveis}
+    assert com_escrita == set(permissoes.MODULOS_COM_ESCRITA), (
+        f"declarado {sorted(permissoes.MODULOS_COM_ESCRITA)}, "
+        f"com rota em editar {sorted(com_escrita)}"
+    )
+
+
+def test_niveis_de_modulo_nao_oferece_editar_sem_escrita() -> None:
+    for modulo in permissoes.MODULOS:
+        niveis = permissoes.niveis_de_modulo(modulo)
+        assert permissoes.NIVEL_NENHUM in niveis and permissoes.NIVEL_LER in niveis
+        tem_editar = permissoes.NIVEL_EDITAR in niveis
+        assert tem_editar == (modulo in permissoes.MODULOS_COM_ESCRITA), modulo
+
+
+def test_gravar_recusa_editar_em_modulo_sem_escrita() -> None:
+    """
+    Esconder na tela não basta: o servidor tem que recusar.
+
+    Aceitar `editar` num módulo sem escrita gravaria um valor que o servidor
+    ignora — a matriz passaria a afirmar um poder que ninguém tem, e a próxima
+    pessoa a ler a tabela acreditaria nela.
+    """
+    completa = {p: {m: permissoes.NIVEL_LER for m in permissoes.MODULOS}
+                for p in permissoes.PAPEIS_CONFIGURAVEIS}
+    completa["gestor"]["vencidos"] = permissoes.NIVEL_EDITAR
+    with pytest.raises(ValueError, match="não tem escrita"):
         permissoes.gravar(completa)

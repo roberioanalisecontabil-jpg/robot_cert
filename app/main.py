@@ -1573,7 +1573,19 @@ def get_permissoes() -> dict:
     """A matriz para a tela: o que cada papel configuravel alcanca hoje."""
     try:
         return {
-            "modulos": list(permissoes.MODULOS),
+            "modulos": [
+                {
+                    "id": m,
+                    # Os niveis que ESTE modulo aceita. Sem rota de escrita,
+                    # `editar` nao e oferecido — seria configurar uma diferenca
+                    # que nao existe.
+                    "niveis": list(permissoes.niveis_de_modulo(m)),
+                    # Modulo ainda nao ligado a rota nenhuma: a tela precisa
+                    # dizer isso, senao oferece um controle que nao governa.
+                    "governado": m in permissoes.MODULOS_GOVERNADOS,
+                }
+                for m in permissoes.MODULOS
+            ],
             "niveis": list(permissoes.NIVEIS),
             "papeis": list(permissoes.PAPEIS_CONFIGURAVEIS),
             # Informativo: a tela mostra a coluna de admin travada, para

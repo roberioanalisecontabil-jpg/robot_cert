@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=niveis-de-acesso-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=niveis-por-modulo-2026-08" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -62,6 +62,10 @@
         .perm-col { width: 12rem; }
         .perm-modulo { font-weight: 600; }
         .perm-modulo small { display: block; font-weight: 400; font-size: 0.78rem; color: var(--text-muted); }
+        .perm-nota { color: var(--text-muted); font-style: italic; }
+        /* Ambar de "pendente", o mesmo sentido do badge de expirando: algo que
+           ainda vai acontecer, e nao um erro. */
+        .perm-pendente { color: var(--warning-text); font-weight: 500; }
         .perm-tabela select { width: 100%; }
         /* Celula alterada e nao salva: o amarelo de "expirando" reaproveitado
            como "pendente", que e o mesmo sentido — algo que ainda vai acontecer. */
@@ -736,20 +740,35 @@
 
         function renderPermissoes(dados) {
             const corpo = document.getElementById('perm-corpo');
-            corpo.innerHTML = dados.modulos.map(function (mod) {
+            corpo.innerHTML = dados.modulos.map(function (info) {
+                const mod = info.id;
                 const par = PERM_ROTULOS[mod] || [mod, ''];
                 const celulas = dados.papeis.map(function (papel) {
                     const atual = (_permAtual[papel] || {})[mod] || 'nenhum';
-                    const opcoes = dados.niveis.map(function (n) {
+                    // As opcoes vem do MODULO, e nao de uma lista fixa: onde nao
+                    // ha rota de escrita, "Ver e editar" nem aparece, porque
+                    // escolher nao mudaria nada. No dia em que um desses ganhar
+                    // escrita, a opcao aparece sozinha.
+                    const opcoes = info.niveis.map(function (n) {
                         return '<option value="' + n + '"' + (n === atual ? ' selected' : '') +
                                '>' + (PERM_NIVEIS[n] || n) + '</option>';
                     }).join('');
                     return '<td><select class="form-control" data-papel="' + papel +
-                           '" data-modulo="' + mod + '" aria-label="' + esc(par[0]) +
-                           ' para ' + papel + '">' + opcoes + '</select></td>';
+                           '" data-modulo="' + mod + '"' +
+                           (info.governado ? '' : ' disabled') +
+                           ' aria-label="' + esc(par[0]) + ' para ' + papel + '">' +
+                           opcoes + '</select></td>';
                 }).join('');
+                // Modulo ainda nao ligado: o controle fica desabilitado e diz
+                // por que. Deixa-lo ativo seria oferecer um botao que nao faz
+                // nada — o defeito que esta tela existe para nao repetir.
+                const aviso = info.governado ? '' :
+                    '<small class="perm-pendente">ainda não governado por esta tela</small>';
+                const soLeitura = (info.governado && info.niveis.length < 3) ?
+                    '<small class="perm-nota">só consulta — não há o que editar</small>' : '';
                 return '<tr role="row"><td class="perm-modulo">' + esc(par[0]) +
-                       '<small>' + esc(par[1]) + '</small></td>' + celulas + '</tr>';
+                       '<small>' + esc(par[1]) + '</small>' + soLeitura + aviso +
+                       '</td>' + celulas + '</tr>';
             }).join('');
 
             corpo.querySelectorAll('select').forEach(function (sel) {
@@ -764,7 +783,7 @@
         /** Quais celulas mudaram e ainda nao foram salvas. */
         function marcarSujos() {
             let sujas = 0;
-            document.querySelectorAll('#perm-corpo select').forEach(function (sel) {
+            document.querySelectorAll('#perm-corpo select:not([disabled])').forEach(function (sel) {
                 const mudou = _permOriginal[sel.dataset.papel][sel.dataset.modulo] !== sel.value;
                 // Atributo, e nao classe: o CSS ja seleciona por `data-sujo`, e
                 // o valor fica visivel no inspetor na hora de depurar.

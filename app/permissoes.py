@@ -60,6 +60,47 @@ MODULOS = (
 PAPEIS_TOTAIS = ("admin",)
 
 
+# ── O que cada modulo REALMENTE aceita ─────────────────────────────────────
+#
+# Oferecer tres niveis em todo modulo parecia simplicidade, e era promessa
+# vazia: marcar "Ver e editar" em Vencidos nao muda nada, porque Vencidos nao
+# tem uma unica rota de escrita. Um controle que promete um poder que nao
+# exerce e o mesmo defeito que este plano inteiro existe para evitar.
+#
+# Estas duas listas dizem a verdade, e `tests/test_permissoes.py` as compara
+# com as rotas de verdade em `main.py` — declarar aqui e esquecer de ligar la
+# faz o teste falhar.
+
+# Modulos que TEM rota governada pela matriz. Fora daqui, mexer na tela nao
+# muda comportamento nenhum: a rota continua com a guarda antiga.
+MODULOS_GOVERNADOS = (
+    "dashboard",
+    "historico",
+    "vencidos",
+    "duplicidades",
+    "acompanhamento",
+    "usuarios",
+)
+
+# Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
+# `ler`, e a tela nem oferece o terceiro.
+MODULOS_COM_ESCRITA = ("usuarios",)
+
+
+def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:
+    """
+    Os niveis que fazem sentido oferecer para um modulo.
+
+    Sem escrita, `editar` seria indistinguivel de `ler` — e a tela estaria
+    convidando a configurar uma diferenca que nao existe.
+    """
+    if modulo not in MODULOS:
+        raise ValueError(f"módulo desconhecido: {modulo!r}")
+    if modulo in MODULOS_COM_ESCRITA:
+        return NIVEIS
+    return (NIVEL_NENHUM, NIVEL_LER)
+
+
 # ── O padrão: exatamente o comportamento de hoje ───────────────────────────
 #
 # Semente da migration e queda quando não há banco. Reproduz o que o portal já
@@ -256,6 +297,13 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
                 raise ValueError(f"módulo desconhecido: {modulo!r}")
             if n not in NIVEIS:
                 raise ValueError(f"nível desconhecido: {nivel!r}")
+            # Recusar aqui, e nao so esconder na tela: aceitar `editar` num
+            # modulo sem escrita gravaria um valor que o servidor ignora, e a
+            # matriz passaria a dizer uma coisa que nao acontece.
+            if n not in niveis_de_modulo(m):
+                raise ValueError(
+                    f"módulo {m!r} não tem escrita; nível {nivel!r} não se aplica"
+                )
             limpa.setdefault(p, {})[m] = n
 
     faltando = [
