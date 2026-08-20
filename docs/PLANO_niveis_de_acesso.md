@@ -60,27 +60,48 @@ isto é conveniência, não barreira."*
 verdade. Torná-la configurável é trocar esse literal por dado vindo da API —
 trabalho pequeno. O que não existe é o resto.
 
-### 0.3 Só existem três papéis, e nenhum eixo de leitura × escrita
+### 0.3 Quatro guardas, e o gestor já tem alcance real
+
+> **Corrigido em 19/08, depois da primeira versão deste documento.** A versão
+> original afirmava que existiam quatro guardas e que *"um gestor tem exatamente
+> os mesmos poderes de API que um operador comum"*. **As duas coisas eram
+> falsas**, e a causa foi um erro de método meu: o censo procurava as strings
+> `require_admin`, `require_auth` e `require_agent_or_admin` — e `require_admin`
+> é **substring** de `require_admin_ou_lider`, então as 5 rotas de carteira do
+> gestor foram contadas como admin puro e a quarta guarda desapareceu da tabela.
+> Fica registrado porque o erro é sutil e reincidente: censo por substring
+> mistura o específico com o geral sempre que um nome contém o outro.
 
 `auth.py:PAPEIS_VALIDOS` = `("admin", "gestor", "user")`. As 66 rotas de API se
-distribuem em quatro guardas:
+distribuem em **quatro** guardas mais as rotas deliberadamente públicas
+(contagem de 19/08, já com a Etapa 1 aplicada):
 
-| Guarda | Rotas |
-|---|---|
-| `require_admin` | 31 |
-| `require_auth` (qualquer autenticado) | 19 |
-| pública (por desenho — ver §0.4) | 13 |
-| `require_agent_or_admin` | 3 |
+| Guarda | Rotas | Quem passa |
+|---|---:|---|
+| `require_admin` | 29 | só admin |
+| `require_auth` | 14 | qualquer autenticado |
+| _(sem guarda, por desenho — ver §0.4)_ | 13 | qualquer um |
+| `require_agent_or_admin` | 5 | o agente (X-API-Key) e admin; recusa identidade anônima |
+| `require_admin_ou_lider` | 5 | admin, ou gestor que lidera ao menos um departamento |
 
-Não há nada entre "qualquer autenticado" e "admin". **Um gestor tem exatamente
-os mesmos poderes de API que um operador comum**, exceto onde a própria rota
-checa liderança de departamento por dentro.
+**O modelo de gestor já existe e é mais fino do que "papel".** Desde 18/08 são
+duas camadas:
 
-E não existe distinção de **ler vs. escrever** em lugar nenhum: `require_auth`
-guarda igualmente um `GET /api/certificados` e um `POST /api/agent/commands`.
+1. `require_admin_ou_lider` — o papel abre a porta. Gestor **sem liderança
+   nenhuma** é recusado ali mesmo; deixá-lo entrar numa tela onde toda ação
+   falha depois transformaria o sintoma em "não consigo salvar nada".
+2. `_exigir_alcance` — a liderança define **até onde**. Presente em 5 rotas,
+   confere o alvo com `cert_installer.pode_gerir`: um líder do Fiscal não monta
+   a carteira de alguém do Contábil trocando o `user_id` na chamada.
 
-**Consequência:** o eixo "editar ou só visualizar" do pedido **não tem onde
-morar**. É a parte cara, e é a que dá valor real.
+E há um detalhe que vale copiar para qualquer permissão futura: falha de
+verificação responde **503, não 403**. *"Não consegui verificar"* não é *"você
+não pode"* — um 403 ali faria o líder acreditar que perdeu a permissão.
+
+**O que continua verdadeiro:** não existe distinção de **ler vs. escrever** em
+lugar nenhum. `require_auth` guarda igualmente um `GET /api/certificados` e um
+`POST` de escrita. O eixo "editar ou só visualizar" do pedido segue sem onde
+morar — essa parte da §0.3 original estava certa, e continua sendo a cara.
 
 ### 0.4 As 13 rotas públicas são públicas de propósito
 
@@ -111,7 +132,7 @@ quer configurar e que hoje não existe.
 |---|---:|---:|---|
 | `usuarios` (+ departamentos) | 3 | 12 | admin, auth |
 | `instalador` | 6 | 12 | pública, admin, agent_or_admin, auth |
-| `carteiras` | 3 | 3 | pública, admin |
+| `carteiras` | 3 | 3 | admin_ou_lider (+ alcance por pessoa) |
 | `configuracao` | 1 | 3 | admin, auth |
 | `conta` (login/senha) | 0 | 5 | pública, auth |
 | `acompanhamento` | 4 | 1 | auth |
@@ -128,9 +149,9 @@ quer configurar e que hoje não existe.
    enfileirar comando para o agente e mandar inventário. São 3 rotas.
 2. **`mover-vencidos` sob `require_auth`.** Move arquivo de certificado no
    servidor. Uma rota.
-3. **`carteiras` mistura pública e admin** — a importação por planilha checa
-   liderança por dentro, o que funciona mas não aparece no mapa de guardas.
-4. **`gestor` não tem poder de API nenhum** que o operador também não tenha.
+3. **`carteiras/importar` não declara guarda no decorador** — checa liderança
+   por dentro. Funciona, mas não aparece em nenhum censo de guardas, que é
+   exatamente como a quarta guarda escapou da primeira versão deste documento.
 
 Os itens 1 e 2 valem correção **independente** da tela de permissões: são
 guardas coarse demais para a ação que protegem, e o conserto é trocar
@@ -149,6 +170,16 @@ Uma matriz **papel × módulo × nível**, com três níveis:
 | `editar` | aparece; leitura e escrita passam |
 
 Com 3 papéis × 12 módulos, são 36 células. A matriz cabe numa tela sem rolagem.
+
+**Mas a matriz sozinha é grosseira demais para o que já existe.** O modelo de
+carteiras (§0.3) tem um terceiro eixo que uma grade papel × módulo não expressa:
+**alcance** — *de quem* o ator pode tratar, derivado da liderança de
+departamento. Achatar isso numa célula `gestor × carteiras = editar` **perderia**
+a barreira que impede um líder do Fiscal de mexer na carteira do Contábil.
+
+Portanto: a matriz governa **se** o módulo é alcançável e em que profundidade;
+o alcance por pessoa continua onde está, em `_exigir_alcance`. A tela não deve
+prometer configurar alcance — isso é liderança de departamento, e já tem dono.
 
 **A regra que não pode ser negociada:** o nível governa **as rotas**, e o menu é
 consequência. Se for o contrário — o menu esconde e as rotas continuam abertas —
@@ -181,10 +212,11 @@ cofre de produção tem 491 certificados do ANALISESRV que só chegam por
 Dois testes de barreira novos, ambos verificados por mutação: afrouxar a guarda
 faz o teste falhar.
 
-**Etapa 2 — dar poder ao `gestor` (sem tela).**
-Hoje o papel existe e não concede nada além do menu de Carteiras. Definir o que
-um gestor deve alcançar, e aplicar. Sem isso, "configurar o que o gestor pode"
-configura um papel vazio.
+**Etapa 2 — dar poder ao `gestor`. ✅ JÁ ESTAVA FEITA, em 18/08/2026.**
+Descoberto ao investigar, não planejado: `require_admin_ou_lider` +
+`_exigir_alcance` já implementam exatamente o que o `PRODUCT.md` registra sobre
+o papel — *"monta e acompanha a carteira do seu time; não administra contas"*.
+A primeira versão deste plano propunha construir o que já existia.
 
 **Etapa 3 — a matriz em banco.**
 Tabela `permissoes(papel, modulo, nivel)`, com os valores atuais como semente —
