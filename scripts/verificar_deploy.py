@@ -47,6 +47,20 @@ ROTAS_ESPERADAS = [
     "/api/health",
     "/api/cert-installer/vault-optin",
     "/api/cert-installer/upload-pfx",
+]
+
+# Rotas que precisam estar AUSENTES. A lista existe porque a verificação só
+# olhava para o que falta, e removeu-se coisa de propósito.
+#
+# `/api/cert-installer/prepare` saiu em 16/08/2026 por decisão de segurança:
+# emitia token de instalação para um caminho que ninguém usa, e um token É a
+# entrega da chave privada. Ela ficou em ROTAS_ESPERADAS depois disso, então
+# todo deploy saudável era reportado como "há divergência" — e um verificador
+# que acusa deploy bom treina quem o roda a ignorá-lo.
+#
+# Invertida, a mesma linha passa a valer alguma coisa: se a rota reaparecer num
+# merge ou num revert, isto acusa.
+ROTAS_PROIBIDAS = [
     "/api/cert-installer/prepare",
 ]
 
@@ -148,6 +162,14 @@ def verificar(base: str) -> dict:
             faltando = [r for r in ROTAS_ESPERADAS if r not in caminhos]
             if faltando:
                 resultado["erros"].append("rotas ausentes: " + ", ".join(faltando))
+                resultado["ok"] = False
+
+            ressuscitadas = [r for r in ROTAS_PROIBIDAS if r in caminhos]
+            if ressuscitadas:
+                resultado["erros"].append(
+                    "rotas que deveriam estar removidas voltaram ao ar: "
+                    + ", ".join(ressuscitadas)
+                )
                 resultado["ok"] = False
         else:
             resultado["avisos"].append(f"/openapi.json indisponível (HTTP {status_o})")
