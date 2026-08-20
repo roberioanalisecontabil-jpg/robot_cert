@@ -50,7 +50,6 @@ MODULOS = (
     "instalador",
     "usuarios",
     "configuracao",
-    "carteiras",
 )
 
 # Rotas de máquina (`ingest`, `agent/*`) e de conta (`login`, `senha`) ficam de

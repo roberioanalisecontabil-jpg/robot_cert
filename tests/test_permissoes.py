@@ -19,6 +19,29 @@ def cache_limpo() -> None:
     permissoes.invalidar_cache()
 
 
+def test_as_listas_de_modulos_nao_tem_repetido_nem_estranho() -> None:
+    """
+    Trivial, e existe porque a ausencia dele deixou passar um defeito real.
+
+    Em 20/08 um `replace` meu acertou `MODULOS` em vez de `MODULOS_GOVERNADOS`
+    — as duas terminam com as mesmas linhas — e `carteiras` ficou duplicado na
+    lista canonica. Os 726 testes de entao passaram: nenhum olhava a lista em
+    si, so o que era derivado dela.
+
+    Quem viu foi a TELA, que renderizou 11 linhas para 10 modulos. Um teste de
+    duas linhas teria pegado antes.
+    """
+    assert len(permissoes.MODULOS) == len(set(permissoes.MODULOS)), "modulo repetido"
+    for lista, nome in (
+        (permissoes.MODULOS_GOVERNADOS, "MODULOS_GOVERNADOS"),
+        (permissoes.MODULOS_COM_ESCRITA, "MODULOS_COM_ESCRITA"),
+    ):
+        assert len(lista) == len(set(lista)), f"{nome} tem repetido"
+        assert set(lista) <= set(permissoes.MODULOS), f"{nome} cita modulo inexistente"
+    # Escrita so faz sentido em modulo governado.
+    assert set(permissoes.MODULOS_COM_ESCRITA) <= set(permissoes.MODULOS_GOVERNADOS)
+
+
 def test_admin_e_sempre_total_e_nao_depende_da_matriz() -> None:
     """
     `admin` não tem linha na tabela, por desenho.
