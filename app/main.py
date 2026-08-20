@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import atividade, auth, config, senha_reset
+from app import atividade, auth, config, permissoes, senha_reset
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -291,6 +291,46 @@ async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.T
 
 
 ERRO_ACESSO_MAQUINA = "Acesso restrito ao agente e a administradores."
+
+
+def require_modulo(modulo: str, minimo: str = permissoes.NIVEL_LER):
+    """
+    Guarda por MODULO, lida da matriz de permissoes (`app/permissoes.py`).
+
+    Substitui `require_admin` onde a alcada deixa de ser "so admin" e passa a
+    ser configuravel pela tela. O nome do modulo e conferido AQUI, na
+    importacao: um erro de digitacao vira erro de partida do servidor, e nao um
+    403 silencioso em producao para um modulo que ninguem mexeu.
+
+    NAO SERVE para rota que o AGENTE chama. O agente autentica por X-API-Key e
+    recebe papel 'agent', que nao esta na matriz e portanto cai em `nenhum`.
+    `GET /api/settings` e o exemplo vivo: pertence ao modulo `configuracao`, mas
+    `agent/run_agent.py` o consome para saber quais pastas monitorar — liga-lo
+    aqui pararia o agente em producao. Rota de maquina fica com
+    `require_agent_or_admin`.
+    """
+    if modulo not in permissoes.MODULOS:
+        raise ValueError(f"modulo desconhecido em require_modulo: {modulo!r}")
+    if minimo not in permissoes.NIVEIS:
+        raise ValueError(f"nivel desconhecido em require_modulo: {minimo!r}")
+
+    async def _guarda(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+        try:
+            if permissoes.pode(token.role or "", modulo, minimo):
+                return token
+        except permissoes.PermissoesIndisponiveis:
+            # 503, e nao 403: "nao consegui verificar" nao e "voce nao pode".
+            # Mesmo criterio de `require_admin_ou_lider` e `_exigir_alcance`.
+            raise HTTPException(
+                status_code=503,
+                detail="Nao foi possivel verificar suas permissoes. Tente de novo.",
+            )
+        raise HTTPException(
+            status_code=403,
+            detail=f"Seu perfil nao tem acesso a {modulo}.",
+        )
+
+    return _guarda
 
 
 async def require_agent_or_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
@@ -3920,7 +3960,7 @@ def expurgar_log_agora() -> dict:
     }
 
 
-@app.get("/api/dashboard", dependencies=[Depends(require_admin)])
+@app.get("/api/dashboard", dependencies=[Depends(require_modulo("dashboard"))])
 def dashboard_visao_geral(dias: int = Query(30, ge=1, le=365)) -> dict:
     """
     Os painéis baratos do dashboard, numa chamada (~1s).
@@ -3934,7 +3974,7 @@ def dashboard_visao_geral(dias: int = Query(30, ge=1, le=365)) -> dict:
     return dashboard.visao_geral(dias)
 
 
-@app.get("/api/dashboard/renovacoes", dependencies=[Depends(require_admin)])
+@app.get("/api/dashboard/renovacoes", dependencies=[Depends(require_modulo("dashboard"))])
 def dashboard_renovacoes(
     dias: int = Query(30, ge=1, le=365),
     machine_id: str = Query("ANALISESRV", min_length=1),

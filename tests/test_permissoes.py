@@ -252,3 +252,62 @@ def test_semente_da_migration_e_identica_ao_padrao_do_codigo() -> None:
     bloco = re.search(r"modulo\s+text not null check \(modulo in \(([^)]*)\)", sql, re.S)
     assert bloco, "o check de modulo sumiu da migration"
     assert set(re.findall(r"'(\w+)'", bloco.group(1))) == set(permissoes.MODULOS)
+
+
+# ── A guarda ligada em rota de verdade ──────────────────────────────────────
+
+def _token(papel: str) -> dict:
+    from app import auth
+    return {"Authorization": "Bearer " + auth.create_access_token(
+        {"sub": f"{papel}@exemplo.com", "role": papel})}
+
+
+def test_dashboard_respeita_a_matriz(client) -> None:
+    """
+    `/api/dashboard` saiu de `require_admin` para `require_modulo("dashboard")`.
+
+    O comportamento tinha que continuar IDENTICO — a matriz da `nenhum` a gestor
+    e user para este modulo. Nenhum teste existente notou a troca, o que e o
+    resultado desejado e tambem o motivo de este teste existir: sem ele, a
+    camada nova estaria em producao sem uma linha que prove que ela barra.
+    """
+    for rota in ("/api/dashboard", "/api/dashboard/renovacoes"):
+        for papel in ("user", "gestor"):
+            r = client.get(rota, headers=_token(papel))
+            assert r.status_code == 403, f"{papel} alcancou {rota}"
+
+        # Admin passa sem consultar a matriz. 200 ou 5xx de dependencia externa
+        # servem; o que nao pode e 403.
+        r = client.get(rota, headers=_token("admin"))
+        assert r.status_code != 403, f"admin foi barrado em {rota}"
+
+
+def test_matriz_indisponivel_vira_503_e_nao_403(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Banco fora do ar nao pode parecer falta de permissao.
+
+    Um 403 aqui faria o gestor acreditar que perdeu um acesso que continua sendo
+    dele — e o suporte procuraria a permissao errada, em vez de olhar o banco.
+    """
+    def _explode(*_a, **_k):
+        raise permissoes.PermissoesIndisponiveis("connection refused")
+
+    monkeypatch.setattr(permissoes, "pode", _explode)
+
+    r = client.get("/api/dashboard", headers=_token("gestor"))
+    assert r.status_code == 503, f"esperava 503, veio {r.status_code}"
+
+
+def test_require_modulo_recusa_nome_invalido_na_importacao() -> None:
+    """
+    Erro de digitacao no nome do modulo derruba o servidor na partida, e nao
+    silenciosamente tranca todo mundo para fora em producao.
+    """
+    from app.main import require_modulo
+
+    with pytest.raises(ValueError):
+        require_modulo("dashbaord")
+    with pytest.raises(ValueError):
+        require_modulo("dashboard", "editarr")

@@ -218,10 +218,26 @@ Descoberto ao investigar, não planejado: `require_admin_ou_lider` +
 o papel — *"monta e acompanha a carteira do seu time; não administra contas"*.
 A primeira versão deste plano propunha construir o que já existia.
 
-**Etapa 3 — a matriz em banco.**
-Tabela `permissoes(papel, modulo, nivel)`, com os valores atuais como semente —
-assim o comportamento não muda no dia do deploy. Uma dependência
-`require_modulo("usuarios", "editar")` substituindo `require_admin` rota a rota.
+**Etapa 3 — a matriz em banco. ✅ FEITA em 20/08.**
+Tabela `permissoes(papel, modulo, nivel)` aplicada em produção, semeada com o
+comportamento de então; a conferência do PASSO 4 bateu com a semente papel por
+papel. `app/permissoes.py` resolve a matriz, e `require_modulo(modulo, nivel)`
+em `main.py` é a dependência.
+
+**Ligado até agora: só `dashboard`** (2 rotas). Era `require_admin` e a matriz
+dá `nenhum` a gestor e user — comportamento idêntico, que é o motivo de começar
+por ele.
+
+**Armadilha encontrada ao ligar, que muda a ordem das próximas.** Nem toda rota
+de um módulo pode ir para a matriz: `GET /api/settings` pertence a
+`configuracao`, mas quem o consome é o **agente**, para saber quais pastas
+monitorar. O agente autentica por X-API-Key e recebe papel `agent`, que não está
+na matriz e cairia em `nenhum` — ligá-lo pararia a ingestão em produção.
+
+Regra que sai daí: **rota que uma máquina chama fica com
+`require_agent_or_admin`; `require_modulo` é para rota que só gente usa.** Antes
+de ligar cada módulo, conferir os chamadores em `agent/`, e não só em
+`templates/`.
 
 **Etapa 4 — a tela.**
 Aba em `/usuarios`, matriz 3 × 12, alimentada pela API da etapa 3. É a parte

@@ -5,7 +5,13 @@
 -- COMO USAR: rode um PASSO de cada vez. Se algum der erro, PARE e me mande a
 -- mensagem exata. Sem BEGIN/COMMIT -- o SQL Editor ja roda numa transacao.
 --
--- NAO APLICADA. Etapa 3 de docs/PLANO_niveis_de_acesso.md.
+-- APLICADA EM PRODUCAO EM 20/08/2026. Etapa 3 de
+-- docs/PLANO_niveis_de_acesso.md.
+--
+-- Conferencia do PASSO 4, conforme rodada: 6 linhas nao-'nenhum' para gestor
+-- (as cinco telas de consulta em 'ler', mais carteiras em 'editar') e 5 para
+-- user. Identico a semente, papel por papel -- ou seja, o comportamento do
+-- portal nao mudou com a criacao da tabela, que era o objetivo.
 --
 -- ADITIVA: uma tabela nova. Nada existente e alterado.
 --
