@@ -50,6 +50,7 @@ MODULOS = (
     "instalador",
     "usuarios",
     "configuracao",
+    "carteiras",
 )
 
 # Rotas de máquina (`ingest`, `agent/*`) e de conta (`login`, `senha`) ficam de
@@ -81,11 +82,12 @@ MODULOS_GOVERNADOS = (
     "acompanhamento",
     "usuarios",
     "configuracao",
+    "carteiras",
 )
 
 # Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
 # `ler`, e a tela nem oferece o terceiro.
-MODULOS_COM_ESCRITA = ("usuarios", "configuracao")
+MODULOS_COM_ESCRITA = ("usuarios", "configuracao", "carteiras")
 
 
 def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:

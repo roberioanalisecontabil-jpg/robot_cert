@@ -449,8 +449,12 @@ def test_get_permissoes_entrega_o_que_a_tela_precisa(client) -> None:
     por_id = {m["id"]: m for m in d["modulos"]}
     assert por_id["usuarios"]["niveis"] == list(permissoes.NIVEIS)
     assert permissoes.NIVEL_EDITAR not in por_id["vencidos"]["niveis"]
-    assert por_id["usuarios"]["governado"] is True
-    assert por_id["carteiras"]["governado"] is False
+    # Contra a DECLARACAO, e nao contra um modulo escolhido a dedo: a versao
+    # anterior fixava `carteiras: governado is False`, o que era um retrato do
+    # momento — quebrou no dia em que carteiras foi ligada, sem nada estar errado.
+    for m in d["modulos"]:
+        assert m["governado"] == (m["id"] in permissoes.MODULOS_GOVERNADOS), m["id"]
+        assert m["niveis"] == list(permissoes.niveis_de_modulo(m["id"])), m["id"]
     assert d["papeis"] == list(permissoes.PAPEIS_CONFIGURAVEIS)
     assert d["papeis_totais"] == list(permissoes.PAPEIS_TOTAIS)
     # `admin` nao vem como linha editavel: e o que impede a tela de oferecer
@@ -601,3 +605,77 @@ def test_escrita_de_configuracao_nao_e_de_mao_dupla(client_com_chave, api_key: s
     assert client_com_chave.post(
         "/api/settings/alerts/trigger", json={}, headers=h
     ).status_code == 403
+
+
+def _roda_guarda(guarda, papel: str):
+    """
+    Executa uma dependencia de guarda direto, com um token de mentira.
+
+    Os casos POSITIVOS nao podem ser testados por HTTP: a guarda passa e o corpo
+    da rota morre no Supabase, devolvendo 503. Um `assert != 403` ali passa por
+    acidente — foi o que uma verificacao por mutacao mostrou, com as duas
+    mutacoes (tirar o eixo do papel e tirar o eixo da lideranca) escapando.
+
+    Chamando a guarda isolada, o que se mede e exatamente o que esta em
+    julgamento: ela autoriza, ou levanta?
+    """
+    import asyncio
+    from app import auth as _auth
+
+    token = _auth.TokenData(email=f"{papel}@exemplo.com", role=papel)
+    return asyncio.run(guarda(token))
+
+
+def test_carteiras_mantem_os_dois_eixos(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    A matriz diz SE o papel alcança; a liderança diz DE QUEM.
+
+    Ao ligar Carteiras à matriz troquei o literal `papel != "gestor"` de
+    `require_admin_ou_lider` — sem isso, marcar "Carteiras: Ver e editar" para
+    outro papel não adiantaria nada, e a tela prometeria o que não entrega.
+
+    O risco da troca é o oposto: a matriz atropelar o alcance e deixar um líder
+    do Fiscal mexer na carteira do Contábil. Os dois lados estão travados aqui.
+    """
+    from fastapi import HTTPException
+    from app import cert_installer, main as _main
+
+    monkeypatch.setattr(_main, "_user_id_da_sessao", lambda _t: "uid-de-teste")
+    G, U = permissoes.PADRAO["gestor"], permissoes.PADRAO["user"]
+
+    def cenario(matriz, lidera):
+        monkeypatch.setattr(permissoes, "_matriz", lambda: matriz)
+        monkeypatch.setattr(cert_installer, "departamentos_que_lidera", lambda _u: lidera)
+
+    # ── Eixo 1: o MODULO ────────────────────────────────────────────────
+    cenario({"gestor": {**G, "carteiras": permissoes.NIVEL_NENHUM}, "user": U}, ["dep-1"])
+    assert client.get(
+        "/api/carteira/operadores", headers=_token("gestor")
+    ).status_code == 403, "sem o modulo, liderar nao deveria bastar"
+
+    # `ler` nao concede escrita, aqui como em qualquer modulo.
+    cenario({"gestor": {**G, "carteiras": permissoes.NIVEL_LER}, "user": U}, ["dep-1"])
+    assert client.post(
+        "/api/carteira", json={"user_id": "x", "documentos": []}, headers=_token("gestor")
+    ).status_code == 403
+
+    # ── Eixo 2: a LIDERANCA ─────────────────────────────────────────────
+    cenario({"gestor": {**G, "carteiras": permissoes.NIVEL_EDITAR}, "user": U}, [])
+    assert client.post(
+        "/api/carteira", json={"user_id": "x", "documentos": []}, headers=_token("gestor")
+    ).status_code == 403, "a matriz atropelou o alcance: quem nao lidera passou"
+
+    # ── Os positivos, na guarda isolada ─────────────────────────────────
+    cenario({"gestor": {**G, "carteiras": permissoes.NIVEL_EDITAR}, "user": U}, ["dep-1"])
+    assert _roda_guarda(_main.require_admin_ou_lider, "gestor").role == "gestor"
+
+    # E o caso que prova que quem decide o papel e a MATRIZ, e nao um literal:
+    # com `papel != "gestor"` de volta, este `user` seria recusado.
+    cenario({"gestor": G, "user": {**U, "carteiras": permissoes.NIVEL_EDITAR}}, ["dep-1"])
+    assert _roda_guarda(_main.require_admin_ou_lider, "user").role == "user"
+
+    # ...e sem liderar, o mesmo `user` e recusado — o segundo eixo continua de pe.
+    cenario({"gestor": G, "user": {**U, "carteiras": permissoes.NIVEL_EDITAR}}, [])
+    with pytest.raises(HTTPException) as erro:
+        _roda_guarda(_main.require_admin_ou_lider, "user")
+    assert erro.value.status_code == 403

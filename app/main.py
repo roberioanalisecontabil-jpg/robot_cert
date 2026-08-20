@@ -3585,15 +3585,27 @@ async def require_admin_ou_lider(
     papel abre a porta e a LIDERANÇA define até onde se vai; cada rota confere
     o alvo com `cert_installer.pode_gerir`.
 
-    Gestor sem liderança nenhuma é recusado aqui mesmo, com uma mensagem que
-    diz o que fazer. Deixá-lo entrar numa tela onde toda ação falha depois
-    seria pior: o sintoma viraria "não consigo salvar nada".
+    Mudou de novo em 20/08/2026: o papel passou a ser decidido pela matriz de
+    permissões (`require_modulo("carteiras", ...)` nas rotas), e esta função
+    ficou só com a liderança. Quem chega aqui já provou que o papel dele alcança
+    Carteiras; falta provar que a pessoa-alvo está no alcance dele.
+
+    Quem lidera nada é recusado aqui mesmo, com uma mensagem que diz o que
+    fazer. Deixá-lo entrar numa tela onde toda ação falha depois seria pior: o
+    sintoma viraria "não consigo salvar nada".
     """
     papel = (token.role or "").strip().lower()
     if papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
         return token
-    if papel != "gestor":
-        raise HTTPException(status_code=403, detail="Acesso restrito a gestores e administradores.")
+
+    # O PAPEL deixou de ser decidido aqui em 20/08. Antes era um literal
+    # (`papel != "gestor"`), agora quem diz se o papel alcanca Carteiras e a
+    # matriz de permissoes, declarada nas rotas com `require_modulo`. Esta
+    # guarda cuida so do outro eixo: a LIDERANCA, que diz de quem.
+    #
+    # Separar os dois e o que torna a tela util. Com o literal, marcar
+    # "Carteiras: Ver e editar" para outro papel nao adiantaria nada — a guarda
+    # recusaria assim mesmo, e a tela estaria prometendo o que nao entrega.
 
     uid = _user_id_da_sessao(token)
     try:
@@ -3637,7 +3649,11 @@ class CarteiraRequest(BaseModel):
     documentos: List[str]
 
 
-@app.get("/api/carteira/operadores")
+# Modulo `carteiras` na matriz desde 20/08, com os DOIS eixos declarados: a
+# matriz diz se o papel alcanca (e se so ve ou tambem monta), e
+# `require_admin_ou_lider` diz de QUEM. Um lider do Fiscal com "Ver e editar"
+# continua sem tocar na carteira de alguem do Contabil.
+@app.get("/api/carteira/operadores", dependencies=[Depends(require_modulo("carteiras"))])
 def listar_operadores(
     token: auth.TokenData = Depends(require_admin_ou_lider),
 ) -> dict:
@@ -3707,7 +3723,7 @@ def listar_operadores(
     }
 
 
-@app.get("/api/carteira/documentos", dependencies=[Depends(require_admin_ou_lider)])
+@app.get("/api/carteira/documentos", dependencies=[Depends(require_modulo("carteiras")), Depends(require_admin_ou_lider)])
 def listar_documentos_atribuiveis(
     q: Optional[str] = Query(None, max_length=120),
     limite: int = Query(500, ge=1, le=2000),
@@ -3736,7 +3752,7 @@ def listar_documentos_atribuiveis(
     return {"total": len(todos), "documentos": todos[:limite]}
 
 
-@app.get("/api/carteira/{user_id}")
+@app.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])
 def obter_carteira(
     user_id: str,
     token: auth.TokenData = Depends(require_admin_ou_lider),
@@ -3774,7 +3790,7 @@ def obter_carteira(
     }
 
 
-@app.post("/api/carteira")
+@app.post("/api/carteira", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
 def atribuir_carteira(
     body: CarteiraRequest,
     token: auth.TokenData = Depends(require_admin_ou_lider),
@@ -3853,7 +3869,7 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
     return [{(k or ""): (v or "") for k, v in linha.items()} for linha in leitor]
 
 
-@app.post("/api/carteira/importar")
+@app.post("/api/carteira/importar", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
 async def importar_carteiras(
     file: UploadFile = File(...),
     token: auth.TokenData = Depends(require_admin_ou_lider),
@@ -3988,7 +4004,7 @@ async def importar_carteiras(
     }
 
 
-@app.delete("/api/carteira/{user_id}/{documento}")
+@app.delete("/api/carteira/{user_id}/{documento}", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
 def remover_carteira(
     user_id: str,
     documento: str,
