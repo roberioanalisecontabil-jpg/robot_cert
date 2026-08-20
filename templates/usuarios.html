@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=li-todos-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=trilha-de-permissoes-2026-08" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -62,6 +62,35 @@
         .perm-col { width: 12rem; }
         .perm-modulo { font-weight: 600; }
         .perm-modulo small { display: block; font-weight: 400; font-size: 0.78rem; color: var(--text-muted); }
+
+        /* Histórico. Mesmo idioma da `.acoes-menu` acima: `<details>` nativo,
+           sem marcador do navegador, sem JS para abrir. */
+        .perm-trilha { margin-top: var(--sp-4); border-top: 1px dashed var(--border); }
+        .perm-trilha > summary {
+            list-style: none; cursor: pointer;
+            display: flex; align-items: baseline; gap: 0.5rem;
+            padding: var(--sp-3) 0; font-size: 0.88rem; font-weight: 600;
+        }
+        .perm-trilha > summary::-webkit-details-marker { display: none; }
+        .perm-trilha > summary::marker { content: ""; }
+        .perm-trilha > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .perm-trilha__contagem { font-weight: 400; font-size: 0.8rem; color: var(--text-muted); }
+        .perm-trilha__corpo { padding-bottom: var(--sp-3); }
+        .perm-trilha__lista { list-style: none; margin: 0; padding: 0; }
+        .perm-trilha__lista li {
+            display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem;
+            padding: 0.45rem 0; border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+        .perm-trilha__quando { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
+        .perm-trilha__quem { color: var(--text-muted); }
+        /* Concessão e revogação com cores diferentes: numa lista de auditoria,
+           "ganhou acesso" e "perdeu acesso" são as duas coisas que se procura,
+           e lê-las depende de distinguir uma da outra de relance. */
+        .perm-trilha__de { color: var(--text-muted); text-decoration: line-through; }
+        .perm-trilha__para { font-weight: 600; }
+        .perm-trilha__para--sobe { color: var(--warning-text); }
+        .perm-trilha__para--desce { color: var(--text-muted); }
         .perm-nota { color: var(--text-muted); font-style: italic; }
         /* Ambar de "pendente", o mesmo sentido do badge de expirando: algo que
            ainda vai acontecer, e nao um erro. */
@@ -316,6 +345,19 @@
             <button type="button" class="btn-action" id="perm-desfazer" disabled>Desfazer alterações</button>
             <button type="button" class="btn-action primary" id="perm-salvar" disabled>Salvar</button>
           </div>
+
+          <!-- Fechado por padrão: o assunto da aba é a matriz, e o histórico é
+               consulta ocasional. Aberto, empurraria a tabela para fora da
+               primeira tela. -->
+          <details class="perm-trilha" id="perm-trilha">
+            <summary>
+              <span>Histórico de alterações</span>
+              <span class="perm-trilha__contagem" id="perm-trilha-contagem"></span>
+            </summary>
+            <div class="perm-trilha__corpo" id="perm-trilha-corpo">
+              <p class="hint">Carregando…</p>
+            </div>
+          </details>
 
           <p class="hint" style="margin-top: var(--sp-3);">
             <strong>Não entra</strong>: o módulo some do menu e as rotas recusam.
@@ -817,6 +859,7 @@
                 _permAtual = JSON.parse(JSON.stringify(dados.matriz));
                 marcarSujos();
                 permMsg('Níveis de acesso salvos. Quem já está logado passa a ver a mudança em até 30 segundos.', 'success');
+                if (document.getElementById('perm-trilha').open) void carregarTrilha();
             } catch (e) {
                 permMsg('Não foi possível salvar: ' + e.message, 'error');
                 botao.disabled = false;
@@ -832,6 +875,55 @@
             });
             marcarSujos();
         }
+
+        // ── Histórico ────────────────────────────────────────────────
+        //
+        // Carregado só quando a pessoa abre, e recarregado depois de salvar:
+        // são os dois momentos em que ele muda ou passa a interessar.
+        const PERM_ORDEM = { nenhum: 0, ler: 1, editar: 2 };
+
+        async function carregarTrilha() {
+            const corpo = document.getElementById('perm-trilha-corpo');
+            try {
+                const r = await fetch('/api/permissoes/trilha', { headers: getHeaders() });
+                if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+                const itens = (await r.json()).itens || [];
+                document.getElementById('perm-trilha-contagem').textContent =
+                    itens.length ? '(' + itens.length + ')' : '';
+                if (!itens.length) {
+                    // Distingue "nada aconteceu" de "não consegui ler" — as
+                    // duas frases significam coisas muito diferentes num
+                    // registro de auditoria.
+                    corpo.innerHTML = '<p class="hint">Nenhuma alteração registrada até agora.</p>';
+                    return;
+                }
+                corpo.innerHTML = '<ul class="perm-trilha__lista">' + itens.map(function (t) {
+                    const rot = PERM_ROTULOS[t.modulo] || [t.modulo, ''];
+                    const de = PERM_NIVEIS[t.de] || (t.de || '—');
+                    const para = PERM_NIVEIS[t.para] || t.para;
+                    const subiu = (PERM_ORDEM[t.para] ?? 0) > (PERM_ORDEM[t.de] ?? -1);
+                    const quando = t.em ? new Date(t.em).toLocaleString('pt-BR') : '';
+                    return '<li>' +
+                        '<span class="perm-trilha__quando">' + esc(quando) + '</span>' +
+                        '<strong>' + esc(rot[0]) + '</strong>' +
+                        '<span>para ' + esc(t.papel === 'user' ? 'Operador' : 'Gestor') + ':</span>' +
+                        '<span class="perm-trilha__de">' + esc(de) + '</span>' +
+                        '<span aria-hidden="true">→</span>' +
+                        '<span class="perm-trilha__para ' +
+                        (subiu ? 'perm-trilha__para--sobe' : 'perm-trilha__para--desce') +
+                        '">' + esc(para) + '</span>' +
+                        (t.alterado_por ? '<span class="perm-trilha__quem">por ' + esc(t.alterado_por) + '</span>' : '') +
+                        '</li>';
+                }).join('') + '</ul>';
+            } catch (e) {
+                corpo.innerHTML = '<p class="hint">Não foi possível carregar o histórico: ' +
+                    esc(e.message) + '</p>';
+            }
+        }
+
+        document.getElementById('perm-trilha').addEventListener('toggle', function () {
+            if (this.open) void carregarTrilha();
+        });
 
         document.getElementById('perm-salvar').addEventListener('click', salvarPermissoes);
         document.getElementById('perm-desfazer').addEventListener('click', desfazerPermissoes);

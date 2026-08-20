@@ -22,9 +22,12 @@ e vale registrá-las porque cada uma poda uma classe inteira de engano:
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 # ── Vocabulário ────────────────────────────────────────────────────────────
 
@@ -289,6 +292,82 @@ def matriz_para_papel(papel: str) -> Dict[str, str]:
 PAPEIS_CONFIGURAVEIS = ("gestor", "user")
 
 
+def _registrar_trilha(sb, antes: Dict[str, Dict[str, str]],
+                      depois: Dict[str, Dict[str, str]], alterado_por: str) -> int:
+    """Grava uma linha por célula que MUDOU. Nunca levanta.
+
+    Chamada DEPOIS do upsert, e engolindo a própria falha, por uma razão que
+    vale escrever: se a trilha pudesse derrubar a gravação, uma tabela ausente
+    ou um erro de rede trancaria o administrador fora de conceder acesso — e
+    "não consegui registrar" viraria "você não pode", que é exatamente a
+    inversão que este módulo evita em todo o resto (503, nunca 403).
+
+    A postura estrita de auditoria seria o contrário: sem trilha, sem mudança.
+    Ela não cabe aqui porque a permissão É o mecanismo de recuperação de acesso
+    do portal; travá-la por causa do registro cria um modo de falha pior do que
+    o que o registro previne. A falha vai para o log como ERROR.
+    """
+    mudancas = []
+    for papel, colunas in depois.items():
+        for modulo, novo in colunas.items():
+            velho = (antes.get(papel) or {}).get(modulo)
+            # `velho is None` = célula que não existia (primeira gravação, ou
+            # módulo novo). Registrar como mudança é correto: passou a existir.
+            if velho == novo:
+                continue
+            mudancas.append({
+                "papel": papel,
+                "modulo": modulo,
+                "de": velho if velho is not None else "",
+                "para": novo,
+                "alterado_por": (alterado_por or "")[:120],
+            })
+
+    if not mudancas:
+        # Salvar sem alterar nada não gera linha. É o que mantém a trilha
+        # legível: quem a abrir vê decisões, e não cliques em Salvar.
+        return 0
+
+    try:
+        sb.table("permissoes_trilha").insert(mudancas).execute()
+        return len(mudancas)
+    except Exception as e:  # noqa: BLE001
+        logger.error(
+            "Permissões gravadas, mas a trilha NÃO foi registrada (%d mudança(s), "
+            "por %s): %s",
+            len(mudancas), alterado_por or "?", e,
+        )
+        return 0
+
+
+def ler_trilha(limite: int = 50) -> List[Dict[str, Any]]:
+    """As últimas mudanças, mais recentes primeiro.
+
+    Devolve lista vazia quando não há de onde ler — tabela ausente, sem
+    Supabase, erro de rede. A trilha é para consulta; uma tela que não consegue
+    mostrá-la não deve impedir o resto de funcionar.
+    """
+    from app.settings_state import _supabase, supabase_configured
+
+    if not supabase_configured():
+        return []
+    sb = _supabase()
+    if sb is None:
+        return []
+    try:
+        r = (
+            sb.table("permissoes_trilha")
+            .select("papel, modulo, de, para, alterado_por, em")
+            .order("em", desc=True)
+            .limit(max(1, min(int(limite or 50), 200)))
+            .execute()
+        )
+        return list(r.data or [])
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Trilha de permissões indisponível: %s", e)
+        return []
+
+
 def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[str, Dict[str, str]]:
     """
     Grava a matriz inteira e devolve o que ficou valendo.
@@ -336,6 +415,12 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
     if sb is None:
         raise PermissoesIndisponiveis("cliente Supabase indisponível")
 
+    # Estado ANTES da escrita, para saber o que de fato mudou. A tela grava a
+    # matriz inteira toda vez; sem o diff, a trilha teria 20 linhas por clique
+    # em Salvar e não diria nada — histórico que registra tudo é tão inútil
+    # quanto histórico que não registra nada.
+    antes = _buscar_no_banco() or {}
+
     linhas = [
         {"papel": p, "modulo": m, "nivel": n, "alterado_por": (alterado_por or "")[:120]}
         for p, cols in limpa.items() for m, n in cols.items()
@@ -344,6 +429,9 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
         sb.table("permissoes").upsert(linhas, on_conflict="papel,modulo").execute()
     except Exception as e:
         raise PermissoesIndisponiveis(str(e)) from e
+
+    # Depois da gravação, e sem poder derrubá-la: ver `_registrar_trilha`.
+    _registrar_trilha(sb, antes, limpa, alterado_por)
 
     # Sem isto a mudança só valeria depois do TTL do cache — a pessoa salvaria,
     # recarregaria a tela e veria o valor antigo por até 30 segundos.

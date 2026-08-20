@@ -1615,6 +1615,22 @@ class PermissoesBody(BaseModel):
 # amarrar isto ao proprio modulo Usuarios deixaria um gestor com escrita em
 # Usuarios se autoconceder Configuracao e Instalador. Quem concede tem que estar
 # acima do que concede.
+@app.get("/api/permissoes/trilha", dependencies=[Depends(require_admin)])
+def get_trilha_permissoes(limite: int = Query(30, ge=1, le=200)) -> dict:
+    """Histórico de concessão e revogação de acesso.
+
+    `require_admin` pelo mesmo motivo da matriz: a trilha diz quem alcança o
+    quê e quem decidiu isso. Gatear pela própria matriz deixaria um gestor com
+    escrita em Usuários lendo — e depois reescrevendo — o registro das próprias
+    concessões.
+
+    Nunca falha: `ler_trilha` devolve lista vazia quando não há de onde ler. A
+    aba de Níveis de acesso não pode parar de funcionar porque o histórico
+    ficou indisponível.
+    """
+    return {"itens": permissoes.ler_trilha(limite)}
+
+
 @app.get("/api/permissoes", dependencies=[Depends(require_admin)])
 def get_permissoes() -> dict:
     """A matriz para a tela: o que cada papel configuravel alcanca hoje."""
