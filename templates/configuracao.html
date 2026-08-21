@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
+    <link rel="stylesheet" href="/static/style.css?v=componentes-extraidos-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -63,7 +63,7 @@
 
       <!-- Status bar topo -->
       <section class="panel--nested" style="margin-bottom: 1.5rem;" aria-label="Estado e caminhos">
-        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <div class="linha-acoes" style="gap: 1rem;">
           <span class="tag" id="tag-supabase">Supabase: …</span>
           <span class="tag" id="tag-api-key" title="Só indica se o .env exige chave">Chave: …</span>
 
@@ -91,7 +91,7 @@
 
         <!-- Aba 1: Chave API -->
         <section id="sec-chave">
-          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Chave API (segurança)</h2>
+          <h2 style="margin: 0 0 0.5rem;">Chave API (segurança)</h2>
           <p class="hint">
             Se o servidor estiver protegido por uma <code>API_KEY</code>, adicione a mesma chave abaixo para liberar as configurações. Fica gravado no seu navegador.
           </p>
@@ -107,7 +107,7 @@
 
         <!-- Aba 2: Pastas e Agente -->
         <section id="sec-pastas" style="display: none;">
-          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
+          <h2 style="margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
           <p class="hint">
             Estes caminhos são a referência para o <strong>agente</strong>. O agente lê daqui para monitorar pastas usando o Watchdog.
           </p>
@@ -154,7 +154,7 @@
           </div>
 
           <!-- Info lateral inline -->
-          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1.5rem;">
+          <div class="linha-acoes" style="gap: 1.5rem; margin-top: 1.5rem;">
             <div class="side-card" style="flex: 1; min-width: 220px;">
               <h3>Agente no Windows</h3>
               <p class="side-text">
@@ -174,7 +174,7 @@
 
         <!-- Aba 3: SMTP -->
         <section id="sec-smtp" style="display: none;">
-          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
+          <h2 style="margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
           <p class="hint">
             Configure o servidor SMTP e, abaixo, para quem os alertas vão e com que antecedência.
           </p>
@@ -261,7 +261,7 @@
                 </span>
               </div>
             </div>
-            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <div class="linha-acoes" style="margin-top: 1.5rem;">
               <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
               <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
               <input type="email" id="inp-smtp-test-dest" class="form-control" placeholder="Destinatário teste" style="max-width: 200px;" />
@@ -274,7 +274,7 @@
 
         <!-- Aba 4: Fila de Comandos -->
         <section id="sec-comandos" style="display: none;">
-          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Fila de Comandos (Remoto)</h2>
+          <h2 style="margin: 0 0 0.5rem;">Fila de Comandos (Remoto)</h2>
           <p class="hint">
             Envie comandos para o Agente executar na máquina dele. Por exemplo: <em>Forçar Scan</em> instrui o Watchdog do agente a reler a pasta ignorando o delay de 24 horas.
           </p>

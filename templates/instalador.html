@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
+    <link rel="stylesheet" href="/static/style.css?v=componentes-extraidos-2026-08" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -24,14 +24,14 @@
       <!-- Diagnóstico: cada bloco corresponde a algo que já falhou em produção
            sem aviso nenhum. Ver a docstring de /api/cert-installer/diagnostico. -->
       <section class="card" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div class="secao-cabecalho">
           <div>
-            <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">Diagnóstico</h2>
+            <h2 style="margin-bottom: 0.25rem;">Diagnóstico</h2>
             <p class="text-muted" style="font-size: var(--fs-ui);">
               O que existe no servidor agora — binário, assinatura, cofre e chaves de cifragem.
             </p>
           </div>
-          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <div class="linha-acoes">
             <button id="btnRevalidarCofre" class="btn btn-secondary" style="font-size: var(--fs-ui);">
               Revalidar cofre
             </button>
@@ -49,7 +49,7 @@
            cada um tem um trade-off que só quem administra o portal resolve. -->
       <section class="card" style="margin-bottom: 2rem;">
         <div style="margin-bottom: 1rem;">
-          <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">Configuração</h2>
+          <h2 style="margin-bottom: 0.25rem;">Configuração</h2>
           <p class="text-muted" style="font-size: var(--fs-ui);">
             Deixe em branco ou zero para usar o padrão do sistema.
           </p>
@@ -57,7 +57,7 @@
 
         <div id="cfgMessageArea"></div>
 
-        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+        <div class="linha-acoes" style="gap: 1.5rem;">
           <div class="form-field" style="flex: 2; min-width: min(320px, 100%);">
             <label for="cfgNomeTemplate">Nome do arquivo baixado</label>
             <input type="text" id="cfgNomeTemplate" class="form-control"
@@ -90,7 +90,7 @@
           </div>
         </div>
 
-        <div style="display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
+        <div class="linha-acoes" style="margin-top: 1rem;">
           <button id="btnSalvarCfg" class="btn btn-primary">Salvar configuração</button>
           <button id="btnExpurgarAgora" class="btn btn-secondary">Expurgar log agora</button>
         </div>
@@ -99,9 +99,9 @@
       <!-- Painel de Ação de Instalação -->
       <!-- Passo 1: autorizar quais certificados podem ir para o cofre do servidor -->
       <section class="card" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div class="secao-cabecalho">
           <div>
-            <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">
+            <h2 style="margin-bottom: 0.25rem;">
               Custódia dos certificados
               <span id="badgeMaquina" class="badge"
                     style="margin-left: 0.5rem; font-size: var(--fs-caption); vertical-align: middle;
@@ -113,7 +113,7 @@
               <strong>As decisões desta tela valem só para a máquina indicada acima.</strong>
             </p>
           </div>
-          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <div class="linha-acoes">
             <label for="buscaOptin" class="cg-sr-only">Buscar certificado por nome ou documento</label>
             <input type="search" id="buscaOptin" class="form-control" placeholder="Buscar por nome ou documento" style="width: min(260px, 100%);" />
             <button id="btnRefreshOptin" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
@@ -154,14 +154,14 @@
            A lista plana mostrava eventos soltos em ordem cronológica, e o que
            importa é onde a cadeia quebrou. Ver cadeias_de_instalacao(). -->
       <section class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div class="secao-cabecalho">
           <div>
-            <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">Trilha de instalações</h2>
+            <h2 style="margin-bottom: 0.25rem;">Trilha de instalações</h2>
             <p class="text-muted" style="font-size: var(--fs-ui);">
               Uma linha por tentativa, do pedido ao desfecho.
             </p>
           </div>
-          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <div class="linha-acoes">
             <label for="trilhaDias" class="cg-sr-only">Período</label>
             <select id="trilhaDias" class="form-control" style="width: 150px;">
               <option value="7">Últimos 7 dias</option>
@@ -712,7 +712,7 @@
         const blocoCausas = causas.length
           ? "<div style='margin-top:0.75rem'>" +
             causas.map(([m, n]) =>
-              `<div style="font-size: var(--fs-ui-sm);color:var(--expired-text)">` +
+              `<div class="falha-inline">` +
               `<strong>${n}×</strong> ${esc(m)}</div>`
             ).join("") + "</div>"
           : "";

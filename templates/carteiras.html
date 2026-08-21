@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
+    <link rel="stylesheet" href="/static/style.css?v=componentes-extraidos-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
       @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
@@ -221,9 +221,9 @@
           </div>
 
           <div id="detalheCarteira" hidden>
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div class="secao-cabecalho">
               <div>
-                <h2 id="opNome" style="font-size: var(--fs-subsection); margin-bottom: 0.15rem;"></h2>
+                <h2 id="opNome" style="margin-bottom: 0.15rem;"></h2>
                 <p id="opEmail" class="text-muted" style="font-size: var(--fs-ui-sm);"></p>
               </div>
               <span id="opAviso"></span>
@@ -348,7 +348,7 @@
           renderOperadores();
         } catch (e) {
           document.getElementById("listaOperadores").innerHTML =
-            `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm)">${esc(e.message)}</p>`;
+            `<p class="falha-inline">${esc(e.message)}</p>`;
         }
       }
 
@@ -389,7 +389,7 @@
           _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
           renderTransfer();
         } catch (e) {
-          el.innerHTML = `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm);padding:0.6rem">${esc(e.message)}</p>`;
+          el.innerHTML = `<p class="falha-inline" style="padding:0.6rem">${esc(e.message)}</p>`;
         }
       }
 
@@ -430,7 +430,7 @@
                 }">${esc(c.desfecho)}</span>
               </div>`).join("");
         } catch (e) {
-          el.innerHTML = `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm)">${esc(e.message)}</p>`;
+          el.innerHTML = `<p class="falha-inline">${esc(e.message)}</p>`;
         }
       }
 

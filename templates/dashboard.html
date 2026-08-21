@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
+    <link rel="stylesheet" href="/static/style.css?v=componentes-extraidos-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       /* min(320px, 100%): sem a guarda, o mínimo fixo estoura a página em
          telas de 320px (mesma razão do .cards-grid global). */
@@ -85,7 +85,7 @@
 
       function erroPainel(el, msg) {
         document.getElementById(el).innerHTML =
-          `<p style="color:var(--expired-text);font-size: var(--fs-ui-sm)">${esc(msg)}</p>`;
+          `<p class="falha-inline">${esc(msg)}</p>`;
       }
 
       function renderInstalacao(d) {
@@ -215,7 +215,7 @@
         }).join("");
 
         document.getElementById("pAtividade").innerHTML =
-          `<div style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:0.75rem">` +
+          `<div class="linha-acoes" style="gap:2rem; margin-bottom:0.75rem;">` +
           `<div><div class="numerao">${d.ativos_no_periodo}</div>` +
           `<p class="painel__nota">pessoa(s) com atividade</p></div>` +
           `<div><div class="numerao ${d.sem_sucesso ? "numerao--alerta" : "numerao--ok"}">${d.sem_sucesso}</div>` +

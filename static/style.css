@@ -910,6 +910,54 @@ textarea {
   caret-color: var(--accent-solid);
 }
 
+/* Falha renderizada NO LUGAR do conteudo.
+
+   O nome nao e `.msg-erro`: `login.html` ja tinha uma classe com esse nome,
+   pareada com `.msg-ok`, e ela e outra coisa — um banner PREENCHIDO, com
+   `background-color`. As duas regras se somariam em silencio, e o banner do
+   login herdaria tamanho e margem que ninguem pediu.
+
+   Colisao de nome entre componentes de intencao diferente e um dos jeitos mais
+   discretos de um sistema de design apodrecer: nada quebra, so fica errado.
+
+   Seis lugares montavam `color: var(--expired-text); font-size: var(--fs-ui-sm)`
+   a mao, dentro de template string de JS — onde um erro de digitacao nao aparece
+   em lugar nenhum ate alguem ver a tela no momento exato de uma falha, que e
+   justamente quando ninguem esta olhando com calma.
+
+   Nao e `.hint`: hint explica algo que esta funcionando. */
+.falha-inline {
+  color: var(--expired-text);
+  font-size: var(--fs-ui-sm);
+  margin: 0;
+}
+
+/* Cabecalho de secao: titulo a esquerda, acoes a direita.
+
+   Nao e `.toolbar` — aquela tem borda tracejada embaixo e separa a barra de
+   ferramentas da tabela. Esta so distribui, dentro de um painel. */
+.secao-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+/* Fila de botoes que quebra.
+
+   Nao e `.toolbar__actions`, e a diferenca e o alinhamento: aquela empurra para
+   a DIREITA porque divide a barra com um texto de status a esquerda. Esta
+   comeca na esquerda porque e uma fila solta dentro de um painel. Duas regras
+   parecidas com intencoes opostas — juntar as duas quebraria uma das duas. */
+.linha-acoes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
 /* Campo de busca das telas de listagem.
 
    Existe porque os cinco campos de busca do portal eram `<input>` SEM classe,

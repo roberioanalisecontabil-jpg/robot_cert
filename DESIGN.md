@@ -606,6 +606,33 @@ volta ao lugar.
 - **Container de tabela:** mesma folha, padding `--sp-6`, margem inferior
   `--sp-8`.
 
+### Composição repetida
+
+Extraídos em 21/08 a partir de 197 atributos `style=` inline, e só os que
+apareciam **3+ vezes com a mesma intenção** — abstrair antes disso custa mais
+do que a duplicação.
+
+- **`.linha-acoes`** — fila de botões que quebra: `flex`, `align-items: center`,
+  `flex-wrap`, `gap: --sp-3`. 9 usos em 3 telas.
+- **`.secao-cabecalho`** — título à esquerda, ações à direita: `flex`,
+  `space-between`, `gap: --sp-4`, margem inferior `--sp-4`. 4 usos.
+- **`.falha-inline`** — a mensagem do `catch` renderizada NO LUGAR do conteúdo:
+  `--expired-text` em `--fs-ui-sm`. 5 usos, todos dentro de template string de
+  JS, onde um erro de digitação só aparece no momento exato de uma falha.
+
+**Duas distinções que parecem redundância e não são:**
+
+`.linha-acoes` **não** é `.toolbar__actions`. A diferença é o alinhamento, e ela
+é intencional: `.toolbar__actions` empurra para a **direita** porque divide a
+barra com um texto de status à esquerda; `.linha-acoes` começa na **esquerda**
+porque é uma fila solta dentro de um painel. Juntar as duas quebraria uma.
+
+`.falha-inline` **não** é `.msg-erro`. Esse nome já existia em `login.html`,
+pareado com `.msg-ok`, e é outra coisa: um banner **preenchido**, com
+`background-color`. As duas regras se somavam em silêncio, e o banner do login
+herdava tamanho e margem que ninguém pediu. Colisão de nome entre componentes
+de intenção diferente não quebra nada — só fica errado.
+
 ### Navigation
 
 - **Sidebar:** 250px, `#1C1C1E`, fixa, `backdrop-filter: blur(20px)`, borda
