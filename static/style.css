@@ -356,16 +356,11 @@ body {
   transform: translateY(0);
 }
 
+/* `*` cobre tudo que recebe foco, inclusive `summary`, `[tabindex]` e a regiao
+   rolavel da tabela. Existia uma segunda regra logo abaixo listando
+   `button, a, input, select, textarea` com declaracoes IDENTICAS — sem efeito
+   nenhum, e com o risco de alguem editar uma das duas e nao a outra. */
 *:focus-visible {
-  outline: 2px solid var(--accent) !important;
-  outline-offset: 2px !important;
-}
-
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px !important;
 }
@@ -406,87 +401,21 @@ h3 {
    de um dropdown de 320px, 16px domina o container. Desce UM degrau, por token,
    e nos dois lugares o mesmo. */
 
-/* ── Papeis tipograficos ──────────────────────────────────────────────────
+/* As dez classes `.text-*` deste ramo foram removidas em 21/08.
 
-   Uma classe por token, com o MESMO nome. Antes eram dois vocabularios para um
-   ramo so — `.text-title1` de um lado, `--fs-section` do outro — e nenhum dos
-   dois era usado: as sete classes tinham ZERO ocorrencia nos templates.
+   Elas nasceram como a implementacao da escala e nunca tiveram UM uso — nem
+   antes, nem depois de eu renomea-las no passo anterior. O motivo ficou claro
+   ao migrar os `style=` inline: esta base nao consome classe utilitaria. Um
+   componente escreve `font-size: var(--fs-ui)` na propria regra, e `h1`/`h2`/
+   `h3` ja herdam o papel deles.
 
-   Renomear custou nada justamente por isso, e encerra a duplicidade antes que
-   alguem escolha um dos dois lados e os dois passem a divergir. */
-.text-display {
-  font-size: var(--fs-display);
-  font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.04em;
-}
+   Uma classe utilitaria aqui serviria para estilizar direto no HTML — que e
+   exatamente o idioma de que este projeto esta saindo. Manter as dez seria
+   guardar uma terceira forma de dizer a mesma coisa, esperando um consumidor
+   que a arquitetura nao tem.
 
-.text-title {
-  font-size: var(--fs-title);
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.03em;
-}
+   A escala continua inteira nos tokens `--fs-*` e documentada no DESIGN.md. */
 
-.text-section {
-  font-size: var(--fs-section);
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
-}
-
-.text-subsection {
-  font-size: var(--fs-subsection);
-  font-weight: 500;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-}
-
-.text-body {
-  font-size: var(--fs-body);
-  font-weight: 400;
-  line-height: 1.6;
-  letter-spacing: 0;
-}
-
-.text-ui {
-  font-size: var(--fs-ui);
-  font-weight: 400;
-  line-height: 1.5;
-  letter-spacing: 0;
-}
-
-.text-ui-sm {
-  font-size: var(--fs-ui-sm);
-  font-weight: 400;
-  line-height: 1.45;
-  letter-spacing: 0;
-}
-
-/* Numeral de card. `tabular-nums` porque numero que muda de largura ao atualizar
-   faz a coluna dancar — e estes numeros atualizam a cada varredura. */
-.text-metric {
-  font-size: var(--fs-metric);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.text-caption {
-  font-size: var(--fs-caption);
-  font-weight: 400;
-  line-height: 1.4;
-  letter-spacing: 0.02em;
-}
-
-.text-label {
-  font-size: var(--fs-label);
-  font-weight: 600;
-  line-height: 1.4;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-}
 
 /* Sidebar */
 .sidebar {
@@ -1176,12 +1105,6 @@ tbody tr:hover {
 }
 
 /* Configuracao Page Styles */
-.config-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 2rem;
-  align-items: start;
-}
 
 .doc-block {
   margin-bottom: 2.5rem;
@@ -1275,15 +1198,7 @@ select:focus {
   margin: 0 0 0.75rem;
 }
 
-.path-summary-title {
-  font-size: var(--fs-body);
-  font-weight: 600;
-  margin: 1.5rem 0 0.5rem;
-}
 
-.path-line {
-  margin-bottom: 0.5rem;
-}
 
 .path-label {
   display: block;
@@ -1351,15 +1266,7 @@ select:focus {
   overflow-x: auto;
 }
 
-.doc-list {
-  padding-left: 1.5rem;
-  color: var(--text-muted);
-  font-size: var(--fs-ui);
-}
 
-.doc-list li {
-  margin-bottom: 0.5rem;
-}
 
 /* Sidebar toggle + theme toggle — barra do topo */
 /* .topbar-actions e .sidebar-toggle-btn eram declaradas duas vezes neste
