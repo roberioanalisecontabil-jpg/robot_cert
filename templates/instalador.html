@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
+    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
   </head>
   <body>
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -26,21 +26,21 @@
       <section class="card" style="margin-bottom: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Diagnóstico</h2>
-            <p class="text-muted" style="font-size: 0.875rem;">
+            <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">Diagnóstico</h2>
+            <p class="text-muted" style="font-size: var(--fs-ui);">
               O que existe no servidor agora — binário, assinatura, cofre e chaves de cifragem.
             </p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <button id="btnRevalidarCofre" class="btn btn-secondary" style="font-size: 0.875rem;">
+            <button id="btnRevalidarCofre" class="btn btn-secondary" style="font-size: var(--fs-ui);">
               Revalidar cofre
             </button>
-            <button id="btnRefreshDiag" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
+            <button id="btnRefreshDiag" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
           </div>
         </div>
 
         <div id="diagArea">
-          <p class="text-muted" style="font-size: 0.875rem;">Carregando diagnóstico...</p>
+          <p class="text-muted" style="font-size: var(--fs-ui);">Carregando diagnóstico...</p>
         </div>
         <div id="revalidarArea" style="margin-top: 1rem;"></div>
       </section>
@@ -49,8 +49,8 @@
            cada um tem um trade-off que só quem administra o portal resolve. -->
       <section class="card" style="margin-bottom: 2rem;">
         <div style="margin-bottom: 1rem;">
-          <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Configuração</h2>
-          <p class="text-muted" style="font-size: 0.875rem;">
+          <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">Configuração</h2>
+          <p class="text-muted" style="font-size: var(--fs-ui);">
             Deixe em branco ou zero para usar o padrão do sistema.
           </p>
         </div>
@@ -101,13 +101,13 @@
       <section class="card" style="margin-bottom: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">
+            <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">
               Custódia dos certificados
               <span id="badgeMaquina" class="badge"
-                    style="margin-left: 0.5rem; font-size: 0.72rem; vertical-align: middle;
+                    style="margin-left: 0.5rem; font-size: var(--fs-caption); vertical-align: middle;
                            background: var(--bg); color: var(--text-muted);">—</span>
             </h2>
-            <p class="text-muted" style="font-size: 0.875rem;">
+            <p class="text-muted" style="font-size: var(--fs-ui);">
               Todo certificado válido do inventário vai ao cofre por padrão. Desative aqui os
               que não devem ter a chave privada copiada para o servidor — o agente passa a ignorá-los.
               <strong>As decisões desta tela valem só para a máquina indicada acima.</strong>
@@ -116,7 +116,7 @@
           <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
             <label for="buscaOptin" class="cg-sr-only">Buscar certificado por nome ou documento</label>
             <input type="search" id="buscaOptin" class="form-control" placeholder="Buscar por nome ou documento" style="width: min(260px, 100%);" />
-            <button id="btnRefreshOptin" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
+            <button id="btnRefreshOptin" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
           </div>
         </div>
 
@@ -156,8 +156,8 @@
       <section class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
           <div>
-            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Trilha de instalações</h2>
-            <p class="text-muted" style="font-size: 0.875rem;">
+            <h2 style="font-size: var(--fs-subsection); margin-bottom: 0.25rem;">Trilha de instalações</h2>
+            <p class="text-muted" style="font-size: var(--fs-ui);">
               Uma linha por tentativa, do pedido ao desfecho.
             </p>
           </div>
@@ -174,7 +174,7 @@
             <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: var(--fs-ui-sm);">
               <input type="checkbox" id="trilhaSoFalhas" /> só falhas
             </label>
-            <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: 0.875rem;">Atualizar</button>
+            <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
           </div>
         </div>
 
@@ -348,7 +348,7 @@
       function blocoDiag(titulo, linhas) {
         return (
           "<div style='flex:1;min-width:280px'>" +
-          "<h3 style='font-size:0.95rem;margin-bottom:0.5rem'>" + esc(titulo) + "</h3>" +
+          "<h3 style='margin-bottom:0.5rem'>" + esc(titulo) + "</h3>" +
           linhas.join("") +
           "</div>"
         );
@@ -368,7 +368,7 @@
           linhaDiag("Presente no servidor", b.existe ? "sim" : "NÃO", b.existe ? "bom" : "ruim"),
           linhaDiag("Tamanho", bytesLegiveis(b.tamanho_bytes)),
           linhaDiag("Compilado em", b.modificado_em ? new Date(b.modificado_em).toLocaleString("pt-BR") : "—"),
-          linhaDiag("SHA-256", b.sha256 ? "<code style='font-size:0.72rem'>" + esc(b.sha256.slice(0, 32)) + "…</code>" : "—"),
+          linhaDiag("SHA-256", b.sha256 ? "<code style='font-size: var(--fs-caption)'>" + esc(b.sha256.slice(0, 32)) + "…</code>" : "—"),
           linhaDiag("Assinatura", assinatura[0], assinatura[1]),
           ...(b.signatarios || []).map((s) =>
             linhaDiag("Signatário", esc(s.subject), s.expirado ? "ruim" : "bom")
@@ -386,7 +386,7 @@
           // acumular reputação no SmartScreen. Um seletor que parecesse aplicar
           // na hora geraria um chamado de suporte por uso.
           linhaDiag("Trocar o ícone",
-                    "<span style='font-size:0.75rem'>exige recompilar e reassinar</span>"),
+                    "<span style='font-size: var(--fs-caption)'>exige recompilar e reassinar</span>"),
         ]);
 
         // "Sem senha cifrada" é o número que mais importa aqui: foi a causa
@@ -453,7 +453,7 @@
           renderDiagnostico(await r.json());
         } catch (e) {
           document.getElementById("diagArea").innerHTML =
-            "<p style='color:var(--expired-text);font-size:0.875rem'>Não foi possível carregar o diagnóstico: " +
+            "<p style='color:var(--expired-text);font-size: var(--fs-ui)'>Não foi possível carregar o diagnóstico: " +
             esc(e.message) + "</p>";
         }
       }
@@ -478,7 +478,7 @@
               ).join("")
             : "<p class='text-muted' style='font-size: var(--fs-ui-sm)'>Cofre vazio: nada a revalidar.</p>";
         } catch (e) {
-          area.innerHTML = "<p style='color:var(--expired-text);font-size:0.875rem'>" + esc(e.message) + "</p>";
+          area.innerHTML = "<p style='color:var(--expired-text);font-size: var(--fs-ui)'>" + esc(e.message) + "</p>";
         } finally {
           btn.disabled = false;
         }
@@ -684,7 +684,7 @@
                     : alcancado ? "var(--ok-text)"
                     : "var(--text-muted)";
           const peso = alcancado ? "600" : "400";
-          return `<span style="color:${cor};font-weight:${peso};font-size:0.78rem">` +
+          return `<span style="color:${cor};font-weight:${peso};font-size: var(--fs-ui-sm)">` +
                  `${m.slice(0, 4)}${alcancado ? "&nbsp;✓" : "&nbsp;·"}</span>`;
         }).join("<span style='color:var(--text-muted)'>&nbsp;→&nbsp;</span>");
       }
@@ -712,7 +712,7 @@
         const blocoCausas = causas.length
           ? "<div style='margin-top:0.75rem'>" +
             causas.map(([m, n]) =>
-              `<div style="font-size:0.82rem;color:var(--expired-text)">` +
+              `<div style="font-size: var(--fs-ui-sm);color:var(--expired-text)">` +
               `<strong>${n}×</strong> ${esc(m)}</div>`
             ).join("") + "</div>"
           : "";
@@ -763,7 +763,7 @@
                 <td style="text-align:center">${c.certificados}</td>
                 <td style="white-space:nowrap">${desenharCadeia(c)}</td>
                 <td>${badgeDesfecho(c.desfecho)}${
-                  motivo ? `<div style="font-size:0.75rem;color:var(--expired-text);margin-top:0.25rem">${esc(motivo)}</div>` : ""
+                  motivo ? `<div style="font-size: var(--fs-caption);color:var(--expired-text);margin-top:0.25rem">${esc(motivo)}</div>` : ""
                 }</td>
               </tr>`;
           }).join("");

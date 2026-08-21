@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c">
+    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e">
     <style>
         body {
             display: flex;
@@ -42,7 +42,7 @@
             object-fit: contain;
         }
         .login-header h1 {
-            font-size: 22px;
+            font-size: var(--fs-section);
             font-weight: 600;
             letter-spacing: -0.02em;
             margin-bottom: var(--sp-2);
@@ -67,7 +67,7 @@
             padding: 0.75rem 1rem;
             border: 1.5px solid var(--border);
             border-radius: var(--radius-md);
-            font-size: 0.95rem;
+            font-size: var(--fs-ui);
             background-color: var(--bg);
             color: var(--text);
             outline: none;
@@ -84,7 +84,7 @@
             color: white;
             border: none;
             border-radius: var(--radius-pill);
-            font-size: 0.95rem;
+            font-size: var(--fs-ui);
             font-weight: 600;
             cursor: pointer;
             transition: all var(--duration-fast) var(--ease-out);
@@ -102,7 +102,7 @@
             padding: var(--sp-3);
             border-radius: var(--radius-md);
             margin-bottom: var(--sp-4);
-            font-size: 0.875rem;
+            font-size: var(--fs-ui);
             display: none;
             text-align: center;
             font-weight: 500;
@@ -142,7 +142,7 @@
 
         #campo-codigo {
             text-align: center;
-            font-size: 1.5rem;
+            font-size: var(--fs-section);
             letter-spacing: 0.5em;
             font-weight: 600;
             /* O letter-spacing empurra o texto para a direita; o padding

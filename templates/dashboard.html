@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
+    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
     <style nonce="{{ request.state.nonce }}">
       /* min(320px, 100%): sem a guarda, o mínimo fixo estoura a página em
          telas de 320px (mesma razão do .cards-grid global). */
@@ -17,9 +17,9 @@
          tabelas fazem via .table-scroll — sem isto ela alarga a página. */
       .painel .table-container { overflow-x: auto; }
       .painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
-      .painel h2 { font-size: 1rem; margin-bottom: 0.75rem; }
-      .painel__nota { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.6rem; line-height: 1.45; }
-      .numerao { font-size: 2.1rem; font-weight: 700; line-height: 1.1; }
+      .painel h2 { font-size: var(--fs-body); margin-bottom: 0.75rem; }
+      .painel__nota { font-size: var(--fs-ui-sm); color: var(--text-muted); margin-top: 0.6rem; line-height: 1.45; }
+      .numerao { font-size: var(--fs-title); font-weight: 700; line-height: 1.1; }
       .numerao--alerta { color: var(--expired-text); }
       .numerao--ok { color: var(--ok-text); }
       .linha-dado { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 0.5px solid var(--border); font-size: var(--fs-ui-sm); }
@@ -209,7 +209,7 @@
             <td style="text-align:center">${u.instalacoes_pedidas}</td>
             <td style="text-align:center;color:${u.instalacoes_concluidas ? "var(--ok-text)" : "var(--text-muted)"}">${u.instalacoes_concluidas}</td>
             <td style="text-align:center;color:${u.instalacoes_falhadas ? "var(--expired-text)" : "var(--text-muted)"}">${u.instalacoes_falhadas}</td>
-            <td style="font-size:0.8rem">${quando}</td>
+            <td style="font-size: var(--fs-ui-sm)">${quando}</td>
             <td>${travado ? '<span class="badge" style="background:var(--warning-bg);color:var(--warning-text)">TRAVADO</span>' : ""}</td>
           </tr>`;
         }).join("");

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
+    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
     <style nonce="{{ request.state.nonce }}">
       .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
       @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
@@ -21,7 +21,7 @@
          vira uma caixa com fio e rolagem propria, espelhando o `.transfer__lista`
          que ja existe nesta mesma folha. Resolve o flutuar e o comprimento de
          uma vez — 480 operadores nao esticam mais a pagina. */
-      .op-titulo { font-size: 1rem; margin: 0 0 var(--sp-3); }
+      .op-titulo { font-size: var(--fs-body); margin: 0 0 var(--sp-3); }
       .op-lista {
         margin-top: var(--sp-3);
         border: 1px solid var(--border);
@@ -39,8 +39,8 @@
         transition: background-color var(--duration-fast) var(--ease-out);
       }
       .op-item:last-child { border-bottom: none; }
-      .op-item strong { display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 2px; }
-      .op-item__meta { display: block; font-size: 0.74rem; color: var(--text-muted); }
+      .op-item strong { display: block; font-size: var(--fs-ui); font-weight: 600; margin-bottom: 2px; }
+      .op-item__meta { display: block; font-size: var(--fs-caption); color: var(--text-muted); }
       .op-item:hover { background: var(--surface); }
       /* Selecionado em `--total-bg`, nao mais com borda `--ok-text`: verde e
          estado de certificado neste sistema, e "o operador que estou vendo" e
@@ -51,7 +51,7 @@
       .op-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
       .doc-chip { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
                   padding: 0.5rem 0.6rem; border-bottom: 0.5px solid var(--border); }
-      .doc-chip__trilha { font-size: 0.72rem; color: var(--text-muted); }
+      .doc-chip__trilha { font-size: var(--fs-caption); color: var(--text-muted); }
       /* Transfer list: disponíveis | na carteira */
       .transfer { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: 0.75rem; }
       /* Empilha antes do drawer mobile: dois painéis de lista lado a lado
@@ -61,8 +61,8 @@
       .transfer__cab { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
                        padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
       .transfer__cab h3 { font-size: var(--fs-ui); margin: 0; }
-      .transfer__cab .text-muted { font-weight: 400; font-size: 0.8rem; }
-      .transfer__acao-lote { font-size: 0.72rem; padding: 0.2rem 0.5rem; }
+      .transfer__cab .text-muted { font-weight: 400; font-size: var(--fs-ui-sm); }
+      .transfer__acao-lote { font-size: var(--fs-caption); padding: 0.2rem 0.5rem; }
       /* `.btn` declara display, e display explícito vence o `display:none` que
          o atributo `hidden` traz da folha do navegador — sem esta regra o
          botão de lote ficava visível dizendo "os 491 filtrados" sem filtro
@@ -93,9 +93,9 @@
         gap: var(--sp-2); flex-wrap: wrap;
         padding: var(--sp-2) 0.6rem; border-top: 1px solid var(--border);
       }
-      .transfer__selecao { font-size: 0.72rem; font-weight: 600; color: var(--accent-text); }
+      .transfer__selecao { font-size: var(--fs-caption); font-weight: 600; color: var(--accent-text); }
       .transfer__rodape__acoes { display: flex; gap: var(--sp-1); margin-left: auto; }
-      .transfer__acao { font-size: 0.72rem; padding: 0.25rem 0.6rem; display: inline-flex;
+      .transfer__acao { font-size: var(--fs-caption); padding: 0.25rem 0.6rem; display: inline-flex;
                         align-items: center; gap: 4px; }
       .transfer__acao svg { width: 14px; height: 14px; flex-shrink: 0; }
       /* Desabilitado, e nao escondido: some so quando nao ha o que mover, e a
@@ -122,7 +122,7 @@
          secao de baixo, porque este elemento esta ACIMA da grade: empurrar por
          ele desce as duas colunas juntas, e nao so a da esquerda. */
       .cart-importar { margin-bottom: var(--sp-6); }
-      .cart-importar__sumario { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+      .cart-importar__sumario { cursor: pointer; font-weight: 600; font-size: var(--fs-ui); }
       .cart-importar__faixa { margin-top: var(--sp-3); display: flex; align-items: center;
                               gap: var(--sp-3); flex-wrap: wrap; }
       .cart-importar__dica { flex: 1 1 100%; margin: 0; }
@@ -139,7 +139,7 @@
       .dropzone__icone { width: 24px; height: 24px; flex-shrink: 0; color: var(--text-muted);
                          transition: color var(--duration-fast) var(--ease-out); }
       .dropzone__titulo { margin: 0; font-weight: 600; font-size: var(--fs-ui); }
-      .dropzone__sub { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+      .dropzone__sub { margin: 0; font-size: var(--fs-ui-sm); color: var(--text-muted); }
       .dropzone__nome { margin: 0 0 0 auto; font-size: var(--fs-ui-sm); font-weight: 600;
                         color: var(--accent-text); }
       .dropzone:hover,
@@ -223,7 +223,7 @@
           <div id="detalheCarteira" hidden>
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
               <div>
-                <h2 id="opNome" style="font-size: 1.1rem; margin-bottom: 0.15rem;"></h2>
+                <h2 id="opNome" style="font-size: var(--fs-subsection); margin-bottom: 0.15rem;"></h2>
                 <p id="opEmail" class="text-muted" style="font-size: var(--fs-ui-sm);"></p>
               </div>
               <span id="opAviso"></span>
@@ -280,7 +280,7 @@
 
             <!-- Histórico -->
             <div style="margin-top: 1.5rem;">
-              <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">Instalações desta pessoa</h3>
+              <h3 style="margin-bottom: 0.4rem;">Instalações desta pessoa</h3>
               <div id="historicoOperador">
                 <p class="text-muted" style="font-size: var(--fs-ui-sm);">—</p>
               </div>
@@ -421,11 +421,11 @@
             `${r2.total} tentativa(s) · ${r2.concluidas} concluída(s) · ${r2.falhadas} com falha</p>` +
             cadeias.slice(0, 10).map((c) => `
               <div class="doc-chip">
-                <div style="font-size:0.82rem">
+                <div style="font-size: var(--fs-ui-sm)">
                   ${c.inicio ? new Date(c.inicio).toLocaleString("pt-BR") : "—"}
                   · ${c.certificados} certificado(s) · ${esc(c.target_machine || "—")}
                 </div>
-                <span style="font-size:0.78rem;color:${
+                <span style="font-size: var(--fs-ui-sm);color:${
                   c.desfecho === "concluido" ? "var(--ok-text)" : "var(--expired-text)"
                 }">${esc(c.desfecho)}</span>
               </div>`).join("");

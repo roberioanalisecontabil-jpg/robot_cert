@@ -103,6 +103,23 @@
   --fora-padrao-bg: #F5F3FF;
   --fora-padrao-text: #6D28D9;
 
+  /* ── Escala de tipos ──────────────────────────────────────────────────
+
+     Nomes de PAPEL, e nao de valor: `--fs-section` diz para que serve, `--fs-22`
+     diria so quanto mede — e um papel que muda de tamanho amanha quebra o
+     segundo nome, nao o primeiro.
+
+     A escala existia no DESIGN.md desde 19/08 e as classes `.text-*` que a
+     implementavam tinham ZERO uso: era um ramo declarado que ninguem apontava.
+     A hierarquia real vinha de 36 tamanhos literais espalhados por 12
+     templates. Os dois lados passam a ser a mesma coisa. */
+  --fs-display: 3.5rem;      /* 56px — nao usado no app; existe para o ramo */
+  --fs-title: 2rem;          /* 32px — titulo de pagina (24px no mobile) */
+  --fs-section: 1.375rem;    /* 22px — titulo de bloco maior */
+  --fs-subsection: 1.125rem; /* 18px — titulo de painel e de secao */
+  --fs-body: 1rem;           /* 16px — prosa */
+  --fs-metric: 1.625rem;     /* 26px — numeral de card, que le como numero */
+
   /* Texto de interface densa.
 
      O ramo do DESIGN.md ia de 12px direto para 16px, e o portal usa a faixa do
@@ -110,8 +127,10 @@
      96 tamanhos literais espalhados por 12 templates: nao eram 96 enganos, era
      a escala sem os degraus que este produto precisa. Documentados agora, com
      os mesmos valores que ja estavam em uso. */
-  --fs-ui: 0.9rem;      /* 14.4px — corpo de controle: campo, botao, celula */
-  --fs-ui-sm: 0.85rem;  /* 13.6px — apoio: hint, legenda de card, meta */
+  --fs-ui: 0.9rem;         /* 14.4px — corpo de controle: campo, botao, celula */
+  --fs-ui-sm: 0.8125rem;   /* 13px — apoio: hint, meta, segunda linha */
+  --fs-caption: 0.75rem;   /* 12px — legenda e nota de rodape */
+  --fs-label: 0.6875rem;   /* 11px — micro-rotulo, quase sempre em caixa alta */
 
   /* Veus de sobreposicao.
 
@@ -351,51 +370,118 @@ textarea:focus-visible {
   outline-offset: 2px !important;
 }
 
-/* Typography Scale (Apple Style) */
+/* Os elementos de titulo herdam o papel.
+
+   Sem isto, `<h2>` sem regra propria cai no `1.5em` do NAVEGADOR — 24px, um
+   degrau que nao existe na escala — e `<h3>` no `1.17em`. Foram encontrados 21
+   titulos nessa situacao, em 6 telas: a hierarquia deles era decidida pelo
+   user-agent, nao pelo sistema.
+
+   Isto e o PISO. Toda regra mais especifica continua vencendo, e as que existem
+   ja apontam para os mesmos tokens — entao nada muda onde alguem ja decidiu, e
+   passa a haver decisao onde nao havia.
+
+   `h3` fica em `--fs-body` com peso 600: a diferenca para o corpo e o PESO, nao
+   o tamanho. Num painel denso, mais um degrau de tamanho entre 16 e 14.4 nao se
+   enxerga — o peso se enxerga. */
+h1 {
+  font-size: var(--fs-title);
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  font-size: var(--fs-subsection);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Variante compacta do mesmo papel, e nao deriva: dentro de um card lateral ou
+   de um dropdown de 320px, 16px domina o container. Desce UM degrau, por token,
+   e nos dois lugares o mesmo. */
+
+/* ── Papeis tipograficos ──────────────────────────────────────────────────
+
+   Uma classe por token, com o MESMO nome. Antes eram dois vocabularios para um
+   ramo so — `.text-title1` de um lado, `--fs-section` do outro — e nenhum dos
+   dois era usado: as sete classes tinham ZERO ocorrencia nos templates.
+
+   Renomear custou nada justamente por isso, e encerra a duplicidade antes que
+   alguem escolha um dos dois lados e os dois passem a divergir. */
 .text-display {
-  font-size: 56px;
+  font-size: var(--fs-display);
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.04em;
 }
 
-.text-headline {
-  font-size: 32px;
+.text-title {
+  font-size: var(--fs-title);
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.03em;
 }
 
-.text-title1 {
-  font-size: 22px;
+.text-section {
+  font-size: var(--fs-section);
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: -0.02em;
 }
 
-.text-title2 {
-  font-size: 18px;
+.text-subsection {
+  font-size: var(--fs-subsection);
   font-weight: 500;
   line-height: 1.35;
   letter-spacing: -0.01em;
 }
 
 .text-body {
-  font-size: 16px;
+  font-size: var(--fs-body);
   font-weight: 400;
   line-height: 1.6;
   letter-spacing: 0;
 }
 
+.text-ui {
+  font-size: var(--fs-ui);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.text-ui-sm {
+  font-size: var(--fs-ui-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+/* Numeral de card. `tabular-nums` porque numero que muda de largura ao atualizar
+   faz a coluna dancar — e estes numeros atualizam a cada varredura. */
+.text-metric {
+  font-size: var(--fs-metric);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
 .text-caption {
-  font-size: 12px;
+  font-size: var(--fs-caption);
   font-weight: 400;
   line-height: 1.4;
   letter-spacing: 0.02em;
 }
 
 .text-label {
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: 0.10em;
@@ -451,13 +537,13 @@ textarea:focus-visible {
 .brand-text h2 {
   color: white;
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--fs-subsection);
   font-weight: 600;
   line-height: 1.2;
 }
 
 .brand-text span {
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   color: var(--sidebar-text);
 }
 
@@ -477,7 +563,7 @@ textarea:focus-visible {
   text-decoration: none;
   border-radius: var(--radius-sm);
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: var(--fs-ui);
   transition: all var(--duration-fast) var(--ease-out);
 }
 
@@ -520,7 +606,7 @@ textarea:focus-visible {
 }
 
 .page-header h1 {
-  font-size: 32px;
+  font-size: var(--fs-title);
   font-weight: 600;
   letter-spacing: -0.03em;
   color: var(--text);
@@ -531,7 +617,7 @@ textarea:focus-visible {
 .page-header p {
   color: var(--text-muted);
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-ui);
   letter-spacing: -0.01em;
 }
 
@@ -577,7 +663,7 @@ textarea:focus-visible {
 }
 
 .card-title {
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -589,7 +675,7 @@ textarea:focus-visible {
 }
 
 .card-number {
-  font-size: 26px;
+  font-size: var(--fs-metric);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--text);
@@ -597,7 +683,7 @@ textarea:focus-visible {
 }
 
 .card-subtitle {
-  font-size: 0.7rem;
+  font-size: var(--fs-label);
   color: var(--text-muted);
   margin-top: 0.35rem;
   white-space: nowrap;
@@ -911,7 +997,7 @@ button.danger:hover {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
 }
 
 th, td {
@@ -924,7 +1010,7 @@ th {
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: var(--fs-label);
   letter-spacing: 0.10em;
   padding-top: 0;
   line-height: 1.4;
@@ -943,7 +1029,7 @@ tbody tr:hover {
   align-items: center;
   padding: 0.25rem 0.75rem;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.01em;
   border: none;
@@ -1003,11 +1089,29 @@ tbody tr:hover {
 
 .doc-type-num {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
+}
+
+/* Medida de leitura.
+
+   As linhas de prosa corriam a largura inteira do painel: medidas 175
+   caracteres por linha em /configuracao a 1200px. O olho perde a linha na
+   volta muito antes disso — a faixa confortavel e 45 a 75.
+
+   `ch` e nao `px`: a medida acompanha o tamanho da fonte, entao continua certa
+   se o papel mudar de degrau ou se o usuario der zoom.
+
+   `max-width` e nao `width`: onde o container ja e estreito, nada muda. E
+   `.hint` tambem aparece solto em barra de ferramentas, onde a regra e inerte
+   porque o texto ali nunca chega perto do limite. */
+.hint,
+.page-header p,
+.doc-block > p {
+  max-width: 68ch;
 }
 
 .hint {
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text-muted);
   margin: 0;
 }
@@ -1020,7 +1124,7 @@ tbody tr:hover {
 
 .error-cell {
   color: var(--danger-text);
-  font-size: 0.82rem;
+  font-size: var(--fs-ui-sm);
 }
 
 /* Configuracao Page Styles */
@@ -1036,7 +1140,7 @@ tbody tr:hover {
 }
 
 .doc-block h2 {
-  font-size: 1.15rem;
+  font-size: var(--fs-subsection);
   font-weight: 600;
   margin: 0 0 0.5rem;
 }
@@ -1113,7 +1217,7 @@ select:focus {
 }
 
 .side-card h3 {
-  font-size: 0.95rem;
+  font-size: var(--fs-ui);
   margin: 0 0 0.5rem;
 }
 
@@ -1124,7 +1228,7 @@ select:focus {
 }
 
 .path-summary-title {
-  font-size: 1rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   margin: 1.5rem 0 0.5rem;
 }
@@ -1135,7 +1239,7 @@ select:focus {
 
 .path-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
   text-transform: uppercase;
   margin-bottom: 0.25rem;
@@ -1164,7 +1268,7 @@ select:focus {
   border: 1px solid var(--border);
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text-muted);
   font-weight: 500;
 }
@@ -1195,7 +1299,7 @@ select:focus {
   padding: 1rem;
   border-radius: var(--radius-sm);
   font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   overflow-x: auto;
 }
 
@@ -1289,7 +1393,7 @@ body.sidebar-collapsed .sidebar-nav a {
 }
 
 .dup-crypto-table-block h2 {
-  font-size: 1.1rem;
+  font-size: var(--fs-subsection);
   margin: 0 0 0.5rem;
 }
 
@@ -1328,7 +1432,7 @@ body.sidebar-collapsed .sidebar-nav a {
   /* Mesmo ambar literal que estava em `usuarios.html`; escapou da varredura
      anterior por estar na folha de estilo, e nao num template. */
   color: var(--warning-text);
-  font-size: 0.95rem;
+  font-size: var(--fs-ui);
 }
 
 .dup-crypto-table-wrap th,
@@ -1359,7 +1463,7 @@ body.sidebar-collapsed .sidebar-nav a {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  font-size: 0.8125rem;
+  font-size: var(--fs-ui-sm);
   line-height: 1.45;
   pointer-events: auto;
   transition: opacity var(--duration-fast) var(--ease-out);
@@ -1377,7 +1481,7 @@ body.sidebar-collapsed .sidebar-nav a {
   gap: 0.4rem;
   margin: 0 0 0.45rem;
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   color: var(--accent-text);
   letter-spacing: 0.01em;
 }
@@ -1408,7 +1512,7 @@ body.sidebar-collapsed .sidebar-nav a {
 .dup-path-tooltip__path {
   display: block;
   font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1454,7 +1558,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 
 .dup-doc-tooltip__bloco--venc {
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text);
   white-space: nowrap;
   flex: 0 1 auto;
@@ -1468,7 +1572,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .dup-doc-tooltip__caminho {
   display: block;
   font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
-  font-size: 0.78rem;
+  font-size: var(--fs-ui-sm);
   color: var(--text);
   word-break: break-all;
   white-space: pre-wrap;
@@ -1521,7 +1625,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .global-loading-text {
   color: var(--text);
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: var(--fs-ui);
 }
 
 @keyframes spin-loader {
@@ -1595,7 +1699,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .cg-page-nav__meta {
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
   color: var(--text-muted);
   text-align: center;
 }
@@ -1645,7 +1749,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 
 .barra-selecao__aviso {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   color: var(--expired-text);
 }
 
@@ -1680,7 +1784,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   padding: 0 0.85rem;
   min-height: 2.25rem;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
   font-weight: 600;
   line-height: 1.25;
   color: var(--text);
@@ -1745,7 +1849,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   min-width: 8.5rem;
   padding: 0.55rem 0.65rem;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
   line-height: 1.25;
   color: var(--text);
   background: var(--surface);
@@ -1877,7 +1981,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
      `50%` num retângulo desenha uma elipse. */
   border-radius: var(--radius-pill);
   padding: 0 4px;
-  font-size: 10px;
+  font-size: var(--fs-label);
   font-weight: 700;
   /* Dígito de largura fixa: sem isto a contagem muda de largura ao subir de
      53 para 54, e o badge treme no canto do sino. */
@@ -1954,7 +2058,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 
 .notifications-header h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--fs-ui);
   font-weight: 600;
   color: var(--text);
 }
@@ -1964,7 +2068,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
    `button`, e só reescreve o que precisa ser menor. */
 .notif-lidas-btn {
   padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   font-weight: 500;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
@@ -2020,7 +2124,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .notif-badge-type {
-  font-size: 0.65rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2035,7 +2139,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .notif-date {
-  font-size: 0.7rem;
+  font-size: var(--fs-label);
   color: var(--text-muted);
 }
 
@@ -2048,14 +2152,14 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 .notif-doc {
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
 /* Cabeçalho de seção do sino (Expirando / Vencidos) */
 .notif-section-title {
   margin: 0.75rem 0.25rem 0.4rem;
-  font-size: 10px;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2074,7 +2178,7 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   margin-top: 0.5rem;
   padding: 0.65rem 0.25rem 0.25rem;
   border-top: 1px solid var(--border);
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
@@ -2184,7 +2288,9 @@ body.sidebar-open .sidebar-backdrop {
      dos três botões e fazia o sino parecer um caso isolado. A caixa é de tamanho
      fixo; padding aqui não tem o que fazer. */
   padding: 0;
-  font-size: 1.2rem;
+  /* Dimensiona o GLIFO do botao, nao texto de leitura: fora do ramo de tipos
+     de proposito. */
+  font-size: var(--fs-subsection);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: background-color var(--duration-fast) var(--ease-out);
@@ -2228,12 +2334,21 @@ body.sidebar-open .sidebar-backdrop {
     padding: 1.25rem 1rem !important;
   }
 
-  .page-header h1 {
-    font-size: 24px;
+  /* O PAPEL encolhe, e nao um elemento por vez.
+
+     Era um override em `.page-header h1`. Redefinir o token faz o titulo de
+     pagina E o numeral do dashboard cairem juntos — que e o certo: 32px num
+     aparelho de 390px e grande demais nos dois casos, e a proxima coisa a usar
+     `--fs-title` ja nasce adaptada sem ninguem lembrar de acrescentar override.
+
+     Degrau discreto no breakpoint, e nao `clamp()`: superficie densa de
+     trabalho se le melhor previsivel do que fluida. */
+  :root {
+    --fs-title: 1.5rem;
   }
 
   .page-header p {
-    font-size: 13px;
+    font-size: var(--fs-ui-sm);
   }
 
   .cards-grid {
@@ -2248,7 +2363,7 @@ body.sidebar-open .sidebar-backdrop {
   }
 
   .card-number {
-    font-size: 22px;
+    font-size: var(--fs-section);
   }
 
   .toolbar {
@@ -2337,7 +2452,7 @@ body.sidebar-open .sidebar-backdrop {
     flex: 0 0 auto;
     max-width: 45%;
     text-align: left;
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -2370,7 +2485,7 @@ body.sidebar-open .sidebar-backdrop {
 
   table th, table td {
     padding: 0.65rem 0.5rem;
-    font-size: 0.8rem;
+    font-size: var(--fs-ui-sm);
   }
 
   .cg-page-nav__row {
@@ -2389,7 +2504,7 @@ body.sidebar-open .sidebar-backdrop {
   }
 
   .card-title {
-    font-size: 10px;
+    font-size: var(--fs-label);
   }
 
   .card-icon {
@@ -2432,7 +2547,7 @@ body.sidebar-open .sidebar-backdrop {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   color: var(--text);
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
   font-weight: 500;
   opacity: 0;
   transform: translateY(16px);
@@ -2446,7 +2561,7 @@ body.sidebar-open .sidebar-backdrop {
 
 .toast-icon {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: var(--fs-subsection);
   flex-shrink: 0;
 }
 
@@ -2461,7 +2576,7 @@ body.sidebar-open .sidebar-backdrop {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 1.25rem;
+  font-size: var(--fs-subsection);
   cursor: pointer;
   padding: 0;
   line-height: 1;
@@ -2523,20 +2638,21 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 .empty-state-icon {
+  /* Idem: e o tamanho do simbolo, nao um degrau tipografico. */
   font-size: 2.5rem;
   margin-bottom: 0.75rem;
   opacity: 0.8;
 }
 
 .empty-state-title {
-  font-size: 1.1rem;
+  font-size: var(--fs-subsection);
   font-weight: 600;
   color: var(--text);
   margin: 0 0 0.4rem;
 }
 
 .empty-state-desc {
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
   color: var(--text-muted);
   max-width: 400px;
   margin: 0 0 1.25rem;
@@ -2552,7 +2668,7 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 .form-field label {
-  font-size: 0.8rem;
+  font-size: var(--fs-ui-sm);
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -2574,13 +2690,13 @@ body.sidebar-open .sidebar-backdrop {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.875rem;
+  font-size: var(--fs-ui);
   line-height: 1.45;
 }
 
 .cg-banner__icon {
   flex-shrink: 0;
-  font-size: 1rem;
+  font-size: var(--fs-body);
   line-height: 1.35;
 }
 
@@ -2608,7 +2724,7 @@ body.sidebar-open .sidebar-backdrop {
 
 /* Empty state renderizado como linha de tabela (renderEmptyRow) */
 .empty-state-card .empty-state-title {
-  font-size: 1.05rem;
+  font-size: var(--fs-subsection);
   font-weight: 600;
   color: var(--text);
   margin: 0 0 0.4rem;
@@ -2727,7 +2843,7 @@ dialog.modal::backdrop {
 
 .modal__head h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-subsection);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -2774,12 +2890,12 @@ dialog.modal::backdrop {
   border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: var(--fs-ui);
 }
 
 .modal__dica {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-ui-sm);
   line-height: 1.4;
 }
 
@@ -2832,7 +2948,7 @@ dialog.modal::backdrop {
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: var(--fs-body);
 }
 
 .btn-olho:hover {
@@ -2888,7 +3004,7 @@ dialog.modal::backdrop {
   border: none;
   border-radius: 0;
   padding: 0.75rem 0.25rem;
-  font-size: 0.95rem;
+  font-size: var(--fs-ui);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=audit-2026-08c" />
+    <link rel="stylesheet" href="/static/style.css?v=escala-de-tipos-2026-08e" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -23,7 +23,7 @@
         border: none !important;
         border-radius: 0 !important;
         padding: 0.75rem 0.25rem !important;
-        font-size: 0.95rem;
+        font-size: var(--fs-ui);
         font-weight: 500;
         color: var(--text-muted);
         cursor: pointer;
@@ -68,8 +68,8 @@
           <span class="tag" id="tag-api-key" title="Só indica se o .env exige chave">Chave: …</span>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
-            <label for="sel-fonte" style="font-size: 0.875rem; color: var(--text-muted); white-space: nowrap;">Fonte dos dados:</label>
-            <select id="sel-fonte" aria-describedby="fonte-hint" style="font-size: 0.875rem;">
+            <label for="sel-fonte" style="font-size: var(--fs-ui); color: var(--text-muted); white-space: nowrap;">Fonte dos dados:</label>
+            <select id="sel-fonte" aria-describedby="fonte-hint" style="font-size: var(--fs-ui);">
               <option value="auto">Automático</option>
               <option value="remoto">Só remoto</option>
               <option value="local">Só local</option>
@@ -91,7 +91,7 @@
 
         <!-- Aba 1: Chave API -->
         <section id="sec-chave">
-          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Chave API (segurança)</h2>
+          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Chave API (segurança)</h2>
           <p class="hint">
             Se o servidor estiver protegido por uma <code>API_KEY</code>, adicione a mesma chave abaixo para liberar as configurações. Fica gravado no seu navegador.
           </p>
@@ -107,7 +107,7 @@
 
         <!-- Aba 2: Pastas e Agente -->
         <section id="sec-pastas" style="display: none;">
-          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
+          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
           <p class="hint">
             Estes caminhos são a referência para o <strong>agente</strong>. O agente lê daqui para monitorar pastas usando o Watchdog.
           </p>
@@ -140,7 +140,7 @@
 
           <!-- Leitura efetiva -->
           <div class="panel--nested" style="margin-top: 1.5rem;">
-            <h3 style="margin: 0 0 0.75rem; font-size: 1rem;">Leitura local efetiva</h3>
+            <h3 style="margin: 0 0 0.75rem;">Leitura local efetiva</h3>
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
               <div>
                 <span class="path-label">Origem</span>
@@ -174,7 +174,7 @@
 
         <!-- Aba 3: SMTP -->
         <section id="sec-smtp" style="display: none;">
-          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
+          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
           <p class="hint">
             Configure o servidor SMTP e, abaixo, para quem os alertas vão e com que antecedência.
           </p>
@@ -194,7 +194,7 @@
             <div class="row">
               <label for="inp-smtp-pass">Senha SMTP</label>
               <input type="password" id="inp-smtp-pass" class="path-input" placeholder="Preencha apenas para alterar" />
-              <span id="smtp-pass-set-label" style="font-size: 12px; margin-top: 0.25rem; font-weight: 500;">Senha configurada: <span id="smtp-pass-status">—</span></span>
+              <span id="smtp-pass-set-label" style="font-size: var(--fs-caption); margin-top: 0.25rem; font-weight: 500;">Senha configurada: <span id="smtp-pass-status">—</span></span>
             </div>
             <div class="row">
               <label for="inp-smtp-from">E-mail Remetente</label>
@@ -217,7 +217,7 @@
                  servidor de e-mail; daqui para baixo é PARA QUEM e QUANDO. As
                  duas coisas dividiam um bloco só e nenhum título as separava. -->
             <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
-              <h3 style="font-size: 0.95rem; margin: 0 0 0.35rem;">Para quem, e quando</h3>
+              <h3 style="margin: 0 0 0.35rem;">Para quem, e quando</h3>
               <p class="hint" style="margin-top: 0;">
                 Vale para o resumo do portal — a lista com os certificados a vencer e os vencidos.
                 Os avisos que cada pessoa recebe dos certificados que acompanha continuam indo para ela.
@@ -266,7 +266,7 @@
               <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
               <input type="email" id="inp-smtp-test-dest" class="form-control" placeholder="Destinatário teste" style="max-width: 200px;" />
               <button type="button" id="btn-test-smtp">Enviar Teste</button>
-              <button type="button" id="btn-trigger-alerts" style="background-color: var(--warning-text); color: #FFFFFF; border: none; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
+              <button type="button" id="btn-trigger-alerts" style="background-color: var(--warning-text); color: #FFFFFF; border: none; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-size: var(--fs-ui); font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
             </div>
             <span id="smtp-msg" class="hint" style="margin-top: 0.75rem; display: block;"></span>
           </div>
@@ -274,7 +274,7 @@
 
         <!-- Aba 4: Fila de Comandos -->
         <section id="sec-comandos" style="display: none;">
-          <h2 style="font-size: 1.1rem; margin: 0 0 0.5rem;">Fila de Comandos (Remoto)</h2>
+          <h2 style="font-size: var(--fs-subsection); margin: 0 0 0.5rem;">Fila de Comandos (Remoto)</h2>
           <p class="hint">
             Envie comandos para o Agente executar na máquina dele. Por exemplo: <em>Forçar Scan</em> instrui o Watchdog do agente a reler a pasta ignorando o delay de 24 horas.
           </p>

@@ -42,17 +42,17 @@ typography:
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: "-0.04em"
-  headline:
+  title:
     fontSize: "32px"
     fontWeight: 600
     lineHeight: 1.25
     letterSpacing: "-0.03em"
-  title1:
+  section:
     fontSize: "22px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "-0.02em"
-  title2:
+  subsection:
     fontSize: "18px"
     fontWeight: 500
     lineHeight: 1.35
@@ -62,13 +62,18 @@ typography:
     fontWeight: 400
     lineHeight: 1.6
     letterSpacing: "0"
+  metric:
+    fontSize: "1.625rem"
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: "-0.03em"
   ui:
     fontSize: "0.9rem"
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: "0"
   ui-sm:
-    fontSize: "0.85rem"
+    fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.45
     letterSpacing: "0"
@@ -803,6 +808,19 @@ Com `--row-hover` a media query desapareceu e o defeito com ela.
   que parece certo, num arquivo que ninguém relê.
 - **Don't** resolver tema com `@media (prefers-color-scheme: dark)` cru numa
   regra de componente; ver A Regra da Guarda de Tema.
+- **Don't** escrever `font-size` literal. A escala tem dez papeis
+  (`--fs-display` a `--fs-label`) e os elementos `h1`/`h2`/`h3` ja herdam o seu.
+  Um literal novo significa ou um papel que falta — e ai ele vira token — ou um
+  papel que ja existe escrito de outro jeito.
+
+  Em 21/08 havia **36 tamanhos distintos para 7 papeis**, dezenove deles entre
+  10 e 15px: `0.78rem`, `0.8rem`, `0.8125rem` e `0.82rem` cobriam 0.6px. E o
+  mesmo `<h2>` de secao media 16.8, 17.6, 18.4, 19.2 ou 20px conforme a tela.
+  As classes `.text-*` que implementavam o ramo tinham ZERO uso.
+
+  Exceção declarada: dimensionar GLIFO (icone de estado vazio, seta de botao)
+  nao e tipografia e fica fora do ramo, com comentario dizendo isso.
+
 - **Don't** repetir o material *glassmorphic*. Ele pertence a exatamente dois
   elementos — a sidebar e o dropdown de notificações — e sua raridade é o que o
   faz funcionar.
