@@ -158,3 +158,39 @@ def test_falha_ao_listar_esconde_o_painel_em_vez_de_alarmar() -> None:
     captura = trecho[trecho.index("catch"):]
     assert "secao.hidden = true" in captura
     assert "showToast" not in captura
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 3. Versão do agente na estação
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_versao_nao_reportada_nao_vira_desatualizado() -> None:
+    """
+    Um agente anterior a esta coluna não diz a versão. Pintá-lo de atrasado
+    mandaria alguém atualizar o que talvez já esteja em dia — e faria o painel
+    mentir justamente para quem o abriu para conferir se a correção chegou.
+    """
+    corpo = _inicio()
+    trecho = corpo[corpo.index("function versaoDoDispositivo"):]
+    trecho = trecho[: trecho.index("\n      }")]
+
+    assert "if (!d.versao)" in trecho
+    assert trecho.index("if (!d.versao)") < trecho.index("desatualizado")
+
+
+def test_o_servidor_tambem_exige_as_duas_coisas_para_dizer_atrasado() -> None:
+    """
+    A tela não é a barreira: `listar` decide. Se `desatualizado` virar
+    "versão != esperada" sem checar que a versão existe, toda estação muda
+    aparece em vermelho — e o JS acima não teria como corrigir.
+    """
+    from app import agent_devices
+
+    fonte = (RAIZ / "app" / "agent_devices.py").read_text(encoding="utf-8")
+    trecho = fonte[fonte.index('item["desatualizado"]'):]
+    trecho = trecho[: trecho.index("\n")]
+
+    assert "instalada and esperada" in trecho
+
+    linha_muda = {"versao": "", "visto_em": None, "revogado_em": None}
+    assert agent_devices.esta_vivo(linha_muda) is False

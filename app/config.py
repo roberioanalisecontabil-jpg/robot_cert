@@ -89,3 +89,16 @@ CERT_INSTALL_TOKEN_TTL_MIN = _env_int(
     lo=1,
     hi=60,
 )
+
+
+# Versão do agente que ESTE deploy espera na frota.
+#
+# Terceira cópia do mesmo número, e a duplicação é inevitável: `agent/__init__`
+# é a fonte que o código do agente lê, `agent_setup.iss` declara AppVersion
+# porque o Inno não importa Python, e aqui porque o pacote `agent` não vai no
+# bundle da Vercel — `from agent import __version__` no servidor resolveria em
+# desenvolvimento e falharia em produção, ou pior, cairia num fallback vazio e
+# o portal deixaria de acusar máquina atrasada sem ninguém perceber.
+#
+# `tests/test_versao_agente.py` guarda as três contra divergência.
+VERSAO_AGENTE_ESPERADA = "1.1.0"

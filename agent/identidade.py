@@ -279,9 +279,16 @@ class Sessao:
             raise NaoRegistrado(
                 "Esta estação ainda não foi registrada. Abra o agente e faça login."
             )
+        # A versão vai junto da renovação, e não num heartbeat próprio: é a
+        # única chamada que já acontece de hora em hora, e um segundo endereço
+        # só para dizer o número poderia continuar batendo com o segredo já
+        # revogado — o portal veria "viva" uma máquina que não consegue mais
+        # receber comando.
+        from agent import __version__
+
         r = self._client.post(
             f"{self._base}/api/agent/dispositivos/token",
-            json={"segredo": guardado["segredo"]},
+            json={"segredo": guardado["segredo"], "versao": __version__},
         )
         if r.status_code in (401, 403):
             # Revogado, ou conta sem acesso. Apagar o arquivo é a resposta
@@ -300,6 +307,20 @@ class Sessao:
         self.email = guardado.get("email")
         minutos = int(dados.get("validade_token_min") or 60)
         self._expira_em = time.time() + max(60, minutos * 60 - FOLGA_DE_RENOVACAO_SEG)
+
+        # Deixa rastro no agent.log quando esta estação está atrás do portal.
+        # Não atualiza sozinho: hoje não há canal de distribuição do instalador
+        # do agente. O registro é o que permite responder, num diagnóstico, se a
+        # correção chegou aqui — antes disso a pergunta não tinha resposta.
+        esperada = (dados.get("versao_esperada") or "").strip()
+        self.versao_esperada = esperada or None
+        if esperada and esperada != __version__:
+            LOGGER.warning(
+                "Agente na versão %s; o portal espera %s. Atualização pendente "
+                "nesta estação.",
+                __version__,
+                esperada,
+            )
 
     def cabecalhos(self) -> Dict[str, str]:
         """Cabeçalhos prontos para o portal, renovando se preciso."""

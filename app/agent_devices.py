@@ -46,6 +46,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from app import config
+
 logger = logging.getLogger(__name__)
 
 TABELA = "agent_devices"
@@ -147,7 +149,7 @@ def registrar(user_id: str, machine_id: str, nome: str = "") -> str:
     return segredo
 
 
-def autenticar(segredo: str) -> Optional[Dict[str, Any]]:
+def autenticar(segredo: str, versao: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Devolve o dispositivo dono deste segredo, ou None.
 
@@ -176,10 +178,37 @@ def autenticar(segredo: str) -> Optional[Dict[str, Any]]:
         return None
 
     agora = _agora().isoformat()
+    carimbo: Dict[str, Any] = {"visto_em": agora}
+    # A versão só entra quando a estação a informa. Gravar "" por omissão
+    # apagaria o que ela disse da última vez — e a pergunta num diagnóstico é
+    # "o que tem naquela máquina", que não some porque um contato veio mudo.
+    if (versao or "").strip():
+        carimbo["versao"] = versao.strip()[:40]
     try:
-        sb.table(TABELA).update({"visto_em": agora}).eq("id", linha["id"]).execute()
-        linha["visto_em"] = agora
+        sb.table(TABELA).update(carimbo).eq("id", linha["id"]).execute()
+        linha.update(carimbo)
     except Exception:  # noqa: BLE001
+        # Ordem de implantação: se o agente novo reportar `versao` antes de a
+        # coluna existir, o PostgREST recusa o update INTEIRO (PGRST204) e o
+        # `visto_em` deixa de ser gravado — toda a frota apareceria "Parada", e
+        # a fase 4 não enfileiraria comando para máquina nenhuma. O sintoma não
+        # apontaria para a migration em lugar nenhum.
+        #
+        # Em vez de depender de quem roda o quê primeiro, tenta de novo sem a
+        # coluna nova. Perde-se a versão, que é informativa; mantém-se o
+        # carimbo, de que a instalação depende.
+        if "versao" in carimbo:
+            try:
+                sb.table(TABELA).update({"visto_em": agora}).eq("id", linha["id"]).execute()
+                linha["visto_em"] = agora
+                logger.warning(
+                    "Coluna `versao` indisponível em %s; carimbei só visto_em. "
+                    "Rode a migration 20260822200000.",
+                    TABELA,
+                )
+                return linha
+            except Exception:  # noqa: BLE001
+                pass
         # Falhar em carimbar não pode negar acesso a quem apresentou segredo
         # válido: o pior efeito é a máquina parecer parada na tela.
         logger.exception("Falha ao carimbar visto_em do dispositivo %s", linha.get("id"))
@@ -213,10 +242,17 @@ def listar(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         q = q.eq("user_id", user_id)
     linhas = (q.execute()).data or []
     agora = _agora()
+    esperada = (config.VERSAO_AGENTE_ESPERADA or "").strip()
     saida = []
     for linha in linhas:
         item = _sem_segredo(linha)
         item["vivo"] = esta_vivo(linha, agora)
+        instalada = (linha.get("versao") or "").strip()
+        # Só afirma "desatualizado" quando SABE. Estação que nunca reportou
+        # (agente anterior a esta coluna) não é atrasada: é desconhecida, e
+        # marcá-la de vermelho mandaria alguém atualizar o que talvez já esteja
+        # em dia.
+        item["desatualizado"] = bool(instalada and esperada and instalada != esperada)
         saida.append(item)
     saida.sort(key=lambda d: str(d.get("criado_em") or ""), reverse=True)
     return saida

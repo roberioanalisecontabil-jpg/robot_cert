@@ -2627,6 +2627,10 @@ class RegistrarDispositivoBody(BaseModel):
 
 class TokenDoDispositivoBody(BaseModel):
     segredo: str
+    # Reportada pela estação, não medida pelo portal. Opcional porque um agente
+    # anterior a esta coluna continua trocando token normalmente — exigir aqui
+    # deixaria a frota velha sem acesso no deploy, que é o oposto do objetivo.
+    versao: Optional[str] = None
 
 
 def _erro_sem_banco(e: agent_devices.SemBanco) -> HTTPException:
@@ -2703,7 +2707,7 @@ def token_do_dispositivo(body: TokenDoDispositivoBody) -> dict:
     cautela que a sessão de admin no navegador.
     """
     try:
-        disp = agent_devices.autenticar(body.segredo)
+        disp = agent_devices.autenticar(body.segredo, versao=body.versao)
     except agent_devices.SemBanco as e:
         raise _erro_sem_banco(e)
 
@@ -2730,6 +2734,11 @@ def token_do_dispositivo(body: TokenDoDispositivoBody) -> dict:
         "role": user["role"],
         "machine_id": disp.get("machine_id"),
         "validade_token_min": agent_devices.VALIDADE_TOKEN_MIN,
+        # O agente compara com a própria e registra no log quando está atrás.
+        # Não atualiza sozinho: distribuir o instalador do agente pelo portal
+        # ainda é decisão em aberto — são 33 MB que teriam de entrar no
+        # repositório e no pacote da Vercel.
+        "versao_esperada": config.VERSAO_AGENTE_ESPERADA,
     }
 
 

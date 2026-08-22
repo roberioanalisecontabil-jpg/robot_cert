@@ -381,3 +381,72 @@ def test_sem_supabase_responde_503(client: TestClient) -> None:
     """
     r = _token(client, "qualquer-coisa")
     assert r.status_code == 503
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7. Versão reportada, e a ordem de implantação
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_a_versao_reportada_fica_guardada(banco: _Fake) -> None:
+    segredo = agent_devices.registrar("u-ana", MAQUINA)
+    agent_devices.autenticar(segredo, versao="1.1.0")
+    assert banco.tabelas[agent_devices.TABELA][0]["versao"] == "1.1.0"
+
+
+def test_contato_mudo_nao_apaga_a_versao_anterior(banco: _Fake) -> None:
+    """
+    A pergunta num diagnóstico é "o que tem naquela máquina", e ela não some
+    porque um contato veio sem o número.
+    """
+    segredo = agent_devices.registrar("u-ana", MAQUINA)
+    agent_devices.autenticar(segredo, versao="1.1.0")
+    agent_devices.autenticar(segredo)
+    assert banco.tabelas[agent_devices.TABELA][0]["versao"] == "1.1.0"
+
+
+def test_sem_a_coluna_o_carimbo_de_vida_sobrevive(
+    banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    O risco de ordem. Se o agente novo reportar `versao` antes de a coluna
+    existir, o PostgREST recusa o UPDATE INTEIRO (PGRST204) e o `visto_em`
+    deixa de ser gravado — toda a frota apareceria "Parada", e a fase 4 não
+    enfileiraria comando para máquina nenhuma. O sintoma não apontaria para a
+    migration em lugar nenhum.
+    """
+    segredo = agent_devices.registrar("u-ana", MAQUINA)
+
+    original = _Query.update
+
+    def _recusa_versao(self, p):
+        if "versao" in p:
+            raise RuntimeError(
+                "{'message': \"Could not find the 'versao' column\", 'code': 'PGRST204'}"
+            )
+        return original(self, p)
+
+    monkeypatch.setattr(_Query, "update", _recusa_versao)
+
+    d = agent_devices.autenticar(segredo, versao="1.1.0")
+
+    assert d is not None, "o segredo continua válido; a coluna é informativa"
+    assert d.get("visto_em"), "o carimbo de vida tem de sobreviver à coluna ausente"
+    assert agent_devices.esta_vivo(d) is True
+
+
+def test_versao_desconhecida_nao_e_desatualizada(
+    banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Estação que nunca reportou é DESCONHECIDA. Marcá-la de atrasada mandaria
+    alguém atualizar o que talvez já esteja em dia.
+    """
+    monkeypatch.setattr("app.config.VERSAO_AGENTE_ESPERADA", "9.9.9", raising=False)
+    segredo = agent_devices.registrar("u-ana", MAQUINA)
+    agent_devices.autenticar(segredo)
+
+    d = agent_devices.listar("u-ana")[0]
+    assert d["desatualizado"] is False
+
+    agent_devices.autenticar(segredo, versao="1.1.0")
+    assert agent_devices.listar("u-ana")[0]["desatualizado"] is True

@@ -234,6 +234,7 @@
                 <th scope="col">Computador</th>
                 <th scope="col">Situação</th>
                 <th scope="col">Último contato</th>
+                <th scope="col">Versão</th>
                 <th scope="col"><span class="cg-sr-only">Ações</span></th>
               </tr>
             </thead>
@@ -1017,6 +1018,44 @@
         return { texto: "Parado", classe: "badge-warning", glifo: "!" };
       }
 
+      // `createElement` + `textContent`, nunca string HTML. É a forma sancionada
+      // por `test_status_de_certificado_nao_e_montado_a_mao_no_template`, e o
+      // motivo dela é concreto: montar a string do badge dentro do template foi
+      // como o mapeamento estado→badge acabou duplicado em duas telas e
+      // divergiu, sem nada acusando.
+      function badgeElemento(texto, classe, glifo) {
+        const span = document.createElement("span");
+        span.className = "badge " + classe;
+        const g = document.createElement("span");
+        g.className = "badge-glifo";
+        g.setAttribute("aria-hidden", "true");
+        g.textContent = glifo;
+        span.appendChild(g);
+        span.appendChild(document.createTextNode(texto));
+        return span;
+      }
+
+      function versaoDoDispositivo(d) {
+        const td = document.createElement("td");
+        // Não reportada é DESCONHECIDA, não atrasada. Um agente anterior a esta
+        // coluna não diz a versão, e pintá-lo de atrasado mandaria alguém
+        // atualizar o que talvez já esteja em dia — e faria o painel mentir
+        // justamente para quem o abriu para conferir se a correção chegou.
+        if (!d.versao) {
+          const vazio = document.createElement("span");
+          vazio.className = "hint";
+          vazio.textContent = "—";
+          td.appendChild(vazio);
+          return td;
+        }
+        td.appendChild(document.createTextNode(d.versao));
+        if (d.desatualizado) {
+          td.appendChild(document.createTextNode(" "));
+          td.appendChild(badgeElemento("Desatualizado", "badge-warning", "!"));
+        }
+        return td;
+      }
+
       function quandoFoi(iso) {
         if (!iso) return "Nunca se conectou";
         const q = new Date(iso);
@@ -1053,20 +1092,37 @@
         lista.forEach((d) => {
           const s = situacaoDoDispositivo(d);
           const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${esc(d.nome || d.machine_id)}<br><small class="hint">${esc(d.machine_id)}</small></td>
-            <td><span class="badge ${s.classe}"><span class="badge-glifo" aria-hidden="true">${s.glifo}</span>${esc(s.texto)}</span></td>
-            <td>${esc(quandoFoi(d.visto_em))}</td>
-            <td class="acoes-celula"></td>`;
 
+          const tdNome = document.createElement("td");
+          tdNome.appendChild(document.createTextNode(d.nome || d.machine_id));
+          tdNome.appendChild(document.createElement("br"));
+          const mid = document.createElement("small");
+          mid.className = "hint";
+          mid.textContent = d.machine_id;
+          tdNome.appendChild(mid);
+          tr.appendChild(tdNome);
+
+          const tdSituacao = document.createElement("td");
+          tdSituacao.appendChild(badgeElemento(s.texto, s.classe, s.glifo));
+          tr.appendChild(tdSituacao);
+
+          const tdQuando = document.createElement("td");
+          tdQuando.textContent = quandoFoi(d.visto_em);
+          tr.appendChild(tdQuando);
+
+          tr.appendChild(versaoDoDispositivo(d));
+
+          const tdAcoes = document.createElement("td");
           if (!d.revogado_em) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "btn btn-secondary";
             btn.textContent = "Revogar";
             btn.addEventListener("click", () => revogarDispositivo(d));
-            tr.querySelector(".acoes-celula").appendChild(btn);
+            tdAcoes.appendChild(btn);
           }
+          tr.appendChild(tdAcoes);
+
           corpo.appendChild(tr);
         });
       }
