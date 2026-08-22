@@ -212,6 +212,36 @@
         </div>
       </div>
 
+      <!-- Meus computadores.
+           Mora no Início, e não em Configuração, porque não é ajuste de sistema:
+           é a lista de máquinas que agem COM A CONTA de quem está olhando. Um
+           operador sem permissão nenhuma no menu precisa poder cortar o acesso
+           de um computador que não usa mais — e Configuração está fechada para
+           ele.
+           Fica escondido quando não há nenhum: quem nunca instalou o agente não
+           tem o que gerir aqui, e um painel vazio dizendo "nenhum" seria ruído
+           permanente para a maioria. -->
+      <section id="secao-dispositivos" class="side-card" style="margin-top: 1.5rem;" hidden>
+        <h3>Meus computadores</h3>
+        <p class="side-text">
+          Computadores onde você entrou pelo agente. Eles agem com a sua conta —
+          se um deixou de ser seu, revogue o acesso.
+        </p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Meus computadores">
+          <table role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th scope="col">Computador</th>
+                <th scope="col">Situação</th>
+                <th scope="col">Último contato</th>
+                <th scope="col"><span class="cg-sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody id="corpo-dispositivos" role="rowgroup"></tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
 
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
@@ -972,7 +1002,102 @@
 
         initPerPageDashboard();
         await carregarTabela();
+        carregarDispositivos();
       })();
+
+      // ─── Meus computadores ───────────────────────────────────────────────
+
+      function situacaoDoDispositivo(d) {
+        // Três estados, e a diferença entre os dois últimos importa: "parado" é
+        // um computador desligado, que volta sozinho; "revogado" é uma decisão
+        // que alguém tomou. Mostrá-los igual faria a pessoa revogar de novo o
+        // que já revogou, ou esperar por um que nunca vai voltar.
+        if (d.revogado_em) return { texto: "Acesso revogado", classe: "badge-bad", glifo: "×" };
+        if (d.vivo) return { texto: "Ativo agora", classe: "badge-ok", glifo: "✓" };
+        return { texto: "Parado", classe: "badge-warning", glifo: "!" };
+      }
+
+      function quandoFoi(iso) {
+        if (!iso) return "Nunca se conectou";
+        const q = new Date(iso);
+        if (isNaN(q)) return "—";
+        const min = Math.floor((Date.now() - q.getTime()) / 60000);
+        if (min < 1) return "Agora mesmo";
+        if (min < 60) return `Há ${min} min`;
+        if (min < 1440) return `Há ${Math.floor(min / 60)} h`;
+        return q.toLocaleDateString("pt-BR");
+      }
+
+      async function carregarDispositivos() {
+        const secao = document.getElementById("secao-dispositivos");
+        const corpo = document.getElementById("corpo-dispositivos");
+        if (!secao || !corpo) return;
+
+        let dados;
+        try {
+          const r = await fetch("/api/agent/dispositivos", { headers: getHeaders() });
+          if (!r.ok) throw new Error(String(r.status));
+          dados = await r.json();
+        } catch (e) {
+          // Silêncio de propósito: a migration pode não ter rodado (503), e um
+          // toast de erro no Início assustaria por causa de um painel opcional
+          // que a maioria nem usa. Quem depende dele percebe pela ausência.
+          secao.hidden = true;
+          return;
+        }
+
+        const lista = dados.dispositivos || [];
+        secao.hidden = lista.length === 0;
+        corpo.innerHTML = "";
+
+        lista.forEach((d) => {
+          const s = situacaoDoDispositivo(d);
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${esc(d.nome || d.machine_id)}<br><small class="hint">${esc(d.machine_id)}</small></td>
+            <td><span class="badge ${s.classe}"><span class="badge-glifo" aria-hidden="true">${s.glifo}</span>${esc(s.texto)}</span></td>
+            <td>${esc(quandoFoi(d.visto_em))}</td>
+            <td class="acoes-celula"></td>`;
+
+          if (!d.revogado_em) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-secondary";
+            btn.textContent = "Revogar";
+            btn.addEventListener("click", () => revogarDispositivo(d));
+            tr.querySelector(".acoes-celula").appendChild(btn);
+          }
+          corpo.appendChild(tr);
+        });
+      }
+
+      async function revogarDispositivo(d) {
+        const ok = await confirmarAcao({
+          titulo: "Revogar este computador?",
+          mensagem:
+            `“${d.nome || d.machine_id}” deixa de agir com a sua conta. ` +
+            "O agente lá vai pedir login de novo na próxima vez. " +
+            "Os certificados já instalados nele continuam onde estão.",
+          textoConfirmar: "Revogar acesso",
+          perigo: true,
+        });
+        if (!ok) return;
+
+        try {
+          const r = await fetch(`/api/agent/dispositivos/${encodeURIComponent(d.id)}`, {
+            method: "DELETE",
+            headers: getHeaders(),
+          });
+          if (!r.ok) {
+            const corpo = await r.json().catch(() => ({}));
+            throw new Error(corpo.detail || `Erro ${r.status}`);
+          }
+          showToast("Acesso revogado.", "success");
+          carregarDispositivos();
+        } catch (e) {
+          showToast("Não foi possível revogar: " + e.message, "error");
+        }
+      }
     </script>
   </body>
 </html>
