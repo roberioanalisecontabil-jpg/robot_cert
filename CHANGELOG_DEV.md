@@ -11,9 +11,9 @@
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
 | **Data da última atualização** | 2026-08-22                  |
-| **Branch ativa**   | `main`, sincronizada com o origin (último: `7491db0`) |
+| **Branch ativa**   | `main`, sincronizada com o origin (último: `615c043`) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Ciclo de design (audit → typeset → extract → polish), a trilha de permissões, e nove ajustes pedidos pelo cliente — incluindo /duplicidades, que estava morta havia 4 dias — 814 testes |
+| **Última tarefa concluída** | Ciclo de design (audit → typeset → extract → polish), a trilha de permissões, e dez ajustes pedidos pelo cliente — incluindo /duplicidades (morta havia 4 dias) e o cliente renovado que aparecia como vencido — 820 testes |
 | **Próxima tarefa** | Nada em aberto por decisão. Da §5 de `docs/PLANO_niveis_de_acesso.md` sobram duas perguntas de granularidade (por usuário; `editar` separado de `apagar`), e a recomendação registrada é **esperar alguém precisar** — decidir granularidade antes da necessidade costuma acertar a errada. Segue pendente e **inaplicável hoje**: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) — o cofre tem 1 máquina, então o defeito que a chave composta previne não pode se manifestar |
 
 ---
@@ -198,9 +198,34 @@ estimador, não do CSS — o valor real era 68 exatos.
 
 #### Estado ao fim
 
-`main` em `7491db0`, **814 testes**, tudo em produção. Cinco migrations
+`main` em `615c043`, **820 testes**, tudo em produção. Cinco migrations
 aplicadas nas duas sessões. `/duplicidades`, o menu e o salvamento em
 Acompanhamento confirmados pelo cliente.
+
+#### Decisão registrada: `cert_history` continua chaveada por `file_name`
+
+`cert_history` faz upsert por `file_name`, e dois arquivos de mesmo nome em
+pastas diferentes colidem numa linha só. Isso causou o defeito do cliente
+renovado (`615c043`), corrigido trocando a FONTE do painel — que passou a ler o
+inventário, onde os dois existem.
+
+A raiz não foi tocada, **por decisão tomada com o número medido**: sobram 7
+arquivos invisíveis no Histórico, de 569. Rechavear por caminho exige migration
+que mapeie as 1.000 linhas acumuladas do antigo para o novo — senão a tela
+duplica —, e sete arquivos numa tela de conferência não pagam esse risco.
+
+Revisitar se o Histórico virar a tela onde se confere arquivo por arquivo.
+
+**E não usar a pasta como critério de prioridade.** Foi considerado e recusado
+com medição: `99.CERTIFICADOS VENCIDOS` tem 24 arquivos, **todos** expirados, e
+há **zero** expirados fora dela — concordância de 100%, ou seja a pasta não
+acrescentaria informação. E não é coincidência: o agente move os vencidos para
+lá a partir do `not_after` do próprio certificado. A pasta é CONSEQUÊNCIA do
+status e chega depois dele — um certificado que venceu hoje só é movido na
+próxima varredura. Priorizar por pasta seria confiar numa cópia atrasada do
+fato, e rebaixaria um certificado válido que alguém movesse por engano.
+
+---
 
 **A lição que fica:** os testes deste projeto são fortes onde olham — o servidor
 — e eram cegos para o navegador. Dois dos três defeitos desta sessão viviam
