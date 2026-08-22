@@ -714,6 +714,67 @@ def chave_alfabetica(item: dict) -> tuple:
     return (0, sem_acento.casefold())
 
 
+# Colunas que a tabela do Inicio deixa ordenar. O valor e a funcao que extrai a
+# chave; `None` como primeiro elemento da tupla mantem a regra que ja valia para
+# o nome: **o que falta vai para o FIM**, nas duas direcoes.
+#
+# Isso nao e detalhe. Ordenar por vencimento com os sem-data no topo daria uma
+# primeira pagina inteira de arquivos que o robo nao conseguiu ler — o oposto do
+# util, que e exatamente o que `chave_alfabetica` ja evitava para o nome.
+def _chave_texto(campo: str):
+    def chave(it: dict):
+        v = str(it.get(campo) or "").strip()
+        if not v:
+            return (1, "")
+        sem_acento = "".join(
+            c for c in unicodedata.normalize("NFD", v) if unicodedata.category(c) != "Mn"
+        )
+        return (0, sem_acento.casefold())
+    return chave
+
+
+def _chave_data(campo: str):
+    def chave(it: dict):
+        v = str(it.get(campo) or "").strip()
+        return (1, "") if not v else (0, v)   # ISO 8601 ordena como texto
+    return chave
+
+
+ORDENACOES = {
+    "nome": chave_alfabetica,
+    "status": _chave_texto("status"),
+    "emissao": _chave_data("not_before"),
+    "vencimento": _chave_data("not_after"),
+    "documento": _chave_texto("documento_numero"),
+}
+
+
+def _ordenar_listagem(itens: List[dict], coluna: str, direcao: str) -> List[dict]:
+    """Ordena por coluna. Coluna desconhecida mantem a ordem que veio.
+
+    Recusar seria pior: a tabela ganharia um estado em que ela simplesmente nao
+    carrega, e o sintoma (uma tela vazia) nao diria que o problema e o parametro.
+    """
+    chave = ORDENACOES.get((coluna or "").strip().lower())
+    if chave is None:
+        return itens
+
+    # Os SEM valor saem da ordenacao em vez de participar dela.
+    #
+    # A primeira versao devolvia `(1, "")` para eles e deixava o `reverse` fazer
+    # o resto — e o `reverse` inverte tambem o marcador, entao em ordem
+    # decrescente os sem-data iam para o TOPO. A primeira pagina virava uma
+    # lista de arquivos que o robo nao conseguiu ler, que e o oposto do util e
+    # justamente o que `chave_alfabetica` ja evitava para o nome.
+    #
+    # Descoberto pelo teste que afirmava a invariante nas DUAS direcoes; com uma
+    # so teria passado.
+    presentes = [it for it in itens if chave(it)[0] == 0]
+    ausentes = [it for it in itens if chave(it)[0] != 0]
+    ordenados = sorted(presentes, key=chave, reverse=(str(direcao).lower() == "desc"))
+    return ordenados + ausentes
+
+
 def ordenar_por_titular(itens: List[dict]) -> List[dict]:
     """
     Ordena a listagem de certificados pelo nome do titular.
@@ -2429,6 +2490,11 @@ def listar_certificados(
         False,
         description="Exclui erro e fora_do_padrao da lista, da contagem e da exportação",
     ),
+    ordenar: Optional[str] = Query(
+        None,
+        description="nome | status | emissao | vencimento | documento. Vazio = ordem alfabética por titular",
+    ),
+    direcao: str = Query("asc", description="asc | desc"),
 ) -> JSONResponse:
     """
     * auto: usa o último snapshot ingerido se existir; senão leitura local.
@@ -2466,6 +2532,16 @@ def listar_certificados(
             and _dashboard_busca_match(it, busca or "")
             and not (ocultar_ilegiveis and _e_ilegivel(it))
         ]
+        # Antes do `resumo` e da paginacao, e pelo mesmo motivo que a ordem
+        # alfabetica ja era feita aqui: ordenar no navegador ordenaria so os 25
+        # itens da pagina visivel, e a lista PARECERIA certa enquanto
+        # continuasse errada entre paginas.
+        #
+        # Sem `ordenar`, nada muda: a lista ja chega ordenada por titular de
+        # `_list_certificados_payload`, e essa continua sendo a ordem de fabrica.
+        if ordenar:
+            filtered = _ordenar_listagem(filtered, ordenar, direcao)
+
         resumo = _dashboard_resumo_counts(filtered)
 
         if todas_filtradas:

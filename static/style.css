@@ -839,6 +839,69 @@ textarea {
   caret-color: var(--accent-solid);
 }
 
+/* Cabecalho que ordena.
+
+   `<button>` dentro do `<th>`, e nao um `onclick` no proprio `<th>`: celula de
+   tabela nao entra na ordem de tabulacao nem responde a Enter, entao um `<th>`
+   clicavel funciona so para quem usa mouse.
+
+   A seta e SVG e nao um glifo — no resto do portal os icones sao desenhados, e
+   um "▲" solto sairia com a fonte e a metrica que o sistema operacional
+   escolher. */
+.th-ordenar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-ordenar:hover {
+  color: var(--text);
+}
+
+.th-ordenar__seta {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  /* Discreta enquanto a coluna nao ordena: o cabecalho precisa dizer que e
+     clicavel sem que cinco setas competindo virem ruido. */
+  opacity: 0.35;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+}
+
+.th-ordenar:hover .th-ordenar__seta {
+  opacity: 0.7;
+}
+
+.th-ordenar--ativa {
+  color: var(--accent-text);
+}
+
+.th-ordenar--ativa .th-ordenar__seta {
+  opacity: 1;
+}
+
+/* A coluna ordenada mostra UMA direcao: a seta dupla vira simples por corte. */
+th[aria-sort="ascending"] .th-ordenar__seta {
+  clip-path: inset(0 0 50% 0);
+  transform: translateY(3px);
+}
+
+th[aria-sort="descending"] .th-ordenar__seta {
+  clip-path: inset(50% 0 0 0);
+  transform: translateY(-3px);
+}
+
 /* Falha renderizada NO LUGAR do conteudo.
 
    O nome nao e `.msg-erro`: `login.html` ja tinha uma classe com esse nome,
@@ -2752,11 +2815,17 @@ body.sidebar-open .sidebar-backdrop {
    Opt-in por classe, e nao global: /duplicidades empilha TRES tabelas no mesmo
    container — dividir o viewport entre elas seria outro desenho, nao esta
    correcao —, e /configuracao e /dashboard nao tem tabela que role. */
-/* Acima de 768px apenas. Abaixo disso a tabela vira lista de cards e o desenho
-   ja diz que "os cards rolam com a pagina" — prender isso num viewport de
-   altura fixa criaria um scroller aninhado justamente onde ele foi removido de
-   proposito. */
-@media (min-width: 769px) {
+/* Acima de 768px de LARGURA: abaixo disso a tabela vira lista de cards e o
+   desenho ja diz que "os cards rolam com a pagina" — prender isso num viewport
+   de altura fixa criaria um scroller aninhado justamente onde ele foi removido
+   de proposito.
+
+   E acima de 800px de ALTURA. Preencher exige haver o que preencher: medido
+   numa janela de 639px, cabecalho + cards + toolbar + paginacao consumiam quase
+   tudo e a tabela ficava com 139px — DUAS linhas, contra as seis do teto de
+   68vh que isto substitui. A correcao piorava a tela exatamente onde ela ja era
+   apertada. Abaixo do limiar, vale o `max-height: min(68vh, 760px)` de sempre. */
+@media (min-width: 769px) and (min-height: 800px) {
 
 .main-content:has(.table-container--cheia) {
   display: flex;
@@ -2810,14 +2879,22 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 /* Piso: numa janela baixa, cabecalho + cards + toolbar podem consumir a altura
-   toda e a tabela ficaria com zero. Oito linhas e o minimo para a tabela ainda
-   ser uma tabela. Se nao couber, a pagina volta a rolar — que e o
-   comportamento correto quando nao ha espaco, e nao um bug. */
-.table-container--cheia .table-scroll {
-  min-height: 22rem;
+   toda e a tabela ficaria com zero.
+
+   O piso fica no CONTAINER, e nao no `.table-scroll`. Na primeira versao estava
+   no scroll, e o resultado foi pior do que o problema: o `.table-scroll-anchor`
+   recebia 2px de altura, o scroll mantinha os 352 do piso e TRANSBORDAVA dele —
+   entao a paginacao, que vem logo depois na ordem, era desenhada POR CIMA da
+   primeira linha da tabela.
+
+   No container, o piso empurra o bloco inteiro: se nao couber no viewport, a
+   pagina volta a rolar — que e o comportamento correto quando nao ha espaco, e
+   nao uma sobreposicao. */
+.table-container--cheia {
+  min-height: 26rem;
 }
 
-}  /* @media (min-width: 769px) */
+}  /* @media (min-width: 769px) and (min-height: 800px) */
 
 /* Região rolável precisa ser alcançável por teclado (WCAG 2.1.1) */
 .table-scroll:focus-visible {

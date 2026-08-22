@@ -162,3 +162,104 @@ def test_exportacao_tambem_sai_ordenada(client: TestClient, inventario) -> None:
 ])
 def test_chave_alfabetica(item: dict, esperado: tuple) -> None:
     assert m.chave_alfabetica(item) == esperado
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Ordenação escolhida pelo cabeçalho (21/08/2026)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# A mesma invariante do topo deste arquivo, agora para a ordem que a pessoa
+# escolhe: precisa acontecer no SERVIDOR e ANTES da paginação. E uma segunda,
+# que só aparece quando a ordem deixa de ser sempre a mesma: **o que falta vai
+# para o fim, nas duas direções.** Ordenar por vencimento com os sem-data no
+# topo daria uma primeira página inteira de arquivos ilegíveis — o oposto do
+# útil, que é exatamente o que `chave_alfabetica` já evitava para o nome.
+
+def _com_data(nome: str, emissao: str, venc: str, doc: str = "1", status: str = "ok") -> dict:
+    return {
+        "nome": nome, "display_name": nome, "status": status,
+        "not_before": emissao, "not_after": venc,
+        "documento_numero": doc, "documento_formatado": doc,
+        "file_name": nome + ".pfx", "fingerprint_sha256": "fp-" + nome,
+    }
+
+
+@pytest.fixture
+def acervo_para_ordenar(monkeypatch: pytest.MonkeyPatch):
+    itens = [
+        _com_data("CARLOS", "2026-03-01T00:00:00Z", "2027-03-01T00:00:00Z", "300"),
+        _com_data("ana", "2026-01-01T00:00:00Z", "2027-05-01T00:00:00Z", "100"),
+        _com_data("Bruno", "2026-02-01T00:00:00Z", "2027-01-01T00:00:00Z", "200"),
+        _com_data("SEM DATA", "", "", "400"),
+    ]
+    monkeypatch.setattr(m, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)})
+    return itens
+
+
+def _admin() -> dict:
+    from app import auth
+    return {"Authorization": f"Bearer {auth.create_access_token({'sub': 'admin@x.com', 'role': 'admin'})}"}
+
+
+def _nomes_da_url(client, url: str) -> list:
+    r = client.get(url, headers=_admin())
+    assert r.status_code == 200, r.text
+    return [it["nome"] for it in r.json()["itens"]]
+
+
+def test_sem_o_parametro_a_ordem_de_fabrica_continua(client, acervo_para_ordenar) -> None:
+    """Alfabética por titular, sem acento e sem caixa — o que já valia."""
+    assert _nomes_da_url(client, "/api/certificados?pagina=1&por_pagina=50") == [
+        "ana", "Bruno", "CARLOS", "SEM DATA"
+    ]
+
+
+def test_ordena_por_vencimento_nas_duas_direcoes(client, acervo_para_ordenar) -> None:
+    asc = _nomes_da_url(client, "/api/certificados?pagina=1&por_pagina=50&ordenar=vencimento&direcao=asc")
+    des = _nomes_da_url(client, "/api/certificados?pagina=1&por_pagina=50&ordenar=vencimento&direcao=desc")
+    assert asc[:3] == ["Bruno", "CARLOS", "ana"]
+    assert des[:3] == ["ana", "CARLOS", "Bruno"]
+
+
+def test_o_que_falta_vai_para_o_fim_nas_duas_direcoes(client, acervo_para_ordenar) -> None:
+    """A invariante que decide se a primeira página é útil."""
+    for direcao in ("asc", "desc"):
+        nomes = _nomes_da_url(
+            client, f"/api/certificados?pagina=1&por_pagina=50&ordenar=vencimento&direcao={direcao}"
+        )
+        assert nomes[-1] == "SEM DATA", (direcao, nomes)
+
+
+def test_ordena_antes_de_paginar_tambem_na_ordem_escolhida(client, acervo_para_ordenar) -> None:
+    """O teste que mais importa, repetido para a ordem escolhida.
+
+    Com 2 por página e ordem decrescente de vencimento, a PRIMEIRA página tem
+    de trazer os dois maiores. Ordenar depois de paginar traria os dois
+    primeiros da ordem alfabética, ordenados entre si — e a lista pareceria
+    certa página a página.
+    """
+    p1 = _nomes_da_url(client, "/api/certificados?pagina=1&por_pagina=2&ordenar=vencimento&direcao=desc")
+    assert p1 == ["ana", "CARLOS"], p1
+
+
+def test_coluna_desconhecida_nao_derruba_a_tela(client, acervo_para_ordenar) -> None:
+    """Recusar daria uma tabela que simplesmente não carrega, e o sintoma —
+    tela vazia — não diria que o problema é o parâmetro."""
+    assert _nomes_da_url(client, "/api/certificados?pagina=1&por_pagina=50&ordenar=inventada") == [
+        "ana", "Bruno", "CARLOS", "SEM DATA"
+    ]
+
+
+def test_ordenar_compoe_com_filtro_e_exclusao(client, monkeypatch) -> None:
+    """As três decisões são independentes e precisam continuar sendo."""
+    itens = [
+        _com_data("ZEBRA", "2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z", "1"),
+        _com_data("ALFA", "2026-01-01T00:00:00Z", "2027-02-01T00:00:00Z", "2"),
+        _com_data("ILEGIVEL", "", "", "3", status="fora_do_padrao"),
+    ]
+    monkeypatch.setattr(m, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)})
+    nomes = _nomes_da_url(
+        client,
+        "/api/certificados?pagina=1&por_pagina=50&ordenar=nome&direcao=desc&ocultar_ilegiveis=true",
+    )
+    assert nomes == ["ZEBRA", "ALFA"]

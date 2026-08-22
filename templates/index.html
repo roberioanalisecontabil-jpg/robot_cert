@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=sem-ilegiveis-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=ordenar-2026-08c" />
     <style nonce="{{ request.state.nonce }}">
       /* .barra-selecao migrou para o style.css em 18/08: a aba Seleção do
          Acompanhamento passou a usá-la, e regra compartilhada dentro do
@@ -127,11 +127,31 @@
                     <input type="checkbox" id="chkSelTodos" title="Selecionar os instaláveis desta página"
                            aria-label="Selecionar os instaláveis desta página" />
                   </th>
-                  <th role="columnheader">Status</th>
-                  <th role="columnheader">Nome (titular)</th>
-                  <th role="columnheader">Emissão</th>
-                  <th role="columnheader">Vencimento</th>
-                  <th role="columnheader">CNPJ / CPF</th>
+                  <th role="columnheader" aria-sort="none" data-col="status">
+                    <button type="button" class="th-ordenar" data-col="status">
+                      Status<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                    </button>
+                  </th>
+                  <th role="columnheader" aria-sort="none" data-col="nome">
+                    <button type="button" class="th-ordenar" data-col="nome">
+                      Nome (titular)<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                    </button>
+                  </th>
+                  <th role="columnheader" aria-sort="none" data-col="emissao">
+                    <button type="button" class="th-ordenar" data-col="emissao">
+                      Emissão<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                    </button>
+                  </th>
+                  <th role="columnheader" aria-sort="none" data-col="vencimento">
+                    <button type="button" class="th-ordenar" data-col="vencimento">
+                      Vencimento<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                    </button>
+                  </th>
+                  <th role="columnheader" aria-sort="none" data-col="documento">
+                    <button type="button" class="th-ordenar" data-col="documento">
+                      CNPJ / CPF<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody role="rowgroup" id="tbody"></tbody>
@@ -575,6 +595,8 @@
             filtro_status: document.getElementById("filtro-status")?.value || "todos",
             busca: document.getElementById("busca-cert")?.value || "",
             todas_filtradas: "true",
+            ordenar: ordenacao.coluna || "",
+            direcao: ordenacao.direcao,
             // O arquivo exportado precisa conter o que a tela mostra. Sem esta
             // linha, exportar de uma tela sem ilegiveis produziria uma planilha
             // COM eles — e a divergencia so apareceria depois, na mao de quem
@@ -716,6 +738,10 @@
             // cards. Vai ao servidor porque a paginacao e a contagem sao de la:
             // filtrar no cliente daria pagina de 100 com 91 linhas.
             ocultar_ilegiveis: "true",
+            // Vazio significa "ordem de fabrica" (alfabetica por titular), e nao
+            // "sem ordem": o servidor ja entrega ordenado sem este parametro.
+            ordenar: ordenacao.coluna || "",
+            direcao: ordenacao.direcao,
           });
           const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
           if (r.status === 401) {
@@ -806,6 +832,55 @@
           primeiroCarregamento = false;
         }
       }
+
+      // ── Ordenacao por cabecalho ──────────────────────────────────────
+      //
+      // O estado vive aqui e viaja ao SERVIDOR a cada carga. Ordenar no
+      // navegador ordenaria so os 25 itens da pagina visivel — a lista
+      // pareceria certa e continuaria errada entre paginas, que e pior do que
+      // estar visivelmente errada porque ninguem procura o defeito.
+      //
+      // Coluna vazia = ordem de fabrica (alfabetica por titular). O ciclo tem
+      // TRES estados e nao dois: clicar de novo na mesma coluna volta ao padrao
+      // em vez de prender a pessoa alternando entre asc e desc sem saida.
+      const ordenacao = { coluna: "", direcao: "asc" };
+
+      function aplicarOrdenacao(col) {
+        if (ordenacao.coluna !== col) {
+          ordenacao.coluna = col;
+          ordenacao.direcao = "asc";
+        } else if (ordenacao.direcao === "asc") {
+          ordenacao.direcao = "desc";
+        } else {
+          ordenacao.coluna = "";
+          ordenacao.direcao = "asc";
+        }
+        // Volta para a primeira pagina: manter a pagina 7 depois de reordenar
+        // mostraria um trecho do meio da lista nova, sem relacao com o que a
+        // pessoa estava vendo.
+        paginaAtual = 1;
+        marcarCabecalhos();
+        carregarTabela();
+      }
+
+      function marcarCabecalhos() {
+        document.querySelectorAll("thead th[data-col]").forEach((th) => {
+          const ativa = th.dataset.col === ordenacao.coluna;
+          // `aria-sort` e o que o leitor de tela anuncia. Sem ele a seta e
+          // decoracao para quem enxerga e silencio para quem nao enxerga.
+          th.setAttribute(
+            "aria-sort",
+            ativa ? (ordenacao.direcao === "asc" ? "ascending" : "descending") : "none"
+          );
+          const btn = th.querySelector(".th-ordenar");
+          if (btn) btn.classList.toggle("th-ordenar--ativa", ativa);
+        });
+      }
+
+      document.querySelector("thead").addEventListener("click", (e) => {
+        const btn = e.target.closest(".th-ordenar");
+        if (btn) aplicarOrdenacao(btn.dataset.col);
+      });
 
       document.getElementById("btn-refresh").addEventListener("click", () => {
         paginaAtual = 1;
