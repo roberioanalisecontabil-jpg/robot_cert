@@ -141,3 +141,47 @@ def test_o_registro_nao_usa_o_client_do_laco() -> None:
         "_abrir_login voltou a capturar o `client` do laço principal, que não "
         "existe em tray_only — crie um cliente próprio com _novo_http_client()."
     )
+
+
+def test_o_envio_passa_a_senha_por_parametro() -> None:
+    """
+    Defeito que passou por dois projetos, e que só o linter pegou.
+
+    A primeira versão chamava `ao_registrar(email, senha)` e, num `finally`,
+    fazia `del senha` — para não deixar a senha pendurada na variável de fecho.
+    Em Python, `del x` dentro de uma função torna `x` LOCAL dela: a leitura na
+    primeira linha passava a estourar `UnboundLocalError` ANTES de chegar ao
+    portal. O `except BaseException` engolia, e a tela dizia "Não foi possível
+    registrar este computador".
+
+    **O botão Entrar nunca teria funcionado**, e a mensagem apontava para o
+    lugar errado — rede ou credencial, quando o defeito era de escopo.
+
+    Os testes de comportamento não pegavam: só `validar_campos` e
+    `mensagem_de_falha` eram exercitadas, porque o resto exige Tk. Este é
+    estático pelo mesmo motivo.
+    """
+    import ast
+    import inspect
+
+    from agent import janela_login
+
+    # `_rodar_janela` é função de módulo: a fonte já vem na coluna 0.
+    arvore = ast.parse(inspect.getsource(janela_login._rodar_janela))
+
+    trabalho = next(
+        (
+            n for n in ast.walk(arvore)
+            if isinstance(n, ast.FunctionDef) and n.name == "_trabalho"
+        ),
+        None,
+    )
+    assert trabalho is not None, "_trabalho sumiu de janela_login"
+
+    assert {a.arg for a in trabalho.args.args}, (
+        "_trabalho voltou a ler a senha do fecho. Passe-a como PARÂMETRO: com "
+        "`del` ela vira local e a chamada anterior estoura UnboundLocalError."
+    )
+    assert "del " not in ast.unparse(trabalho), (
+        "`del` sobre a senha torna o nome local e quebra a leitura anterior"
+    )

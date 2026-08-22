@@ -185,21 +185,31 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
         aviso.configure(text="", fg=_COR_ERRO)
         raiz.update_idletasks()
 
-        def _trabalho() -> None:
+        # A senha entra como PARÂMETRO, e não pelo fecho.
+        #
+        # A primeira versão fazia `ao_registrar(email, senha)` e, num `finally`,
+        # `del senha` — para não deixar a senha pendurada na variável de fecho.
+        # O efeito foi o oposto: em Python, `del x` dentro de uma função torna
+        # `x` LOCAL daquela função, então a leitura na primeira linha estourava
+        # `UnboundLocalError` antes de chegar ao portal. O `except BaseException`
+        # engolia, e a tela dizia "Não foi possível registrar este computador".
+        # O botão Entrar nunca teria funcionado, e a mensagem apontava para o
+        # lugar errado.
+        #
+        # Como parâmetro, ela é local por construção e morre com a thread —
+        # que era a intenção desde o início.
+        def _trabalho(senha_local: str) -> None:
             try:
-                ao_registrar(email, senha)
+                ao_registrar(email, senha_local)
             except BaseException as e:  # noqa: BLE001
                 LOGGER.warning("Registro do dispositivo recusado: %s", e)
                 raiz.after(0, _falhou, mensagem_de_falha(e))
                 return
-            finally:
-                # Não fica pendurada em variável de fecho depois do envio.
-                del senha
             raiz.after(0, _conseguiu)
 
         # Fora da thread do Tk: a chamada ao portal pode levar segundos, e
         # congelar a janela faria a pessoa clicar de novo.
-        threading.Thread(target=_trabalho, daemon=True).start()
+        threading.Thread(target=_trabalho, args=(senha,), daemon=True).start()
 
     def _falhou(texto: str) -> None:
         aviso.configure(text=texto, fg=_COR_ERRO)
