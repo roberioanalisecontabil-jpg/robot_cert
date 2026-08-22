@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=sr-only-contido-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=alertas-redesenhados-2026-08c" />
 </head>
 <body>
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -644,11 +644,16 @@
     function trCertLine(it) {
       const st = it._statusDup != null ? it._statusDup : "—";
       const enc = encodeURIComponent(JSON.stringify(it._pathsList || []));
+      // `tabindex="0"` põe a linha na ordem de Tab: é o que faz o balão de
+      // caminhos existir para quem não usa mouse. `aria-describedby` liga a
+      // linha ao balão, então o leitor de tela anuncia os caminhos ao chegar
+      // nela, em vez de só ler as células e seguir.
+      //
+      // Este comentário vivia DENTRO da template literal abaixo, com crases em
+      // volta de `tabindex="0"` — e crase dentro de template literal fecha a
+      // string. O `<script>` inteiro parava de compilar e a página não
+      // renderizava nada. Comentário de JS não tem esse risco.
       return `
-        <!-- `tabindex="0"` põe a linha na ordem de Tab: é o que faz o balão de
-             caminhos existir para quem não usa mouse. `aria-describedby` liga a
-             linha ao balão, então o leitor de tela anuncia os caminhos ao
-             chegar nela, em vez de só ler as células e seguir. -->
         <tr role="row" class="dup-igual-row" data-dup-paths="${enc}"
             tabindex="0" aria-describedby="dup-path-tooltip">
           <td role="cell" data-label="Nome" style="max-width:20rem; word-break:break-word;">${esc(it.nome || "—")}</td>

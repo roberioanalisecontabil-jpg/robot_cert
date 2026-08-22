@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=sr-only-contido-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=alertas-redesenhados-2026-08c" />
     <style>
         .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
         .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
@@ -638,6 +638,28 @@
                 const hay = [u.full_name || '', u.email || ''].join(' ').toLowerCase();
                 return hay.includes(q);
             });
+
+            // Desativados no FIM, sempre — e por ordem alfabética dentro de cada
+            // grupo.
+            //
+            // Escolhido em vez de um segundo filtro porque o filtro de status já
+            // existe logo acima: quem quiser sumir com os desativados escolhe
+            // "Status: Desativado" ao contrário, ou "Ativo". Um botão a mais
+            // para o mesmo fim seria duas maneiras de dizer a mesma coisa, e a
+            // pessoa teria de descobrir qual das duas está valendo.
+            //
+            // A ordenação resolve a queixa real — conta encerrada ocupando o
+            // topo da lista de quem administra contas vivas — sem acrescentar
+            // controle nenhum à tela.
+            users.sort((a, b) => {
+                const ina = estaAtivo(a) ? 0 : 1;
+                const inb = estaAtivo(b) ? 0 : 1;
+                if (ina !== inb) return ina - inb;
+                return (a.full_name || a.email || '').localeCompare(
+                    b.full_name || b.email || '', 'pt-BR', { sensitivity: 'base' }
+                );
+            });
+
             document.getElementById('users-count').textContent = `${users.length} usuário(s) encontrado(s)`;
             limparSkeleton(body);
 
@@ -1405,12 +1427,31 @@
 
         async function desativarUsuario(id) {
             const u = usersCache.find((x) => x.id === id);
+            const quem = (u && (u.full_name || u.email)) || 'Este usuário';
+
+            // A contagem vem ANTES da pergunta, porque ela muda a pergunta:
+            // apagar a carteira é irreversível, e remontar doze vínculos é
+            // trabalho manual ou uma planilha nova. Ninguém deve descobrir o
+            // número depois de confirmar.
+            let carteira = null;
+            try {
+                const r = await fetch(`/api/users/${id}/carteira/contagem`, { headers: getHeaders() });
+                if (r.ok) carteira = (await r.json()).total;
+            } catch (_e) {
+                // Sem contagem a pergunta sai sem o número — melhor do que
+                // travar a inativação por causa do texto do aviso.
+            }
+
+            const aviso = carteira
+                ? ` A carteira dele será ZERADA: ${carteira} cliente(s) serão removidos, e reativar depois devolve a carteira vazia.`
+                : '';
+
             const ok = await confirmarAcao({
                 titulo: 'Desativar usuário',
                 // Diz DE QUEM se trata: o `confirm()` perguntava "este
                 // usuário?" sobre uma tabela de dezenas de linhas.
-                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} perde o acesso ao portal na próxima requisição. O nível de acesso é preservado, então reativar depois devolve o mesmo papel.`,
-                textoConfirmar: 'Desativar',
+                mensagem: `${quem} perde o acesso ao portal na próxima requisição. O nível de acesso é preservado, então reativar depois devolve o mesmo papel.${aviso}`,
+                textoConfirmar: carteira ? `Desativar e remover ${carteira}` : 'Desativar',
                 perigo: true,
             });
             if (!ok) return;
@@ -1422,8 +1463,21 @@
                 showToast('Não foi possível desativar o usuário: ' + (await mensagemCorpoErro(r)), 'error');
                 return;
             }
+            const res = await r.json().catch(() => ({}));
             await loadUsers();
-            showToast('Usuário desativado. O nível de acesso foi preservado.', 'success');
+            if (res.carteira_falhou) {
+                showToast(
+                    'Usuário desativado, mas a carteira dele NÃO foi limpa. Ele já não entra no portal; a carteira aparece em Carteiras para ser removida à mão.',
+                    'warning'
+                );
+            } else if (res.carteira_removida) {
+                showToast(
+                    `Usuário desativado e ${res.carteira_removida} cliente(s) removidos da carteira dele.`,
+                    'success'
+                );
+            } else {
+                showToast('Usuário desativado. O nível de acesso foi preservado.', 'success');
+            }
         }
 
         async function reativarUsuario(id) {

@@ -1447,9 +1447,59 @@ def deactivate_user(user_id: str) -> dict:
     _garantir_que_sobra_admin(sb, user_id, novo_ativo=False)
     try:
         sb.table("users").update({"ativo": False}).eq("id", user_id).execute()
-        return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # A carteira e removida DEPOIS de a conta cair, e nunca antes.
+    #
+    # Se a ordem fosse inversa e a inativacao falhasse, a pessoa continuaria
+    # entrando no portal e teria perdido a carteira — o pior dos dois mundos.
+    # Nesta ordem, a falha aqui deixa uma carteira orfa de uma conta que ja nao
+    # entra: inofensiva, e visivel na tela de Carteiras para ser limpa a mao.
+    #
+    # Nao e barreira de seguranca: `require_auth` ja recusa conta inativa com
+    # 401, entao a carteira de quem foi inativado nao concede nada mesmo antes
+    # disto. E higiene — e uma decisao IRREVERSIVEL, por isso a tela mostra a
+    # contagem antes de perguntar.
+    removidos = 0
+    try:
+        alvo = sb.table("carteira").select("user_id").eq("user_id", user_id).execute().data or []
+        removidos = len(alvo)
+        if removidos:
+            sb.table("carteira").delete().eq("user_id", user_id).execute()
+    except Exception as e:  # noqa: BLE001
+        logger.error(
+            "Conta %s desativada, mas a carteira NAO foi limpa (%d vinculo(s)): %s",
+            user_id, removidos, e,
+        )
+        return {"ok": True, "carteira_removida": 0, "carteira_falhou": True}
+
+    return {"ok": True, "carteira_removida": removidos}
+
+
+@app.get(
+    "/api/users/{user_id}/carteira/contagem",
+    dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))],
+)
+def contar_carteira_do_usuario(user_id: str) -> dict:
+    """Quantos clientes a pessoa tem, para a confirmacao dizer o numero.
+
+    Rota separada, e nao um campo em `/api/users`: aquela lista carrega dezenas
+    de linhas em toda abertura da tela, e esta contagem so interessa no
+    instante de inativar alguem.
+    """
+    from app.settings_state import _supabase
+    sb = _supabase()
+    if not sb:
+        # Sem contagem, a tela pergunta sem o numero — o que ainda e melhor do
+        # que travar a inativacao por causa do texto do aviso.
+        return {"total": None}
+    try:
+        linhas = sb.table("carteira").select("user_id").eq("user_id", user_id).execute().data or []
+        return {"total": len(linhas)}
+    except Exception:  # noqa: BLE001
+        logger.warning("Nao foi possivel contar a carteira de %s", user_id)
+        return {"total": None}
 
 
 @app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])

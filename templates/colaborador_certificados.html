@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=sr-only-contido-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=alertas-redesenhados-2026-08c" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -113,7 +113,18 @@
       <p>Escolha os certificados a acompanhar e veja o painel com vencimentos.</p>
     </header>
 
-    <div class="table-container table-container--cheia" id="table-container-colab">
+    <!-- SEM `--cheia`, ao contrario de Inicio, Historico e Vencidos.
+
+           Esta tela e a mais complexa das quatro: duas abas trocadas por
+           `display`, um painel de preferencia em `<details>`, e uma barra de
+           salvar em `position: sticky`. Sticky depende do scrollport mais
+           proximo, e transformar a secao em coluna flex muda qual e ele —
+           risco real de a barra de salvar sair do alcance, que foi como o
+           cliente relatou ("nao consigo mais salvar minhas selecoes").
+
+           O ganho aqui tambem era menor: o tamanho da tabela nao e a queixa
+           desta tela. Fica de fora ate haver um motivo proprio. -->
+        <div class="table-container" id="table-container-colab">
       <div class="tab-container-navigation">
         <button type="button" id="tab-painel" class="tab-btn active">Painel</button>
         <button type="button" id="tab-selecao" class="tab-btn">Seleção de Certificados</button>
@@ -380,6 +391,30 @@
     function renderSelecao() {
       const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
       const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+
+      // Marcados no TOPO, e por ordem alfabética dentro de cada grupo.
+      //
+      // A lista tem 516 certificados em 21 páginas. Sem isto, conferir o que já
+      // se acompanha exige percorrer todas as páginas procurando caixas
+      // marcadas — e a resposta para "o que eu acompanho?" fica espalhada por
+      // um lugar onde ninguém consegue vê-la inteira.
+      //
+      // A ordenação acontece DEPOIS do filtro e ANTES da paginação: assim a
+      // primeira página traz os marcados mesmo com busca ativa, e o efeito não
+      // se limita à página visível.
+      //
+      // Não reordena enquanto se clica: `renderSelecao` só roda em busca,
+      // troca de página ou recarga. Uma linha que pula de lugar no instante do
+      // clique faria a pessoa perder o dedo de onde estava.
+      rows.sort((a, b) => {
+        const ma = selecionados.has(String(a.documento_digitos)) ? 0 : 1;
+        const mb = selecionados.has(String(b.documento_digitos)) ? 0 : 1;
+        if (ma !== mb) return ma - mb;
+        return (a.nome || a.documento || "").localeCompare(
+          b.nome || b.documento || "", "pt-BR", { sensitivity: "base" }
+        );
+      });
+
       const psz = porPagColabSelecao();
       const total = rows.length;
       const totalPag = Math.max(1, Math.ceil(total / psz));

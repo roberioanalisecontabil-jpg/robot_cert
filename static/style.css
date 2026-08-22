@@ -902,6 +902,114 @@ th[aria-sort="descending"] .th-ordenar__seta {
   transform: translateY(-3px);
 }
 
+/* ==========================================================================
+   CONFIGURACAO — blocos nomeados
+   --------------------------------------------------------------------------
+   A aba de alertas tinha onze controles empilhados numa coluna so, todos com o
+   mesmo peso: "Host SMTP" parecia a mesma coisa que "Avisar quando faltarem".
+   Estas classes existem para dar NOME e SEPARACAO a cada assunto, sem
+   introduzir material visual novo — e o mesmo painel, o mesmo espacamento e os
+   mesmos tokens do resto do portal.
+   ========================================================================== */
+
+/* A chave que governa a aba. Vem antes dos blocos porque a resposta dela muda
+   o sentido de tudo abaixo. */
+.cfg-chave {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-5);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+/* Ligada, a borda esquerda ganha o azul de NAVEGACAO — nao verde de estado.
+   Verde aqui diria "esta tudo certo", e ligado nao significa que esta certo:
+   significa que esta ligado. A Regra do Sinal Unico vale nos dois sentidos. */
+.cfg-chave--ligada {
+  border-left-color: var(--accent-solid);
+}
+
+.cfg-chave__controle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  cursor: pointer;
+}
+
+.cfg-chave__titulo {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.cfg-chave__estado {
+  margin: var(--sp-2) 0 0;
+  /* Alinhado com o texto do rotulo, e nao com a caixa de selecao. */
+  padding-left: calc(20px + var(--sp-3));
+}
+
+/* Cada assunto num painel proprio, com titulo. */
+.cfg-bloco {
+  margin-bottom: var(--sp-5);
+}
+
+.cfg-bloco > h3 {
+  margin: 0 0 var(--sp-1);
+}
+
+.cfg-bloco > .hint {
+  margin-bottom: var(--sp-4);
+}
+
+/* A acao mora no bloco a que pertence — testar envio junto do servidor,
+   disparar junto da entrega —, em vez de uma fila de quatro botoes no rodape
+   onde nada dizia a que cada um se referia. */
+.cfg-bloco__acoes {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px dashed var(--border);
+}
+
+/* Dois campos lado a lado quando o segundo e curto (porta, intervalo): dar
+   largura inteira a um campo de tres digitos e desperdicio que empurra o resto
+   da aba para baixo. Colapsa sozinho em tela estreita. */
+.cfg-grade {
+  display: grid;
+  /* 26rem, e nao 16: `.row` poe o rotulo AO LADO do campo com `min-width:
+     140px`, e numa coluna de 16rem isso nao cabe — o rotulo quebrava para cima
+     e "Porta" ficava desalinhado de "Servidor", que estava logo ao lado.
+     O limiar tem de caber o par inteiro, senao a grade entrega duas colunas
+     estreitas em vez de uma linha legivel. */
+  grid-template-columns: repeat(auto-fit, minmax(min(26rem, 100%), 1fr));
+  gap: 0 var(--sp-5);
+}
+
+/* O teto vai no CAMPO, nao na linha.
+
+   Estava em `.cfg-grade__curto` inteiro — e a linha e `flex` com rotulo de
+   140px, entao 10rem nao cabia o par e o rotulo quebrava para cima. "Porta"
+   ficava desalinhado de "Servidor", que estava ao lado. */
+.cfg-grade__curto input {
+  max-width: 7rem;
+}
+
+/* Aviso de consequencia, e nao dica. Herda a cor de ADVERTENCIA porque descreve
+   algo que continua acontecendo depois que a pessoa sai da empresa. */
+.cfg-aviso {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-ui-sm);
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  max-width: 68ch;
+}
+
+.cfg-salvar {
+  margin-top: var(--sp-5);
+}
+
 /* Falha renderizada NO LUGAR do conteudo.
 
    O nome nao e `.msg-erro`: `login.html` ja tinha uma classe com esse nome,

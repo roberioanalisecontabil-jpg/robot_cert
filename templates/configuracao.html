@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=sr-only-contido-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=alertas-redesenhados-2026-08c" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -85,7 +85,7 @@
         <div class="tab-container-navigation">
           <button type="button" id="tab-chave" class="tab-btn active">Chave API</button>
           <button type="button" id="tab-pastas" class="tab-btn">Pastas e Agente</button>
-          <button type="button" id="tab-smtp" class="tab-btn">Alertas por E-mail (SMTP)</button>
+          <button type="button" id="tab-smtp" class="tab-btn">Alertas por e-mail</button>
           <button type="button" id="tab-comandos" class="tab-btn">Fila de Comandos</button>
         </div>
 
@@ -172,103 +172,154 @@
           </div>
         </section>
 
-        <!-- Aba 3: SMTP -->
+        <!-- Aba 3: alertas por e-mail.
+
+             Reorganizada em 22/08. Antes eram onze controles empilhados numa
+             coluna so, com o mesmo peso visual: "Host SMTP" parecia a mesma
+             coisa que "Avisar quando faltarem". Tres assuntos dividiam o bloco
+             — credencial do servidor, entrega e teste — e so um deles tinha
+             titulo.
+
+             A ordem agora e a da pergunta que a pessoa faz: PRIMEIRO se o
+             portal manda e-mail; DEPOIS por onde ele manda; POR FIM para quem e
+             quando. Cada acao mora no bloco a que pertence, em vez de uma fila
+             de quatro botoes no rodape. -->
         <section id="sec-smtp" style="display: none;">
-          <h2 style="margin: 0 0 0.5rem;">Alertas por E-mail (SMTP)</h2>
+          <h2 style="margin: 0 0 0.5rem;">Alertas por e-mail</h2>
           <p class="hint">
-            Configure o servidor SMTP e, abaixo, para quem os alertas vão e com que antecedência.
+            O portal avisa antes de um certificado vencer. Configure aqui se ele
+            envia, por qual servidor, e para quem.
           </p>
-          <div class="panel--nested">
-            <div class="row">
-              <label for="inp-smtp-host">Host SMTP</label>
-              <input type="text" id="inp-smtp-host" class="path-input" placeholder="smtp.gmail.com" />
-            </div>
-            <div class="row">
-              <label for="inp-smtp-port">Porta SMTP</label>
-              <input type="number" id="inp-smtp-port" class="path-input" value="587" placeholder="587" />
-            </div>
-            <div class="row">
-              <label for="inp-smtp-user">Usuário / E-mail</label>
-              <input type="text" id="inp-smtp-user" class="path-input" placeholder="seu-email@gmail.com" />
-            </div>
-            <div class="row">
-              <label for="inp-smtp-pass">Senha SMTP</label>
-              <input type="password" id="inp-smtp-pass" class="path-input" placeholder="Preencha apenas para alterar" />
-              <span id="smtp-pass-set-label" style="font-size: var(--fs-caption); margin-top: 0.25rem; font-weight: 500;">Senha configurada: <span id="smtp-pass-status">—</span></span>
-            </div>
-            <div class="row">
-              <label for="inp-smtp-from">E-mail Remetente</label>
-              <input type="text" id="inp-smtp-from" class="path-input" placeholder="Monitor de Certificados &lt;alertas@empresa.com&gt;" />
-            </div>
-            <div class="row-inline" style="margin-top: 1rem;">
-              <input type="checkbox" id="chk-smtp-tls" style="margin-right: 0.5rem;" checked />
-              <label for="chk-smtp-tls" style="display: inline;">Usar STARTTLS (TLS)</label>
-            </div>
-            <div class="row-inline" style="margin-top: 0.5rem;">
-              <input type="checkbox" id="chk-smtp-ssl" style="margin-right: 0.5rem;" />
-              <label for="chk-smtp-ssl" style="display: inline;">Usar SSL Implícito</label>
-            </div>
-            <div class="row-inline" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-              <input type="checkbox" id="chk-smtp-alerts-enabled" style="margin-right: 0.5rem;" />
-              <label for="chk-smtp-alerts-enabled" style="display: inline; font-weight: bold; color: var(--accent-text);">Habilitar Disparo de Alertas Automáticos</label>
-            </div>
 
-            <!-- Entrega, e não credencial. Acima é COMO o portal fala com o
-                 servidor de e-mail; daqui para baixo é PARA QUEM e QUANDO. As
-                 duas coisas dividiam um bloco só e nenhum título as separava. -->
-            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
-              <h3 style="margin: 0 0 0.35rem;">Para quem, e quando</h3>
-              <p class="hint" style="margin-top: 0;">
-                Vale para o resumo do portal — a lista com os certificados a vencer e os vencidos.
-                Os avisos que cada pessoa recebe dos certificados que acompanha continuam indo para ela.
-              </p>
+          <!-- O interruptor sai do meio da lista e vira o cabecalho.
 
-              <div class="row" style="margin-top: 1rem;">
-                <label for="inp-alertas-dest">Destinatários do resumo</label>
-                <input type="text" id="inp-alertas-dest" class="path-input"
-                       placeholder="Deixe vazio para enviar a todos os administradores" />
-                <span class="hint" id="alertas-dest-efetivo" style="margin-top: 0.35rem;"></span>
-                <!-- O aviso não é decorativo: em 09/08/2026 quatro linhas
-                     órfãs recebiam nome de titular, CNPJ/CPF e vencimento de
-                     certificados de clientes. Um endereço digitado aqui não
-                     tem conta para ser desativada. -->
-                <span class="hint" style="margin-top: 0.35rem; color: var(--warning-text);">
-                  Um endereço que não pertence a uma conta do portal continua recebendo
-                  mesmo que a pessoa saia da empresa — não há conta para desativar.
-                  O resumo traz nome, CNPJ/CPF e vencimento de certificados de clientes.
-                </span>
+               Era um checkbox em negrito e cor de acento, espremido entre
+               "Usar SSL Implicito" e o bloco de entrega — gritando de um lugar
+               onde ninguem procura. E a chave que governa todo o resto da aba:
+               agora abre a aba, e diz em texto o que esta valendo. -->
+          <div class="cfg-chave" id="cfg-chave-alertas">
+            <label class="cfg-chave__controle">
+              <input type="checkbox" id="chk-smtp-alerts-enabled" />
+              <span class="cfg-chave__titulo">Enviar alertas automaticamente</span>
+            </label>
+            <p class="cfg-chave__estado hint" id="smtp-estado"></p>
+          </div>
+
+          <!-- ── Bloco 1: por onde sai ─────────────────────────────────── -->
+          <section class="panel--nested cfg-bloco">
+            <h3>Servidor de e-mail</h3>
+            <p class="hint">
+              A conta por onde as mensagens saem. O portal guarda a senha cifrada
+              e nunca a devolve para a tela.
+            </p>
+
+            <div class="cfg-grade">
+              <div class="row">
+                <label for="inp-smtp-host">Servidor</label>
+                <input type="text" id="inp-smtp-host" class="path-input" placeholder="smtp.gmail.com" />
               </div>
+              <div class="row cfg-grade__curto">
+                <label for="inp-smtp-port">Porta</label>
+                <input type="number" id="inp-smtp-port" class="path-input" value="587" placeholder="587" />
+              </div>
+            </div>
 
-              <div class="row" style="margin-top: 1rem;">
+            <div class="row">
+              <label for="inp-smtp-user">Usuário</label>
+              <input type="text" id="inp-smtp-user" class="path-input" placeholder="alertas@empresa.com" />
+            </div>
+
+            <div class="row">
+              <label for="inp-smtp-pass">Senha</label>
+              <input type="password" id="inp-smtp-pass" class="path-input" placeholder="Preencha apenas para alterar" />
+              <span class="hint" id="smtp-pass-set-label">Senha guardada: <span id="smtp-pass-status">—</span></span>
+            </div>
+
+            <div class="row">
+              <label for="inp-smtp-from">Remetente</label>
+              <input type="text" id="inp-smtp-from" class="path-input" placeholder="Monitor de Certificados &lt;alertas@empresa.com&gt;" />
+              <span class="hint">Como o destinatário vê quem enviou.</span>
+            </div>
+
+            <!-- Um controle, e nao dois.
+
+                 Eram dois checkboxes independentes — e `validate_smtp_config`
+                 recusa os dois marcados com 422. A tela convidava a montar um
+                 estado que o servidor nunca aceitaria. Sao tres possibilidades
+                 excludentes, entao sao um `<select>`. -->
+            <div class="row">
+              <label for="sel-smtp-seguranca">Segurança da conexão</label>
+              <select id="sel-smtp-seguranca" class="path-input">
+                <option value="tls">STARTTLS — porta 587 (mais comum)</option>
+                <option value="ssl">SSL implícito — porta 465</option>
+                <option value="nenhuma">Sem criptografia</option>
+              </select>
+            </div>
+
+            <div class="linha-acoes cfg-bloco__acoes">
+              <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
+              <input type="email" id="inp-smtp-test-dest" class="form-control" placeholder="Enviar teste para…" style="max-width: 15rem;" />
+              <button type="button" id="btn-test-smtp">Enviar teste</button>
+            </div>
+          </section>
+
+          <!-- ── Bloco 2: para quem e quando ───────────────────────────── -->
+          <section class="panel--nested cfg-bloco">
+            <h3>Para quem, e quando</h3>
+            <p class="hint">
+              Vale para o resumo do portal — a lista com os certificados a vencer
+              e os vencidos. Os avisos que cada pessoa recebe dos certificados que
+              acompanha continuam indo para ela.
+            </p>
+
+            <div class="row">
+              <label for="inp-alertas-dest">Destinatários do resumo</label>
+              <input type="text" id="inp-alertas-dest" class="path-input"
+                     placeholder="Deixe vazio para enviar a todos os administradores" />
+              <span class="hint" id="alertas-dest-efetivo"></span>
+              <!-- O aviso não é decorativo: em 09/08/2026 quatro linhas órfãs
+                   recebiam nome de titular, CNPJ/CPF e vencimento de
+                   certificados de clientes. Um endereço digitado aqui não tem
+                   conta para ser desativada. -->
+              <p class="cfg-aviso">
+                Um endereço que não pertence a uma conta do portal continua recebendo
+                mesmo que a pessoa saia da empresa — não há conta para desativar.
+                O resumo traz nome, CNPJ/CPF e vencimento de certificados de clientes.
+              </p>
+            </div>
+
+            <div class="cfg-grade">
+              <div class="row">
                 <label for="inp-alertas-marcos">Avisar quando faltarem (dias)</label>
                 <input type="text" id="inp-alertas-marcos" class="path-input"
                        placeholder="30, 15, 5" inputmode="numeric" />
-                <span class="hint" id="alertas-marcos-efetivo" style="margin-top: 0.35rem;"></span>
+                <span class="hint" id="alertas-marcos-efetivo"></span>
               </div>
-
-              <div class="row" style="margin-top: 1rem;">
-                <label for="sel-alertas-intervalo">Com que frequência verificar</label>
+              <div class="row">
+                <label for="sel-alertas-intervalo">Verificar a cada</label>
                 <select id="sel-alertas-intervalo" class="path-input">
-                  <option value="0">Padrão (a cada 20 horas)</option>
-                  <option value="12">Duas vezes por dia</option>
-                  <option value="24">Uma vez por dia</option>
-                  <option value="168">Uma vez por semana</option>
+                  <option value="0">20 horas (padrão)</option>
+                  <option value="12">12 horas</option>
+                  <option value="24">24 horas</option>
+                  <option value="168">7 dias</option>
                 </select>
-                <span class="hint" style="margin-top: 0.35rem;">
-                  É o intervalo entre duas verificações, e não um horário de disparo.
-                  Cada certificado só gera um e-mail por marco — verificar mais vezes
-                  não multiplica mensagens, apenas encurta a espera até o aviso sair.
-                </span>
               </div>
             </div>
-            <div class="linha-acoes" style="margin-top: 1.5rem;">
-              <button type="button" id="btn-save-smtp" class="primary">Salvar Configurações SMTP</button>
-              <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
-              <input type="email" id="inp-smtp-test-dest" class="form-control" placeholder="Destinatário teste" style="max-width: 200px;" />
-              <button type="button" id="btn-test-smtp">Enviar Teste</button>
-              <button type="button" id="btn-trigger-alerts" style="background-color: var(--warning-text); color: #FFFFFF; border: none; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-size: var(--fs-ui); font-weight: 500; cursor: pointer;">Disparar Alertas Agora</button>
+            <span class="hint">
+              É o intervalo entre duas verificações, e não um horário de disparo.
+              Cada certificado só gera um e-mail por marco — verificar mais vezes
+              não multiplica mensagens, apenas encurta a espera até o aviso sair.
+            </span>
+
+            <div class="linha-acoes cfg-bloco__acoes">
+              <button type="button" id="btn-trigger-alerts">Disparar agora</button>
+              <span class="hint">Ignora o intervalo e roda a verificação uma vez.</span>
             </div>
-            <span id="smtp-msg" class="hint" style="margin-top: 0.75rem; display: block;"></span>
+          </section>
+
+          <div class="linha-acoes cfg-salvar">
+            <button type="button" id="btn-save-smtp" class="primary">Salvar</button>
+            <span id="smtp-msg" class="hint" role="status"></span>
           </div>
         </section>
 
@@ -397,10 +448,15 @@
           document.getElementById("smtp-pass-status").textContent = s.smtp_password_set ? "Sim" : "Não";
           document.getElementById("smtp-pass-status").style.color = s.smtp_password_set ? "var(--ok)" : "var(--expired)";
           document.getElementById("inp-smtp-from").value = s.smtp_from_email || "";
-          document.getElementById("chk-smtp-tls").checked = s.smtp_use_tls !== false;
-          document.getElementById("chk-smtp-ssl").checked = !!s.smtp_use_ssl;
+          // Dois booleanos do servidor viram UMA escolha na tela. Os dois
+          // marcados nunca deveriam existir (`validate_smtp_config` recusa),
+          // mas se vierem assim de um banco antigo, STARTTLS ganha — e o
+          // proximo Salvar normaliza.
+          document.getElementById("sel-smtp-seguranca").value =
+            (s.smtp_use_tls !== false) ? "tls" : (s.smtp_use_ssl ? "ssl" : "nenhuma");
           document.getElementById("chk-smtp-alerts-enabled").checked = !!s.smtp_alerts_enabled;
           preencherAlertas(s);
+          pintarEstadoAlertas();
 
           const inputAgentBaseUrl = document.getElementById("inp-agent-base-url");
           if (inputAgentBaseUrl) {
@@ -475,8 +531,7 @@
             smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
             smtp_user: document.getElementById("inp-smtp-user").value || "",
             smtp_password: document.getElementById("inp-smtp-pass").value || null,
-            smtp_use_tls: document.getElementById("chk-smtp-tls").checked,
-            smtp_use_ssl: document.getElementById("chk-smtp-ssl").checked,
+            ...seguranca(),
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
             ...corpoAlertas(),
@@ -516,12 +571,33 @@
       });
 
       // ── SMTP ─────────────────────────────────────────────────────────────────
-      document.getElementById("chk-smtp-tls").addEventListener("change", (e) => {
-        if (e.target.checked) document.getElementById("chk-smtp-ssl").checked = false;
-      });
-      document.getElementById("chk-smtp-ssl").addEventListener("change", (e) => {
-        if (e.target.checked) document.getElementById("chk-smtp-tls").checked = false;
-      });
+      // Os dois listeners que existiam aqui — cada checkbox desmarcando o
+      // outro — sairam junto com os checkboxes. Exclusao mutua deixou de ser
+      // uma regra que o JS precisa manter: agora e a forma do controle.
+      function seguranca() {
+        const v = document.getElementById("sel-smtp-seguranca").value;
+        return { smtp_use_tls: v === "tls", smtp_use_ssl: v === "ssl" };
+      }
+
+      // O interruptor diz em texto o que esta valendo. Um checkbox sozinho
+      // obriga a pessoa a traduzir "marcado" para "vai enviar" — e a metade
+      // dos casos em que ele importa e justamente quando esta DESLIGADO e
+      // ninguem entende por que nao chega e-mail.
+      function pintarEstadoAlertas() {
+        const ligado = document.getElementById("chk-smtp-alerts-enabled").checked;
+        const host = (document.getElementById("inp-smtp-host").value || "").trim();
+        const el = document.getElementById("smtp-estado");
+        const bloco = document.getElementById("cfg-chave-alertas");
+        bloco.classList.toggle("cfg-chave--ligada", ligado && !!host);
+        el.textContent = !ligado
+          ? "Desligado: nenhum alerta sai, mesmo com o servidor configurado."
+          : host
+            ? "Ligado: o portal verifica os vencimentos e envia o resumo."
+            : "Ligado, mas sem servidor configurado — nada será enviado até preencher o bloco abaixo.";
+      }
+
+      document.getElementById("chk-smtp-alerts-enabled").addEventListener("change", pintarEstadoAlertas);
+      document.getElementById("inp-smtp-host").addEventListener("input", pintarEstadoAlertas);
 
       document.getElementById("btn-save-smtp").addEventListener("click", async () => {
         const st = document.getElementById("smtp-msg");
@@ -535,8 +611,7 @@
             smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
             smtp_user: document.getElementById("inp-smtp-user").value || "",
             smtp_password: document.getElementById("inp-smtp-pass").value || null,
-            smtp_use_tls: document.getElementById("chk-smtp-tls").checked,
-            smtp_use_ssl: document.getElementById("chk-smtp-ssl").checked,
+            ...seguranca(),
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
             ...corpoAlertas(),
