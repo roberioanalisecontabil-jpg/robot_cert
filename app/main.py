@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import atividade, auth, config, permissoes, senha_reset
+from app import agent_devices, atividade, auth, config, permissoes, senha_reset
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -986,51 +986,73 @@ class LoginBody(BaseModel):
     password: str
 
 
-@app.post("/api/login")
-def login(body: LoginBody, request: Request) -> dict:
-    load_settings()  # trigger client init
+def _sb_do_login():
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb:
         raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado para login.")
+    return sb
 
-    ip = request.client.host if request and request.client else None
-    # Normalizado ANTES da consulta. A coluna guarda tudo em minúsculas (o
-    # portal grava assim, e o índice único é sobre `lower(email)`), mas a
-    # consulta usava o valor cru do formulário: quem digitasse "Ana@X.com" não
-    # casava com linha nenhuma e levava 401 "E-mail ou senha incorretos" —
-    # mensagem que manda a pessoa caçar a senha por causa de uma maiúscula.
-    #
-    # O `trim` está aqui pelo mesmo motivo: colar o e-mail de um e-mail
-    # costuma trazer espaço junto.
-    email_login = (body.email or "").strip().lower()
-    try:
-        r = sb.table("users").select("*").eq("email", email_login).limit(1).execute()
-        user = r.data[0] if r.data else None
-        if not user or not auth.verify_password(body.password, user["password_hash"]):
-            # Só registra quando a conta EXISTE: e-mail inexistente viraria
-            # guardar entrada arbitrária de quem chamou. Com conta existente, o
-            # registro responde "alguém está tentando entrar aqui", que é o
-            # caso que importa.
-            if user:
-                atividade.registrar(
-                    atividade.EVENTO_LOGIN_NEGADO,
-                    user_id=str(user.get("id") or "") or None,
-                    user_email=email_login,
-                    client_ip=ip,
-                    contexto={"motivo": "senha_incorreta"},
-                )
-            raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
-        if not conta_ativa(user):
+
+def _conferir_credenciais(email: str, senha: str, ip: Optional[str]) -> dict:
+    """
+    E-mail + senha viram a linha de `users`, ou levantam o HTTP certo.
+
+    Extraído de `login` em 22/08/2026, quando o agente ganhou tela de login:
+    passaram a existir dois caminhos que autenticam com senha. O módulo `auth`
+    já explica por que uma regra de acesso duplicada é perigosa — a cópia que
+    divergisse para o lado permissivo não daria sintoma nenhum. Aqui isso
+    significaria conta desativada continuar registrando dispositivo depois de
+    já ter perdido o portal.
+
+    Normalizado ANTES da consulta. A coluna guarda tudo em minúsculas (o portal
+    grava assim, e o índice único é sobre `lower(email)`), mas a consulta usava
+    o valor cru do formulário: quem digitasse "Ana@X.com" não casava com linha
+    nenhuma e levava 401 "E-mail ou senha incorretos" — mensagem que manda a
+    pessoa caçar a senha por causa de uma maiúscula.
+
+    O `trim` está aqui pelo mesmo motivo: colar o e-mail de um e-mail costuma
+    trazer espaço junto.
+    """
+    email_login = (email or "").strip().lower()
+    r = _sb_do_login().table("users").select("*").eq("email", email_login).limit(1).execute()
+    user = r.data[0] if r.data else None
+
+    if not user or not auth.verify_password(senha, user["password_hash"]):
+        # Só registra quando a conta EXISTE: e-mail inexistente viraria guardar
+        # entrada arbitrária de quem chamou. Com conta existente, o registro
+        # responde "alguém está tentando entrar aqui", que é o caso que importa.
+        if user:
             atividade.registrar(
                 atividade.EVENTO_LOGIN_NEGADO,
                 user_id=str(user.get("id") or "") or None,
                 user_email=email_login,
                 client_ip=ip,
-                contexto={"motivo": "conta_desativada"},
+                contexto={"motivo": "senha_incorreta"},
             )
-            raise HTTPException(status_code=403, detail="Usuário desativado. Procure um administrador.")
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
 
+    if not conta_ativa(user):
+        atividade.registrar(
+            atividade.EVENTO_LOGIN_NEGADO,
+            user_id=str(user.get("id") or "") or None,
+            user_email=email_login,
+            client_ip=ip,
+            contexto={"motivo": "conta_desativada"},
+        )
+        raise HTTPException(status_code=403, detail="Usuário desativado. Procure um administrador.")
+
+    return user
+
+
+@app.post("/api/login")
+def login(body: LoginBody, request: Request) -> dict:
+    load_settings()  # trigger client init
+    _sb_do_login()
+
+    ip = request.client.host if request and request.client else None
+    try:
+        user = _conferir_credenciais(body.email, body.password, ip)
         atividade.registrar(
             atividade.EVENTO_LOGIN,
             user_id=str(user.get("id") or "") or None,
@@ -2584,6 +2606,179 @@ def agent_next_command(
 def agent_queue_list() -> dict:
     """Lista comandos ainda pendentes (monitorização no portal)."""
     return {"pendentes": list_pending(), "comandos_validos": sorted(COMMANDS)}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Dispositivos do agente — a identidade deixa de ser uma chave compartilhada
+#
+# As duas primeiras rotas NÃO usam `require_auth`, e é de propósito: são
+# justamente as que criam a credencial. `registrar` autentica com a senha do
+# portal (uma vez, na janela de login do agente) e `token` autentica com o
+# segredo do dispositivo. Ver `app/agent_devices.py` para o desenho.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class RegistrarDispositivoBody(BaseModel):
+    email: str
+    password: str
+    machine_id: str
+    nome: Optional[str] = None
+
+
+class TokenDoDispositivoBody(BaseModel):
+    segredo: str
+
+
+def _erro_sem_banco(e: agent_devices.SemBanco) -> HTTPException:
+    return HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/api/agent/dispositivos/registrar")
+def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> dict:
+    """
+    Troca a senha do portal por um segredo de dispositivo — uma vez só.
+
+    O agente descarta a senha aqui. É a diferença que importa: segredo vazado
+    custa uma revogação; senha do portal vazada custa a conta inteira, e ela
+    vale também para o navegador.
+
+    Recusa senha provisória. Quem entrou com senha definida por outra pessoa
+    ainda não provou ser quem diz — `require_auth` já barra todas as outras
+    rotas nesse estado, e deixar esta passar daria ao portador da senha
+    provisória uma credencial durável, que sobreviveria à troca.
+    """
+    ip = request.client.host if request and request.client else None
+    user = _conferir_credenciais(body.email, body.password, ip)
+
+    if bool(user.get("deve_trocar_senha")):
+        raise HTTPException(
+            status_code=403,
+            detail="Troque a senha no portal antes de registrar o agente.",
+            headers={"X-Senha-Provisoria": "1"},
+        )
+
+    machine_id = (body.machine_id or "").strip()
+    if not machine_id:
+        raise HTTPException(status_code=400, detail="Informe a máquina do agente.")
+
+    try:
+        segredo = agent_devices.registrar(
+            user_id=str(user["id"]),
+            machine_id=machine_id,
+            nome=body.nome or machine_id,
+        )
+    except agent_devices.SemBanco as e:
+        raise _erro_sem_banco(e)
+    except Exception:
+        logger.exception("Falha ao registrar dispositivo do agente")
+        raise HTTPException(status_code=500, detail="Erro interno ao registrar o dispositivo.")
+
+    return {
+        "segredo": segredo,
+        "machine_id": machine_id,
+        "email": user["email"],
+        "role": user["role"],
+        # O agente usa isto para renovar antes de expirar, em vez de descobrir
+        # pelo 401 — que chegaria no meio de uma instalação.
+        "validade_token_min": agent_devices.VALIDADE_TOKEN_MIN,
+    }
+
+
+@app.post("/api/agent/dispositivos/token")
+def token_do_dispositivo(body: TokenDoDispositivoBody) -> dict:
+    """
+    Segredo do dispositivo vira JWT curto.
+
+    O JWT sai com o papel REAL da pessoa (`user`, `gestor`, `admin`), não com
+    `agent`. É o ponto da fase: as rotas passam a poder perguntar "este
+    certificado é seu" em vez de "que papel você tem", e a barreira de carteira
+    volta a valer para quem opera o agente.
+
+    A contrapartida, que é preciso ter em conta ao instalar o agente: **um
+    dispositivo vale o que vale o dono.** O segredo guardado na estação de um
+    administrador emite token de administrador. Não é regressão — a chave
+    compartilhada de antes dava papel `agent` a QUALQUER máquina que a tivesse,
+    e sem revogação individual —, mas troca "todo mundo tem a mesma chave" por
+    "cada máquina tem o poder de quem a usa". Agente de admin merece a mesma
+    cautela que a sessão de admin no navegador.
+    """
+    try:
+        disp = agent_devices.autenticar(body.segredo)
+    except agent_devices.SemBanco as e:
+        raise _erro_sem_banco(e)
+
+    if not disp:
+        # Mesma resposta para segredo inexistente e revogado: distinguir diria a
+        # quem tenta se aquele valor já existiu.
+        raise HTTPException(status_code=401, detail="Dispositivo não autorizado.")
+
+    sb = _sb_do_login()
+    r = sb.table("users").select("*").eq("id", disp["user_id"]).limit(1).execute()
+    user = r.data[0] if r.data else None
+    # A conta pode ter sido desativada depois do registro. Sem esta conferência,
+    # o dispositivo continuaria emitindo token para quem já perdeu o portal.
+    if not user or not conta_ativa(user):
+        raise HTTPException(status_code=403, detail="Conta sem acesso ao portal.")
+
+    token = auth.create_access_token(
+        {"sub": user["email"], "role": user["role"]},
+        expires_delta=timedelta(minutes=agent_devices.VALIDADE_TOKEN_MIN),
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": user["role"],
+        "machine_id": disp.get("machine_id"),
+        "validade_token_min": agent_devices.VALIDADE_TOKEN_MIN,
+    }
+
+
+@app.get("/api/agent/dispositivos")
+def listar_dispositivos(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """
+    Os dispositivos de quem pergunta. Admin vê a frota inteira.
+
+    Não é o módulo `instalador` que governa isto: um operador precisa ver e
+    revogar as PRÓPRIAS máquinas mesmo sem permissão nenhuma no menu — é a
+    conta dele que está naquela estação. Mesmo raciocínio que mantém
+    `/api/users/me/export` fora da matriz.
+    """
+    try:
+        if (token.role or "").strip().lower() == "admin":
+            return {"dispositivos": agent_devices.listar(), "alcance": "todos"}
+        user_id = _user_id_da_sessao(token)
+        if not user_id:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        return {"dispositivos": agent_devices.listar(user_id), "alcance": "proprios"}
+    except agent_devices.SemBanco as e:
+        raise _erro_sem_banco(e)
+
+
+@app.delete("/api/agent/dispositivos/{device_id}")
+def revogar_dispositivo(
+    device_id: str, token: auth.TokenData = Depends(require_auth)
+) -> dict:
+    """
+    Revoga o segredo. O dispositivo para de trocar por token no próximo ciclo.
+
+    Tokens já emitidos continuam válidos até expirar — daí `VALIDADE_TOKEN_MIN`
+    ser uma hora, e não as 24 h do navegador: é a janela real da revogação.
+    """
+    admin = (token.role or "").strip().lower() == "admin"
+    dono = None if admin else _user_id_da_sessao(token)
+    if not admin and not dono:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    try:
+        ok = agent_devices.revogar(device_id, user_id=dono)
+    except agent_devices.SemBanco as e:
+        raise _erro_sem_banco(e)
+
+    if not ok:
+        # 404 também quando o dispositivo existe mas é de outra pessoa: um 403
+        # confirmaria a existência daquele id para quem não devia saber.
+        raise HTTPException(status_code=404, detail="Dispositivo não encontrado.")
+    return {"status": "revogado", "id": device_id}
 
 
 # `/api/certificados` fica FORA da matriz, de proposito. Duas razoes:
