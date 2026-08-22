@@ -1692,6 +1692,13 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 }
 
 /* Paginação (estilo “button group”, sem Tailwind) */
+/* Texto so para leitor de tela.
+
+   `position: absolute` sem `top`/`left` fica na posicao estatica, mas se ancora
+   no ANCESTRAL POSICIONADO mais proximo — e isso decide se ele e recortado
+   junto com o resto ou nao. Ver `.table-scroll td` mais abaixo: dentro da
+   tabela, sem a celula como ancora, estes spans escapavam do `overflow` e
+   esticavam a PAGINA ate a altura da linha mais funda. */
 .cg-sr-only {
   position: absolute;
   width: 1px;
@@ -2778,6 +2785,23 @@ body.sidebar-open .sidebar-backdrop {
    `inset: 0` resolveria contra a altura total do conteúdo e o spinner cairia
    fora da parte visível. */
 .table-scroll-anchor {
+  position: relative;
+}
+
+/* A CELULA e o bloco de contencao do texto so-para-leitor-de-tela.
+
+   Sem isto, um `<span class="cg-sr-only">` dentro de uma linha se ancorava no
+   `.table-scroll-anchor` — que e `position: relative` e fica FORA da area que
+   recorta. O span ia parar na sua posicao estatica (top de ate 5.938px numa
+   pagina de 100 itens), o `overflow: auto` nao o alcancava, e a PAGINA crescia
+   ate ele: 7.262px de altura com 6.312px de rolagem vazia abaixo da tabela.
+   Quanto mais itens por pagina, mais fundo o span e maior o vazio — que foi
+   exatamente como o defeito foi relatado.
+
+   Sao spans de 1px que ninguem ve. O sintoma nao tinha relacao aparente com a
+   causa, e por isso ele sobreviveu a duas rodadas de medicao: nos meus testes
+   eu injetava linhas falsas, que nao tinham esses spans. */
+.table-scroll td {
   position: relative;
 }
 
