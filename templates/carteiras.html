@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=menos-texto-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=carteiras-sem-inativos-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
       @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
@@ -313,6 +313,19 @@
           // Admin e gestor têm alcance total e não dependem de carteira —
           // listá-los aqui sugeriria que precisam de uma.
           if (o.role !== "user") return false;
+
+          // Conta inativa some da lista: `require_auth` a recusa com 401, então
+          // atribuir um cliente a ela é uma ação sem efeito nenhum — e oferecer
+          // a ação é o mesmo defeito do menu que mostrava página que a pessoa
+          // não alcançava.
+          //
+          // A EXCEÇÃO importa mais que a regra: se a conta inativa ainda tiver
+          // clientes, ela CONTINUA na lista. Inativar zera a carteira, mas essa
+          // limpeza pode falhar (é registrada como ERROR e não derruba a
+          // inativação — ver `deactivate_user`). Esconder a carteira órfã
+          // deixaria a limpeza sem nenhum caminho pela tela.
+          if (!o.ativo && !(o.documentos > 0)) return false;
+
           if (!q) return true;
           return ((o.full_name || "") + " " + (o.email || "")).toLowerCase().includes(q);
         });
@@ -331,7 +344,7 @@
               <span style="color:${o.documentos ? "var(--ok-text)" : "var(--expired-text)"}">
                 ${o.documentos} cliente(s)
               </span>
-              ${o.ativo ? "" : " · <em>inativo</em>"}
+              ${o.ativo ? "" : " · <em>inativa, com carteira a limpar</em>"}
             </span>
           </button>`).join("");
 
