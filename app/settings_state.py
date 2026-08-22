@@ -46,6 +46,15 @@ class PortalSettings:
     alertas_marcos: str = ""
     alertas_intervalo_horas: int = 0
 
+    # ── Texto do e-mail de alerta (22/08/2026) ─────────────────────────────
+    # Mesma convenção: vazio é "usar o padrão". Os padrões e a validação moram
+    # em `app/email_modelo.py`, que é o único lugar que sabe o que cada campo
+    # significa — aqui eles são texto opaco, de propósito.
+    alerta_email_assunto: str = ""
+    alerta_email_titulo: str = ""
+    alerta_email_abertura: str = ""
+    alerta_email_recado: str = ""
+
     def effective_source(self) -> Path:
         p = (self.source_folder or "").strip()
         if p:
@@ -78,6 +87,10 @@ def _from_row(row: dict) -> PortalSettings:
         alertas_destinatarios=str(row.get("alertas_destinatarios", "") or ""),
         alertas_marcos=str(row.get("alertas_marcos", "") or ""),
         alertas_intervalo_horas=int(row.get("alertas_intervalo_horas") or 0),
+        alerta_email_assunto=str(row.get("alerta_email_assunto", "") or ""),
+        alerta_email_titulo=str(row.get("alerta_email_titulo", "") or ""),
+        alerta_email_abertura=str(row.get("alerta_email_abertura", "") or ""),
+        alerta_email_recado=str(row.get("alerta_email_recado", "") or ""),
         instalador_nome_template=str(row.get("instalador_nome_template", "") or ""),
         install_token_ttl_min=int(row.get("install_token_ttl_min") or 0),
         trilha_retencao_dias=int(row.get("trilha_retencao_dias") or 0),
@@ -104,6 +117,10 @@ def _load_file() -> Optional[PortalSettings]:
             alertas_destinatarios=str(raw.get("alertas_destinatarios", "") or ""),
             alertas_marcos=str(raw.get("alertas_marcos", "") or ""),
             alertas_intervalo_horas=int(raw.get("alertas_intervalo_horas") or 0),
+            alerta_email_assunto=str(raw.get("alerta_email_assunto", "") or ""),
+            alerta_email_titulo=str(raw.get("alerta_email_titulo", "") or ""),
+            alerta_email_abertura=str(raw.get("alerta_email_abertura", "") or ""),
+            alerta_email_recado=str(raw.get("alerta_email_recado", "") or ""),
             instalador_nome_template=str(raw.get("instalador_nome_template", "")),
             install_token_ttl_min=int(raw.get("install_token_ttl_min", 0) or 0),
             trilha_retencao_dias=int(raw.get("trilha_retencao_dias", 0) or 0),
@@ -164,6 +181,10 @@ def load_settings() -> PortalSettings:
                             supa.alertas_destinatarios = local.alertas_destinatarios
                             supa.alertas_marcos = local.alertas_marcos
                             supa.alertas_intervalo_horas = local.alertas_intervalo_horas
+                            supa.alerta_email_assunto = local.alerta_email_assunto
+                            supa.alerta_email_titulo = local.alerta_email_titulo
+                            supa.alerta_email_abertura = local.alerta_email_abertura
+                            supa.alerta_email_recado = local.alerta_email_recado
                 return supa
         except Exception:  # noqa: BLE001
             logger.exception("Falha ao ler portal_settings no Supabase; usando o arquivo local")
@@ -226,6 +247,10 @@ def save_settings(s: PortalSettings, *, exigir_supabase: bool = False) -> bool:
         "alertas_destinatarios": s.alertas_destinatarios,
         "alertas_marcos": s.alertas_marcos,
         "alertas_intervalo_horas": s.alertas_intervalo_horas,
+        "alerta_email_assunto": s.alerta_email_assunto,
+        "alerta_email_titulo": s.alerta_email_titulo,
+        "alerta_email_abertura": s.alerta_email_abertura,
+        "alerta_email_recado": s.alerta_email_recado,
         "updated_at": now,
     }
     try:

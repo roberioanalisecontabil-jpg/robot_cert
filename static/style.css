@@ -3292,3 +3292,145 @@ dialog.modal::backdrop {
   background-color: var(--accent);
   border-radius: var(--radius-xs);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Modal de edição do texto do e-mail de alerta
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* O `dialog.modal` padrão tem 460px, largura certa para um formulário que se
+   lê de cima a baixo. Este precisa mostrar o texto E o resultado ao mesmo
+   tempo: separar em dois passos ("edite, agora veja") é o que faz alguém
+   salvar sem nunca ter olhado a prévia. */
+dialog.modal--largo {
+  width: min(96vw, 940px);
+  max-height: min(92vh, 820px);
+}
+
+.modal__colunas {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-5);
+}
+
+/* Lado a lado só quando há largura para as duas colunas continuarem legíveis.
+   Empilhado, a prévia fica ABAIXO dos campos — que é a ordem de leitura certa
+   quando não cabem juntos. */
+@media (min-width: 880px) {
+  .modal__colunas {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* `textarea` não estava na regra de `input, select` — sem isto ele herda a
+   fonte do navegador e destoa dos campos vizinhos dentro do mesmo modal. */
+.modal__campo textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-family: inherit;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+/* ── Marcadores ─────────────────────────────────────────────────────────── */
+
+.marcadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+/* Clicável de propósito: digitar `{a_vencer}` à mão erra o sublinhado e o
+   plural, e o erro só aparece no e-mail que já saiu. */
+.marcador {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-label);
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1.6;
+}
+
+.marcador:hover,
+.marcador:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Prévia ─────────────────────────────────────────────────────────────── */
+
+.email-previa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  position: sticky;
+  top: 0;
+}
+
+.email-previa__rotulo {
+  font-size: var(--fs-ui-sm);
+  font-weight: 600;
+}
+
+.email-previa__assunto {
+  font-size: var(--fs-ui-sm);
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.email-previa__assunto strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* `iframe`, e não uma `<div>` com innerHTML.
+   
+   O e-mail traz `<h2>`, `<h3>` e `<table>`, e o CSS do portal estiliza todos
+   eles. Numa div, a prévia mostraria o e-mail com a tipografia da TELA — quer
+   dizer, mostraria algo que ninguém vai receber. O iframe é o que faz a prévia
+   valer: documento próprio, só os estilos embutidos no e-mail. */
+.email-previa__quadro {
+  width: 100%;
+  height: 340px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f5f5f7;
+  display: block;
+}
+
+@media (min-width: 880px) {
+  .email-previa__quadro { height: 420px; }
+}
+
+/* Prévia com dados inventados PRECISA dizer isso. Sem o aviso, quem tem a base
+   em dia lê "EMPRESA EXEMPLO LTDA" como um cliente real que não reconhece. */
+.email-previa__exemplo {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  background: var(--accent-soft);
+  border-radius: var(--radius-xs);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+/* Linha "assunto atual" no bloco da aba, antes de abrir o modal. */
+.cfg-valor-atual {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-ui-sm);
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.cfg-valor-atual strong {
+  color: var(--text);
+  font-weight: 600;
+}

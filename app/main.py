@@ -31,9 +31,10 @@ from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
 from app import alertas_config
+from app import email_modelo
 from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
-from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente
+from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente, previa_do_resumo
 from app.notification_service import build_notifications_payload, get_active_alerts
 from app.settings_state import (
     GravacaoNaoPersistida,
@@ -880,6 +881,13 @@ class SettingsBody(BaseModel):
     alertas_destinatarios: Optional[str] = Field(default=None)
     alertas_marcos: Optional[str] = Field(default=None)
     alertas_intervalo_horas: Optional[int] = Field(default=None)
+    # Editados por um modal só, e ausentes de todos os outros formulários da
+    # tela — `None` aqui é o que impede o Salvar das pastas de apagar o texto
+    # do e-mail.
+    alerta_email_assunto: Optional[str] = Field(default=None)
+    alerta_email_titulo: Optional[str] = Field(default=None)
+    alerta_email_abertura: Optional[str] = Field(default=None)
+    alerta_email_recado: Optional[str] = Field(default=None)
 
 
 class IngestBody(BaseModel):
@@ -1901,6 +1909,16 @@ def _settings_dict(s: PortalSettings) -> dict:
             if alertas_config.destinatarios_configurados(s.alertas_destinatarios)
             else "admins"
         ),
+        # Texto do e-mail. Mesmo par `campo` + `campo_efetivo`: o modal precisa
+        # abrir com o campo EM BRANCO (senão a pessoa não distingue "eu escrevi
+        # isto" de "é o padrão") e mostrar o padrão como placeholder.
+        "alerta_email": {
+            campo: getattr(s, coluna, "")
+            for campo, coluna in email_modelo.CAMPO_COLUNA.items()
+        },
+        "alerta_email_padrao": dict(email_modelo.PADROES),
+        "alerta_email_marcadores": list(email_modelo.MARCADORES),
+        "alerta_email_limites": dict(email_modelo.LIMITES),
     }
 
 
@@ -1982,6 +2000,23 @@ def put_settings(body: SettingsBody) -> dict:
     except alertas_config.ConfiguracaoInvalida as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    # Texto do e-mail: mesma assimetria dos marcos, e pelo mesmo motivo. O job
+    # cai no padrão diante de um marcador que não existe, porque alerta que não
+    # sai é pior que alerta com um `{tota}` literal no meio. Só que "cai no
+    # padrão" como resposta à tela seria a pessoa salvar `{tota}`, ler "salvo" e
+    # nunca ver o texto que escreveu.
+    try:
+        modelo = {
+            campo: email_modelo.validar_campo(
+                campo,
+                getattr(old, coluna, "") if getattr(body, coluna) is None
+                else getattr(body, coluna),
+            )
+            for campo, coluna in email_modelo.CAMPO_COLUNA.items()
+        }
+    except email_modelo.ModeloInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     enc_password = old.smtp_password_encrypted
     if body.smtp_password is not None and body.smtp_password.strip() != "":
         try:
@@ -2007,6 +2042,7 @@ def put_settings(body: SettingsBody) -> dict:
         alertas_destinatarios=destinatarios,
         alertas_marcos=marcos,
         alertas_intervalo_horas=intervalo,
+        **{coluna: modelo[campo] for campo, coluna in email_modelo.CAMPO_COLUNA.items()},
     )
     # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
     # prefere o Supabase — a próxima leitura devolveria o valor antigo. Dizer
@@ -2377,6 +2413,42 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True, "message": "E-mail de teste enviado com sucesso!"}
+
+
+class PreviaEmailBody(BaseModel):
+    """O texto que a pessoa está digitando, ainda não salvo.
+
+    `None` em um campo é "usar o que está gravado" — a mesma semântica do
+    `SettingsBody`, para a prévia de um campo em branco mostrar o padrão em vez
+    de um buraco.
+    """
+    alerta_email_assunto: Optional[str] = Field(default=None)
+    alerta_email_titulo: Optional[str] = Field(default=None)
+    alerta_email_abertura: Optional[str] = Field(default=None)
+    alerta_email_recado: Optional[str] = Field(default=None)
+
+
+@app.post("/api/settings/alerts/preview", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
+def preview_email_alerta(body: PreviaEmailBody) -> dict:
+    """O e-mail que sairia agora com este texto, sem salvar nada.
+
+    Valida com a MESMA `validar_campo` do PUT e devolve o mesmo 422. Uma prévia
+    mais tolerante que o Salvar deixaria a pessoa aprovar na tela um texto que a
+    gravação depois recusa.
+    """
+    old = load_settings()
+    try:
+        modelo = {
+            campo: email_modelo.validar_campo(
+                campo,
+                getattr(old, coluna, "") if getattr(body, coluna) is None
+                else getattr(body, coluna),
+            )
+            for campo, coluna in email_modelo.CAMPO_COLUNA.items()
+        }
+    except email_modelo.ModeloInvalido as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"ok": True, **previa_do_resumo(old, modelo)}
 
 
 @app.post("/api/settings/alerts/trigger", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])

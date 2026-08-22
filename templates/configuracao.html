@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=carteiras-sem-inativos-2026-08" />
+    <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -303,6 +303,17 @@
             </div>
           </section>
 
+          <!-- ── Bloco 3: o que o e-mail diz ───────────────────────────── -->
+          <section class="panel--nested cfg-bloco">
+            <h3>Texto do e-mail</h3>
+            <p class="cfg-valor-atual">
+              Assunto: <strong id="email-assunto-atual">—</strong>
+            </p>
+            <div class="linha-acoes cfg-bloco__acoes">
+              <button type="button" id="btn-editar-email">Editar texto…</button>
+            </div>
+          </section>
+
           <div class="linha-acoes cfg-salvar">
             <button type="button" id="btn-save-smtp" class="primary">Salvar</button>
             <span id="smtp-msg" class="hint" role="status"></span>
@@ -335,6 +346,86 @@
       </div><!-- /config-tabs-container -->
 
     </main>
+
+    <!-- Editor do texto do e-mail de alerta.
+
+         A tabela de certificados NAO esta aqui, e a ausencia e a decisao: ela
+         e o inventario do dia, nao texto. Um campo editavel no lugar dela
+         produziria um e-mail que afirma vencimentos que ninguem conferiu.
+
+         A previa vem do servidor, montada pela MESMA funcao que monta o envio
+         (`_montar_resumo`). Uma previa desenhada aqui no JS concordaria com o
+         e-mail no dia em que fosse escrita e divergiria na primeira mudanca de
+         um lado so — e previa que diverge do que sai e pior que nenhuma,
+         porque e acreditada. -->
+    <dialog id="modal-email" class="modal modal--largo" aria-labelledby="modal-email-titulo">
+      <form id="form-email" class="modal__form" method="dialog">
+        <div class="modal__head">
+          <h2 id="modal-email-titulo">Texto do e-mail de alerta</h2>
+          <p class="modal__sub">Vale para o resumo do administrador e o do colaborador.</p>
+        </div>
+
+        <div class="modal__body">
+          <div class="modal__erro" id="modal-email-erro" role="alert"></div>
+
+          <div class="modal__colunas">
+            <div class="modal__coluna">
+              <div class="modal__campo">
+                <label for="em-assunto">Assunto</label>
+                <input type="text" id="em-assunto" data-campo="alerta_email_assunto" />
+              </div>
+
+              <div class="modal__campo">
+                <label for="em-titulo">Título</label>
+                <input type="text" id="em-titulo" data-campo="alerta_email_titulo" />
+              </div>
+
+              <div class="modal__campo">
+                <label for="em-abertura">Abertura</label>
+                <textarea id="em-abertura" rows="3" data-campo="alerta_email_abertura"></textarea>
+              </div>
+
+              <div class="modal__campo">
+                <label for="em-recado">Recado final</label>
+                <textarea id="em-recado" rows="3" data-campo="alerta_email_recado"></textarea>
+              </div>
+
+              <div class="modal__campo">
+                <span class="modal__dica" id="em-marcadores-rotulo">Clique para inserir:</span>
+                <div class="marcadores" id="em-marcadores" role="group"
+                     aria-labelledby="em-marcadores-rotulo"></div>
+                <span class="modal__dica">
+                  Campo vazio volta ao padrão. A linha que diz por que a pessoa
+                  recebeu não é editável.
+                </span>
+              </div>
+            </div>
+
+            <div class="modal__coluna">
+              <div class="email-previa">
+                <span class="email-previa__rotulo">Prévia</span>
+                <p class="email-previa__assunto">
+                  Assunto: <strong id="em-previa-assunto">—</strong>
+                </p>
+                <!-- `sandbox` sem `allow-scripts`: e um documento de e-mail,
+                     nao tem por que executar nada. -->
+                <iframe id="em-previa-quadro" class="email-previa__quadro"
+                        sandbox="" title="Prévia do e-mail"></iframe>
+                <p class="email-previa__exemplo" id="em-previa-exemplo" hidden>
+                  Nenhum certificado na janela agora — os nomes acima são exemplo.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn-action" id="em-restaurar">Restaurar padrão</button>
+          <button type="button" class="btn-action" id="em-cancelar">Cancelar</button>
+          <button type="submit" class="primary" id="em-salvar">Salvar</button>
+        </div>
+      </form>
+    </dialog>
 
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
     <script nonce="{{ request.state.nonce }}">
@@ -449,6 +540,7 @@
             (s.smtp_use_tls !== false) ? "tls" : (s.smtp_use_ssl ? "ssl" : "nenhuma");
           document.getElementById("chk-smtp-alerts-enabled").checked = !!s.smtp_alerts_enabled;
           preencherAlertas(s);
+          preencherModeloEmail(s);
           pintarEstadoAlertas();
 
           const inputAgentBaseUrl = document.getElementById("inp-agent-base-url");
@@ -490,6 +582,41 @@
           alertas_intervalo_horas:
             parseInt(document.getElementById("sel-alertas-intervalo").value, 10) || 0,
         };
+      }
+
+      // ── Texto do e-mail ──────────────────────────────────────────────────
+      // O modal edita quatro campos e o PUT continua sendo o mesmo: mandar so
+      // os quatro faria o servidor remontar `PortalSettings` do corpo e zerar
+      // pastas e SMTP. E o defeito que o comentario do `SettingsBody` descreve,
+      // visto do outro lado.
+      const CAMPOS_EMAIL = ["alerta_email_assunto", "alerta_email_titulo",
+                            "alerta_email_abertura", "alerta_email_recado"];
+
+      // O que esta GRAVADO. O modal edita uma copia e so escreve aqui depois de
+      // o servidor confirmar — cancelar tem de devolver o estado anterior, e
+      // sem esta separacao "cancelar" deixaria a tela mostrando o que nao foi
+      // salvo.
+      let modeloEmailSalvo = {};
+      let modeloEmailPadrao = {};
+      let marcadoresEmail = [];
+
+      function corpoModeloEmail() {
+        const out = {};
+        CAMPOS_EMAIL.forEach((c) => { out[c] = modeloEmailSalvo[c] || ""; });
+        return out;
+      }
+
+      function preencherModeloEmail(s) {
+        const m = s.alerta_email || {};
+        modeloEmailPadrao = s.alerta_email_padrao || {};
+        marcadoresEmail = s.alerta_email_marcadores || [];
+        CAMPOS_EMAIL.forEach((c) => {
+          modeloEmailSalvo[c] = m[c.replace("alerta_email_", "")] || "";
+        });
+        // O assunto EFETIVO, e nao o campo: vazio aqui e "usar o padrao", e
+        // mostrar um traco faria parecer que o e-mail sai sem assunto.
+        document.getElementById("email-assunto-atual").textContent =
+          modeloEmailSalvo.alerta_email_assunto || modeloEmailPadrao.assunto || "—";
       }
 
       function preencherAlertas(s) {
@@ -608,6 +735,7 @@
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
             ...corpoAlertas(),
+            ...corpoModeloEmail(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
           if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
@@ -645,6 +773,151 @@
           st.textContent = `Alertas processados! Enviados: ${s.alerts_sent || 0} | Ignorados: ${s.skipped_already_sent || 0} | Sem e-mail: ${s.skipped_no_recipient_email || 0} | Erros: ${s.errors || 0}`;
           st.style.color = "var(--ok)";
         } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+      });
+
+      // ── Modal do texto do e-mail ─────────────────────────────────────────
+      const dlgEmail = document.getElementById("modal-email");
+      const camposEmail = () => Array.from(dlgEmail.querySelectorAll("[data-campo]"));
+      let ultimoFoco = null;
+
+      function erroEmail(msg) {
+        const el = document.getElementById("modal-email-erro");
+        el.textContent = msg || "";
+        el.setAttribute("data-visivel", msg ? "1" : "0");
+      }
+
+      // Os marcadores vem do SERVIDOR (`alerta_email_marcadores`), e nao de uma
+      // lista repetida aqui. Uma copia no JS e como a tela ofereceria `{total}`
+      // seis meses depois de o servidor ter parado de aceita-lo.
+      function pintarMarcadores() {
+        const box = document.getElementById("em-marcadores");
+        box.textContent = "";
+        marcadoresEmail.forEach((nome) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "marcador";
+          b.textContent = "{" + nome + "}";
+          b.addEventListener("click", () => inserirMarcador("{" + nome + "}"));
+          box.appendChild(b);
+        });
+      }
+
+      // Insere no ponto do cursor do ultimo campo tocado. Anexar ao fim faria a
+      // pessoa cortar e colar para o lugar certo, toda vez.
+      function inserirMarcador(texto) {
+        const alvo = ultimoFoco || document.getElementById("em-abertura");
+        const ini = alvo.selectionStart ?? alvo.value.length;
+        const fim = alvo.selectionEnd ?? alvo.value.length;
+        alvo.value = alvo.value.slice(0, ini) + texto + alvo.value.slice(fim);
+        alvo.focus();
+        alvo.selectionStart = alvo.selectionEnd = ini + texto.length;
+        agendarPrevia();
+      }
+
+      function abrirModalEmail() {
+        erroEmail("");
+        camposEmail().forEach((el) => {
+          const curto = el.dataset.campo.replace("alerta_email_", "");
+          // Campo em branco com o PADRAO no placeholder: a pessoa ve o que vai
+          // sair sem que o texto pareca escrito por ela. Preencher o campo com o
+          // padrao apagaria a diferenca entre "eu escrevi isto" e "e o padrao",
+          // e o "Restaurar padrao" deixaria de ter sentido visivel.
+          el.value = modeloEmailSalvo[el.dataset.campo] || "";
+          el.placeholder = modeloEmailPadrao[curto] || "";
+        });
+        pintarMarcadores();
+        dlgEmail.showModal();
+        atualizarPrevia();
+      }
+
+      let timerPrevia = null;
+      function agendarPrevia() {
+        clearTimeout(timerPrevia);
+        timerPrevia = setTimeout(atualizarPrevia, 450);
+      }
+
+      async function atualizarPrevia() {
+        const corpo = {};
+        camposEmail().forEach((el) => { corpo[el.dataset.campo] = el.value || ""; });
+        try {
+          const r = await fetch("/api/settings/alerts/preview", {
+            method: "POST", headers: getHeaders(true), body: JSON.stringify(corpo),
+          });
+          if (!r.ok) {
+            // 422 e a MESMA recusa que o Salvar dara. Mostrar aqui e o ponto: a
+            // pessoa corrige enquanto digita, em vez de descobrir no Salvar.
+            erroEmail(await mensagemCorpoErro(r));
+            return;
+          }
+          erroEmail("");
+          const p = await r.json();
+          document.getElementById("em-previa-assunto").textContent = p.assunto || "—";
+          document.getElementById("em-previa-quadro").srcdoc = p.html || "";
+          document.getElementById("em-previa-exemplo").hidden = !p.exemplo;
+        } catch (e) {
+          erroEmail("Não foi possível gerar a prévia: " + e);
+        }
+      }
+
+      camposEmail().forEach((el) => {
+        el.addEventListener("input", agendarPrevia);
+        el.addEventListener("focus", () => { ultimoFoco = el; });
+      });
+
+      document.getElementById("btn-editar-email").addEventListener("click", abrirModalEmail);
+      document.getElementById("em-cancelar").addEventListener("click", () => dlgEmail.close());
+
+      document.getElementById("em-restaurar").addEventListener("click", () => {
+        // Esvaziar os quatro campos E salvar seria decidir por quem clicou. Aqui
+        // so esvazia: a prévia mostra o padrao, e o Salvar continua sendo o ato.
+        camposEmail().forEach((el) => { el.value = ""; });
+        atualizarPrevia();
+      });
+
+      document.getElementById("form-email").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const btn = document.getElementById("em-salvar");
+        btn.disabled = true;
+        erroEmail("");
+        const antes = { ...modeloEmailSalvo };
+        try {
+          camposEmail().forEach((el) => { modeloEmailSalvo[el.dataset.campo] = el.value || ""; });
+          const body = {
+            source_folder: document.getElementById("inp-source").value,
+            expired_folder: document.getElementById("inp-exp").value,
+            machine_id: document.getElementById("inp-machine").value || "default",
+            smtp_host: document.getElementById("inp-smtp-host").value || "",
+            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
+            smtp_user: document.getElementById("inp-smtp-user").value || "",
+            smtp_password: null,
+            ...seguranca(),
+            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
+            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoAlertas(),
+            ...corpoModeloEmail(),
+          };
+          const r = await fetch("/api/settings", {
+            method: "PUT", headers: getHeaders(true), body: JSON.stringify(body),
+          });
+          if (!r.ok) {
+            // Devolve o estado anterior: sem isto a tela ficaria mostrando o
+            // texto novo com o banco guardando o antigo, e o proximo Salvar de
+            // OUTRO bloco gravaria o que esta recusa acabou de rejeitar.
+            modeloEmailSalvo = antes;
+            erroEmail("Erro " + r.status + ": " + (await mensagemCorpoErro(r)));
+            return;
+          }
+          preencherModeloEmail(await r.json());
+          dlgEmail.close();
+          const st = document.getElementById("smtp-msg");
+          st.textContent = "Texto do e-mail salvo.";
+          st.style.color = "var(--ok)";
+        } catch (e) {
+          modeloEmailSalvo = antes;
+          erroEmail("Erro: " + e);
+        } finally {
+          btn.disabled = false;
+        }
       });
 
       // ── Comandos ─────────────────────────────────────────────────────────────

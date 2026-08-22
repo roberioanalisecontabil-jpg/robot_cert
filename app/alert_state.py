@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 from app import config
 from app.auth import conta_ativa
 from app import alertas_config
+from app import email_modelo
 from app.settings_state import load_settings, _supabase, _load_colaborador_file_dict
 from app.cert_scanner import scan_folder, cert_to_public_dict
 from app.smtp_service import send_smtp_email
@@ -497,22 +498,42 @@ def _separar_por_situacao(itens, now: datetime, janela: int):
     )
 
 
-def _montar_resumo(expirando, vencidos, now: datetime, janela: int, motivo: str):
+def _montar_resumo(expirando, vencidos, now: datetime, janela: int, motivo: str,
+                   modelo: Optional[Dict[str, str]] = None):
     """(assunto, html) do resumo — o mesmo para o admin e para o colaborador.
 
     Estava dentro de `_enviar_resumo_admins`, e foi de lá que veio a diferença
-    de tratamento que este commit corrige: o admin recebia UM e-mail com tudo,
+    de tratamento que aquele commit corrigiu: o admin recebia UM e-mail com tudo,
     e o colaborador recebia UM POR CERTIFICADO. Não por decisão de desenho —
     porque o código que agrupa morava num lugar onde só o admin passava.
+
+    A moldura (assunto, título, abertura, recado) vem de `modelo`, que a tela
+    edita. `modelo=None` são os padrões, e os padrões são o texto que estava
+    escrito aqui antes — quem nunca abriu o modal recebe o mesmo e-mail.
+
+    O que NÃO vem do modelo: as tabelas, que são o inventário do dia, e o
+    `motivo`, que é a única linha dizendo a quem recebeu por que recebeu e onde
+    parar de receber.
     """
+    modelo = modelo or {}
+    valores = {
+        "data": now.strftime("%d/%m/%Y"),
+        "a_vencer": len(expirando),
+        "vencidos": len(vencidos),
+        "janela": janela,
+    }
+    titulo = email_modelo.bloco_html("titulo", modelo.get("titulo"), valores)
+    abertura = email_modelo.bloco_html("abertura", modelo.get("abertura"), valores)
+    recado = email_modelo.bloco_html("recado", modelo.get("recado"), valores)
+
     linhas_venc = "".join(_linha_resumo(c, d, "#ff3b30") for c, d in vencidos)
     linhas_exp = "".join(_linha_resumo(c, d, "#b35c00") for c, d in expirando)
 
-    def _bloco(titulo: str, linhas: str, total: int) -> str:
+    def _bloco(titulo_bloco: str, linhas: str, total: int) -> str:
         if not linhas:
             return ""
         return f"""
-          <h3 style="font-size:15px;margin:22px 0 8px;">{titulo} ({total})</h3>
+          <h3 style="font-size:15px;margin:22px 0 8px;">{titulo_bloco} ({total})</h3>
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <tr>
               <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Nome</th>
@@ -526,26 +547,21 @@ def _montar_resumo(expirando, vencidos, now: datetime, janela: int, motivo: str)
     <html>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f5f5f7; padding:20px; color:#1d1d1f;">
         <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid #e5e5ea;">
-          <h2 style="margin-top:0;">Resumo de certificados</h2>
-          <p style="color:#6e6e73;margin-top:0;">
-            Situação em {now.strftime('%d/%m/%Y')} — {len(vencidos)} vencido(s) nos últimos
-            {janela} dias e {len(expirando)} a vencer nos próximos {janela}.
-          </p>
+          <h2 style="margin-top:0;">{titulo}</h2>
+          <p style="color:#6e6e73;margin-top:0;">{abertura}</p>
           {_bloco("Vencidos recentemente", linhas_venc, len(vencidos))}
           {_bloco("A vencer", linhas_exp, len(expirando))}
           <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
+            {recado}
+          </p>
+          <p style="font-size:12px;color:#86868b;margin-top:8px;margin-bottom:0;">
             {motivo}
-            Certificados vencidos há mais de {janela} dias não entram aqui —
-            consulte a página Vencidos para a lista completa.
           </p>
         </div>
       </body>
     </html>
     """
-    subject = (
-        f"Resumo de certificados — {len(expirando)} a vencer, "
-        f"{len(vencidos)} vencidos recentemente"
-    )
+    subject = email_modelo.assunto_final(modelo.get("assunto"), valores)
     return subject, html_content
 
 
@@ -597,7 +613,8 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
         else "Você recebe este resumo porque tem perfil de administrador no portal."
     )
     subject, html_content = _montar_resumo(
-        expirando, vencidos_recentes, now, janela, motivo_do_envio
+        expirando, vencidos_recentes, now, janela, motivo_do_envio,
+        email_modelo.do_settings(settings)
     )
 
     for admin_email in admins:
@@ -755,6 +772,7 @@ def trigger_all_alerts() -> Dict[str, Any]:
             janela,
             "Você recebe este resumo pelos certificados que escolheu acompanhar. "
             "Para mudar isso, use a página Acompanhamento do portal.",
+            email_modelo.do_settings(settings),
         )
         try:
             send_smtp_email(
@@ -783,3 +801,75 @@ def trigger_all_alerts() -> Dict[str, Any]:
 
     registrar_execucao_job()
     return stats
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Prévia para a tela
+# ══════════════════════════════════════════════════════════════════════════
+
+def _linhas_de_exemplo(now: datetime):
+    """Três certificados fictícios, para a prévia quando a janela está vazia.
+
+    Sem eles, quem tem a base em dia abre o modal, vê um e-mail sem tabela
+    nenhuma e conclui que quebrou alguma coisa. O `exemplo: True` no retorno
+    existe para a tela poder dizer que estes nomes não são reais — prévia com
+    dado inventado e sem aviso é pior que prévia vazia.
+    """
+    def _falso(nome: str, doc: str, dias: int) -> Dict[str, Any]:
+        return {
+            "nome": nome,
+            "documento_formatado": doc,
+            "not_after": (now + timedelta(days=dias)).isoformat(),
+        }
+
+    expirando = [
+        (_falso("EMPRESA EXEMPLO LTDA", "12.345.678/0001-90", 3), 3),
+        (_falso("COMERCIO MODELO ME", "98.765.432/0001-10", 12), 12),
+    ]
+    vencidos = [(_falso("SERVICOS ANTIGOS SA", "11.222.333/0001-44", -4), -4)]
+    return expirando, vencidos
+
+
+def previa_do_resumo(settings, modelo: Optional[Dict[str, str]] = None,
+                     now: Optional[datetime] = None) -> Dict[str, Any]:
+    """O e-mail que sairia AGORA com este texto.
+
+    Monta pela mesma `_montar_resumo` que o job usa, e não por um caminho
+    paralelo. Uma prévia com código próprio concorda com o envio no dia em que
+    é escrita e diverge na primeira mudança de um lado só — e prévia que diverge
+    do que é enviado é pior que nenhuma, porque é acreditada.
+
+    Nunca levanta por causa do inventário: base indisponível vira exemplo, e a
+    pessoa continua conseguindo julgar o texto que escreveu.
+    """
+    now = now or datetime.now(timezone.utc)
+    marcos = alertas_config.marcos_efetivos(getattr(settings, "alertas_marcos", ""))
+    janela = alertas_config.janela_dias(marcos)
+
+    itens: List[Dict[str, Any]] = []
+    try:
+        from app.settings_state import get_latest_snapshot
+        from app.main import _list_certificados_payload
+        payload = _list_certificados_payload(settings, get_latest_snapshot(), "auto")
+        itens = list(payload.get("itens") or [])
+    except Exception:  # noqa: BLE001
+        logger.exception("Prévia do e-mail: inventário indisponível; usando exemplo")
+
+    expirando, vencidos = _separar_por_situacao(itens, now, janela)
+    exemplo = not expirando and not vencidos
+    if exemplo:
+        expirando, vencidos = _linhas_de_exemplo(now)
+
+    assunto, corpo = _montar_resumo(
+        expirando, vencidos, now, janela,
+        "Você recebe este resumo porque tem perfil de administrador no portal.",
+        modelo,
+    )
+    return {
+        "assunto": assunto,
+        "html": corpo,
+        "exemplo": exemplo,
+        "a_vencer": len(expirando),
+        "vencidos": len(vencidos),
+        "janela": janela,
+    }
