@@ -2882,35 +2882,60 @@ def _status_prioridade(status: str) -> int:
 
 
 def _lista_base_docs_historico() -> List[dict]:
-    # Limitamos a 100 snapshots para não sobrecarregar a memória no Render free tier.
-    # Para colaboradores, apenas os snapshots recentes são relevantes.
-    hist = historico_certificados(limite_snapshots=100)
-    rows = hist.get("itens", [])
+    """Um item por DOCUMENTO, escolhendo o certificado que responde a pergunta
+    "este cliente esta coberto?".
+
+    Le o INVENTARIO, e nao `cert_history`. A troca corrigiu um defeito que so
+    aparecia em cliente que renovou o certificado:
+
+    `cert_history` faz upsert por `file_name`, e o fluxo normal do escritorio
+    produz DOIS arquivos com o mesmo nome — o novo na pasta de trabalho e o
+    antigo movido para `99.CERTIFICADOS VENCIDOS`. Os dois colidiam numa linha
+    so, e sobrava o ultimo processado. Em 22/08 eram 7 nomes repetidos, 5 deles
+    com um valido e um vencido: para esses cinco clientes o Acompanhamento
+    mostrava VENCIDO existindo certificado valido — e o dano e concreto, porque
+    sugere renovar o que acabou de ser renovado.
+
+    A regra de prioridade abaixo ja existia e ja estava certa. Ela nunca chegava
+    a ser aplicada porque o valido nao estava na base.
+    """
+    sets = load_settings()
+    snap = get_latest_snapshot()
+    payload = _list_certificados_payload(sets, snap, "auto")
+    now = datetime.now(timezone.utc)
+
     grupos: Dict[str, dict] = {}
-    for it in rows:
-        doc = _doc_norm(it.get("documento"))
+    for it in (payload.get("itens") or []):
+        doc = _doc_norm(it.get("documento_formatado") or it.get("documento_numero"))
         if not doc:
             continue
-        atual = grupos.get(doc)
+        venc = it.get("not_after")
         cand = {
-            "documento": it.get("documento") or doc,
+            "documento": it.get("documento_formatado") or it.get("documento_numero") or doc,
             "documento_digitos": doc,
-            "nome": it.get("nome") or "—",
-            "status_ultimo": str(it.get("status_ultimo") or "").lower(),
-            "vencimento_certificado": it.get("vencimento_certificado"),
-            "ultima_data_registrada": it.get("ultima_data_registrada"),
+            "nome": it.get("nome") or it.get("display_name") or "—",
+            "status_ultimo": str(it.get("status") or "").lower(),
+            "vencimento_certificado": venc,
+            "ultima_data_registrada": venc,
         }
+        atual = grupos.get(doc)
         if not atual:
             grupos[doc] = cand
             continue
+
         pa = _status_prioridade(atual.get("status_ultimo", ""))
         pc = _status_prioridade(cand.get("status_ultimo", ""))
         if pc > pa:
             grupos[doc] = cand
             continue
         if pc == pa:
-            da = _parse_dt_or_min(atual.get("ultima_data_registrada"))
-            dc = _parse_dt_or_min(cand.get("ultima_data_registrada"))
+            # Empate: vence o de validade MAIS DISTANTE.
+            #
+            # Entre dois validos, e o que diz ate quando o cliente esta coberto.
+            # Entre dois vencidos, e o que venceu por ultimo — o mais proximo de
+            # ainda valer, e o que a pessoa reconhece.
+            da = _parse_dt_or_min(atual.get("vencimento_certificado"))
+            dc = _parse_dt_or_min(cand.get("vencimento_certificado"))
             if dc > da:
                 grupos[doc] = cand
     return sorted(grupos.values(), key=lambda x: (x.get("nome") or "").lower())
