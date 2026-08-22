@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, config, permissoes, senha_reset
+from app import agent_devices, atividade, auth, auth_supabase, config, permissoes, senha_reset
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -83,6 +83,38 @@ class ContaIndisponivel(RuntimeError):
 
 class ContaInvalida(RuntimeError):
     """A conta que o token nomeia não existe mais no diretório."""
+
+
+def _conta_local_do_email(email: str) -> Optional[dict]:
+    """
+    A linha em `users` deste e-mail, ou None. Não levanta.
+
+    Serve ao login por Supabase Auth: lá a identidade já foi provada, e o que
+    falta saber é se essa pessoa tem perfil NESTE portal. Entrar na lista comum
+    de pessoas não dá acesso aqui — é a diferença entre autenticação e
+    autorização, e é o que impede alguém cadastrado só para o inventário de
+    passar a listar certificados.
+
+    `_conta_da_sessao` não serve: ela levanta `ContaInvalida` quando não acha, o
+    que é certo para uma sessão em curso e errado para uma tentativa de login.
+    """
+    from app.settings_state import _supabase
+
+    sb = _supabase()
+    if not sb:
+        return None
+    try:
+        r = (
+            sb.table("users")
+            .select("id, email, role, ativo, deve_trocar_senha")
+            .eq("email", (email or "").strip().lower())
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Não foi possível ler a conta local de %s: %s", email, e)
+        return None
+    return r.data[0] if r.data else None
 
 
 def _conta_da_sessao(email: str) -> Optional[dict]:
@@ -252,6 +284,30 @@ async def require_auth(
     #    confere no banco se a conta segue existindo, ativa, e com qual papel.
     if auth_creds:
         token_data = auth.decode_access_token(auth_creds.credentials)
+
+        # 1b. Não é token deste portal? Pode ser do Supabase Auth, que passa a
+        #     ser a lista única de pessoas dos dois portais (fase 3).
+        #
+        #     Os dois nunca se confundem: os daqui trazem `iss=robot_cert_portal`
+        #     e `aud=robot_cert_users`, conferidos por `decode_access_token`; o do
+        #     outro é validado contra o servidor do Supabase. Um não passa pelo
+        #     caminho do outro por engano.
+        #
+        #     O token só precisa provar o E-MAIL. Papel, `user_id` e senha
+        #     provisória continuam vindo da linha em `users`, por
+        #     `_sessao_do_token` — inclusive `conta_ativa`, que é o que corta
+        #     acesso aqui de imediato quando alguém é desativado neste portal.
+        #
+        #     `emitido_em` fica None de propósito: `senha_alterada_em` é a marca
+        #     de troca de senha LOCAL, e a senha destas contas não mora mais
+        #     aqui. Derrubar a sessão por ela seria comparar com um evento que
+        #     não pode mais acontecer. Quem revoga sessão do Supabase é o
+        #     Supabase; quem corta acesso a ESTE portal é `conta_ativa`.
+        if token_data is None:
+            email_externo = auth_supabase.email_do_token(auth_creds.credentials)
+            if email_externo:
+                token_data = auth.TokenData(email=email_externo, role=None)
+
         if token_data:
             sessao = _sessao_do_token(token_data)
             # A barreira mora AQUI, e não na tela. Um modal pode ser fechado
@@ -1052,7 +1108,71 @@ def login(body: LoginBody, request: Request) -> dict:
 
     ip = request.client.host if request and request.client else None
     try:
+        # Supabase Auth PRIMEIRO, login local como queda (fase 3).
+        #
+        # Nesta ordem porque quem já tem conta lá tem de entrar por lá — senão
+        # trocar a senha no portal unificado não teria efeito aqui, e ficariam
+        # duas senhas para a mesma pessoa, divergindo em silêncio.
+        #
+        # A queda existe enquanto houver quem só tem conta local: recusá-los no
+        # deploy trancaria gente para fora sem aviso. Sai do log quando a última
+        # conta migrar — é o que permite responder "já dá para desligar?" sem
+        # adivinhar.
+        #
+        # O front não muda: ele guarda no localStorage o token que vier, sem
+        # saber quem o emitiu.
+        externo = auth_supabase.entrar(body.email, body.password)
+        if externo:
+            user = _conta_local_do_email(body.email)
+
+            # Identidade provada não é acesso a ESTE portal. Alguém cadastrado
+            # só para o inventário autentica na lista comum e não tem perfil
+            # aqui — recusar com motivo é melhor que entregar um token que
+            # morreria em 401 na primeira tela, deixando a pessoa achando que o
+            # sistema quebrou.
+            if not user:
+                atividade.registrar(
+                    atividade.EVENTO_LOGIN_NEGADO,
+                    user_id=None,
+                    user_email=(body.email or "").strip().lower(),
+                    client_ip=ip,
+                    contexto={"motivo": "sem_conta_neste_portal"},
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail="Sua conta não tem acesso a este portal. Procure um administrador.",
+                )
+            if not conta_ativa(user):
+                atividade.registrar(
+                    atividade.EVENTO_LOGIN_NEGADO,
+                    user_id=str(user.get("id") or "") or None,
+                    user_email=(body.email or "").strip().lower(),
+                    client_ip=ip,
+                    contexto={"motivo": "conta_desativada"},
+                )
+                raise HTTPException(
+                    status_code=403, detail="Usuário desativado. Procure um administrador."
+                )
+
+            atividade.registrar(
+                atividade.EVENTO_LOGIN,
+                user_id=str(user.get("id") or "") or None,
+                user_email=(body.email or "").strip().lower(),
+                client_ip=ip,
+                contexto={"via": "supabase_auth"},
+            )
+            return {
+                "access_token": externo,
+                "token_type": "bearer",
+                "role": user.get("role"),
+            }
+
         user = _conferir_credenciais(body.email, body.password, ip)
+        if auth_supabase.configurado():
+            logger.warning(
+                "Login local (conta ainda nao migrada para o Supabase Auth): %s",
+                user.get("email"),
+            )
         atividade.registrar(
             atividade.EVENTO_LOGIN,
             user_id=str(user.get("id") or "") or None,
