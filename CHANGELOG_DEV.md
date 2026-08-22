@@ -10,11 +10,11 @@
 
 | Campo              | Valor                                      |
 |--------------------|--------------------------------------------|
-| **Data da última atualização** | 2026-08-20 (2ª sessão)      |
-| **Branch ativa**   | `main` (último: `8059ad9`; a migration de `notificacao_lida` precisa rodar antes do push) |
+| **Data da última atualização** | 2026-08-22                  |
+| **Branch ativa**   | `main`, sincronizada com o origin (último: `7491db0`) |
 | **Versão/Build**   | Deploy Vercel ativo em produção            |
-| **Última tarefa concluída** | Os 8 pontos do `Notificação.txt`: destinatários/marcos/periodicidade configuráveis, resumo único por colaborador, preferência por pessoa e "Li todos" no sino — 781 testes |
-| **Próxima tarefa** | Aplicar a migration `20260820220000_notificacao_lida.sql` e dar push. Depois: as três perguntas de `docs/PLANO_niveis_de_acesso.md` §5 (papel ou usuário; `editar` separado de `apagar`; trilha de auditoria). Segue pendente: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) e obter a `API_KEY` real |
+| **Última tarefa concluída** | Ciclo de design (audit → typeset → extract → polish), a trilha de permissões, e nove ajustes pedidos pelo cliente — incluindo /duplicidades, que estava morta havia 4 dias — 814 testes |
+| **Próxima tarefa** | Nada em aberto por decisão. Da §5 de `docs/PLANO_niveis_de_acesso.md` sobram duas perguntas de granularidade (por usuário; `editar` separado de `apagar`), e a recomendação registrada é **esperar alguém precisar** — decidir granularidade antes da necessidade costuma acertar a errada. Segue pendente e **inaplicável hoje**: validar a coexistência em duas estações (passo 5 de `docs/PLANO_chave_composta_cofre.md`) — o cofre tem 1 máquina, então o defeito que a chave composta previne não pode se manifestar |
 
 ---
 
@@ -41,6 +41,171 @@ robot_cert/
 ---
 
 ## 📋 Registro de Sessões de Desenvolvimento
+
+---
+
+### 🗓️ 2026-08-21/22 — O teste sintético que escondia o defeito
+
+**Objetivo:** fechar a §5 do plano de permissões, rodar um ciclo de design
+completo, e atender uma lista de ajustes do cliente. Treze commits.
+
+O fio da sessão apareceu no fim e explica o resto: **três defeitos sobreviveram
+a rodadas inteiras de medição porque o instrumento estava errado, não o
+raciocínio.** Um deles quatro dias no ar.
+
+---
+
+#### Parte 1 — Auditoria de permissões, e um verificador que mentia (`1936322`, `a40bb67`)
+
+`permissoes` já guardava `alterado_em` e `alterado_por` — quem mexeu **por
+último** naquela célula. Isso não diz o que havia antes: conceder e revogar no
+mesmo dia deixava a linha idêntica à de quem nunca mexeu. `permissoes_trilha`
+guarda o par **(de, para)**, e só das células que MUDARAM — a tela grava a
+matriz inteira a cada Salvar, e sem o diff o histórico registraria cliques em
+vez de decisões.
+
+**A trilha nunca derruba a concessão.** É o oposto da postura estrita de
+auditoria ("sem trilha, sem mudança"), e não cabe aqui: a permissão **é** o
+mecanismo de recuperação de acesso do portal. Travá-la por causa do registro
+cria um modo de falha pior que o previnido. A falha vira ERROR com a contagem e
+o autor.
+
+**`verificar_deploy.py` acusava "há divergência" num deploy saudável.** Cobrava
+`/api/cert-installer/prepare`, removida de propósito em 16/08 (emitia token de
+instalação para um caminho sem uso, e um token É a entrega da chave privada). A
+lista não acompanhou a remoção. **Um verificador que acusa deploy bom treina
+quem o roda a ignorá-lo**, e o próximo alarme — o de verdade — passa junto.
+Invertido: `ROTAS_PROIBIDAS` acusa se a rota reaparecer.
+
+---
+
+#### Parte 2 — O ciclo de design (`39619ef`, `094d385`, `6ce0713`, `2e351f4`)
+
+Detector: **139 → 28 achados**, e os 28 restantes são todos não-defeitos
+verificados (Inter é decisão registrada; os `#555` estão no documento de
+exportação PDF).
+
+**A escala de tipos não estava violada — estava incompleta.** 36 tamanhos
+distintos para 7 papéis, dezenove deles entre 10 e 15px: `0.78rem`, `0.8rem`,
+`0.8125rem` e `0.82rem` cobriam **0,6px**. E o mesmo `<h2>` de seção media
+16.8, 17.6, 18.4, 19.2 ou 20px conforme a tela.
+
+A causa estava nos dois lados: o DESIGN.md declarava um ramo, as classes
+`.text-*` que o implementavam tinham **ZERO uso**, e a hierarquia real vinha de
+literais soltos. **Um ramo que ninguém apontava e uma escala que ninguém
+declarou.** Dez tokens com nome de papel, 139 declarações apontando para eles, e
+`h1`/`h2`/`h3` herdando — porque 21 títulos em 6 telas não tinham regra e caíam
+no `1.5em` do navegador.
+
+**No `polish` apaguei as dez classes que eu tinha acabado de arrumar.** No
+`extract` ficou claro por que nunca tiveram uso: esta base não consome classe
+utilitária — um componente escreve `var(--fs-ui)` na própria regra. Renomear e
+depois remover em dois commits é churn que eu criei; está registrado no commit.
+
+**O `hidden` que não escondia**, achado por um teste que eu escrevi para outra
+coisa: `[hidden]` da folha do navegador tem especificidade zero, e o projeto já
+o remendara **três vezes**, uma classe por vez. A quarta vítima era o campo
+"Senha inicial", desenhado também ao EDITAR um usuário — `offsetHeight` de 68px
+com o atributo presente. Quem digitasse uma senha nova ali receberia "Usuário
+atualizado" e acreditaria.
+
+---
+
+#### Parte 3 — Os pedidos do cliente (`abfa47e`…`9c0d36d`, `7491db0`)
+
+**O menu piscava, e a regressão era minha**, de 20/08: ao ligar o menu à matriz
+troquei um `localStorage` síncrono por um `fetch`. Medido: 88ms de mediana
+local, 216 no pior caso — e na Vercel com cold start, muito pior. Cache por
+pessoa aplicado antes da pintura; a rede confirma depois.
+
+**Erro e falha saíram do Início.** Contra o banco real: 569 → 516, 23 páginas →
+21. Antes de esconder, conferi que o /dashboard já os apresenta como
+"ilegíveis" — senão eu estaria apagando 53 certificados da vista de todos, e o
+princípio 3 do PRODUCT.md diz que "não consegui saber" nunca vira "não há
+nada". A exclusão é **opt-in**: o mesmo endpoint atende o `diagnostico.py`, que
+existe para achar arquivo ilegível.
+
+**Ordenação por cabeçalho**, no servidor e antes de paginar, com ciclo de três
+estados. E **`inativar` passou a zerar a carteira** — mas só depois de um fato
+mudar a premissa: `require_auth` já recusa conta inativa com 401, então não
+havia brecha, e apagar virou higiene. Como é irreversível, a confirmação mostra
+a contagem antes.
+
+**A aba de alertas** virou três blocos com nome, na ordem da pergunta. TLS e SSL
+viraram **um select**: eram dois checkboxes independentes que `validate_smtp_config`
+recusa juntos com 422 — a tela convidava a montar um estado impossível.
+
+**E o cliente apontou dois vícios meus.** "Por que existe Remetente se o usuário
+do SMTP já é um e-mail?" — porque `from_email or user`, o campo é opcional e
+serve só para o nome de exibição; o rótulo é que mentia. E "tanto texto
+informativo faz parecer feito por IA" — certo: 4.404 caracteres de explicação no
+portal, 1.372 só na aba de alertas. Cortados para 3.679 e 781, pelo critério
+**"fica só o que carrega consequência que o rótulo não carrega"**.
+
+---
+
+#### O fio: três defeitos que a medição escondeu
+
+**(1) O espaço em branco não era a tabela.** O cliente relatou duas vezes;
+consertei a coisa errada na primeira. Eram **cinco `<span class="cg-sr-only">`**
+— texto para leitor de tela — com `position: absolute` ancorados no
+`.table-scroll-anchor`, **fora da área que recorta**. O `overflow` não os
+alcançava e a página crescia até o span mais fundo: `top: 5.938px`, página de
+**7.262px com 6.312px de rolagem vazia**. Mais itens por página, mais fundo os
+spans, mais vazio — exatamente a correlação relatada.
+
+**Por que passou por duas rodadas:** nos meus testes eu injetava linhas falsas
+no `<tbody>` para medir o layout, e **elas não tinham esses spans** — só
+aparecem em certificado que não pode ser instalado. O teste sintético mascarava
+o defeito que eu procurava, e me deu números "constantes" que li como "está
+tudo bem". O que virou a chave foi pôr `overflow: hidden` no scroll: a página
+**não** encolheu; esvaziar o `<tbody>` encolheu. Só escapa de um clipe quem tem
+bloco de contenção fora dele.
+
+**(2) /duplicidades estava morta havia 4 dias.** Um comentário HTML dentro de
+uma template literal, com crases em volta de `` `tabindex="0"` `` — e crase
+dentro de template literal fecha a string. O `<script>` inteiro não compilava.
+**Nenhum dos 800 testes pegava, e não é descuido deles: todos testam o
+SERVIDOR**, que respondia 200 com o HTML certo. O que estava quebrado só existia
+depois, no navegador. `test_js_dos_templates.py` compila o JS de cada template
+com `node --check`.
+
+**(3) A medição mentiu quatro vezes.** Viewport reportando 0×0 (só não saí
+consertando CSS porque medi um vizinho antes); `zoom` corrompendo
+`getBoundingClientRect`; CSP bloqueando script em documento sintético, deixando
+`initSidebarPorPapel` como `undefined`; e um "86ch" que era erro do meu
+estimador, não do CSS — o valor real era 68 exatos.
+
+---
+
+#### Outras armadilhas
+
+- **Colisão de nome, duas vezes.** `.msg-erro` já existia em `login.html` como
+  banner preenchido — as duas regras se somavam em silêncio. E `_nomes()` já
+  existia em `test_ordem_alfabetica.py` com outra assinatura; o meu sobrescreveu
+  e quebrou 10 testes.
+- **Falso positivo do meu próprio scan.** Os quatro `.toast-*` apareceram como
+  órfãos: o JS monta `toast-item toast-${type}` por interpolação, que regex
+  nenhum enxerga. **Se eu tivesse agido pela lista sem conferir, teria apagado o
+  estilo dos quatro tipos de toast.**
+- **`min-height` não limita nada.** Primeira tentativa de encher a tabela fez
+  ela empurrar a página com 4.967px de rolagem — pior que o problema.
+- **Ordenação decrescente jogava os sem-data para o TOPO**, porque o `reverse`
+  inverte também o marcador de ausente. Achado pelo meu próprio teste **porque
+  ele afirmava a invariante nas duas direções**; com uma só, teria passado.
+
+---
+
+#### Estado ao fim
+
+`main` em `7491db0`, **814 testes**, tudo em produção. Cinco migrations
+aplicadas nas duas sessões. `/duplicidades`, o menu e o salvamento em
+Acompanhamento confirmados pelo cliente.
+
+**A lição que fica:** os testes deste projeto são fortes onde olham — o servidor
+— e eram cegos para o navegador. Dois dos três defeitos desta sessão viviam
+exatamente nesse ponto cego, e um deles quatro dias. `test_js_dos_templates.py`
+e `test_atributo_hidden.py` são os primeiros testes que olham para o outro lado.
 
 ---
 
