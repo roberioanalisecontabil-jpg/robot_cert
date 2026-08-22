@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=tabela-cheia-2026-08b" />
+    <link rel="stylesheet" href="/static/style.css?v=sem-ilegiveis-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       /* .barra-selecao migrou para o style.css em 18/08: a aba Seleção do
          Acompanhamento passou a usá-la, e regra compartilhada dentro do
@@ -67,29 +67,16 @@
           </div>
         </div>
 
-        <div class="dashboard-card card-erros">
-          <div class="card-info">
-            <span class="card-title">Erro</span>
-            <span class="card-number" id="n-erros">0</span>
-          </div>
-          <div class="card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-          </div>
-        </div>
+        <!-- Os cards de Erro e de Falha (sem padrao) sairam daqui em 21/08.
 
-        <div class="dashboard-card card-sem-padrao">
-          <div class="card-info">
-            <span class="card-title">Falha (sem padrão)</span>
-            <span class="card-number" id="n-sem-padrao">0</span>
-          </div>
-          <div class="card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-            </svg>
-          </div>
-        </div>
+          Nao e informacao para quem veio buscar um certificado: arquivo que o
+          robo nao consegue ler nunca vai ao cofre e nunca e instalavel, entao
+          ocupa espaco na tela sem oferecer acao a quem esta nela.
+
+          Nao ficam invisiveis. O /dashboard ja os apresenta somados sob o
+          rotulo "ilegiveis", com a nota "arquivo(s) que o robo nao consegue
+          ler", e essa tela e restrita pela matriz de permissoes — que e
+          exatamente o publico tecnico que trata disso. -->
       </div>
 
       <!-- Tabela -->
@@ -106,8 +93,6 @@
               <option value="todos">Todos</option>
               <option value="validos">Ativo</option>
               <option value="prestes_vencer">Expirando</option>
-              <option value="erros">Erro</option>
-              <option value="sem_padrao">Falha (sem padrão)</option>
             </select>
             <label for="busca-cert" class="cg-sr-only">Buscar certificado por nome, CNPJ ou CPF</label>
             <input class="form-control campo-busca"
@@ -300,15 +285,15 @@
         let okCount = 0;
         let expirandoCount = 0;
         let vencidosCount = 0;
-        let erroCount = 0;
-        let semPadraoCount = 0;
+        let ilegivelCount = 0;
         items.forEach((it) => {
           if (it.status === "expirado" || it._isExpiredByDate) {
             vencidosCount++;
-          } else if (it.status === "erro") {
-            erroCount++;
-          } else if (it.status === "fora_do_padrao") {
-            semPadraoCount++;
+          } else if (it.status === "erro" || it.status === "fora_do_padrao") {
+            // Contados e nao exibidos: o servidor ja os exclui, entao isto so
+            // roda no caminho sem paginacao (fonte local). Mantido para a soma
+            // continuar fechando com o total.
+            ilegivelCount++;
           } else if (it.status === "ok") {
             if (it._isExpiringSoon) expirandoCount++;
             else okCount++;
@@ -317,8 +302,6 @@
         document.getElementById("n-tot").textContent = total;
         document.getElementById("n-ok").textContent = okCount;
         document.getElementById("n-exp-soon").textContent = expirandoCount;
-        document.getElementById("n-erros").textContent = erroCount;
-        document.getElementById("n-sem-padrao").textContent = semPadraoCount;
       }
 
       function atualizarCardsResumo(r) {
@@ -326,8 +309,6 @@
         document.getElementById("n-tot").textContent = r.total ?? 0;
         document.getElementById("n-ok").textContent = r.validos ?? 0;
         document.getElementById("n-exp-soon").textContent = r.expirando ?? 0;
-        document.getElementById("n-erros").textContent = r.erros ?? 0;
-        document.getElementById("n-sem-padrao").textContent = r.sem_padrao ?? 0;
       }
 
 
@@ -594,6 +575,11 @@
             filtro_status: document.getElementById("filtro-status")?.value || "todos",
             busca: document.getElementById("busca-cert")?.value || "",
             todas_filtradas: "true",
+            // O arquivo exportado precisa conter o que a tela mostra. Sem esta
+            // linha, exportar de uma tela sem ilegiveis produziria uma planilha
+            // COM eles — e a divergencia so apareceria depois, na mao de quem
+            // recebesse o arquivo.
+            ocultar_ilegiveis: "true",
           });
           const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
           if (r.status === 401) {
@@ -726,6 +712,10 @@
             por_pagina: String(porPaginaDashboard()),
             filtro_status: document.getElementById("filtro-status")?.value || "todos",
             busca: document.getElementById("busca-cert")?.value || "",
+            // O Inicio nao lista certificado ilegivel — ver o comentario nos
+            // cards. Vai ao servidor porque a paginacao e a contagem sao de la:
+            // filtrar no cliente daria pagina de 100 com 91 linhas.
+            ocultar_ilegiveis: "true",
           });
           const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
           if (r.status === 401) {

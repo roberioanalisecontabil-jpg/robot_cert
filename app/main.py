@@ -627,6 +627,18 @@ def _dashboard_filtro_status_match(row: dict, filtro: str) -> bool:
     return True
 
 
+# Status que significam "o robo NAO conseguiu ler este arquivo": ou a leitura
+# falhou (`erro`), ou o nome nao segue a convencao que carrega a senha do PFX
+# (`fora_do_padrao`). Nos dois casos o certificado nunca vai ao cofre e nunca e
+# instalavel pelo portal — e por isso nao ajuda quem veio buscar um certificado
+# para usar.
+STATUS_ILEGIVEIS = ("erro", "fora_do_padrao")
+
+
+def _e_ilegivel(row: dict) -> bool:
+    return str(row.get("status") or "").lower() in STATUS_ILEGIVEIS
+
+
 def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
     if not str(q_raw or "").strip():
         return True
@@ -2413,6 +2425,10 @@ def listar_certificados(
     filtro_status: str = Query("todos", description="todos | validos | prestes_vencer | vencidos | erros"),
     busca: Optional[str] = Query(None, max_length=400),
     todas_filtradas: bool = Query(False, description="Exportação: todos os itens do filtro (até LISTAGEM_EXPORT_MAX)"),
+    ocultar_ilegiveis: bool = Query(
+        False,
+        description="Exclui erro e fora_do_padrao da lista, da contagem e da exportação",
+    ),
 ) -> JSONResponse:
     """
     * auto: usa o último snapshot ingerido se existir; senão leitura local.
@@ -2435,10 +2451,20 @@ def listar_certificados(
         now = datetime.now(timezone.utc)
         thirty = now + timedelta(days=30)
         enriched = [_enrich_cert_item_dashboard_flags(it, now, thirty) for it in (base.get("itens") or [])]
+        # A exclusao entra AQUI, junto dos outros filtros, e nao depois: daqui
+        # saem a listagem, o `resumo` dos cards, a contagem de paginas e a
+        # exportacao. Filtrar mais tarde daria uma pagina de 100 com 91 linhas e
+        # cards que nao batem com a tabela.
+        #
+        # `ocultar_ilegiveis` e OPT-IN. O mesmo endpoint atende o
+        # `scripts/diagnostico.py`, que existe justamente para achar arquivo
+        # ilegivel — mudar o padrao cegaria a ferramenta de diagnostico.
         filtered = [
             it
             for it in enriched
-            if _dashboard_filtro_status_match(it, filtro_status) and _dashboard_busca_match(it, busca or "")
+            if _dashboard_filtro_status_match(it, filtro_status)
+            and _dashboard_busca_match(it, busca or "")
+            and not (ocultar_ilegiveis and _e_ilegivel(it))
         ]
         resumo = _dashboard_resumo_counts(filtered)
 
