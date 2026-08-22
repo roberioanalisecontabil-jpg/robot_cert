@@ -2720,9 +2720,104 @@ body.sidebar-open .sidebar-backdrop {
 
 .table-scroll {
   overflow: auto;
+  /* Teto de seguranca para as telas que NAO optam por preencher (o painel do
+     Instalador, a trilha). Nas que optam, `--cheia` abaixo o remove. */
   max-height: min(68vh, 760px);
   scrollbar-gutter: stable;
 }
+
+/* ==========================================================================
+   TABELA QUE PREENCHE A ALTURA DISPONIVEL  (opt-in: .table-container--cheia)
+   --------------------------------------------------------------------------
+   O teto de `68vh` existia por um bom motivo — sem altura, o wrapper nao rola
+   e o cabecalho nao gruda — mas tinha um efeito que ninguem mediu: a janela da
+   tabela ficava do MESMO tamanho para 10 ou para 100 itens por pagina.
+
+   Medido em 21/08 numa janela de 643px: janela de 437px constante, com 5.145px
+   de conteudo dentro quando a pessoa escolhia 100. Ou seja, escolher "100 por
+   pagina" mudava o tamanho da barra de rolagem e mais nada — continuavam
+   visiveis seis linhas — e sobrava faixa vazia embaixo, que foi como o defeito
+   chegou ate aqui: "a pagina aumenta e fica uma area vazia enorme".
+
+   A correcao troca o teto fixo por "o que sobrar": a cadeia de flex leva a
+   altura do viewport ate o `.table-scroll`. O cabecalho continua grudando
+   (o wrapper segue sendo o scrollport), a paginacao continua visivel abaixo,
+   e a rolagem horizontal continua interna — que e o que a regra do DESIGN.md
+   protege.
+
+   `min-height: 0` em cada elo NAO e decoracao: item de flex tem
+   `min-height: auto`, entao sem isso cada um se recusa a encolher abaixo do
+   proprio conteudo e a tabela empurra a pagina em vez de rolar por dentro.
+
+   Opt-in por classe, e nao global: /duplicidades empilha TRES tabelas no mesmo
+   container — dividir o viewport entre elas seria outro desenho, nao esta
+   correcao —, e /configuracao e /dashboard nao tem tabela que role. */
+/* Acima de 768px apenas. Abaixo disso a tabela vira lista de cards e o desenho
+   ja diz que "os cards rolam com a pagina" — prender isso num viewport de
+   altura fixa criaria um scroller aninhado justamente onde ele foi removido de
+   proposito. */
+@media (min-width: 769px) {
+
+.main-content:has(.table-container--cheia) {
+  display: flex;
+  flex-direction: column;
+  /* `height`, e nao `min-height`.
+     Foi o erro da primeira tentativa: com `min-height: 100vh` a coluna cresce
+     junto com o conteudo, o filho recebe tudo o que pede, e a tabela voltou a
+     empurrar a pagina — 5.145px de tabela e 4.967px de rolagem. Minimo nao
+     limita nada; para o filho encolher, o pai precisa de teto. */
+  height: 100vh;
+}
+
+/* Cabecalho e cards mantem a altura natural; so a tabela estica. */
+.main-content:has(.table-container--cheia) > .page-header,
+.main-content:has(.table-container--cheia) > .cards-grid {
+  flex: none;
+}
+
+.table-container--cheia {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* Telas com abas (Acompanhamento): o painel visivel e mais um elo da cadeia.
+   O escondido esta em `display: none` e nao participa do flex. */
+.table-container--cheia > section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.table-container--cheia .table-scroll-anchor {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-container--cheia .table-scroll {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* A paginacao fica colada embaixo da tabela, e nao empurrada pelo estica. */
+.table-container--cheia .cg-page-nav {
+  flex: none;
+}
+
+/* Piso: numa janela baixa, cabecalho + cards + toolbar podem consumir a altura
+   toda e a tabela ficaria com zero. Oito linhas e o minimo para a tabela ainda
+   ser uma tabela. Se nao couber, a pagina volta a rolar — que e o
+   comportamento correto quando nao ha espaco, e nao um bug. */
+.table-container--cheia .table-scroll {
+  min-height: 22rem;
+}
+
+}  /* @media (min-width: 769px) */
 
 /* Região rolável precisa ser alcançável por teclado (WCAG 2.1.1) */
 .table-scroll:focus-visible {
