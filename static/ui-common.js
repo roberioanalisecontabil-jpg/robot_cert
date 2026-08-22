@@ -11,6 +11,8 @@
 
 const KEY_STORAGE = "cert_robot_api_key"; // Agora armazena o Token JWT
 const FONT_STORAGE = "cert_robot_data_fonte";
+// Formato: {email, modulos}. Ver `initSidebarPorPapel` para o porque do e-mail.
+const MENU_CACHE_STORAGE = "cg_menu_modulos";
 const SIDEBAR_COLLAPSED_STORAGE = "analise_certidigital_sidebar_collapsed";
 
 function getDataFonte() {
@@ -40,6 +42,8 @@ function logout() {
   localStorage.removeItem(KEY_STORAGE);
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_email');
+  // O cache do menu descreve o que UMA pessoa alcanca. Sai junto com ela.
+  localStorage.removeItem(MENU_CACHE_STORAGE);
   window.location.href = '/login';
 }
 
@@ -79,22 +83,64 @@ function initSidebarPorPapel() {
     configuracao: "nav-config",
   };
 
+  function aplicar(modulos) {
+    for (const [modulo, id] of Object.entries(MENU_POR_MODULO)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.style.display = modulos[modulo] !== "nenhum" ? "flex" : "none";
+    }
+  }
+
+  // ── 1. Cache: sincrono, sem rede ────────────────────────────────────────
+  //
+  // Sem isto o menu PISCA a cada navegacao, e o defeito foi introduzido em
+  // 20/08 junto com a matriz: os cinco itens restritos nascem com
+  // `display: none` no HTML, e ate 20/08 eram revelados por um
+  // `localStorage.getItem("user_role")` — sincrono, no mesmo quadro. Ao trocar
+  // isso por `fetch`, cada clique no menu passou a mostrar metade dos itens,
+  // esperar uma ida a rede e so entao completar. Para o admin, que alcanca os
+  // dez, o salto e maximo; num cold start da Vercel, longo.
+  //
+  // Guardado POR PESSOA: a estacao e compartilhada neste escritorio, e um cache
+  // solto faria o proximo a entrar ver por um instante o menu de quem saiu.
+  // Chave errada e o mesmo que cache vazio — cai no comportamento de antes.
+  let cache = null;
+  try {
+    const bruto = JSON.parse(localStorage.getItem(MENU_CACHE_STORAGE) || "null");
+    if (bruto && bruto.email && bruto.email === localStorage.getItem("user_email")) {
+      cache = bruto.modulos;
+    }
+  } catch (_e) {
+    // JSON corrompido: segue sem cache, que e o caminho lento e correto.
+  }
+  if (cache) aplicar(cache);
+
+  // ── 2. Rede: confirma ou corrige ────────────────────────────────────────
+  //
+  // Roda sempre, inclusive com cache aplicado. Permissao revogada continua
+  // aparecendo no menu ate esta resposta chegar — e isso e aceitavel pelo que
+  // ja estava escrito acima: o menu e conveniencia, `require_modulo` e a
+  // barreira. Um item obsoleto por 200ms leva a um 403, nao a um acesso.
   fetch("/api/permissoes/minhas", { headers: getHeaders() })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
     .then((dados) => {
-      for (const [modulo, id] of Object.entries(MENU_POR_MODULO)) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        const alcanca = (dados.modulos || {})[modulo] !== "nenhum";
-        el.style.display = alcanca ? "flex" : "none";
+      const modulos = dados.modulos || {};
+      aplicar(modulos);
+      try {
+        localStorage.setItem(
+          MENU_CACHE_STORAGE,
+          JSON.stringify({ email: localStorage.getItem("user_email"), modulos })
+        );
+      } catch (_e) {
+        // Cota cheia ou modo privado: o menu funciona igual, so volta a piscar.
       }
     })
     .catch(() => {
-      // Falha de rede ou 503: NÃO mexe em nada, e o menu fica como o HTML o
-      // entregou — itens restritos escondidos (`display: none` no partial) e
-      // itens abertos visíveis. É exatamente o comportamento anterior a esta
-      // mudança, então uma indisponibilidade degrada para o menu de ontem em
-      // vez de para um menu vazio, que pareceria perda de acesso.
+      // Falha de rede ou 503: NÃO mexe em nada. Com cache, o menu fica no
+      // ultimo estado conhecido daquela pessoa; sem cache, fica como o HTML o
+      // entregou — restritos escondidos, abertos visiveis. Nos dois casos
+      // degrada para algo que ja foi verdade, e nunca para um menu vazio, que
+      // pareceria perda de acesso.
     });
 }
 

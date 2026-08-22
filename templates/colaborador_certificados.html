@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/static/style.css?v=polimento-2026-08" />
+  <link rel="stylesheet" href="/static/style.css?v=tabela-cheia-2026-08b" />
   <style>
     .tab-container-navigation {
       display: flex;
@@ -113,7 +113,7 @@
       <p>Escolha os certificados a acompanhar e veja o painel com vencimentos.</p>
     </header>
 
-    <div class="table-container" id="table-container-colab">
+    <div class="table-container table-container--cheia" id="table-container-colab">
       <div class="tab-container-navigation">
         <button type="button" id="tab-painel" class="tab-btn active">Painel</button>
         <button type="button" id="tab-selecao" class="tab-btn">Seleção de Certificados</button>
@@ -308,7 +308,7 @@
     </div>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=li-todos-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
   <script nonce="{{ request.state.nonce }}">
     function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
     // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
