@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=alertas-redesenhados-2026-08c" />
+    <link rel="stylesheet" href="/static/style.css?v=menos-texto-2026-08" />
     <style>
       .tab-container-navigation {
         display: flex;
@@ -109,7 +109,7 @@
         <section id="sec-pastas" style="display: none;">
           <h2 style="margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
           <p class="hint">
-            Estes caminhos são a referência para o <strong>agente</strong>. O agente lê daqui para monitorar pastas usando o Watchdog.
+            O <strong>agente</strong> lê estes caminhos para saber que pastas monitorar.
           </p>
           <div class="panel--nested">
             <div class="row">
@@ -186,10 +186,6 @@
              de quatro botoes no rodape. -->
         <section id="sec-smtp" style="display: none;">
           <h2 style="margin: 0 0 0.5rem;">Alertas por e-mail</h2>
-          <p class="hint">
-            O portal avisa antes de um certificado vencer. Configure aqui se ele
-            envia, por qual servidor, e para quem.
-          </p>
 
           <!-- O interruptor sai do meio da lista e vira o cabecalho.
 
@@ -208,10 +204,6 @@
           <!-- ── Bloco 1: por onde sai ─────────────────────────────────── -->
           <section class="panel--nested cfg-bloco">
             <h3>Servidor de e-mail</h3>
-            <p class="hint">
-              A conta por onde as mensagens saem. O portal guarda a senha cifrada
-              e nunca a devolve para a tela.
-            </p>
 
             <div class="cfg-grade">
               <div class="row">
@@ -236,9 +228,9 @@
             </div>
 
             <div class="row">
-              <label for="inp-smtp-from">Remetente</label>
+              <label for="inp-smtp-from">Nome do remetente</label>
               <input type="text" id="inp-smtp-from" class="path-input" placeholder="Monitor de Certificados &lt;alertas@empresa.com&gt;" />
-              <span class="hint">Como o destinatário vê quem enviou.</span>
+              <span class="hint" id="smtp-from-efetivo"></span>
             </div>
 
             <!-- Um controle, e nao dois.
@@ -267,9 +259,8 @@
           <section class="panel--nested cfg-bloco">
             <h3>Para quem, e quando</h3>
             <p class="hint">
-              Vale para o resumo do portal — a lista com os certificados a vencer
-              e os vencidos. Os avisos que cada pessoa recebe dos certificados que
-              acompanha continuam indo para ela.
+              Vale para o resumo do portal. Os avisos que cada pessoa recebe dos
+              certificados que acompanha não mudam.
             </p>
 
             <div class="row">
@@ -282,9 +273,9 @@
                    certificados de clientes. Um endereço digitado aqui não tem
                    conta para ser desativada. -->
               <p class="cfg-aviso">
-                Um endereço que não pertence a uma conta do portal continua recebendo
-                mesmo que a pessoa saia da empresa — não há conta para desativar.
-                O resumo traz nome, CNPJ/CPF e vencimento de certificados de clientes.
+                Endereço de fora do portal continua recebendo mesmo depois que a
+                pessoa sai da empresa — não há conta para desativar. O resumo traz
+                dados de certificados de clientes.
               </p>
             </div>
 
@@ -305,15 +296,10 @@
                 </select>
               </div>
             </div>
-            <span class="hint">
-              É o intervalo entre duas verificações, e não um horário de disparo.
-              Cada certificado só gera um e-mail por marco — verificar mais vezes
-              não multiplica mensagens, apenas encurta a espera até o aviso sair.
-            </span>
+            <span class="hint">Intervalo entre verificações, não horário de disparo.</span>
 
             <div class="linha-acoes cfg-bloco__acoes">
               <button type="button" id="btn-trigger-alerts">Disparar agora</button>
-              <span class="hint">Ignora o intervalo e roda a verificação uma vez.</span>
             </div>
           </section>
 
@@ -448,6 +434,13 @@
           document.getElementById("smtp-pass-status").textContent = s.smtp_password_set ? "Sim" : "Não";
           document.getElementById("smtp-pass-status").style.color = s.smtp_password_set ? "var(--ok)" : "var(--expired)";
           document.getElementById("inp-smtp-from").value = s.smtp_from_email || "";
+          // Diz o valor QUE VALE, em vez de explicar o conceito. O campo existe
+          // so pelo nome de exibicao: `send_smtp_email` faz `from_email or user`,
+          // entao vazio nao e um estado quebrado — e o padrao.
+          document.getElementById("smtp-from-efetivo").textContent =
+            (s.smtp_from_email || "").trim()
+              ? ""
+              : "Vazio: usa " + (s.smtp_user || "o usuário acima") + ".";
           // Dois booleanos do servidor viram UMA escolha na tela. Os dois
           // marcados nunca deveriam existir (`validate_smtp_config` recusa),
           // mas se vierem assim de um banco antigo, STARTTLS ganha — e o

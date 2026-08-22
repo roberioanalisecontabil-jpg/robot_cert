@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=alertas-redesenhados-2026-08c" />
+    <link rel="stylesheet" href="/static/style.css?v=menos-texto-2026-08" />
     <style nonce="{{ request.state.nonce }}">
       /* min(320px, 100%): sem a guarda, o mínimo fixo estoura a página em
          telas de 320px (mesma razão do .cards-grid global). */
@@ -225,9 +225,10 @@
           `<th>Falhas</th><th>Última atividade</th>` +
           `<th><span class="cg-sr-only">Situação</span></th>` +
           `</tr></thead><tbody>${linhas}</tbody></table></div>` +
-          `<p class="painel__nota">Eventos discretos, não tempo de sessão: neste portal ` +
-          `a tarefa dura menos de um minuto, e permanência longa indicaria que a pessoa ` +
-          `não achou o que queria — não engajamento.</p>`;
+          // O PORQUE de medir evento em vez de permanencia esta no PRODUCT.md e
+          // no CHANGELOG. Aqui fica so o QUE o numero e — quem le um painel
+          // quer entender o dado, nao a decisao de quem o desenhou.
+          `<p class="painel__nota">Eventos discretos, não tempo de sessão.</p>`;
       }
 
       function renderRenovacoes(d) {
