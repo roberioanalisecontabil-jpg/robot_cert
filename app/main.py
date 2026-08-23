@@ -5186,8 +5186,68 @@ def preparar_instalacao(
     return {
         "status": "ok",
         "machine_id": machine_id,
+        # O ID do REGISTRO, nunca o token em si: e por ele que a tela acompanha
+        # o desfecho. O token e a entrega da chave privada e nao volta para o
+        # navegador — ver `/acompanhar`.
+        "token_id": token_id,
         "expires_at": expires_at.isoformat() if expires_at else None,
         "validade_min": config.CERT_INSTALL_TOKEN_TTL_MIN,
+    }
+
+
+@app.get("/api/cert-installer/acompanhar/{token_id}")
+def acompanhar_instalacao(
+    token_id: str, token: auth.TokenData = Depends(require_auth)
+) -> dict:
+    """
+    Em que pe esta aquele pedido de instalacao.
+
+    Existe porque a tela mentia por omissao: dizia "Pedido enviado" e nunca mais
+    voltava ao assunto. O desfecho ficava no `install_log` ou na janela do
+    agente — dois lugares onde quem clicou nao esta.
+
+    ── Escopo ────────────────────────────────────────────────────────────
+
+    `user_email` do proprio requisitante, sempre. Um token de instalacao e a
+    entrega de uma chave privada; saber o andamento do pedido de outra pessoa
+    ja diz demais — quem, quando, para qual maquina.
+
+    ── Desfechos ─────────────────────────────────────────────────────────
+
+    `aguardando` cobre dois casos que a tela apresenta igual mas sao diferentes
+    por dentro: o pedido acabou de sair, ou o agente ainda nao acordou. Nao
+    distinguimos aqui de proposito — a pessoa nao pode fazer nada diferente num
+    caso ou no outro, e um "o agente esta dormindo" so geraria ansiedade.
+    """
+    email = (token.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    try:
+        cadeias = cert_installer.cadeias_de_instalacao(user_email=email)
+    except Exception:
+        logger.exception("Falha ao consultar o andamento da instalação")
+        # 200 com "desconhecido", e nao 500: a tela pergunta isto em laco, e um
+        # erro faria a pessoa ver um alarme por causa de uma consulta que ela
+        # nem sabe que existe. O certificado pode ter entrado.
+        return {"desfecho": "desconhecido", "parou_em": None, "detalhe": ""}
+
+    cadeia = next((c for c in cadeias if str(c.get("token_id")) == str(token_id)), None)
+    if not cadeia:
+        return {"desfecho": "aguardando", "parou_em": None, "detalhe": ""}
+
+    desfecho = cadeia.get("desfecho") or "incompleto"
+    eventos = cadeia.get("eventos") or []
+    detalhe = ""
+    for e in reversed(eventos):
+        if e.get("detail"):
+            detalhe = str(e["detail"])
+            break
+
+    return {
+        "desfecho": "aguardando" if desfecho == "incompleto" else desfecho,
+        "parou_em": cadeia.get("parou_em"),
+        "detalhe": detalhe,
     }
 
 

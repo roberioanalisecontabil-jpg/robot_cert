@@ -546,6 +546,55 @@
         }
       }
 
+      // A tela mentia por omissao: dizia "Pedido enviado" e nunca mais voltava
+      // ao assunto. O desfecho ficava no log do portal ou na janela do agente —
+      // dois lugares onde quem clicou nao esta.
+      //
+      // Trinta tentativas de 2s = 1 minuto. A instalacao real levou 37s do
+      // clique ao certificado no perfil; um minuto cobre isso com folga, e
+      // desistir depois disso e honesto: passou desse tempo, alguma coisa nao
+      // esta indo, e a pessoa precisa saber ONDE olhar em vez de ficar vendo
+      // uma barrinha girar.
+      const ACOMPANHAR_TENTATIVAS = 30;
+      const ACOMPANHAR_INTERVALO_MS = 2000;
+
+      async function acompanharInstalacao(tokenId) {
+        if (!tokenId) return;
+        for (let i = 0; i < ACOMPANHAR_TENTATIVAS; i++) {
+          await new Promise((r) => setTimeout(r, ACOMPANHAR_INTERVALO_MS));
+          let d;
+          try {
+            const r = await fetch(
+              `/api/cert-installer/acompanhar/${encodeURIComponent(tokenId)}`,
+              { headers: getHeaders() }
+            );
+            if (!r.ok) continue;
+            d = await r.json();
+          } catch (e) {
+            continue;  // instabilidade de rede nao e desfecho
+          }
+
+          if (d.desfecho === "concluido") {
+            showToast("Certificado instalado nesta máquina.", "success");
+            return;
+          }
+          if (d.desfecho === "falhou") {
+            // O motivo vem da trilha, que recebeu o relato do agente. Sem ele a
+            // pessoa saberia que falhou e nao o que fazer.
+            showToast(
+              "A instalação falhou: " + (d.detalhe || "motivo não informado pelo agente."),
+              "error"
+            );
+            return;
+          }
+        }
+        showToast(
+          "O agente ainda não confirmou a instalação. Abra o Hardlyze Agent " +
+            "nesta máquina para ver o histórico.",
+          "warning"
+        );
+      }
+
       async function instalarNaEstacao() {
         if (!_estacao) return;
         const btn = document.getElementById("btnInstalarAqui");
@@ -571,13 +620,11 @@
           // "Pedido enviado" e nao "instalado": quem instala e o agente, em
           // segundos. Prometer o que ainda nao aconteceu faria a pessoa achar
           // que falhou quando o certificado demorasse dez segundos.
-          showToast(
-            "Pedido enviado. O agente vai instalar e avisar nesta maquina.",
-            "success"
-          );
+          showToast("Pedido enviado. Acompanhando a instalação…", "info");
           _selecao.clear();
           sincronizarCheckboxesDaPagina();
           atualizarBarraSelecao();
+          acompanharInstalacao(d.token_id);
         } catch (e) {
           showToast("Nao foi possivel instalar: " + e.message, "error");
         } finally {
