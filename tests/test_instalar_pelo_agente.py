@@ -163,3 +163,89 @@ def test_a_configuracao_e_conferida_antes_de_emitir_token(
 
     assert _pedir(client).status_code == 503
     assert emitidos == [], "emitiu token mesmo sem ter para quem mandar"
+
+
+# ── 4. "Onde estou?" — e o que acontece quando não dá para saber ─────────
+
+def _minha_estacao(client: TestClient):
+    return client.get("/api/cert-installer/minha-estacao", headers=_h())
+
+
+def test_sem_ponte_configurada_o_botao_nao_aparece(client: TestClient) -> None:
+    """Estado em que este commit entra em produção: nada muda no Início."""
+    r = _minha_estacao(client)
+    assert r.status_code == 200
+    assert r.json()["disponivel"] is False
+    assert r.json()["motivo"] == "nao_configurado"
+
+
+def test_portal_de_inventario_fora_do_ar_nao_derruba_o_inicio(
+    client: TestClient, cenario
+) -> None:
+    """
+    O teste que importa nesta rota.
+
+    Uma indisponibilidade do outro portal não pode quebrar a tela onde todo
+    mundo aterrissa depois do login. Ela apenas faz o botão não aparecer, e a
+    pessoa cai no caminho do .exe — que é o que ela já fazia antes de tudo isto
+    existir. Degradar para o caminho antigo é diferente de quebrar.
+    """
+    import httpx
+
+    def _explode(*_a, **_k):
+        raise httpx.ConnectError("sem rede")
+
+    cenario["monkeypatch"].setattr(httpx, "get", _explode)
+
+    r = _minha_estacao(client)
+    assert r.status_code == 200, "o Início não pode receber erro por causa disto"
+    assert r.json()["disponivel"] is False
+    assert r.json()["motivo"] == "indisponivel"
+
+
+def test_resposta_de_erro_do_outro_portal_tambem_degrada(
+    client: TestClient, cenario
+) -> None:
+    import httpx
+
+    class _R:
+        status_code = 503
+
+        def json(self):
+            return {}
+
+    cenario["monkeypatch"].setattr(httpx, "get", lambda *a, **k: _R())
+    assert _minha_estacao(client).json()["disponivel"] is False
+
+
+def test_com_agente_vivo_o_botao_aparece(client: TestClient, cenario) -> None:
+    import httpx
+
+    class _R:
+        status_code = 200
+
+        def json(self):
+            return {"dispositivos": [{"machine_id": MAQUINA, "nome": "TI-002"}]}
+
+    cenario["monkeypatch"].setattr(httpx, "get", lambda *a, **k: _R())
+
+    corpo = _minha_estacao(client).json()
+    assert corpo["disponivel"] is True
+    assert corpo["dispositivos"][0]["machine_id"] == MAQUINA
+
+
+def test_sem_agente_vivo_diz_o_motivo(client: TestClient, cenario) -> None:
+    """
+    "Nenhum agente vivo" e "não consegui perguntar" são situações diferentes, e
+    a tela pode querer dizer coisas diferentes. Um motivo só apagaria isso.
+    """
+    import httpx
+
+    class _R:
+        status_code = 200
+
+        def json(self):
+            return {"dispositivos": []}
+
+    cenario["monkeypatch"].setattr(httpx, "get", lambda *a, **k: _R())
+    assert _minha_estacao(client).json()["motivo"] == "sem_agente_vivo"

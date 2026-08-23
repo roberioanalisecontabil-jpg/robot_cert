@@ -5091,6 +5091,51 @@ def instalabilidade(
 # ganha acesso ao banco do outro.
 
 
+@app.get("/api/cert-installer/minha-estacao")
+def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
+    """
+    Há um agente vivo desta pessoa agora? Em qual máquina?
+
+    O Início usa isto para decidir entre "Instalar nesta máquina" e o download
+    do .exe. Quem sabe a resposta é o portal de inventário: o vínculo
+    pessoa↔máquina nasce do login que ela mesma fez na estação.
+
+    **Nunca levanta.** Uma indisponibilidade do outro portal não pode derrubar o
+    Início — ela apenas faz o botão não aparecer, e a pessoa cai no caminho do
+    .exe, que é o que ela já fazia antes de tudo isto existir. Degradar para o
+    caminho antigo é diferente de quebrar.
+    """
+    if not config.ponte_invent_configurada():
+        return {"disponivel": False, "motivo": "nao_configurado", "dispositivos": []}
+
+    email = (token.email or "").strip().lower()
+    if not email:
+        return {"disponivel": False, "motivo": "sem_email", "dispositivos": []}
+
+    try:
+        import httpx
+
+        r = httpx.get(
+            f"{config.INVENT_API_URL}/api/agent/devices/vivos",
+            params={"email": email},
+            headers={"Authorization": f"Bearer {config.CERT_PORTAL_TOKEN}"},
+            timeout=8.0,
+        )
+        if r.status_code != 200:
+            logger.warning("Portal de inventário respondeu %s ao consultar estações", r.status_code)
+            return {"disponivel": False, "motivo": "indisponivel", "dispositivos": []}
+        dispositivos = (r.json() or {}).get("dispositivos") or []
+    except Exception:  # noqa: BLE001
+        logger.warning("Não foi possível consultar as estações no portal de inventário", exc_info=True)
+        return {"disponivel": False, "motivo": "indisponivel", "dispositivos": []}
+
+    return {
+        "disponivel": bool(dispositivos),
+        "motivo": "" if dispositivos else "sem_agente_vivo",
+        "dispositivos": dispositivos,
+    }
+
+
 class PrepararInstalacaoRequest(BaseModel):
     """Instalar na máquina onde a pessoa está, pelo agente residente."""
     certificate_ids: List[str]
