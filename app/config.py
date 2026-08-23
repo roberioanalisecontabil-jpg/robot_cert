@@ -102,3 +102,25 @@ CERT_INSTALL_TOKEN_TTL_MIN = _env_int(
 #
 # `tests/test_versao_agente.py` guarda as três contra divergência.
 VERSAO_AGENTE_ESPERADA = "1.1.0"
+
+
+# ── Ponte com o portal de inventário (INVENT/Hardlyze) ────────────────────
+#
+# É por ela que "instalar nesta máquina" chega ao agente: o agente escuta a fila
+# do INVENT e mais nada, então este portal precisa PEDIR a ele que enfileire.
+#
+# Servidor a servidor, com segredo dedicado. Nenhum dos dois ganha acesso ao
+# banco do outro — o muro que mantém o cofre fora do alcance do código de
+# inventário continua de pé, e essa foi a razão de não unificar os bancos.
+#
+# Vazio = o botão "instalar nesta máquina" não existe e o portal continua
+# entregando o .exe avulso, como sempre fez. Ligar é definir estas duas.
+INVENT_API_URL = (os.getenv("INVENT_API_URL") or "").strip().rstrip("/")
+
+# O MESMO valor configurado como CERT_PORTAL_TOKEN do outro lado. Próprio, e não
+# um token de admin: dá exatamente uma capacidade — enfileirar uma instalação.
+CERT_PORTAL_TOKEN = (os.getenv("CERT_PORTAL_TOKEN") or "").strip()
+
+
+def ponte_invent_configurada() -> bool:
+    return bool(INVENT_API_URL and CERT_PORTAL_TOKEN)

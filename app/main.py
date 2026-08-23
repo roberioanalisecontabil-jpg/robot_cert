@@ -5072,22 +5072,149 @@ def instalabilidade(
     }
 
 
-# A rota POST /api/cert-installer/prepare foi removida em 16/08/2026.
+# A rota POST /api/cert-installer/prepare foi removida em 16/08/2026 e VOLTOU em
+# 23/08/2026, por um destino diferente do original.
 #
-# Ela instalava numa máquina que já roda o agente: enfileirava um comando, o
-# agente pegava no poll seguinte e instalava lá. O cliente não usa esse caminho
-# -- o operador baixa o .exe e instala na própria máquina --, e endpoint que
-# emite token de instalação sem ninguém usar é superfície de ataque sem
-# contrapartida: um token É a entrega da chave privada.
+# O comentário de então dizia: "endpoint que emite token de instalação sem
+# ninguém usar é superfície de ataque sem contrapartida". A premissa era o USO,
+# não a arquitetura — e ela caiu quando o agente do INVENT, que já mora nas
+# estações dos colaboradores, passou a ser quem instala.
 #
-# `cert_installer.enqueue_install_command` continua existindo e o agente
-# continua entendendo o comando `instalar_certificados`. Mexer no agente exige
-# recompilar e reinstalar o .exe no ANALISESRV -- custo operacional real por
-# zero benefício, já que sem quem enfileire o comando ele nunca chega.
+# Ele fechava assim: "Se o caminho voltar a fazer sentido, o que falta é a rota:
+# a barreira de carteira e a trilha já existem, e `tests/test_carteira.py`
+# obriga qualquer rota nova que emita token a passar por elas." É exatamente o
+# que segue abaixo.
 #
-# Se o caminho voltar a fazer sentido, o que falta é a rota: a barreira de
-# carteira e a trilha já existem, e `tests/test_carteira.py` obriga qualquer
-# rota nova que emita token a passar por elas.
+# O que MUDOU em relação à original: ela enfileirava na fila deste portal, para
+# o agente daqui. Agora o agente é o do INVENT, que escuta a fila DE LÁ — então
+# este portal pede, servidor a servidor, que o outro enfileire. Nenhum dos dois
+# ganha acesso ao banco do outro.
+
+
+class PrepararInstalacaoRequest(BaseModel):
+    """Instalar na máquina onde a pessoa está, pelo agente residente."""
+    certificate_ids: List[str]
+    machine_id: str
+    hostname: Optional[str] = None
+
+
+@app.post("/api/cert-installer/prepare")
+def preparar_instalacao(
+    body: PrepararInstalacaoRequest,
+    request: Request,
+    token: auth.TokenData = Depends(require_auth),
+):
+    """
+    Emite o token e pede ao INVENT que a estação instale.
+
+    Difere de `/preparar-download` no transporte, não na autorização: as duas
+    passam pela MESMA barreira de carteira, porque as duas produzem um token — e
+    um token é a entrega da chave privada. Lá o transporte é o download; aqui é
+    o agente que já está na mesa da pessoa.
+
+    O `target_machine` deixa de ser "download-avulso" e passa a ser a máquina de
+    verdade, o que torna a trilha capaz de responder ONDE o certificado entrou.
+    """
+    if not body.certificate_ids:
+        raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
+
+    machine_id = (body.machine_id or "").strip()
+    if not machine_id:
+        raise HTTPException(status_code=400, detail="Máquina de destino não informada.")
+
+    if not config.ponte_invent_configurada():
+        # 503 e não 404: a rota existe, o que falta é a ligação entre os dois
+        # portais. Quem estiver implantando precisa saber a diferença.
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Instalação pelo agente não está ligada neste portal "
+                "(INVENT_API_URL / CERT_PORTAL_TOKEN)."
+            ),
+        )
+
+    user_id = _user_id_da_sessao(token)
+    if not user_id:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
+
+    client_ip = request.client.host if request.client else None
+
+    try:
+        token_raw, token_id, expires_at = cert_installer.create_install_token(
+            user_id=user_id,
+            user_email=token.email,
+            target_machine=machine_id,
+            certificate_ids=body.certificate_ids,
+            client_ip=client_ip,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Erro ao emitir token de instalação pelo agente")
+        raise HTTPException(status_code=500, detail="Erro interno ao preparar a instalação")
+
+    # Só registra SOLICITADO depois de o comando CHEGAR ao outro portal. Registrar
+    # antes deixaria a trilha afirmando um pedido que talvez nunca tenha saído
+    # daqui — e a trilha existe justamente para ser confiável.
+    try:
+        _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao pedir a instalação ao portal de inventário")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Não foi possível avisar o agente desta máquina: {e}",
+        )
+
+    for cid in body.certificate_ids:
+        cert_installer.log_event(
+            event="SOLICITADO",
+            user_id=user_id,
+            user_email=token.email,
+            token_id=token_id,
+            certificate_id=cid,
+            target_machine=machine_id,
+            client_ip=client_ip,
+        )
+
+    return {
+        "status": "ok",
+        "machine_id": machine_id,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+        "validade_min": config.CERT_INSTALL_TOKEN_TTL_MIN,
+    }
+
+
+def _pedir_instalacao_ao_invent(
+    machine_id: str, token_raw: str, hostname: Optional[str]
+) -> None:
+    """
+    Chama o portal de inventário, servidor a servidor.
+
+    Levanta em qualquer desfecho que não seja sucesso: quem chama transforma em
+    502 com o motivo. Silenciar aqui produziria a pior tela possível — "pedido
+    enviado" para um agente que nunca vai receber nada.
+    """
+    import httpx
+
+    r = httpx.post(
+        f"{config.INVENT_API_URL}/api/agent-commands/instalar-certificado",
+        headers={"Authorization": f"Bearer {config.CERT_PORTAL_TOKEN}"},
+        json={
+            "mac_address": machine_id,
+            "token": token_raw,
+            "hostname": hostname or None,
+        },
+        timeout=20.0,
+    )
+    if r.status_code != 200:
+        detalhe = ""
+        try:
+            detalhe = str((r.json() or {}).get("detail") or "")
+        except Exception:  # noqa: BLE001
+            detalhe = (r.text or "")[:200]
+        raise RuntimeError(detalhe or f"o portal de inventário respondeu {r.status_code}")
 
 
 class RedeemRequest(BaseModel):

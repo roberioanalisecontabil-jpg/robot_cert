@@ -114,6 +114,11 @@ CERT_SEM_DOC = "id-cert-sem-doc"
 # aqui, e `test_toda_rota_que_cria_token_passa_pela_carteira` cobra isso.
 ROTAS = [
     ("/api/cert-installer/preparar-download", {"nome": "ACME"}),
+    # Voltou em 23/08/2026, quando o agente do INVENT passou a instalar nas
+    # estacoes. O comentario de 16/08 previu este momento: "o parametrize
+    # continua porque o numero volta a crescer no dia em que outro caminho de
+    # instalacao existir — e e ai que esquecer a barreira fica facil".
+    ("/api/cert-installer/prepare", {"machine_id": "aa:bb:cc:dd:ee:ff"}),
 ]
 
 
@@ -159,6 +164,13 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
                         lambda **kw: ("tok", "tid", __import__("datetime").datetime.now(
                             __import__("datetime").timezone.utc)))
     monkeypatch.setattr(ci, "log_event", lambda **kw: None)
+
+    # A rota /prepare so passa da configuracao para a carteira se a ponte com o
+    # portal de inventario estiver ligada; e o pedido a ele nao pode ir a rede
+    # num teste. Nada disto afrouxa a barreira — ela roda antes de ambos.
+    monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent-de-teste", raising=False)
+    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "segredo-de-teste", raising=False)
+    monkeypatch.setattr(m, "_pedir_instalacao_ao_invent", lambda *a, **k: None)
     return fake
 
 

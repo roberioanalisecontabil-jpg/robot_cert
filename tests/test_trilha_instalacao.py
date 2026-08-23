@@ -281,26 +281,43 @@ def test_instalador_nao_instala_mais() -> None:
     assert "Para instalar, use o Início" in html
 
 
-def test_inicio_nao_oferece_instalacao_em_estacao() -> None:
+def test_instalar_em_estacao_voltou_e_o_avulso_ficou() -> None:
     """
-    O "Enviar para estação" saiu em 16/08 a pedido do cliente: no modelo dele o
-    operador baixa o `.exe` e instala na própria máquina, e instalar no servidor
-    via agente não tem uso.
+    Até 23/08/2026 este teste afirmava o CONTRÁRIO: que `/prepare` não devia
+    existir.
 
-    A rota que emitia o token saiu junto — endpoint que entrega chave privada
-    sem ninguém usar é superfície de ataque sem contrapartida.
+    A regra de 16/08 era "no modelo do cliente o operador baixa o .exe e instala
+    na própria máquina, e instalar via agente não tem uso" — e a conclusão dali
+    era correta: endpoint que entrega chave privada sem ninguém usar é
+    superfície de ataque sem contrapartida.
+
+    **A premissa era o USO, não a arquitetura.** Ela caiu quando o agente do
+    INVENT, que já mora nas estações dos colaboradores, passou a ser quem
+    instala. A rota voltou por decisão do dono do projeto — e agora tem quem a
+    use.
+
+    O que este teste guarda hoje são as duas coisas que sobreviveram à reversão:
+
+    1. O instalador avulso **fica**. Máquina sem agente não recebe comando, e
+       ele é como o agente chega na primeira vez; removê-lo tiraria a saída de
+       quem não é da frota.
+    2. A rota nova não pode ser usada por acidente: sem a ponte com o portal de
+       inventário configurada, ela recusa antes de emitir token — senão sobraria
+       uma credencial válida sem consumidor, até expirar.
     """
-    html = _html("/")
-    assert "btnEnviarEstacao" not in html
-    assert "/api/cert-installer/prepare" not in html
-    assert "grupoEstacao" not in html
-
+    from app import config
     from app.main import app
+
     caminhos = {getattr(r, "path", "") for r in app.routes}
-    assert "/api/cert-installer/prepare" not in caminhos
+    assert "/api/cert-installer/prepare" in caminhos, (
+        "a rota voltou em 23/08 — se sumiu de novo, foi sem querer"
+    )
     assert "/api/cert-installer/preparar-download" in caminhos, (
         "o caminho do instalador avulso é o que fica — removê-lo tiraria a "
-        "única forma de instalar"
+        "saída de quem não tem agente"
+    )
+    assert hasattr(config, "ponte_invent_configurada"), (
+        "sumiu o portão que impede emitir token sem ter para quem mandar"
     )
 
 
