@@ -208,6 +208,11 @@
         </div>
         <div class="barra-selecao__acoes">
           <button id="btnLimparSel" class="btn btn-secondary" type="button">Limpar</button>
+          <!-- Instalar direto só aparece quando há agente vivo desta pessoa.
+               O download NÃO sai: máquina sem agente não recebe comando, e o
+               .exe é como o agente chega na primeira vez. Ele deixa de ser o
+               caminho principal e passa a ser o de exceção. -->
+          <button id="btnInstalarAqui" class="btn btn-primary" type="button" hidden>Instalar nesta máquina</button>
           <button id="btnBaixarSel" class="btn btn-primary" type="button">Baixar instalador</button>
         </div>
       </div>
@@ -469,6 +474,10 @@
           ? `Máximo de ${MAX_CERTIFICADOS} por instalador — desmarque ${n - MAX_CERTIFICADOS}.`
           : "";
         document.getElementById("btnBaixarSel").disabled = excedeu;
+        // O teto vale para os DOIS caminhos: o token e o mesmo, e o limite
+        // existe do lado do servidor. Deixar um botao habilitado convidaria a
+        // um 422 que a tela ja sabia evitar.
+        document.getElementById("btnInstalarAqui").disabled = excedeu;
       }
 
       function sincronizarCheckboxesDaPagina() {
@@ -502,6 +511,74 @@
           _instalabilidade = {};
           _instalIndisponivel = true;
           showToast("Não foi possível verificar quais certificados estão disponíveis.", "error");
+        }
+      }
+
+      // ─── Instalar pelo agente residente ──────────────────────────────────
+
+      let _estacao = null;   // { machine_id, nome } quando ha agente vivo
+
+      async function carregarMinhaEstacao() {
+        try {
+          const r = await fetch("/api/cert-installer/minha-estacao", { headers: getHeaders() });
+          if (!r.ok) return;
+          const d = await r.json();
+          _estacao = d.disponivel && d.dispositivos.length ? d.dispositivos[0] : null;
+        } catch (e) {
+          // Silencio de proposito: sem agente, a pessoa usa o download, que e
+          // o que ela ja fazia. Um toast de erro aqui assustaria por causa de
+          // um caminho opcional que talvez ela nem use.
+          _estacao = null;
+        }
+        const btn = document.getElementById("btnInstalarAqui");
+        if (!btn) return;
+        btn.hidden = !_estacao;
+        if (_estacao) {
+          // O nome da maquina no titulo, e nao no rotulo: o rotulo tem de caber
+          // no celular, e "nesta maquina" ja diz o essencial.
+          btn.title = `Instalar em ${_estacao.nome || _estacao.machine_id}`;
+          // Com agente, instalar e o caminho principal e baixar vira a saida.
+          document.getElementById("btnBaixarSel").className = "btn btn-secondary";
+        }
+      }
+
+      async function instalarNaEstacao() {
+        if (!_estacao) return;
+        const btn = document.getElementById("btnInstalarAqui");
+        const escolhidos = Array.from(_selecao.entries());
+        if (!escolhidos.length) return;
+
+        btn.disabled = true;
+        const rotulo = btn.textContent;
+        btn.textContent = "Enviando...";
+        try {
+          const r = await fetch("/api/cert-installer/prepare", {
+            method: "POST",
+            headers: getHeaders(true),
+            body: JSON.stringify({
+              certificate_ids: escolhidos.map(([, v]) => v.id),
+              machine_id: _estacao.machine_id,
+              hostname: _estacao.nome || null,
+            }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.detail || "Falha ao pedir a instalacao");
+
+          // "Pedido enviado" e nao "instalado": quem instala e o agente, em
+          // segundos. Prometer o que ainda nao aconteceu faria a pessoa achar
+          // que falhou quando o certificado demorasse dez segundos.
+          showToast(
+            "Pedido enviado. O agente vai instalar e avisar nesta maquina.",
+            "success"
+          );
+          _selecao.clear();
+          sincronizarCheckboxesDaPagina();
+          atualizarBarraSelecao();
+        } catch (e) {
+          showToast("Nao foi possivel instalar: " + e.message, "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = rotulo;
         }
       }
 
@@ -1000,10 +1077,12 @@
         });
 
         document.getElementById("btnBaixarSel").addEventListener("click", baixarSelecionados);
+        document.getElementById("btnInstalarAqui").addEventListener("click", instalarNaEstacao);
 
         initPerPageDashboard();
         await carregarTabela();
         carregarDispositivos();
+        carregarMinhaEstacao();
       })();
 
       // ─── Meus computadores ───────────────────────────────────────────────
