@@ -281,7 +281,7 @@ def test_instalador_nao_instala_mais() -> None:
     assert "Para instalar, use o Início" in html
 
 
-def test_instalar_em_estacao_voltou_e_o_avulso_ficou() -> None:
+def test_instalar_em_estacao_e_o_unico_caminho() -> None:
     """
     Até 23/08/2026 este teste afirmava o CONTRÁRIO: que `/prepare` não devia
     existir.
@@ -312,10 +312,18 @@ def test_instalar_em_estacao_voltou_e_o_avulso_ficou() -> None:
     assert "/api/cert-installer/prepare" in caminhos, (
         "a rota voltou em 23/08 — se sumiu de novo, foi sem querer"
     )
-    assert "/api/cert-installer/preparar-download" in caminhos, (
-        "o caminho do instalador avulso é o que fica — removê-lo tiraria a "
-        "saída de quem não tem agente"
-    )
+    # O caminho de DOWNLOAD saiu no mesmo dia, algumas horas depois. A ressalva
+    # que eu tinha feito — "o .exe é como o agente chega na primeira vez" —
+    # estava errada: o agente chega pelo instalador do Hardlyze, distribuído por
+    # fora. Sem esse furo, sobra a razão de remover: dois caminhos para emitir
+    # token são duas superfícies para a entrega de uma chave privada.
+    assert "/api/cert-installer/preparar-download" not in caminhos
+    assert "/instalador/baixar/{token}" not in caminhos
+
+    # `/claim` FICA, e não por descuido: nasceu para o .exe avulso, mas é o
+    # caminho que o AGENTE usa — ele também chega sem credencial neste portal,
+    # tendo só o token. Removê-la quebraria a única instalação que restou.
+    assert "/api/cert-installer/claim" in caminhos
     assert hasattr(config, "ponte_invent_configurada"), (
         "sumiu o portão que impede emitir token sem ter para quem mandar"
     )

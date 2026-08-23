@@ -1,3 +1,14 @@
+"""
+NOTA — 23/08/2026: os testes do TEMPLATE DO NOME DO ARQUIVO sairam junto com o
+instalador avulso. Eles guardavam que `{token}` era obrigatorio no nome, porque
+o .exe lia o token do proprio argv[0]. Sem .exe servido pelo portal, nao ha
+nome a montar.
+
+O que ficou neste arquivo continua valendo e nao tem relacao com o download:
+validade do token, retencao da trilha, expurgo, e a preservacao do SMTP ao
+salvar a configuracao do instalador.
+"""
+
 """Configuração do módulo instalador: nome do arquivo, validade e retenção.
 
 Leva 3b da etapa 3 (`docs/PLANO_reorganizacao_portal.md` §4, pontos 2, 5 e 7).
@@ -69,100 +80,6 @@ def settings_em_memoria(monkeypatch: pytest.MonkeyPatch) -> PortalSettings:
 # ──────────────────────────────────────────────────────────────────────────
 # 1. O {token} é funcional
 # ──────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.parametrize("template,porque", [
-    ("Instalar {nome}.exe", "sem {token} o instalador não acha o token"),
-    ("Instalar {token}", "sem .exe o Windows não executa"),
-    ("C:/pasta/{token}.exe", "separador de caminho escapa do nome"),
-    ("Instalar {cliente} {token}.exe", "marcador que ninguém substitui vira texto literal"),
-    ("x" * 130 + "{token}.exe", "nome longo demais"),
-])
-def test_template_invalido_e_recusado(template: str, porque: str) -> None:
-    with pytest.raises(ValueError):
-        ci.validar_template_nome(template)
-
-
-@pytest.mark.parametrize("template", [
-    "Instalar {nome} -{token}.exe",
-    "Certificado {nome} [{token}].exe",
-    "{token}.exe",
-])
-def test_template_valido_passa(template: str) -> None:
-    assert ci.validar_template_nome(template) == template
-
-
-def test_vazio_significa_padrao_e_nao_erro() -> None:
-    assert ci.validar_template_nome("") == ""
-    assert ci.validar_template_nome("   ") == ""
-
-
-def test_nome_e_sanitizado_mas_o_token_nunca() -> None:
-    """
-    Sanitizar o token o corromperia — ele precisa chegar íntegro ao instalador.
-    O nome do titular, esse vem do certificado e pode conter qualquer coisa.
-    """
-    token = "aB3-_xYz"
-    saida = ci.montar_nome_do_arquivo("", 'ACME/LTDA: "Filial" <SP>', token)
-    assert token in saida
-    for proibido in '/\\:*?"<>|':
-        assert proibido not in saida
-
-
-def test_template_gravado_invalido_cai_no_padrao_em_vez_de_quebrar() -> None:
-    """
-    Se um template inválido escapar da validação por algum caminho, entregar o
-    nome padrão dá um instalador que funciona. O erro fica no log, não na mão
-    do usuário.
-    """
-    saida = ci.montar_nome_do_arquivo("sem marcador nenhum.exe", "ACME", "tok123")
-    assert "tok123" in saida
-
-
-def test_download_usa_o_template_configurado(
-    settings_em_memoria: PortalSettings, monkeypatch, tmp_path
-) -> None:
-    """Fecha o circuito: configuração → nome do arquivo realmente servido."""
-    settings_em_memoria.instalador_nome_template = "Cert {nome} [{token}].exe"
-
-    # Um arquivo de verdade em vez de remendar Path.is_file: o patch global
-    # afetaria toda leitura de arquivo do processo durante o teste.
-    exe = tmp_path / "Instalar_Certificado.exe"
-    exe.write_bytes(b"MZ")
-    monkeypatch.setattr(m, "INSTALADOR_AVULSO_EXE", exe)
-    monkeypatch.setattr(m, "FileResponse", lambda **kw: {"filename": kw["filename"]})
-
-    r = m.baixar_instalador(token="A" * 30, nome="ACME LTDA")
-    assert r["filename"] == "Cert ACME LTDA [AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA].exe"
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# 2. A rota parcial não pode apagar o resto
-# ──────────────────────────────────────────────────────────────────────────
-
-def test_salvar_config_do_instalador_preserva_o_smtp(
-    client: TestClient, settings_em_memoria: PortalSettings
-) -> None:
-    """
-    O motivo de existir uma rota própria.
-
-    `PUT /api/settings` monta um PortalSettings inteiro a partir do corpo:
-    mandar só os três campos do instalador zeraria o SMTP — sem erro nenhum, e
-    ninguém notaria até o próximo alerta não sair.
-    """
-    r = client.put(
-        "/api/cert-installer/configuracao",
-        json={"instalador_nome_template": "{nome}-{token}.exe",
-              "install_token_ttl_min": 15, "trilha_retencao_dias": 90},
-        headers=_admin(),
-    )
-    assert r.status_code == 200, r.text
-
-    assert settings_em_memoria.smtp_host == "smtp.exemplo.com"
-    assert settings_em_memoria.smtp_password_encrypted == "cifrada"
-    assert settings_em_memoria.smtp_alerts_enabled is True
-    assert settings_em_memoria.source_folder == "F:/certs"
-    assert settings_em_memoria.instalador_nome_template == "{nome}-{token}.exe"
-
 
 def test_salvar_a_configuracao_geral_preserva_o_instalador(
     client: TestClient, settings_em_memoria: PortalSettings
@@ -247,31 +164,6 @@ def test_campo_enviado_vazio_continua_limpando(
     assert settings_em_memoria.alertas_marcos == ""
     # E vazio volta a significar o padrão, não silêncio.
     assert r.json()["alertas_marcos_efetivos"] == [30, 15, 7, 1]
-
-
-def test_rota_recusa_template_sem_token(
-    client: TestClient, settings_em_memoria: PortalSettings
-) -> None:
-    r = client.put(
-        "/api/cert-installer/configuracao",
-        json={"instalador_nome_template": "Instalar {nome}.exe"},
-        headers=_admin(),
-    )
-    assert r.status_code == 422, r.text
-    assert "{token}" in r.json()["detail"]
-    assert settings_em_memoria.instalador_nome_template == "", "nada pode ter sido gravado"
-
-
-@pytest.mark.parametrize("ttl", [-5, 2000, 1441])
-def test_rota_recusa_ttl_fora_dos_limites(
-    client: TestClient, settings_em_memoria: PortalSettings, ttl: int
-) -> None:
-    r = client.put(
-        "/api/cert-installer/configuracao",
-        json={"install_token_ttl_min": ttl},
-        headers=_admin(),
-    )
-    assert r.status_code == 422, r.text
 
 
 def test_config_do_instalador_e_de_admin(

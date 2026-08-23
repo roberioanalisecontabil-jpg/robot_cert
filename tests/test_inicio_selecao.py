@@ -190,7 +190,7 @@ def test_nao_enviado_e_distinto_de_bloqueado(client: TestClient, banco: _Fake) -
 
 
 def test_id_do_cofre_acompanha_o_estado_ok(client: TestClient, banco: _Fake) -> None:
-    """Sem o id, a tela não teria o que mandar para `preparar-download`."""
+    """Sem o id, a tela não teria o que mandar para `/prepare`."""
     r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQUINA}",
                    headers=_h("user", "operador@x.com"))
     itens = r.json()["itens"]

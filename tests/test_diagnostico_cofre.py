@@ -218,20 +218,26 @@ def test_rota_de_diagnostico_reune_tudo(client: TestClient, banco: _Fake) -> Non
     r = client.get("/api/cert-installer/diagnostico", headers=_admin())
     assert r.status_code == 200, r.text
     d = r.json()
-    assert set(d) >= {"binario", "icone", "cofre", "chaves"}
+    # `binario` e `icone` sairam em 23/08/2026 com o instalador avulso:
+    # diagnosticavam um .exe que o portal nao serve mais.
+    assert set(d) >= {"cofre", "chaves"}
+    assert "binario" not in d, "o diagnostico voltou a falar de um .exe que nao existe"
     assert d["cofre"]["total"] == 2
 
 
 def test_diagnostico_sobrevive_a_falha_do_cofre(client: TestClient, banco: _Fake) -> None:
     """
-    Banco fora do ar não pode derrubar a tela inteira: o estado do binário
-    continua legível e é metade do diagnóstico.
+    Banco fora do ar nao pode derrubar a tela: ela tem de dizer O QUE falhou.
+
+    Antes o argumento era "o estado do binario continua legivel e e metade do
+    diagnostico". Sem o binario, a metade que resta e o motivo — e um 500 aqui
+    esconderia justamente a informacao que a pessoa veio buscar.
     """
     banco.quebrado["cert_pfx_store"] = True
     r = client.get("/api/cert-installer/diagnostico", headers=_admin())
     assert r.status_code == 200, r.text
     assert "erro" in r.json()["cofre"]
-    assert "existe" in r.json()["binario"]
+    assert "erro" in r.json()["chaves"]
 
 
 def test_diagnostico_e_revalidar_sao_de_admin(client: TestClient, banco: _Fake) -> None:

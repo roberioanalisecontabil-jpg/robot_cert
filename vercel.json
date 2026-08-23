@@ -7,8 +7,7 @@
       "config": {
         "includeFiles": [
           "templates/**",
-          "static/**",
-          "dist/Instalar_Certificado.exe"
+          "static/**"
         ]
       }
     }

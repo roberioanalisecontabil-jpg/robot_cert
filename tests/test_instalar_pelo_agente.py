@@ -87,9 +87,9 @@ def test_o_token_nao_volta_para_o_navegador(client: TestClient, cenario) -> None
 
 def test_a_trilha_registra_a_maquina_de_verdade(client: TestClient, cenario) -> None:
     """
-    `/preparar-download` grava "download-avulso" porque não sabe onde o
-    certificado vai cair. Aqui sabe — e é isso que torna a trilha capaz de
-    responder ONDE o certificado entrou.
+    Até 23/08/2026 o caminho do download gravava "download-avulso", porque não
+    sabia onde o certificado ia cair. Ele saiu, e agora a trilha sempre sabe —
+    é o que a torna capaz de responder ONDE o certificado entrou.
     """
     _pedir(client)
     assert cenario["trilha"], "nada foi registrado"

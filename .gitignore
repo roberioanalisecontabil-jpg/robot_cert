@@ -28,7 +28,6 @@ build_smoke/
 # de Windows — se ele nao viajar versionado, /instalador/baixar responde 503 em
 # producao. Rebuild com scripts/build_instalador_avulso.ps1 (sem parametro para
 # apontar a producao); cada rebuild adiciona ~16 MB permanentes ao historico.
-!dist/Instalar_Certificado.exe
 
 .pytest_cache/
 *.egg-info/

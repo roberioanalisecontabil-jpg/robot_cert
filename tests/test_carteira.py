@@ -112,12 +112,14 @@ CERT_SEM_DOC = "id-cert-sem-doc"
 # estação) foi removida em 16/08 — o cliente não usa esse caminho. A lista
 # continua sendo lista de propósito: se outra rota emissora nascer, ela entra
 # aqui, e `test_toda_rota_que_cria_token_passa_pela_carteira` cobra isso.
+# A lista voltou a UMA entrada em 23/08/2026, e por um motivo diferente do de
+# 16/08: agora nao e o caminho do agente que sai, e o do download. Sobrou o do
+# agente, que e o unico que emite token.
+#
+# O parametrize fica, pelo mesmo argumento de sempre: o numero volta a crescer
+# no dia em que outro caminho de instalacao existir — e e ai que esquecer a
+# barreira fica facil.
 ROTAS = [
-    ("/api/cert-installer/preparar-download", {"nome": "ACME"}),
-    # Voltou em 23/08/2026, quando o agente do INVENT passou a instalar nas
-    # estacoes. O comentario de 16/08 previu este momento: "o parametrize
-    # continua porque o numero volta a crescer no dia em que outro caminho de
-    # instalacao existir — e e ai que esquecer a barreira fica facil".
     ("/api/cert-installer/prepare", {"machine_id": "aa:bb:cc:dd:ee:ff"}),
 ]
 
@@ -304,7 +306,7 @@ def test_falha_de_banco_recusa_com_503_e_nao_403(
     banco.quebrado[tabela] = True
     chamou = []
     with patch.object(ci, "create_install_token", lambda **kw: chamou.append(kw) or ("t", "i", None)):
-        r = _pedir(client, "/api/cert-installer/preparar-download", {"nome": "ACME"},
+        r = _pedir(client, "/api/cert-installer/prepare", {"machine_id": "aa:bb:cc:dd:ee:ff"},
                    [CERT_MEU], _h("user", "operador@x.com"))
     assert r.status_code == 503, r.text
     assert not chamou
@@ -336,7 +338,7 @@ def test_documento_formatado_na_carteira_ainda_casa(
         {"user_id": "u-operador", "documento": "33.706.943/0001-93",
          "atribuido_por": None, "atribuido_por_email": "x@x.com"},
     ]
-    r = _pedir(client, "/api/cert-installer/preparar-download", {"nome": "ACME"},
+    r = _pedir(client, "/api/cert-installer/prepare", {"machine_id": "aa:bb:cc:dd:ee:ff"},
                [CERT_MEU], _h("user", "operador@x.com"))
     assert r.status_code == 200, r.text
 
@@ -391,7 +393,7 @@ def test_remover_da_carteira_tira_o_acesso(client: TestClient, banco: _Fake) -> 
     r = client.delete(f"/api/carteira/u-operador/{DOC_MEU}", headers=_h("gestor"))
     assert r.status_code == 200, r.text
 
-    r = _pedir(client, "/api/cert-installer/preparar-download", {"nome": "ACME"},
+    r = _pedir(client, "/api/cert-installer/prepare", {"machine_id": "aa:bb:cc:dd:ee:ff"},
                [CERT_MEU], _h("user", "operador@x.com"))
     assert r.status_code == 403, "o acesso tinha de cair junto"
 

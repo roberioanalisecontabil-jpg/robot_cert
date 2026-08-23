@@ -208,12 +208,13 @@
         </div>
         <div class="barra-selecao__acoes">
           <button id="btnLimparSel" class="btn btn-secondary" type="button">Limpar</button>
-          <!-- Instalar direto só aparece quando há agente vivo desta pessoa.
-               O download NÃO sai: máquina sem agente não recebe comando, e o
-               .exe é como o agente chega na primeira vez. Ele deixa de ser o
-               caminho principal e passa a ser o de exceção. -->
+          <!-- Unico caminho desde 23/08/2026. O download do .exe saiu: o agente
+               mora nas estacoes e instala na sessao da pessoa.
+               Continua nascendo escondido — sem agente vivo nao ha o que
+               oferecer, e um botao que falha e pior que botao nenhum. O aviso
+               ao lado explica o que fazer nesse caso. -->
           <button id="btnInstalarAqui" class="btn btn-primary" type="button" hidden>Instalar nesta máquina</button>
-          <button id="btnBaixarSel" class="btn btn-primary" type="button">Baixar instalador</button>
+          <span id="semAgente" class="barra-selecao__aviso" hidden>Sem agente ativo nesta máquina — abra o Hardlyze Agent e entre com sua conta.</span>
         </div>
       </div>
 
@@ -473,7 +474,6 @@
         document.getElementById("selAviso").textContent = excedeu
           ? `Máximo de ${MAX_CERTIFICADOS} por instalador — desmarque ${n - MAX_CERTIFICADOS}.`
           : "";
-        document.getElementById("btnBaixarSel").disabled = excedeu;
         // O teto vale para os DOIS caminhos: o token e o mesmo, e o limite
         // existe do lado do servidor. Deixar um botao habilitado convidaria a
         // um 422 que a tela ja sabia evitar.
@@ -531,14 +531,18 @@
           _estacao = null;
         }
         const btn = document.getElementById("btnInstalarAqui");
+        const aviso = document.getElementById("semAgente");
         if (!btn) return;
         btn.hidden = !_estacao;
+        // Sem agente a pessoa nao fica sem saida nem sem explicacao: antes ela
+        // caia no download, que nao existe mais. Dizer O QUE FAZER e o minimo
+        // que substitui um botao que sumiu.
+        if (aviso) aviso.hidden = !!_estacao;
         if (_estacao) {
           // O nome da maquina no titulo, e nao no rotulo: o rotulo tem de caber
           // no celular, e "nesta maquina" ja diz o essencial.
           btn.title = `Instalar em ${_estacao.nome || _estacao.machine_id}`;
           // Com agente, instalar e o caminho principal e baixar vira a saida.
-          document.getElementById("btnBaixarSel").className = "btn btn-secondary";
         }
       }
 
@@ -579,38 +583,6 @@
         } finally {
           btn.disabled = false;
           btn.textContent = rotulo;
-        }
-      }
-
-      async function baixarSelecionados() {
-        const btn = document.getElementById("btnBaixarSel");
-        const escolhidos = Array.from(_selecao.entries());
-        if (!escolhidos.length) return;
-
-        btn.disabled = true;
-        const rotulo = btn.textContent;
-        btn.textContent = "Gerando...";
-        try {
-          const r = await fetch("/api/cert-installer/preparar-download", {
-            method: "POST",
-            headers: getHeaders(true),
-            body: JSON.stringify({
-              certificate_ids: escolhidos.map(([, v]) => v.id),
-              nome:
-                escolhidos.length === 1
-                  ? escolhidos[0][1].nome || "Certificado"
-                  : `${escolhidos.length} certificados`,
-            }),
-          });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.detail || "Falha ao gerar o instalador");
-          window.location.href = d.download_url;
-          showToast("Instalador gerado. O download vai começar.", "success");
-        } catch (e) {
-          showToast("Não foi possível gerar o instalador: " + e.message, "error");
-        } finally {
-          btn.textContent = rotulo;
-          atualizarBarraSelecao();
         }
       }
 
@@ -1076,7 +1048,6 @@
           atualizarBarraSelecao();
         });
 
-        document.getElementById("btnBaixarSel").addEventListener("click", baixarSelecionados);
         document.getElementById("btnInstalarAqui").addEventListener("click", instalarNaEstacao);
 
         initPerPageDashboard();

@@ -931,7 +931,6 @@ class SettingsBody(BaseModel):
     #
     # O sintoma aparece longe da causa: o instalador volta a gerar o nome
     # padrão, e nada na tela de Configuração sugere que foi ela.
-    instalador_nome_template: Optional[str] = Field(default=None)
     install_token_ttl_min: Optional[int] = Field(default=None)
     trilha_retencao_dias: Optional[int] = Field(default=None)
     alertas_destinatarios: Optional[str] = Field(default=None)
@@ -2022,10 +2021,8 @@ def _settings_dict(s: PortalSettings) -> dict:
         "smtp_password_set": bool(s.smtp_password_encrypted),
         "smtp_use_tls": s.smtp_use_tls,
         "smtp_use_ssl": s.smtp_use_ssl,
-        "instalador_nome_template": s.instalador_nome_template,
         # `efetivo` é o que realmente vale agora, com o padrão já resolvido —
         # a tela precisa mostrar isso, não o campo em branco.
-        "instalador_nome_efetivo": s.instalador_nome_template or cert_installer.TEMPLATE_NOME_PADRAO,
         "install_token_ttl_min": s.install_token_ttl_min,
         "install_token_ttl_efetivo": cert_installer.ttl_do_token(),
         "trilha_retencao_dias": s.trilha_retencao_dias,
@@ -2082,18 +2079,6 @@ def put_settings(body: SettingsBody) -> dict:
 
     try:
         validate_smtp_config(body.smtp_use_tls, body.smtp_use_ssl)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    # Recusar na hora de salvar é a única defesa possível para o template: um
-    # template sem {token} produz um .exe que abre e não instala nada, e o
-    # sintoma aparece na máquina do usuário final.
-    try:
-        template = cert_installer.validar_template_nome(
-            old.instalador_nome_template
-            if body.instalador_nome_template is None
-            else body.instalador_nome_template
-        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -2178,7 +2163,6 @@ def put_settings(body: SettingsBody) -> dict:
         smtp_use_ssl=body.smtp_use_ssl,
         smtp_from_email=body.smtp_from_email.strip(),
         smtp_alerts_enabled=body.smtp_alerts_enabled,
-        instalador_nome_template=template,
         install_token_ttl_min=ttl,
         trilha_retencao_dias=retencao,
         alertas_destinatarios=destinatarios,
@@ -4826,7 +4810,8 @@ def remover_carteira(
 
 
 class ConfigInstaladorBody(BaseModel):
-    instalador_nome_template: str = ""
+    # `instalador_nome_template` saiu em 23/08/2026: ele nomeava o .exe que o
+    # portal servia, e o portal nao serve mais .exe nenhum.
     install_token_ttl_min: int = 0
     trilha_retencao_dias: int = 0
 
@@ -4844,11 +4829,6 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     Aqui a configuração atual é lida, três campos mudam, e o resto vai de volta
     como estava.
     """
-    try:
-        template = cert_installer.validar_template_nome(body.instalador_nome_template)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
     ttl = int(body.install_token_ttl_min or 0)
     if ttl and not (cert_installer.TTL_TOKEN_MIN <= ttl <= cert_installer.TTL_TOKEN_MAX):
         raise HTTPException(
@@ -4864,7 +4844,6 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
         raise HTTPException(status_code=422, detail="Retenção não pode ser negativa.")
 
     atual = load_settings()
-    atual.instalador_nome_template = template
     atual.install_token_ttl_min = ttl
     atual.trilha_retencao_dias = retencao
     # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
@@ -4957,7 +4936,7 @@ def pagina_dashboard(request: Request) -> HTMLResponse:
 #      `report-avulso`) segue com a guarda propria. O agente nao tem papel na
 #      matriz.
 #
-#   2. FLUXO DO COLABORADOR (`instalabilidade`, `preparar-download`) fica de
+#   2. FLUXO DO COLABORADOR (`instalabilidade`, `prepare`) fica de
 #      fora. Sao chamadas pelo `index.html`, ou seja pertencem ao Inicio, onde a
 #      pessoa instala o proprio certificado. Gatea-las por "Instalador" tiraria
 #      de TODO operador a capacidade de instalar — e o sintoma apareceria como
@@ -4987,29 +4966,11 @@ def diagnostico_do_instalador() -> dict:
     - **chaves**: em 15/08 a chave foi trocada sem rotação e todo o cofre virou
       lixo cifrado. Nada na interface disse isso.
     """
-    from app import pe_assinatura
-
-    binario = pe_assinatura.inspecionar(INSTALADOR_AVULSO_EXE)
-    out: dict = {
-        "binario": {
-            "existe": binario.existe,
-            "caminho": binario.caminho,
-            "tamanho_bytes": binario.tamanho_bytes,
-            "sha256": binario.sha256,
-            "modificado_em": binario.modificado_em,
-            "assinado": binario.assinado,
-            "assinatura_detalhe": binario.assinatura_detalhe,
-            "signatarios": [vars(s) for s in binario.signatarios],
-        },
-        # O ícone é entrada de BUILD, não configuração de runtime: o binário é
-        # o mesmo para todo download de propósito, e é isso que permite assiná-lo
-        # uma vez e acumular reputação no SmartScreen. Trocar exige recompilar.
-        "icone": {
-            "arquivo": str(ROOT / "ico" / "icone.ico"),
-            "presente": (ROOT / "ico" / "icone.ico").is_file(),
-            "observacao": "Definido em Instalar_Certificado.spec; trocar exige recompilar e reassinar.",
-        },
-    }
+    # Os blocos `binario`, `assinatura` e `icone` sairam em 23/08/2026 junto do
+    # instalador avulso: eles diagnosticavam um .exe que o portal nao serve
+    # mais. Diagnostico de coisa que nao existe e ruido que envelhece para
+    # mentira.
+    out: dict = {}
 
     try:
         out["cofre"] = cert_installer.diagnostico_do_cofre()
@@ -5152,10 +5113,9 @@ def preparar_instalacao(
     """
     Emite o token e pede ao INVENT que a estação instale.
 
-    Difere de `/preparar-download` no transporte, não na autorização: as duas
-    passam pela MESMA barreira de carteira, porque as duas produzem um token — e
-    um token é a entrega da chave privada. Lá o transporte é o download; aqui é
-    o agente que já está na mesa da pessoa.
+    Desde 23/08/2026 e a UNICA rota que emite token de instalacao — o caminho de
+    download saiu. A barreira de carteira continua sendo o que a governa, porque
+    um token e a entrega da chave privada.
 
     O `target_machine` deixa de ser "download-avulso" e passa a ser a máquina de
     verdade, o que torna a trilha capaz de responder ONDE o certificado entrou.
@@ -5388,119 +5348,21 @@ def claim_install(body: RedeemRequest, request: Request):
         raise HTTPException(status_code=500, detail="Erro interno ao montar bundle")
 
 
-class PrepararDownloadRequest(BaseModel):
-    """Admin escolhe os certificados e recebe o link do instalador."""
-    certificate_ids: List[str]
-    nome: Optional[str] = None
-
-
-@app.post("/api/cert-installer/preparar-download")
-def preparar_download(
-    body: PrepararDownloadRequest,
-    request: Request,
-    token: auth.TokenData = Depends(require_auth),
-):
-    """
-    Cria o token e devolve a URL do instalador — sem enfileirar nada.
-
-    Difere de /prepare no destino: lá o alvo é uma máquina que já roda o agente,
-    e o comando vai para a fila dela. Aqui o alvo é a máquina de quem clicou,
-    que não tem agente nenhum; o "transporte" é o próprio download.
-
-    Mesma barreira de carteira da outra: são os dois caminhos que produzem um
-    token de instalação, e um token é o que entrega a chave privada.
-    """
-    if not body.certificate_ids:
-        raise HTTPException(status_code=400, detail="Selecione ao menos um certificado")
-
-    user_id = _user_id_da_sessao(token)
-    if not user_id:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
-
-    client_ip = request.client.host if request.client else None
-
-    try:
-        token_raw, token_id, expires_at = cert_installer.create_install_token(
-            user_id=user_id,
-            user_email=token.email,
-            # Não há máquina alvo conhecida: quem executar o instalador define
-            # onde o certificado entra. Fica registrado como tal na auditoria.
-            target_machine="download-avulso",
-            certificate_ids=body.certificate_ids,
-            client_ip=client_ip,
-        )
-        for cid in body.certificate_ids:
-            cert_installer.log_event(
-                event="SOLICITADO",
-                user_id=user_id,
-                user_email=token.email,
-                token_id=token_id,
-                certificate_id=cid,
-                target_machine="download-avulso",
-                client_ip=client_ip,
-            )
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception:
-        logger.exception("Erro ao preparar download do instalador")
-        raise HTTPException(status_code=500, detail="Erro interno ao preparar instalador")
-
-    nome = quote((body.nome or "Certificado")[:60])
-    return {
-        "status": "ok",
-        "download_url": f"/instalador/baixar/{token_raw}?nome={nome}",
-        "expires_at": expires_at.isoformat(),
-        "validade_min": config.CERT_INSTALL_TOKEN_TTL_MIN,
-    }
-
-
-# Onde o build deposita o instalador avulso já compilado.
-INSTALADOR_AVULSO_EXE = ROOT / "dist" / "Instalar_Certificado.exe"
-
-# Só o alfabeto de secrets.token_urlsafe. Serve para recusar, antes de tocar o
-# disco, qualquer coisa que não tenha forma de token — inclusive travessia de
-# caminho, já que o valor vai para o nome do arquivo servido.
-_TOKEN_SEGURO = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
-
-
-@app.get("/instalador/baixar/{token}")
-def baixar_instalador(token: str, nome: str = Query("Certificado")):
-    """
-    Serve o instalador avulso com o token no NOME do arquivo.
-
-    O binário é sempre o mesmo — não é recompilado por download. Isso é o que
-    permite assiná-lo uma vez e acumular reputação no SmartScreen; um executável
-    gerado a cada clique seria inédito para o Windows em toda instalação, e o
-    aviso de "aplicativo não reconhecido" apareceria justamente no fluxo que
-    deveria ser de um clique só. O instalador lê o token do próprio argv[0].
-    """
-    if not _TOKEN_SEGURO.match(token):
-        raise HTTPException(status_code=400, detail="Token malformado")
-
-    if not INSTALADOR_AVULSO_EXE.is_file():
-        raise HTTPException(
-            status_code=503,
-            detail="Instalador ainda não compilado no servidor. Rode scripts/build_instalador_avulso.ps1.",
-        )
-
-    # O template é configurável desde 15/08, mas o `{token}` continua sendo
-    # obrigatório: o instalador o lê do próprio argv[0]. `montar_nome_do_arquivo`
-    # cai no padrão se o template gravado for inválido — entregar um instalador
-    # que funciona com nome padrão é melhor que um nome bonito que não instala.
-    try:
-        template = load_settings().instalador_nome_template
-    except Exception:  # noqa: BLE001
-        logger.exception("Falha ao ler o template do nome; usando o padrão")
-        template = ""
-
-    return FileResponse(
-        path=INSTALADOR_AVULSO_EXE,
-        media_type="application/vnd.microsoft.portable-executable",
-        filename=cert_installer.montar_nome_do_arquivo(template, nome, token),
-    )
-
+# O caminho de DOWNLOAD do instalador avulso saiu em 23/08/2026.
+#
+# `preparar-download` gerava o link e `/instalador/baixar/{token}` servia o
+# .exe com o token no nome do arquivo. Enquanto nao havia agente nas
+# estacoes, era a unica forma de alguem instalar um certificado.
+#
+# Agora ha: o agente do INVENT mora nas maquinas e instala na sessao da
+# pessoa, com o portal so pedindo. Manter os dois caminhos significaria dois
+# jeitos de emitir token de instalacao -- e token e a entrega da chave
+# privada. O menos usado seria o menos observado.
+#
+# O que FICOU, e nao por descuido: `/claim` e `/report-avulso`. Elas nasceram
+# para o .exe avulso, mas sao o caminho que o AGENTE usa -- ele tambem chega
+# sem credencial neste portal, tendo so o token. Remove-las quebraria a
+# instalacao que este commit torna a unica.
 
 class InstallResultItem(BaseModel):
     certificateId: str

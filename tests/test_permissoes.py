@@ -772,11 +772,11 @@ def test_instalar_o_proprio_certificado_nao_depende_do_modulo_instalador(
     """
     O menu "Instalador" é a tela de DIAGNÓSTICO, não o ato de instalar.
 
-    `instalabilidade` e `preparar-download` moram sob `/api/cert-installer/`,
-    mas quem as chama é o `index.html` — é a pessoa instalando o próprio
-    certificado pelo Início. Gateá-las pelo módulo tiraria de TODO operador a
-    capacidade de instalar, e o sintoma apareceria como "o botão de instalar
-    sumiu" numa tela que ninguém mexeu.
+    `instalabilidade` e `prepare` moram sob `/api/cert-installer/`, mas quem as
+    chama é o `index.html` — é a pessoa instalando o próprio certificado pelo
+    Início. Gateá-las pelo módulo tiraria de TODO operador a capacidade de
+    instalar, e o sintoma apareceria como "o botão de instalar sumiu" numa tela
+    que ninguém mexeu.
 
     Prefixo de rota compartilhado não é público compartilhado.
     """
@@ -789,7 +789,7 @@ def test_instalar_o_proprio_certificado_nao_depende_do_modulo_instalador(
     for rota in ("/api/cert-installer/instalabilidade",):
         assert client.get(rota, headers=h).status_code != 403, rota
     assert client.post(
-        "/api/cert-installer/preparar-download", json={}, headers=h
+        "/api/cert-installer/prepare", json={}, headers=h
     ).status_code != 403
 
 

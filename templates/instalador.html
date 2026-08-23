@@ -28,7 +28,7 @@
           <div>
             <h2 style="margin-bottom: 0.25rem;">Diagnóstico</h2>
             <p class="text-muted" style="font-size: var(--fs-ui);">
-              O que existe no servidor agora — binário, assinatura, cofre e chaves de cifragem.
+              O que existe no servidor agora — cofre e chaves de cifragem.
             </p>
           </div>
           <div class="linha-acoes">
@@ -58,18 +58,6 @@
         <div id="cfgMessageArea"></div>
 
         <div class="linha-acoes" style="gap: 1.5rem;">
-          <div class="form-field" style="flex: 2; min-width: min(320px, 100%);">
-            <label for="cfgNomeTemplate">Nome do arquivo baixado</label>
-            <input type="text" id="cfgNomeTemplate" class="form-control"
-                   placeholder="Instalar {nome} -{token}.exe" />
-            <p class="hint" style="margin-top: 0.4rem;">
-              Marcadores: <code>{nome}</code> e <code>{token}</code>.
-              <strong>O <code>{token}</code> é obrigatório</strong> — o instalador lê o token do
-              próprio nome do arquivo. Sem ele, o programa abre e não instala nada.
-            </p>
-            <p class="hint" id="cfgNomeEfetivo" style="margin-top: 0.25rem;"></p>
-          </div>
-
           <div class="form-field" style="flex: 1; min-width: 200px;">
             <label for="cfgTtl">Validade do token (minutos)</label>
             <input type="number" id="cfgTtl" class="form-control" min="0" max="1440" />
@@ -253,14 +241,11 @@
           const r = await fetch("/api/settings", { headers: getHeaders() });
           if (!r.ok) return;
           const s = await r.json();
-          document.getElementById("cfgNomeTemplate").value = s.instalador_nome_template || "";
           document.getElementById("cfgTtl").value = s.install_token_ttl_min || 0;
           document.getElementById("cfgRetencao").value = s.trilha_retencao_dias || 0;
           // O "em vigor" existe porque o campo em branco não diz nada: quem
           // olha precisa saber o que realmente vale agora, não o que está
           // digitado.
-          document.getElementById("cfgNomeEfetivo").textContent =
-            "Em vigor: " + (s.instalador_nome_efetivo || "—");
           document.getElementById("cfgTtlEfetivo").textContent =
             "Em vigor: " + (s.install_token_ttl_efetivo || "—") + " min";
         } catch (e) {
@@ -276,7 +261,6 @@
             method: "PUT",
             headers: getHeaders(true),
             body: JSON.stringify({
-              instalador_nome_template: document.getElementById("cfgNomeTemplate").value,
               install_token_ttl_min: parseInt(document.getElementById("cfgTtl").value || "0", 10),
               trilha_retencao_dias: parseInt(document.getElementById("cfgRetencao").value || "0", 10),
             }),
@@ -327,10 +311,6 @@
       // determinar" e NÃO pode ser mostrado como "não assinado" — o primeiro
       // pede investigação, o segundo pede uma compra de certificado.
 
-      function bytesLegiveis(n) {
-        if (!n && n !== 0) return "—";
-        return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : (n / 1024).toFixed(0) + " KB";
-      }
 
       function linhaDiag(rotulo, valor, tom) {
         const cor = tom === "ruim" ? "var(--expired-text)"
@@ -355,39 +335,12 @@
       }
 
       function renderDiagnostico(d) {
-        const b = d.binario || {};
         const c = d.cofre || {};
         const k = d.chaves || {};
 
-        const assinatura =
-          b.assinado === true ? [esc(b.assinatura_detalhe || "Assinado."), "bom"]
-          : b.assinado === false ? [esc(b.assinatura_detalhe || "Sem assinatura."), "ruim"]
-          : [esc(b.assinatura_detalhe || "Não foi possível determinar."), "aviso"];
-
-        const blocoBinario = blocoDiag("Instalador (.exe)", [
-          linhaDiag("Presente no servidor", b.existe ? "sim" : "NÃO", b.existe ? "bom" : "ruim"),
-          linhaDiag("Tamanho", bytesLegiveis(b.tamanho_bytes)),
-          linhaDiag("Compilado em", b.modificado_em ? new Date(b.modificado_em).toLocaleString("pt-BR") : "—"),
-          linhaDiag("SHA-256", b.sha256 ? "<code style='font-size: var(--fs-caption)'>" + esc(b.sha256.slice(0, 32)) + "…</code>" : "—"),
-          linhaDiag("Assinatura", assinatura[0], assinatura[1]),
-          ...(b.signatarios || []).map((s) =>
-            linhaDiag("Signatário", esc(s.subject), s.expirado ? "ruim" : "bom")
-          ),
-          linhaDiag(
-            "Ícone do instalador",
-            (d.icone && d.icone.presente)
-              ? "<img src='/favicon.ico' alt='Ícone do instalador' " +
-                "style='width:16px;height:16px;vertical-align:middle' /> em uso"
-              : "ausente",
-            (d.icone && d.icone.presente) ? "" : "ruim"
-          ),
-          // Entrada de BUILD, não configuração: o binário é o mesmo para todo
-          // download de propósito — é o que permite assiná-lo uma vez e
-          // acumular reputação no SmartScreen. Um seletor que parecesse aplicar
-          // na hora geraria um chamado de suporte por uso.
-          linhaDiag("Trocar o ícone",
-                    "<span style='font-size: var(--fs-caption)'>exige recompilar e reassinar</span>"),
-        ]);
+        // O bloco do binario saiu em 23/08/2026 com o instalador avulso: ele
+        // diagnosticava um .exe que o portal nao serve mais. Diagnostico de
+        // coisa que nao existe e ruido que envelhece para mentira.
 
         // "Sem senha cifrada" é o número que mais importa aqui: foi a causa
         // ÚNICA das seis falhas de instalação registradas em produção, e
@@ -430,19 +383,12 @@
             "Reponha a chave em CERT_ENCRYPTION_KEY_V&lt;n&gt; ou peça um rescan ao agente — " +
             "o cofre se reconstrói a partir dos arquivos de origem." +
             "</span></div>";
-        } else if (b.assinado === false) {
-          aviso =
-            "<div class='cg-banner cg-banner--info' style='margin-bottom:1rem'>" +
-            "<span class='cg-banner__icon' aria-hidden='true'>ℹ️</span><span class='cg-banner__text'>" +
-            "O instalador não está assinado: o Windows vai exibir “aplicativo não reconhecido” " +
-            "na primeira execução em cada estação. Mitigação atual é a diretiva de grupo." +
-            "</span></div>";
         }
 
         document.getElementById("diagArea").innerHTML =
           aviso +
           "<div style='display:flex;gap:2rem;flex-wrap:wrap'>" +
-          blocoBinario + blocoCofre + blocoChaves +
+           blocoCofre + blocoChaves +
           "</div>";
       }
 

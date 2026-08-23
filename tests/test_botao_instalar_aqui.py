@@ -39,23 +39,40 @@ def test_o_botao_nasce_escondido() -> None:
     assert "hidden" in tag
 
 
-def test_baixar_continua_existindo() -> None:
+def test_o_download_do_exe_saiu_de_vez() -> None:
     """
-    Máquina sem agente não recebe comando, e o .exe é como o agente chega na
-    primeira vez. Ele deixa de ser o caminho principal — vira o de exceção —,
-    que é diferente de deixar de existir.
+    Este teste afirmava o CONTRÁRIO até 23/08/2026: que o botão de baixar devia
+    ficar como caminho de exceção.
+
+    O argumento era "máquina sem agente não recebe comando, e o .exe é como o
+    agente chega na primeira vez". **Estava errado**: o agente chega pelo
+    instalador do Hardlyze, distribuído por fora — o .exe de certificado nunca
+    foi o caminho de instalação do agente.
+
+    Sem esse furo, sobra a razão de remover: dois caminhos para emitir token de
+    instalação são duas superfícies para a entrega de uma chave privada, e o
+    menos usado é o menos observado.
     """
-    assert 'id="btnBaixarSel"' in INICIO
-    assert "preparar-download" in INICIO
+    assert "btnBaixarSel" not in INICIO
+    assert "preparar-download" not in INICIO
+    assert "baixarSelecionados" not in INICIO
 
 
-def test_o_teto_de_certificados_vale_para_os_dois_caminhos() -> None:
+def test_quem_nao_tem_agente_recebe_instrucao_e_nao_silencio() -> None:
     """
-    O token é o mesmo e o limite é do servidor. Deixar um botão habilitado
-    convidaria a um 422 que a tela já sabia evitar.
+    Antes, sem agente, a pessoa caía no download. Sem ele, um botão escondido e
+    mais nada deixaria a tela muda — e ela não teria como saber o que fazer.
     """
-    trecho = INICIO[INICIO.index("btnBaixarSel\").disabled = excedeu") :][:400]
-    assert "btnInstalarAqui" in trecho and "disabled = excedeu" in trecho
+    assert 'id="semAgente"' in INICIO
+    assert "Hardlyze Agent" in INICIO
+
+
+def test_o_teto_de_certificados_desabilita_o_botao() -> None:
+    """
+    O limite é do servidor. Deixar o botão habilitado convidaria a um 422 que a
+    tela já sabia evitar.
+    """
+    assert 'document.getElementById("btnInstalarAqui").disabled = excedeu' in INICIO
 
 
 def test_falha_ao_consultar_a_estacao_nao_alarma() -> None:

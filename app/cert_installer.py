@@ -982,64 +982,11 @@ def remover_da_carteira(user_id: str, documento: str) -> None:
 # a um agente e um servidor de distância de quem editou o campo.
 # ──────────────────────────────────────────────────────────────────────────
 
-TEMPLATE_NOME_PADRAO = "Instalar {nome} -{token}.exe"
-
-_CARACTERES_PROIBIDOS = set('/\\:*?"<>|')
-
-
-def validar_template_nome(template: str) -> str:
-    """
-    Devolve o template normalizado ou levanta `ValueError` com o motivo.
-
-    Recusar na hora de salvar é a única defesa possível: depois de gravado, o
-    defeito só se manifesta na máquina de quem baixou.
-    """
-    t = (template or "").strip()
-    if not t:
-        return ""   # vazio = usar o padrão do código
-
-    if "{token}" not in t:
-        raise ValueError(
-            "O template precisa conter {token}: o instalador lê o token do "
-            "próprio nome do arquivo. Sem ele, nada é instalado."
-        )
-    if not t.lower().endswith(".exe"):
-        raise ValueError("O nome do arquivo precisa terminar em .exe.")
-    if any(c in _CARACTERES_PROIBIDOS for c in t.replace("{nome}", "").replace("{token}", "")):
-        raise ValueError('O nome não pode conter / \\ : * ? " < > |.')
-    if len(t) > 120:
-        raise ValueError("O template ficou longo demais (máximo 120 caracteres).")
-
-    desconhecidos = set(re.findall(r"\{(\w+)\}", t)) - {"nome", "token"}
-    if desconhecidos:
-        raise ValueError(
-            "Marcadores desconhecidos: "
-            + ", ".join("{" + d + "}" for d in sorted(desconhecidos))
-            + ". Use apenas {nome} e {token}."
-        )
-    return t
-
-
-def montar_nome_do_arquivo(template: str, nome: str, token: str) -> str:
-    """
-    Aplica o template. O `nome` é sanitizado; o `token` nunca.
-
-    Sanitizar o token o corromperia — ele precisa chegar íntegro ao instalador.
-    Quem o gera é o servidor (`secrets`), e `_TOKEN_SEGURO` já o valida na
-    rota de download antes de chegar aqui.
-    """
-    seguro = re.sub(r"[^A-Za-z0-9 _-]", "", str(nome or ""))[:60].strip() or "Certificado"
-    try:
-        t = validar_template_nome(template) or TEMPLATE_NOME_PADRAO
-    except ValueError:
-        # Template inválido gravado por algum caminho que escapou da validação:
-        # cair no padrão entrega um instalador que funciona, em vez de um nome
-        # quebrado. O erro fica no log, não na mão do usuário.
-        logger.warning("Template de nome inválido em uso; caindo no padrão.")
-        t = TEMPLATE_NOME_PADRAO
-    return t.replace("{nome}", seguro).replace("{token}", token)
-
-
+# O nome do arquivo baixado saiu em 23/08/2026 com o instalador avulso.
+# `TEMPLATE_NOME_PADRAO`, `validar_template_nome` e `montar_nome_do_arquivo`
+# existiam para pôr o token no NOME do .exe — o modelo Ninite, que permitia
+# assinar o binário uma vez. Sem .exe servido pelo portal, não há nome a
+# montar.
 # ──────────────────────────────────────────────────────────────────────────
 # Diagnóstico do cofre e das chaves
 #
