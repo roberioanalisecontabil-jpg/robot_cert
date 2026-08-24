@@ -13,6 +13,46 @@ portal passa a saber DE QUEM é a máquina. É o que permitirá enfileirar um
 comando de instalação para "a estação da Ana" sem ninguém escolher `machine_id`
 numa lista.
 
+── ⚠️ DORMENTE desde 24/08/2026 — leia antes de mexer ────────────────────
+
+**A tabela tem 0 linhas em produção, e não é descuido.** Este módulo não tem
+consumidor hoje, por duas razões que só aparecem juntas:
+
+1. **O consumidor previsto mudou de projeto.** Isto foi desenhado para a
+   instalação de certificado na estação do colaborador. Em 23/08/2026 esse
+   caminho passou a ser do agente do INVENT, que já mora nas 60 máquinas — o
+   `.exe` avulso saiu do portal. Ver `app/main.py`, a nota sobre o retorno de
+   `/api/cert-installer/prepare`.
+
+2. **O agente que sobrou não consegue usar isto**, e a razão é estrutural, não
+   uma pendência de fiação. O agente do robot_cert é UM processo num servidor
+   controlado (o ANALISESRV, que varre os PFX), e todas as chamadas
+   autenticadas dele — `/api/ingest`, upload de PFX, configurações — saem do
+   **serviço Windows, como LocalSystem**. A credencial daqui é gravada em
+   `%LOCALAPPDATA%` cifrada com **DPAPI de usuário**: LocalSystem não decifra o
+   blob da pessoa. A bandeja, que roda na sessão dela, não faz chamada
+   autenticada nenhuma além do próprio registro.
+
+   Consequência prática: fazer o login no ANALISESRV gravaria um segredo que
+   nada leria. `run_agent._headers()` continuaria mandando `X-API-Key`.
+
+**Credencial de PESSOA não substitui credencial de MÁQUINA.** É essa a lição, e
+ela vale para os dois projetos: o INVENT tem exatamente o mesmo buraco, onde o
+`AGENT_SECRET_TOKEN` compartilhado ainda é a identidade da máquina porque o
+serviço também não alcança a credencial da pessoa.
+
+O que revive este módulo, e a ordem importa:
+
+  * uma credencial de MÁQUINA em `ProgramData`, que o serviço alcance,
+    substituindo o `X-API-Key`. É outro objeto, não este — e é o mesmo trabalho
+    que o INVENT precisa fazer. Merecem um desenho só, não dois; e
+  * ou um caminho novo em que a PESSOA aja pelo agente na sessão dela.
+
+Até lá: mantido intacto, testado e sem consumidor. Não é código morto por
+esquecimento — é código à espera da metade que falta, e apagá-lo custaria
+reescrever a parte difícil (o hash determinístico, a revogação, `visto_em`)
+quando a credencial de máquina for feita.
+
 ── O agente nunca guarda a senha do portal ───────────────────────────────
 
 `registrar` recebe a senha uma vez, na janela de login, e devolve um segredo de
