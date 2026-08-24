@@ -5372,7 +5372,11 @@ def _claim_rate_limit(ip: str) -> bool:
 @app.post("/api/cert-installer/claim")
 def claim_install(body: RedeemRequest, request: Request):
     """
-    Resgate SEM API key, para o instalador avulso. O token é a credencial.
+    Resgate SEM API key: o token de uso único É a credencial.
+
+    Nasceu para o instalador avulso e hoje serve o AGENTE, que chega na mesma
+    condição — sem credencial neste portal, tendo só o token. O nome ficou; o
+    público mudou.
 
     Deliberadamente não distingue token inválido de expirado ou já consumido:
     a resposta única evita virar oráculo de tokens válidos.
@@ -5393,7 +5397,10 @@ def claim_install(body: RedeemRequest, request: Request):
         token_id=str(token_data["id"]),
         target_machine=token_data.get("target_machine"),
         client_ip=client_ip,
-        detail="instalador avulso",
+        # Era "instalador avulso" ate 23/08/2026, e virou mentira quando o
+        # download saiu: quem resgata agora e o agente da estacao. Numa
+        # auditoria, esse campo responde "como esse certificado entrou?".
+        detail="agente da estacao",
     )
 
     try:
@@ -5404,7 +5411,7 @@ def claim_install(body: RedeemRequest, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception:
-        logger.exception("Erro ao montar bundle para instalador avulso")
+        logger.exception("Erro ao montar bundle para o agente da estacao")
         raise HTTPException(status_code=500, detail="Erro interno ao montar bundle")
 
 
@@ -5453,7 +5460,7 @@ def report_install(
 @app.post("/api/cert-installer/report-avulso")
 def report_install_avulso(body: ReportRequest, request: Request):
     """
-    Mesma gravação, para o instalador avulso — que não tem API key.
+    Mesma gravação, para quem resgata sem API key — hoje, o agente da estação.
 
     Abrir a rota não afeta o gate real: `_registrar_relatorio` já exigia um
     token conhecido E já redimido, o que a dependência de autenticação apenas
