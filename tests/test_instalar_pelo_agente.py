@@ -51,8 +51,13 @@ def cenario(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent-de-teste", raising=False)
     monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "segredo", raising=False)
 
-    def _ponte(machine_id, token_raw, hostname):
-        pedidos.append({"machine_id": machine_id, "token": token_raw, "hostname": hostname})
+    def _ponte(machine_id, token_raw, hostname, expira_em=None):
+        pedidos.append({
+            "machine_id": machine_id,
+            "token": token_raw,
+            "hostname": hostname,
+            "expira_em": expira_em,
+        })
 
     monkeypatch.setattr(m, "_pedir_instalacao_ao_invent", _ponte)
     return {"trilha": trilha, "pedidos": pedidos, "monkeypatch": monkeypatch}
@@ -249,3 +254,66 @@ def test_sem_agente_vivo_diz_o_motivo(client: TestClient, cenario) -> None:
 
     cenario["monkeypatch"].setattr(httpx, "get", lambda *a, **k: _R())
     assert _minha_estacao(client).json()["motivo"] == "sem_agente_vivo"
+
+
+# ── 5. O prazo viaja com o pedido ────────────────────────────────────────
+
+
+def test_o_prazo_do_token_vai_junto_para_o_outro_portal(
+    client: TestClient, cenario
+) -> None:
+    """
+    Sem o prazo, o portal de inventário não tem como saber que o comando morreu:
+    o token é opaco do lado de lá, e a validade é configurável aqui (1 min a
+    24 h), então nenhum teto adivinhado lá serviria.
+
+    O efeito de não mandar é a máquina desligada acordar horas depois, tentar,
+    ser recusada — e a trilha ganhar um ERRO que não é erro nenhum, no lugar
+    onde ela é usada como prova.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    prazo = datetime.now(timezone.utc) + timedelta(minutes=5)
+    cenario["monkeypatch"].setattr(
+        ci, "create_install_token", lambda **kw: (TOKEN_EMITIDO, "tid-1", prazo)
+    )
+
+    assert _pedir(client).status_code == 200
+    assert cenario["pedidos"][0]["expira_em"] == prazo
+
+
+def test_o_prazo_sai_em_iso_no_corpo_da_ponte(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    O `datetime` tem de virar ISO antes de sair — `json=` não serializa objeto
+    de data, e a falha apareceria só em produção, no momento do clique.
+    """
+    from datetime import datetime, timezone
+
+    import httpx
+
+    enviados: List[Dict[str, Any]] = []
+
+    class _R:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    def _post(_url, **kw):
+        enviados.append(kw.get("json") or {})
+        return _R()
+
+    monkeypatch.setattr(httpx, "post", _post)
+    monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent-de-teste", raising=False)
+    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "segredo", raising=False)
+
+    prazo = datetime(2026, 8, 24, 15, 0, tzinfo=timezone.utc)
+    m._pedir_instalacao_ao_invent(MAQUINA, TOKEN_EMITIDO, "TI-002", prazo)
+
+    assert enviados[0]["expira_em"] == prazo.isoformat()
+    assert isinstance(enviados[0]["expira_em"], str)
+
+    # Sem prazo conhecido o campo vai nulo, e o outro lado volta ao
+    # comportamento antigo — esperar na fila até a máquina acordar.
+    m._pedir_instalacao_ao_invent(MAQUINA, TOKEN_EMITIDO, None, None)
+    assert enviados[1]["expira_em"] is None

@@ -1517,6 +1517,81 @@ def validate_and_consume_token(token_raw: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def prazo_do_token(token_id: str, user_email: str) -> Optional[Dict[str, Any]]:
+    """
+    Até quando aquele pedido ainda vale — para a tela poder dizer que expirou.
+
+    ── Por que a tela precisa disto ──────────────────────────────────────
+
+    O token vale minutos; o comando espera na fila. Quem clica e sai para
+    almoçar volta e encontra `failed`, sem nada explicando. Pior: entre o
+    momento em que o prazo acaba e o momento em que a máquina acorda, o pedido
+    já está morto e a tela continua dizendo "aguardando" — afirmando andamento
+    onde não há mais nenhum.
+
+    ── Escopo, e por que ele não é o mesmo do `/redeem` ──────────────────
+
+    `validate_and_consume_token` recusa sem dizer o motivo de propósito: quem
+    apresenta um token ali é o portador, e distinguir "expirado" de "não existe"
+    diria a quem tenta se aquele valor já existiu.
+
+    Aqui é o contrário. Quem pergunta é a dona do pedido, autenticada, com o
+    `token_id` que ELA recebeu ao clicar — e o filtro por `user_email` garante
+    isso. Não devolve o token nem o hash: só prazo e se já foi usado.
+
+    Devolve `None` quando não achou — inclusive quando o id é de outra pessoa,
+    que a tela apresenta como "ainda aguardando", igual a um pedido recém-saído.
+    """
+    client = _supabase()
+    if not client or not (token_id or "").strip():
+        return None
+
+    alvo = (user_email or "").strip().lower()
+    if not alvo:
+        return None
+
+    try:
+        r = (
+            client.table("install_token")
+            .select("id, expires_at, consumed_at, created_at")
+            .eq("id", token_id)
+            .eq("user_email", alvo)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        logger.exception("Falha ao consultar o prazo do install_token")
+        return None
+
+    linhas = r.data or []
+    if not linhas:
+        return None
+
+    linha = linhas[0]
+    expira = _para_datetime(linha.get("expires_at"))
+    return {
+        "expires_at": linha.get("expires_at"),
+        "consumed_at": linha.get("consumed_at"),
+        "expirado": bool(expira and datetime.now(timezone.utc) >= expira),
+    }
+
+
+def _para_datetime(valor: Any) -> Optional[datetime]:
+    """ISO do Postgres em datetime ciente de fuso. `None` no que não converte.
+
+    Sem fuso vira UTC: o banco grava em UTC e uma leitura ingênua compararia
+    contra o relógio local — o que faria o prazo parecer terminado três horas
+    antes, ou três horas depois, dependendo de onde o processo roda.
+    """
+    if not valor:
+        return None
+    try:
+        quando = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return quando if quando.tzinfo else quando.replace(tzinfo=timezone.utc)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # CRUD — install_log
 # ──────────────────────────────────────────────────────────────────────────

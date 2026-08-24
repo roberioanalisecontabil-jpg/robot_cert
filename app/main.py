@@ -5164,7 +5164,7 @@ def preparar_instalacao(
     # antes deixaria a trilha afirmando um pedido que talvez nunca tenha saído
     # daqui — e a trilha existe justamente para ser confiável.
     try:
-        _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname)
+        _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname, expires_at)
     except Exception as e:  # noqa: BLE001
         logger.exception("Falha ao pedir a instalação ao portal de inventário")
         raise HTTPException(
@@ -5218,10 +5218,41 @@ def acompanhar_instalacao(
     por dentro: o pedido acabou de sair, ou o agente ainda nao acordou. Nao
     distinguimos aqui de proposito — a pessoa nao pode fazer nada diferente num
     caso ou no outro, e um "o agente esta dormindo" so geraria ansiedade.
+
+    `expirado` e outra coisa, e por isso e um desfecho proprio: ali existe algo a
+    fazer — ligar a maquina e pedir de novo. Ver a secao abaixo.
+
+    ── Maquina desligada = token morto ──────────────────────────────────
+
+    O token vale minutos e o comando espera na fila. Quem clica e sai para
+    almocar volta e encontra `failed`, sem explicacao. E, no intervalo entre o
+    prazo acabar e a maquina acordar, o pedido ja esta morto enquanto a tela
+    ainda diz "aguardando" — afirmando andamento onde nao ha mais nenhum.
+
+    O prazo entra na resposta ANTES de a cadeia falhar, entao a tela para de
+    esperar na hora certa em vez de descobrir pelo relato de erro do agente, que
+    chega tarde ou nao chega. E uma falha JA registrada depois do prazo tambem
+    sai como `expirado`: o motivo verdadeiro e o prazo, e "o portal recusou o
+    token" mandaria alguem procurar defeito onde nao ha.
     """
     email = (token.email or "").strip().lower()
     if not email:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    prazo = cert_installer.prazo_do_token(str(token_id), email)
+    expirado = bool(prazo and prazo.get("expirado") and not prazo.get("consumed_at"))
+    expira_em = (prazo or {}).get("expires_at")
+
+    def _resposta(desfecho: str, parou_em=None, detalhe: str = "") -> dict:
+        return {
+            "desfecho": desfecho,
+            "parou_em": parou_em,
+            "detalhe": detalhe,
+            # A tela usa isto para se dar o prazo certo de espera em vez de
+            # desistir num numero de tentativas escolhido a dedo — que era
+            # menor que a validade do token e por isso desistia cedo demais.
+            "expira_em": expira_em,
+        }
 
     try:
         cadeias = cert_installer.cadeias_de_instalacao(user_email=email)
@@ -5230,11 +5261,13 @@ def acompanhar_instalacao(
         # 200 com "desconhecido", e nao 500: a tela pergunta isto em laco, e um
         # erro faria a pessoa ver um alarme por causa de uma consulta que ela
         # nem sabe que existe. O certificado pode ter entrado.
-        return {"desfecho": "desconhecido", "parou_em": None, "detalhe": ""}
+        return _resposta("desconhecido")
 
     cadeia = next((c for c in cadeias if str(c.get("token_id")) == str(token_id)), None)
     if not cadeia:
-        return {"desfecho": "aguardando", "parou_em": None, "detalhe": ""}
+        # Sem cadeia e com prazo vencido: o agente nunca chegou a tocar no
+        # pedido. E o caso exato da maquina que ficou desligada.
+        return _resposta("expirado" if expirado else "aguardando")
 
     desfecho = cadeia.get("desfecho") or "incompleto"
     eventos = cadeia.get("eventos") or []
@@ -5244,15 +5277,27 @@ def acompanhar_instalacao(
             detalhe = str(e["detail"])
             break
 
-    return {
-        "desfecho": "aguardando" if desfecho == "incompleto" else desfecho,
-        "parou_em": cadeia.get("parou_em"),
-        "detalhe": detalhe,
-    }
+    if desfecho == "concluido":
+        return _resposta("concluido", cadeia.get("parou_em"), detalhe)
+
+    # `falhou` e `incompleto` viram `expirado` quando o prazo acabou sem consumo:
+    # nos dois casos o que aconteceu foi o prazo, e o detalhe tecnico do agente
+    # ("o portal recusou o token") mandaria procurar defeito onde nao ha.
+    if expirado:
+        return _resposta("expirado", cadeia.get("parou_em"), detalhe)
+
+    return _resposta(
+        "aguardando" if desfecho == "incompleto" else desfecho,
+        cadeia.get("parou_em"),
+        detalhe,
+    )
 
 
 def _pedir_instalacao_ao_invent(
-    machine_id: str, token_raw: str, hostname: Optional[str]
+    machine_id: str,
+    token_raw: str,
+    hostname: Optional[str],
+    expira_em: Optional[datetime] = None,
 ) -> None:
     """
     Chama o portal de inventário, servidor a servidor.
@@ -5260,6 +5305,17 @@ def _pedir_instalacao_ao_invent(
     Levanta em qualquer desfecho que não seja sucesso: quem chama transforma em
     502 com o motivo. Silenciar aqui produziria a pior tela possível — "pedido
     enviado" para um agente que nunca vai receber nada.
+
+    ── O prazo viaja junto ──────────────────────────────────────────────
+
+    Sem ele, o outro portal não tem como saber que o comando morreu: o token é
+    opaco do lado de lá, e a validade é configurável aqui (1 min a 24 h), então
+    nenhum teto fixo adivinhado lá serviria. O efeito de não mandar é a máquina
+    desligada acordar horas depois, tentar, ser recusada — e a trilha ganhar um
+    ERRO que não é erro nenhum, no lugar onde ela é usada como prova.
+
+    Opcional: um portal de inventário anterior a este campo simplesmente o
+    ignora, e o comportamento volta a ser o de hoje.
     """
     import httpx
 
@@ -5270,6 +5326,7 @@ def _pedir_instalacao_ao_invent(
             "mac_address": machine_id,
             "token": token_raw,
             "hostname": hostname or None,
+            "expira_em": expira_em.isoformat() if expira_em else None,
         },
         timeout=20.0,
     )

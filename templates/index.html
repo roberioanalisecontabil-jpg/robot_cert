@@ -550,18 +550,49 @@
       // ao assunto. O desfecho ficava no log do portal ou na janela do agente —
       // dois lugares onde quem clicou nao esta.
       //
-      // Trinta tentativas de 2s = 1 minuto. A instalacao real levou 37s do
-      // clique ao certificado no perfil; um minuto cobre isso com folga, e
-      // desistir depois disso e honesto: passou desse tempo, alguma coisa nao
-      // esta indo, e a pessoa precisa saber ONDE olhar em vez de ficar vendo
-      // uma barrinha girar.
-      const ACOMPANHAR_TENTATIVAS = 30;
-      const ACOMPANHAR_INTERVALO_MS = 2000;
+      // A instalacao real levou 37s do clique ao certificado no perfil, entao os
+      // primeiros 30s vao de 2 em 2s: e o caso comum, e ali a pessoa esta
+      // olhando. Depois disso o ritmo cai, porque quem ainda nao respondeu nao
+      // vai responder no proximo segundo, e o custo passa a ser da bateria dela.
+      const ACOMPANHAR_INTERVALO_RAPIDO_MS = 2000;
+      const ACOMPANHAR_RAPIDO_ATE_MS = 30000;
+      const ACOMPANHAR_INTERVALO_LENTO_MS = 5000;
 
-      async function acompanharInstalacao(tokenId) {
+      // Quanto esperar quando o prazo do pedido nao veio na resposta — a
+      // consulta pode falhar, e sem teto o laco ficaria girando para sempre.
+      const ACOMPANHAR_TETO_PADRAO_MS = 5 * 60 * 1000;
+
+      // Uma volta a mais depois do prazo: o agente pode ter resgatado no ultimo
+      // segundo e a trilha ainda estar a caminho. Desistir exatamente no minuto
+      // do prazo chamaria de expirada uma instalacao que deu certo.
+      const ACOMPANHAR_FOLGA_MS = 4000;
+
+      async function acompanharInstalacao(tokenId, expiraEmISO) {
         if (!tokenId) return;
-        for (let i = 0; i < ACOMPANHAR_TENTATIVAS; i++) {
-          await new Promise((r) => setTimeout(r, ACOMPANHAR_INTERVALO_MS));
+
+        const inicio = Date.now();
+        let limite = inicio + ACOMPANHAR_TETO_PADRAO_MS;
+        const prazoDoPedido = (iso) => {
+          const t = iso ? Date.parse(iso) : NaN;
+          if (!isNaN(t)) limite = t + ACOMPANHAR_FOLGA_MS;
+        };
+        prazoDoPedido(expiraEmISO);
+
+        const expirou = () =>
+          showToast(
+            "O pedido expirou — esta máquina não respondeu a tempo. " +
+              "Verifique se ela está ligada com o Hardlyze Agent aberto e peça de novo.",
+            "warning"
+          );
+
+        while (Date.now() < limite) {
+          const decorrido = Date.now() - inicio;
+          const intervalo =
+            decorrido < ACOMPANHAR_RAPIDO_ATE_MS
+              ? ACOMPANHAR_INTERVALO_RAPIDO_MS
+              : ACOMPANHAR_INTERVALO_LENTO_MS;
+          await new Promise((r) => setTimeout(r, intervalo));
+
           let d;
           try {
             const r = await fetch(
@@ -574,8 +605,17 @@
             continue;  // instabilidade de rede nao e desfecho
           }
 
+          // O prazo real vem do portal; o do clique e so o palpite inicial.
+          prazoDoPedido(d.expira_em);
+
           if (d.desfecho === "concluido") {
             showToast("Certificado instalado nesta máquina.", "success");
+            return;
+          }
+          if (d.desfecho === "expirado") {
+            // Desfecho proprio, e nao "falhou": aqui existe algo a fazer, e
+            // dizer "falhou" mandaria a pessoa procurar defeito no certificado.
+            expirou();
             return;
           }
           if (d.desfecho === "falhou") {
@@ -588,11 +628,11 @@
             return;
           }
         }
-        showToast(
-          "O agente ainda não confirmou a instalação. Abra o Hardlyze Agent " +
-            "nesta máquina para ver o histórico.",
-          "warning"
-        );
+
+        // Passou do prazo sem desfecho: o token nao vale mais, entao isto E a
+        // expiracao — nao "ainda pode dar certo, vá olhar noutro lugar", que era
+        // o que a tela dizia antes e mandava esperar por algo que ja morreu.
+        expirou();
       }
 
       async function instalarNaEstacao() {
@@ -624,7 +664,9 @@
           _selecao.clear();
           sincronizarCheckboxesDaPagina();
           atualizarBarraSelecao();
-          acompanharInstalacao(d.token_id);
+          // O prazo ja vem do `prepare`: sem ele, a espera comecaria com o teto
+          // padrao e so acertaria o alvo na primeira resposta do acompanhamento.
+          acompanharInstalacao(d.token_id, d.expires_at);
         } catch (e) {
           showToast("Nao foi possivel instalar: " + e.message, "error");
         } finally {
