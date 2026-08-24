@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#d1d5db",
+        "createdAt": "2026-08-24T19:06:13.730Z",
+        "reason": "Excecao sancionada, e limitada ao popup de exportacao do index.html: janela criada por window.open('')+document.write, sem o <link> do style.css, entao nenhum token existe ali. O par --border e rgba(0,0,0,0.08); em papel 8% de preto some, e a tabela impressa ficaria sem grade. Cinza solido e o equivalente impresso. Os outros tres literais do mesmo bloco foram corrigidos para valores da paleta/rampa em 24/08."
+      }
+    ]
+  }
+}
