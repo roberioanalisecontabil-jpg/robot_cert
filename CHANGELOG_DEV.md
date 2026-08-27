@@ -1088,12 +1088,12 @@ Passou a ser `listar_optin_fingerprints(body.machine_id)`. Verificado antes de a
 
 | # | Descrição | Severidade | Status |
 |---|-----------|------------|--------|
-| 1 | `robot_cert-main/` é uma cópia inteira do projeto dentro dele mesmo (backup do zip de 25/05, gitignored, 0,7 MB). Contornado por `pytest.ini`, mas continua confundindo buscas e ferramentas | Baixa | Contornado |
+| 1 | `robot_cert-main/` era uma cópia inteira do projeto dentro dele mesmo (backup do zip de 25/05, gitignored, 0,7 MB), confundindo buscas e ferramentas | Baixa | **Removido em 25/08** |
 | 2 | `ENCRYPTION_KEY` não definida (`/api/health` → `smtp_key_dedicada: false`). Sem ela a chave do SMTP é derivada da `JWT_SECRET_KEY` — se a JWT diferir entre ambientes, a senha SMTP para de descriptografar | Média | Aberto |
 | 3 | Instalação fim-a-fim: o circuito do opt-in passou a ter cobertura (`test_cert_installer_optin_e2e.py`); falta o transporte ECDH/AES e a instalação na estação, que dependem de agente Windows real | Média | Parcial |
 | 6 | Barreira de servidor do `/upload-pfx` era global — não conferia o `machine_id` do agente contra o da autorização. Agente adulterado podia sobrescrever `cert_pfx_store` de outra máquina | Média | **Resolvido em 08/08** |
 | 4 | `autorizar_no_cofre` usa `on_conflict="fingerprint"` — o mesmo certificado não pode estar autorizado em duas máquinas ao mesmo tempo; a segunda autorização move a primeira | Baixa | Aberto |
-| 5 | `app/main.py` usa `@app.on_event("startup")`, deprecado no FastAPI (avisos na suíte). Migrar para lifespan handlers | Baixa | Aberto |
+| 5 | `app/main.py` usava `@app.on_event("startup")`, deprecado no FastAPI. Migrado para `lifespan` (`app/main.py:493`) | Baixa | **Resolvido** |
 
 ---
 
