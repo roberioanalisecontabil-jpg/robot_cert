@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Analise CertiDigital Agent
-AppVersion=1.1.0
+AppVersion=1.2.0
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
 DefaultGroupName=Analise CertiDigital

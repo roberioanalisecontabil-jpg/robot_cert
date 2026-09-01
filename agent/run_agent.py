@@ -346,8 +346,21 @@ def _novo_http_client() -> httpx.Client:
     virava "unavailable" — o mesmo laço de erro de um portal fora do ar, com
     outra causa. Corrigir apenas a URL no config resolveria hoje e voltaria a
     quebrar no próximo redirect que o servidor introduzisse.
+
+    O hook de resposta é o descarte da credencial de máquina recusada
+    (`identidade_maquina.descartar_se_recusada`): centralizado AQUI porque as
+    chamadas do agente estão espalhadas (settings, ingest, upload, poll) e um
+    descarte por chamada seria esquecido justamente na que importasse. Sem ele,
+    um segredo revogado seria repetido a cada volta do laço para sempre — o
+    INVENT pagou esse defeito em 24/08/2026.
     """
-    return httpx.Client(timeout=_httpx_timeout(), follow_redirects=True)
+    from agent import identidade_maquina
+
+    return httpx.Client(
+        timeout=_httpx_timeout(),
+        follow_redirects=True,
+        event_hooks={"response": [identidade_maquina.descartar_se_recusada]},
+    )
 
 
 def _httpx_timeout() -> httpx.Timeout:
@@ -799,8 +812,34 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
         t.start()
 
     def _headers() -> dict:
+        """
+        A credencial da estação, no header de sempre: a de MÁQUINA se houver,
+        senão a X-API-Key compartilhada.
+
+        A credencial de máquina é a que acordou este caminho — mora em
+        ProgramData, cifrada com DPAPI de escopo máquina, e o serviço
+        (LocalSystem) a alcança. A da PESSOA (`agent.identidade`) continua fora
+        daqui, e continua certa fora daqui: vive no perfil do usuário e o
+        serviço não a decifra.
+
+        Lê do disco a cada chamada de propósito: guardar em memória manteria o
+        serviço usando um segredo já revogado até reiniciar. Quem apaga o
+        arquivo quando o portal recusa a credencial é o hook de resposta do
+        client (`identidade_maquina.descartar_se_recusada`) — não esta função,
+        que só LÊ.
+        """
         h: dict = {"Content-Type": "application/json"}
-        if api_key:
+        try:
+            from agent import identidade_maquina
+
+            guardado = identidade_maquina.ler()
+        except Exception:  # noqa: BLE001
+            # Cofre ilegível não pode calar o agente: cai na X-API-Key, que é
+            # o que já funcionava.
+            guardado = None
+        if guardado and guardado.get("segredo"):
+            h["X-API-Key"] = guardado["segredo"]
+        elif api_key:
             h["X-API-Key"] = api_key
         return h
     _start_tray()
@@ -969,6 +1008,34 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
         ).start()
 
     with _novo_http_client() as client:
+        # Primeira subida do serviço sem credencial de máquina: provisiona.
+        # É o seeding único do desenho (identidade-de-maquina-desenho.md) — a
+        # X-API-Key que já autentica o agente prova posse, o portal emite o
+        # segredo desta máquina uma vez, e ele fica em ProgramData cifrado com
+        # DPAPI de escopo máquina. `pode_guardar` ensaia ANTES de pedir, para
+        # não queimar a emissão única numa estação que não consegue gravar.
+        # Falha aqui nunca derruba o laço: sem credencial o agente segue na
+        # X-API-Key, que é o que já funcionava.
+        try:
+            from agent import __version__, identidade_maquina
+
+            if (
+                api_key
+                and identidade_maquina.ler() is None
+                and identidade_maquina.pode_guardar()
+            ):
+                identidade_maquina.provisionar(
+                    client,
+                    base,
+                    _machine_id({}, local_cfg),
+                    versao=__version__,
+                    cabecalhos=_headers(),
+                )
+        except Exception:  # noqa: BLE001
+            LOGGER.exception(
+                "Falha no provisionamento da credencial de máquina; seguindo na X-API-Key."
+            )
+
         while not quit_event.is_set():
             s_payload, fetch_err = fetch_portal_settings(client, base, _headers)
             s = s_payload

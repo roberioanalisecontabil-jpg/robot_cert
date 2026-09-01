@@ -18,24 +18,26 @@ o `certutil` diz OK, a trilha grava INSTALADO, e a pessoa não vê nada no
 navegador. A instalação tem de passar para o processo da bandeja, que roda na
 sessão dela — e é lá, e só lá, que esta credencial existe.
 
-── ⚠️ A outra face da mesma moeda (24/08/2026) ───────────────────────────
+── ⚠️ A outra face da mesma moeda (24/08/2026; atualizada em 01/09/2026) ──
 
 O que protege esta credencial é o que a impede de servir ao agente.
 
-`run_agent._headers()` manda `X-API-Key` e **nunca** usa o que está guardado
-aqui. Isso não é fiação esquecida: quem faz todas as chamadas autenticadas
-(`/api/ingest`, upload de PFX, configurações) é o **serviço**, como LocalSystem,
-e ele não decifra um blob DPAPI do perfil de outra conta. A bandeja, que
-alcançaria este arquivo, não faz chamada autenticada nenhuma além do registro.
+`run_agent._headers()` **nunca** usa o que está guardado aqui. Isso não é
+fiação esquecida: quem faz todas as chamadas autenticadas (`/api/ingest`,
+upload de PFX, configurações) é o **serviço**, como LocalSystem, e ele não
+decifra um blob DPAPI do perfil de outra conta. A bandeja, que alcançaria este
+arquivo, não faz chamada autenticada nenhuma além do registro.
 
 Então **fazer o login hoje grava um segredo que nada lê.** O item "Entrar no
 portal…" continua na bandeja porque o registro em si funciona e a fase 2 pode
-voltar; mas ele não troca a chave que o agente usa, e ninguém deve esperar que
-troque.
+voltar; mas ele não troca a credencial que o agente usa, e ninguém deve
+esperar que troque.
 
-Substituir o `X-API-Key` exige outro objeto: uma credencial de MÁQUINA em
-`ProgramData`, que o serviço alcance. Ver a nota em `app/agent_devices.py` —
-o INVENT tem o mesmo buraco, e os dois merecem um desenho só.
+O outro objeto que essa nota pedia existe desde 01/09/2026: a credencial de
+MÁQUINA (`agent/identidade_maquina.py`, ProgramData, DPAPI de escopo máquina),
+que `_headers()` passou a preferir no lugar da `X-API-Key` compartilhada. Ela
+não muda nada AQUI: máquina e pessoa seguem sendo duas identidades, e esta —
+a da pessoa — continua à espera da fase 2.
 
 ── DPAPI, e a recusa em degradar ─────────────────────────────────────────
 

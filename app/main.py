@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, auth_supabase, config, permissoes, senha_reset
+from app import agent_devices, atividade, auth, auth_supabase, config, machine_credentials, permissoes, senha_reset
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -324,10 +324,49 @@ async def require_auth(
                 )
             return sessao
 
-    # 2. Se API_KEY estiver ativa, aceitar a chave estática para o agente.
+    # 2. Credencial do agente, no header X-API-Key que ele já manda: primeiro a
+    #    credencial de MÁQUINA (própria, revogável — app/machine_credentials.py),
+    #    depois a chave estática compartilhada, que é o legado em transição.
+    #
+    #    O TokenData sai IGUAL nos dois caminhos, de propósito: o ganho da
+    #    credencial de máquina é rotação e revogação, não privilégio novo — e
+    #    qualquer diferença aqui mudaria o alcance de rotas que hoje funcionam.
     if config.API_KEY:
-        if x_api_key and x_api_key == config.API_KEY:
-            return auth.TokenData(email="agent@internal", role="agent")
+        if x_api_key:
+            if x_api_key == config.API_KEY:
+                # WARNING de propósito: é o que permite responder "já dá para
+                # desligar a chave compartilhada?" olhando o log, em vez de
+                # adivinhar. Some quando o ANALISESRV migrar (R2 fecha aí).
+                logger.warning(
+                    "Agente autenticou pela X-API-Key compartilhada (legado). "
+                    "Estação ainda não migrada para credencial de máquina."
+                )
+                return auth.TokenData(email="agent@internal", role="agent")
+
+            marcar = True
+            try:
+                maquina = machine_credentials.autenticar(x_api_key)
+            except (machine_credentials.SemBanco, machine_credentials.SemTabela):
+                # Problema de implantação, não da credencial: sem o marcador,
+                # para o agente não descartar um segredo válido por causa de
+                # uma migration que falta.
+                logger.warning("machine_credentials indisponível; só a X-API-Key vale.")
+                maquina, marcar = None, False
+            if maquina:
+                return auth.TokenData(email="agent@internal", role="agent")
+
+            # X-API-Key presente e inválida: o marcador diz ao agente que o
+            # problema é a CREDENCIAL (descarte e caia na chave compartilhada),
+            # não a operação. Protocolo portado do INVENT — casar string de
+            # mensagem quebraria em silêncio no dia em que alguém a melhorasse.
+            cabecalhos = {"WWW-Authenticate": "Bearer"}
+            if marcar:
+                cabecalhos[machine_credentials.CABECALHO_CREDENCIAL_INVALIDA] = "1"
+            raise HTTPException(
+                status_code=401,
+                detail="Não autorizado. Faça login ou forneça uma chave de API válida.",
+                headers=cabecalhos,
+            )
     else:
         # Ambiente aberto (sem API_KEY): mantém compatibilidade para rotas /api/*
         # que usam require_auth, sem elevar privilégios administrativos.
@@ -2892,6 +2931,113 @@ def revogar_dispositivo(
         # confirmaria a existência daquele id para quem não devia saber.
         raise HTTPException(status_code=404, detail="Dispositivo não encontrado.")
     return {"status": "revogado", "id": device_id}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Credencial de MÁQUINA — a identidade do SERVIÇO deixa a X-API-Key
+#
+# Par das rotas de dispositivos acima, para o outro objeto: ali é a PESSOA na
+# estação (dormente — o serviço não alcança aquele cofre); aqui é a máquina em
+# si. Ver `app/machine_credentials.py` para o desenho, e o WARNING de "legado"
+# em `require_auth` para saber quando a chave compartilhada pode morrer.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class ProvisionarMaquinaBody(BaseModel):
+    machine_id: str
+    versao: Optional[str] = None
+
+
+def _erro_maquina_indisponivel(e: Exception) -> HTTPException:
+    return HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/api/agent/maquinas/provisionar")
+def provisionar_maquina(
+    body: ProvisionarMaquinaBody,
+    token: auth.TokenData = Depends(require_agent_or_admin),
+) -> dict:
+    """
+    Troca a X-API-Key pela credencial própria desta máquina — uma vez só.
+
+    Quem prova posse aqui é a X-API-Key que já autentica o agente hoje (não há
+    fluxo de aprovação: é UM consumidor conhecido, o ANALISESRV, e o seeding é
+    a primeira subida do serviço). `require_agent_or_admin` e não `require_auth`
+    porque a identidade anônima do modo sem API_KEY não pode emitir credencial:
+    seria criar um segredo durável a partir de credencial nenhuma.
+
+    Linha existente — até revogada — recusa com 409. Se a emissão pudesse
+    reabrir uma revogação, revogar não revogaria nada para quem tem a chave
+    compartilhada; o caminho de volta é um admin reemitir.
+    """
+    mid = (body.machine_id or "").strip()
+    if not mid:
+        raise HTTPException(status_code=400, detail="Informe a máquina do agente.")
+    try:
+        segredo = machine_credentials.provisionar(mid, versao=body.versao)
+    except machine_credentials.JaProvisionada as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except (machine_credentials.SemBanco, machine_credentials.SemTabela) as e:
+        raise _erro_maquina_indisponivel(e)
+    except Exception:
+        logger.exception("Falha ao provisionar credencial de máquina")
+        raise HTTPException(status_code=500, detail="Erro interno ao provisionar.")
+
+    # O segredo em claro, pela única vez. Não é logado; quem o guarda é o
+    # ProgramData da estação, cifrado com DPAPI de escopo máquina.
+    return {"machine_id": mid.strip().lower(), "segredo": segredo}
+
+
+@app.get("/api/agent/maquinas", dependencies=[Depends(require_admin)])
+def listar_maquinas() -> dict:
+    """
+    As máquinas com credencial própria, com `vivo` calculado.
+
+    Também é o mapa da transição: o ANALISESRV aparecer aqui vivo — e o WARNING
+    de X-API-Key sumir do log — é o sinal de que o legado pode ser desligado.
+    """
+    try:
+        return {"maquinas": machine_credentials.listar()}
+    except (machine_credentials.SemBanco, machine_credentials.SemTabela) as e:
+        raise _erro_maquina_indisponivel(e)
+
+
+@app.delete("/api/agent/maquinas/{machine_id}", dependencies=[Depends(require_admin)])
+def revogar_maquina(machine_id: str) -> dict:
+    """
+    Revoga a credencial da máquina. Idempotente; a linha fica.
+
+    A linha preservada é a própria garantia: enquanto ela existir, o
+    provisionamento NÃO emite segredo novo para este machine_id — revogar
+    significa "esta máquina não fala mais", não "pega outra chave na próxima
+    subida". O caminho de volta é a reemissão, que é outra decisão.
+    """
+    try:
+        ok = machine_credentials.revogar(machine_id)
+    except (machine_credentials.SemBanco, machine_credentials.SemTabela) as e:
+        raise _erro_maquina_indisponivel(e)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Esta máquina não tem credencial.")
+    return {"status": "revogado", "machine_id": machine_id.strip().lower()}
+
+
+@app.post("/api/agent/maquinas/{machine_id}/reemitir", dependencies=[Depends(require_admin)])
+def reemitir_maquina(machine_id: str) -> dict:
+    """
+    Descarta a credencial atual; a próxima subida do serviço emite uma NOVA.
+
+    Para os dois becos que a linha existente cria: revogação que precisa ser
+    desfeita, e emissão perdida (o serviço recebeu o segredo e não conseguiu
+    guardar). Ato de admin de propósito — é exatamente a decisão que o
+    provisionamento não pode tomar sozinho.
+    """
+    try:
+        ok = machine_credentials.reemitir(machine_id)
+    except (machine_credentials.SemBanco, machine_credentials.SemTabela) as e:
+        raise _erro_maquina_indisponivel(e)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Esta máquina não tem credencial.")
+    return {"status": "descartada", "machine_id": machine_id.strip().lower()}
 
 
 # `/api/certificados` fica FORA da matriz, de proposito. Duas razoes:

@@ -23,7 +23,7 @@ O projeto é dividido em dois componentes principais que se comunicam via API HT
 - **Frontend:** HTML5, Vanilla CSS, JavaScript Puro (Sem frameworks pesados para máxima performance).
 - **Agente Local:** Python, Watchdog (para monitoramento de File System via SO).
 - **Banco de Dados/Cloud:** Supabase (PostgreSQL & REST API).
-- **Segurança:** Sistema de `X-API-Key` implementado nas rotas para evitar injeções não autorizadas no portal.
+- **Segurança:** o agente autentica com credencial de máquina própria (revogável, emitida uma vez no provisionamento — `app/machine_credentials.py`); a `X-API-Key` compartilhada segue aceita durante a transição e avisa no log a cada uso.
 
 ## 📦 Como rodar localmente
 

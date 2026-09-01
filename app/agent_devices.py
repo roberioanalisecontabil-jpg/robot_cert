@@ -41,17 +41,22 @@ ela vale para os dois projetos: o INVENT tem exatamente o mesmo buraco, onde o
 `AGENT_SECRET_TOKEN` compartilhado ainda é a identidade da máquina porque o
 serviço também não alcança a credencial da pessoa.
 
-O que revive este módulo, e a ordem importa:
+O que reviveria este módulo, e onde isso está (atualizado em 01/09/2026):
 
-  * uma credencial de MÁQUINA em `ProgramData`, que o serviço alcance,
-    substituindo o `X-API-Key`. É outro objeto, não este — e é o mesmo trabalho
-    que o INVENT precisa fazer. Merecem um desenho só, não dois; e
-  * ou um caminho novo em que a PESSOA aja pelo agente na sessão dela.
+  * a credencial de MÁQUINA em `ProgramData` **existe** — é a irmã
+    `app/machine_credentials.py`, com o mesmo desenho aplicado também ao
+    INVENT. Ela substitui o `X-API-Key` do serviço, mas é OUTRO objeto: não
+    consome nem acorda este módulo, que segue sendo a credencial da PESSOA;
+  * o que acorda ESTE módulo é um caminho em que a pessoa aja pelo agente na
+    sessão dela (a "fase 2") — e ele continua não existindo.
 
 Até lá: mantido intacto, testado e sem consumidor. Não é código morto por
 esquecimento — é código à espera da metade que falta, e apagá-lo custaria
 reescrever a parte difícil (o hash determinístico, a revogação, `visto_em`)
-quando a credencial de máquina for feita.
+quando a fase 2 chegar. Os testes-sentinela de `test_identidade_dormente.py`
+foram apagados como o próprio arquivo mandava: eles prendiam `_headers()` à
+chave compartilhada, e a troca que eles vigiavam foi feita — pela credencial
+de máquina, que era a decisão certa.
 
 ── O agente nunca guarda a senha do portal ───────────────────────────────
 
