@@ -612,7 +612,18 @@ async def lifespan(_app: FastAPI):
             logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
 
 
-app = FastAPI(title="Monitor de certificados PFX", version="1.2.1", lifespan=lifespan)
+# A documentação só existe onde alguém a ligou (ENABLE_DOCS=1). Em produção o
+# /openapi.json descrevia as ~97 rotas — nomes, parâmetros, shapes — para
+# qualquer visitante anônimo, e era o único dado que uma visita sem sessão
+# levava do portal. O INVENT já nascia assim; isto é a paridade.
+app = FastAPI(
+    title="Monitor de certificados PFX",
+    version="1.2.1",
+    lifespan=lifespan,
+    docs_url="/docs" if config.ENABLE_DOCS else None,
+    redoc_url="/redoc" if config.ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if config.ENABLE_DOCS else None,
+)
 
 import secrets
 

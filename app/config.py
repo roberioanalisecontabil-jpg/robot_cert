@@ -22,6 +22,13 @@ SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip()
 # Se definida, todas as rotas /api/* exigem o header X-API-Key (exceto se documentado)
 API_KEY = (os.getenv("API_KEY") or "").strip()
 
+# Se `/docs`, `/redoc` e `/openapi.json` ficam públicos. Desligado por padrão:
+# em produção o schema das ~97 rotas só ajuda quem está mapeando a API — era o
+# único dado que um visitante anônimo levava do portal (levantamento de
+# 01/09/2026). Ligue com ENABLE_DOCS=1 em desenvolvimento. Mesmo desenho (e
+# mesma variável) do INVENT, para os dois portais se configurarem igual.
+ENABLE_DOCS = (os.getenv("ENABLE_DOCS") or "").strip().lower() in ("1", "true", "yes", "on")
+
 
 def _env_int(name: str, default: int, lo: int, hi: int) -> int:
     raw = (os.getenv(name) or "").strip()
