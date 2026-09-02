@@ -131,3 +131,103 @@ CERT_PORTAL_TOKEN = (os.getenv("CERT_PORTAL_TOKEN") or "").strip()
 
 def ponte_invent_configurada() -> bool:
     return bool(INVENT_API_URL and CERT_PORTAL_TOKEN)
+
+
+# ── Verificação central do ambiente, na partida ───────────────────────────
+
+
+def _hex_de_32_bytes(valor: str) -> bool:
+    if len(valor) != 64:
+        return False
+    try:
+        bytes.fromhex(valor)
+        return True
+    except ValueError:
+        return False
+
+
+def verificar_ambiente() -> tuple[list[str], list[str]]:
+    """As variáveis críticas, conferidas de uma vez — na subida, não no uso.
+
+    Devolve `(fatais, avisos)`. Antes disto (R9 do diagnóstico de 25/08/2026),
+    cada variável falhava só na primeira utilização: chave do cofre errada
+    aparecia no primeiro upload de PFX, JWT ausente no primeiro login — erro
+    tarde, em produção, desligado da causa. O precedente é a ENCRYPTION_KEY,
+    que já falhava no boot de propósito; isto estende a regra às demais.
+
+    O que é FATAL segue dois critérios, e só eles:
+
+    1. Valor PRESENTE mas malformado ou contraditório — nunca é intencional
+       (chave do cofre fora do formato, as duas chaves iguais, Supabase pela
+       metade).
+    2. Valor AUSENTE num ambiente com cara de produção (Supabase configurado)
+       cuja falta só apareceria no primeiro uso.
+
+    Ausências em ambiente de desenvolvimento viram AVISO: recusar o boot local
+    por falta de CRON_SECRET só ensinaria a ignorar a verificação.
+    """
+    fatais: list[str] = []
+    avisos: list[str] = []
+
+    producao = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+
+    # Supabase pela metade nunca é intencional: o portal sobe, e toda rota de
+    # dado morre com erro de cliente — longe da causa.
+    if bool(SUPABASE_URL) != bool(SUPABASE_SERVICE_KEY):
+        fatais.append(
+            "SUPABASE_URL e SUPABASE_SERVICE_KEY precisam ser definidas JUNTAS "
+            "(uma sem a outra é configuração pela metade)."
+        )
+
+    # Chaves do cofre: formato conferido sempre que presentes; presença exigida
+    # quando há banco (sem banco não há cofre a proteger).
+    for nome, valor in (
+        ("CERT_ENCRYPTION_KEY", CERT_ENCRYPTION_KEY),
+        ("CERT_PASSWORD_ENCRYPTION_KEY", CERT_PASSWORD_ENCRYPTION_KEY),
+    ):
+        if valor and not _hex_de_32_bytes(valor):
+            fatais.append(f"{nome} precisa ser hex de 64 caracteres (32 bytes).")
+        elif not valor and producao:
+            fatais.append(f"{nome} não definida — o cofre falharia no primeiro PFX.")
+
+    # A separação das chaves é a garantia de 03/08: cifrar senha e certificado
+    # com a mesma chave fez um vazamento entregar os dois.
+    if (
+        CERT_ENCRYPTION_KEY
+        and CERT_PASSWORD_ENCRYPTION_KEY
+        and CERT_ENCRYPTION_KEY == CERT_PASSWORD_ENCRYPTION_KEY
+    ):
+        fatais.append(
+            "CERT_PASSWORD_ENCRYPTION_KEY não pode ser igual a CERT_ENCRYPTION_KEY."
+        )
+
+    if not (os.getenv("JWT_SECRET_KEY") or "").strip():
+        (fatais if producao else avisos).append(
+            "JWT_SECRET_KEY não definida — o login falharia na primeira sessão."
+        )
+
+    if not API_KEY:
+        # O modo sem API_KEY abre o /api/* com identidade anônima (papel
+        # agent). É deliberado em dev; em produção é a porta que o levantamento
+        # de 01/09/2026 mandou vigiar (api_key_required no /api/health).
+        (fatais if producao else avisos).append(
+            "API_KEY não definida — todas as rotas /api/* aceitam identidade "
+            "anônima com papel agent (modo aberto)."
+        )
+
+    if producao and not (os.getenv("CRON_SECRET") or "").strip():
+        # Aviso e não fatal: só o Vercel usa o cron, e a rota já falha fechada
+        # (503) sem o segredo. O aviso existe porque o sintoma — alertas que
+        # nunca disparam — não aponta para cá.
+        avisos.append(
+            "CRON_SECRET não definida — no Vercel, o disparo agendado de "
+            "alertas responderá 503 e nada será enviado."
+        )
+
+    if not ponte_invent_configurada():
+        avisos.append(
+            "Ponte com o INVENT desligada (INVENT_API_URL/CERT_PORTAL_TOKEN) — "
+            "o botão 'instalar nesta máquina' não aparece."
+        )
+
+    return fatais, avisos

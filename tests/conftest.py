@@ -54,6 +54,19 @@ def chaves_do_cofre(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "22" * 32, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def limpar_rate_limit() -> None:
+    """A janela de rate limit em memória (fallback de `app/taxa.py`) vive no
+    módulo, e o TestClient chega sempre como o mesmo IP: sem limpar entre
+    testes, o teto de 20 logins/minuto derrubaria a suíte — que faz dezenas de
+    logins — por ORDEM de execução, não por defeito."""
+    from app import taxa
+
+    taxa._memoria.clear()
+    yield
+    taxa._memoria.clear()
+
+
 @pytest.fixture
 def no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """API sem exigir X-API-Key (reproduz ambiente dev sem API_KEY)."""

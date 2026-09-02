@@ -130,7 +130,53 @@ def _pop_from_file(agent: str) -> Optional[QueuedCommand]:
     return None
 
 
+def _linha_para_comando(row: dict[str, Any]) -> QueuedCommand:
+    return QueuedCommand(
+        id=str(row.get("id")),
+        machine_id=str(row.get("machine_id", "")),
+        command=str(row.get("command", "")),
+        status="popped",
+        created_at=str(row.get("created_at", "")),
+        payload=row.get("payload"),
+    )
+
+
+def _e_funcao_ausente(erro: Exception) -> bool:
+    texto = str(erro).lower()
+    return "pop_agent_command" in texto and (
+        "could not find the function" in texto
+        or "does not exist" in texto
+        or "pgrst202" in texto
+    )
+
+
 def _pop_from_supabase(client: Any, agent: str) -> Optional[QueuedCommand]:
+    """Retira o próximo comando desta máquina — atomicamente, quando dá.
+
+    O caminho principal é a RPC `pop_agent_command` (migration 20260902110000):
+    SELECT+DELETE numa transação com FOR UPDATE SKIP LOCKED, então dois
+    consumidores do mesmo machine_id nunca levam o MESMO comando. Era o R8 do
+    diagnóstico de 25/08/2026 — hoje um agente só mascara a corrida; a mina se
+    desarma antes do dia em que houver dois.
+
+    Sem a função no banco (deploy antes da migration), cai no SELECT+DELETE
+    antigo com aviso: perde a atomicidade, não a fila — o padrão de resiliência
+    a ordem de implantação usado em todo o projeto.
+    """
+    try:
+        r = client.rpc("pop_agent_command", {"p_machine_id": agent}).execute()
+        rows = r.data or []
+        return _linha_para_comando(rows[0]) if rows else None
+    except Exception as e:  # noqa: BLE001
+        if _e_funcao_ausente(e):
+            logger.warning(
+                "Função pop_agent_command ausente (rode a migration "
+                "20260902110000); usando o pop em duas idas, sem atomicidade."
+            )
+        else:
+            logger.exception("pop atômico falhou; tentando o caminho antigo")
+
+    # ── Caminho legado: SELECT e depois DELETE, em duas idas ──────────────
     try:
         r = (
             client.table("agent_command_queue")
@@ -152,14 +198,7 @@ def _pop_from_supabase(client: Any, agent: str) -> Optional[QueuedCommand]:
         except Exception:  # noqa: BLE001
             logger.exception("remover comando da fila (Supabase); id=%s", cid)
             return None
-        return QueuedCommand(
-            id=cid,
-            machine_id=str(row.get("machine_id", "")),
-            command=str(row.get("command", "")),
-            status="popped",
-            created_at=str(row.get("created_at", "")),
-            payload=row.get("payload"),
-        )
+        return _linha_para_comando(row)
     return None
 
 

@@ -50,7 +50,11 @@ def _load_local_sent_alerts() -> List[Dict[str, Any]]:
         return []
     try:
         return json.loads(SENT_ALERTS_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as e:
+        # Nunca em silêncio (item 13 da Frente 2): este arquivo é o antispam
+        # local. Ilegível = o dedup some e os MESMOS alertas podem reenviar —
+        # e o sintoma ("recebi o aviso duas vezes") não apontaria para cá.
+        logger.warning("Antispam local ilegível em %s: %s", SENT_ALERTS_FILE, e)
         return []
 
 def _save_local_sent_alerts(alerts: List[Dict[str, Any]]) -> None:
@@ -172,7 +176,10 @@ def _load_job_state() -> Dict[str, Any]:
         return {}
     try:
         return json.loads(JOB_STATE_FILE.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except Exception as e:
+        # Nunca em silêncio: sem o marcador o job "diário" redispara a cada
+        # boot do worker, e o sintoma (e-mails repetidos) não aponta para cá.
+        logger.warning("Marcador do job de alertas ilegível em %s: %s", JOB_STATE_FILE, e)
         return {}
 
 

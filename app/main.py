@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, auth_supabase, config, machine_credentials, permissoes, senha_reset
+from app import agent_devices, atividade, auth, auth_supabase, config, machine_credentials, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -553,6 +553,17 @@ async def lifespan(_app: FastAPI):
     # ATENÇÃO AO DEPLOY: defina ENCRYPTION_KEY no painel da plataforma
     # (Vercel/Render) ANTES de publicar esta versão. O .env não sobe no deploy.
     smtp_service.verificar_chave_configurada()
+
+    # As demais críticas, conferidas de uma vez (item 12 da Frente 2 — R9):
+    # valor malformado ou faltando em produção derruba o boot AQUI, com a lista
+    # inteira na mensagem, em vez de uma por vez no primeiro uso de cada rota.
+    fatais, avisos = config.verificar_ambiente()
+    for aviso in avisos:
+        logger.warning("Ambiente: %s", aviso)
+    if fatais:
+        raise RuntimeError(
+            "Ambiente mal configurado — corrija antes de subir:\n- " + "\n- ".join(fatais)
+        )
 
     try:
         config.CERT_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
@@ -1152,6 +1163,16 @@ def _conferir_credenciais(email: str, senha: str, ip: Optional[str]) -> dict:
 
 @app.post("/api/login")
 def login(body: LoginBody, request: Request) -> dict:
+    # Teto por IP ANTES de qualquer ida ao banco (junto do item 13 da Frente
+    # 2; achado do levantamento de superfície anônima de 01/09/2026): o /claim
+    # sempre teve teto e o login não — e login é o alvo clássico de spray de
+    # senhas. Vinte por minuto não atrapalha um escritório inteiro atrás de um
+    # NAT; adivinhação vira exercício inútil. A janela é a durável de
+    # `app/taxa.py`, a mesma do claim — em memória de instância, na Vercel, o
+    # teto seria sugestão.
+    if not taxa.permitir(f"login:{_ip_do_cliente(request)}", 20, 60):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+
     load_settings()  # trigger client init
     _sb_do_login()
 
@@ -5560,27 +5581,31 @@ def redeem_install(
 
 _CLAIM_JANELA_SEC = 60
 _CLAIM_MAX_POR_JANELA = 10
-_claim_tentativas: dict[str, list[float]] = {}
-_claim_lock = threading.Lock()
+
+
+def _ip_do_cliente(request: Request) -> str:
+    """O IP de quem chama, atrás do proxy da Vercel.
+
+    A plataforma põe o cliente real no primeiro valor de X-Forwarded-For; sem
+    o cabeçalho (dev local, testes), vale o socket. Antes disto os limites
+    usavam `request.client.host`, que atrás do proxy é o PROXY — o teto "por
+    IP" era na prática um teto global compartilhado por todo mundo.
+    """
+    encaminhado = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if encaminhado:
+        return encaminhado
+    return request.client.host if request.client else "desconhecido"
 
 
 def _claim_rate_limit(ip: str) -> bool:
-    """True se o IP ainda pode tentar. Janela deslizante em memória."""
-    agora = time.time()
-    with _claim_lock:
-        tentativas = [t for t in _claim_tentativas.get(ip, []) if agora - t < _CLAIM_JANELA_SEC]
-        if len(tentativas) >= _CLAIM_MAX_POR_JANELA:
-            _claim_tentativas[ip] = tentativas
-            return False
-        tentativas.append(agora)
-        _claim_tentativas[ip] = tentativas
-        # A limpeza oportunista evita o dicionário crescer sem limite com IPs
-        # que apareceram uma vez. Barato: só roda quando o mapa já está grande.
-        if len(_claim_tentativas) > 1000:
-            for k in [k for k, v in _claim_tentativas.items()
-                      if not v or agora - v[-1] > _CLAIM_JANELA_SEC]:
-                _claim_tentativas.pop(k, None)
-        return True
+    """True se o IP ainda pode tentar.
+
+    A janela vive no Supabase (`app/taxa.py`) desde o item 13 da Frente 2: em
+    memória de processo, na Vercel, o teto valia POR INSTÂNCIA — cold starts
+    diluíam o limite em "10 × quantas instâncias houver". Sem banco, o módulo
+    degrada para a janela em memória (o comportamento antigo) e avisa no log.
+    """
+    return taxa.permitir(f"claim:{ip}", _CLAIM_MAX_POR_JANELA, _CLAIM_JANELA_SEC)
 
 
 @app.post("/api/cert-installer/claim")
@@ -5595,7 +5620,7 @@ def claim_install(body: RedeemRequest, request: Request):
     Deliberadamente não distingue token inválido de expirado ou já consumido:
     a resposta única evita virar oráculo de tokens válidos.
     """
-    client_ip = request.client.host if request.client else "desconhecido"
+    client_ip = _ip_do_cliente(request)
 
     if not _claim_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
@@ -5681,7 +5706,7 @@ def report_install_avulso(body: ReportRequest, request: Request):
     duplicava. O pior que um token vazado permite aqui é sujar a auditoria da
     própria instalação que ele representa; não devolve material criptográfico.
     """
-    ip = request.client.host if request.client else "desconhecido"
+    ip = _ip_do_cliente(request)
     if not _claim_rate_limit(ip):
         raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
     return _registrar_relatorio(body, request)
