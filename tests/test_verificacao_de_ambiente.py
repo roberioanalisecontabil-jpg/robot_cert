@@ -7,9 +7,13 @@ causa. O precedente era a ENCRYPTION_KEY, que já derrubava o boot; agora a
 regra vale para as demais.
 
 A fronteira que estes testes prendem: valor MALFORMADO é fatal sempre;
-ausência só é fatal em ambiente com cara de produção (Supabase configurado).
+ausência só é fatal em ambiente com cara de produção (banco configurado).
 Recusar o boot local por falta de CRON_SECRET ensinaria a ignorar a
 verificação — e verificação ignorada é pior que nenhuma.
+
+Desde 05/09/2026 "banco configurado" é `DATABASE_URL` (PostgreSQL puro). Um
+`.env` antigo, com SUPABASE_URL e sem DATABASE_URL, é fatal de propósito: é o
+ambiente de antes da migração subindo sem banco nenhum.
 """
 
 from __future__ import annotations
@@ -21,16 +25,15 @@ from app import config
 
 @pytest.fixture
 def producao(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ambiente com cara de produção: Supabase configurado."""
-    monkeypatch.setattr(config, "SUPABASE_URL", "https://x.supabase.co", raising=False)
-    monkeypatch.setattr(config, "SUPABASE_SERVICE_KEY", "chave-service", raising=False)
+    """Ambiente com cara de produção: banco configurado."""
+    monkeypatch.setattr(config, "DATABASE_URL", "postgresql://u:p@127.0.0.1:5432/certguard", raising=False)
     monkeypatch.setattr(config, "API_KEY", "chave-do-agente", raising=False)
     monkeypatch.setenv("JWT_SECRET_KEY", "segredo-de-teste")
     monkeypatch.setenv("CRON_SECRET", "segredo-do-cron")
 
 
 def test_dev_sem_nada_sobe_com_avisos() -> None:
-    """O conftest zera o Supabase: é o ambiente de desenvolvimento típico."""
+    """O conftest zera o banco: é o ambiente de desenvolvimento típico."""
     fatais, avisos = config.verificar_ambiente()
     assert fatais == []
     assert avisos, "dev sem API_KEY tinha de pelo menos avisar do modo aberto"
@@ -41,11 +44,18 @@ def test_producao_completa_nao_tem_fatal(producao: None) -> None:
     assert fatais == []
 
 
-def test_supabase_pela_metade_e_fatal(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(config, "SUPABASE_URL", "https://x.supabase.co", raising=False)
-    monkeypatch.setattr(config, "SUPABASE_SERVICE_KEY", "", raising=False)
+def test_env_do_supabase_sem_database_url_e_fatal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O .env de antes da migração não pode subir "vazio" em silêncio."""
+    monkeypatch.setattr(config, "_SUPABASE_LEGADO", True, raising=False)
+    monkeypatch.setattr(config, "DATABASE_URL", "", raising=False)
     fatais, _ = config.verificar_ambiente()
-    assert any("JUNTAS" in f for f in fatais)
+    assert any("DATABASE_URL" in f and "Supabase" in f for f in fatais)
+
+
+def test_database_url_que_nao_e_postgres_e_fatal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "DATABASE_URL", "mysql://u:p@h/db", raising=False)
+    fatais, _ = config.verificar_ambiente()
+    assert any("postgresql://" in f for f in fatais)
 
 
 def test_chave_do_cofre_malformada_e_fatal_ate_em_dev(

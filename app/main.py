@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, auth_supabase, config, machine_credentials, permissoes, senha_reset, taxa
+from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -285,28 +285,10 @@ async def require_auth(
     if auth_creds:
         token_data = auth.decode_access_token(auth_creds.credentials)
 
-        # 1b. Não é token deste portal? Pode ser do Supabase Auth, que passa a
-        #     ser a lista única de pessoas dos dois portais (fase 3).
-        #
-        #     Os dois nunca se confundem: os daqui trazem `iss=robot_cert_portal`
-        #     e `aud=robot_cert_users`, conferidos por `decode_access_token`; o do
-        #     outro é validado contra o servidor do Supabase. Um não passa pelo
-        #     caminho do outro por engano.
-        #
-        #     O token só precisa provar o E-MAIL. Papel, `user_id` e senha
-        #     provisória continuam vindo da linha em `users`, por
-        #     `_sessao_do_token` — inclusive `conta_ativa`, que é o que corta
-        #     acesso aqui de imediato quando alguém é desativado neste portal.
-        #
-        #     `emitido_em` fica None de propósito: `senha_alterada_em` é a marca
-        #     de troca de senha LOCAL, e a senha destas contas não mora mais
-        #     aqui. Derrubar a sessão por ela seria comparar com um evento que
-        #     não pode mais acontecer. Quem revoga sessão do Supabase é o
-        #     Supabase; quem corta acesso a ESTE portal é `conta_ativa`.
-        if token_data is None:
-            email_externo = auth_supabase.email_do_token(auth_creds.credentials)
-            if email_externo:
-                token_data = auth.TokenData(email=email_externo, role=None)
+        # 1b. (Até 05/09/2026 havia aqui um segundo caminho: token do Supabase
+        #     Auth, a "lista única de pessoas" da fase 3. O portal não roda mais
+        #     no Supabase; a lista única, se voltar, será uma tabela no mesmo
+        #     PostgreSQL que os dois portais leem — não um emissor externo.)
 
         if token_data:
             sessao = _sessao_do_token(token_data)
@@ -1106,7 +1088,7 @@ def _sb_do_login():
     from app.settings_state import _supabase
     sb = _supabase()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado para login.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado para login.")
     return sb
 
 
@@ -1178,71 +1160,10 @@ def login(body: LoginBody, request: Request) -> dict:
 
     ip = request.client.host if request and request.client else None
     try:
-        # Supabase Auth PRIMEIRO, login local como queda (fase 3).
-        #
-        # Nesta ordem porque quem já tem conta lá tem de entrar por lá — senão
-        # trocar a senha no portal unificado não teria efeito aqui, e ficariam
-        # duas senhas para a mesma pessoa, divergindo em silêncio.
-        #
-        # A queda existe enquanto houver quem só tem conta local: recusá-los no
-        # deploy trancaria gente para fora sem aviso. Sai do log quando a última
-        # conta migrar — é o que permite responder "já dá para desligar?" sem
-        # adivinhar.
-        #
-        # O front não muda: ele guarda no localStorage o token que vier, sem
-        # saber quem o emitiu.
-        externo = auth_supabase.entrar(body.email, body.password)
-        if externo:
-            user = _conta_local_do_email(body.email)
-
-            # Identidade provada não é acesso a ESTE portal. Alguém cadastrado
-            # só para o inventário autentica na lista comum e não tem perfil
-            # aqui — recusar com motivo é melhor que entregar um token que
-            # morreria em 401 na primeira tela, deixando a pessoa achando que o
-            # sistema quebrou.
-            if not user:
-                atividade.registrar(
-                    atividade.EVENTO_LOGIN_NEGADO,
-                    user_id=None,
-                    user_email=(body.email or "").strip().lower(),
-                    client_ip=ip,
-                    contexto={"motivo": "sem_conta_neste_portal"},
-                )
-                raise HTTPException(
-                    status_code=403,
-                    detail="Sua conta não tem acesso a este portal. Procure um administrador.",
-                )
-            if not conta_ativa(user):
-                atividade.registrar(
-                    atividade.EVENTO_LOGIN_NEGADO,
-                    user_id=str(user.get("id") or "") or None,
-                    user_email=(body.email or "").strip().lower(),
-                    client_ip=ip,
-                    contexto={"motivo": "conta_desativada"},
-                )
-                raise HTTPException(
-                    status_code=403, detail="Usuário desativado. Procure um administrador."
-                )
-
-            atividade.registrar(
-                atividade.EVENTO_LOGIN,
-                user_id=str(user.get("id") or "") or None,
-                user_email=(body.email or "").strip().lower(),
-                client_ip=ip,
-                contexto={"via": "supabase_auth"},
-            )
-            return {
-                "access_token": externo,
-                "token_type": "bearer",
-                "role": user.get("role"),
-            }
-
+        # Login local: `users` + bcrypt + JWT deste portal. (Até 05/09/2026 o
+        # Supabase Auth era tentado primeiro, como "lista única de pessoas" da
+        # fase 3; o portal não roda mais no Supabase e esse caminho saiu.)
         user = _conferir_credenciais(body.email, body.password, ip)
-        if auth_supabase.configurado():
-            logger.warning(
-                "Login local (conta ainda nao migrada para o Supabase Auth): %s",
-                user.get("email"),
-            )
         atividade.registrar(
             atividade.EVENTO_LOGIN,
             user_id=str(user.get("id") or "") or None,
@@ -3961,10 +3882,10 @@ def historico_certificados(
                 rows_non_paginated = _cert_history_fetch_all(sb)
         except Exception as e:  # noqa: BLE001
             err_str = str(e)
-            if "PGRST205" in err_str or "cert_history" in err_str:
+            if db_pg.tabela_ausente(e) or "PGRST205" in err_str or "cert_history" in err_str:
                 logger.warning(
                     "Tabela cert_history não encontrada; usando fallback de snapshots. "
-                    "Execute supabase/migrations/20260504_cert_history.sql no Supabase."
+                    "Aplique supabase/migrations/20260504_cert_history.sql no banco."
                 )
                 _use_history_table = False
                 rows_non_paginated = []

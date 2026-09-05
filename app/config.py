@@ -15,9 +15,13 @@ CERT_EXPIRED_DIR = Path(
     os.getenv("CERT_EXPIRED_DIR", str(ROOT / "certificados_vencidos"))
 ).resolve()
 
-# Supabase (só no servidor; usados para config + snapshots ingeridos pelo agente)
-SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip()
-SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip()
+# Banco (só no servidor): PostgreSQL, por `app.db_pg`. Ex.:
+#   postgresql://certguard:senha@127.0.0.1:5432/certguard
+# Até 05/09/2026 aqui moravam SUPABASE_URL/SUPABASE_SERVICE_KEY; o portal não
+# roda mais no Supabase (ver `app/db_pg.py`). Sem DATABASE_URL o portal sobe
+# em modo local (arquivos), como sempre fez sem banco.
+DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+_SUPABASE_LEGADO = bool((os.getenv("SUPABASE_URL") or "").strip())
 
 # Se definida, todas as rotas /api/* exigem o header X-API-Key (exceto se documentado)
 API_KEY = (os.getenv("API_KEY") or "").strip()
@@ -158,9 +162,9 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
     O que é FATAL segue dois critérios, e só eles:
 
     1. Valor PRESENTE mas malformado ou contraditório — nunca é intencional
-       (chave do cofre fora do formato, as duas chaves iguais, Supabase pela
-       metade).
-    2. Valor AUSENTE num ambiente com cara de produção (Supabase configurado)
+       (chave do cofre fora do formato, as duas chaves iguais, configuração do
+       Supabase sobrando de antes da migração).
+    2. Valor AUSENTE num ambiente com cara de produção (banco configurado)
        cuja falta só apareceria no primeiro uso.
 
     Ausências em ambiente de desenvolvimento viram AVISO: recusar o boot local
@@ -169,15 +173,19 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
     fatais: list[str] = []
     avisos: list[str] = []
 
-    producao = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+    producao = bool(DATABASE_URL)
 
-    # Supabase pela metade nunca é intencional: o portal sobe, e toda rota de
-    # dado morre com erro de cliente — longe da causa.
-    if bool(SUPABASE_URL) != bool(SUPABASE_SERVICE_KEY):
+    # Um .env com SUPABASE_URL e sem DATABASE_URL é o ambiente de antes de
+    # 05/09/2026 subindo sem banco nenhum: as rotas de dado cairiam no modo
+    # local (arquivos) em silêncio, e o portal pareceria "vazio". Melhor
+    # recusar o boot e apontar a migração.
+    if _SUPABASE_LEGADO and not DATABASE_URL:
         fatais.append(
-            "SUPABASE_URL e SUPABASE_SERVICE_KEY precisam ser definidas JUNTAS "
-            "(uma sem a outra é configuração pela metade)."
+            "SUPABASE_URL está definida mas o portal não roda mais no Supabase: "
+            "defina DATABASE_URL (PostgreSQL) e remova as variáveis SUPABASE_*."
         )
+    if DATABASE_URL and not DATABASE_URL.startswith(("postgresql://", "postgres://")):
+        fatais.append("DATABASE_URL precisa começar com postgresql:// (PostgreSQL).")
 
     # Chaves do cofre: formato conferido sempre que presentes; presença exigida
     # quando há banco (sem banco não há cofre a proteger).

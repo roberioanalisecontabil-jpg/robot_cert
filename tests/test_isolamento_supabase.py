@@ -18,18 +18,19 @@ import app.settings_state as ss
 from app import config
 
 
-def test_credenciais_de_supabase_zeradas_no_config() -> None:
-    assert config.SUPABASE_URL == ""
-    assert config.SUPABASE_SERVICE_KEY == ""
+def test_banco_zerado_no_config() -> None:
+    """Desde 05/09/2026 o banco é `DATABASE_URL` (PostgreSQL); em teste, vazio."""
+    assert config.DATABASE_URL == ""
 
 
-def test_credenciais_de_supabase_fora_do_ambiente() -> None:
+def test_banco_fora_do_ambiente() -> None:
     """Código que lê direto de os.getenv também não pode encontrar nada."""
+    assert not os.getenv("DATABASE_URL")
     assert not os.getenv("SUPABASE_URL")
     assert not os.getenv("SUPABASE_SERVICE_KEY")
 
 
-def test_cliente_supabase_nao_e_criado() -> None:
+def test_cliente_de_banco_nao_e_criado() -> None:
     """As duas portas de entrada — settings_state e cert_installer."""
     assert ss._supabase() is None
     assert ci._supabase() is None
