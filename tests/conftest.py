@@ -5,24 +5,26 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
-def sem_supabase_real(monkeypatch: pytest.MonkeyPatch) -> None:
+def sem_banco_real(monkeypatch: pytest.MonkeyPatch) -> None:
     """
-    Nenhum teste fala com o Supabase de verdade. Autouse, sem opt-in.
+    Nenhum teste fala com o banco de verdade. Autouse, sem opt-in.
 
     Isto não é higiene teórica: `test_upload_aceita_certificado_autorizado`
     fazia patch de `listar_optin_fingerprints` mas não de `upsert_pfx`, então
     passava da barreira do opt-in e **gravava em cert_pfx_store de produção** a
     cada `pytest` — uma linha com fingerprint "bbbb…" e machine_id "m1", chaves
-    de teste no cofre real. O `.env` da máquina de desenvolvimento aponta para
+    de teste no cofre real. O `.env` da máquina de desenvolvimento apontava para
     produção, e nada no conftest anterior desligava isso.
 
-    Zerar as credenciais em `app.config` basta: `settings_state._supabase()`
-    devolve None antes de tocar no singleton do cliente, e
-    `cert_installer._supabase()` delega para ele. Testes que precisam de banco
-    injetam um fake explícito (ver `test_cert_installer_optin_e2e.py`).
+    Zerar `DATABASE_URL` em `app.config` basta: `settings_state._supabase()`
+    devolve None antes de abrir o pool, e `cert_installer._supabase()` delega
+    para ele. Testes que precisam de banco injetam um fake explícito (ver
+    `test_cert_installer_optin_e2e.py`); os de integração de `db_pg` usam
+    `TEST_DATABASE_URL`, que é outra variável de propósito.
     """
-    monkeypatch.setattr("app.config.SUPABASE_URL", "", raising=False)
-    monkeypatch.setattr("app.config.SUPABASE_SERVICE_KEY", "", raising=False)
+    monkeypatch.setattr("app.config.DATABASE_URL", "", raising=False)
+    monkeypatch.setattr("app.config._SUPABASE_LEGADO", False, raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
 

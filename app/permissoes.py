@@ -187,12 +187,18 @@ def _tabela_ausente(erro: Exception) -> bool:
     """
     O erro diz "essa tabela nao existe", e nao "nao consegui ler"?
 
-    PostgREST devolve `PGRST205` com a mensagem "Could not find the table". Olho
-    os dois: o codigo e o contrato estavel, o texto e a queda para quando o
-    cliente embrulhar o erro e o codigo se perder no caminho.
+    O Postgres responde com SQLSTATE `42P01` (undefined_table); `app.db_pg`
+    o entrega em `DbError.code`. Olho tambem o texto, para quando alguem
+    embrulhar o erro no caminho e o codigo se perder. (Ate 05/09/2026 o
+    contrato era o `PGRST205` do PostgREST — os fakes de teste ainda podem
+    falar essa lingua, por isso ela continua aceita.)
     """
+    from app import db_pg
+
+    if db_pg.tabela_ausente(erro):
+        return True
     texto = str(erro)
-    return "PGRST205" in texto or "Could not find the table" in texto
+    return "42P01" in texto or "PGRST205" in texto or "Could not find the table" in texto
 
 
 def _buscar_no_banco() -> Optional[Dict[str, Dict[str, str]]]:

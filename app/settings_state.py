@@ -135,19 +135,25 @@ def _save_file(s: PortalSettings) -> None:
         logger.warning(f"Falha ao salvar portal_settings.json localmente (ambiente read-only / Vercel): {e}")
 
 
-# Singleton: o cliente Supabase é criado uma única vez e reutilizado.
-# Antes: cada chamada a _supabase() criava um novo client (~15-25 MB),
-# gerando dezenas de instâncias por minuto e estourando a memória.
+# Singleton: um pool de conexões por processo, criado no primeiro uso.
+#
+# O nome `_supabase` ficou por enquanto DE PROPÓSITO: é o ponto que os outros
+# módulos importam e que 30 arquivos de teste substituem por um fake
+# (`monkeypatch.setattr("app.settings_state._supabase", ...)`). Desde
+# 05/09/2026 o que ele devolve é `app.db_pg.Client` — PostgreSQL puro, sem
+# Supabase — com a mesma cadeia de chamadas. Renomear é uma leva mecânica à
+# parte, quando o portal estiver no ar no servidor novo.
 _supabase_client = None
 
 
 def _supabase():
     global _supabase_client
-    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_KEY:
+    if not config.DATABASE_URL:
         return None
     if _supabase_client is None:
-        from supabase import create_client  # type: ignore[import-untyped]
-        _supabase_client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
+        from app import db_pg
+
+        _supabase_client = db_pg.Client(config.DATABASE_URL)
     return _supabase_client
 
 
@@ -658,4 +664,5 @@ def marcar_notificacoes_lidas(user_id: Optional[str], chaves: List[str]) -> int:
 
 
 def supabase_configured() -> bool:
-    return bool(config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY)
+    """Há banco configurado? (Nome herdado; desde 05/09/2026 o banco é PostgreSQL puro.)"""
+    return bool(config.DATABASE_URL)
