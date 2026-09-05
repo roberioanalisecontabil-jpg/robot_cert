@@ -103,20 +103,21 @@ def test_erro_desconhecido_nao_vira_texto_vazio() -> None:
 # 3. A ligação com o run_agent
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_o_registro_nao_usa_o_client_do_laco() -> None:
+def test_a_bandeja_nao_abre_a_janela_de_login() -> None:
     """
-    Defeito encontrado ao ligar a janela, e que nenhum teste de comportamento
-    pegaria.
+    Sentinela do sentido inverso ao que este teste tinha até 04/09/2026.
 
-    `_abrir_login` vive perto do topo de `main()`, mas o `client` do laço só
-    nasce no `with _novo_http_client()`, muito abaixo — e em `tray_only` a
-    função RETORNA antes disso. Capturá-lo daria `NameError` dentro da thread
-    da janela, engolido pelo `except` de quem chamou: o botão "Entrar" não faria
-    nada, sem erro visível, exatamente no modo que roda na estação do
-    colaborador.
+    Até lá ele vigiava `_abrir_login` em `run_agent.py` (que não podia capturar
+    o `client` do laço — em `tray_only` a função retorna antes de ele nascer).
+    A bandeja deixou de ter login: ela roda num servidor, o trabalho é
+    autenticado pela credencial de MÁQUINA, e a de pessoa gravava um segredo que
+    nada lê (nota em `agent/identidade.py`). A janela ficou, dormente, para a
+    fase 2; o que não pode voltar em silêncio é a porta de entrada — porque
+    voltaria com a pergunta "que conta eu coloco no servidor?".
 
-    Estático de propósito: exercitar isto de verdade exigiria subir o agente com
-    bandeja, e o defeito é de ESCOPO — visível na árvore sintática.
+    Se a fase 2 chegar e a janela voltar a ser ligada, a regra do `client`
+    acima volta junto: cliente próprio via `_novo_http_client()`, nunca o do
+    laço.
     """
     import ast
     from pathlib import Path
@@ -124,22 +125,31 @@ def test_o_registro_nao_usa_o_client_do_laco() -> None:
     fonte = (Path(__file__).resolve().parent.parent / "agent" / "run_agent.py")
     arvore = ast.parse(fonte.read_text(encoding="utf-8"))
 
-    alvo = next(
-        (
-            n for n in ast.walk(arvore)
-            if isinstance(n, ast.FunctionDef) and n.name == "_abrir_login"
-        ),
-        None,
+    funcoes = {n.name for n in ast.walk(arvore) if isinstance(n, ast.FunctionDef)}
+    assert "_abrir_login" not in funcoes, (
+        "run_agent.py voltou a ter _abrir_login — a bandeja do servidor não "
+        "pede login; ver a nota junto de _start_tray."
     )
-    assert alvo is not None, "_abrir_login sumiu de run_agent.py"
 
-    lidos = {
-        n.id for n in ast.walk(alvo)
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+    importados = {
+        alias.name
+        for n in ast.walk(arvore) if isinstance(n, ast.ImportFrom) and n.module == "agent"
+        for alias in n.names
     }
-    assert "client" not in lidos, (
-        "_abrir_login voltou a capturar o `client` do laço principal, que não "
-        "existe em tray_only — crie um cliente próprio com _novo_http_client()."
+    assert "janela_login" not in importados, "run_agent.py voltou a importar janela_login"
+    assert "identidade" not in importados, (
+        "run_agent.py voltou a usar a identidade de PESSOA; a do agente é "
+        "identidade_maquina."
+    )
+
+    # Só literais de código (rótulos de menu), não comentários — o comentário
+    # junto de _start_tray cita o item justamente para explicar por que saiu.
+    rotulos = {
+        n.value for n in ast.walk(arvore)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    }
+    assert not any(r.startswith("Entrar no portal") for r in rotulos), (
+        "o item de menu de login voltou à bandeja"
     )
 
 

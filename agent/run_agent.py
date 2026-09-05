@@ -751,50 +751,17 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 caminho_log=Path(log_file),
             )
 
-        abrir_janela(obter_estado=_estado, nome_servico=SERVICE_NAME)
-
-    def _abrir_login(_icon=None, _item=None) -> None:
-        """
-        Vincula esta conta do Windows à conta do portal.
-
-        Fica na bandeja, e não no serviço, porque é a bandeja que roda na sessão
-        da pessoa: o serviço é LocalSystem e não tem a quem mostrar uma janela —
-        nem seria a identidade certa para guardar. `agent.identidade` grava a
-        credencial no perfil do usuário, cifrada com DPAPI.
-        """
-        from agent import identidade
-        from agent.janela_login import abrir_janela as abrir_login
-
-        mid = _machine_id({}, local_cfg)
-
-        def _registrar(email: str, senha: str) -> None:
-            # Cliente próprio, e não o do laço principal. Dois motivos, e o
-            # segundo é fatal: o `client` do laço só nasce na linha do
-            # `with _novo_http_client()`, lá embaixo — e em `tray_only` a função
-            # RETORNA antes disso, então ele nunca existe justamente no modo
-            # que roda na sessão do colaborador. Capturá-lo daria NameError na
-            # thread da janela, engolido pelo `except` de quem chamou: o botão
-            # "Entrar" não faria nada, sem erro visível.
-            #
-            # O outro motivo: os timeouts do laço são de poll, não de uma
-            # pessoa esperando na frente de uma janela.
-            with _novo_http_client() as http:
-                identidade.registrar(
-                    http, base, email, senha, mid,
-                    nome=os.getenv("COMPUTERNAME") or mid,
-                )
-
-        def _pronto() -> None:
-            LOGGER.info("Dispositivo registrado no portal (máquina %s).", mid)
-            _notify(
-                "Analise CertiDigital Agent",
-                "Este computador foi vinculado à sua conta do portal.",
-            )
-
-        abrir_login(
-            ao_registrar=_registrar, portal=base, machine_id=mid, ao_concluir=_pronto
+        abrir_janela(
+            obter_estado=_estado, nome_servico=SERVICE_NAME, caminho_log=Path(log_file)
         )
 
+    # Não há "Entrar no portal…" na bandeja, de propósito (04/09/2026). Esta
+    # bandeja roda num servidor, e a identidade que autentica o trabalho é a de
+    # MÁQUINA (`agent.identidade_maquina`), obtida pelo serviço sozinho. O login
+    # de pessoa (`agent.identidade` + `agent.janela_login`) gravava um segredo
+    # que nada lê — ver a nota em `agent/identidade.py` —, e a janela abrindo a
+    # cada início só ensinava a fechá-la. Os módulos ficam, dormentes, para a
+    # fase 2 descrita lá; o que saiu foi a porta de entrada na interface.
     def _start_tray() -> None:
         if cfg.no_tray or cfg.once:
             return
@@ -803,7 +770,6 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             # usuário tenta primeiro para "ver como está".
             pystray.MenuItem("Status do serviço", _status_action, default=True),
             pystray.MenuItem("Forçar leitura agora", _rescan_action),
-            pystray.MenuItem("Entrar no portal…", _abrir_login),
             pystray.MenuItem("Sair", _quit_action),
         )
         icon = pystray.Icon("Analise CertiDigital Agent", _icon_gray, "Analise CertiDigital Agent — verificando...", menu)
@@ -844,23 +810,6 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
         return h
     _start_tray()
     LOGGER.info("Logs em: %s", log_file)
-
-    # Primeira execução nesta conta do Windows: pede o login sozinho, em vez de
-    # esperar alguém descobrir o item na bandeja. Só onde há bandeja — o serviço
-    # é LocalSystem e não tem a quem mostrar janela.
-    #
-    # Falha aqui não pode impedir o agente de subir: a leitura de certificados
-    # não depende do dispositivo, e um erro ao consultar o perfil deixaria a
-    # estação sem inventário por causa de uma tela.
-    if not cfg.no_tray and not cfg.once:
-        try:
-            from agent import identidade
-
-            if not identidade.esta_registrado():
-                LOGGER.info("Estação ainda não vinculada a uma conta; a pedir login.")
-                _abrir_login()
-        except Exception:  # noqa: BLE001
-            LOGGER.exception("Falha ao verificar o registro do dispositivo")
 
     def _command_watcher() -> None:
         """Thread separada: consome agent_command.json a cada 1s sem depender

@@ -28,10 +28,13 @@ upload de PFX, configurações) é o **serviço**, como LocalSystem, e ele não
 decifra um blob DPAPI do perfil de outra conta. A bandeja, que alcançaria este
 arquivo, não faz chamada autenticada nenhuma além do registro.
 
-Então **fazer o login hoje grava um segredo que nada lê.** O item "Entrar no
-portal…" continua na bandeja porque o registro em si funciona e a fase 2 pode
-voltar; mas ele não troca a credencial que o agente usa, e ninguém deve
-esperar que troque.
+Então **fazer o login hoje grava um segredo que nada lê.** Por isso, desde
+04/09/2026, a bandeja NÃO tem mais o item "Entrar no portal…" nem abre a
+janela sozinha na primeira execução: a bandeja roda num servidor, e a única
+coisa que a janela produzia ali era a pergunta "que conta eu coloco?". Este
+módulo e `janela_login` ficam intactos e testados, sem porta de entrada, à
+espera da fase 2 (`tests/test_janela_login.py` vigia que a porta não volte
+em silêncio).
 
 O outro objeto que essa nota pedia existe desde 01/09/2026: a credencial de
 MÁQUINA (`agent/identidade_maquina.py`, ProgramData, DPAPI de escopo máquina),

@@ -15,7 +15,9 @@ conteúdo testável sem Windows, sem serviço e sem Tk.
 from __future__ import annotations
 
 import ctypes
+import os
 import re
+import subprocess
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -140,9 +142,9 @@ def montar_estado(
     )
 
 
-def _executar_elevado(argumentos: str) -> bool:
+def _executar_elevado(argumentos: str, programa: str = "sc.exe") -> bool:
     """
-    Executa `sc.exe <argumentos>` pedindo elevação (UAC).
+    Executa `<programa> <argumentos>` pedindo elevação (UAC).
 
     Parar e iniciar serviço exigem privilégio que a bandeja não tem: ela roda na
     sessão do usuário. Sem o "runas" o botão falharia com acesso negado, e o
@@ -150,7 +152,7 @@ def _executar_elevado(argumentos: str) -> bool:
     """
     try:
         rc = ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", "sc.exe", argumentos, None, 0  # SW_HIDE
+            None, "runas", programa, argumentos, None, 0  # SW_HIDE
         )
         # ShellExecuteW devolve > 32 em sucesso. 5 (SE_ERR_ACCESSDENIED) é o
         # usuário clicando "Não" no diálogo do UAC.
@@ -167,12 +169,48 @@ def iniciar_servico(nome_servico: str) -> bool:
     return _executar_elevado(f'start "{nome_servico}"')
 
 
+def reiniciar_servico(nome_servico: str) -> bool:
+    """
+    Um clique, um UAC. `sc stop` volta antes de o serviço parar, então
+    `sc stop && sc start` falharia com "stop pending"; e dois `sc` elevados
+    seriam dois diálogos de UAC para um gesto só. `Restart-Service` espera a
+    parada e sobe de novo, num processo elevado único.
+    """
+    comando = f"Restart-Service -Name '{nome_servico}'"
+    return _executar_elevado(
+        f'-NoProfile -NonInteractive -WindowStyle Hidden -Command "{comando}"',
+        programa="powershell.exe",
+    )
+
+
+def abrir_log(caminho: Path) -> bool:
+    """
+    Abre o agent.log no programa associado; sem associação, no Bloco de Notas.
+
+    Sem isto, "ver o log" num servidor era achar o ProgramData na mão — a
+    janela já sabe o caminho, então abre.
+    """
+    try:
+        os.startfile(str(caminho))  # noqa: S606 — caminho vem do próprio agente
+        return True
+    except Exception:
+        pass
+    try:
+        subprocess.Popen(["notepad.exe", str(caminho)])  # noqa: S603, S607
+        return True
+    except Exception:
+        return False
+
+
 def abrir_janela(
     *,
     obter_estado: Callable[[], EstadoAgente],
     nome_servico: str,
+    caminho_log: Optional[Path] = None,
     ao_parar: Optional[Callable[[], bool]] = None,
     ao_iniciar: Optional[Callable[[], bool]] = None,
+    ao_reiniciar: Optional[Callable[[], bool]] = None,
+    ao_abrir_log: Optional[Callable[[], bool]] = None,
 ) -> None:
     """
     Abre a janela numa thread própria.
@@ -185,7 +223,8 @@ def abrir_janela(
     _janela_aberta.set()
     threading.Thread(
         target=_rodar_janela,
-        args=(obter_estado, nome_servico, ao_parar, ao_iniciar),
+        args=(obter_estado, nome_servico, caminho_log,
+              ao_parar, ao_iniciar, ao_reiniciar, ao_abrir_log),
         name="AnaliseCertiDigitalJanelaStatus",
         daemon=True,
     ).start()
@@ -199,7 +238,8 @@ _COR_PARADO = "#9e9e9e"
 _COR_ERRO = "#c62828"
 
 
-def _rodar_janela(obter_estado, nome_servico, ao_parar, ao_iniciar) -> None:
+def _rodar_janela(obter_estado, nome_servico, caminho_log,
+                  ao_parar, ao_iniciar, ao_reiniciar, ao_abrir_log) -> None:
     import tkinter as tk
     from tkinter import ttk
 
@@ -212,7 +252,7 @@ def _rodar_janela(obter_estado, nome_servico, ao_parar, ao_iniciar) -> None:
     raiz.title("Analise CertiDigital Agent — Status")
     raiz.configure(bg=_COR_FUNDO)
     raiz.resizable(False, False)
-    raiz.geometry("520x360")
+    raiz.geometry("600x360")
 
     cabecalho = tk.Frame(raiz, bg=_COR_FUNDO)
     cabecalho.pack(fill="x", padx=18, pady=(16, 6))
@@ -250,9 +290,13 @@ def _rodar_janela(obter_estado, nome_servico, ao_parar, ao_iniciar) -> None:
 
     btn_parar = ttk.Button(rodape, text="Parar serviço")
     btn_iniciar = ttk.Button(rodape, text="Iniciar serviço")
+    btn_reiniciar = ttk.Button(rodape, text="Reiniciar serviço")
     btn_parar.pack(side="left")
     btn_iniciar.pack(side="left", padx=(8, 0))
+    btn_reiniciar.pack(side="left", padx=(8, 0))
     ttk.Button(rodape, text="Fechar", command=raiz.destroy).pack(side="right")
+    btn_log = ttk.Button(rodape, text="Abrir log")
+    btn_log.pack(side="right", padx=(0, 8))
 
     def atualizar() -> None:
         try:
@@ -280,6 +324,7 @@ def _rodar_janela(obter_estado, nome_servico, ao_parar, ao_iniciar) -> None:
 
         btn_parar.state(["!disabled"] if e.servico_ativo else ["disabled"])
         btn_iniciar.state(["disabled"] if e.servico_ativo else ["!disabled"])
+        btn_reiniciar.state(["!disabled"] if e.servico_ativo else ["disabled"])
 
         raiz.after(2000, atualizar)
 
@@ -294,6 +339,15 @@ def _rodar_janela(obter_estado, nome_servico, ao_parar, ao_iniciar) -> None:
 
     btn_parar.config(command=_acao(ao_parar or (lambda: parar_servico(nome_servico))))
     btn_iniciar.config(command=_acao(ao_iniciar or (lambda: iniciar_servico(nome_servico))))
+    btn_reiniciar.config(
+        command=_acao(ao_reiniciar or (lambda: reiniciar_servico(nome_servico)))
+    )
+    if ao_abrir_log:
+        btn_log.config(command=ao_abrir_log)
+    elif caminho_log:
+        btn_log.config(command=lambda: abrir_log(caminho_log))
+    else:
+        btn_log.state(["disabled"])
 
     def ao_fechar() -> None:
         _janela_aberta.clear()

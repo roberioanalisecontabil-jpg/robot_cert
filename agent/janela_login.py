@@ -1,10 +1,17 @@
 """
 Janela de login do agente — onde a estação passa a saber de quem ela é.
 
-Abre uma vez, na primeira execução depois da instalação, e depois só quando o
-portal recusa o dispositivo (revogado, ou conta desativada). O que ela produz
-não é uma sessão: é o registro do dispositivo, guardado cifrado por
-`agent.identidade`. A senha digitada aqui morre com a janela.
+DORMENTE desde 04/09/2026: nada a abre. A bandeja perdeu o item "Entrar no
+portal…" e a abertura automática, porque roda num servidor e o que ela
+produzia ali não era lido por ninguém — ver a nota em `agent/identidade.py`.
+Fica intacta e testada para a fase 2, quando a bandeja agir na sessão da
+pessoa.
+
+O desenho, para quando voltar: abre uma vez, na primeira execução depois da
+instalação, e depois só quando o portal recusa o dispositivo (revogado, ou
+conta desativada). O que ela produz não é uma sessão: é o registro do
+dispositivo, guardado cifrado por `agent.identidade`. A senha digitada aqui
+morre com a janela.
 
 Mesmo desenho de `janela_status`: não importa `run_agent` (o import circular
 apareceria na primeira vez que alguém mexesse), roda em thread própria porque o

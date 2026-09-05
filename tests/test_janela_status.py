@@ -152,3 +152,79 @@ def test_portal_vazio_e_explicito(log_vazio) -> None:
 
 def test_servico_parado_e_refletido(log_vazio) -> None:
     assert _estado(_log=log_vazio, servico_ativo=False).servico_ativo is False
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Botões do servidor: reiniciar e abrir o log (04/09/2026)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def test_reiniciar_e_um_unico_processo_elevado(monkeypatch) -> None:
+    """
+    `sc stop && sc start` falharia com "stop pending", e dois `sc` elevados
+    seriam dois UAC para um clique. Reiniciar tem de ser UM processo, e o
+    PowerShell é quem espera a parada antes de subir.
+    """
+    from agent import janela_status
+
+    chamadas: list[tuple[str, str]] = []
+
+    def _falso(argumentos: str, programa: str = "sc.exe") -> bool:
+        chamadas.append((programa, argumentos))
+        return True
+
+    monkeypatch.setattr(janela_status, "_executar_elevado", _falso)
+    assert janela_status.reiniciar_servico("AnaliseCertiDigitalAgent") is True
+    assert len(chamadas) == 1
+    programa, argumentos = chamadas[0]
+    assert programa == "powershell.exe"
+    assert "Restart-Service -Name 'AnaliseCertiDigitalAgent'" in argumentos
+    assert "-NonInteractive" in argumentos
+
+
+def test_parar_e_iniciar_continuam_no_sc(monkeypatch) -> None:
+    from agent import janela_status
+
+    chamadas: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        janela_status, "_executar_elevado",
+        lambda argumentos, programa="sc.exe": chamadas.append((programa, argumentos)) or True,
+    )
+    janela_status.parar_servico("X")
+    janela_status.iniciar_servico("X")
+    assert chamadas == [("sc.exe", 'stop "X"'), ("sc.exe", 'start "X"')]
+
+
+def test_abrir_log_usa_o_programa_associado(monkeypatch, log_vazio) -> None:
+    from agent import janela_status
+
+    abertos: list[str] = []
+    monkeypatch.setattr(janela_status.os, "startfile", abertos.append, raising=False)
+    assert janela_status.abrir_log(log_vazio) is True
+    assert abertos == [str(log_vazio)]
+
+
+def test_abrir_log_cai_no_bloco_de_notas_sem_associacao(monkeypatch, log_vazio) -> None:
+    """Sem programa associado a .log, `startfile` levanta; o Bloco de Notas abre qualquer texto."""
+    from agent import janela_status
+
+    def _sem_associacao(_caminho: str) -> None:
+        raise OSError("Nenhum aplicativo associado")
+
+    lancados: list[list[str]] = []
+    monkeypatch.setattr(janela_status.os, "startfile", _sem_associacao, raising=False)
+    monkeypatch.setattr(janela_status.subprocess, "Popen", lambda args: lancados.append(args))
+    assert janela_status.abrir_log(log_vazio) is True
+    assert lancados == [["notepad.exe", str(log_vazio)]]
+
+
+def test_abrir_log_nao_levanta_quando_nada_abre(monkeypatch, log_vazio) -> None:
+    """Falha ao abrir um log não pode derrubar a janela de status — ela é o diagnóstico."""
+    from agent import janela_status
+
+    def _falha(*_a, **_k):
+        raise OSError("sem nada")
+
+    monkeypatch.setattr(janela_status.os, "startfile", _falha, raising=False)
+    monkeypatch.setattr(janela_status.subprocess, "Popen", _falha)
+    assert janela_status.abrir_log(log_vazio) is False

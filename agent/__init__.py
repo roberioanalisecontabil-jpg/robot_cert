@@ -14,4 +14,4 @@ e a instalação remota nunca aconteceria.
 # Fonte única da versão do agente. O instalador declara a dele em
 # `agent_setup.iss` (AppVersion), que o Inno não consegue ler daqui — um teste
 # em tests/test_versao_agente.py garante que as duas não divirjam.
-__version__ = "1.2.0"
+__version__ = "1.3.0"
