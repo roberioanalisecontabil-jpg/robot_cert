@@ -477,9 +477,13 @@ class Client:
     def __init__(self, dsn: str, *, min_size: int = 1, max_size: int = 6,
                  timeout: float = 10.0) -> None:
         self._dsn = dsn
+        # timezone=UTC na sessão: o PostgREST entregava timestamptz em UTC
+        # ("...+00:00") e há código que compara/recorta esse texto. Sem isto o
+        # Postgres formata no fuso do servidor (-03:00) e a mesma hora vira
+        # outro texto.
         self._pool = ConnectionPool(
             conninfo=dsn, min_size=min_size, max_size=max_size, timeout=timeout,
-            kwargs={"autocommit": True}, open=True,
+            kwargs={"autocommit": True, "options": "-c timezone=UTC"}, open=True,
         )
         self._pk_cache: Dict[str, List[str]] = {}
         self._lock = threading.Lock()

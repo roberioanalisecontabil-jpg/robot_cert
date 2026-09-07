@@ -14,6 +14,21 @@
 
 CREATE SCHEMA IF NOT EXISTS auth;
 
+-- Os papéis que as políticas e GRANTs das migrations citam. NOLOGIN: existem
+-- só para o SQL antigo compilar; ninguém conecta com eles.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+        CREATE ROLE service_role NOLOGIN;
+    END IF;
+END $$;
+
 -- Sem JWT não há papel: devolve 'service_role' porque é o único chamador que
 -- existe (o próprio portal). Não é uma barreira de segurança — a barreira é a
 -- rede (só VPN) e o usuário do banco com senha própria.
