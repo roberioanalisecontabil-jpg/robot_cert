@@ -21,8 +21,26 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-PRELUDIO = RAIZ / "db" / "000_prelude_postgres.sql"
+# `db/*.sql` roda antes: o prelúdio (esquema `auth` mínimo) e as tabelas que
+# nunca tiveram migration (`users`, criada à mão no Supabase).
+BASE = RAIZ / "db"
 MIGRATIONS = RAIZ / "supabase" / "migrations"
+
+
+def _ordem(arq: Path) -> tuple[str, str]:
+    """
+    Ordem cronológica, não alfabética. `20260803_cert_installer.sql` veio ANTES
+    de `20260803120000_cert_installer_rls.sql` (que até checa isso), mas o
+    `_` ordena depois do `1`. Preenche o carimbo curto (só data) com zeros.
+    """
+    nome = arq.name
+    digitos = ""
+    for ch in nome:
+        if ch.isdigit():
+            digitos += ch
+        else:
+            break
+    return (digitos.ljust(14, "0"), nome)
 
 
 def _dsn(argv: list[str]) -> str:
@@ -44,7 +62,7 @@ def main(argv: list[str]) -> int:
     import psycopg
 
     dsn = _dsn(argv)
-    arquivos = [PRELUDIO] + sorted(MIGRATIONS.glob("*.sql"))
+    arquivos = sorted(BASE.glob("*.sql")) + sorted(MIGRATIONS.glob("*.sql"), key=_ordem)
     aplicados = 0
     with psycopg.connect(dsn, autocommit=False) as conn:
         # O prelúdio cria a tabela de controle; até ela existir, tudo é "novo".
