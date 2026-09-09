@@ -7,8 +7,8 @@
 -- Para a história rodar num Postgres vazio, ela precisa começar de onde
 -- começou. Depois da fase 3d o resultado é idêntico ao `schema.sql`.
 --
--- ⚠️ PROVISÓRIA (07/09/2026), como `001_users_base.sql`: o dump do banco real
--- é a verdade e substitui as duas quando chegar.
+-- Conferida (09/09/2026) contra o dump do banco de produção: o resultado
+-- final das migrations sobre esta tabela bate coluna a coluna com o real.
 
 CREATE TABLE IF NOT EXISTS public.colaborador_cert_selecoes (
     user_email text PRIMARY KEY,

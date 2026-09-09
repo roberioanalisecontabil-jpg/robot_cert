@@ -3,6 +3,10 @@ Aplica o esquema do portal num PostgreSQL puro: prelúdio + migrations, em ordem
 
     python db/aplicar_schema.py postgresql://certguard:senha@127.0.0.1:5432/certguard
     python db/aplicar_schema.py            # usa DATABASE_URL do ambiente/.env
+    python db/aplicar_schema.py <dsn> --marcar-ate <arquivo.sql>
+        # banco restaurado de um dump que JA CONTEM o efeito das migrations
+        # ate <arquivo.sql> (inclusive): registra-as como aplicadas sem
+        # executa-las e segue aplicando so as posteriores.
 
 Reexecutável: o que já foi aplicado fica em `public.schema_migrations` e é
 pulado. Cada arquivo roda numa transação própria — um erro no meio deixa os
@@ -43,9 +47,20 @@ def _ordem(arq: Path) -> tuple[str, str]:
     return (digitos.ljust(14, "0"), nome)
 
 
+def _opcao(argv: list[str], nome: str) -> str | None:
+    if nome in argv:
+        i = argv.index(nome)
+        if i + 1 >= len(argv):
+            sys.exit(f"{nome} precisa do nome de um arquivo .sql")
+        return argv[i + 1].strip()
+    return None
+
+
 def _dsn(argv: list[str]) -> str:
-    if len(argv) > 1 and argv[1].strip():
-        return argv[1].strip()
+    marcar = _opcao(argv, "--marcar-ate")
+    posicionais = [a for a in argv[1:] if a != "--marcar-ate" and a != marcar]
+    if posicionais and posicionais[0].strip():
+        return posicionais[0].strip()
     try:
         from dotenv import load_dotenv
 
@@ -74,6 +89,27 @@ def main(argv: list[str]) -> int:
             with conn.cursor() as cur:
                 cur.execute("SELECT arquivo FROM public.schema_migrations")
                 ja = {r[0] for r in cur.fetchall()}
+
+        marcar_ate = _opcao(argv, "--marcar-ate")
+        if marcar_ate is not None:
+            nomes = [a.name for a in arquivos]
+            if marcar_ate not in nomes:
+                sys.exit(f"--marcar-ate: {marcar_ate} não está entre os arquivos conhecidos.")
+            baseline = [n for n in nomes[: nomes.index(marcar_ate) + 1] if n not in ja]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "CREATE TABLE IF NOT EXISTS public.schema_migrations ("
+                    "arquivo text PRIMARY KEY, aplicado_em timestamptz NOT NULL DEFAULT now())"
+                )
+                for n in baseline:
+                    cur.execute(
+                        "INSERT INTO public.schema_migrations (arquivo) VALUES (%s) "
+                        "ON CONFLICT DO NOTHING",
+                        (n,),
+                    )
+            conn.commit()
+            ja |= set(baseline)
+            print(f"  marcadas como já aplicadas (sem executar): {len(baseline)}, até {marcar_ate}")
 
         for arq in arquivos:
             nome = arq.name

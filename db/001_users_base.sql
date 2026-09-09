@@ -5,19 +5,19 @@
 -- já na 1ª migration; `carteira`, `departamento_lider`, `password_reset_codigo`
 -- depois). Sem isto o esquema não sobe num Postgres vazio.
 --
--- ⚠️ PROVISÓRIA (07/09/2026): reconstruída a partir do que o código lê e
--- grava (`main.py`: id, email, password_hash, full_name, role,
--- deve_trocar_senha) e do que as migrations acrescentam depois (ativo,
--- gestor_id, senha_alterada_em, departamento_id, e-mail único). Quando o dump
--- do banco real chegar, o `schema-all.sql` dele é a verdade e substitui este
--- arquivo — conferir tipos e defaults antes de importar os dados.
+-- Conferida (09/09/2026) contra o dump do banco de produção: colunas, tipos,
+-- defaults e o e-mail único (`users_email_key`) são os reais. As colunas que
+-- as migrations acrescentam depois (ativo, gestor_id, senha_alterada_em,
+-- departamento_id e o índice único por lower(email)) continuam nelas.
 
 CREATE TABLE IF NOT EXISTS public.users (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    email             text NOT NULL,
+    email             text NOT NULL UNIQUE,
     password_hash     text NOT NULL,
     full_name         text,
     role              text NOT NULL DEFAULT 'user',
     deve_trocar_senha boolean NOT NULL DEFAULT false,
     created_at        timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS users_email_idx ON public.users (email);
