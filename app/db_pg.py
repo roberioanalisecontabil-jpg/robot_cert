@@ -105,6 +105,10 @@ def _normalizar_valor(v: Any) -> Any:
         return int(v) if v == v.to_integral_value() else float(v)
     if isinstance(v, (bytes, bytearray, memoryview)):
         return "\\x" + bytes(v).hex()
+    if isinstance(v, (list, tuple)):
+        # Colunas array (uuid[] etc.) voltam como lista de objetos; o PostgREST
+        # entregava lista de texto, e é isso que o resto do portal espera.
+        return [_normalizar_valor(x) for x in v]
     return v
 
 
@@ -117,6 +121,23 @@ def _adaptar_param(v: Any) -> Any:
     if isinstance(v, (dict, list)):
         return Jsonb(v)
     return v
+
+
+def _marcador_e_param(coluna: str, valor: Any, arrays: Dict[str, str]) -> Tuple[sql.Composable, Any]:
+    """O marcador e o parâmetro de UMA coluna num INSERT/UPDATE.
+
+    Lista vira JSONB por padrão. A exceção é coluna declarada como array no
+    catálogo (install_token.certificate_ids é uuid[]): o PostgREST aceitava um
+    array JSON e convertia; aqui a lista vai como array de texto com cast
+    explícito para o tipo da coluna ("%s::uuid[]"), que é como o Postgres
+    aceita text[] → uuid[].
+    """
+    tipo = arrays.get(coluna)
+    if tipo and isinstance(valor, (list, tuple)):
+        if not _IDENT.match(tipo):
+            raise DbError(f"tipo de array inválido: {tipo!r}", "22023")
+        return sql.SQL("%s::" + tipo + "[]"), [None if x is None else str(x) for x in valor]
+    return sql.SQL("%s"), _adaptar_param(valor)
 
 
 # ── Montagem de SQL ───────────────────────────────────────────────────────
@@ -331,6 +352,14 @@ class Query:
             params.append(self._offset)
         return peca, params
 
+    def _colunas_array_se_preciso(self, valores: Any) -> Dict[str, str]:
+        """Consulta o catálogo só quando há lista entre os valores (raro) e só
+        se o cliente souber responder — os testes montam Query com dublês."""
+        if not any(isinstance(v, (list, tuple)) for v in valores):
+            return {}
+        consultar = getattr(self._c, "_colunas_array", None)
+        return consultar(self._tabela) if consultar else {}
+
     def _linhas_sql(self, linhas: List[Dict[str, Any]]) -> Tuple[List[str], sql.Composable, List[Any]]:
         colunas: List[str] = []
         for r in linhas:
@@ -339,12 +368,14 @@ class Query:
                     colunas.append(k)
         params: List[Any] = []
         tuplas = []
+        arrays = self._colunas_array_se_preciso(r[c] for r in linhas for c in colunas if c in r)
         for r in linhas:
             marcadores = []
             for c in colunas:
                 if c in r:
-                    marcadores.append(sql.SQL("%s"))
-                    params.append(_adaptar_param(r[c]))
+                    marcador, param = _marcador_e_param(c, r[c], arrays)
+                    marcadores.append(marcador)
+                    params.append(param)
                 else:
                     marcadores.append(sql.SQL("DEFAULT"))
             tuplas.append(sql.SQL("(") + sql.SQL(", ").join(marcadores) + sql.SQL(")"))
@@ -388,8 +419,15 @@ class Query:
         if self._op == "update":
             if not self._values:
                 return [(sql.SQL("SELECT * FROM {}").format(t) + where + sql.SQL(" LIMIT 0"), list(wp))]
-            setar = sql.SQL(", ").join(sql.SQL("{} = %s").format(_ident(k)) for k in self._values)
-            params = [_adaptar_param(v) for v in self._values.values()] + list(wp)
+            arrays = self._colunas_array_se_preciso(self._values.values())
+            pedacos = []
+            params: List[Any] = []
+            for k, v in self._values.items():
+                marcador, param = _marcador_e_param(k, v, arrays)
+                pedacos.append(sql.SQL("{} = ").format(_ident(k)) + marcador)
+                params.append(param)
+            setar = sql.SQL(", ").join(pedacos)
+            params = params + list(wp)
             return [(sql.SQL("UPDATE {} SET ").format(t) + setar + where + sql.SQL(" RETURNING *"), params)]
         if self._op == "delete":
             return [(sql.SQL("DELETE FROM {}").format(t) + where + sql.SQL(" RETURNING *"), list(wp))]
@@ -486,6 +524,7 @@ class Client:
             kwargs={"autocommit": True, "options": "-c timezone=UTC"}, open=True,
         )
         self._pk_cache: Dict[str, List[str]] = {}
+        self._array_cache: Dict[str, Dict[str, str]] = {}
         self._lock = threading.Lock()
 
     def conexao(self):
@@ -502,6 +541,29 @@ class Client:
 
     def rpc(self, nome: str, params: Optional[Dict[str, Any]] = None) -> _Rpc:
         return _Rpc(self, nome, params)
+
+    def _colunas_array(self, tabela: str) -> Dict[str, str]:
+        """{coluna: tipo do elemento} das colunas array da tabela (ex.:
+        {"certificate_ids": "uuid"}). Uma consulta por tabela, por processo."""
+        with self._lock:
+            if tabela in self._array_cache:
+                return self._array_cache[tabela]
+        esquema, _, nome = tabela.rpartition(".")
+        esquema = esquema or "public"
+        q = """
+            SELECT column_name, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = %s AND table_name = %s AND data_type = 'ARRAY'
+        """
+        try:
+            with self.conexao() as conn, conn.cursor() as cur:
+                cur.execute(q, (esquema, nome))
+                cols = {r[0]: r[1].lstrip("_") for r in cur.fetchall()}
+        except psycopg.Error as e:
+            raise DbError(str(e).strip(), getattr(e, "sqlstate", "") or "") from e
+        with self._lock:
+            self._array_cache[tabela] = cols
+        return cols
 
     def _chave_primaria(self, tabela: str) -> List[str]:
         with self._lock:
