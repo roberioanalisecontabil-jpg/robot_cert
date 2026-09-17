@@ -1,7 +1,7 @@
 """
-Cache em memória (TTL) da agregação de histórico (Supabase / snapshot local).
+Cache em memória (TTL) da agregação de histórico (banco / snapshot local).
 
-- Chave: (Supabase ativo?, limite_snapshots).
+- Chave: (banco ativo?, limite_snapshots).
 - Invalidação ao gravar novo snapshot (`save_snapshot`).
 """
 
@@ -37,7 +37,7 @@ def _purge_expired_unlocked(now: float) -> None:
 
 
 def get_or_build(
-    uses_supabase: bool,
+    usa_banco: bool,
     limite_snapshots: int,
     builder: Callable[[], Tuple[Dict[str, dict], int]],
 ) -> Tuple[Dict[str, dict], int]:
@@ -45,7 +45,7 @@ def get_or_build(
     if ttl <= 0:
         return builder()
 
-    key: CacheKey = (_CACHE_PAYLOAD_VERSION, uses_supabase, int(limite_snapshots))
+    key: CacheKey = (_CACHE_PAYLOAD_VERSION, usa_banco, int(limite_snapshots))
 
     now0 = time.monotonic()
     with _lock:

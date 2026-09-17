@@ -27,11 +27,11 @@ def test_ttl_reuso_por_limite(monkeypatch: pytest.MonkeyPatch) -> None:
     invalidate_all()
     calls: list[int] = []
 
-    def mk(supabase: bool, lim: int):
+    def mk(usa_banco: bool, lim: int):
 
         def b() -> tuple[dict, int]:
             calls.append(len(calls))
-            return ({f"{supabase}:{lim}": {}}, lim)
+            return ({f"{usa_banco}:{lim}": {}}, lim)
 
         return b
 

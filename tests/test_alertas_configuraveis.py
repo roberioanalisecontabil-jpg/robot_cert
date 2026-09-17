@@ -200,9 +200,9 @@ def _certificado(nome: str, dias: int, fp: str) -> dict:
 
 @pytest.fixture
 def resumo_isolado(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    """Sem Supabase e sem SMTP: devolve a lista de e-mails que sairiam."""
+    """Sem banco e sem SMTP: devolve a lista de e-mails que sairiam."""
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "_get_admin_emails", lambda: ["admin@portal.com"])
 
     def _executar(settings, itens):

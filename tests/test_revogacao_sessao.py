@@ -63,7 +63,7 @@ ADMIN = {"id": "u-adm", "email": "chefe@x.com", "full_name": "Chefe",
 @pytest.fixture
 def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake = _Fake([dict(ADMIN)])
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
 
 
@@ -217,17 +217,17 @@ def test_banco_fora_do_ar_nao_desloga_o_usuario(client: TestClient, banco: _Fake
 # 6. Sem diretório de usuários, nada a conferir
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_sem_supabase_o_token_ainda_vale(
+def test_sem_banco_o_token_ainda_vale(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    Dev e testes rodam sem Supabase, e aí não existe conta contra a qual
-    conferir. Não é brecha em produção: sem Supabase o `/api/login` responde 503
+    Dev e testes rodam sem banco, e aí não existe conta contra a qual
+    conferir. Não é brecha em produção: sem banco o `/api/login` responde 503
     e ninguém chega a ter um token para apresentar.
 
-    Sem a fixture `banco` de propósito — é o cenário em que `_supabase()` é None.
+    Sem a fixture `banco` de propósito — é o cenário em que `_banco()` é None.
     """
-    monkeypatch.setattr("app.settings_state._supabase", lambda: None)
+    monkeypatch.setattr("app.settings_state._banco", lambda: None)
     assert client.get("/api/users", headers=_h()).status_code == 200
 
 
@@ -271,7 +271,7 @@ def test_id_da_sessao_recorre_a_consulta_quando_nao_houve_leitura(
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    O caso sem Supabase e o do agente por X-API-Key: ninguém leu conta nenhuma,
+    O caso sem banco e o do agente por X-API-Key: ninguém leu conta nenhuma,
     então `user_id` vem None e a consulta antiga ainda é o caminho. Sem esta
     saída, as três rotas passariam a responder 404 em ambiente sem banco.
     """

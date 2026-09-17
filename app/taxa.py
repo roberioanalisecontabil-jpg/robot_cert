@@ -8,7 +8,7 @@ um atacante paciente falava com várias instâncias e o limite real era
 "10 × quantas instâncias a plataforma quiser subir". Memória de instância em
 serverless não é limite; é sugestão.
 
-Aqui a janela vive numa tabela pequena do Supabase (`rate_limit_tentativas`),
+Aqui a janela vive numa tabela pequena do banco (`rate_limit_tentativas`),
 compartilhada por todas as instâncias. Cada tentativa é uma linha; permitir é
 contar as linhas da chave dentro da janela. A poda é oportunista, na própria
 chave, a cada chamada — o volume por chave é limitado pelo próprio teto, então
@@ -16,7 +16,7 @@ a tabela não cresce além de (chaves ativas × máximo).
 
 ── Falha do banco NÃO abre o portão nem fecha o portal ───────────────────
 
-Sem Supabase (dev, ou indisponibilidade), cai na janela em memória — que é
+Sem banco (dev, ou indisponibilidade), cai na janela em memória — que é
 exatamente o comportamento que existia antes: por instância, imperfeito, e
 melhor que negar serviço a todo mundo por causa do limitador. A queda é
 logada; um limitador que degrada em silêncio é o defeito que este módulo veio
@@ -49,8 +49,8 @@ _memoria: dict[str, list[float]] = {}
 _memoria_lock = threading.Lock()
 
 
-def _supabase():
-    from app.settings_state import _supabase as _sb
+def _banco():
+    from app.settings_state import _banco as _sb
 
     return _sb()
 
@@ -77,10 +77,10 @@ def _permitir_em_memoria(chave: str, maximo: int, janela_seg: float) -> bool:
 def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
     """True se esta chave ainda pode tentar dentro da janela.
 
-    Conta e registra no Supabase — o mapa vale para TODAS as instâncias. Sem
+    Conta e registra no banco — o mapa vale para TODAS as instâncias. Sem
     banco, degrada para a janela em memória com aviso no log.
     """
-    client = _supabase()
+    client = _banco()
     if client:
         agora = datetime.now(timezone.utc)
         corte_janela = (agora - timedelta(seconds=janela_seg)).isoformat()
@@ -107,7 +107,7 @@ def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
             return True
         except Exception:  # noqa: BLE001
             logger.warning(
-                "Rate limit no Supabase indisponível (tabela %s ausente? rode a "
+                "Rate limit no banco indisponível (tabela %s ausente? rode a "
                 "migration 20260902100000); usando a janela em memória desta "
                 "instância.",
                 TABELA,

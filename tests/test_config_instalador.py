@@ -65,8 +65,8 @@ def settings_em_memoria(monkeypatch: pytest.MonkeyPatch) -> PortalSettings:
         return estado
 
     def _save(s, **_kwargs):
-        # `**_kwargs` absorve o `exigir_supabase` que as rotas de tela passam.
-        # Aqui não há Supabase para falhar: gravou na memória, gravou de fato.
+        # `**_kwargs` absorve o `exigir_banco` que as rotas de tela passam.
+        # Aqui não há banco para falhar: gravou na memória, gravou de fato.
         for campo in vars(s):
             setattr(estado, campo, getattr(s, campo))
         return True
@@ -247,7 +247,7 @@ def log_com_historico(monkeypatch: pytest.MonkeyPatch) -> _FakeLog:
         {"id": "medio", "created_at": (agora - timedelta(days=100)).isoformat()},
         {"id": "antigo", "created_at": (agora - timedelta(days=400)).isoformat()},
     ])
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
     return fake
 
 
@@ -277,7 +277,7 @@ def test_expurgo_relata_falha_em_vez_de_levantar(monkeypatch: pytest.MonkeyPatch
         def table(self, _n):
             raise RuntimeError("banco fora do ar")
 
-    monkeypatch.setattr(ci, "_supabase", lambda: _Quebrado())
+    monkeypatch.setattr(ci, "_banco", lambda: _Quebrado())
     r = ci.expurgar_install_log(dias=30)
     assert r["executado"] is False
     assert "fora do ar" in r["motivo"]
@@ -311,7 +311,7 @@ def test_gravacao_que_nao_chegou_ao_banco_nao_responde_salvo(
     """A tela não pode dizer "salvo" sobre um valor que ela vai recarregar diferente.
 
     `save_settings` sempre escreveu o arquivo local e só REGISTRAVA a falha do
-    Supabase. Mas `load_settings` prefere o Supabase: o valor ia para um arquivo
+    banco. Mas `load_settings` prefere o banco: o valor ia para um arquivo
     que ninguém lê, e a rota devolvia 200.
 
     Encontrado ao aplicar esta própria funcionalidade — o Supabase recusou com
@@ -321,7 +321,7 @@ def test_gravacao_que_nao_chegou_ao_banco_nao_responde_salvo(
     from app.settings_state import GravacaoNaoPersistida
 
     def _save_que_falha(s, **kwargs):
-        if kwargs.get("exigir_supabase"):
+        if kwargs.get("exigir_banco"):
             raise GravacaoNaoPersistida("PGRST204: coluna inexistente")
         return False
 
@@ -356,7 +356,7 @@ def test_o_ingest_do_agente_nao_e_derrubado_por_falha_de_gravacao(
 
     Quem chama `save_settings` no meio de uma varredura de centenas de
     certificados não pode ter a varredura interrompida por causa da
-    configuração. Só quem responde a uma tela pede `exigir_supabase`.
+    configuração. Só quem responde a uma tela pede `exigir_banco`.
     """
     import app.settings_state as ss
 
@@ -364,11 +364,11 @@ def test_o_ingest_do_agente_nao_e_derrubado_por_falha_de_gravacao(
         def table(self, _nome):
             raise RuntimeError("banco fora do ar")
 
-    monkeypatch.setattr(ss, "_supabase", lambda: _ClientQueFalha())
+    monkeypatch.setattr(ss, "_banco", lambda: _ClientQueFalha())
     monkeypatch.setattr(ss, "_save_file", lambda _s: None)
 
     s = PortalSettings(source_folder="F:/a", expired_folder="F:/b")
     assert ss.save_settings(s) is False, "relata, mas não levanta"
 
     with pytest.raises(ss.GravacaoNaoPersistida):
-        ss.save_settings(s, exigir_supabase=True)
+        ss.save_settings(s, exigir_banco=True)

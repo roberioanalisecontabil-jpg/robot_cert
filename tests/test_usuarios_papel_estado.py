@@ -31,7 +31,7 @@ import app.main as m
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Fake de Supabase — só o subconjunto usado pelas rotas de usuário
+# Fake do banco — só o subconjunto usado pelas rotas de usuário
 # ──────────────────────────────────────────────────────────────────────────
 
 class _Resultado:
@@ -86,7 +86,7 @@ class _Query:
         raise AssertionError(self._op)
 
 
-class _FakeSupabase:
+class _FakeBanco:
     def __init__(self, users: List[Dict[str, Any]]) -> None:
         self.tabelas = {"users": users}
 
@@ -119,14 +119,14 @@ def _users() -> List[Dict[str, Any]]:
 
 
 @pytest.fixture
-def banco(monkeypatch: pytest.MonkeyPatch) -> _FakeSupabase:
-    fake = _FakeSupabase(_users())
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+def banco(monkeypatch: pytest.MonkeyPatch) -> _FakeBanco:
+    fake = _FakeBanco(_users())
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     monkeypatch.setattr(m, "load_settings", lambda *a, **k: None)
     return fake
 
 
-def _linha(banco: _FakeSupabase, user_id: str) -> Dict[str, Any]:
+def _linha(banco: _FakeBanco, user_id: str) -> Dict[str, Any]:
     return next(u for u in banco.tabelas["users"] if u["id"] == user_id)
 
 
@@ -343,7 +343,7 @@ def test_tela_oferece_reativar() -> None:
 # ──────────────────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def unico_admin(banco: _FakeSupabase) -> _FakeSupabase:
+def unico_admin(banco: _FakeBanco) -> _FakeBanco:
     """Deixa `u-admin` como o único administrador ativo."""
     for u in banco.tabelas["users"]:
         if u["id"] == "u-admin2":
@@ -352,7 +352,7 @@ def unico_admin(banco: _FakeSupabase) -> _FakeSupabase:
 
 
 def test_ultimo_admin_nao_pode_se_desativar(
-    client: TestClient, unico_admin: _FakeSupabase
+    client: TestClient, unico_admin: _FakeBanco
 ) -> None:
     r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
     assert r.status_code == 409, r.text
@@ -360,7 +360,7 @@ def test_ultimo_admin_nao_pode_se_desativar(
 
 
 def test_ultimo_admin_nao_pode_se_rebaixar(
-    client: TestClient, unico_admin: _FakeSupabase
+    client: TestClient, unico_admin: _FakeBanco
 ) -> None:
     """
     Rebaixar é o caminho menos óbvio para o mesmo buraco, e por isso o mais
@@ -376,7 +376,7 @@ def test_ultimo_admin_nao_pode_se_rebaixar(
 
 
 def test_ultimo_admin_nao_pode_ser_apagado(
-    client: TestClient, unico_admin: _FakeSupabase
+    client: TestClient, unico_admin: _FakeBanco
 ) -> None:
     r = client.delete("/api/users/u-admin", headers=_admin_headers())
     assert r.status_code == 409, r.text
@@ -384,7 +384,7 @@ def test_ultimo_admin_nao_pode_ser_apagado(
 
 
 def test_role_disabled_legado_tambem_esbarra_na_regra(
-    client: TestClient, unico_admin: _FakeSupabase
+    client: TestClient, unico_admin: _FakeBanco
 ) -> None:
     """
     O cliente antigo desativa mandando `role="disabled"`. Se esse caminho não
@@ -400,7 +400,7 @@ def test_role_disabled_legado_tambem_esbarra_na_regra(
 
 
 def test_com_dois_admins_desativar_um_e_permitido(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     A regra não pode virar "administrador é intocável" — isso impediria a
@@ -412,7 +412,7 @@ def test_com_dois_admins_desativar_um_e_permitido(
 
 
 def test_admin_inativo_nao_conta_como_administrador(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     `u-off` tem role='admin' e está inativo. Contá-lo deixaria o portal sem
@@ -430,7 +430,7 @@ def test_admin_inativo_nao_conta_como_administrador(
 
 
 def test_falha_ao_verificar_recusa_em_vez_de_liberar(
-    client: TestClient, banco: _FakeSupabase, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, banco: _FakeBanco, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
     Não dá para afirmar que sobra admin → recusa. O custo é uma operação
@@ -440,7 +440,7 @@ def test_falha_ao_verificar_recusa_em_vez_de_liberar(
         def table(self, _n):
             raise RuntimeError("banco fora do ar")
 
-    monkeypatch.setattr("app.settings_state._supabase", lambda: _Quebrado())
+    monkeypatch.setattr("app.settings_state._banco", lambda: _Quebrado())
     r = client.post("/api/users/u-admin/deactivate", headers=_admin_headers())
     assert r.status_code == 503, r.text
 
@@ -455,7 +455,7 @@ def test_falha_ao_verificar_recusa_em_vez_de_liberar(
 # o quê) e a trilha (quem instalou).
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_nao_cria_com_email_ja_usado(client: TestClient, banco: _FakeSupabase) -> None:
+def test_nao_cria_com_email_ja_usado(client: TestClient, banco: _FakeBanco) -> None:
     r = client.post(
         "/api/users",
         json={"email": "CHEFE@empresa.com", "password": SENHA,
@@ -466,7 +466,7 @@ def test_nao_cria_com_email_ja_usado(client: TestClient, banco: _FakeSupabase) -
     assert sum(1 for u in banco.tabelas["users"] if "chefe@" in u["email"]) == 1
 
 
-def test_nao_edita_para_email_de_outro(client: TestClient, banco: _FakeSupabase) -> None:
+def test_nao_edita_para_email_de_outro(client: TestClient, banco: _FakeBanco) -> None:
     r = client.put(
         "/api/users/u-gestor",
         json={"email": "chefe@empresa.com", "full_name": "Gestor", "role": "gestor"},
@@ -477,7 +477,7 @@ def test_nao_edita_para_email_de_outro(client: TestClient, banco: _FakeSupabase)
 
 
 def test_manter_o_proprio_email_na_edicao_e_permitido(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     A checagem tem de ignorar a própria linha — senão salvar sem mexer no
@@ -493,7 +493,7 @@ def test_manter_o_proprio_email_na_edicao_e_permitido(
     assert _linha(banco, "u-gestor")["full_name"] == "Gestor Editado"
 
 
-def test_email_e_normalizado_para_minusculas(client: TestClient, banco: _FakeSupabase) -> None:
+def test_email_e_normalizado_para_minusculas(client: TestClient, banco: _FakeBanco) -> None:
     """
     O login compara normalizado. Gravar "Fulano@x.com" cru deixaria a conta
     inacessível — e abriria espaço para uma segunda com o mesmo endereço.
@@ -510,7 +510,7 @@ def test_email_e_normalizado_para_minusculas(client: TestClient, banco: _FakeSup
 
 @pytest.mark.parametrize("email", ["sem-arroba", "@semlocal.com", "sem@dominio", "a b@x.com", ""])
 def test_email_implausivel_e_recusado(
-    client: TestClient, banco: _FakeSupabase, email: str
+    client: TestClient, banco: _FakeBanco, email: str
 ) -> None:
     """
     Validação frouxa de propósito: "@" com algo dos dois lados e ponto no
@@ -525,7 +525,7 @@ def test_email_implausivel_e_recusado(
     assert r.status_code == 422, r.text
 
 
-def test_senha_curta_e_recusada_ao_criar(client: TestClient, banco: _FakeSupabase) -> None:
+def test_senha_curta_e_recusada_ao_criar(client: TestClient, banco: _FakeBanco) -> None:
     """
     `reset_user_password` já exigia 6. Criar era mais permissivo que
     redefinir: dava para nascer com senha de um caractere e só descobrir o

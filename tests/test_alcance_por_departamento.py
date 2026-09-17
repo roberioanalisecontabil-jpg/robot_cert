@@ -125,8 +125,8 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         "carteira": [],
         "cert_snapshots": [],
     })
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     monkeypatch.setattr(m, "_resolve_user_id",
                         lambda email: {
                             "admin@x.com": "u-adm",

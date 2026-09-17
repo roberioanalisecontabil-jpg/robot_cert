@@ -59,7 +59,7 @@ def disparar(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
     monkeypatch.setattr(als, "JOB_STATE_FILE", tmp_path / "job.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "load_settings", lambda: _Settings())
     # O resumo dos admins tem teste próprio; aqui ele só atrapalharia a contagem.
     monkeypatch.setattr(als, "_enviar_resumo_admins", lambda *a, **k: {})

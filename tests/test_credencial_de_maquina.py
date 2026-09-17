@@ -50,7 +50,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         machine_credentials.TABELA: [],
         "user_activity": [],
     })
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
 
 
@@ -152,7 +152,7 @@ def test_sem_banco_o_401_nao_leva_o_marcador(client_com_chave: TestClient) -> No
     """Migration/banco ausente é problema de implantação, não da credencial.
     Com o marcador, o agente descartaria um segredo perfeitamente válido."""
     r = _provisionar(client_com_chave, "um-segredo-qualquer-que-nao-e-a-chave")
-    # Sem `banco`, o conftest zera o Supabase: machine_credentials.SemBanco.
+    # Sem `banco`, o conftest zera o banco: machine_credentials.SemBanco.
     assert r.status_code in (401, 503)
     assert machine_credentials.CABECALHO_CREDENCIAL_INVALIDA not in r.headers
 

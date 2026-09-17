@@ -39,7 +39,7 @@ class _FakeQuery:
         return R()
 
 
-class _FakeSupabase:
+class _FakeBanco:
     def __init__(self, tabelas: dict) -> None:
         self._tabelas = tabelas
 
@@ -47,8 +47,8 @@ class _FakeSupabase:
         return _FakeQuery(list(self._tabelas.get(nome, [])))
 
 
-def _banco(users: list, selecoes: list) -> _FakeSupabase:
-    return _FakeSupabase({"users": users, "colaborador_cert_selecoes": selecoes})
+def _banco(users: list, selecoes: list) -> _FakeBanco:
+    return _FakeBanco({"users": users, "colaborador_cert_selecoes": selecoes})
 
 
 # `saiu@` está na forma NOVA (papel preservado, estado desligado) e `legado@` na
@@ -79,7 +79,7 @@ SELECOES = [
 
 
 def test_usuario_desativado_nao_recebe() -> None:
-    with patch.object(als, "_supabase", lambda: _banco(USERS, SELECOES)):
+    with patch.object(als, "_banco", lambda: _banco(USERS, SELECOES)):
         r = als._get_todos_colaboradores_selecoes()
 
     assert "saiu@empresa.com" not in r, "desativar no painel tem de parar o e-mail"
@@ -94,7 +94,7 @@ def test_desativado_na_forma_antiga_tambem_nao_recebe() -> None:
     omissão e todo desativado de antes da migration voltaria a receber e-mail —
     sem erro, sem log, e sem ninguém para reclamar de receber a mais.
     """
-    with patch.object(als, "_supabase", lambda: _banco(USERS, SELECOES)):
+    with patch.object(als, "_banco", lambda: _banco(USERS, SELECOES)):
         r = als._get_todos_colaboradores_selecoes()
 
     assert "legado@empresa.com" not in r
@@ -102,7 +102,7 @@ def test_desativado_na_forma_antiga_tambem_nao_recebe() -> None:
 
 def test_email_sem_conta_nao_recebe() -> None:
     """Linha órfã de conta apagada, ou nunca criada."""
-    with patch.object(als, "_supabase", lambda: _banco(USERS, SELECOES)):
+    with patch.object(als, "_banco", lambda: _banco(USERS, SELECOES)):
         r = als._get_todos_colaboradores_selecoes()
 
     assert "fantasma@outrodominio.com" not in r
@@ -110,7 +110,7 @@ def test_email_sem_conta_nao_recebe() -> None:
 
 def test_identidade_de_servico_nao_recebe() -> None:
     """`agent@internal` é o agente, não uma pessoa — não tem caixa de entrada."""
-    with patch.object(als, "_supabase", lambda: _banco(USERS, SELECOES)):
+    with patch.object(als, "_banco", lambda: _banco(USERS, SELECOES)):
         r = als._get_todos_colaboradores_selecoes()
 
     assert "agent@internal" not in r
@@ -118,7 +118,7 @@ def test_identidade_de_servico_nao_recebe() -> None:
 
 def test_usuarios_ativos_continuam_recebendo() -> None:
     """O filtro não pode silenciar quem deve ser avisado."""
-    with patch.object(als, "_supabase", lambda: _banco(USERS, SELECOES)):
+    with patch.object(als, "_banco", lambda: _banco(USERS, SELECOES)):
         r = als._get_todos_colaboradores_selecoes()
 
     assert set(r) == {"ativo@empresa.com", "chefe@empresa.com"}
@@ -144,7 +144,7 @@ def test_falha_ao_listar_usuarios_deixa_a_rodada_sem_destinatario(
     contrapartida é que a falha grita: sai `ERROR` com a contagem, e o job
     tenta de novo no ciclo seguinte.
     """
-    class BancoQueFalhaEmUsers(_FakeSupabase):
+    class BancoQueFalhaEmUsers(_FakeBanco):
         def table(self, nome: str):
             if nome == "users":
                 raise RuntimeError("indisponível")
@@ -152,7 +152,7 @@ def test_falha_ao_listar_usuarios_deixa_a_rodada_sem_destinatario(
 
     banco = BancoQueFalhaEmUsers({"colaborador_cert_selecoes": SELECOES})
     with caplog.at_level("ERROR"):
-        with patch.object(als, "_supabase", lambda: banco):
+        with patch.object(als, "_banco", lambda: banco):
             r = als._get_todos_colaboradores_selecoes()
 
     assert r == {}
@@ -161,10 +161,10 @@ def test_falha_ao_listar_usuarios_deixa_a_rodada_sem_destinatario(
     )
 
 
-def test_sem_supabase_usa_arquivo_local_sem_filtrar() -> None:
+def test_sem_banco_usa_arquivo_local_sem_filtrar() -> None:
     """Modo offline: não há tabela `users` para consultar."""
     local = {"alguem@empresa.com": ["27049257000194"]}
-    with patch.object(als, "_supabase", lambda: None):
+    with patch.object(als, "_banco", lambda: None):
         with patch.object(als, "_load_colaborador_file_dict", lambda: local):
             r = als._get_todos_colaboradores_selecoes()
 
@@ -184,7 +184,7 @@ def test_endereco_de_destino_sai_normalizado() -> None:
     users = [{"id": "u-1", "email": "  Fulano@Empresa.com ", "role": "user"}]
     selecoes = [{"user_id": "u-1", "documentos": ["1"]}]
 
-    with patch.object(als, "_supabase", lambda: _banco(users, selecoes)):
+    with patch.object(als, "_banco", lambda: _banco(users, selecoes)):
         r = als._get_todos_colaboradores_selecoes()
 
     assert r == {"fulano@empresa.com": ["1"]}

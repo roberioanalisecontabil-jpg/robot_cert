@@ -180,7 +180,7 @@ def token_valido(monkeypatch):
         "expires_at": futuro,
         "consumed_at": None,
     }
-    monkeypatch.setattr(ci, "_supabase", lambda: _FakeClient([linha]))
+    monkeypatch.setattr(ci, "_banco", lambda: _FakeClient([linha]))
     return bruto, linha
 
 
@@ -236,14 +236,14 @@ def test_token_expirado_e_recusado(monkeypatch) -> None:
         "expires_at": passado,
         "consumed_at": None,
     }
-    monkeypatch.setattr(ci, "_supabase", lambda: _FakeClient([linha]))
+    monkeypatch.setattr(ci, "_banco", lambda: _FakeClient([linha]))
 
     assert ci.validate_and_consume_token(bruto) is None
     assert linha["consumed_at"] is None, "token expirado não deve ser marcado como consumido"
 
 
 def test_token_inexistente_e_recusado(monkeypatch) -> None:
-    monkeypatch.setattr(ci, "_supabase", lambda: _FakeClient([]))
+    monkeypatch.setattr(ci, "_banco", lambda: _FakeClient([]))
     assert ci.validate_and_consume_token("nao-existe") is None
 
 

@@ -77,11 +77,11 @@ def _matriz(gestor_usuarios: str = "ler", user_dashboard: str = "nenhum"):
 
 @pytest.fixture
 def gravacao(monkeypatch: pytest.MonkeyPatch):
-    """`gravar` contra um Supabase falso, com o estado anterior controlável."""
+    """`gravar` contra um banco falso, com o estado anterior controlável."""
     def _preparar(antes, falhar_trilha=False):
         sb = _Sb(falhar_trilha=falhar_trilha)
-        monkeypatch.setattr("app.settings_state.supabase_configured", lambda: True)
-        monkeypatch.setattr("app.settings_state._supabase", lambda: sb)
+        monkeypatch.setattr("app.settings_state.banco_configurado", lambda: True)
+        monkeypatch.setattr("app.settings_state._banco", lambda: sb)
         monkeypatch.setattr(permissoes, "_buscar_no_banco", lambda: antes)
         monkeypatch.setattr(permissoes, "invalidar_cache", lambda: None)
         return sb
@@ -175,7 +175,7 @@ def test_trilha_indisponivel_nao_impede_a_concessao(gravacao, caplog) -> None:
     ), [r.message for r in caplog.records]
 
 
-def test_ler_trilha_sem_supabase_devolve_lista_vazia(monkeypatch) -> None:
+def test_ler_trilha_sem_banco_devolve_lista_vazia(monkeypatch) -> None:
     """A aba não pode quebrar porque o histórico ficou indisponível."""
-    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: False)
+    monkeypatch.setattr("app.settings_state.banco_configurado", lambda: False)
     assert permissoes.ler_trilha() == []

@@ -49,7 +49,7 @@ from app.settings_state import (
     save_colaborador_selecao,
     save_settings,
     save_snapshot,
-    supabase_configured,
+    banco_configurado,
     upsert_cert_history,
 )
 
@@ -98,9 +98,9 @@ def _conta_local_do_email(email: str) -> Optional[dict]:
     `_conta_da_sessao` não serve: ela levanta `ContaInvalida` quando não acha, o
     que é certo para uma sessão em curso e errado para uma tentativa de login.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         return None
     try:
@@ -122,9 +122,9 @@ def _conta_da_sessao(email: str) -> Optional[dict]:
     Relê a conta a cada requisição, para o token não congelar a permissão.
 
     Devolve `None` quando **não há** diretório de usuários configurado — dev e
-    testes sem Supabase. Aí não existe conta contra a qual conferir, e o token é
+    testes sem banco. Aí não existe conta contra a qual conferir, e o token é
     a única informação disponível. Isso não abre brecha em produção: sem
-    Supabase o `/api/login` responde 503 e ninguém chega a ter um token para
+    banco o `/api/login` responde 503 e ninguém chega a ter um token para
     apresentar.
 
     Levanta `ContaInvalida` quando a conta sumiu — excluída, ou com o e-mail
@@ -134,9 +134,9 @@ def _conta_da_sessao(email: str) -> Optional[dict]:
     escolha já feita em `CustodiaIndisponivel`, e pela mesma razão — a variante
     permissiva não daria sintoma nenhum.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         return None
     try:
@@ -264,7 +264,7 @@ def _user_id_da_sessao(token: auth.TokenData) -> Optional[str]:
     linhas depois — foi o que pagou a leitura extra que a revogação introduziu.
 
     O `_resolve_user_id` continua como saída para quando não houve leitura: sem
-    Supabase configurado, e no agente por X-API-Key. Nesses casos ele devolve o
+    banco configurado, e no agente por X-API-Key. Nesses casos ele devolve o
     mesmo `None` de antes, e as rotas seguem respondendo 404 como respondiam.
     """
     return token.user_id or _resolve_user_id(token.email or "")
@@ -1085,8 +1085,8 @@ class LoginBody(BaseModel):
 
 
 def _sb_do_login():
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado para login.")
     return sb
@@ -1193,8 +1193,8 @@ def login(body: LoginBody, request: Request) -> dict:
 # operador o direito de exportar os proprios dados.
 @app.get("/api/users", dependencies=[Depends(require_modulo("usuarios"))])
 def list_users() -> List[dict]:
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb: return []
     r = sb.table("users").select(
         "id, email, full_name, role, ativo, gestor_id, departamento_id, created_at"
@@ -1236,11 +1236,11 @@ def _norm_header(v: str) -> str:
 
 @app.post("/api/users/import", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 async def import_users(file: UploadFile = File(...)) -> dict:
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     name = (file.filename or "").lower()
     if not name.endswith(".csv"):
@@ -1398,8 +1398,8 @@ def _garantir_email_livre(sb: Any, email: str, ignorar_id: Optional[str] = None)
 
 @app.post("/api/users", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def create_user(body: UserCreateBody) -> dict:
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb: raise HTTPException(status_code=503)
     
     # A validação não existia aqui: qualquer string virava papel. Com o CHECK
@@ -1498,8 +1498,8 @@ def _garantir_que_sobra_admin(
 
 @app.put("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def update_user(user_id: str, body: UserUpdateBody) -> dict:
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
     role = (body.role or "user").strip().lower()
@@ -1553,8 +1553,8 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
 
 @app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
     new_pw = (body.password or "").strip()
@@ -1581,8 +1581,8 @@ def deactivate_user(user_id: str) -> dict:
     um administrador virava adivinhação, e o mesmo teria acontecido com gestor —
     levando junto o sentido das carteiras que ele tivesse criado.
     """
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
     _garantir_que_sobra_admin(sb, user_id, novo_ativo=False)
@@ -1629,8 +1629,8 @@ def contar_carteira_do_usuario(user_id: str) -> dict:
     de linhas em toda abertura da tela, e esta contagem so interessa no
     instante de inativar alguem.
     """
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         # Sem contagem, a tela pergunta sem o numero — o que ainda e melhor do
         # que travar a inativacao por causa do texto do aviso.
@@ -1656,8 +1656,8 @@ def reactivate_user(user_id: str) -> dict:
     sobrescrito e a migration as pôs em 'user', o menor privilégio. Se alguma
     era admin, promover é ato explícito — e é assim que deve ser.
     """
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
     try:
@@ -1669,8 +1669,8 @@ def reactivate_user(user_id: str) -> dict:
 
 @app.delete("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def delete_user(user_id: str) -> dict:
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb: raise HTTPException(status_code=503)
     _garantir_que_sobra_admin(sb, user_id, apagar=True)
     sb.table("users").delete().eq("id", user_id).execute()
@@ -1717,9 +1717,9 @@ def listar_departamentos() -> List[dict]:
     segundo clique — e apagar um setor com gente dentro deixa essas pessoas
     sem departamento, o que ninguém quer descobrir depois.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         return []
     try:
@@ -1762,11 +1762,11 @@ def listar_departamentos() -> List[dict]:
 
 @app.post("/api/departamentos", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def criar_departamento(body: DepartamentoBody) -> dict:
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
     nome = _nome_de_departamento(body.nome)
     try:
         r = sb.table("departamento").insert({"nome": nome}).execute()
@@ -1783,11 +1783,11 @@ def criar_departamento(body: DepartamentoBody) -> dict:
 
 @app.put("/api/departamentos/{dep_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
     nome = _nome_de_departamento(body.nome)
     try:
         sb.table("departamento").update({"nome": nome}).eq("id", dep_id).execute()
@@ -1808,11 +1808,11 @@ def apagar_departamento(dep_id: str) -> dict:
     As lideranças caem junto (`ON DELETE CASCADE`): liderança de um setor que
     não existe mais daria alcance sobre nada e confundiria a leitura.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
     try:
         sb.table("departamento").delete().eq("id", dep_id).execute()
     except Exception as e:  # noqa: BLE001
@@ -1829,11 +1829,11 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
     servidor só acrescentasse, tirar alguém exigiria uma rota a mais e a tela
     passaria a mentir sobre o que salvou.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     ids = [str(x).strip() for x in (body.lideres or []) if str(x).strip()]
     if len(set(ids)) != len(ids):
@@ -1966,7 +1966,7 @@ def health() -> dict:
     """
     return {
         "ok": True,
-        "supabase": supabase_configured(),
+        "banco": banco_configurado(),
         "api_key_required": bool(config.API_KEY),
         # Sem esta chave o cofre não funciona: /upload-pfx falha no primeiro
         # certificado que o agente tentar enviar.
@@ -2001,10 +2001,10 @@ def _settings_dict(s: PortalSettings) -> dict:
         "machine_id": s.machine_id,
         "effective_source": str(s.effective_source()),
         "effective_expired": str(s.effective_expired()),
-        "supabase": supabase_configured(),
+        "banco": banco_configurado(),
         "persistence": (
-            "supabase+data/portal_settings.json"
-            if supabase_configured()
+            "banco+data/portal_settings.json"
+            if banco_configurado()
             else "data/portal_settings.json"
         ),
         "smtp_host": s.smtp_host,
@@ -2033,7 +2033,7 @@ def _settings_dict(s: PortalSettings) -> dict:
             s.alertas_intervalo_horas
         ),
         # "lista" ou "admins" em vez da lista de admins resolvida: montá-la
-        # aqui custaria uma consulta ao Supabase numa rota que o agente também
+        # aqui custaria uma consulta ao banco numa rota que o agente também
         # chama, e que precisa responder mesmo com o banco ruim.
         "alertas_destinatarios_origem": (
             "lista"
@@ -2163,11 +2163,11 @@ def put_settings(body: SettingsBody) -> dict:
         **{coluna: modelo[campo] for campo, coluna in email_modelo.CAMPO_COLUNA.items()},
     )
     # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
-    # prefere o Supabase — a próxima leitura devolveria o valor antigo. Dizer
+    # prefere o banco — a próxima leitura devolveria o valor antigo. Dizer
     # "salvo" aqui seria a tela mentindo sobre um dado que ela mesma vai
     # recarregar diferente.
     try:
-        save_settings(s, exigir_supabase=True)
+        save_settings(s, exigir_banco=True)
     except GravacaoNaoPersistida as e:
         raise HTTPException(
             status_code=503,
@@ -2286,11 +2286,11 @@ def senha_pedir_codigo(body: SenhaCodigoBody, request: Request) -> dict:
     O 200 genérico é o ponto: qualquer variação de mensagem, status ou tempo
     de resposta entre "existe" e "não existe" vira enumeração de contas.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     ip = request.client.host if request and request.client else None
     email = (body.email or "").strip().lower()
@@ -2342,11 +2342,11 @@ def senha_verificar_codigo(body: SenhaVerificarBody) -> dict:
     Sem este passo, um código errado só apareceria depois de ela preencher a
     senha duas vezes — e já teria queimado uma das três tentativas à toa.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     conta = _conta_para_reset(sb, (body.email or "").strip().lower())
     if not conta:
@@ -2369,11 +2369,11 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
     conveniência de tela, não credencial. Quem chamar esta rota direto tem de
     apresentar o código do mesmo jeito.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     nova = (body.password or "").strip()
     if len(nova) < SENHA_MINIMA:
@@ -2440,11 +2440,11 @@ def senha_trocar(
     cadeira definiria a senha nova sem saber a antiga, e a pessoa perderia a
     conta para quem passou por ali.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Sistema sem Supabase configurado.")
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     nova = (body.nova_senha or "").strip()
     if len(nova) < SENHA_MINIMA:
@@ -3041,7 +3041,7 @@ def listar_certificados(
 
         paged = pagina is not None and por_pagina is not None
         if not paged and not todas_filtradas:
-            return JSONResponse({**base, "supabase": supabase_configured()})
+            return JSONResponse({**base, "banco": banco_configurado()})
 
         now = datetime.now(timezone.utc)
         thirty = now + timedelta(days=30)
@@ -3081,7 +3081,7 @@ def listar_certificados(
                     "itens": filtered[:LISTAGEM_EXPORT_MAX],
                     "resumo": resumo,
                     "lista_truncada": lista_truncada,
-                    "supabase": supabase_configured(),
+                    "banco": banco_configurado(),
                 }
             )
 
@@ -3105,7 +3105,7 @@ def listar_certificados(
                     # em vez de só depois que o arquivo já foi gerado.
                     "export_max": LISTAGEM_EXPORT_MAX,
                 },
-                "supabase": supabase_configured(),
+                "banco": banco_configurado(),
             }
         )
     except HTTPException:
@@ -3682,12 +3682,12 @@ def _historico_merge_snapshot_into_agregados(snap: dict[str, Any], agregados: Di
 
 def _historico_carregar_agregados(limite_snapshots: int) -> Tuple[Dict[str, dict], int]:
     """
-    Percorre snapshots (Supabase em lotes ou arquivo local) e devolve agregação por file_name.
-    Resultado pode vir de cache em RAM (TTL configurável) por (Supabase ativo, limite).
+    Percorre snapshots (banco em lotes ou arquivo local) e devolve agregação por file_name.
+    Resultado pode vir de cache em RAM (TTL configurável) por (banco ativo, limite).
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     uses_sb = sb is not None
 
     def _build() -> Tuple[Dict[str, dict], int]:
@@ -3717,7 +3717,7 @@ def _historico_carregar_agregados(limite_snapshots: int) -> Tuple[Dict[str, dict
                     if len(rows) < chunk:
                         break
             except Exception as e:  # noqa: BLE001
-                logger.exception("Falha ao ler histórico no Supabase")
+                logger.exception("Falha ao ler histórico no banco")
                 raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
         else:
             snap = get_latest_snapshot()
@@ -3818,7 +3818,7 @@ def historico_certificados(
 
     Chamadas internas devem omitir ``limit`` para obter a lista completa.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
     pagination = limit is not None
     offset = max(0, int(offset or 0))
@@ -3845,7 +3845,7 @@ def historico_certificados(
         filt = f"nome.ilike.{pat},file_name.ilike.{pat},documento.ilike.{pat}"
         return qb.or_(filt)
 
-    sb = _supabase()
+    sb = _banco()
     if sb:
         _use_history_table = True
         rows_non_paginated: List[dict[str, Any]] = []
@@ -3890,7 +3890,7 @@ def historico_certificados(
                 _use_history_table = False
                 rows_non_paginated = []
             else:
-                logger.exception("Falha inesperada ao ler cert_history no Supabase")
+                logger.exception("Falha inesperada ao ler cert_history no banco")
                 raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
 
         if _use_history_table and rows_non_paginated and not pagination:
@@ -4087,7 +4087,7 @@ def vencidos_certificados(
 def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
     """
     Recebe o resultado de um scan feito no Windows (agente em segundo plano).
-    Persiste no Supabase (ou em data/last_ingest.json se o Supabase não estiver configurado).
+    Persiste no banco (ou em data/last_ingest.json se o banco não estiver configurado).
     Também faz upsert na tabela materializada cert_history para acelerar o histórico.
     """
     machine_id = body.machine_id.strip() or "default"
@@ -4110,7 +4110,7 @@ def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
     return {
         "ok": True,
         "itens_recebidos": len(body.items),
-        "grava_em": "supabase" if supabase_configured() else "arquivo local (data/last_ingest.json)",
+        "grava_em": "banco" if banco_configurado() else "arquivo local (data/last_ingest.json)",
     }
 
 
@@ -4171,9 +4171,9 @@ def export_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
 @app.delete("/api/users/me/delete")
 def delete_my_data(token: auth.TokenData = Depends(require_auth)) -> dict:
     """[LGPD] Direito ao Esquecimento / Eliminação (Art. 18, inciso VI)"""
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
     email = token.email
-    sb = _supabase()
+    sb = _banco()
     
     # 1. Apagar seleções (Ações do usuário no app)
     if sb:
@@ -4551,11 +4551,11 @@ def listar_operadores(
     inteira do usuário. O gestor precisa montar carteira **sem** poder
     administrar contas, e não tem por que ver o hash de senha de ninguém.
     """
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Supabase não configurado")
+        raise HTTPException(status_code=503, detail="Banco não configurado")
     try:
         us = sb.table("users").select(
             "id, email, full_name, role, ativo, gestor_id, departamento_id"
@@ -4816,11 +4816,11 @@ async def importar_carteiras(
             detail="A planilha precisa de duas colunas: e-mail do colaborador e CNPJ/CPF do cliente.",
         )
 
-    from app.settings_state import _supabase
+    from app.settings_state import _banco
 
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=503, detail="Supabase não configurado.")
+        raise HTTPException(status_code=503, detail="Banco não configurado.")
     try:
         contas = sb.table("users").select("id, email").execute().data or []
     except Exception:
@@ -4946,11 +4946,11 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     atual.install_token_ttl_min = ttl
     atual.trilha_retencao_dias = retencao
     # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
-    # prefere o Supabase — a próxima leitura devolveria o valor antigo. Dizer
+    # prefere o banco — a próxima leitura devolveria o valor antigo. Dizer
     # "salvo" aqui seria a tela mentindo sobre um dado que ela mesma vai
     # recarregar diferente.
     try:
-        save_settings(atual, exigir_supabase=True)
+        save_settings(atual, exigir_banco=True)
     except GravacaoNaoPersistida as e:
         raise HTTPException(
             status_code=503,
@@ -5521,7 +5521,7 @@ def _ip_do_cliente(request: Request) -> str:
 def _claim_rate_limit(ip: str) -> bool:
     """True se o IP ainda pode tentar.
 
-    A janela vive no Supabase (`app/taxa.py`) desde o item 13 da Frente 2: em
+    A janela vive no banco (`app/taxa.py`) desde o item 13 da Frente 2: em
     memória de processo, na Vercel, o teto valia POR INSTÂNCIA — cold starts
     diluíam o limite em "10 × quantas instâncias houver". Sem banco, o módulo
     degrada para a janela em memória (o comportamento antigo) e avisa no log.
@@ -5639,10 +5639,10 @@ def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
     # Validar que o token existe e foi redimido (consumed_at != null)
     import hashlib
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
-        raise HTTPException(status_code=500, detail="Supabase não configurado")
+        raise HTTPException(status_code=500, detail="Banco não configurado")
 
     try:
         r = sb.table("install_token").select("*").eq("token_hash", token_hash).execute()
@@ -5757,8 +5757,8 @@ def cleanup_tokens(token: auth.TokenData = Depends(require_modulo("instalador", 
 
 def _resolve_user_id(email: str) -> Optional[str]:
     """Busca o UUID do usuário pelo email."""
-    from app.settings_state import _supabase
-    sb = _supabase()
+    from app.settings_state import _banco
+    sb = _banco()
     if not sb:
         return None
     try:

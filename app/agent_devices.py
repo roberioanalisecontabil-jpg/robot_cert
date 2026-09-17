@@ -114,20 +114,20 @@ VALIDADE_TOKEN_MIN = 60
 
 
 class SemBanco(RuntimeError):
-    """Supabase não configurado. Dispositivos não têm fallback em arquivo."""
+    """Banco não configurado. Dispositivos não têm fallback em arquivo."""
 
 
-def _supabase():
-    from app.settings_state import _supabase as _sb
+def _banco():
+    from app.settings_state import _banco as _sb
 
     return _sb()
 
 
 def _exigir_banco():
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         raise SemBanco(
-            "Dispositivos do agente exigem Supabase configurado."
+            "Dispositivos do agente exigem banco configurado."
         )
     return sb
 

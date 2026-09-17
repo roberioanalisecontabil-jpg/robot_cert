@@ -3,7 +3,7 @@ Módulo Instalador de Certificados Digitais.
 
 Lógica de negócio para:
 - Cifrar/decifrar PFX em repouso (AES-256-GCM com chave do servidor)
-- Armazenar PFX cifrado no Supabase (cert_pfx_store)
+- Armazenar PFX cifrado no banco (cert_pfx_store)
 - Gerar tokens de instalação de uso único com TTL
 - Montar bundle criptografado ponta a ponta (ECDH + AES-256-GCM)
 - Trilha de auditoria (install_log)
@@ -210,11 +210,11 @@ def encrypt_bundle_for_client(
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Supabase helpers (reutiliza singleton de settings_state)
+# Helpers do banco (reutiliza singleton de settings_state)
 # ──────────────────────────────────────────────────────────────────────────
 
-def _supabase():
-    from app.settings_state import _supabase as _sb
+def _banco():
+    from app.settings_state import _banco as _sb
     return _sb()
 
 
@@ -254,9 +254,9 @@ def upsert_pfx(
     Cifra e armazena (ou atualiza) um PFX no banco.
     Retorna o ID do registro.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     encrypted_pfx, pfx_iv, pfx_auth_tag = encrypt_pfx_at_rest(pfx_bytes)
 
@@ -311,7 +311,7 @@ def upsert_pfx(
 
 def list_available_pfx(machine_id: Optional[str] = None) -> List[StoredPfx]:
     """Lista certificados disponíveis para instalação (sem dados cifrados)."""
-    client = _supabase()
+    client = _banco()
     if not client:
         return []
 
@@ -348,7 +348,7 @@ def list_available_pfx(machine_id: Optional[str] = None) -> List[StoredPfx]:
 
 def get_pfx_by_ids(cert_ids: List[str]) -> List[Dict[str, Any]]:
     """Busca PFX cifrados por lista de IDs (para montagem do bundle)."""
-    client = _supabase()
+    client = _banco()
     if not client:
         return []
     try:
@@ -400,9 +400,9 @@ def listar_bloqueios(machine_id: str) -> Set[str]:
     seria dizer "nada bloqueado, pode mandar tudo" — exatamente o contrário do
     que uma falha significa.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise CustodiaIndisponivel("Supabase não configurado")
+        raise CustodiaIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("cert_vault_bloqueio")
@@ -427,9 +427,9 @@ def fingerprints_do_inventario(machine_id: str) -> Set[str]:
     não serve para nada é passivo puro. Certificado sem fingerprint idem — o
     scanner não conseguiu lê-lo.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise CustodiaIndisponivel("Supabase não configurado")
+        raise CustodiaIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("cert_snapshots")
@@ -486,9 +486,9 @@ def reativar_custodia(fingerprint: str, machine_id: str) -> None:
     este fingerprint na lista de autorizados e reenvia o PFX. Não há o que
     restaurar aqui, porque o cofre é derivado dos arquivos do ANALISESRV.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
     (
         client.table("cert_vault_bloqueio")
         .delete()
@@ -516,9 +516,9 @@ def bloquear_custodia(
     O `machine_id` é obrigatório de propósito: sob a chave composta, agir só
     por fingerprint alcançaria todas as máquinas que têm o mesmo certificado.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     client.table("cert_vault_bloqueio").upsert(
         {
@@ -586,9 +586,9 @@ def departamentos_que_lidera(user_id: str) -> Set[str]:
     viraria uma recusa que parece decisão — o líder veria "acesso restrito" e
     concluiria que perdeu a permissão, não que o banco não respondeu.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise AlcanceIndisponivel("Supabase não configurado")
+        raise AlcanceIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("departamento_lider")
@@ -624,9 +624,9 @@ def pode_gerir(ator_id: str, ator_role: str, alvo_id: str) -> bool:
     if not meus:
         return False
 
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise AlcanceIndisponivel("Supabase não configurado")
+        raise AlcanceIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("users")
@@ -690,9 +690,9 @@ def listar_carteira(user_id: str) -> Set[str]:
     Levanta `CarteiraIndisponivel` se a consulta falhar, em vez de devolver
     vazio — ver a docstring da exceção.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise CarteiraIndisponivel("Supabase não configurado")
+        raise CarteiraIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("carteira")
@@ -713,9 +713,9 @@ def documentos_dos_certificados(certificate_ids: List[str]) -> Dict[str, str]:
     Certificado ausente do cofre não aparece no mapa; quem chama trata isso
     como negado, não como permitido.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise CarteiraIndisponivel("Supabase não configurado")
+        raise CarteiraIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("cert_pfx_store")
@@ -794,9 +794,9 @@ def estado_de_instalabilidade(
     uma tela que, na dúvida, marca tudo como instalável é pior que uma tela que
     diz "não consegui verificar".
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise CustodiaIndisponivel("Supabase não configurado")
+        raise CustodiaIndisponivel("Banco não configurado")
 
     try:
         r = (
@@ -861,9 +861,9 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
     quê é a única forma de reconstruir o que houve se uma conta for
     comprometida. Mostrar isso é o que torna a trilha útil em vez de decorativa.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise CarteiraIndisponivel("Supabase não configurado")
+        raise CarteiraIndisponivel("Banco não configurado")
     try:
         r = (
             client.table("carteira")
@@ -892,7 +892,7 @@ def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, s
     O nome do titular vai junto porque ninguém escolhe cliente por CNPJ de
     cabeça — e uma lista de 488 números seria inutilizável.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
         return []
     try:
@@ -932,9 +932,9 @@ def atribuir_carteira(
     atribuido_por_email: str,
 ) -> int:
     """Acrescenta documentos à carteira. Devolve quantos foram gravados."""
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     linhas = []
     for doc in documentos:
@@ -957,9 +957,9 @@ def atribuir_carteira(
 
 
 def remover_da_carteira(user_id: str, documento: str) -> None:
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
     (
         client.table("carteira")
         .delete()
@@ -1001,9 +1001,9 @@ def remover_da_carteira(user_id: str, documento: str) -> None:
 
 def diagnostico_do_cofre() -> Dict[str, Any]:
     """Números do cofre, agrupados pelo que costuma dar errado."""
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     r = (
         client.table("cert_pfx_store")
@@ -1094,9 +1094,9 @@ def revalidar_cofre() -> List[Dict[str, Any]]:
     que a chave certa está no ambiente é decifrar de fato. Uma amostra por
     versão basta — todas as linhas de uma versão usam a mesma chave.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     versoes = [
         int(v) for v in diagnostico_do_cofre()["por_key_version"] if str(v).isdigit()
@@ -1211,9 +1211,9 @@ def expurgar_cofre(machine_id: Optional[str] = None) -> Dict[str, Any]:
     que se recusa a agir em silêncio seria indistinguível de um expurgo
     quebrado, e é justamente nas varreduras suspeitas que ele não age.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"executado": False, "motivo": "Supabase não configurado"}
+        return {"executado": False, "motivo": "Banco não configurado"}
 
     agora = datetime.now(timezone.utc)
     resultado: Dict[str, Any] = {"executado": True, "vencidos_apagados": 0, "maquinas": []}
@@ -1401,9 +1401,9 @@ def expurgar_install_log(dias: Optional[int] = None) -> Dict[str, Any]:
     if not dias or dias <= 0:
         return {"executado": False, "motivo": "retenção desligada (0 = guardar tudo)"}
 
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"executado": False, "motivo": "Supabase não configurado"}
+        return {"executado": False, "motivo": "Banco não configurado"}
 
     corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     try:
@@ -1436,9 +1436,9 @@ def create_install_token(
     Cria um token de uso único para instalação.
     Retorna (token_raw, token_id, expires_at).
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     token_raw = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token_raw.encode()).hexdigest()
@@ -1483,7 +1483,7 @@ def validate_and_consume_token(token_raw: str) -> Optional[Dict[str, Any]]:
     um deles encontra `consumed_at IS NULL` e escreve; o outro casa com zero
     linhas. Quem recebe linha de volta é o dono do token.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
         return None
 
@@ -1542,7 +1542,7 @@ def prazo_do_token(token_id: str, user_email: str) -> Optional[Dict[str, Any]]:
     Devolve `None` quando não achou — inclusive quando o id é de outra pessoa,
     que a tela apresenta como "ainda aguardando", igual a um pedido recém-saído.
     """
-    client = _supabase()
+    client = _banco()
     if not client or not (token_id or "").strip():
         return None
 
@@ -1609,9 +1609,9 @@ def log_event(
     client_ip: Optional[str] = None,
 ) -> None:
     """Grava um evento de auditoria na tabela install_log."""
-    client = _supabase()
+    client = _banco()
     if not client:
-        logger.warning("Supabase indisponível; log de instalação não gravado: %s", event)
+        logger.warning("Banco indisponível; log de instalação não gravado: %s", event)
         return
 
     row: Dict[str, Any] = {
@@ -1646,7 +1646,7 @@ def list_install_logs(
     user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Lista logs de instalação ordenados por data decrescente."""
-    client = _supabase()
+    client = _banco()
     if not client:
         return []
     try:
@@ -1695,7 +1695,7 @@ def cadeias_de_instalacao(
     dashboard perdeu 29 certificados em silêncio.
     """
     limite = min(limite, 1000)
-    client = _supabase()
+    client = _banco()
     if not client:
         return []
 
@@ -1885,7 +1885,7 @@ def enqueue_install_command(
     chamava /redeem — a instalação jamais acontecia.
 
     Reusa `command_queue.enqueue` em vez de inserir direto, para herdar a
-    validação de comando e o fallback em disco quando o Supabase cai.
+    validação de comando e o fallback em disco quando o banco cai.
     """
     from app.command_queue import enqueue
 
@@ -1902,7 +1902,7 @@ def enqueue_install_command(
 
 def cleanup_expired_tokens() -> int:
     """Remove tokens expirados há mais de 1 dia. Retorna quantidade removida."""
-    client = _supabase()
+    client = _banco()
     if not client:
         return 0
     cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()

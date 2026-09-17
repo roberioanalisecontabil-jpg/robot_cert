@@ -127,10 +127,10 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         "install_log": [],
     })
     cfg = PortalSettings(source_folder="", expired_folder="")
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     monkeypatch.setattr("app.settings_state.load_settings", lambda: cfg)
     monkeypatch.setattr(m, "load_settings", lambda: cfg)
-    monkeypatch.setattr(dash, "_supabase", lambda: fake)
+    monkeypatch.setattr(dash, "_banco", lambda: fake)
     fake.cfg = cfg
     return fake
 
@@ -155,7 +155,7 @@ def test_falha_ao_registrar_nao_impede_o_login(client: TestClient, banco: _Fake)
 
 
 def test_registrar_nunca_levanta_mesmo_sem_banco(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.settings_state._supabase", lambda: None)
+    monkeypatch.setattr("app.settings_state._banco", lambda: None)
     atividade.registrar(atividade.EVENTO_LOGIN, "u-1", "ana@x.com")   # não deve levantar
 
 

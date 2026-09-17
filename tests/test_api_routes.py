@@ -33,7 +33,7 @@ def test_health(client: TestClient) -> None:
     assert r.status_code == 200
     j = r.json()
     assert j.get("ok") is True
-    assert "supabase" in j
+    assert "banco" in j
     assert "api_key_required" in j
 
 
@@ -519,13 +519,13 @@ def test_operador_comum_nao_enfileira_comando(
 def test_fila_comando_ping(
     client_com_chave: TestClient, api_key: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Enfileirar, consumir e esvaziar a fila (só ficheiro, sem Supabase)."""
+    """Enfileirar, consumir e esvaziar a fila (só ficheiro, sem banco)."""
     from app import command_queue
 
     import tempfile
     from pathlib import Path
 
-    monkeypatch.setattr(command_queue, "_supabase", lambda: None)
+    monkeypatch.setattr(command_queue, "_banco", lambda: None)
 
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "queue.json"

@@ -96,7 +96,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake = _Fake()
     fake.tabelas["cert_pfx_store"] = [_linha("a" * 64), _linha("b" * 64)]
     fake.tabelas["cert_vault_bloqueio"] = []
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
     return fake
 
 

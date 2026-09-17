@@ -29,7 +29,7 @@ URL_PADRAO = "https://certificado.analisegroup.cnt.br"
 # não é "configuração faltando": é deploy velho, anterior a esse commit.
 CAMPOS_HEALTH = {
     "ok": "portal respondendo",
-    "supabase": "credenciais do Supabase presentes",
+    "banco": "banco de dados configurado (DATABASE_URL)",
     "api_key_required": "X-API-Key exigida nas rotas de máquina",
     "cert_vault_key_configurada": "CERT_ENCRYPTION_KEY — sem ela o cofre falha no primeiro upload",
     "smtp_key_dedicada": "ENCRYPTION_KEY — sem ela o portal nem sobe (código novo)",

@@ -147,8 +147,8 @@ def test_tabela_ausente_cai_no_padrao_em_vez_de_derrubar_o_portal(
         def table(self, _nome):
             return _Tabela()
 
-    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: True)
-    monkeypatch.setattr("app.settings_state._supabase", lambda: _SB())
+    monkeypatch.setattr("app.settings_state.banco_configurado", lambda: True)
+    monkeypatch.setattr("app.settings_state._banco", lambda: _SB())
 
     assert permissoes.nivel_de("gestor", "carteiras") == permissoes.NIVEL_EDITAR
 
@@ -174,8 +174,8 @@ def test_falha_de_leitura_nao_e_falta_de_permissao(
         def table(self, _nome):
             return _Tabela()
 
-    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: True)
-    monkeypatch.setattr("app.settings_state._supabase", lambda: _SB())
+    monkeypatch.setattr("app.settings_state.banco_configurado", lambda: True)
+    monkeypatch.setattr("app.settings_state._banco", lambda: _SB())
 
     with pytest.raises(permissoes.PermissoesIndisponiveis):
         permissoes.nivel_de("gestor", "carteiras")
@@ -206,8 +206,8 @@ def test_tabela_vazia_vale_como_nao_semeada(monkeypatch: pytest.MonkeyPatch) -> 
         def table(self, _nome):
             return _Tabela()
 
-    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: True)
-    monkeypatch.setattr("app.settings_state._supabase", lambda: _SB())
+    monkeypatch.setattr("app.settings_state.banco_configurado", lambda: True)
+    monkeypatch.setattr("app.settings_state._banco", lambda: _SB())
 
     assert permissoes.nivel_de("gestor", "carteiras") == permissoes.NIVEL_EDITAR
 
@@ -235,8 +235,8 @@ def test_matriz_do_banco_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None
         def table(self, _nome):
             return _Tabela()
 
-    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: True)
-    monkeypatch.setattr("app.settings_state._supabase", lambda: _SB())
+    monkeypatch.setattr("app.settings_state.banco_configurado", lambda: True)
+    monkeypatch.setattr("app.settings_state._banco", lambda: _SB())
 
     assert permissoes.nivel_de("gestor", "carteiras") == permissoes.NIVEL_LER
     assert permissoes.nivel_de("user", "instalador") == permissoes.NIVEL_EDITAR
@@ -527,12 +527,12 @@ def test_gravar_sem_banco_avisa_em_vez_de_fingir_que_salvou(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    Sem Supabase nao ha onde gravar — e a tela precisa saber.
+    Sem banco nao ha onde gravar — e a tela precisa saber.
 
     Retornar sucesso aqui seria pior que o erro: a pessoa fecharia a tela
     achando que configurou, e a matriz continuaria a de antes.
     """
-    monkeypatch.setattr("app.settings_state.supabase_configured", lambda: False)
+    monkeypatch.setattr("app.settings_state.banco_configurado", lambda: False)
     completa = {p: {m: "nenhum" for m in permissoes.MODULOS}
                 for p in permissoes.PAPEIS_CONFIGURAVEIS}
     with pytest.raises(permissoes.PermissoesIndisponiveis):
@@ -662,7 +662,7 @@ def _roda_guarda(guarda, papel: str):
     Executa uma dependencia de guarda direto, com um token de mentira.
 
     Os casos POSITIVOS nao podem ser testados por HTTP: a guarda passa e o corpo
-    da rota morre no Supabase, devolvendo 503. Um `assert != 403` ali passa por
+    da rota morre no banco, devolvendo 503. Um `assert != 403` ali passa por
     acidente — foi o que uma verificacao por mutacao mostrou, com as duas
     mutacoes (tirar o eixo do papel e tirar o eixo da lideranca) escapando.
 

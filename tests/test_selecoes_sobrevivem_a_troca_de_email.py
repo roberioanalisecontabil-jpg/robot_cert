@@ -88,8 +88,8 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
                     "updated_at": "2026-08-01T10:00:00Z"}],
         "user_activity": [],
     })
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
-    monkeypatch.setattr(als, "_supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
+    monkeypatch.setattr(als, "_banco", lambda: fake)
     return fake
 
 

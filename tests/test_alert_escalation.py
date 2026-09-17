@@ -55,7 +55,7 @@ def test_um_alerta_por_marco_e_nao_por_dia(tmp_path, monkeypatch) -> None:
     e-mails sairiam. Antes seria 1; com marcos, 4.
     """
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
 
     enviados = 0
     for dias in range(30, -1, -1):  # de 30 dias até o vencimento
@@ -70,7 +70,7 @@ def test_um_alerta_por_marco_e_nao_por_dia(tmp_path, monkeypatch) -> None:
 def test_vencido_continua_com_alerta_unico(tmp_path, monkeypatch) -> None:
     """Um certificado vencido há dois anos não pode cobrar todo dia."""
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
 
     enviados = 0
     for _ in range(10):  # dez execuções do job
@@ -139,7 +139,7 @@ class _Settings:
 
 def test_admin_recebe_um_resumo_e_nao_um_email_por_certificado(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "_get_admin_emails", lambda: ["admin@x.com"])
 
     itens = [_cert(f"CERT {i}", 5, f"fp{i}") for i in range(40)]
@@ -154,7 +154,7 @@ def test_admin_recebe_um_resumo_e_nao_um_email_por_certificado(tmp_path, monkeyp
 
 def test_resumo_do_admin_e_diario(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "_get_admin_emails", lambda: ["admin@x.com"])
 
     itens = [_cert("UNICO", 3, "fp1")]
@@ -171,7 +171,7 @@ def test_resumo_do_admin_e_diario(tmp_path, monkeypatch) -> None:
 def test_resumo_ignora_vencidos_antigos(tmp_path, monkeypatch) -> None:
     """486 certificados vencidos há 1-2 anos não podem inundar o resumo."""
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "_get_admin_emails", lambda: ["admin@x.com"])
 
     itens = [_cert(f"ANTIGO {i}", -400 - i, f"fp{i}") for i in range(50)]
@@ -185,7 +185,7 @@ def test_resumo_ignora_vencidos_antigos(tmp_path, monkeypatch) -> None:
 
 def test_resumo_deduplica_o_mesmo_certificado(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "_get_admin_emails", lambda: ["admin@x.com"])
 
     itens = [_cert("MESMO CERT", 5, "fp-igual") for _ in range(4)]
@@ -209,7 +209,7 @@ def test_sem_admins_nao_quebra(tmp_path, monkeypatch) -> None:
 def test_nome_do_certificado_e_escapado_no_resumo(tmp_path, monkeypatch) -> None:
     """O CN do certificado é controlado por quem gera o .pfx."""
     monkeypatch.setattr(als, "SENT_ALERTS_FILE", tmp_path / "sent.json")
-    monkeypatch.setattr(als, "_supabase", lambda: None)
+    monkeypatch.setattr(als, "_banco", lambda: None)
     monkeypatch.setattr(als, "_get_admin_emails", lambda: ["admin@x.com"])
 
     malicioso = '<script>alert(1)</script>'

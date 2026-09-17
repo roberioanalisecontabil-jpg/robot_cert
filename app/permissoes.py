@@ -170,7 +170,7 @@ class PermissoesIndisponiveis(RuntimeError):
 # ── Cache ──────────────────────────────────────────────────────────────────
 #
 # A matriz muda em cliques de admin e é lida em toda requisição. Sem cache,
-# cada chamada de API viraria uma consulta a mais no Supabase.
+# cada chamada de API viraria uma consulta a mais no banco.
 _TTL_SEGUNDOS = 30.0
 _cache: Optional[Tuple[float, Dict[str, Dict[str, str]]]] = None
 _trava = threading.Lock()
@@ -203,18 +203,18 @@ def _tabela_ausente(erro: Exception) -> bool:
 
 def _buscar_no_banco() -> Optional[Dict[str, Dict[str, str]]]:
     """
-    Lê a matriz do Supabase. `None` quando não há Supabase configurado.
+    Lê a matriz do banco. `None` quando não há banco configurado.
 
     Levanta `PermissoesIndisponiveis` quando HÁ banco e a leitura falhou — os
     dois casos são diferentes e confundi-los seria abrir ou fechar demais.
     """
-    # Os dois vivem em `settings_state`, que é quem já fala com o Supabase.
-    from app.settings_state import _supabase, supabase_configured
+    # Os dois vivem em `settings_state`, que é quem já fala com o banco.
+    from app.settings_state import _banco, banco_configurado
 
-    if not supabase_configured():
+    if not banco_configurado():
         return None
 
-    sb = _supabase()
+    sb = _banco()
     if sb is None:
         return None
 
@@ -350,14 +350,14 @@ def ler_trilha(limite: int = 50) -> List[Dict[str, Any]]:
     """As últimas mudanças, mais recentes primeiro.
 
     Devolve lista vazia quando não há de onde ler — tabela ausente, sem
-    Supabase, erro de rede. A trilha é para consulta; uma tela que não consegue
+    banco, erro de rede. A trilha é para consulta; uma tela que não consegue
     mostrá-la não deve impedir o resto de funcionar.
     """
-    from app.settings_state import _supabase, supabase_configured
+    from app.settings_state import _banco, banco_configurado
 
-    if not supabase_configured():
+    if not banco_configurado():
         return []
-    sb = _supabase()
+    sb = _banco()
     if sb is None:
         return []
     try:
@@ -386,7 +386,7 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
     uma aqui reabriria o engano que a ausência dela fecha (o administrador
     tirando o próprio acesso a Usuários e ficando sem como voltar).
     """
-    from app.settings_state import _supabase, supabase_configured
+    from app.settings_state import _banco, banco_configurado
 
     limpa: Dict[str, Dict[str, str]] = {}
     for papel, linha in (matriz or {}).items():
@@ -415,11 +415,11 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
     if faltando:
         raise ValueError("matriz incompleta: faltam " + ", ".join(faltando[:5]))
 
-    if not supabase_configured():
-        raise PermissoesIndisponiveis("sem Supabase configurado: não há onde gravar")
-    sb = _supabase()
+    if not banco_configurado():
+        raise PermissoesIndisponiveis("sem banco configurado: não há onde gravar")
+    sb = _banco()
     if sb is None:
-        raise PermissoesIndisponiveis("cliente Supabase indisponível")
+        raise PermissoesIndisponiveis("cliente do banco indisponível")
 
     # Estado ANTES da escrita, para saber o que de fato mudou. A tela grava a
     # matriz inteira toda vez; sem o diff, a trilha teria 20 linhas por clique

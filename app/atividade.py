@@ -62,9 +62,9 @@ def registrar(
         return
 
     try:
-        from app.settings_state import _supabase
+        from app.settings_state import _banco
 
-        client = _supabase()
+        client = _banco()
         if not client:
             return
         client.table("user_activity").insert(
@@ -102,11 +102,11 @@ def expurgar(dias: Optional[int] = None) -> Dict[str, Any]:
         return {"executado": False, "motivo": "retenção desligada (0 = guardar tudo)"}
 
     try:
-        from app.settings_state import _supabase
+        from app.settings_state import _banco
 
-        client = _supabase()
+        client = _banco()
         if not client:
-            return {"executado": False, "motivo": "Supabase não configurado"}
+            return {"executado": False, "motivo": "Banco não configurado"}
 
         corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
         r = client.table("user_activity").delete().lt("ocorrido_em", corte).execute()

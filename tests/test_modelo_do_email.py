@@ -247,7 +247,7 @@ def test_previa_sobrevive_a_inventario_indisponivel(monkeypatch) -> None:
     """Banco ruim não pode impedir alguém de julgar o texto que escreveu."""
     import app.main as m
     def _explode(*a, **k):
-        raise RuntimeError("supabase fora")
+        raise RuntimeError("banco fora")
     monkeypatch.setattr(m, "_list_certificados_payload", _explode)
     p = alert_state.previa_do_resumo(_Settings(), None, AGORA)
     assert p["exemplo"] is True

@@ -54,8 +54,8 @@ class LimiteDePedidos(RuntimeError):
     """A conta já pediu códigos demais na última hora."""
 
 
-def _supabase():
-    from app.settings_state import _supabase as _sb
+def _banco():
+    from app.settings_state import _banco as _sb
 
     return _sb()
 
@@ -89,9 +89,9 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None) -> str:
     por CONTA, e não por IP: quem ataca troca de IP com facilidade, mas o alvo
     continua sendo a mesma conta.
     """
-    sb = _supabase()
+    sb = _banco()
     if not sb:
-        raise RuntimeError("Supabase não configurado")
+        raise RuntimeError("Banco não configurado")
 
     agora = _agora()
     desde = (agora - timedelta(hours=1)).isoformat()
@@ -160,7 +160,7 @@ def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
     Não distingue "não existe", "expirou", "já foi usado" e "está errado" para
     o chamador — a distinção viraria oráculo.
     """
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         return False, None
 
@@ -195,7 +195,7 @@ def consumir(user_id: str, codigo: str) -> bool:
     dois envios simultâneos passariam ambos pela leitura antes de qualquer
     escrita.
     """
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         return False
 
@@ -218,7 +218,7 @@ def consumir(user_id: str, codigo: str) -> bool:
 
 def limpar_expirados(dias: int = 7) -> int:
     """Remove códigos vencidos há mais de `dias`. Não guardamos o que não serve."""
-    sb = _supabase()
+    sb = _banco()
     if not sb:
         return 0
     corte = (_agora() - timedelta(days=dias)).isoformat()
