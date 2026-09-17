@@ -120,7 +120,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         agent_devices.TABELA: [],
         "user_activity": [],
     })
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
 
 
@@ -373,9 +373,9 @@ def test_segredo_inexistente_e_revogado_respondem_igual(
 # 6. Sem banco, a rota diz o motivo em vez de estourar
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_sem_supabase_responde_503(client: TestClient) -> None:
+def test_sem_banco_responde_503(client: TestClient) -> None:
     """
-    Sem o fixture `banco` não há Supabase (o conftest zera as credenciais).
+    Sem o fixture `banco` não há banco (o conftest zera as credenciais).
     Dispositivos não têm fallback em arquivo de propósito: uma fila local de
     credenciais sobreviveria à revogação feita no portal.
     """

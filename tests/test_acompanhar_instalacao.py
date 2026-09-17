@@ -206,7 +206,7 @@ class _FakeTabela:
         return _R()
 
 
-class _FakeSupabase:
+class _FakeBanco:
     def __init__(self, linhas: list[dict]) -> None:
         self._linhas = linhas
 
@@ -215,13 +215,13 @@ class _FakeSupabase:
 
 
 @contextmanager
-def _com_supabase(fake):
-    original = ci._supabase
-    ci._supabase = lambda: fake
+def _com_banco(fake):
+    original = ci._banco
+    ci._banco = lambda: fake
     try:
         yield
     finally:
-        ci._supabase = original
+        ci._banco = original
 
 
 def _corpo_do_acompanhamento() -> str:
@@ -417,7 +417,7 @@ def test_prazo_do_token_filtra_pelo_dono() -> None:
         "expires_at": "2020-01-01T00:00:00+00:00",
         "consumed_at": None,
     }
-    with _com_supabase(_FakeSupabase([linha])):
+    with _com_banco(_FakeBanco([linha])):
         assert ci.prazo_do_token(TOKEN_ID, "dono@x.com")["expirado"] is True
         assert ci.prazo_do_token(TOKEN_ID, "OUTRA@x.com") is None
 
@@ -437,7 +437,7 @@ def test_prazo_sem_fuso_e_lido_como_utc() -> None:
         "expires_at": futuro.isoformat(),  # sem sufixo de fuso, como o Postgres devolve
         "consumed_at": None,
     }
-    with _com_supabase(_FakeSupabase([linha])):
+    with _com_banco(_FakeBanco([linha])):
         assert ci.prazo_do_token(TOKEN_ID, EMAIL)["expirado"] is False
 
 
@@ -448,7 +448,7 @@ def test_prazo_ilegivel_nao_declara_expirado() -> None:
     de formato.
     """
     linha = {"id": TOKEN_ID, "user_email": EMAIL, "expires_at": "ontem", "consumed_at": None}
-    with _com_supabase(_FakeSupabase([linha])):
+    with _com_banco(_FakeBanco([linha])):
         assert ci.prazo_do_token(TOKEN_ID, EMAIL)["expirado"] is False
 
 

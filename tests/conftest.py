@@ -16,8 +16,8 @@ def sem_banco_real(monkeypatch: pytest.MonkeyPatch) -> None:
     de teste no cofre real. O `.env` da máquina de desenvolvimento apontava para
     produção, e nada no conftest anterior desligava isso.
 
-    Zerar `DATABASE_URL` em `app.config` basta: `settings_state._supabase()`
-    devolve None antes de abrir o pool, e `cert_installer._supabase()` delega
+    Zerar `DATABASE_URL` em `app.config` basta: `settings_state._banco()`
+    devolve None antes de abrir o pool, e `cert_installer._banco()` delega
     para ele. Testes que precisam de banco injetam um fake explícito (ver
     `test_cert_installer_optin_e2e.py`); os de integração de `db_pg` usam
     `TEST_DATABASE_URL`, que é outra variável de propósito.

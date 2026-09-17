@@ -98,7 +98,7 @@ class _FakeBancoTaxa:
 @pytest.fixture
 def banco_taxa(monkeypatch: pytest.MonkeyPatch) -> _FakeBancoTaxa:
     fake = _FakeBancoTaxa()
-    monkeypatch.setattr(taxa, "_supabase", lambda: fake)
+    monkeypatch.setattr(taxa, "_banco", lambda: fake)
     return fake
 
 
@@ -141,7 +141,7 @@ def test_a_poda_limpa_o_rastro_antigo_da_chave(banco_taxa: _FakeBancoTaxa) -> No
 def test_sem_banco_degrada_para_memoria_e_o_teto_continua(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(taxa, "_supabase", lambda: None)
+    monkeypatch.setattr(taxa, "_banco", lambda: None)
     for _ in range(3):
         assert taxa.permitir("m:1.2.3.4", 3, 60.0) is True
     assert taxa.permitir("m:1.2.3.4", 3, 60.0) is False
@@ -154,7 +154,7 @@ def test_banco_quebrado_nao_derruba_a_rota(monkeypatch: pytest.MonkeyPatch) -> N
         def table(self, _n: str):
             raise RuntimeError("banco fora do ar")
 
-    monkeypatch.setattr(taxa, "_supabase", lambda: _Explode())
+    monkeypatch.setattr(taxa, "_banco", lambda: _Explode())
     assert taxa.permitir("q:1.2.3.4", 3, 60.0) is True
 
 
@@ -228,7 +228,7 @@ class _FakeRpc:
 
 
 def test_pop_usa_a_rpc_e_nao_rele_a_tabela() -> None:
-    cmd = cq._pop_from_supabase(_FakeRpc([dict(_LINHA)]), "SRV01")
+    cmd = cq._pop_do_banco(_FakeRpc([dict(_LINHA)]), "SRV01")
     assert cmd is not None
     assert cmd.id == "cmd-1"
     assert cmd.command == "rescan"
@@ -238,7 +238,7 @@ def test_pop_usa_a_rpc_e_nao_rele_a_tabela() -> None:
 def test_fila_vazia_pela_rpc_e_resposta_final() -> None:
     """None da RPC significa 'não há comando' — reler tudo pelo caminho de
     duas idas reintroduziria exatamente a corrida que a RPC fecha."""
-    assert cq._pop_from_supabase(_FakeRpc([]), "SRV01") is None
+    assert cq._pop_do_banco(_FakeRpc([]), "SRV01") is None
 
 
 class _FakeSemFuncao:
@@ -282,7 +282,7 @@ def test_sem_a_migration_o_pop_cai_no_caminho_antigo(
 ) -> None:
     cliente = _FakeSemFuncao()
     with caplog.at_level("WARNING"):
-        cmd = cq._pop_from_supabase(cliente, "SRV01")
+        cmd = cq._pop_do_banco(cliente, "SRV01")
     assert cmd is not None and cmd.id == "cmd-1"
     assert cliente.fila == [], "o caminho antigo tinha de consumir a linha"
     assert any("20260902110000" in m for m in caplog.messages), (

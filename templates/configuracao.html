@@ -64,7 +64,7 @@
       <!-- Status bar topo -->
       <section class="panel--nested" style="margin-bottom: 1.5rem;" aria-label="Estado e caminhos">
         <div class="linha-acoes" style="gap: 1rem;">
-          <span class="tag" id="tag-supabase">Supabase: …</span>
+          <span class="tag" id="tag-banco">Banco: …</span>
           <span class="tag" id="tag-api-key" title="Só indica se o .env exige chave">Chave: …</span>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
@@ -967,8 +967,8 @@
 
         syncSelectFonteFromStorage();
         const h = await health();
-        const tagS = document.getElementById("tag-supabase");
-        if (tagS) tagS.textContent = "Supabase: " + (h.supabase ? "Ligado" : "Desligado (Somente Local)");
+        const tagS = document.getElementById("tag-banco");
+        if (tagS) tagS.textContent = "Banco: " + (h.banco ? "Ligado" : "Desligado (Somente Local)");
         const tagK = document.getElementById("tag-api-key");
         if (tagK) tagK.textContent = h.api_key_required ? "Chave: Obrigatória" : "Chave: Aberta";
         const ah = document.getElementById("auth-hint");

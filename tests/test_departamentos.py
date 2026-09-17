@@ -117,7 +117,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         "departamento": [{"id": "dep-1", "nome": "Fiscal", "criado_em": "2026-08-18T10:00:00Z"}],
         "departamento_lider": [{"departamento_id": "dep-1", "user_id": "u-lider"}],
     })
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
 
 

@@ -116,7 +116,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     linhas += [_ev("t-parada", "SOLICITADO", 30, email="outro@x.com")]
 
     fake = _Fake(linhas)
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
     return fake
 
 

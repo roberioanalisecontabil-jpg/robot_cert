@@ -77,8 +77,8 @@ USERS = [
 
 def _banco(monkeypatch: pytest.MonkeyPatch, selecoes: List[Dict[str, Any]]) -> _Fake:
     fake = _Fake({"users": [dict(u) for u in USERS], SELECOES: selecoes})
-    monkeypatch.setattr(st, "_supabase", lambda: fake)
-    monkeypatch.setattr(als, "_supabase", lambda: fake)
+    monkeypatch.setattr(st, "_banco", lambda: fake)
+    monkeypatch.setattr(als, "_banco", lambda: fake)
     return fake
 
 
@@ -117,13 +117,13 @@ def test_sem_identidade_recusa_e_avisa(
     assert "sem user_id" in caplog.text
 
 
-def test_sem_supabase_le_o_ficheiro_local(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sem_banco_le_o_ficheiro_local(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     O ficheiro local continua chaveado por e-mail: nesse modo não existe tabela
     `users`, então ali a identidade *é* o endereço. Os dois backends divergem
     de propósito.
     """
-    monkeypatch.setattr(st, "_supabase", lambda: None)
+    monkeypatch.setattr(st, "_banco", lambda: None)
     monkeypatch.setattr(st, "_load_colaborador_file_dict", lambda: {"ana@x.com": DOCS})
     assert st.load_colaborador_selecao("ana@x.com", "u-ana") == DOCS
 

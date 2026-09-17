@@ -47,7 +47,7 @@ class TokenData(BaseModel):
     # Preenchido por `main._sessao_do_token`, que já leu a linha em `users` para
     # validar a sessão. Não vem do JWT e não é assinado: é só o `id` da conta
     # que acabou de ser conferida, carregado para as rotas não repetirem a
-    # consulta. Fica None quando não houve leitura — sem Supabase configurado,
+    # consulta. Fica None quando não houve leitura — sem banco configurado,
     # e no agente por X-API-Key, que não tem conta no portal.
     user_id: Optional[str] = None
     # Instante de emissão, este SIM vindo do token assinado. Comparado com

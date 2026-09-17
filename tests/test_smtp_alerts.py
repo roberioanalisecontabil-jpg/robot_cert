@@ -25,8 +25,8 @@ def test_antispam_and_local_rotation(tmp_path, monkeypatch):
     # Mock fallback file
     mock_file = tmp_path / "sent_alerts.json"
     monkeypatch.setattr("app.alert_state.SENT_ALERTS_FILE", mock_file)
-    # Ensure supabase is mocked as None
-    monkeypatch.setattr("app.alert_state._supabase", lambda: None)
+    # Garante que o cliente do banco está mockado como None
+    monkeypatch.setattr("app.alert_state._banco", lambda: None)
     
     fingerprint = "abc123sha256"
     tipo = "expiring"

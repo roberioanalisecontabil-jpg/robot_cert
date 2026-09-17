@@ -36,7 +36,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from app import cert_installer
-from app.settings_state import _supabase
+from app.settings_state import _banco
 
 logger = logging.getLogger(__name__)
 
@@ -121,9 +121,9 @@ def painel_cofre() -> Dict[str, Any]:
     Era 6% antes da inversão da custódia (33 de 560). O número sozinho justifica
     o painel — ninguém sabia dele até alguém somar as duas contagens.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     try:
         linhas = _todas_as_linhas(
@@ -161,9 +161,9 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
     minutos de confusão em 14/08. Só `scanned_at` e `machine_id`: 24 KB para as
     317 linhas, contra 160 MB se viessem os itens junto.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     try:
@@ -220,9 +220,9 @@ def painel_acervo() -> Dict[str, Any]:
     nunca vão ao cofre, logo nunca são instaláveis pelo portal. É trabalho
     concreto: cada um é um arquivo para arrumar na origem.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     try:
         linhas = _todas_as_linhas(
@@ -267,9 +267,9 @@ def painel_acervo() -> Dict[str, Any]:
 
 def painel_alertas(dias: int = 30) -> Dict[str, Any]:
     """Fecha o ciclo: avisamos — e adiantou?"""
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     try:
@@ -299,9 +299,9 @@ def painel_acesso() -> Dict[str, Any]:
     acesso fecha por padrão), mas é também o que trava a primeira pessoa que
     abrir a tela. Melhor ver o número aqui do que descobrir pelo chamado.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     try:
         us = _todas_as_linhas(
@@ -344,9 +344,9 @@ def painel_atividade(dias: int = 30) -> Dict[str, Any]:
     concluiu nenhuma. É gente que provavelmente está esperando alguém — o
     gestor atribuir carteira, o agente enviar o certificado — sem saber disso.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     try:
@@ -482,9 +482,9 @@ def painel_renovacoes(dias: int = 30, machine_id: str = "ANALISESRV") -> Dict[st
     "renovados nos últimos 30 dias" seria mentira. Quem chama recebe a data que
     foi realmente usada.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
-        return {"erro": "Supabase não configurado"}
+        return {"erro": "Banco não configurado"}
 
     corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     try:

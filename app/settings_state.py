@@ -137,39 +137,37 @@ def _save_file(s: PortalSettings) -> None:
 
 # Singleton: um pool de conexões por processo, criado no primeiro uso.
 #
-# O nome `_supabase` ficou por enquanto DE PROPÓSITO: é o ponto que os outros
-# módulos importam e que 30 arquivos de teste substituem por um fake
-# (`monkeypatch.setattr("app.settings_state._supabase", ...)`). Desde
-# 05/09/2026 o que ele devolve é `app.db_pg.Client` — PostgreSQL puro, sem
-# Supabase — com a mesma cadeia de chamadas. Renomear é uma leva mecânica à
-# parte, quando o portal estiver no ar no servidor novo.
-_supabase_client = None
+# `_banco` é o ponto que os outros módulos importam e que os testes substituem
+# por um fake (`monkeypatch.setattr("app.settings_state._banco", ...)`). O que
+# ele devolve é `app.db_pg.Client` — PostgreSQL puro. (Até 17/09/2026 chamava-se
+# `_supabase`, nome herdado de antes da migração de 05/09/2026.)
+_banco_client = None
 
 
-def _supabase():
-    global _supabase_client
+def _banco():
+    global _banco_client
     if not config.DATABASE_URL:
         return None
-    if _supabase_client is None:
+    if _banco_client is None:
         from app import db_pg
 
-        _supabase_client = db_pg.Client(config.DATABASE_URL)
-    return _supabase_client
+        _banco_client = db_pg.Client(config.DATABASE_URL)
+    return _banco_client
 
 
 def load_settings() -> PortalSettings:
-    client = _supabase()
+    client = _banco()
     if client:
         try:
             r = client.table("portal_settings").select("*").eq("id", 1).limit(1).execute()
             rows = r.data
             if rows:
                 supa = _from_row(rows[0])
-                # Se o Supabase tem pastas vazias, tenta complementar com o arquivo local
+                # Se o banco tem pastas vazias, tenta complementar com o arquivo local
                 if not supa.source_folder.strip() and not supa.expired_folder.strip():
                     local = _load_file()
                     if local:
-                        # Mantém pastas locais e SMTP local se vazios no Supabase
+                        # Mantém pastas locais e SMTP local se vazios no banco
                         supa.source_folder = local.source_folder
                         supa.expired_folder = local.expired_folder
                         if not supa.smtp_host.strip():
@@ -190,7 +188,7 @@ def load_settings() -> PortalSettings:
                             supa.alerta_email_recado = local.alerta_email_recado
                 return supa
         except Exception:  # noqa: BLE001
-            logger.exception("Falha ao ler portal_settings no Supabase; usando o arquivo local")
+            logger.exception("Falha ao ler portal_settings no banco; usando o arquivo local")
     s = _load_file()
     if s:
         return s
@@ -202,23 +200,23 @@ def load_settings() -> PortalSettings:
 
 
 class GravacaoNaoPersistida(RuntimeError):
-    """O arquivo local recebeu, o Supabase não.
+    """O arquivo local recebeu, o banco não.
 
     Existe porque as duas coisas NÃO são equivalentes: `load_settings` prefere
-    o Supabase quando ele está configurado, então uma gravação que só chegou ao
+    o banco quando ele está configurado, então uma gravação que só chegou ao
     arquivo é uma gravação que ninguém vai ler. Engolir isso fazia a tela
     responder "salvo com sucesso" sobre um valor que a próxima leitura
     descartaria — inclusive numa instalação a que faltasse uma migration.
     """
 
 
-def save_settings(s: PortalSettings, *, exigir_supabase: bool = False) -> bool:
+def save_settings(s: PortalSettings, *, exigir_banco: bool = False) -> bool:
     """
-    Grava em data/portal_settings.json sempre. Com Supabase, faz upsert (insert ou update)
+    Grava em data/portal_settings.json sempre. Com banco, faz upsert (insert ou update)
     para a linha id=1, pois update em linha inexistente não grava nada.
 
     Devolve True quando a gravação chegou onde será lida. Com
-    `exigir_supabase=True`, levanta `GravacaoNaoPersistida` em vez de devolver
+    `exigir_banco=True`, levanta `GravacaoNaoPersistida` em vez de devolver
     False — para quem responde a uma tela e precisa transformar isso em erro.
 
     O padrão continua sendo o antigo (registrar e seguir): o ingest do agente
@@ -226,9 +224,9 @@ def save_settings(s: PortalSettings, *, exigir_supabase: bool = False) -> bool:
     seria trocar um problema pequeno por um grande.
     """
     _save_file(s)
-    client = _supabase()
+    client = _banco()
     if not client:
-        # Sem Supabase, o arquivo local É a fonte de verdade.
+        # Sem banco, o arquivo local É a fonte de verdade.
         return True
     now = datetime.now(timezone.utc).isoformat()
     row = {
@@ -259,9 +257,9 @@ def save_settings(s: PortalSettings, *, exigir_supabase: bool = False) -> bool:
         client.table("portal_settings").upsert(row, on_conflict="id").execute()
     except Exception as e:  # noqa: BLE001
         logger.exception(
-            "Falha ao gravar no Supabase; a configuração foi guardada em %s", DATA_FILE
+            "Falha ao gravar no banco; a configuração foi guardada em %s", DATA_FILE
         )
-        if exigir_supabase:
+        if exigir_banco:
             raise GravacaoNaoPersistida(str(e)) from e
         return False
     return True
@@ -277,7 +275,7 @@ def _save_snapshot_to_file(
     scanned_iso: str,
     items: List[dict[str, Any]],
 ) -> None:
-    """Grava o snapshot em arquivo local (fallback ou modo sem Supabase)."""
+    """Grava o snapshot em arquivo local (fallback ou modo sem banco)."""
     INGEST_FILE.parent.mkdir(parents=True, exist_ok=True)
     INGEST_FILE.write_text(
         json.dumps(
@@ -302,7 +300,7 @@ def save_snapshot(
 ) -> None:
     scanned = datetime.now(timezone.utc)
     scanned_iso = scanned.isoformat()
-    client = _supabase()
+    client = _banco()
     if client:
         try:
             client.table("cert_snapshots").insert(
@@ -316,7 +314,7 @@ def save_snapshot(
             ).execute()
         except Exception:  # noqa: BLE001
             logger.exception(
-                "Falha ao gravar snapshot no Supabase; a guardar em %s", INGEST_FILE
+                "Falha ao gravar snapshot no banco; a guardar em %s", INGEST_FILE
             )
             _save_snapshot_to_file(machine_id, source_folder, expired_folder, scanned_iso, items)
     else:
@@ -334,9 +332,9 @@ def upsert_cert_history(
     Mantém a tabela materializada cert_history atualizada.
     Para cada item do scan faz UPSERT usando file_name como chave,
     sobrescrevendo apenas se o scanned_at for mais recente que o registrado.
-    Silenciosamente ignorado se o Supabase não estiver configurado.
+    Silenciosamente ignorado se o banco não estiver configurado.
     """
-    client = _supabase()
+    client = _banco()
     if not client or not items:
         return
 
@@ -374,7 +372,7 @@ def upsert_cert_history(
     if not rows:
         return
 
-    # Envia em lotes de 200 para não ultrapassar limites do Supabase
+    # Envia em lotes de 200 para não ultrapassar limites do banco
     BATCH = 200
     for i in range(0, len(rows), BATCH):
         batch = rows[i : i + BATCH]
@@ -396,7 +394,7 @@ def get_latest_snapshot() -> Optional[dict]:
     """
     Retorna o snapshot mais recente, qualquer machine_id, ou None.
     """
-    client = _supabase()
+    client = _banco()
     if client:
         r = (
             client.table("cert_snapshots")
@@ -444,18 +442,18 @@ def load_colaborador_selecao(email: str, user_id: Optional[str] = None) -> List[
     """
     Documentos (CNPJ/CPF só dígitos) que o usuário escolheu para acompanhar.
 
-    Com Supabase, a linha é procurada **só** por `user_id`. A queda para
+    Com banco, a linha é procurada **só** por `user_id`. A queda para
     `user_email` existiu na fase 2 para curar linhas criadas antes dela; saiu
     na 3c depois de a produção confirmar 1 linha, 1 ligada, 0 órfãs, e porque
     a fase 3d remove a coluna — código que ainda a lesse quebraria ali.
 
-    Sem Supabase é o arquivo local, que continua chaveado por e-mail: nesse
+    Sem banco é o arquivo local, que continua chaveado por e-mail: nesse
     modo não existe tabela `users`, então ali a identidade *é* o endereço. Os
     dois backends divergem de propósito.
     """
     key = (email or "").strip().lower()
     uid = (user_id or "").strip() or None
-    client = _supabase()
+    client = _banco()
     if client:
         if not uid:
             # Sem identidade não há o que procurar, e devolver [] calado faria
@@ -482,7 +480,7 @@ def load_colaborador_selecao(email: str, user_id: Optional[str] = None) -> List[
             return []
         except Exception:  # noqa: BLE001
             logger.exception(
-                "Falha ao ler colaborador_cert_selecoes no Supabase; usando o arquivo local"
+                "Falha ao ler colaborador_cert_selecoes no banco; usando o arquivo local"
             )
     return _load_colaborador_file_dict().get(key, [])
 
@@ -491,7 +489,7 @@ def save_colaborador_selecao(
     email: str, docs: List[str], user_id: Optional[str] = None
 ) -> None:
     """
-    Grava sempre no arquivo local; com Supabase faz upsert por identidade.
+    Grava sempre no arquivo local; com banco faz upsert por identidade.
 
     Desde a fase 3c a linha guarda **só** `user_id`. `user_email` deixou de ser
     escrita — ela virou coluna anulável na 3b-2 justamente para isto, e sai de
@@ -510,7 +508,7 @@ def save_colaborador_selecao(
     merged = _load_colaborador_file_dict()
     merged[key] = clean
     _save_colaborador_file_dict(merged)
-    client = _supabase()
+    client = _banco()
     if not client:
         return
     if not uid:
@@ -533,7 +531,7 @@ def save_colaborador_selecao(
         client.table("colaborador_cert_selecoes").upsert(row, on_conflict="user_id").execute()
     except Exception:  # noqa: BLE001
         logger.exception(
-            "Falha ao gravar colaborador_cert_selecoes no Supabase; seleção ficou em %s",
+            "Falha ao gravar colaborador_cert_selecoes no banco; seleção ficou em %s",
             COLAB_SELECAO_FILE,
         )
 
@@ -543,13 +541,13 @@ def save_colaborador_selecao(
 def load_preferencia_alerta(user_id: Optional[str]) -> Dict[str, Any]:
     """Como a pessoa quer ser avisada. Ausência = o padrão de sempre.
 
-    Devolve sempre um dicionário utilizável: sem Supabase, sem linha ou sem as
+    Devolve sempre um dicionário utilizável: sem banco, sem linha ou sem as
     colunas (migration pendente), o resultado é "recebe tudo" — que é o que
     acontecia antes desta preferência existir.
     """
     padrao = {"notificar_email": True, "alerta_marcos_ignorados": ""}
     uid = (user_id or "").strip()
-    client = _supabase()
+    client = _banco()
     if not client or not uid:
         return padrao
     try:
@@ -588,7 +586,7 @@ def save_preferencia_alerta(
     defeito que 20/08 passou o dia corrigindo.
     """
     uid = (user_id or "").strip()
-    client = _supabase()
+    client = _banco()
     if not client or not uid:
         return
     try:
@@ -613,14 +611,14 @@ def save_preferencia_alerta(
 #
 # Sem fallback em arquivo, ao contrário das seleções. É deliberado: em produção
 # o disco é efêmero, e um "li todos" que volta atrás no próximo reinício seria
-# pior do que um botão que assumidamente não funciona sem banco. Sem Supabase,
+# pior do que um botão que assumidamente não funciona sem banco. Sem banco,
 # ler devolve conjunto vazio e marcar não faz nada — o sino se comporta como
 # antes de o botão existir.
 
 def carregar_notificacoes_lidas(user_id: Optional[str]) -> set:
     """Chaves que esta pessoa já marcou como lidas."""
     uid = (user_id or "").strip()
-    client = _supabase()
+    client = _banco()
     if not client or not uid:
         return set()
     try:
@@ -644,7 +642,7 @@ def marcar_notificacoes_lidas(user_id: Optional[str], chaves: List[str]) -> int:
     """Marca as chaves como lidas. Devolve quantas foram gravadas."""
     uid = (user_id or "").strip()
     limpas = sorted({str(c).strip() for c in chaves if str(c).strip()})
-    client = _supabase()
+    client = _banco()
     if not client or not uid or not limpas:
         return 0
     agora = datetime.now(timezone.utc).isoformat()
@@ -663,6 +661,6 @@ def marcar_notificacoes_lidas(user_id: Optional[str], chaves: List[str]) -> int:
         raise GravacaoNaoPersistida(str(e)) from e
 
 
-def supabase_configured() -> bool:
-    """Há banco configurado? (Nome herdado; desde 05/09/2026 o banco é PostgreSQL puro.)"""
+def banco_configurado() -> bool:
+    """Há banco (PostgreSQL) configurado? (Até 17/09/2026 chamava-se `supabase_configured`.)"""
     return bool(config.DATABASE_URL)

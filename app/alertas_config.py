@@ -1,6 +1,6 @@
 """Regras dos alertas por e-mail que a tela passou a configurar.
 
-Funções puras, sem Supabase e sem SMTP: a validação que a tela usa para recusar
+Funções puras, sem banco e sem SMTP: a validação que a tela usa para recusar
 um valor tem de ser a MESMA que o job usa para interpretá-lo. Duas cópias da
 regra é como "a vencer em 30 dias" viraria dois números diferentes.
 

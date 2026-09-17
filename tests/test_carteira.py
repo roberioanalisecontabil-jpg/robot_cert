@@ -9,7 +9,7 @@ vazamento.
 O teste mais importante deste arquivo não exercita comportamento nenhum — é o
 `test_toda_rota_que_cria_token_passa_pela_carteira`, que lê o código. A razão
 está em `docs/PLANO_reorganizacao_portal.md` §6.4: a aplicação fala com o
-Supabase pelo service_role, que ignora RLS, então **não há rede de proteção no
+banco por um papel que ignora RLS, então **não há rede de proteção no
 banco**. Toda rota que emite token de instalação precisa lembrar de checar a
 carteira, e uma que esqueça entrega chave privada a quem não devia — sem erro,
 sem log, e passando por toda a suíte funcional.
@@ -29,7 +29,7 @@ import app.main as m
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Fake Supabase
+# Fake do banco
 # ──────────────────────────────────────────────────────────────────────────
 
 class _Resultado:
@@ -158,7 +158,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         {"departamento_id": "dep-fiscal", "user_id": "u-gestor"},
         {"departamento_id": "dep-fiscal", "user_id": "u-chefe"},
     ]
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
     monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-" + email.split("@")[0])
     # O que viria depois da barreira não interessa aqui; o que interessa é se
     # chegou a ser chamado.
@@ -317,7 +317,7 @@ def test_listar_carteira_levanta_em_vez_de_devolver_vazio() -> None:
         def table(self, _n):
             raise RuntimeError("banco fora do ar")
 
-    with patch.object(ci, "_supabase", lambda: _Quebrado()):
+    with patch.object(ci, "_banco", lambda: _Quebrado()):
         with pytest.raises(ci.CarteiraIndisponivel):
             ci.listar_carteira("u-1")
 

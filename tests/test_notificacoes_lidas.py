@@ -156,5 +156,5 @@ def test_falha_ao_ler_as_lidas_mostra_tudo_em_vez_de_esconder(
         def table(self, _n):
             raise RuntimeError("banco fora do ar")
 
-    monkeypatch.setattr(ss, "_supabase", lambda: _ClientQuebrado())
+    monkeypatch.setattr(ss, "_banco", lambda: _ClientQuebrado())
     assert ss.carregar_notificacoes_lidas("uid-1") == set()

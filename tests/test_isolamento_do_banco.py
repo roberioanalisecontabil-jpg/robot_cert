@@ -1,4 +1,4 @@
-"""Guarda-corpo: a suíte não pode alcançar o Supabase de produção.
+"""Guarda-corpo: a suíte não pode alcançar o banco de produção.
 
 Em 08/08 descobriu-se que `pytest` gravava em `cert_pfx_store` de produção a
 cada execução — `test_upload_aceita_certificado_autorizado` fazia patch da
@@ -32,8 +32,8 @@ def test_banco_fora_do_ambiente() -> None:
 
 def test_cliente_de_banco_nao_e_criado() -> None:
     """As duas portas de entrada — settings_state e cert_installer."""
-    assert ss._supabase() is None
-    assert ci._supabase() is None
+    assert ss._banco() is None
+    assert ci._banco() is None
 
 
 def test_escrita_no_cofre_nao_alcanca_banco_nenhum() -> None:
@@ -58,7 +58,7 @@ def test_leitura_da_custodia_sem_banco_falha_fechada() -> None:
     Sem cliente, a leitura levanta `CustodiaIndisponivel` — não devolve vazio.
 
     Sob opt-out, conjunto vazio de bloqueios significa "libera tudo". Um
-    ambiente sem Supabase configurado não pode ser lido como "nada bloqueado".
+    ambiente sem banco configurado não pode ser lido como "nada bloqueado".
     """
     import pytest
 

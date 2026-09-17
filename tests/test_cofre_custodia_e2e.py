@@ -18,7 +18,7 @@ posso mandar?" e agiu só sobre a resposta. Mudar o que entra na lista inverteu 
 custódia sem recompilar nada — e um teste que deixe esse contrato escorregar
 quebra produção sem quebrar a suíte.
 
-O Supabase é substituído por um fake em memória que implementa só o subconjunto
+O banco é substituído por um fake em memória que implementa só o subconjunto
 de query builder usado por `cert_installer`. Não é mock de asserção — é um banco
 de brinquedo, para o teste exercitar a lógica real de filtro em vez de verificar
 que uma chamada aconteceu.
@@ -36,7 +36,7 @@ import app.cert_installer as ci
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Fake Supabase
+# Fake do banco
 # ──────────────────────────────────────────────────────────────────────────
 
 class _Resultado:
@@ -47,7 +47,7 @@ class _Resultado:
 class _Query:
     """Query builder encadeável sobre uma lista de dicts."""
 
-    def __init__(self, tabela: List[Dict[str, Any]], banco: "_FakeSupabase", nome: str) -> None:
+    def __init__(self, tabela: List[Dict[str, Any]], banco: "_FakeBanco", nome: str) -> None:
         self._tabela = tabela
         self._banco = banco
         self._nome = nome
@@ -122,7 +122,7 @@ class _Query:
         raise AssertionError(f"operacao nao suportada: {self._operacao}")
 
 
-class _FakeSupabase:
+class _FakeBanco:
     def __init__(self) -> None:
         self.tabelas: Dict[str, List[Dict[str, Any]]] = {}
         # Permite derrubar UMA tabela: é assim que se testa falha parcial, que
@@ -147,8 +147,8 @@ def _item(fp: str, status: str = "ok") -> dict:
 
 
 @pytest.fixture
-def banco() -> _FakeSupabase:
-    fake = _FakeSupabase()
+def banco() -> _FakeBanco:
+    fake = _FakeBanco()
     # Inventário: A tem um válido, um vencido e um ilegível. B tem o mesmo
     # certificado da A (é o caso comum num escritório contábil) e mais um.
     fake.tabelas["cert_snapshots"] = [
@@ -168,7 +168,7 @@ def banco() -> _FakeSupabase:
             "items": [_item(FP), _item(FP_B)],
         },
     ]
-    with patch.object(ci, "_supabase", lambda: fake):
+    with patch.object(ci, "_banco", lambda: fake):
         yield fake
 
 
@@ -196,7 +196,7 @@ def _lista(client: TestClient, maquina: str, headers=None) -> list:
 # ──────────────────────────────────────────────────────────────────────────
 
 def test_resposta_mantem_caminho_e_formato_do_agente(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     O `.exe` do ANALISESRV lê `fingerprints` de `/api/cert-installer/vault-optin`.
@@ -215,7 +215,7 @@ def test_resposta_mantem_caminho_e_formato_do_agente(
     assert isinstance(corpo["fingerprints"], list)
 
 
-def test_sem_machine_id_e_recusado(client: TestClient, banco: _FakeSupabase) -> None:
+def test_sem_machine_id_e_recusado(client: TestClient, banco: _FakeBanco) -> None:
     """A custódia é por estação; lista global não responde pergunta nenhuma."""
     r = client.get("/api/cert-installer/vault-optin", headers=_headers_agente())
     assert r.status_code == 422, r.text
@@ -226,7 +226,7 @@ def test_sem_machine_id_e_recusado(client: TestClient, banco: _FakeSupabase) -> 
 # ──────────────────────────────────────────────────────────────────────────
 
 def test_certificado_valido_entra_sem_ninguem_autorizar(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """O ponto da inversão: sem nenhuma linha de autorização, o válido já entra."""
     assert banco.tabelas.get("cert_vault_bloqueio", []) == []
@@ -238,7 +238,7 @@ def test_certificado_valido_entra_sem_ninguem_autorizar(
     (FP_ILEGIVEL, "o scanner não conseguiu ler"),
 ])
 def test_o_que_nao_instala_nao_entra(
-    client: TestClient, banco: _FakeSupabase, fp: str, motivo: str
+    client: TestClient, banco: _FakeBanco, fp: str, motivo: str
 ) -> None:
     """
     "Tudo por padrão" é "todo certificado VÁLIDO e LEGÍVEL por padrão".
@@ -249,13 +249,13 @@ def test_o_que_nao_instala_nao_entra(
     assert fp not in _lista(client, MAQUINA_A), motivo
 
 
-def test_so_a_varredura_mais_recente_conta(client: TestClient, banco: _FakeSupabase) -> None:
+def test_so_a_varredura_mais_recente_conta(client: TestClient, banco: _FakeBanco) -> None:
     """Certificado que sumiu da máquina não pode continuar autorizado."""
     assert "e" * 64 not in _lista(client, MAQUINA_A)
 
 
 def test_maquina_sem_varredura_nao_autoriza_nada(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     Máquina desconhecida devolve lista vazia — e isso NÃO é erro.
@@ -271,7 +271,7 @@ def test_maquina_sem_varredura_nao_autoriza_nada(
 # 3. Bloqueio — a exceção, por estação
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_bloqueado_sai_da_lista(client: TestClient, banco: _FakeSupabase) -> None:
+def test_bloqueado_sai_da_lista(client: TestClient, banco: _FakeBanco) -> None:
     r = client.delete(
         f"/api/cert-installer/vault-optin/{FP}?machine_id={MAQUINA_A}",
         headers=_headers_admin(),
@@ -281,7 +281,7 @@ def test_bloqueado_sai_da_lista(client: TestClient, banco: _FakeSupabase) -> Non
 
 
 def test_bloquear_registra_o_bloqueio_e_nao_so_apaga_o_material(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     Sem a linha de bloqueio, o botão desfaz a si mesmo.
@@ -309,7 +309,7 @@ def test_bloquear_registra_o_bloqueio_e_nao_so_apaga_o_material(
 
 
 def test_bloquear_numa_maquina_nao_alcanca_a_outra(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """O mesmo certificado em duas estações: bloquear em A não toca em B."""
     client.delete(
@@ -320,7 +320,7 @@ def test_bloquear_numa_maquina_nao_alcanca_a_outra(
     assert FP in _lista(client, MAQUINA_B), "o bloqueio vazou para a outra estação"
 
 
-def test_bloquear_sem_machine_id_e_recusado(client: TestClient, banco: _FakeSupabase) -> None:
+def test_bloquear_sem_machine_id_e_recusado(client: TestClient, banco: _FakeBanco) -> None:
     r = client.delete(
         f"/api/cert-installer/vault-optin/{FP}", headers=_headers_admin()
     )
@@ -328,7 +328,7 @@ def test_bloquear_sem_machine_id_e_recusado(client: TestClient, banco: _FakeSupa
     assert not banco.tabelas.get("cert_vault_bloqueio")
 
 
-def test_reativar_devolve_a_custodia(client: TestClient, banco: _FakeSupabase) -> None:
+def test_reativar_devolve_a_custodia(client: TestClient, banco: _FakeBanco) -> None:
     client.delete(
         f"/api/cert-installer/vault-optin/{FP}?machine_id={MAQUINA_A}",
         headers=_headers_admin(),
@@ -345,7 +345,7 @@ def test_reativar_devolve_a_custodia(client: TestClient, banco: _FakeSupabase) -
 
 
 def test_usuario_comum_nao_bloqueia_nem_reativa(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """Decidir o que guarda chave privada no servidor é ação de admin."""
     tok = auth.create_access_token({"sub": "user@exemplo.com", "role": "user"})
@@ -373,7 +373,7 @@ def test_usuario_comum_nao_bloqueia_nem_reativa(
 # ──────────────────────────────────────────────────────────────────────────
 
 def test_falha_ao_ler_bloqueios_nao_libera_tudo(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     Consulta de bloqueios fora do ar → 503, **nunca** a lista completa.
@@ -392,7 +392,7 @@ def test_falha_ao_ler_bloqueios_nao_libera_tudo(
 
 
 def test_falha_ao_ler_inventario_nao_libera_tudo(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     banco.quebrado["cert_snapshots"] = True
 
@@ -404,7 +404,7 @@ def test_falha_ao_ler_inventario_nao_libera_tudo(
 
 
 def test_upload_recusa_quando_nao_da_para_saber_a_custodia(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     A barreira do upload falha fechada pelo mesmo motivo.
@@ -438,7 +438,7 @@ def test_conta_ativa_da_custodia_nao_e_silenciosa() -> None:
         def table(self, _n):
             raise RuntimeError("banco fora do ar")
 
-    with patch.object(ci, "_supabase", lambda: _Quebrado()):
+    with patch.object(ci, "_banco", lambda: _Quebrado()):
         with pytest.raises(ci.CustodiaIndisponivel):
             ci.listar_bloqueios(MAQUINA_A)
         with pytest.raises(ci.CustodiaIndisponivel):
@@ -449,7 +449,7 @@ def test_conta_ativa_da_custodia_nao_e_silenciosa() -> None:
 # 5. Barreira de servidor no upload
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_upload_barra_certificado_bloqueado(client: TestClient, banco: _FakeSupabase) -> None:
+def test_upload_barra_certificado_bloqueado(client: TestClient, banco: _FakeBanco) -> None:
     """
     A barreira existe para o agente desatualizado ou adulterado.
 
@@ -472,7 +472,7 @@ def test_upload_barra_certificado_bloqueado(client: TestClient, banco: _FakeSupa
 
 
 def test_upload_barra_fingerprint_fora_do_inventario(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """Certificado que a máquina nunca reportou não pode ser gravado por ela."""
     with patch.object(ci, "upsert_pfx", lambda **kw: "id-fake"):
@@ -484,7 +484,7 @@ def test_upload_barra_fingerprint_fora_do_inventario(
     assert r.status_code == 403, r.text
 
 
-def test_upload_barra_vencido(client: TestClient, banco: _FakeSupabase) -> None:
+def test_upload_barra_vencido(client: TestClient, banco: _FakeBanco) -> None:
     with patch.object(ci, "upsert_pfx", lambda **kw: "id-fake"):
         r = client.post(
             "/api/cert-installer/upload-pfx",
@@ -494,7 +494,7 @@ def test_upload_barra_vencido(client: TestClient, banco: _FakeSupabase) -> None:
     assert r.status_code == 403, r.text
 
 
-def test_upload_aceita_o_caminho_legitimo(client: TestClient, banco: _FakeSupabase) -> None:
+def test_upload_aceita_o_caminho_legitimo(client: TestClient, banco: _FakeBanco) -> None:
     """Contraprova: o endurecimento não pode barrar o que deve passar."""
     with patch.object(ci, "upsert_pfx", lambda **kw: "id-fake"):
         r = client.post(
@@ -506,7 +506,7 @@ def test_upload_aceita_o_caminho_legitimo(client: TestClient, banco: _FakeSupaba
 
 
 def test_upload_do_mesmo_fingerprint_por_duas_maquinas_gera_duas_linhas(
-    client: TestClient, banco: _FakeSupabase
+    client: TestClient, banco: _FakeBanco
 ) -> None:
     """
     Cada estação guarda a SUA cópia — a chave composta de 15/08.

@@ -32,9 +32,9 @@ class QueuedCommand:
     payload: Optional[str] = None
 
 
-def _supabase():
+def _banco():
     # Reutiliza o singleton de settings_state para não criar um segundo client.
-    from app.settings_state import _supabase as _sb
+    from app.settings_state import _banco as _sb
     return _sb()
 
 
@@ -80,13 +80,13 @@ def enqueue(machine_id: str, command: str, payload: Optional[str] = None) -> str
     if payload is not None:
         row["payload"] = payload
 
-    client = _supabase()
+    client = _banco()
     if client:
         try:
             client.table("agent_command_queue").insert(row).execute()
             return cid
         except Exception:  # noqa: BLE001
-            logger.exception("Fila Supabase indisponível; a enfileirar em disco")
+            logger.exception("Fila no banco indisponível; a enfileirar em disco")
     with _file_lock:
         q = _load_file_queue()
         q.append(row)
@@ -97,12 +97,12 @@ def enqueue(machine_id: str, command: str, payload: Optional[str] = None) -> str
 def pop_next_for_agent(machine_id: str) -> Optional[QueuedCommand]:
     """
     Retira e devolve o próximo comando em fila para este agente, ou None.
-    Tenta Supabase primeiro; se vazio, consome a fila em arquivo (enfileiramentos de fallback).
+    Tenta o banco primeiro; se vazio, consome a fila em arquivo (enfileiramentos de fallback).
     """
     agent = (machine_id or "").strip() or "default"
-    client = _supabase()
+    client = _banco()
     if client:
-        r = _pop_from_supabase(client, agent)
+        r = _pop_do_banco(client, agent)
         if r:
             return r
     with _file_lock:
@@ -150,7 +150,7 @@ def _e_funcao_ausente(erro: Exception) -> bool:
     )
 
 
-def _pop_from_supabase(client: Any, agent: str) -> Optional[QueuedCommand]:
+def _pop_do_banco(client: Any, agent: str) -> Optional[QueuedCommand]:
     """Retira o próximo comando desta máquina — atomicamente, quando dá.
 
     O caminho principal é a RPC `pop_agent_command` (migration 20260902110000):
@@ -187,7 +187,7 @@ def _pop_from_supabase(client: Any, agent: str) -> Optional[QueuedCommand]:
         )
         rows = r.data or []
     except Exception:  # noqa: BLE001
-        logger.exception("listar fila no Supabase")
+        logger.exception("listar fila no banco")
         return _pop_from_file(agent)
     for row in rows:
         if not _matches_agent(str(row.get("machine_id", "")), agent):
@@ -196,7 +196,7 @@ def _pop_from_supabase(client: Any, agent: str) -> Optional[QueuedCommand]:
         try:
             client.table("agent_command_queue").delete().eq("id", cid).execute()
         except Exception:  # noqa: BLE001
-            logger.exception("remover comando da fila (Supabase); id=%s", cid)
+            logger.exception("remover comando da fila (banco); id=%s", cid)
             return None
         return _linha_para_comando(row)
     return None
@@ -211,7 +211,7 @@ def list_pending() -> List[dict[str, Any]]:
     abaixo é explícita de propósito — não trocar por select("*").
     """
     out: List[dict[str, Any]] = []
-    client = _supabase()
+    client = _banco()
     if client:
         try:
             r = (
@@ -223,7 +223,7 @@ def list_pending() -> List[dict[str, Any]]:
             )
             out.extend(dict(row) for row in (r.data or []))
         except Exception:  # noqa: BLE001
-            logger.exception("list_pending supabase")
+            logger.exception("list_pending banco")
     with _file_lock:
         for row in _load_file_queue():
             if row.get("status") == "pending":

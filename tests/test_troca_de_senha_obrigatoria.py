@@ -110,7 +110,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         "user_activity": [],
         "colaborador_cert_selecoes": [],
     })
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
 
 

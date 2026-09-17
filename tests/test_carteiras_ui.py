@@ -140,8 +140,8 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             ]},
         ],
     })
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-" + email.split("@")[0])
     return fake
 

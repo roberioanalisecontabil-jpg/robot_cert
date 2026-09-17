@@ -10,7 +10,7 @@ from app import config
 from app.auth import conta_ativa
 from app import alertas_config
 from app import email_modelo
-from app.settings_state import load_settings, _supabase, _load_colaborador_file_dict
+from app.settings_state import load_settings, _banco, _load_colaborador_file_dict
 from app.cert_scanner import scan_folder, cert_to_public_dict
 from app.smtp_service import send_smtp_email
 
@@ -77,7 +77,7 @@ def _is_alert_already_sent(
     validade_iso: str
 ) -> bool:
     """Verifica antispam composto: certificado + tipo + validade + destinatário."""
-    client = _supabase()
+    client = _banco()
     if client:
         try:
             r = (
@@ -92,7 +92,7 @@ def _is_alert_already_sent(
             )
             return len(r.data or []) > 0
         except Exception as e:
-            logger.warning(f"Falha ao ler sent_alerts no Supabase, usando local: {e}")
+            logger.warning(f"Falha ao ler sent_alerts no banco, usando local: {e}")
             
     # Fallback local
     local_alerts = _load_local_sent_alerts()
@@ -115,7 +115,7 @@ def _record_sent_alert(
 ) -> None:
     """Registra o envio para fins de antispam."""
     now_iso = datetime.now(timezone.utc).isoformat()
-    client = _supabase()
+    client = _banco()
     if client:
         try:
             row = {
@@ -128,7 +128,7 @@ def _record_sent_alert(
             client.table("sent_alerts").insert(row).execute()
             return
         except Exception as e:
-            logger.warning(f"Falha ao salvar sent_alert no Supabase, salvando local: {e}")
+            logger.warning(f"Falha ao salvar sent_alert no banco, salvando local: {e}")
             
     # Gravação local com rotação
     local_alerts = _load_local_sent_alerts()
@@ -150,7 +150,7 @@ def _get_admin_emails() -> List[str]:
     admin via 519 alertas na tela e recebia zero e-mails. Aqui os dois canais
     passam a concordar sobre quem deve ser avisado.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
         return []
     try:
@@ -243,7 +243,7 @@ def _linhas_ativas() -> Optional[List[Dict[str, Any]]]:
     Existe para `_get_todos_colaboradores_selecoes` tirar daqui as DUAS visões
     que precisa (por id e por e-mail) com uma leitura só.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
         return None
     try:
@@ -334,7 +334,7 @@ class PreferenciaDeAlerta:
 def _envolver(selecoes: Dict[str, List[str]]) -> Dict[str, "PreferenciaDeAlerta"]:
     """Arquivo local não guarda preferência: tudo com o padrão de fábrica.
 
-    É o caminho de quando não há Supabase — instalação pequena ou banco fora
+    É o caminho de quando não há banco — instalação pequena ou banco fora
     do ar. Ninguém deixa de receber por isso.
     """
     return {email: PreferenciaDeAlerta(docs) for email, docs in selecoes.items()}
@@ -358,7 +358,7 @@ def _get_selecoes_com_preferencia() -> Dict[str, "PreferenciaDeAlerta"]:
     CNPJ/CPF e vencimento de certificados de clientes reais. Não era acesso
     indevido a uma tela: era e-mail saindo para fora.
     """
-    client = _supabase()
+    client = _banco()
     if not client:
         return _envolver(_so_de_ativos(_load_colaborador_file_dict()))
 
@@ -370,7 +370,7 @@ def _get_selecoes_com_preferencia() -> Dict[str, "PreferenciaDeAlerta"]:
         )
         linhas = r.data or []
     except Exception as e:
-        logger.warning(f"Falha ao ler seleções de colaboradores no Supabase, usando local: {e}")
+        logger.warning(f"Falha ao ler seleções de colaboradores no banco, usando local: {e}")
         return _envolver(_so_de_ativos(_load_colaborador_file_dict()))
 
     ativas = _linhas_ativas()

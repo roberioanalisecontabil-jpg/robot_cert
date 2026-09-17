@@ -150,9 +150,9 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         "carteira": [{"user_id": "u-1"}],
         "install_log": [],
     })
-    monkeypatch.setattr(dash, "_supabase", lambda: fake)
+    monkeypatch.setattr(dash, "_banco", lambda: fake)
     import app.cert_installer as ci
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
     return fake
 
 

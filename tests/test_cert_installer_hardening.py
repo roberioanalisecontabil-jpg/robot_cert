@@ -101,7 +101,7 @@ def test_bloquear_apaga_o_pfx_armazenado(monkeypatch) -> None:
         def execute(self):
             return type("R", (), {"data": []})()
 
-    monkeypatch.setattr(ci, "_supabase", lambda: type("C", (), {"table": lambda s, n: _Tabela(n)})())
+    monkeypatch.setattr(ci, "_banco", lambda: type("C", (), {"table": lambda s, n: _Tabela(n)})())
     ci.bloquear_custodia("c" * 64, "PC-CONTABIL-01", bloqueado_por="admin@exemplo.com")
 
     tabelas = {t for t, _, _ in apagados}
@@ -129,7 +129,7 @@ def test_bloquear_apaga_o_pfx_armazenado(monkeypatch) -> None:
 
 def test_token_e_gravado_no_payload_da_fila(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
-    monkeypatch.setattr(cq, "_supabase", lambda: None)
+    monkeypatch.setattr(cq, "_banco", lambda: None)
 
     ci.enqueue_install_command("SRV01", "token-secreto-123")
 
@@ -141,7 +141,7 @@ def test_token_e_gravado_no_payload_da_fila(monkeypatch, tmp_path) -> None:
 
 def test_agente_recebe_o_token_ao_puxar_o_comando(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
-    monkeypatch.setattr(cq, "_supabase", lambda: None)
+    monkeypatch.setattr(cq, "_banco", lambda: None)
 
     ci.enqueue_install_command("SRV01", "token-abc")
     cmd = cq.pop_next_for_agent("SRV01")
@@ -154,7 +154,7 @@ def test_agente_recebe_o_token_ao_puxar_o_comando(monkeypatch, tmp_path) -> None
 def test_token_nao_vaza_na_listagem_publica_da_fila(monkeypatch, tmp_path) -> None:
     """/api/agent/queue é de monitorização — não pode expor o token."""
     monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
-    monkeypatch.setattr(cq, "_supabase", lambda: None)
+    monkeypatch.setattr(cq, "_banco", lambda: None)
 
     ci.enqueue_install_command("SRV01", "token-sigiloso")
     pendentes = cq.list_pending()
@@ -166,7 +166,7 @@ def test_token_nao_vaza_na_listagem_publica_da_fila(monkeypatch, tmp_path) -> No
 
 def test_comando_comum_continua_sem_payload(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
-    monkeypatch.setattr(cq, "_supabase", lambda: None)
+    monkeypatch.setattr(cq, "_banco", lambda: None)
 
     cq.enqueue("SRV01", "rescan")
     cmd = cq.pop_next_for_agent("SRV01")
@@ -195,7 +195,7 @@ class _CapturaUpsert:
 @pytest.fixture
 def captura(monkeypatch):
     cap = _CapturaUpsert()
-    monkeypatch.setattr(ci, "_supabase", lambda: cap)
+    monkeypatch.setattr(ci, "_banco", lambda: cap)
     monkeypatch.setattr(ci, "encrypt_pfx_at_rest", lambda b: ("ct", "iv", "tag"))
     return cap
 

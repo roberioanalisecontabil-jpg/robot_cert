@@ -127,7 +127,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         TABELA: [],
         "user_activity": [],
     })
-    monkeypatch.setattr("app.settings_state._supabase", lambda: fake)
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
 
     # O envio real exigiria SMTP configurado. O duplo guarda o código para os
     # testes poderem usá-lo — é o que o e-mail entregaria à pessoa.

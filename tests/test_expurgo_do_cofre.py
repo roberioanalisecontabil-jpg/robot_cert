@@ -144,7 +144,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             _snapshot([FP_OK, FP_VENCIDO, FP_SEM_DATA, FP_SUMIU], horas_atras=25),
         ],
     })
-    monkeypatch.setattr(ci, "_supabase", lambda: fake)
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
     return fake
 
 
@@ -333,6 +333,6 @@ def test_falha_de_banco_nao_levanta(banco: _Fake) -> None:
     assert r["motivo"]
 
 
-def test_sem_supabase_nao_apaga_nada(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ci, "_supabase", lambda: None)
+def test_sem_banco_nao_apaga_nada(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ci, "_banco", lambda: None)
     assert ci.expurgar_cofre()["executado"] is False

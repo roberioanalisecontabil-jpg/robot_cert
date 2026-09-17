@@ -2,7 +2,7 @@
 """
 Benchmark do pipeline de Histórico/Vencidos (agregação em memória).
 
-Não usa Supabase: simula snapshots com a mesma função `_historico_merge_snapshot_into_agregados`
+Não usa o banco: simula snapshots com a mesma função `_historico_merge_snapshot_into_agregados`
 usada na API. Objectivo: comparar custo (~CPU + linhas tocadas) alinhado ao vosso cenário:
 
 - cada pedido ao histórico / vencidos reprocessa até `limite_snapshots` snapshots;
@@ -49,7 +49,7 @@ def build_snapshots(
     universo_certificados: int,
 ) -> List[Dict[str, Any]]:
     """
-    Snapshots ordenados como no Supabase (mais recente primeiro).
+    Snapshots ordenados como no banco (mais recente primeiro).
     `universo_certificados` controla sobreposição entre snapshots (pool de file_name distintos).
     """
     u = max(1, universo_certificados)
@@ -166,7 +166,7 @@ def main() -> None:
     )
     print("\n### Sugestão de env `HISTORICO_LIMITE_SNAPSHOTS` por orçamento de latência média\n")
     print(
-        "(Apenas **CPU**, sem tempo de rede/Supabase/deserialização HTTP — produto será mais lento.)\n"
+        "(Apenas **CPU**, sem tempo de rede/banco/deserialização HTTP — produto será mais lento.)\n"
     )
 
     maior_vol = max(linhas_benchmark, key=lambda x: x[3])
@@ -182,7 +182,7 @@ def main() -> None:
         )
         print(
             "\n  Para decidir `HISTORICO_LIMITE_SNAPSHOTS` em produção, use sobretudo **latência real** "
-            "(rede + Supabase) e a percentagem de ganho ao reduzir limite nas linhas abaixo; "
+            "(rede + banco) e a percentagem de ganho ao reduzir limite nas linhas abaixo; "
             "este script só isola custo CPU do merge.",
         )
     else:

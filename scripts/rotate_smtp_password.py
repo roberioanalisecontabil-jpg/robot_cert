@@ -46,7 +46,7 @@ def main() -> int:
     args = p.parse_args()
 
     from app import smtp_service
-    from app.settings_state import load_settings, save_settings, _supabase
+    from app.settings_state import load_settings, save_settings, _banco
 
     # 1. A chave precisa existir e ser válida ANTES de pedir a senha — não faz
     #    sentido o usuário digitar para descobrir depois que não dá para cifrar.
@@ -57,13 +57,13 @@ def main() -> int:
         return 1
     print("ENCRYPTION_KEY: válida.")
 
-    # 2. Onde a configuração vive. Sem Supabase, grava só no arquivo local — o
+    # 2. Onde a configuração vive. Sem banco, grava só no arquivo local — o
     #    que num deploy serverless significa que a gravação não persiste.
-    tem_banco = _supabase() is not None
-    print(f"Supabase: {'configurado' if tem_banco else 'NÃO configurado (grava só em data/)'}")
+    tem_banco = _banco() is not None
+    print(f"Banco: {'configurado' if tem_banco else 'NÃO configurado (grava só em data/)'}")
     if not tem_banco:
         print(
-            "AVISO: sem Supabase a senha vai para data/portal_settings.json. "
+            "AVISO: sem banco a senha vai para data/portal_settings.json. "
             "Em Vercel/Render o filesystem é efêmero ou read-only e isso se perde."
         )
 
@@ -104,7 +104,7 @@ def main() -> int:
     s.smtp_password_encrypted = cifrada
     save_settings(s)
 
-    # 5. Reler do armazenamento — save_settings engole falhas do Supabase e só
+    # 5. Reler do armazenamento — save_settings engole falhas do banco e só
     #    loga, então "não levantou" não é prova de que gravou.
     depois = load_settings()
     if smtp_service.decrypt_password(depois.smtp_password_encrypted) != senha:
