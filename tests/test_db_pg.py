@@ -229,7 +229,8 @@ def banco():
                 n integer,
                 quando timestamptz DEFAULT now(),
                 dados jsonb,
-                lido_em timestamptz
+                lido_em timestamptz,
+                ids uuid[]
             )
         """)
     try:
@@ -323,3 +324,51 @@ def test_rpc_escalar(banco) -> None:
     finally:
         with c.conexao() as conn, conn.cursor() as cur:
             cur.execute(f"DROP FUNCTION {nome}(integer, integer)")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Colunas array (install_token.certificate_ids é uuid[])
+# ──────────────────────────────────────────────────────────────────────────
+
+class _ComArray(_SemBanco):
+    """Cliente falso que declara `ids` como coluna uuid[] da tabela."""
+
+    def _colunas_array(self, tabela: str):
+        return {"ids": "uuid"}
+
+
+def test_lista_em_coluna_array_vai_com_cast_e_nao_como_jsonb() -> None:
+    q = Query(_ComArray(), "t").insert({"ids": ["a", "b"], "dados": [1, 2]})  # type: ignore[arg-type]
+    (texto, params), = _sql(q)
+    assert '"ids", "dados"' in texto
+    assert "%s::uuid[], %s" in texto
+    assert params[0] == ["a", "b"]                # array de texto, o Postgres converte
+    assert type(params[1]).__name__ == "Jsonb"    # lista em coluna comum segue JSONB
+
+
+def test_update_de_coluna_array_tambem_usa_cast() -> None:
+    q = Query(_ComArray(), "t").update({"ids": ["a"]}).eq("id", "x")  # type: ignore[arg-type]
+    (texto, params), = _sql(q)
+    assert '"ids" = %s::uuid[]' in texto
+    assert params[0] == ["a"]
+
+
+def test_sem_lista_nenhuma_nao_consulta_o_catalogo() -> None:
+    class _Explode(_SemBanco):
+        def _colunas_array(self, tabela: str):
+            raise AssertionError("não devia consultar o catálogo")
+
+    (texto, _), = _sql(Query(_Explode(), "t").insert({"n": 1}))  # type: ignore[arg-type]
+    assert "INSERT" in texto
+
+
+@integracao
+def test_coluna_uuid_array_entra_como_lista_e_volta_como_lista_de_texto(banco) -> None:
+    c, t = banco
+    ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+    r = c.table(t).insert({"chave": "arr", "ids": ids}).execute()
+    assert r.data[0]["ids"] == ids
+    lido = c.table(t).select("ids").eq("chave", "arr").single().execute()
+    assert lido.data["ids"] == ids and all(isinstance(x, str) for x in ids)
+    u = c.table(t).update({"ids": ids[:1]}).eq("chave", "arr").execute()
+    assert u.data[0]["ids"] == ids[:1]
