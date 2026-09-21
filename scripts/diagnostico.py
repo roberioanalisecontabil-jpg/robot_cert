@@ -19,14 +19,14 @@ load_dotenv(ROOT / ".env")
 def main() -> None:
     print("=== Diagnóstico cert_robot ===\n")
     print("1) API_KEY no .env:", "sim (rotas /api exigem X-API-Key)" if os.getenv("API_KEY", "").strip() else "não (API aberta)")
-    print("2) SUPABASE:", "configurado" if os.getenv("SUPABASE_URL", "").strip() else "não (só ficheiros locais)")
+    print("2) BANCO (DATABASE_URL):", "configurado" if os.getenv("DATABASE_URL", "").strip() else "não (só ficheiros locais)")
 
     from app.settings_state import DATA_FILE, load_settings
 
     s = load_settings()
     src = s.effective_source()
     exp = s.effective_expired()
-    print("\n3) Config (data/portal_settings.json ou Supabase):")
+    print("\n3) Config (data/portal_settings.json ou banco):")
     print("   origem guardada:", (s.source_folder or "(vazio)"))
     print("   destino guardado:", (s.expired_folder or "(vazio)"))
     print("   origem efetiva:", src)

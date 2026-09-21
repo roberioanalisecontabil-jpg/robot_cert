@@ -117,22 +117,14 @@ def test_erro_na_varredura_vira_500(client: TestClient, com_segredo: str) -> Non
     assert "falha ao varrer" in r.json()["detail"]
 
 
-def test_rota_declarada_no_vercel_json_existe_no_app() -> None:
+def test_rota_do_disparo_agendado_mantem_o_caminho() -> None:
     """
-    O agendamento e a rota moram em arquivos diferentes: renomear uma sem a
-    outra faz o cron chamar 404 todo dia, em silêncio — o Vercel não avisa.
+    Quem chama esta rota é um agendador de fora do processo (nasceu no cron do
+    Vercel; no servidor, qualquer tarefa agendada que queira um disparo fora do
+    laço do lifespan). Renomear a rota sem avisar quem agenda faz o disparo cair
+    em 404 todo dia, em silêncio — por isso o caminho fica cravado aqui.
     """
-    import json
-    from pathlib import Path
-
     from app.main import app
 
-    vercel = json.loads(
-        (Path(__file__).resolve().parent.parent / "vercel.json").read_text(encoding="utf-8")
-    )
-    crons = vercel.get("crons") or []
-    assert crons, "vercel.json sem entrada de cron — os alertas não disparam sozinhos"
-
     rotas = {r.path for r in app.routes if hasattr(r, "path")}
-    for c in crons:
-        assert c["path"] in rotas, f"cron aponta para {c['path']}, que não existe no app"
+    assert "/api/cron/alerts" in rotas
