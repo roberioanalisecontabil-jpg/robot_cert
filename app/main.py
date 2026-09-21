@@ -5570,9 +5570,19 @@ def claim_install(body: RedeemRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception:
+    except Exception as e:  # noqa: BLE001
         logger.exception("Erro ao montar bundle para o agente da estacao")
-        raise HTTPException(status_code=500, detail="Erro interno ao montar bundle")
+        # Chave errada no servidor é a causa que já aconteceu (20/09/2026) e a
+        # única que vale nomear aqui: o texto vai parar no resultado do comando
+        # no portal de inventário, que é onde o admin procura. O resto continua
+        # genérico — o chamador é o agente, não o admin.
+        detalhe = "Erro interno ao montar bundle"
+        if type(e).__name__ == "InvalidTag":
+            detalhe = (
+                "O cofre não decifra com a chave configurada neste portal "
+                "(CERT_ENCRYPTION_KEY). Confira em Instalador → Revalidar cofre."
+            )
+        raise HTTPException(status_code=500, detail=detalhe)
 
 
 # O caminho de DOWNLOAD do instalador avulso saiu em 23/08/2026.

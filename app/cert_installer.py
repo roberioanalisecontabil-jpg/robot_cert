@@ -1085,6 +1085,25 @@ def diagnostico_das_chaves() -> Dict[str, Any]:
     }
 
 
+def descrever_falha_de_decifra(e: BaseException) -> str:
+    """Motivo legível para uma falha de decifra do cofre.
+
+    `InvalidTag` — o erro de chave errada do AES-GCM — tem `str()` VAZIO. Em
+    20/09/2026 a tela de revalidação mostrou `ok: false` com motivo em branco,
+    e o agente da estação recebeu "Erro interno ao montar bundle": o cofre
+    inteiro estava indecifrável porque a chave do servidor não era a que o
+    cifrou, e nada dizia isso.
+    """
+    nome = type(e).__name__
+    if nome == "InvalidTag":
+        return (
+            "InvalidTag: a chave configurada não decifra este registro — "
+            "CERT_ENCRYPTION_KEY não é a que cifrou o cofre."
+        )
+    texto = str(e).strip()
+    return f"{nome}: {texto}" if texto else nome
+
+
 def revalidar_cofre() -> List[Dict[str, Any]]:
     """
     Tenta decifrar UM PFX de cada `key_version` e reporta o que aconteceu.
@@ -1121,7 +1140,7 @@ def revalidar_cofre() -> List[Dict[str, Any]]:
             )
             ok, detalhe = True, f"{len(dados)} bytes decifrados"
         except Exception as e:  # noqa: BLE001
-            ok, detalhe = False, str(e)
+            ok, detalhe = False, descrever_falha_de_decifra(e)
         out.append(
             {
                 "key_version": versao,
