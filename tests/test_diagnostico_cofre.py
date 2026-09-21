@@ -202,6 +202,8 @@ def test_revalidar_detecta_chave_trocada(banco: _Fake, monkeypatch: pytest.Monke
 
     res = ci.revalidar_cofre()
     assert res and res[0]["ok"] is False
+    # `InvalidTag` tem str() vazio; o motivo tem de nomear a chave mesmo assim.
+    assert "CERT_ENCRYPTION_KEY" in res[0]["detalhe"]
     assert ci.diagnostico_do_cofre()["total"] == 2, "as contagens seguem 'saudáveis'"
 
 

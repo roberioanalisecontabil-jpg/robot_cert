@@ -621,6 +621,11 @@
         }
       }
 
+      // Mesma ordem de `ORDEM_DOS_EVENTOS` em app/cert_installer.py. Faltava
+      // desde que a trilha nasceu (7d6a0cc): a tabela caía em
+      // "MARCOS is not defined" e ninguém via as tentativas.
+      const MARCOS = ["SOLICITADO", "REDIMIDO", "CONCLUIDO"];
+
       function desenharCadeia(c) {
         const nomes = new Set((c.eventos || []).map((e) => e.event));
         return MARCOS.map((m) => {
