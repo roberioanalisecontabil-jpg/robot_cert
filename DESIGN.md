@@ -1,863 +1,692 @@
 ---
-name: Analise Certificado
-description: Portal de custódia e monitoramento de certificados digitais — uma superfície por vez, nada na tela que não seja a tarefa.
+name: Analise CertiDigital
+description: Portal de custódia e instalação de certificados digitais sobre o Águia Design System — grafite quente sobre off-white, ouro só como acento, cor só para estado.
 colors:
-  system-blue: "#0071E3"
-  system-blue-hover: "#0051A2"
-  system-blue-text: "#0066CC"
-  bg: "#F5F5F7"
-  surface: "#FFFFFF"
-  text: "#1D1D1F"
-  text-muted: "#6E6E73"
-  border: "rgba(0, 0, 0, 0.08)"
-  sidebar-bg: "#1C1C1E"
-  sidebar-text: "#8E8E93"
-  sidebar-text-active: "#FFFFFF"
-  sidebar-danger: "#FF6B6B"
-  total: "#007AFF"
-  total-bg: "#E8F0FE"
-  ok: "#34C759"
-  ok-bg: "#EAF9EE"
-  ok-text: "#1D7A3A"
-  warning: "#FF9F0A"
-  warning-bg: "#FFF7EB"
-  warning-text: "#8A5200"
-  expired: "#FF3B30"
-  expired-bg: "#FDF2F2"
-  expired-text: "#C1121C"
-  expired-solid: "#C1121C"
-  fora-padrao-bg: "#F5F3FF"
-  fora-padrao-text: "#6D28D9"
-  row-hover: "rgba(0, 113, 227, 0.04)"
-  row-tint-danger: "#FEF2F2"
-  row-tint-warning: "#FFFBEB"
-  accent-soft: "rgba(0, 113, 227, 0.18)"
-  scrim-forte: "rgba(0, 0, 0, 0.45)"
-  scrim-leve: "rgba(0, 0, 0, 0.28)"
-  scrim-tabela: "rgba(255, 255, 255, 0.65)"
+  gold-500: "#C9A06A"
+  gold-600: "#B88157"
+  gold-700: "#9A6A3D"
+  gold-300: "#E0C08A"
+  gold-200: "#ECD6AC"
+  gold-glow: "rgba(201, 160, 106, 0.14)"
+  grad-gold: "linear-gradient(135deg, #B07545 0%, #C9A06A 46%, #E4CC8F 100%)"
+  ink-950: "#171717"
+  ink-900: "#212121"
+  ink-800: "#2C2B29"
+  ink-700: "#3D3B38"
+  ink-600: "#52504C"
+  ink-500: "#6B6863"
+  ink-400: "#8C8983"
+  ink-300: "#B4B0A9"
+  ink-200: "#D8D4CC"
+  ink-150: "#E7E3DB"
+  ink-100: "#EFEBE3"
+  ink-50: "#F7F4EE"
+  white: "#FFFFFF"
+  success-50: "#E6F4EC"
+  success-500: "#2F855A"
+  success-700: "#22633F"
+  warning-50: "#FBF0DC"
+  warning-500: "#B7791F"
+  warning-700: "#8A5A12"
+  danger-50: "#FBE9E9"
+  danger-500: "#C53030"
+  danger-700: "#9B2323"
+  info-50: "#E7F0FA"
+  info-500: "#2B6CB0"
+  info-700: "#1F5185"
+  row-hover: "color-mix(in srgb, #C9A06A 6%, transparent)"
 typography:
   display:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Inter, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-    fontSize: "56px"
-    fontWeight: 700
-    lineHeight: 1.15
-    letterSpacing: "-0.04em"
-  title:
-    fontSize: "32px"
-    fontWeight: 600
-    lineHeight: 1.25
-    letterSpacing: "-0.03em"
-  section:
-    fontSize: "22px"
-    fontWeight: 600
-    lineHeight: 1.3
-    letterSpacing: "-0.02em"
-  subsection:
-    fontSize: "18px"
-    fontWeight: 500
-    lineHeight: 1.35
-    letterSpacing: "-0.01em"
-  body:
-    fontSize: "16px"
-    fontWeight: 400
-    lineHeight: 1.6
-    letterSpacing: "0"
-  metric:
-    fontSize: "1.625rem"
+    fontFamily: "'Exo', system-ui, sans-serif"
+    fontSize: "2rem"
     fontWeight: 700
     lineHeight: 1.1
-    letterSpacing: "-0.03em"
-  ui:
-    fontSize: "0.9rem"
+    letterSpacing: "-0.01em"
+  metric:
+    fontFamily: "'Exo', system-ui, sans-serif"
+    fontSize: "2rem"
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: "-0.01em"
+    fontVariation: "tabular-nums"
+  title:
+    fontFamily: "'Exo', system-ui, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: "0"
+  button:
+    fontFamily: "'Exo', system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "0.01em"
+  overline:
+    fontFamily: "'Exo', system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 700
+    lineHeight: 1.4
+    letterSpacing: "0.12em"
+  table-head:
+    fontFamily: "'Exo', system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 700
+    lineHeight: 1.4
+    letterSpacing: "0.04em"
+  body:
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
+    fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: "0"
-  ui-sm:
+  body-sm:
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: "0"
+  body-xs:
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
     fontSize: "0.8125rem"
     fontWeight: 400
-    lineHeight: 1.45
+    lineHeight: 1.5
     letterSpacing: "0"
-  caption:
-    fontSize: "12px"
-    fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: "0.02em"
   label:
-    fontSize: "11px"
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 600
+    lineHeight: 1.5
+    letterSpacing: "0"
+  badge:
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
+    fontSize: "0.8125rem"
     fontWeight: 600
     lineHeight: 1.4
-    letterSpacing: "0.10em"
-  mono:
-    fontFamily: "ui-monospace, 'Cascadia Code', Consolas, monospace"
-    fontSize: "0.8rem"
-    fontWeight: 400
-    lineHeight: 1.35
     letterSpacing: "0"
+  mono:
+    fontFamily: "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace"
+    fontSize: "0.875rem"
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: "0"
+    fontVariation: "tabular-nums"
 rounded:
   xs: "4px"
-  sm: "8px"
-  md: "12px"
-  lg: "18px"
-  pill: "980px"
+  sm: "6px"
+  md: "10px"
+  lg: "14px"
+  xl: "20px"
+  pill: "999px"
+  circle: "50%"
 spacing:
-  sp-1: "4px"
-  sp-2: "8px"
-  sp-3: "12px"
-  sp-4: "16px"
-  sp-5: "20px"
-  sp-6: "24px"
-  sp-8: "32px"
-  sp-10: "40px"
-  sp-12: "48px"
-  sp-16: "64px"
+  space-1: "0.25rem"
+  space-2: "0.5rem"
+  space-3: "0.75rem"
+  space-4: "1rem"
+  space-5: "1.25rem"
+  space-6: "1.5rem"
+  space-8: "2rem"
+  space-10: "2.5rem"
+  space-12: "3rem"
+  space-16: "4rem"
 components:
-  button-secondary:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.pill}"
-    padding: "0.5rem 1.1rem"
-  button-secondary-hover:
-    backgroundColor: "{colors.bg}"
-    textColor: "{colors.text}"
   button-primary:
-    backgroundColor: "{colors.system-blue}"
-    textColor: "#FFFFFF"
+    backgroundColor: "{colors.gold-500}"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.button}"
     rounded: "{rounded.pill}"
-    padding: "0.5rem 1.1rem"
+    padding: "11px 22px"
+    height: "44px"
   button-primary-hover:
-    backgroundColor: "{colors.system-blue-hover}"
-    textColor: "#FFFFFF"
-  button-danger:
-    backgroundColor: "{colors.expired-bg}"
-    textColor: "{colors.expired-text}"
+    backgroundColor: "{colors.gold-600}"
+    textColor: "{colors.ink-900}"
+  button-primary-pressed:
+    backgroundColor: "{colors.gold-glow}"
+    textColor: "{colors.gold-700}"
     rounded: "{rounded.pill}"
-    padding: "0.5rem 1.1rem"
+    padding: "11px 22px"
+  button-outline:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    padding: "11px 22px"
+    height: "44px"
+  button-outline-hover:
+    backgroundColor: "{colors.gold-glow}"
+    textColor: "{colors.gold-700}"
+  button-ghost:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-600}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    padding: "11px 22px"
+  button-ghost-hover:
+    backgroundColor: "{colors.ink-100}"
+    textColor: "{colors.ink-900}"
+  button-sm:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-600}"
+    rounded: "{rounded.pill}"
+    padding: "8px 16px"
+    height: "36px"
+  button-legacy-solid:
+    backgroundColor: "{colors.ink-900}"
+    textColor: "{colors.white}"
+    rounded: "{rounded.pill}"
   input-field:
-    backgroundColor: "{colors.bg}"
-    textColor: "{colors.text}"
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.body-sm}"
     rounded: "{rounded.md}"
-    padding: "0.6rem 0.9rem"
+    padding: "10px 14px"
+    height: "44px"
   input-field-focus:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-  card-metric:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.lg}"
-    padding: "0.85rem 0.95rem"
-  card-surface:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.lg}"
-    padding: "{spacing.sp-6}"
-  badge-ok:
-    backgroundColor: "{colors.ok-bg}"
-    textColor: "{colors.ok-text}"
-    typography: "{typography.label}"
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+  card:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    rounded: "{rounded.xl}"
+  card-head:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.title}"
+    padding: "{spacing.space-5} {spacing.space-6}"
+  kpi:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.metric}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.space-6}"
+  kpi-atencao:
+    backgroundColor: "{colors.warning-50}"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.metric}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.space-6}"
+  kpi-icon:
+    backgroundColor: "{colors.ink-100}"
+    textColor: "{colors.ink-600}"
+    rounded: "{rounded.md}"
+    size: "40px"
+  badge-success:
+    backgroundColor: "{colors.success-50}"
+    textColor: "{colors.success-700}"
+    typography: "{typography.badge}"
     rounded: "{rounded.pill}"
-    padding: "0.25rem 0.75rem"
+    padding: "3px 10px"
   badge-warning:
-    backgroundColor: "{colors.warning-bg}"
-    textColor: "{colors.warning-text}"
-    typography: "{typography.label}"
+    backgroundColor: "{colors.warning-50}"
+    textColor: "{colors.warning-700}"
+    typography: "{typography.badge}"
     rounded: "{rounded.pill}"
-    padding: "0.25rem 0.75rem"
-  badge-expired:
-    backgroundColor: "{colors.expired-bg}"
-    textColor: "{colors.expired-text}"
-    typography: "{typography.label}"
+    padding: "3px 10px"
+  badge-danger:
+    backgroundColor: "{colors.danger-50}"
+    textColor: "{colors.danger-700}"
+    typography: "{typography.badge}"
     rounded: "{rounded.pill}"
-    padding: "0.25rem 0.75rem"
-  badge-bad:
-    backgroundColor: "transparent"
-    textColor: "{colors.text}"
-    typography: "{typography.label}"
+    padding: "3px 10px"
+  badge-neutral:
+    backgroundColor: "{colors.ink-100}"
+    textColor: "{colors.ink-600}"
+    typography: "{typography.badge}"
     rounded: "{rounded.pill}"
-    padding: "0.25rem 0.75rem"
-  nav-item:
-    backgroundColor: "transparent"
-    textColor: "{colors.sidebar-text}"
-    rounded: "{rounded.sm}"
-    padding: "0.65rem 1rem"
-  nav-item-active:
-    backgroundColor: "{colors.system-blue}"
-    textColor: "{colors.sidebar-text-active}"
-    rounded: "{rounded.sm}"
-    padding: "0.65rem 1rem"
-  page-link:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    padding: "0 0.85rem"
+    padding: "3px 10px"
+  table-head:
+    backgroundColor: "{colors.ink-100}"
+    textColor: "{colors.ink-600}"
+    typography: "{typography.table-head}"
+    padding: "12px 16px"
     height: "44px"
-  page-link-current:
-    backgroundColor: "{colors.total-bg}"
-    textColor: "{colors.system-blue-text}"
+  table-cell:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    typography: "{typography.body-sm}"
+    padding: "12px 16px"
     height: "44px"
-  toast:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.md}"
-    padding: "0.85rem 1.15rem"
-    width: "400px"
-  modal:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
+  table-row-hover:
+    backgroundColor: "{colors.row-hover}"
+    textColor: "{colors.ink-900}"
+  table-wrap:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
     rounded: "{rounded.lg}"
-    width: "460px"
-  notification-dropdown:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
+  row-card-mobile:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.space-3} {spacing.space-4}"
+  sidebar:
+    backgroundColor: "{colors.ink-900}"
+    textColor: "{colors.ink-400}"
+    width: "250px"
+  sidebar-item-active:
+    backgroundColor: "{colors.gold-glow}"
+    textColor: "{colors.gold-300}"
+  selection-bar:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
+    rounded: "{rounded.lg}"
+  dropdown-menu:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink-900}"
     rounded: "{rounded.md}"
-    width: "320px"
-    height: "400px"
-  notification-item-expired:
-    backgroundColor: "{colors.expired-bg}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.sm}"
-    padding: "0.75rem"
-  notification-item-expiring:
-    backgroundColor: "{colors.warning-bg}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.sm}"
-    padding: "0.75rem"
-  notification-badge:
-    backgroundColor: "{colors.expired-solid}"
-    textColor: "#FFFFFF"
-    rounded: "{rounded.pill}"
-    padding: "0.15rem 0.35rem"
-    height: "18px"
-  dup-tooltip:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.md}"
-    padding: "0.7rem 0.85rem 0.75rem"
-    width: "36rem"
-  dup-tooltip-path:
-    backgroundColor: "{colors.bg}"
-    textColor: "{colors.text}"
-    typography: "{typography.mono}"
-    rounded: "{rounded.xs}"
-    padding: "0.28rem 0.45rem"
 ---
 
-# Design System: Analise Certificado
+# Design System: Analise CertiDigital
 
 ## Overview
 
-**Creative North Star: "A Mesa Limpa"**
+**Creative North Star: "A Mesa de Cartório"**
 
-Uma superfície por vez, nada na tela que não seja a tarefa. O usuário primário
-entra para achar um certificado, baixar o instalador e sair — a visita dura
-menos de um minuto, e o sistema é desenhado para acabar rápido, não para
-prender. Tudo que não serve àquela tarefa está arquivado: fora da tela, atrás de
-um item de menu que o papel do usuário nem revela, ou dentro de um modal que
-fecha quando termina.
+A superfície de trabalho é um tampo off-white quente (`ink-50`) sobre o qual
+folhas brancas assentam com um fio de sombra de tinta sépia; o texto é grafite
+quente, não preto; e o ouro da Análise Group aparece como um selo aplicado com
+parcimônia — um filete no alto de cada indicador, um único botão preenchido, o
+anel de foco. É o mundo do **Águia Design System** da Análise Group (documento
+`systemdesign.html`, Desktop/migracao-supabase, revisão de 17/08/2026), adotado
+pelo portal a partir de 22/09/2026. O Início (`templates/index.html`) é a
+primeira tela nele; as demais ainda vestem o mundo anterior ("A Mesa Limpa",
+acento azul derivado da Apple) e migram uma a uma. **Este arquivo descreve o
+sistema de agora em diante, e não o legado.**
 
-O caráter é **preciso e silencioso, confiável e institucional**. Isso não é
-decoração: os certificados custodiados são ICP-Brasil, de clientes do
-escritório, e a interface responde por chave privada de terceiros. O sistema
-transmite isso por rigor, não por drama — sem cadeado ilustrado, sem cofre
-desenhado, sem vermelho de alarme onde um vermelho de estado basta. A seriedade
-vive no fato de que cada token de cor carrega sua razão de contraste medida no
-comentário ao lado, e nada entra no sistema sem ela.
+O caráter é **institucional, quente e contido**. A custódia é de chave privada
+de terceiros (certificados ICP-Brasil de clientes do escritório), e a
+interface responde por isso com rigor, não com drama: a única cor que grita é
+cor de estado, e mesmo ela aparece lavada (fundo a 50) com o texto no degrau 700
+do mesmo matiz. A hierarquia nasce de três famílias tipográficas com papéis
+fixos — Exo para o que se lê de longe (título, número grande, botão, cabeçalho
+de tabela), Inter para o que se lê de perto, JetBrains Mono para o que se
+confere dígito a dígito (CNPJ/CPF).
 
-A moldura é o contraste entre a sidebar escura permanente (`#1C1C1E`) e o campo
-claro de trabalho (`#F5F5F7` com folhas brancas). A navegação é grave e fixa; o
-conteúdo é leve e trocável. Esse par é a assinatura visual do produto e a única
-composição verdadeiramente global.
+O sistema é **de ponte**: os tokens do Águia chegam verbatim em
+`aguia-tokens.css` e nunca são editados no projeto; os primitivos `.ag-*`
+vivem em `aguia-components.css`; e `painel-certificados.css` liga os nomes de
+token que o portal legado usa (`--bg`, `--surface`, `--text`, `--accent`,
+`--sidebar-*`, `--fs-*`, `--sp-*`) aos do Águia. Por isso sidebar, toasts,
+estado vazio, paginação e barra de seleção — escritos em `style.css` com os
+nomes antigos — pintam no Águia nesta tela sem que `style.css` mude, e as
+outras telas ficam como estão até carregarem os três arquivos.
 
-**Anti-referência confirmada:** o SaaS genérico de gradiente — degradê roxo-azul,
-ilustração isométrica, cantos gordos de 24px, herói de landing page. Este produto
-é ferramenta interna de custódia, não pitch de startup. Um gradiente decorativo
-em qualquer superfície é defeito, não gosto.
+**Anti-referências confirmadas:** o SaaS de gradiente (degradê roxo-azul, herói
+de landing, cantos de 24px) e o "dashboard dourado" — ouro em área grande,
+texto branco sobre ouro, borda dourada em todo card. O ouro é acento precioso
+porque é raro.
 
 **Key Characteristics:**
 
-- Sidebar escura fixa de 250px + conteúdo claro com teto de 1280px.
-- Paleta de sistema Apple, com quatro estados de certificado em trio tonal (identidade / fundo / texto).
-- Toda cor de texto vem com razão de contraste medida e comentada no CSS.
-- Botões em pílula (980px), folhas de conteúdo em 18px, campos em 12px.
-- Separação tonal primeiro, sombra como reforço — nunca o contrário.
-- Dois temas completos, com o sistema como padrão e escolha explícita gravada em `data-theme`.
-- Movimento curto e funcional: `fadeUp` de 400ms na entrada, `translateY(-3px)` no hover do card, nada mais.
+- Duas famílias de cor por tela: grafite quente + ouro. Verde, âmbar e vermelho entram só como estado de certificado, sempre lavados.
+- Ouro em no máximo ~10% da tela e nunca como fundo de área: filete de 3px no KPI, um botão primário por vez, anel de foco, texto de marca.
+- Rótulo grafite (`ink-900`) sobre ouro; branco sobre ouro é a violação mais comum do DS e está proibida.
+- Três fontes com papéis fixos (Exo / Inter / JetBrains Mono), servidas pelo próprio portal em `static/fonts` porque o portal vive numa VPN.
+- Sombras de tinta quente `rgba(45,32,20,…)`, nunca preto puro; foco de 3px em ouro a 50%.
+- Todo clicável com 44px de alvo; estado nunca só por cor (glifo Lucide no badge, palavra ao lado, borda no toggle).
+- Tema escuro por token (`html.dark`, `data-theme="dark"` ou sistema com guarda `:root:not([data-theme="light"])`), nunca por regra de componente.
+- Texto em sentence case pt-BR; caixa alta só em overline e cabeçalho de tabela; nenhum emoji.
 
 ## Colors
 
-Paleta de sistema — os tons de referência do vocabulário Apple, escolhidos para
-que a cor de marca não dispute atenção com a cor de estado. O certificado é que
-tem cor; o portal é cinza, branco e grafite.
+Grafite quente sobre off-white, ouro como selo, semânticas lavadas para estado —
+a paleta é a do Águia DS, copiada sem alteração; o projeto escolhe quais degraus
+usa, nunca os valores.
 
 ### Primary
 
-- **Azul de Sistema** (`#0071E3` claro / `#0A84FF` escuro): assume a herança do
-  azul funcional do SO sem disfarce. É a única cor de marca da tela e cobre
-  exclusivamente **navegação e interação**: item ativo da sidebar, botão
-  primário, anel de foco, borda de campo focado, página atual da paginação,
-  link. Nunca diz nada sobre o estado de um certificado.
-- **Azul de Sistema — texto** (`#0066CC` claro / `#5AA9FF` escuro): o par de
-  texto corrido. Existe porque o azul de identidade passa 4.70:1 sobre a folha
-  branca mas reprova sobre `total-bg`, onde a paginação e o selo de sincronismo
-  o usam como texto. Bordas, ícones e anéis usam a identidade; texto usa este.
-
-### Secondary
-
-Não existe cor secundária de marca, e a ausência é deliberada. O segundo eixo
-cromático do sistema é o **estado do certificado**, abaixo — dar-lhe um
-concorrente de marca tornaria a tabela ilegível.
-
-### Tertiary
-
-- **Violeta Fora-de-Padrão** (`#6D28D9` sobre `#F5F3FF`): o quinto estado, para
-  o arquivo que existe mas não segue a convenção de nome. Fica fora da escala
-  verde-âmbar-vermelho de propósito — não é pior nem melhor que vencido, é outra
-  categoria de problema, e o olho precisa separá-la sem ler.
+- **Ouro Águia** (`gold-500`): o único acento de marca. Fundo do botão primário
+  (com rótulo grafite), borda de campo focado, base do anel de foco e da
+  `--border-brand`. Vira `gold-600` no hover do primário, no `accent-color`
+  do checkbox e na borda do contorno em hover; `gold-700` é o **texto de
+  marca** no tema claro (coluna ordenada ativa, botão de contorno em hover,
+  primário "ligado"), e `gold-300` o texto de marca no escuro (também o item
+  ativo da sidebar).
+- **Lavado dourado** (`gold-glow`, ouro a 14% no claro / 12% no escuro): o
+  único ouro que pode cobrir área — fundo do item ativo e do hover da sidebar,
+  fundo do botão de contorno em hover e do primário em `aria-pressed`. Nunca
+  `gold-50` ou `gold-100` como fundo de bloco.
+- **Filete** (`grad-gold`, 135°, `#B07545 → #C9A06A → #E4CC8F`): exclusivo da
+  linha de 3px no topo do KPI. É o único gradiente do sistema e não cresce.
+- **Seleção de texto** (`gold-200` com texto `ink-900` no claro; `gold-700`
+  com `ink-50` no escuro).
 
 ### Neutral
 
-- **Cinza de Mesa** (`#F5F5F7` claro / `#1C1C1E` escuro): o fundo da área de
-  trabalho. Nunca recebe conteúdo diretamente; serve para a folha branca ter de
-  onde se destacar.
-- **Folha** (`#FFFFFF` claro / `#2C2C2E` escuro): toda superfície que carrega
-  conteúdo — card, tabela, modal, toast, painel lateral.
-- **Grafite** (`#1D1D1F` claro / `#F5F5F7` escuro): texto corrido e números.
-- **Cinza Legível** (`#6E6E73` claro / `#98989D` escuro): rótulo, legenda,
-  cabeçalho de tabela, texto de apoio. O tom escuro foi escolhido em 4.85:1
-  sobre a folha — é o mínimo que este sistema aceita, não uma aproximação.
-- **Fio** (`rgba(0,0,0,0.08)` claro / `rgba(255,255,255,0.08)` escuro): toda
-  borda e divisória, aplicada em `0.5px` nas superfícies e `1.5px` nos controles.
-- **Grafite de Moldura** (`#1C1C1E` claro / `#111112` escuro): fundo da sidebar.
-  Note a inversão deliberada: no tema escuro a sidebar fica **mais escura** que
-  o conteúdo, mantendo a hierarquia de moldura em vez de fundi-la com o fundo.
+Doze degraus de tinta quente (`ink-950` a `ink-50`) mais branco. Papéis fixos:
+
+- **Página** (`ink-50` claro / `ink-950` escuro): o tampo. Nunca recebe texto
+  corrido diretamente — exceto no celular, onde o card da tabela dissolve e
+  os cartões de linha assentam direto nele.
+- **Folha** (`white` claro / `ink-900` escuro): card, KPI, campo, moldura de
+  tabela, barra de seleção, menu suspenso.
+- **Folha alternativa** (`ink-100` claro / `ink-800` escuro): cabeçalho de
+  tabela, caixa do ícone do KPI, badge neutro, hover do botão fantasma.
+- **Texto primário** (`ink-900` / `ink-50`), **secundário** (`ink-600` /
+  `ink-300`: frase de abertura, rótulo de campo, cabeçalho de tabela, ícone
+  do KPI, subtexto de célula) e **apagado** (`ink-500` / `ink-400`: rótulo do
+  KPI, delta, placeholder, linha de status, prefixo "Emitido"/"Vence").
+- **Bordas** em três pesos: sutil (`ink-150` / `ink-800`: divisória entre
+  linhas e sob o cabeçalho de card), padrão (`ink-200` / `ink-700`: contorno
+  de card, KPI, campo, moldura de tabela) e forte (`ink-300` / `ink-600`:
+  botão de contorno e hover de campo).
+- **Sidebar** (`ink-900` em ambos os temas, texto `ink-400`): a moldura grave
+  do portal legado passa a usar o grafite do DS; o item ativo é lavado
+  dourado com texto `gold-300`, no lugar do azul sólido de antes.
 
 ### Estados do certificado
 
-Quatro estados, cada um em trio: identidade (ícone, barra, borda), fundo tonal e
-texto legível sobre esse fundo.
+Cada família semântica tem três degraus e os três se usam juntos: **50** é o
+fundo lavado, **500** a identidade (borda, ícone, barra de toast), **700** o
+texto sobre o lavado.
 
-- **Válido** — identidade `#34C759`, fundo `#EAF9EE`, texto `#1D7A3A` (4.95:1).
-- **Expirando** — identidade `#FF9F0A`, fundo `#FFF7EB`, texto `#8A5200` (6.01:1).
-- **Vencido** — identidade `#FF3B30`, fundo `#FDF2F2`, texto `#C1121C` (5.68:1).
-  O sólido `#C1121C` existe à parte para o badge de contagem, onde o branco
-  precisa de 4.5:1 e o vermelho de identidade só entrega 3.54:1.
-- **Total** — identidade `#007AFF`, fundo `#E8F0FE`: contagem, não estado.
+- **Ativo** — `success-50` / `success-500` / `success-700`.
+- **Expirando** — `warning-50` / `warning-500` / `warning-700`. É também a
+  família que lava o KPI de urgência inteiro.
+- **Vencido** — `danger-50` / `danger-500` / `danger-700`. O contador do sino,
+  texto branco sobre sólido, usa `danger-700` no claro e, no escuro,
+  `danger-500` misturado a 55% com `ink-950` — porque os degraus escuros do
+  DS são todos claros, feitos para texto sobre grafite.
+- **Erro / Falha / Não encontrado** — badge neutro (`ink-100` / `ink-600`):
+  não é pior nem melhor que vencido, é outra categoria, e o glifo diz qual.
+- **Informação** — `info-50` / `info-500` / `info-700` existe na paleta e na
+  ponte (`--info`), mas nenhum badge do Início a emite; fica disponível para
+  toast e aviso.
 
-Há ainda dois **tons de linha** (`#FEF2F2` e `#FFFBEB` no claro; os mesmos
-matizes a 10% de alfa no escuro) para pintar a linha inteira da tabela quando ela
-está vencida ou expirando. São mais claros que os fundos de badge de propósito:
-a linha é grande, o badge é pequeno, e a mesma intensidade nos dois faria a
-tabela vibrar.
-
-E um **véu de hover** (`--row-hover`, o azul do sistema a 4% no claro e a 6% no
-escuro), o único token que é deliberadamente translúcido: ele precisa compor com
-o tom de linha que estiver por baixo, e uma cor sólida apagaria o estado do
-certificado justamente ao passar o mouse sobre ele.
+No tema escuro os fundos `-50` viram o matiz a 16% de alfa e os degraus 500 /
+700 clareiam; a regra de trio continua valendo.
 
 ### Named Rules
 
-**A Regra do Contraste Comentado.** Nenhum token de cor de texto entra no sistema
-sem sua razão de contraste medida, escrita em comentário ao lado do valor, e o
-fundo contra o qual foi medida. `--ok-text: #1D7A3A; /* 4.95:1 sobre --ok-bg */`
-é o formato. Um token novo sem essa linha é um token não verificado.
+**A Regra das Duas Famílias.** Uma tela usa grafite e ouro; qualquer terceira
+cor é cor de estado e só aparece onde há estado. O azul do portal legado não
+entra nas telas do Águia: a ponte já redireciona `--accent` para `gold-600` e
+`--accent-solid` para `ink-900`.
 
-**A Regra do Sinal Único.** Azul é navegação; verde, âmbar, vermelho e violeta
-são estado. As duas famílias nunca trocam de papel. Um botão vermelho de ação
-destrutiva usa o trio *vencido* porque destruir e vencer compartilham o mesmo
-alarme — mas um link jamais fica verde para dizer "tudo certo".
+**A Regra do Ouro Raro.** Ouro cobre no máximo ~10% da tela e nunca é fundo
+de bloco. Um botão primário preenchido por vez: quando "Selecionar para
+instalar" liga (`aria-pressed="true"`), ele solta o preenchimento (lavado +
+borda `gold-600` + texto de marca) e o ouro sólido passa a "Instalar nesta
+máquina".
 
-**A Regra da Guarda de Tema.** Toda regra sensível ao tema escuro se escreve
-`@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ... } }`
-— nunca a media query crua. Sem a guarda, quem escolheu tema claro num sistema
-escuro recebe o valor escuro, e o seletor de tema mente. Na prática: resolva por
-token na camada de tema, e nenhuma regra de componente precisará da media query.
+**A Regra do Rótulo Grafite.** Texto sobre ouro é `ink-900`
+(`--text-on-brand`), nunca branco. Onde o legado carrega texto branco sobre
+`--accent-solid` (skip-link, `.primary` do estado vazio), a ponte faz o sólido
+ser grafite.
 
-**A Regra do Par Tonal.** Cor de estado nunca aparece sozinha. Toda vez que um
-fundo tonal é usado, o texto sobre ele vem do token `-text` correspondente,
-nunca de `--text-muted` e nunca da própria cor de identidade.
+**A Regra do Trio Semântico.** Fundo `-50` sempre com texto `-700` e
+identidade `-500` na borda ou no ícone. Texto de estado nunca sai de
+`--text-muted` nem da própria cor `-500`.
+
+**A Regra do Token Verbatim.** `aguia-tokens.css` é cópia fiel do documento
+do DS e não se edita aqui. Valor novo se pede no documento e se recopia. O que
+o projeto precisa e o DS não dá (o modo "seguir o sistema", o vermelho sólido
+escuro do contador) se deriva por `color-mix()` ou por guarda, no arquivo do
+projeto.
 
 ## Typography
 
-**Fonte de interface:** Inter (400 / 500 / 600 / 700), com a fonte nativa do
-sistema à frente na pilha — `-apple-system, BlinkMacSystemFont` primeiro, Inter como
-alternativa livre. É a Inter que atende Windows, plataforma real dos usuários.
+**Fonte de display:** Exo (600 / 700), com `system-ui` como reserva.
+**Fonte de corpo:** Inter (400 / 500 / 600 / 700), com `system-ui`, `-apple-system`, `Segoe UI`.
+**Fonte mono:** JetBrains Mono (400 / 600), com `SFMono-Regular`, `Consolas`.
 
-O carregamento é `<link rel="preconnect">` + `<link rel="stylesheet">` no
-`<head>` de cada template, nunca `@import` no CSS: o import cria uma cadeia
-serial que atrasa o LCP.
+As três são servidas pelo próprio portal (`static/aguia-fontes.css` +
+`static/fonts/*.woff2`, subconjuntos latin e latin-ext, `font-display: swap`).
+O portal roda numa VPN; uma estação sem internet cairia em `system-ui`, que é
+o rosto que o DS recusa.
 
-**Fonte de dado literal:** `ui-monospace, "Cascadia Code", Consolas, monospace`
-— a pilha nativa, sem download. Cobre exclusivamente **caminho de arquivo**
-(`C:\Certs\...`) nos balões de duplicidades. É o único lugar do sistema onde a
-fonte muda, e o motivo é funcional: caminho se compara caractere a caractere, e
-proporcional embaralha essa leitura.
-
-**Character:** uma só família em sete papéis, mais o mono de exceção. A hierarquia vem de peso,
-tamanho e *tracking* negativo crescente — quanto maior o texto, mais fechado
-(-0.04em no display, 0 no corpo). É a receita de sistema operacional, não de
-editorial: nenhum título tem personalidade própria, e a diferença entre um nível
-e o seguinte é sempre lida antes de ser notada.
+**Character:** Exo é a voz de longe — geométrica, levemente técnica, sempre
+em peso 700 — e cobre exatamente o que se lê de relance: o título da página, o
+número do KPI, o rótulo do botão, o cabeçalho da tabela e o overline. Inter é
+a voz de perto e faz todo o resto. JetBrains Mono entra só onde um dígito
+errado importa. A hierarquia vem da troca de família antes do tamanho: um
+título de card em Exo 1.125rem lê como título mesmo sendo menor que a frase
+de abertura em Inter.
 
 ### Hierarchy
 
-- **Display** (700, 56px, 1.15, -0.04em): reservado. Não aparece em nenhuma
-  página do portal hoje — existe para uma tela de marca ou um número único que
-  precise dominar.
-- **Headline** (600, 32px, 1.25, -0.03em): o `<h1>` de cada página. Cai para
-  24px abaixo de 768px.
-- **Title 1** (600, 22px, 1.3, -0.02em): título de bloco dentro de uma folha.
-- **Title 2** (500, 18px, 1.35, -0.01em): subtítulo, cabeçalho de painel lateral.
-- **Body** (400, 16px, 1.6): texto corrido. Tabelas descem para 14px e listas
-  densas para 13,6px — a tabela é lida em varredura, não em leitura.
-- **Caption** (400, 12px, 1.4, 0.02em): dica, nota de rodapé, texto de apoio.
-- **Label** (600, 11px, 1.4, 0.10em, CAIXA ALTA): cabeçalho de tabela, título de
-  card de métrica, badge.
-- **Número de métrica** (700, 26px, 1.1, -0.03em): o valor grande do card de
-  dashboard. Cai para 22px abaixo de 768px.
-- **Mono** (400, 0.8rem, 1.35): caminho de arquivo, com `word-break: break-all`
-  e `white-space: pre-wrap` — o caminho quebra onde precisar e nunca alarga o
-  balão que o contém.
+- **Display / título de página** (Exo 700, 2rem, 1.1, -0.01em): o `<h1>`. Um por tela.
+- **Metric** (Exo 700, 2rem, 1.1, -0.01em, numerais tabulares): o número do
+  KPI. Enquanto carrega mostra "—" em `--text-muted` com `aria-busy`; zero e
+  "ainda não sei" não são a mesma coisa.
+- **Title** (Exo 700, 1.125rem): título de card e contagem da barra de seleção.
+- **Button** (Exo 700, 0.875rem, 0.01em, `line-height: 1`): rótulo de botão em sentence case.
+- **Overline** (Exo 700, 0.75rem, 0.12em, CAIXA ALTA): rótulo do KPI.
+- **Table head** (Exo 700, 0.75rem, 0.04em, CAIXA ALTA): cabeçalho de tabela — meio
+  tracking do overline, porque a linha é mais longa.
+- **Body** (Inter 400, 1rem, 1.5): texto corrido; no celular, o nome do titular no cartão de linha.
+- **Body sm** (Inter, 0.875rem): frase de abertura (máx. 62ch), célula de
+  tabela, campo, texto explicativo (máx. 68ch). Peso 500 no nome do titular
+  (`.ag-cell-main`).
+- **Body xs** (Inter, 0.8125rem): linha de status, delta do KPI, subtexto de
+  célula, tipo do documento, datas no celular, aviso da barra.
+- **Label** (Inter 600, 0.8125rem, `--text-secondary`): rótulo de campo, sempre visível acima do controle.
+- **Badge** (Inter 600, 0.8125rem, 1.4, sem caixa alta): o DS não desce abaixo
+  de 0.75rem, e o badge fica um degrau acima disso.
+- **Mono** (JetBrains Mono, 0.875rem, tabular): número de CNPJ/CPF, com
+  `white-space: nowrap` — "0001-19" partido em duas linhas lê como dois números.
 
 ### Named Rules
 
-**A Regra do Único Grito.** Caixa alta existe em exatamente um nível — o Label
-(11px, peso 600, tracking 0.10em). Cabeçalho de tabela, título de card e badge
-usam esse nível e nada mais no sistema é maiúsculo. Botão, link, título e texto
-corrido ficam em caixa normal, sempre.
+**A Regra da Voz de Longe.** Exo só nos seis papéis acima e sempre em 700.
+Um parágrafo em Exo ou um título em Inter estão errados antes de qualquer
+medida.
 
-**A Regra do Tracking Invertido.** Tamanho grande fecha o espaçamento, tamanho
-pequeno abre. Um título novo de 32px sem `-0.03em` destoa de todos os outros
-antes que alguém saiba dizer por quê.
+**A Regra dos Dois Gritos.** Caixa alta existe em overline e cabeçalho de
+tabela, e em mais nada. Botão, badge, título e link ficam em sentence case
+pt-BR. No celular, o cabeçalho some e os prefixos "Emitido " / "Vence "
+entram em sentence case no lugar dele.
+
+**A Regra do Piso de 0.75rem.** Nenhum texto abaixo de 12px. O rótulo de
+11px do legado foi religado a `--text-overline` pela ponte.
+
+**A Regra do Mono Comparável.** Mono só para dado que se confere caractere a
+caractere — documento, caminho, impressão digital. Texto de interface nunca.
 
 ## Layout
 
-**A moldura.** Sidebar fixa de 250px à esquerda, `position: fixed`, e
-`.main-content` com `margin-left: 250px` e `flex: 1`. O conteúdo tem
-`max-width: 1280px` — sem esse teto, num monitor largo as ações alinhadas à
-direita ficavam a ~900px do título e do dado a que se referem.
+**A moldura** continua a do portal: sidebar fixa de 250px (`ink-900`) e
+`.main-content` com teto de 1280px. A tela do Início empilha seus blocos com
+`space-6` (1.5rem) entre irmãos; no celular, `space-4`.
 
-**Respiro.** Padding de 2,25rem no conteúdo (1,25rem abaixo de 900px, 1,25/1rem
-abaixo de 768px). Escala de espaçamento em passos de 4px, de `sp-1` (4px) a
-`sp-16` (64px); o passo de trabalho é `sp-6` (24px) para padding de folha e
-`sp-4` (16px) entre blocos.
+**Ritmo.** Escala de 4px (`space-1` = 0.25rem até `space-16` = 4rem). Padding
+de KPI e de card `space-6`; cabeça de card `space-5 space-6`; gaps de
+toolbar `space-3` (linha) e `space-4` (coluna); célula de tabela 12px 16px.
 
-**A grade de métricas.** `repeat(auto-fit, minmax(min(180px, 100%), 1fr))` com
-gap de 0,85rem. Sem media query: o `auto-fit` resolve sozinho e os cinco cards
-entram em linha a partir de ~960px. O `min(180px, 100%)` é a guarda contra
-transbordo em 320px. Abaixo de 768px o mínimo cai para 140px; abaixo de 480px
-vira `minmax(0, 1fr) minmax(0, 1fr)` — duas colunas fixas, com o piso em `0` e
-não em `auto`, porque `auto` é o min-content e o rótulo "FALHA (SEM PADRÃO)"
-alargava a coluna além do viewport.
+**Grade de KPIs.** `repeat(auto-fit, minmax(min(180px, 100%), 1fr))` com gap
+`space-4`. **Divergência registrada:** a referência de componentes do DS usa
+200px de piso; aqui é 180px porque num portátil de 1366px a 125% a linha tem
+~600px ao lado da sidebar e, a 200px, o terceiro KPI caía sozinho na segunda
+linha. O `min(…, 100%)` faz o ponto de quebra ser o espaço real, não a tela.
+Abaixo de 640px a grade é uma coluna (gap `space-3`), nunca 2 + 1.
 
-**Três breakpoints, três comportamentos distintos:**
+**Toolbar do card.** Grade `minmax(0,1fr) auto` — filtros à esquerda (select
+com largura própria, busca ocupando o resto), ações à direita — e não flex
+com quebra, porque com flex a busca caía antes das ações. Entre 641 e 1024px a
+toolbar vira duas linhas fixas (filtros; depois ações em `1fr auto auto`, com
+os contornos no padding compacto de 8px 14px). Abaixo de 640px tudo empilha a
+100%.
+
+**Três breakpoints do DS**, com o comportamento que a tela deu a cada um:
 
 | Largura | O que muda |
 |---|---|
-| ≤ 900px | Sidebar colapsa para 76px, só ícones (`font-size: 0` nos rótulos). Conteúdo com `margin-left: 76px`. |
-| ≤ 768px | Sidebar vira gaveta: `translateX(-100%)`, aberta por `body.sidebar-open`, com backdrop. Conteúdo sem margem. Toolbar empilha e todo controle vira 100% de largura. |
-| ≤ 480px | Grade de métricas em duas colunas fixas, ícones de 36px→32px. |
+| ≤ 1024px (`--bp-md`) | Células a 10px, datas em `body-xs`, coluna CNPJ/CPF some e o documento desce para a segunda linha da célula do nome (`.ag-cell-stack`). Toolbar em duas linhas. |
+| ≤ 640px (`--bp-sm`) | KPIs em coluna; o card da tabela perde moldura (cartão dentro de cartão custava 32px do nome); a tabela vira lista de cartões de linha; paginação em pílulas soltas que quebram linha. |
+| 1280px | Teto do conteúdo, herdado do portal. |
 
-**Densidade.** A tabela tem células de `0.85rem 0.5rem` e `border-bottom` de
-0.5px — sem zebra, sem grade vertical. A separação entre linhas é o fio e o
-hover (`rgba(0,113,227,0.04)`); linhas em estado crítico recebem o tom de linha.
+**Densidade.** Linha de tabela com 44px (padding 12px 16px), sem zebra, sem
+grade vertical; separação por fio sutil e hover dourado a 6%. O cabeçalho tem
+44px de altura com o botão de ordenar ocupando toda ela.
 
 ### Named Rules
 
-**A Regra do Rolar Por Dentro.** A página nunca rola de lado. Quem rola é o
-`.table-scroll`, que existe para isso e é focável por teclado. `min-width: 0` em
-todo item flex que contém tabela é obrigatório — sem ele o `min-content` da
-tabela empurra o conteúdo além do viewport entre ~900 e ~1050px.
+**A Regra do Rolar Por Dentro.** A página nunca rola de lado. A tabela rola
+dentro de `.ag-table-scroll` (focável, `role="region"`), e abaixo de 640px nem
+isso: vira cartões.
 
-**A Regra do Teto de 1280.** Conteúdo não passa de 1280px de largura, em nenhuma
-tela. A distância entre uma ação e o dado a que ela se refere é parte do design.
+**A Regra do 44.** Botão, campo, select, checkbox, célula de cabeçalho,
+item de menu, link de paginação: 44px de altura ou área mínima. O DS dá 40px
+ao botão pelo padding; o `min-height: 44px` fecha o alvo sem mudar o desenho.
 
 ## Elevation & Depth
 
-**Híbrido, com o tom fazendo o trabalho principal.** A separação entre planos é
-antes de tudo tonal — `--bg` cinza contra `--surface` branco. A sombra só
-reforça o que o tom já disse, e é deliberadamente sutil no tema claro (alfa de
-0.03 a 0.08). No tema escuro a hierarquia é quase inteiramente tonal, porque
-sombra preta contra `#1C1C1E` praticamente não aparece; por isso os valores
-escuros são bem mais opacos (0.2 a 0.4) — para render o mesmo pouco.
-
-Toda folha nasce com sombra em repouso; este não é um sistema *flat-by-default*.
-O que muda com o estado é a profundidade, não a existência.
+**Híbrido, tom primeiro.** A separação de planos é tonal — `ink-50` da página
+contra o branco da folha, `ink-100` do cabeçalho contra a folha — e a sombra
+só confirma. Toda sombra é de **tinta quente** (`rgba(45,32,20,…)`), nunca
+preto puro: sobre off-white, o preto esfria a página. Card e KPI nascem com
+`shadow-sm` em repouso; o que flutua (menu suspenso, barra de seleção) leva
+`shadow-lg`; o cartão de linha no celular leva `shadow-xs`, quase só um fio.
+O ouro tem sombra própria (`shadow-gold`) que aparece apenas no hover e no
+foco do botão primário.
 
 ### Shadow Vocabulary
 
-- **`--shadow-sm`** (`0 1px 2px rgba(0,0,0,0.04)`): item ativo da sidebar,
-  botão de paginação. Um fio de sombra, o suficiente para o elemento não parecer
-  pintado no fundo.
-- **`--shadow-md`** (`0 4px 12px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.03)`):
-  o repouso de toda folha — card de métrica, container de tabela.
-- **`--shadow-lg`** (`0 12px 30px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)`):
-  o que flutua sobre a página — modal, toast, dropdown de notificações, gaveta
-  mobile, skip-link. E o hover do card de métrica, que sobe um nível.
-
-O `backdrop-filter: blur(20px)` aparece na sidebar e `blur(2px)` no `::backdrop`
-do modal. É o único efeito de material do sistema.
+- **shadow-xs** (`0 1px 2px rgba(45,32,20,.06)`): cartão de linha no celular.
+- **shadow-sm** (`0 1px 3px rgba(45,32,20,.08), 0 1px 2px rgba(45,32,20,.06)`): repouso de card e KPI.
+- **shadow-md** (`0 4px 12px rgba(45,32,20,.10)`): disponível no DS; a tela não o usa.
+- **shadow-lg** (`0 12px 28px rgba(45,32,20,.12)`): menu suspenso de exportar, barra de seleção.
+- **shadow-xl** (`0 24px 48px rgba(45,32,20,.16)`): reservado a modal.
+- **shadow-gold** (`0 10px 30px rgba(184,129,87,.34)`): hover/foco do botão primário, somado ao anel.
+- **focus-ring** (`0 0 0 3px rgba(201,160,106,.5)`): anel de foco de tudo que é focável, por `box-shadow` em `:focus-visible` (campos também em `:focus`).
 
 ### Named Rules
 
-**A Regra do Tom Primeiro.** Se a separação entre dois planos só funciona com a
-sombra, o desenho está errado. Verifique com a sombra desligada: no tema escuro
-é quase assim que a pessoa vê.
+**A Regra da Tinta Quente.** Nenhuma sombra com `rgba(0,0,0,…)`. Se precisa
+de sombra, é um dos sete valores acima.
 
-**A Regra dos Três Degraus.** Existem exatamente três sombras e elas não se
-misturam nem se somam. Um elemento novo escolhe um dos três — não inventa um
-quarto valor.
+**A Regra do Foco Substituído.** `outline: none` só aparece na mesma
+declaração que `box-shadow: var(--focus-ring)`. Anel de 3px, sempre visível.
 
 ## Shapes
 
-Quatro raios, e cada um significa uma categoria de coisa. O raio é como o
-sistema diz o que um elemento é, antes de qualquer rótulo.
+Sete raios com significado fixo, todos do DS:
 
-- **Pílula** (`980px`): tudo que é acionável e efêmero — botão, badge. A forma
-  totalmente arredondada é o gesto mais reconhecível do sistema.
-- **18px** (`--radius-lg`): a folha. Card de métrica, container de tabela, modal,
-  empty state. É o raio grande, e só superfícies de conteúdo o usam.
-- **12px** (`--radius-md`): controle de entrada. Campo de texto, select, toast,
-  banner.
-- **8px** (`--radius-sm`): item de navegação, ícone de card, canto externo de um
-  grupo de paginação.
-- **4px** (`--radius-xs`): etiqueta pequena (`.tag`), o menor elemento nomeado.
+- **Pílula** (999px): botão, badge, link de paginação no celular.
+- **20px** (`xl`): card e KPI — a folha grande.
+- **14px** (`lg`): moldura de tabela, cartão de linha no celular, barra de seleção.
+- **10px** (`md`): campo, select, caixa do ícone do KPI, menu suspenso.
+- **4px** (`xs`): anel de foco do checkbox.
+- **Círculo** (50%): spinner.
+- 6px (`sm`) e 28px (`2xl`) existem no DS e a tela não usa.
 
-**Bordas.** Duas espessuras, com significados diferentes: `0.5px` para
-divisórias e contornos de superfície (folha, linha de tabela, cabeçalho de
-sidebar) e `1.5px` para contornos de controle (botão, campo, select). O fio fino
-separa; o fio grosso convida ao toque.
+**Bordas.** `bw-1` (1px) para card, campo, moldura de tabela e divisória;
+`bw-2` (1.5px) para o contorno de botão (transparente no primário e no
+fantasma, para a caixa não mudar entre variantes); `bw-3` (2px) para o
+spinner. O KPI de urgência troca a cor da borda, não a espessura.
 
-A **toolbar** usa `border-bottom: 1px dashed` — o único tracejado do sistema, e
-o empty state usa `1px dashed` na borda inteira. Tracejado significa "aqui não
-há conteúdo ainda" ou "aqui termina o cabeçalho", nunca decoração.
+**Filete.** O KPI carrega uma linha de 3px em `grad-gold` no topo, recortada
+pelo `overflow: hidden` do card. No KPI de urgência ela vira `warning-500`
+sólida: o aviso não compete com a marca.
+
+**Ícones.** Lucide em traço, `stroke-width: 2` (2.4 nos glifos de badge),
+`currentColor`, sem preenchimento, inline no HTML ou em `BADGE_GLIFOS`.
+18px de padrão, 16px dentro de botão, 20px no KPI (dentro de uma caixa de
+40px com raio `md`).
 
 ### Named Rules
 
-**A Regra dos 55 Por Cento.** Um ícone preenche entre 50% e 55% do seu alvo. O
-ícone de card fica em 50% (18px em 36px), o item de sidebar em ~52%, e os três
-botões de 44px da topbar em 55% (24px). O tamanho mora no CSS da família de
-controle, nunca em `style=` no elemento: irmãos que precisam mudar juntos não
-podem ter três valores independentes.
+**A Regra do Raio pelo Papel.** Folha grande 20, moldura interna 14,
+controle 10, acionável pílula. Um valor fora desses sete é defeito.
 
-**A Regra da Caixa Que Não Aperta.** Controle de tamanho fixo zera o próprio
-padding, e o ícone dentro dele leva `flex-shrink: 0`. A regra base `button` dá
-`padding: 0.5rem 1.1rem`, e um `.sidebar-toggle-btn` de 44px que não a
-sobrescrevia deixava 7,2px de caixa de conteúdo: o sino de 20px renderizava
-7,2×20 — **achatado, não pequeno**. O sintoma relatado foi "o tamanho está
-errado", porque um ícone espremido na horizontal é lido como ícone pequeno, e
-ninguém procura padding num botão que mede exatamente 44px na tela.
-
-**A Regra da Pílula Acionável.** Se é clicável e cabe numa linha, é pílula. Se é
-uma superfície que carrega conteúdo, é 18px. Um botão de canto reto ou um card
-em pílula quebra a leitura do sistema inteiro.
+**A Regra do Traço.** Ícone é SVG Lucide em traço, sempre. Nunca emoji,
+nunca caractere Unicode, nunca fonte de ícone, nunca `<img>`.
 
 ## Components
 
 ### Buttons
 
-Refinados e contidos: reação mínima e imediata, o componente confirma o toque e
-volta ao lugar.
+Firmes e curtos: Exo 700, pílula, 44px, `translateY(1px)` no clique, sem
+brilho além do que o ouro já traz.
 
-- **Shape:** pílula completa (`--radius-pill`, 980px), padding `0.5rem 1.1rem`,
-  peso 500, 0,85rem, `inline-flex` com gap de 4px para o ícone.
-- **Secundário (padrão):** folha branca, borda de 1.5px em `--border`, texto
-  grafite. É a forma base — a maioria dos botões do portal é esta.
-- **Primário:** `--accent-solid` (#0071E3) com texto branco, sempre o mesmo azul
-  nos dois temas. O token não muda entre temas de propósito: o `#0A84FF` do tema
-  escuro com branco dá 3.65:1 e reprovaria.
-- **Perigo:** fundo `--expired-bg`, texto `--expired-text`, borda
-  `rgba(255,59,48,0.25)`. Vermelho tonal, não vermelho sólido — a ação
-  destrutiva é séria, não estridente.
-- **Hover:** fundo desce para `--bg` (ou `--accent-hover` no primário), opacidade
-  0,9. **Active:** `translateY(1px)` + `brightness(0.96)` — o botão afunda.
-  **Focus:** anel de 2px em `--accent` com offset de 2px, via `:focus-visible`.
-- **Disabled:** opacidade 0,45, cursor `not-allowed`, e **permanece no DOM e
-  legível** — a informação de que a ação existe é relevante.
+- **Shape:** pílula, padding 11px 22px, borda 1.5px (transparente quando não há contorno), `gap: space-2` para o ícone de 16px.
+- **Primário:** `gold-500` com texto `ink-900`. Hover `gold-600` + `shadow-gold`; foco anel + `shadow-gold`. **Ligado** (`aria-pressed="true"`): lavado dourado, borda `gold-600`, texto de marca, sem sombra — o estado se lê pela borda, pelo texto e pelo rótulo que o JS troca.
+- **Contorno:** transparente, texto primário, borda `--border-strong`. Hover e ligado: borda `gold-600`, texto de marca, lavado dourado.
+- **Fantasma:** transparente, texto secundário. Hover: fundo `ink-100`, texto primário.
+- **Pequeno** (`--sm`): 8px 16px, `body-xs`, 36px — só em ação secundária dentro de uma cabeça de card ("Limpar seleção").
+- **Enviando:** `.ag-spin` de 14px em `currentColor` no lugar do ícone, mantendo a largura.
+- **Disabled:** opacidade 0.55, `cursor: not-allowed`, permanece no DOM.
+- **Sólido legado** (`--accent-solid` → `ink-900`, texto branco): só onde `style.css` ainda manda (skip-link, `.primary` do estado vazio). Não é uma variante nova; é a ponte impedindo branco sobre ouro.
 
 ### Inputs / Fields
 
-- **Style:** fundo `--bg` (mais escuro que a folha em que está — o campo é uma
-  depressão, não uma elevação), borda de 1.5px, raio de 12px, padding
-  `0.6rem 0.9rem`.
-- **Focus:** a borda vira `--border-focus` **e o fundo sobe para `--surface`** —
-  o campo acende de dentro. Somado a um halo de `0 0 0 4px rgba(0,113,227,0.15)`.
-- **Rótulo sempre visível.** `placeholder` não substitui `label`: ele some assim
-  que a pessoa digita, e o contraste é insuficiente. `.form-field` é
-  `flex-column` com gap de 8px justamente para isso.
+- **Style:** folha branca (não deprimida), borda 1px `--border-default`, raio 10px, padding 10px 14px, 44px, Inter `body-sm`. Placeholder em `--text-muted`.
+- **Hover:** borda forte. **Focus:** borda `gold-500` + anel de 3px. O fundo não muda.
+- **Rótulo** (`.ag-label`) sempre visível acima, Inter 600 `body-xs` secundário, gap `space-1`. Placeholder não é rótulo.
+- **Select:** mantém a seta nativa (desenhar uma exigiria cor literal em data URI); `padding-right: space-8`.
+- **Checkbox:** 18px com `accent-color: gold-600`, dentro de um `.ag-check` de 44×44; foco por anel com raio 4px.
 
 ### Badges
 
-- **Style:** pílula, 11px, peso 600, sem borda; fundo tonal + texto do trio de
-  estado.
-- **Glifo de forma:** todo badge carrega um glifo antes do texto (`.badge-glifo`,
-  peso 700, `min-width: 1em`, `aria-hidden`), herdando `currentColor`. Numa
-  tabela de centenas de linhas a forma se reconhece antes da palavra, e com
-  deuteranopia o verde e o âmbar convergem.
-- **`badge-bad`** é a exceção: transparente com contorno e texto pleno, porque
-  aparece sobre os tons de linha, onde `--text-muted` cai a 4.0–4.4:1 no escuro.
+- **Style:** pílula, Inter 600 `body-xs`, padding 3px 10px, sem borda, sem caixa alta; fundo `-50` + texto `-700` da família.
+- **Glifo:** SVG Lucide de `BADGE_GLIFOS` (check, triângulo de alerta, x, círculo com ponto, círculo com interrogação) a 0.95em, `stroke-width: 2.4`, `aria-hidden`, com gap de 5px. Numa tabela de centenas de linhas a forma se reconhece antes da palavra.
+- **Emissão:** só por `badgeStatus()` / `badgeAviso()` em `ui-common.js`, que gravam as duas classes (`badge-* ag-badge--*`); montar a string à mão no template é proibido por teste.
+- **Variantes usadas:** success (Ativo), warning (Expirando), danger (Vencido), neutral (Erro, Falha, Não encontrado, valor desconhecido). `gold` e `info` existem no CSS e não são emitidas.
 
 ### Cards / Containers
 
-- **Card de métrica:** folha de 18px, borda de 0.5px, `--shadow-md`, padding
-  `0.85rem 0.95rem`. Layout `flex` com o bloco de texto à esquerda e um ícone
-  de 36px (raio 8px) à direita, pintado com o par fundo/texto do estado. O
-  rótulo é caixa alta de 10,5px; o número é 26px peso 700.
-- **Hover:** `translateY(-3px)` + `--shadow-lg`, em 250ms com `--ease-spring`.
-  É o único `will-change` do projeto, e é intencional: aplicá-lo em massa
-  promovia dezenas de camadas ociosas na GPU.
-- **Container de tabela:** mesma folha, padding `--sp-6`, margem inferior
-  `--sp-8`.
+- **Card** (`.ag-card`): folha branca, borda 1px padrão, raio 20px, `shadow-sm`. Cabeça `space-5 space-6` com título Exo `title` à esquerda, ações à direita, divisória sutil. É a moldura da tabela, da barra de seleção e de "Meus computadores".
+- **KPI** (`.ag-kpi`): mesmo card com padding `space-6`, filete de 3px, rótulo overline apagado, número Exo 2rem tabular, delta `body-xs`; caixa de ícone 40px à direita (`ink-100` / `ink-600`, raio 10px, Lucide 20px). Sem hover, sem elevação.
+- **KPI de urgência** (`.cg-kpi--atencao`): o card inteiro lavado em `warning-50`, borda e filete `warning-500`, rótulo e delta `warning-700`, caixa do ícone branca com ícone `warning-700`. **Um por tela** — o que pede ação.
+- **Menu suspenso** (`<details>` legado com gatilho `.ag-btn--outline`): lista em folha branca, borda padrão, raio 10px, `shadow-lg`, itens Inter `body-sm` com 44px.
 
-### Composição repetida
+### Tabela
 
-Extraídos em 21/08 a partir de 197 atributos `style=` inline, e só os que
-apareciam **3+ vezes com a mesma intenção** — abstrair antes disso custa mais
-do que a duplicação.
-
-- **`.linha-acoes`** — fila de botões que quebra: `flex`, `align-items: center`,
-  `flex-wrap`, `gap: --sp-3`. 9 usos em 3 telas.
-- **`.secao-cabecalho`** — título à esquerda, ações à direita: `flex`,
-  `space-between`, `gap: --sp-4`, margem inferior `--sp-4`. 4 usos.
-- **`.falha-inline`** — a mensagem do `catch` renderizada NO LUGAR do conteúdo:
-  `--expired-text` em `--fs-ui-sm`. 5 usos, todos dentro de template string de
-  JS, onde um erro de digitação só aparece no momento exato de uma falha.
-
-**Duas distinções que parecem redundância e não são:**
-
-`.linha-acoes` **não** é `.toolbar__actions`. A diferença é o alinhamento, e ela
-é intencional: `.toolbar__actions` empurra para a **direita** porque divide a
-barra com um texto de status à esquerda; `.linha-acoes` começa na **esquerda**
-porque é uma fila solta dentro de um painel. Juntar as duas quebraria uma.
-
-`.falha-inline` **não** é `.msg-erro`. Esse nome já existia em `login.html`,
-pareado com `.msg-ok`, e é outra coisa: um banner **preenchido**, com
-`background-color`. As duas regras se somavam em silêncio, e o banner do login
-herdava tamanho e margem que ninguém pediu. Colisão de nome entre componentes
-de intenção diferente não quebra nada — só fica errado.
+- **Moldura** (`.ag-table-wrap`): borda 1px, raio 14px, `overflow: hidden`, folha branca; rolagem horizontal dentro de `.ag-table-scroll`.
+- **Cabeçalho:** `ink-100`, Exo 700 0.75rem caixa alta 0.04em, `--text-secondary`, 44px; botão de ordenar herda tudo e alinha à esquerda como a célula; coluna ativa em texto de marca (o único ouro do cabeçalho).
+- **Célula:** 12px 16px, `border-top` sutil, Inter `body-sm`; nome em peso 500; datas em numerais tabulares; documento em `.cg-doc` (tipo em `body-xs` apagado + número em JetBrains Mono, sem quebra no hífen).
+- **Hover:** ouro a 6% (`color-mix`), 12% no escuro.
+- **Seleção:** coluna de checkbox nasce escondida e aparece com `.is-selecionando` no card; a largura devolvida vai para o nome.
+- **Cartão de linha (≤ 640px):** `display: block` na tabela, `thead` oculto acessivelmente, cada `tr` como grade `nome status / emissao / vencimento` (com `sel` à esquerda em 44px no modo de seleção), folha branca, borda padrão, raio 14px, `shadow-xs`, padding `space-3 space-4`, gap `space-1 space-3`. Os `role` explícitos no HTML e no JS mantêm a semântica que `display: block` apaga.
 
 ### Navigation
 
-- **Sidebar:** 250px, `#1C1C1E`, fixa, `backdrop-filter: blur(20px)`, borda
-  direita de 0.5px branca a 8%.
-- **Item:** `flex` com ícone de 1,3rem e gap de 0,75rem, padding `0.65rem 1rem`,
-  raio de 8px, peso 500, 0,95rem, cor `--sidebar-text`.
-- **Hover:** fundo branco a 8%, texto branco pleno. **Ativo:** fundo
-  `--sidebar-active-bg` (#0071E3 nos dois temas) + `--shadow-sm`.
-- **Ícones:** Heroicons outline, `stroke-width: 1.5`, `currentColor`, inline no
-  template. Nunca `<img>`, nunca icon font, nunca caractere Unicode fazendo
-  papel de ícone.
-- **Mobile (≤768px):** gaveta de 270px com `translateX(-100%)`, backdrop
-  escuro, transição de 0,3s.
+- **Sidebar:** a do portal (`style.css`, 250px, fixa) pintada pela ponte: fundo `ink-900`, texto `ink-400`, hover e ativo em lavado dourado, texto ativo `gold-300`, "Sair" em `danger-500`. Ícones Heroicons outline legados permanecem até a sidebar migrar.
+- **Paginação:** o controle segmentado do portal, 44px; no celular, pílulas soltas que quebram linha com gap `space-2`.
 
-### Paginação
+### Barra de seleção
 
-O componente mais trabalhado do sistema. Fila de botões unidos: cantos externos
-arredondados em 8px (`--rounded-s` / `--rounded-e`), miolo quadrado, bordas
-sobrepostas com `margin-left: -1px`. Altura mínima de **44px** — paginação é
-alvo frequente em uso por toque.
-
-A página atual usa `--total-bg` de fundo com texto `--accent-text` e borda
-`--accent`. O foco é `:focus-visible`, nunca `:focus`: o anel é para teclado, e
-com `:focus` puro ele aparecia a cada clique de mouse num controle que se clica
-o tempo todo.
-
-### Toasts
-
-Canto inferior direito, empilhados com gap de 12px, largura máxima de 400px.
-Folha de 12px com `--shadow-lg` e uma **barra de 4px à esquerda** na cor de
-identidade do tipo (`--ok`, `--expired`, `--warning`, `--accent`). Entram com
-`translateY(16px)` → 0 e opacidade 0 → 1 em 250ms.
-
-O botão de fechar é 44×44px com margem negativa de -0,5rem para não inchar o
-toast visualmente — WCAG 2.5.8 exige 24px, as HIG recomendam 44.
-
-### Modais
-
-`<dialog>` nativo. `width: min(92vw, 460px)`, `max-height: min(88vh, 720px)`,
-raio de 18px, `--shadow-lg`, backdrop preto a 45% com `blur(2px)`.
-
-Estrutura de três faixas — cabeçalho, corpo rolável, rodapé — separadas por fios
-de 0.5px, com o rodapé alinhado à direita. **Erro de servidor aparece dentro do
-diálogo** (`.modal__erro`, fundo `--expired-bg`), nunca como toast: o toast fica
-atrás do backdrop e some sozinho, e a pessoa perderia a única explicação de por
-que a gravação falhou justamente enquanto olha o formulário que a causou.
-
-### Empty states
-
-Folha de 18px com **borda tracejada**, padding `3rem 1.5rem`, centralizado:
-ícone de 2,5rem a 80% de opacidade, título de 1,1rem peso 600, descrição de
-0,875rem em `--text-muted` com `max-width: 400px`, e um botão de ação.
-
-### Central de notificações
-
-O único componente **glassmorphic** do sistema, e o único que muda de material
-conforme o tema explícito.
-
-- **Sino:** botão da topbar, empurrado para a direita por `margin-left: auto`.
-  Só um item pode carregar essa margem — se o botão de tema também a tivesse, o
-  espaço se dividiria e o sino voltaria ao centro; por isso existe um seletor
-  adjacente que desfaz a do tema quando o sino está presente.
-- **Badge de contagem:** pílula de 16px em `--expired-solid` (#C1121C) com
-  texto branco de 10px e numeral tabular, ancorada a -3px do canto superior
-  direito do sino, com **anel de 2px em `--surface`** que a recorta do ícone.
-  Era um círculo de 18px: com dois dígitos a caixa deixava de ser quadrada, e o
-  `border-radius: 50%` desenhava uma elipse que chegava a ~26px de largura —
-  quase o tamanho do glifo, então o vermelho ganhava o olho antes do sino. O
-  badge anota o ícone; não disputa com ele. Pulsa em `pulse-badge` — um halo
-  vermelho que expande de 0 a 6px a cada 2s, infinito. É o único movimento
-  perpétuo do portal, e `prefers-reduced-motion` o desliga por completo
-  (`animation: none`), não apenas o acelera.
-- **Dropdown:** 320px de largura, 400px de altura máxima, ancorado a 42px abaixo
-  do sino, raio de 12px com `--shadow-lg`. Entra com `fadeInDown` — 8px de cima
-  para baixo em 200ms com `--ease-out`, o inverso do `fadeUp` da página.
-- **Material:** a folha vira `rgba(255,255,255,0.85)` no claro e
-  `rgba(44,44,46,0.85)` no escuro, ambas com `backdrop-filter: blur(20px)`. A
-  regra é aplicada por `:root[data-theme="..."]`, ou seja **só quando o usuário
-  escolheu um tema explicitamente**; em "seguir o sistema" o dropdown fica
-  opaco. É a mesma família de material da sidebar, e os dois são os únicos.
-- **Seções:** o corpo é dividido por títulos de 10px, peso 700, tracking 0.08em,
-  caixa alta — meio degrau acima do Label, e a única exceção à Regra do Único
-  Grito.
-- **Item:** raio de 8px com **barra de 3px à esquerda**, transparente por
-  padrão, que assume `--expired` ou `--warning` junto do fundo tonal
-  correspondente. O hover soma `translateX(2px)` a um véu de 3% — o item desliza
-  para a direita, para o lado onde a barra não está.
-- **Estados:** vazio, carregando e erro compartilham o mesmo bloco centrado de
-  2rem em `--text-muted`. O carregando desenha seu spinner em `::before` — 14px,
-  borda de 2px em `--border` com o topo em `--accent`, girando em 600ms linear.
-
-### Tabelas de duplicidades
-
-A superfície mais densa do portal: três tabelas independentes na mesma página
-(assinatura idêntica, mesmo documento, nomes semelhantes), cada uma com sua
-própria paginação.
-
-- **Moldura:** `overflow: hidden` sobre folha branca com raio de 12px. A rolagem
-  não fica aqui — fica no `.table-scroll` interno, com `max-height:
-  min(68vh, 760px)` e `scrollbar-gutter: stable`. Abaixo de 640px de **altura**
-  o teto sai, senão sobrariam pouquíssimas linhas visíveis.
-- **Cabeçalho grudado:** `position: sticky; top: 0` com fundo `--surface` e
-  `box-shadow: 0 1px 0 var(--border)` — a linha inferior é sombra, não borda,
-  porque borda em `<th>` sticky se descola ao rolar.
-- **Região focável:** o `.table-scroll` tem `tabindex="0"` e
-  `role="region"` com `aria-label`, e o anel de foco usa `outline-offset: -2px`
-  para desenhar por dentro da moldura em vez de vazar. Região rolável precisa
-  ser alcançável por teclado (WCAG 2.1.1).
-- **Célula:** padding `0.5rem 0.65rem` e `vertical-align: top` — mais apertada
-  que a tabela padrão (`0.85rem 0.5rem`) e alinhada ao topo, porque a coluna de
-  nome quebra em várias linhas e a de documento não.
-- **Linha que fala:** as linhas com detalhe extra recebem `cursor: help`,
-  `tabindex="0"` e `aria-describedby` apontando para o balão. O balão existe
-  para quem chega por Tab, não só por mouse — e por isso a tinta de destaque
-  responde a `:hover` **e** `:focus-visible`.
-- **Balão de caminhos:** `position: fixed`, `z-index: 2000`,
-  `max-width: min(92vw, 36rem)`. Cabeçalho em `--accent-text` com ícone de
-  0.95rem, lista com marcadores em `--border`, e cada caminho num bloco mono
-  sobre `--bg` com borda e raio de 4px, quebrando por `break-all`.
-- **Linha de estado:** quando não há duplicidades, o corpo recebe uma única
-  linha `hint-only` com `colspan`, padding de `0.9rem 0.75rem` e sem borda
-  inferior — a mensagem ocupa a tabela em vez de fingir ser um registro.
-
-**Reconciliado em 19/08/2026.** Este bloco carregava cinco desvios — um azul de
-outra paleta no hover, raios de 10px e 6px fora da escala, uma sombra própria em
-`rgba(15,23,42,…)`, uma transição de `0.12s ease` e uma segunda pilha mono. Todos
-passaram a usar token. A correção do hover trouxe junto um defeito do próprio
-sistema: `tbody tr:hover` resolvia o tema por `@media (prefers-color-scheme:
-dark)` **sem** a guarda `:root:not([data-theme="light"])` que a camada de tokens
-usa, então quem forçava tema claro num sistema escuro recebia o hover escuro.
-Com `--row-hover` a media query desapareceu e o defeito com ela.
+Um `.ag-card` no fluxo do `<main>` (não fixo — fixo taparia a paginação no
+celular), raio 14px, `shadow-lg`, cabeça com a contagem em `title` à esquerda
+e ações à direita ("Limpar seleção" fantasma pequeno; "Instalar nesta máquina"
+primário, escondido sem agente ativo). Avisos abaixo em `body-xs`
+`warning-700`. Abaixo de 640px a cabeça empilha e os botões esticam.
 
 ### Motion
 
-- **Entrada de página:** `fadeUp` (16px + opacidade) em 400ms com `--ease-spring`,
-  aplicado a todo filho direto de `.main-content`. Sempre `backwards`, **nunca
-  `both`** — com `both` o `translateY(0)` final fica aplicado para sempre,
-  criando um contexto de empilhamento em cada filho e prendendo o dropdown de
-  notificações atrás dos cards.
-- **Stagger:** os cards de métrica entram em cascata de 50ms (0,05s a 0,30s).
-- **Vocabulário de easing:** `--ease-spring` `cubic-bezier(0.25,1,0.5,1)` para
-  entrada e movimento; `--ease-out` `cubic-bezier(0.16,1,0.3,1)` para mudança de
-  estado; durações de 150 / 250 / 400ms.
-- **`prefers-reduced-motion`:** zera duração (0,01ms, não 0s — o
-  `transitionend` do toast depende do disparo) e remove o movimento decorativo.
-  **Não zera `transform`**, porque aqui transform também é layout: a gaveta
-  mobile se esconde com `translateX(-100%)`, e um `transform: none !important`
-  global deixava a sidebar aberta sobre o conteúdo exatamente para quem a regra
-  deveria proteger.
+Três durações (`dur-fast` 120ms, `dur-base` 200ms, `dur-slow` 320ms) e uma
+curva (`ease-standard`, `cubic-bezier(.2,0,0,1)`); a ponte aponta os nomes
+legados (`--ease-out`, `--ease-spring`, `--duration-*`) para elas. Transições
+de 120ms em botão e campo; spinner de 0.8s linear; `prefers-reduced-motion`
+zera as transições da tela e desacelera o spinner para 1.6s em vez de
+escondê-lo.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** escrever a razão de contraste medida em comentário ao lado de todo token
-  de cor de texto novo, com o fundo contra o qual foi medida.
-- **Do** usar o trio completo de estado: fundo tonal + o token `-text`
-  correspondente. Texto de estado nunca sai de `--text-muted`.
-- **Do** acompanhar toda cor de estado de um segundo canal — glifo no badge,
-  palavra no texto, ícone no card. Cor sozinha nunca carrega a informação.
-- **Do** dar 44px de altura mínima a qualquer alvo de toque frequente
-  (paginação, fechar toast, ações de linha).
-- **Do** usar `:focus-visible` para anéis de foco e `:focus` apenas quando o
-  realce for do próprio campo (borda + sombra) ou for o skip-link.
-- **Do** manter `min-width: 0` em todo item flex que contenha tabela.
-- **Do** pôr erro de formulário dentro do próprio formulário ou diálogo.
-- **Do** revelar item de menu por papel no cliente, com `display: none` no
-  template como estado inicial.
-- **Do** tornar toda região rolável alcançável por teclado (`tabindex="0"` +
-  `role="region"` + `aria-label`), com o anel de foco em `outline-offset: -2px`
-  quando ela tiver moldura própria.
-- **Do** reservar a fonte mono para dado literal comparável caractere a
-  caractere — caminho de arquivo, impressão digital. Nunca para texto de UI.
-- **Do** lembrar que `<button>`, `<input>` e `<select>` **não herdam
-  `font-family`**: sem `font-family: inherit` o navegador impõe a fonte dele e
-  o controle sai fora da Inter.
+- **Do** carregar, em toda tela que migrar, os três arquivos na ordem `aguia-tokens.css` → `aguia-components.css` → o CSS da tela, depois de `style.css` — a ordem é o que faz o Águia vencer os nomes coincidentes.
+- **Do** ligar todo nome legado novo (`--algo` de `style.css`) a um token do Águia na ponte da tela, e nunca redefinir um `--gold-*` / `--ink-*` no projeto.
+- **Do** manter um só botão primário preenchido por tela e trocá-lo por `aria-pressed` quando a ação passa a outro botão.
+- **Do** usar o trio completo de estado: fundo `-50`, texto `-700`, identidade `-500` na borda ou no ícone.
+- **Do** acompanhar cor de estado de um segundo canal: glifo no badge, palavra ao lado, borda no toggle.
+- **Do** dar 44px a todo clicável e 3px de anel em ouro a todo focável.
+- **Do** escolher Exo 700 para o que se lê de longe e Inter para o resto; JetBrains Mono só para dado comparável.
+- **Do** emitir badge só por `badgeStatus()` / `badgeAviso()`, com o glifo SVG de `BADGE_GLIFOS`.
+- **Do** escrever `color-mix(in srgb, var(--token) N%, …)` quando precisar de uma transparência que o DS não nomeia.
+- **Do** manter a rolagem dentro da moldura e, abaixo de 640px, trocar tabela por cartões de linha com `role` explícito.
 
 ### Don't:
 
-- **Don't** usar gradiente decorativo, ilustração isométrica ou herói de landing
-  page. A anti-referência confirmada é o SaaS genérico de gradiente.
-- **Don't** pintar navegação com cor de estado nem estado com o Azul de Sistema.
-- **Don't** inventar um quarto nível de sombra, um quinto raio ou um segundo
-  nível de caixa alta.
-- **Don't** trocar `backwards` por `both` em animação de entrada — cria contexto
-  de empilhamento e enterra os elementos flutuantes.
-- **Don't** aplicar `will-change` em massa; ele fica reservado aos cards de
-  métrica, que animam `transform` de fato.
-- **Don't** zerar `transform` dentro de `prefers-reduced-motion`.
-- **Don't** carregar fonte com `@import` dentro do CSS; o `<link>` no `<head>`
-  dispara em paralelo.
-- **Don't** usar `placeholder` como rótulo de campo.
-- **Don't** deixar a página rolar horizontalmente para acomodar uma tabela — quem
-  rola é o `.table-scroll`.
-- **Don't** deixar um botão desabilitado sumir da tela; ele fica visível e
-  legível.
-- **Don't** escrever cor literal em `rgba()` onde existe token. O véu de hover
-  das duplicidades já foi um `rgba(59,130,246,0.06)` — azul de outra paleta, sem
-  variante de tema escuro — e é exatamente assim que a deriva começa: um valor
-  que parece certo, num arquivo que ninguém relê.
-- **Don't** resolver tema com `@media (prefers-color-scheme: dark)` cru numa
-  regra de componente; ver A Regra da Guarda de Tema.
-- **Don't** escrever `font-size` literal. A escala tem dez papeis
-  (`--fs-display` a `--fs-label`) e os elementos `h1`/`h2`/`h3` ja herdam o seu.
-  Um literal novo significa ou um papel que falta — e ai ele vira token — ou um
-  papel que ja existe escrito de outro jeito.
-
-  Em 21/08 havia **36 tamanhos distintos para 7 papeis**, dezenove deles entre
-  10 e 15px: `0.78rem`, `0.8rem`, `0.8125rem` e `0.82rem` cobriam 0.6px. E o
-  mesmo `<h2>` de secao media 16.8, 17.6, 18.4, 19.2 ou 20px conforme a tela.
-  As classes `.text-*` que implementavam o ramo tinham ZERO uso.
-
-  Exceção declarada: dimensionar GLIFO (icone de estado vazio, seta de botao)
-  nao e tipografia e fica fora do ramo, com comentario dizendo isso.
-
-- **Don't** repetir o material *glassmorphic*. Ele pertence a exatamente dois
-  elementos — a sidebar e o dropdown de notificações — e sua raridade é o que o
-  faz funcionar.
-
-  **Véu não é material.** `backdrop-filter: blur(1–4px)` sobre um scrim escuro
-  — atrás de diálogo, atrás da gaveta mobile, sobre a tabela que carrega — é
-  outra técnica, com outro propósito: apagar o que está atrás, não apresentar o
-  que está na frente. O material *glass* usa 20px e você lê conteúdo sobre ele;
-  o véu usa 1–4px e você não lê nada sobre ele. Os quatro véus do portal não
-  contam contra a regra dos dois.
-
-  A distinção não estava escrita, e um audit externo leu os quatro véus como
-  deriva do material. Cor de véu sai de `--scrim-*`, nunca de `rgba()` literal.
+- **Don't** pintar texto branco sobre ouro, nem usar `gold-*` como fundo de bloco; o lavado é `gold-glow`.
+- **Don't** trazer o azul do portal legado para uma tela do Águia, nem uma terceira cor de marca.
+- **Don't** editar `aguia-tokens.css` localmente; ele é cópia verbatim do documento do DS.
+- **Don't** escrever cor, sombra, raio ou tamanho literal onde existe token; a única exceção declarada é dimensão de glifo.
+- **Don't** usar sombra preta; toda sombra é `rgba(45,32,20,…)` ou `shadow-gold`.
+- **Don't** usar `outline: none` sem `box-shadow: var(--focus-ring)` na mesma regra.
+- **Don't** usar emoji, caractere Unicode ou fonte de ícone como ícone; Lucide em traço, inline.
+- **Don't** pôr caixa alta fora de overline e cabeçalho de tabela; rótulo, botão e badge ficam em sentence case pt-BR.
+- **Don't** descer abaixo de 0.75rem.
+- **Don't** carregar fonte de CDN; as três famílias vivem em `static/fonts`.
+- **Don't** resolver tema escuro em regra de componente com `@media (prefers-color-scheme)` cru; o token já muda sob a guarda `:root:not([data-theme="light"])`.
+- **Don't** lavar mais de um KPI por tela; o lavado marca o único que pede ação.
+- **Don't** usar gradiente fora do filete de 3px do KPI.
