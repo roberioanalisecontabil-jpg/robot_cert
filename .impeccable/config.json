@@ -53,6 +53,24 @@
         ],
         "createdAt": "2026-09-22T22:43:01.278Z",
         "reason": "popup de exportacao em PDF sem tokens (ver excecao do #d1d5db); 1.375rem copia o valor de --text-xl/--fs-section para o papel"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#6e6e73",
+        "files": [
+          "templates/index.html"
+        ],
+        "createdAt": "2026-09-22T23:05:27.406Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); copia do --text-muted do tema claro para o papel, mesma excecao do #d1d5db de 24/08"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f3f4f6",
+        "files": [
+          "templates/index.html"
+        ],
+        "createdAt": "2026-09-22T23:05:27.526Z",
+        "reason": "popup de exportacao em PDF sem tokens: fundo do cabecalho da tabela impressa, mesma excecao do #d1d5db de 24/08"
       }
     ]
   }
