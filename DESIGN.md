@@ -660,6 +660,8 @@ de 120ms em botão e campo; spinner de 0.8s linear; `prefers-reduced-motion`
 zera as transições da tela e desacelera o spinner para 1.6s em vez de
 escondê-lo.
 
+- **Tooltip** (`.ag-tooltip` ou `[data-tooltip]`): balão à direita do elemento com o texto de `data-tooltip`, `ink-900` com texto branco nos dois temas (no escuro sobe para `ink-800` com borda `ink-700`), `radius-sm`, `shadow-md`, seta de 5px; entra com 180ms de atraso em `:hover` e em `:focus-visible`, some na hora. Sem JavaScript. Na sidebar só existe quando o rótulo está escondido (recolhida pelo botão ou na faixa 769–900px); cada item leva também `title` e `aria-label` com o mesmo nome. A gaveta do celular abre sempre expandida e não usa o balão.
+
 ## Do's and Don'ts
 
 ### Do:

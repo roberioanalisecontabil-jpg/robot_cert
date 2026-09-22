@@ -1502,6 +1502,31 @@ body.sidebar-collapsed .sidebar-nav a {
   padding-right: 0.7rem;
 }
 
+/* Tooltip dos itens (data-tooltip → .ag-tooltip, em aguia-components.css)
+   só faz sentido quando o rótulo está escondido: sidebar recolhida pelo
+   botão ou pela faixa de 769–900px que recolhe sozinha. Com o rótulo à
+   vista — sidebar expandida ou gaveta do celular — o balão repetiria o
+   texto ao lado e sai. Nas telas que ainda não carregam o CSS do DS não há
+   balão nenhum e vale o `title` nativo, que cada item também carrega. */
+body:not(.sidebar-collapsed) .sidebar-nav a::before,
+body:not(.sidebar-collapsed) .sidebar-nav a::after {
+  display: none;
+}
+
+@media (min-width: 769px) and (max-width: 900px) {
+  body:not(.sidebar-collapsed) .sidebar-nav a::before,
+  body:not(.sidebar-collapsed) .sidebar-nav a::after {
+    display: block;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar-nav a::before,
+  .sidebar-nav a::after {
+    display: none !important;
+  }
+}
+
 @media (max-width: 900px) {
   .sidebar {
     width: 76px;
@@ -2472,6 +2497,32 @@ body.sidebar-open .sidebar-backdrop {
 
   body.sidebar-open .sidebar {
     transform: translateX(0);
+  }
+
+  /* A gaveta abre SEMPRE expandida, com ícone e rótulo. O modo só-ícone é
+     otimização da sidebar fixa do desktop (economiza largura o tempo todo);
+     a gaveta é temporária e some ao fechar, não há o que economizar. Antes,
+     as regras de ≤900px (auto-recolher) e de body.sidebar-collapsed
+     (preferência guardada no desktop) chegavam até aqui e a gaveta abria
+     numa faixa de ícones mudos. Os seletores repetem a forma das duas
+     regras para vencê-las por ordem, não por !important. */
+  body.sidebar-collapsed .sidebar-nav a,
+  .sidebar-nav a {
+    justify-content: flex-start;
+    font-size: var(--fs-ui);
+    gap: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  body.sidebar-collapsed .brand-text,
+  .brand-text {
+    display: block;
+  }
+
+  body.sidebar-collapsed .sidebar-header,
+  .sidebar-header {
+    justify-content: flex-start;
   }
 
   .main-content {
