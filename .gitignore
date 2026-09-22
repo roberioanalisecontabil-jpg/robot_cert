@@ -56,3 +56,8 @@ agent/_build_config.py
 # versionados, esses sim.
 .impeccable/live/*
 !.impeccable/live/config.json
+
+# impeccable — capturas de revisao e relatorios de critique sao evidencia de
+# sessao (imagens grandes, banco de ensaio), nao fonte.
+.impeccable/review/
+.impeccable/critique/

@@ -1200,6 +1200,18 @@ tbody tr:hover {
      textos alinhados entre linhas da mesma tabela. */
   min-width: 1em;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Desde 22/09 o glifo é um SVG de traço (ver BADGE_GLIFOS em ui-common.js),
+   que sem tamanho ocuparia a largura da célula. Em em, acompanha a fonte do
+   badge em qualquer tela. */
+.badge-glifo svg {
+  width: 0.95em;
+  height: 0.95em;
+  display: block;
 }
 
 .badge-ok {
