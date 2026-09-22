@@ -35,6 +35,24 @@
         ],
         "createdAt": "2026-09-22T22:17:38.881Z",
         "reason": "filete dourado de 3px no topo do KPI e o desenho do proprio DS (secao 15 do systemdesign.html: 'KPI com filete dourado no topo')"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "arial",
+        "files": [
+          "templates/index.html"
+        ],
+        "createdAt": "2026-09-22T22:43:01.195Z",
+        "reason": "popup de exportacao em PDF: janela de window.open('')+document.write sem o link do CSS, nenhum token existe ali (mesma excecao ja registrada para #d1d5db em 24/08); Segoe UI/Arial e a pilha de impressao"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.375rem",
+        "files": [
+          "templates/index.html"
+        ],
+        "createdAt": "2026-09-22T22:43:01.278Z",
+        "reason": "popup de exportacao em PDF sem tokens (ver excecao do #d1d5db); 1.375rem copia o valor de --text-xl/--fs-section para o papel"
       }
     ]
   }
