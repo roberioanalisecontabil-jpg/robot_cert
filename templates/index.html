@@ -5,66 +5,92 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Certificados PFX — Painel</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <!-- As três famílias do Águia DS (seção 5): Exo em títulos, números de
+         destaque e botões; Inter no corpo; JetBrains Mono em dado numérico
+         tabular (CNPJ/CPF). Servidas pelo próprio portal (static/fonts): o
+         portal vive na VPN, e uma estação sem internet cairia na fonte do
+         sistema se dependesse do Google Fonts. -->
+    <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
     <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-    <style nonce="{{ request.state.nonce }}">
-      /* .barra-selecao migrou para o style.css em 18/08: a aba Seleção do
-         Acompanhamento passou a usá-la, e regra compartilhada dentro do
-         <style> de uma tela é como esc() acabou duplicada em seis. */
-      #tbody .chk-cert:disabled { cursor: not-allowed; opacity: 0.45; }
-    </style>
+    <!-- Ordem de adoção do DS (seção 41): tokens → componentes → o que é só
+         desta tela. Esta é a primeira tela do portal no Águia; as outras
+         continuam só com o style.css até serem levadas uma a uma. -->
+    <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+    <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09" />
+    <link rel="stylesheet" href="/static/painel-certificados.css?v=aguia-2026-09" />
   </head>
-  <body>
+  <body class="cg-aguia">
+    <!--
+      THESIS: a tela responde "qual certificado, quando vence, instalo agora?"
+      em uma passada de olho — e recusa o painel de cartões iguais com uma
+      tabela genérica embaixo.
+      OWN-WORLD: Águia DS da Análise Group, pinado pelo brief — grafite quente
+      sobre off-white, ouro só como acento (filete do KPI, botão primário,
+      foco), Exo nos títulos e números, Inter no corpo, JetBrains Mono nos
+      documentos. Cor semântica só para estado.
+      STORY: a pessoa vê o que expira, acha o cliente pela busca, e instala
+      nesta máquina em três toques (entrar no modo, marcar a linha, instalar);
+      o admin lê a saúde do acervo nos três números.
+      FIRST VIEWPORT: título e frase; três KPIs, o de "Expirando" lavado de
+      aviso; abaixo, um card com a toolbar numa linha acima de 1024px (Status,
+      busca à esquerda; Selecionar para instalar em ouro, Exportar e Atualizar
+      em contorno à direita) e a tabela. A 936px, o viewport real do portátil a
+      125%, a toolbar é de duas linhas: filtros e ações.
+      FORM: roll pulado — o pedido nomeia o systemdesign.html do Águia DS como
+      norma (brief pinado, sem rodada de direção); composição derivada da
+      receita "dashboard com KPIs + tabela" do DS.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with
+      the finish review, the verdict, DESIGN.md, and every shipping raster
+      carrying its provenance.
+    -->
     <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
     {% include "_sidebar.html" %}
 
-    <!-- Main Content -->
-    <main class="main-content" id="main-content">
-      <header class="page-header">
-        <h1>Painel de Certificados</h1>
-        <p>Visão geral dos certificados digitais mapeados pelo agente.</p>
+    <main class="main-content cg-painel" id="main-content">
+      <header class="ag-page__head">
+        <h1 class="ag-page__title">Painel de Certificados</h1>
+        <p class="ag-page__lead">Certificados digitais mapeados pelo agente no servidor. Encontre o do cliente e instale nesta máquina.</p>
       </header>
 
-      <!-- Resumo em cards do Início -->
-      <div class="cards-grid">
-        <div class="dashboard-card card-total">
-          <div class="card-info">
-            <span class="card-title">Total</span>
-            <span class="card-number" id="n-tot">0</span>
+      <!-- Resumo: três números, e só o terceiro pede ação — por isso só ele
+           tem tratamento de aviso. O "—" inicial é "ainda não sei", que não é
+           o mesmo que zero. -->
+      <section class="ag-kpi-row" aria-label="Resumo dos certificados">
+        <div class="ag-kpi cg-kpi">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Total</p>
+            <p class="ag-kpi__value" id="n-tot" aria-busy="true">—</p>
+            <p class="ag-kpi__delta">Certificados mapeados</p>
           </div>
-          <div class="card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-            </svg>
-          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <!-- Lucide "shield": custódia do acervo, no lugar do ícone de
+                 "copiar" que não dizia nada sobre o número. -->
+            <svg class="ag-icon" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+          </span>
         </div>
 
-        <div class="dashboard-card card-validos">
-          <div class="card-info">
-            <span class="card-title">Ativo</span>
-            <span class="card-number" id="n-ok">0</span>
+        <div class="ag-kpi cg-kpi">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Ativo</p>
+            <p class="ag-kpi__value" id="n-ok" aria-busy="true">—</p>
+            <p class="ag-kpi__delta">Válidos e prontos para instalar</p>
           </div>
-          <div class="card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
-            </svg>
-          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <!-- Lucide "circle-check" -->
+            <svg class="ag-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          </span>
         </div>
 
-        <div class="dashboard-card card-expirando">
-          <div class="card-info">
-            <span class="card-title">Expirando</span>
-            <span class="card-number" id="n-exp-soon">0</span>
-            <span class="card-subtitle">Próximos 30 dias</span>
+        <div class="ag-kpi cg-kpi cg-kpi--atencao">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Expirando</p>
+            <p class="ag-kpi__value" id="n-exp-soon" aria-busy="true">—</p>
+            <p class="ag-kpi__delta">Vencem nos próximos 30 dias</p>
           </div>
-          <div class="card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <!-- Lucide "clock" -->
+            <svg class="ag-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
         </div>
 
         <!-- Os cards de Erro e de Falha (sem padrao) sairam daqui em 21/08.
@@ -77,36 +103,50 @@
           rotulo "ilegiveis", com a nota "arquivo(s) que o robo nao consegue
           ler", e essa tela e restrita pela matriz de permissoes — que e
           exatamente o publico tecnico que trata disso. -->
-      </div>
+      </section>
 
       <!-- Tabela -->
-      <div class="table-container table-container--cheia" id="table-container-dash">
-        <div class="toolbar">
-          <div class="toolbar__status" aria-live="polite">
-            <p id="status-msg" class="status-line"></p>
-            <p class="hint" id="data-hint"></p>
-            <p id="panel-hint" class="hint" style="display: none; color: var(--warning-text);"></p>
+      <section class="ag-card cg-tabela-card" id="table-container-dash" aria-label="Certificados">
+        <div class="cg-toolbar">
+          <div class="cg-toolbar__filtros">
+            <div class="ag-field cg-campo-inline">
+              <label class="ag-label" for="filtro-status">Status</label>
+              <select id="filtro-status" class="ag-select" title="Filtrar por status">
+                <option value="todos">Todos</option>
+                <option value="validos">Ativo</option>
+                <option value="prestes_vencer">Expirando</option>
+              </select>
+            </div>
+            <div class="ag-field cg-campo-inline cg-campo-busca">
+              <label class="ag-label" for="busca-cert">Buscar</label>
+              <input class="ag-input"
+                type="search"
+                id="busca-cert"
+                placeholder="Nome, CNPJ ou CPF"
+                title="Busca por nome do certificado, CNPJ/CPF com ou sem pontuação"
+                autocomplete="off"
+              />
+            </div>
           </div>
-          <div class="toolbar__actions">
-            <label for="filtro-status" class="cg-sr-only">Filtrar por status do certificado</label>
-            <select id="filtro-status" title="Filtrar por status">
-              <option value="todos">Todos</option>
-              <option value="validos">Ativo</option>
-              <option value="prestes_vencer">Expirando</option>
-            </select>
-            <label for="busca-cert" class="cg-sr-only">Buscar certificado por nome, CNPJ ou CPF</label>
-            <input class="form-control campo-busca"
-              type="search"
-              id="busca-cert"
-              placeholder="Buscar por nome, CNPJ ou CPF"
-              title="Busca por nome do certificado, CNPJ/CPF com ou sem pontuação"
-            />
-            <button type="button" id="btn-refresh" class="primary">Atualizar tabela</button>
+          <div class="cg-toolbar__acoes">
+            <!-- A coluna de checkbox não é de uso diário e roubava a largura
+                 do nome. Ela nasce escondida e este botão a revela — é o
+                 único caminho para "instalar nesta máquina", então o rótulo
+                 diz para que serve, não "selecionar múltiplos". -->
+            <!-- O ouro da tela vai para o caminho que a tese promete: instalar.
+                 Ligado, o botão perde o preenchimento (aria-pressed) e o ouro
+                 passa ao "Instalar nesta máquina" da barra — um primário por
+                 vez, como o DS pede. -->
+            <button type="button" id="btnModoSelecao" class="ag-btn ag-btn--primary" aria-pressed="false" aria-controls="table-container-dash">
+              <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span class="cg-btn__rotulo">Selecionar para instalar</span>
+            </button>
             <!-- Um gatilho no lugar de dois. Exportar é UMA intenção; o formato
                  é detalhe dela, e ocupava metade da fila de ações competindo em
                  peso com "Atualizar tabela", que é o que se usa o tempo todo. -->
             <details class="menu-suspenso" id="menu-exportar">
-              <summary aria-haspopup="menu">
+              <summary class="ag-btn ag-btn--outline" aria-haspopup="menu">
+                <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
                 Exportar
                 <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
               </summary>
@@ -115,47 +155,61 @@
                 <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
               </div>
             </details>
+            <button type="button" id="btn-refresh" class="ag-btn ag-btn--outline">
+              <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              Atualizar tabela
+            </button>
           </div>
         </div>
 
+        <div class="cg-status" aria-live="polite">
+          <p id="status-msg" class="cg-status__linha"></p>
+          <p class="cg-status__linha" id="data-hint"></p>
+          <p id="panel-hint" class="cg-status__linha cg-status__linha--aviso" style="display: none;"></p>
+        </div>
+
         <div class="table-scroll-anchor">
-          <div class="table-scroll" tabindex="0" role="region" aria-label="Tabela de certificados">
-            <table role="table">
-              <thead role="rowgroup">
-                <tr role="row">
-                  <th role="columnheader" style="width: 40px; text-align: center;">
-                    <input type="checkbox" id="chkSelTodos" title="Selecionar os instaláveis desta página"
-                           aria-label="Selecionar os instaláveis desta página" />
-                  </th>
-                  <th role="columnheader" aria-sort="none" data-col="status">
-                    <button type="button" class="th-ordenar" data-col="status">
-                      Status<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
-                    </button>
-                  </th>
-                  <th role="columnheader" aria-sort="none" data-col="nome">
-                    <button type="button" class="th-ordenar" data-col="nome">
-                      Nome (titular)<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
-                    </button>
-                  </th>
-                  <th role="columnheader" aria-sort="none" data-col="emissao">
-                    <button type="button" class="th-ordenar" data-col="emissao">
-                      Emissão<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
-                    </button>
-                  </th>
-                  <th role="columnheader" aria-sort="none" data-col="vencimento">
-                    <button type="button" class="th-ordenar" data-col="vencimento">
-                      Vencimento<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
-                    </button>
-                  </th>
-                  <th role="columnheader" aria-sort="none" data-col="documento">
-                    <button type="button" class="th-ordenar" data-col="documento">
-                      CNPJ / CPF<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody role="rowgroup" id="tbody"></tbody>
-            </table>
+          <div class="ag-table-wrap cg-tabela-wrap">
+            <div class="ag-table-scroll" tabindex="0" role="region" aria-label="Tabela de certificados">
+              <table class="ag-table cg-tabela" role="table">
+                <thead role="rowgroup">
+                  <tr role="row">
+                    <th role="columnheader" class="ag-th--estatico cg-col-sel">
+                      <label class="ag-check">
+                        <input type="checkbox" id="chkSelTodos" title="Selecionar os instaláveis desta página"
+                               aria-label="Selecionar os instaláveis desta página" />
+                      </label>
+                    </th>
+                    <th role="columnheader" aria-sort="none" data-col="status" class="cg-col-status">
+                      <button type="button" class="th-ordenar" data-col="status">
+                        Status<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                      </button>
+                    </th>
+                    <th role="columnheader" aria-sort="none" data-col="nome">
+                      <button type="button" class="th-ordenar" data-col="nome">
+                        Nome (titular)<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                      </button>
+                    </th>
+                    <th role="columnheader" aria-sort="none" data-col="emissao">
+                      <button type="button" class="th-ordenar" data-col="emissao">
+                        Emissão<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                      </button>
+                    </th>
+                    <th role="columnheader" aria-sort="none" data-col="vencimento">
+                      <button type="button" class="th-ordenar" data-col="vencimento">
+                        Vencimento<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                      </button>
+                    </th>
+                    <th role="columnheader" aria-sort="none" data-col="documento" class="cg-col-doc">
+                      <button type="button" class="th-ordenar" data-col="documento">
+                        CNPJ / CPF<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody role="rowgroup" id="tbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
         <nav id="paginacao-toolbar" class="cg-page-nav" aria-label="Navegação por páginas">
@@ -194,28 +248,30 @@
             </div>
           </div>
         </nav>
-      </div>
+      </section>
 
       <!-- A barra fica no fluxo do <main> e não em position:fixed sobre a
            janela: fixa, ela taparia a paginação no celular, que é justamente o
            controle que o usuário precisa para continuar escolhendo. Só aparece
            quando há seleção. -->
-      <div id="barraSelecao" class="barra-selecao" role="region"
+      <div id="barraSelecao" class="barra-selecao ag-card cg-barra" role="region"
            aria-label="Certificados selecionados" hidden>
-        <div class="barra-selecao__texto">
-          <strong id="selContagem"></strong>
-          <span id="selAviso" class="barra-selecao__aviso"></span>
+        <div class="ag-card-head cg-barra__cabeca">
+          <strong id="selContagem" class="ag-card__title"></strong>
+          <div class="cg-barra__acoes">
+            <button id="btnLimparSel" class="ag-btn ag-btn--ghost ag-btn--sm" type="button">Limpar seleção</button>
+            <!-- Unico caminho desde 23/08/2026. O download do .exe saiu: o agente
+                 mora nas estacoes e instala na sessao da pessoa.
+                 Continua nascendo escondido — sem agente vivo nao ha o que
+                 oferecer, e um botao que falha e pior que botao nenhum. O aviso
+                 abaixo explica o que fazer nesse caso. -->
+            <button id="btnInstalarAqui" class="ag-btn ag-btn--primary" type="button" hidden>Instalar nesta máquina</button>
+          </div>
         </div>
-        <div class="barra-selecao__acoes">
-          <button id="btnLimparSel" class="btn btn-secondary" type="button">Limpar</button>
-          <!-- Unico caminho desde 23/08/2026. O download do .exe saiu: o agente
-               mora nas estacoes e instala na sessao da pessoa.
-               Continua nascendo escondido — sem agente vivo nao ha o que
-               oferecer, e um botao que falha e pior que botao nenhum. O aviso
-               ao lado explica o que fazer nesse caso. -->
-          <button id="btnInstalarAqui" class="btn btn-primary" type="button" hidden>Instalar nesta máquina</button>
-          <span id="semAgente" class="barra-selecao__aviso" hidden>Sem agente ativo nesta máquina — abra o Hardlyze Agent e entre com sua conta.</span>
-        </div>
+        <!-- Linhas de status, abaixo das ações: o aviso de teto e o de "sem
+             agente" informam; não competem com o botão. -->
+        <p id="selAviso" class="cg-barra__aviso"></p>
+        <p id="semAgente" class="cg-barra__aviso" hidden>Sem agente ativo nesta máquina — abra o Hardlyze Agent e entre com sua conta.</p>
       </div>
 
       <!-- Meus computadores.
@@ -227,31 +283,35 @@
            Fica escondido quando não há nenhum: quem nunca instalou o agente não
            tem o que gerir aqui, e um painel vazio dizendo "nenhum" seria ruído
            permanente para a maioria. -->
-      <section id="secao-dispositivos" class="side-card" style="margin-top: 1.5rem;" hidden>
-        <h3>Meus computadores</h3>
-        <p class="side-text">
+      <section id="secao-dispositivos" class="ag-card cg-dispositivos" hidden>
+        <div class="ag-card-head">
+          <h2 class="ag-card__title">Meus computadores</h2>
+        </div>
+        <p class="cg-dispositivos__texto">
           Computadores onde você entrou pelo agente. Eles agem com a sua conta —
           se um deixou de ser seu, revogue o acesso.
         </p>
-        <div class="table-scroll" tabindex="0" role="region" aria-label="Meus computadores">
-          <table role="table">
-            <thead role="rowgroup">
-              <tr role="row">
-                <th scope="col">Computador</th>
-                <th scope="col">Situação</th>
-                <th scope="col">Último contato</th>
-                <th scope="col">Versão</th>
-                <th scope="col"><span class="cg-sr-only">Ações</span></th>
-              </tr>
-            </thead>
-            <tbody id="corpo-dispositivos" role="rowgroup"></tbody>
-          </table>
+        <div class="ag-table-wrap">
+          <div class="ag-table-scroll" tabindex="0" role="region" aria-label="Meus computadores">
+            <table class="ag-table" role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th scope="col">Computador</th>
+                  <th scope="col">Situação</th>
+                  <th scope="col">Último contato</th>
+                  <th scope="col">Versão</th>
+                  <th scope="col"><span class="cg-sr-only">Ações</span></th>
+                </tr>
+              </thead>
+              <tbody id="corpo-dispositivos" role="rowgroup"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -282,11 +342,58 @@
       let itensOriginais = [];
       let itensVisiveis = [];
 
+      // Data e hora completas: só na exportação e no `title` da célula. A
+      // lista mostra a data (dd/mm/aaaa, seção 2 do DS): a hora do certificado
+      // não muda nenhuma decisão de quem está escolhendo o que instalar.
       const fmt = (iso) => {
         if (!iso) return "—";
         const d = new Date(iso);
         return d.toLocaleString("pt-BR", { timeZone: "UTC" });
       };
+
+      const fmtData = (iso) => {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "—";
+        return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+      };
+
+      // Célula de data com o instante completo ao alcance (title), sem o
+      // ocupar na coluna.
+      function celulaData(iso, classe) {
+        const texto = fmtData(iso);
+        if (texto === "—") return "<td role='cell' class='cg-col-data " + classe + "'>—</td>";
+        return (
+          "<td role='cell' class='cg-col-data " + classe + "'>" +
+          "<time datetime='" + esc(iso) + "' title='" + esc(fmt(iso)) + "'>" + esc(texto) + "</time>" +
+          "</td>"
+        );
+      }
+
+      // O nome do certificado vem em CAIXA ALTA do próprio arquivo (e o código
+      // numérico na frente faz parte dele — não é sujeira). Para leitura, a
+      // lista mostra em sentence case; o valor original fica no `title`, na
+      // busca (que é do servidor) e na exportação. Siglas curtas (ME, EPP) e
+      // tokens com barra ou ponto (S/A, S.A.) ficam como estão, senão virariam
+      // "Me" e "S/a". Nome que já tem minúscula não é tocado.
+      const PALAVRAS_MINUSCULAS = new Set(["de", "da", "do", "das", "dos", "e"]);
+
+      function nomeExibicao(nome) {
+        const s = String(nome || "");
+        if (s !== s.toUpperCase()) return s;
+        return s
+          .split(/(\s+)/)
+          .map((p, i) => {
+            if (!/\p{Lu}/u.test(p)) return p;
+            const baixo = p.toLowerCase();
+            // Conectivo antes da regra de sigla: "DE" e "DA" têm duas letras e
+            // seriam mantidos como sigla, e "A DE Castro" não é nome de gente.
+            if (i > 0 && PALAVRAS_MINUSCULAS.has(baixo)) return baixo;
+            if (/[\/.&]/.test(p) || /^\p{Lu}{1,3}$/u.test(p)) return p;
+            return baixo.replace(/(^|[-'])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+          })
+          .join("");
+      }
 
       /** Vencido por `not_after` mesmo que o snapshot ainda diga `ok` (agente sem reenviar). */
       const aplicarFlagsDatasCert = (it, now, thirtyDaysFromNow) => {
@@ -334,7 +441,16 @@
         return String(v || "")
           .toLowerCase()
           .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "");
+          .replace(/[̀-ͯ]/g, "");
+      }
+
+      // O KPI sai do "—" (ainda não sei) só quando o número chega: um zero
+      // antes disso diria "nenhum", que não é o que está acontecendo.
+      function definirKpi(id, valor) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = Number(valor ?? 0).toLocaleString("pt-BR");
+        el.removeAttribute("aria-busy");
       }
 
       function atualizarCards(items) {
@@ -356,16 +472,16 @@
             else okCount++;
           }
         });
-        document.getElementById("n-tot").textContent = total;
-        document.getElementById("n-ok").textContent = okCount;
-        document.getElementById("n-exp-soon").textContent = expirandoCount;
+        definirKpi("n-tot", total);
+        definirKpi("n-ok", okCount);
+        definirKpi("n-exp-soon", expirandoCount);
       }
 
       function atualizarCardsResumo(r) {
         if (!r) return;
-        document.getElementById("n-tot").textContent = r.total ?? 0;
-        document.getElementById("n-ok").textContent = r.validos ?? 0;
-        document.getElementById("n-exp-soon").textContent = r.expirando ?? 0;
+        definirKpi("n-tot", r.total ?? 0);
+        definirKpi("n-ok", r.validos ?? 0);
+        definirKpi("n-exp-soon", r.expirando ?? 0);
       }
 
 
@@ -376,14 +492,17 @@
         return st !== "todos" || bu !== "";
       }
 
+      // `icon: ""` de propósito: o helper compartilhado desenha emoji, que o
+      // DS não admite na interface; o CSS da tela esconde o espaço vazio.
       function renderEstadoVazio() {
         if (temFiltroAtivo()) {
+          const termo = (document.getElementById("busca-cert")?.value || "").trim();
           renderEmptyRow("tbody", 6, {
-            icon: "🔍",
-            title: "Nenhum certificado corresponde ao filtro",
+            icon: "",
+            title: termo ? "Nada encontrado para “" + termo + "”" : "Nenhum certificado com esse status",
             description:
-              "Ajuste a busca ou o status selecionado para ver outros certificados.",
-            actionText: "Limpar filtros",
+              "Ajuste a busca ou o status para ver a lista inteira.",
+            actionText: "Ver a lista inteira",
             onAction: () => {
               const sel = document.getElementById("filtro-status");
               const bu = document.getElementById("busca-cert");
@@ -395,7 +514,7 @@
           });
         } else {
           renderEmptyRow("tbody", 6, {
-            icon: "📭",
+            icon: "",
             title: "Nenhum certificado mapeado ainda",
             description:
               "O agente ainda não enviou dados. Verifique se ele está em execução no servidor e se a pasta de origem está configurada.",
@@ -424,6 +543,28 @@
       let _instalMachineId = null;
       let _instalIndisponivel = false;
 
+      // A coluna de checkbox só existe no modo de seleção. Sair do modo
+      // descarta o que estava marcado: a pessoa disse que terminou, e uma
+      // seleção invisível que reaparecesse dias depois seria uma surpresa.
+      let _modoSelecao = false;
+
+      function definirModoSelecao(ligado) {
+        _modoSelecao = ligado;
+        document.getElementById("table-container-dash").classList.toggle("is-selecionando", ligado);
+        const btn = document.getElementById("btnModoSelecao");
+        btn.setAttribute("aria-pressed", String(ligado));
+        btn.querySelector(".cg-btn__rotulo").textContent = ligado ? "Concluir seleção" : "Selecionar para instalar";
+        if (!ligado) {
+          _selecao.clear();
+          sincronizarCheckboxesDaPagina();
+        }
+        atualizarBarraSelecao();
+        if (ligado) {
+          const primeiro = document.querySelector("#tbody .chk-cert:not([disabled])");
+          if (primeiro) primeiro.focus();
+        }
+      }
+
       // O motivo é a parte que evita a armadilha: um checkbox desabilitado sem
       // explicação parece defeito da tela. Com o motivo, o usuário sabe se
       // espera (o agente ainda não enviou) ou se pede acesso (fora da carteira).
@@ -449,16 +590,17 @@
           ? "Não foi possível verificar a disponibilidade"
           : (MOTIVO[e.estado] || "");
         return (
-          "<td role='cell' data-label='Selecionar' style='text-align:center'>" +
+          "<td role='cell' class='cg-col-sel'>" +
+          "<label class='ag-check'" + (ok ? "" : " title='" + esc(motivo) + "'") + ">" +
           "<input type='checkbox' class='chk-cert'" +
           " data-fp='" + esc(fp) + "'" +
           " data-id='" + esc(e.id || "") + "'" +
           " data-nome='" + esc(it.nome || it.display_name || "") + "'" +
           (ok ? "" : " disabled") +
           (ok && _selecao.has(fp) ? " checked" : "") +
-          (ok ? "" : " title='" + esc(motivo) + "'") +
           " aria-label='" + esc(ok ? "Selecionar certificado" : motivo) + "' />" +
           (ok ? "" : "<span class='cg-sr-only'>" + esc(motivo) + "</span>") +
+          "</label>" +
           "</td>"
         );
       }
@@ -466,8 +608,8 @@
       function atualizarBarraSelecao() {
         const barra = document.getElementById("barraSelecao");
         const n = _selecao.size;
-        barra.hidden = n === 0;
-        if (n === 0) return;
+        barra.hidden = n === 0 || !_modoSelecao;
+        if (barra.hidden) return;
         document.getElementById("selContagem").textContent =
           n === 1 ? "1 certificado selecionado" : `${n} certificados selecionados`;
         const excedeu = n > MAX_CERTIFICADOS;
@@ -676,15 +818,17 @@
       }
 
       function renderTabela(items) {
+        // Tipo em texto apagado e número em mono, numa linha só. O rótulo em
+        // azul saiu: parecia link e não levava a lugar nenhum.
         const colTipo = (it) => {
           const lbl = it.documento_tipo_label || (it.documento_tipo ? String(it.documento_tipo).toUpperCase() : "");
           if (lbl) {
             const f = it.documento_formatado || it.documento_numero || "";
             return (
-              "<span class='doc-type-label'>" +
-              esc(lbl) +
-              "</span>" +
-              (f ? "<span class='doc-type-num'>" + esc(f) + "</span>" : "")
+              "<span class='cg-doc'>" +
+              "<span class='cg-doc__tipo'>" + esc(lbl) + "</span>" +
+              (f ? "<span class='ag-cell-sub ag-cell-sub--mono cg-doc__num'>" + esc(f) + "</span>" : "") +
+              "</span>"
             );
           }
           if (it.error_message) {
@@ -703,25 +847,33 @@
           return;
         }
 
-        // role="row"/"cell" e data-label sustentam o layout de cards < 768px
-        // (ver .table-scroll no media query de style.css).
+        // role="row"/"cell" sustentam o layout de cartões abaixo de 640px
+        // (ver painel-certificados.css): `display:block` apagaria os papéis
+        // implícitos da tabela para o leitor de tela.
         tb.innerHTML = items
-          .map(
-            (it) =>
+          .map((it) => {
+            const nome = it.nome != null && it.nome !== "" ? it.nome : it.display_name;
+            return (
               "<tr role='row'>" +
               celulaSelecao(it) +
-              "<td role='cell' data-label='Status'>" +
+              "<td role='cell' class='cg-col-status'>" +
               badge(it) +
-              "</td><td role='cell' data-label='Nome'>" +
-              esc(it.nome != null && it.nome !== "" ? it.nome : it.display_name) +
-              "</td><td role='cell' data-label='Emissão'>" +
-              fmt(it.not_before) +
-              "</td><td role='cell' data-label='Vencimento'>" +
-              fmt(it.not_after) +
-              "</td><td role='cell' data-label='CNPJ / CPF' class='td-doc'>" +
+              "</td><td role='cell' class='cg-col-nome'>" +
+              "<div class='ag-cell-stack'>" +
+              "<span class='ag-cell-main' title='" + esc(nome) + "'>" + esc(nomeExibicao(nome)) + "</span>" +
+              // Abaixo de 1024px a coluna CNPJ/CPF sai e o documento vem para
+              // debaixo do nome (o padrão de célula do próprio DS); nas telas
+              // largas fica só a coluna, ordenável. O CSS mostra um ou outro.
+              "<span class='cg-doc--sob-nome'>" + colTipo(it) + "</span>" +
+              "</div>" +
+              "</td>" +
+              celulaData(it.not_before, "cg-col-emissao") +
+              celulaData(it.not_after, "cg-col-vencimento") +
+              "<td role='cell' class='cg-col-doc td-doc'>" +
               colTipo(it) +
               "</td></tr>"
-          )
+            );
+          })
           .join("");
 
         sincronizarCheckboxesDaPagina();
@@ -810,7 +962,7 @@
         const csv = all
           .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
           .join("\n");
-        const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+        const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -933,7 +1085,7 @@
             st.textContent = "Fonte “remoto”: ainda sem dados.";
             atualizarPaginacaoUI(null);
             renderEmptyRow("tbody", 6, {
-              icon: "🛰️",
+              icon: "",
               title: "A fonte remota ainda não tem dados",
               description:
                 "Selecione a fonte “local” ou “auto” em Configuração, ou inicie o agente no servidor Windows.",
@@ -947,7 +1099,7 @@
             st.textContent = "Erro " + r.status;
             showToast("Não foi possível carregar os certificados: " + detalhe, "error");
             renderEmptyRow("tbody", 6, {
-              icon: "⚠️",
+              icon: "",
               title: "Erro ao carregar os certificados",
               description: detalhe || "O servidor respondeu com erro " + r.status + ".",
               actionText: "Tentar novamente",
@@ -962,7 +1114,7 @@
             st.textContent = "Resposta inválida do servidor.";
             showToast("Resposta inválida do servidor. Confirme o endereço da API.", "error");
             renderEmptyRow("tbody", 6, {
-              icon: "⚠️",
+              icon: "",
               title: "Resposta inválida do servidor",
               description: "Confirme o endereço da API em Configuração.",
               actionText: "Tentar novamente",
@@ -970,7 +1122,7 @@
             });
             return;
           }
-          st.textContent = "Atualizado em: " + new Date(d.atualizado_em).toLocaleString("pt-BR");
+          st.textContent = "Atualizado em " + new Date(d.atualizado_em).toLocaleString("pt-BR");
           const items = d.itens || [];
           if (d.paginacao) {
             paginaAtual = d.paginacao.pagina;
@@ -1001,7 +1153,7 @@
           st.textContent = "Falha de conexão.";
           showToast("Falha de conexão com o servidor: " + e, "error");
           renderEmptyRow("tbody", 6, {
-            icon: "🔌",
+            icon: "",
             title: "Sem conexão com o servidor",
             description: "Verifique se o portal está em execução e tente novamente.",
             actionText: "Tentar novamente",
@@ -1058,7 +1210,7 @@
         });
       }
 
-      document.querySelector("thead").addEventListener("click", (e) => {
+      document.querySelector(".cg-tabela thead").addEventListener("click", (e) => {
         const btn = e.target.closest(".th-ordenar");
         if (btn) aplicarOrdenacao(btn.dataset.col);
       });
@@ -1066,6 +1218,9 @@
       document.getElementById("btn-refresh").addEventListener("click", () => {
         paginaAtual = 1;
         carregarTabela();
+      });
+      document.getElementById("btnModoSelecao").addEventListener("click", () => {
+        definirModoSelecao(!_modoSelecao);
       });
       // `<details>` abre e fecha no gatilho, mas NAO fecha ao escolher uma
       // opcao nem ao clicar fora — as duas coisas ficam por conta daqui. Sem a
@@ -1129,6 +1284,18 @@
           atualizarBarraSelecao();
         });
 
+        // No modo de seleção a linha inteira marca: no celular a caixa de 44px
+        // é pequena ao lado de um cartão, e quem lê o nome clica no nome.
+        document.getElementById("tbody").addEventListener("click", (ev) => {
+          if (!_modoSelecao) return;
+          if (ev.target.closest("input, label, button, a")) return;
+          const tr = ev.target.closest("tr");
+          const c = tr && tr.querySelector(".chk-cert");
+          if (!c || c.disabled) return;
+          c.checked = !c.checked;
+          c.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+
         document.getElementById("chkSelTodos").addEventListener("change", (ev) => {
           // Alcança só os instaláveis DESTA página — marcar 489 de uma vez com
           // teto de 50 seria uma armadilha, não um atalho.
@@ -1164,9 +1331,9 @@
         // um computador desligado, que volta sozinho; "revogado" é uma decisão
         // que alguém tomou. Mostrá-los igual faria a pessoa revogar de novo o
         // que já revogou, ou esperar por um que nunca vai voltar.
-        if (d.revogado_em) return { texto: "Acesso revogado", classe: "badge-bad", glifo: "×" };
-        if (d.vivo) return { texto: "Ativo agora", classe: "badge-ok", glifo: "✓" };
-        return { texto: "Parado", classe: "badge-warning", glifo: "!" };
+        if (d.revogado_em) return { texto: "Acesso revogado", classe: "badge-bad", glifo: BADGE_GLIFOS.x };
+        if (d.vivo) return { texto: "Ativo agora", classe: "badge-ok", glifo: BADGE_GLIFOS.check };
+        return { texto: "Parado", classe: "badge-warning", glifo: BADGE_GLIFOS.alerta };
       }
 
       // `createElement` + `textContent`, nunca string HTML. É a forma sancionada
@@ -1176,11 +1343,15 @@
       // divergiu, sem nada acusando.
       function badgeElemento(texto, classe, glifo) {
         const span = document.createElement("span");
-        span.className = "badge " + classe;
+        // `classesDeBadge` (ui-common.js) acrescenta a classe .ag-* que pinta
+        // pelo DS; o mapeamento legado→Águia mora lá, num lugar só.
+        span.className = classesDeBadge(classe);
         const g = document.createElement("span");
         g.className = "badge-glifo";
         g.setAttribute("aria-hidden", "true");
-        g.textContent = glifo;
+        // O glifo é um SVG fixo de BADGE_GLIFOS (ui-common.js), nunca dado do
+        // servidor — por isso innerHTML aqui não abre porta a injeção.
+        g.innerHTML = glifo;
         span.appendChild(g);
         span.appendChild(document.createTextNode(texto));
         return span;
@@ -1264,11 +1435,12 @@
           tr.appendChild(versaoDoDispositivo(d));
 
           const tdAcoes = document.createElement("td");
+          tdAcoes.className = "ag-td--acoes";
           if (!d.revogado_em) {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "btn btn-secondary";
-            btn.textContent = "Revogar";
+            btn.className = "ag-btn ag-btn--outline ag-btn--sm";
+            btn.textContent = "Revogar acesso";
             btn.addEventListener("click", () => revogarDispositivo(d));
             tdAcoes.appendChild(btn);
           }

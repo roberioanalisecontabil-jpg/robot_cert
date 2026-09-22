@@ -1,0 +1,617 @@
+/* Painel de Certificados (templates/index.html) sobre o Águia DS.
+
+   Terceiro arquivo da ordem de carregamento do DS (tokens → componentes → o
+   que é só deste projeto), com o prefixo do projeto (.cg-). Ele NUNCA redefine
+   token do Águia — no momento em que escrever `--gold-500: outra coisa` o DS
+   deixa de ser compartilhado. O que ele faz:
+
+   1. Liga os nomes de token que o portal legado usa (--bg, --surface,
+      --text, --accent, --sp-*, --fs-*...) aos tokens do Águia. Assim a
+      sidebar, os toasts, o estado vazio, a paginação e a barra de seleção,
+      que continuam escritos com os nomes antigos em style.css, passam a
+      pintar com a paleta Águia NESTA tela sem que style.css mude — e as
+      outras telas, que não carregam este arquivo, ficam como estão.
+   2. Compõe a página com as peças .ag-* (KPI, tabela, toolbar) e resolve o
+      que o DS deixa a cargo da tela: a linha da tabela virando cartão no
+      celular, o modo de seleção, o destaque do KPI de urgência. */
+
+/* ── 1. Ponte de tokens legado → Águia ────────────────────────────────── */
+
+/* A lista de seletores existe por causa do tema escuro do style.css: ele
+   redefine os mesmos nomes (--bg, --surface, --accent, --sidebar-*...) em
+   `:root[data-theme="dark"]` e em `:root:not([data-theme="light"])` dentro da
+   media query do sistema, ambos mais específicos que `:root`. A ponte repete
+   as mesmas formas para vencer nos três estados (claro, escuro, sistema); o
+   valor certo para cada tema quem decide é o token do Águia do outro lado. */
+:root,
+:root:not([data-theme="light"]),
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+    --bg: var(--bg-page);
+    --surface: var(--bg-surface);
+    --border: var(--border-default);
+    --border-focus: var(--gold-500);
+    --text: var(--text-primary);
+    /* --text-muted já é redefinido pelo próprio aguia-tokens.css. */
+
+    /* O azul de acento do portal legado sai desta tela: só grafite e ouro
+       (regra "duas famílias de cor por tela"). --accent-solid carrega texto
+       branco em quem o usa (skip-link, botão .primary do estado vazio), e
+       branco sobre ouro é a regra mais violada do DS — por isso vira grafite,
+       que é o "botão escuro" do próprio DS. */
+    --accent: var(--gold-600);
+    --accent-hover: var(--gold-700);
+    --accent-text: var(--text-brand);
+    --accent-solid: var(--ink-900);
+    --accent-soft: var(--gold-200);
+
+    /* Estados: os tokens semânticos do Águia no lugar dos do padrão Apple. */
+    --ok: var(--success-500);
+    --ok-bg: var(--success-50);
+    --ok-text: var(--success-700);
+    --warning: var(--warning-500);
+    --warning-bg: var(--warning-50);
+    --warning-text: var(--warning-700);
+    --expired: var(--danger-500);
+    --expired-bg: var(--danger-50);
+    --expired-text: var(--danger-700);
+    --expired-solid: var(--danger-700);
+    --danger-text: var(--danger-700);
+    --info: var(--info-500);
+    --info-bg: var(--info-50);
+    --total: var(--text-brand);
+    --total-bg: var(--bg-surface-alt);
+    --row-hover: color-mix(in srgb, var(--gold-500) 6%, transparent);
+    --row-tint-danger: var(--danger-50);
+    --row-tint-warning: var(--warning-50);
+
+    /* Sidebar: grafite do DS, item ativo em lavado dourado + texto gold-300
+       (seção 27 do DS), no lugar do azul sólido. */
+    --sidebar-bg: var(--ink-900);
+    --sidebar-text: var(--ink-400);
+    --sidebar-text-active: var(--gold-300);
+    --sidebar-hover: var(--color-gold-glow);
+    --sidebar-active-bg: var(--color-gold-glow);
+    --sidebar-danger: var(--danger-500);
+
+    /* Escala tipográfica e espaçamento: os papéis do portal apontam para a
+       escala do Águia. --fs-label deixa de ser 11px porque o DS não desce
+       abaixo de .75rem. */
+    --fs-title: var(--text-3xl);
+    --fs-section: var(--text-2xl);
+    --fs-subsection: var(--text-lg);
+    --fs-body: var(--text-base);
+    --fs-metric: var(--text-3xl);
+    --fs-ui: var(--text-sm);
+    --fs-ui-sm: var(--text-xs);
+    --fs-caption: var(--text-caption);
+    --fs-label: var(--text-overline);
+
+    --sp-1: var(--space-1);
+    --sp-2: var(--space-2);
+    --sp-3: var(--space-3);
+    --sp-4: var(--space-4);
+    --sp-5: var(--space-5);
+    --sp-6: var(--space-6);
+    --sp-8: var(--space-8);
+    --sp-10: var(--space-10);
+    --sp-12: var(--space-12);
+    --sp-16: var(--space-16);
+
+    --duration-fast: var(--dur-fast);
+    --duration-normal: var(--dur-base);
+    --duration-slow: var(--dur-slow);
+    --ease-out: var(--ease-standard);
+    --ease-spring: var(--ease-standard);
+    --ease-default: var(--ease-standard);
+}
+
+/* No escuro os degraus de perigo do DS são todos claros (feitos para texto
+   sobre grafite); o contador do sino, que é texto branco sobre fundo sólido,
+   precisa de um vermelho escurecido — misturado com a tinta, não escrito. */
+html.dark, :root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+    --sidebar-danger: var(--danger-500);
+}
+html.dark, :root[data-theme="dark"] {
+    --expired-solid: color-mix(in srgb, var(--danger-500) 55%, var(--ink-950));
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --expired-solid: color-mix(in srgb, var(--danger-500) 55%, var(--ink-950));
+    }
+}
+
+body {
+    font-family: var(--font-body);
+    background: var(--bg-page);
+    color: var(--text-primary);
+}
+
+/* Seleção de texto e foco vêm do DS, não do navegador (superfícies que a
+   tela não desenha ainda carregam o design). */
+.cg-painel ::selection { background: var(--gold-200); color: var(--ink-900); }
+html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selection {
+    background: var(--gold-700);
+    color: var(--ink-50);
+}
+
+.cg-painel :is(a, button, summary, [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* ── 2. Composição da página ──────────────────────────────────────────── */
+
+.cg-painel > * + * {
+    margin-top: var(--space-6);
+}
+
+/* ── KPIs ────────────────────────────────────────────────────────────── */
+
+.cg-kpi {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.cg-kpi__texto { min-width: 0; }
+
+.cg-kpi__icone {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: var(--bg-surface-alt);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.cg-kpi__icone .ag-icon { width: 20px; height: 20px; }
+
+/* "Expirando" é a informação urgente da tela e os três cards têm o mesmo
+   peso: aqui o card inteiro fica lavado de aviso, com borda e ícone na cor
+   semântica — cor de ESTADO, permitida pelo DS; não é decoração. O filete
+   dourado sai deste card para o aviso não competir com a marca. */
+.cg-kpi--atencao {
+    background: var(--warning-50);
+    border-color: var(--warning-500);
+}
+
+.cg-kpi--atencao::before { background: var(--warning-500); }
+
+.cg-kpi--atencao .ag-kpi__label,
+.cg-kpi--atencao .ag-kpi__delta { color: var(--warning-700); }
+
+.cg-kpi--atencao .cg-kpi__icone {
+    background: var(--bg-surface);
+    color: var(--warning-700);
+}
+
+/* No escuro o --warning-50 do DS já é um lavado translúcido; a borda
+   permanece na cor forte. Nada a sobrescrever. */
+
+/* Enquanto o número não chegou, o card diz que está carregando em vez de
+   mostrar um zero que sugere "nenhum" (contrato de KPI, seção 7 da skill). */
+.ag-kpi__value[aria-busy="true"] { color: var(--text-muted); }
+
+/* ── Card da tabela ──────────────────────────────────────────────────── */
+
+.cg-tabela-card {
+    padding: var(--space-5) var(--space-6) var(--space-6);
+    /* O overlay de carregamento e o banner se ancoram aqui. */
+    position: relative;
+    min-width: 0;
+}
+
+/* Toolbar numa linha: filtros à esquerda, ações à direita. A ação em ouro
+   é "Selecionar para instalar" — o caminho que a tela existe para abrir;
+   Exportar e Atualizar ficam em contorno, com ícone de traço do DS. */
+.cg-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--space-3) var(--space-4);
+}
+
+/* Grade, e não flex com quebra: com flex o campo de busca quebrava para
+   baixo do select antes de a fila de ações quebrar, e a toolbar virava três
+   linhas. Aqui o select tem a largura dele e a busca ocupa o resto. */
+.cg-toolbar__filtros {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: end;
+    min-width: 0;
+}
+
+.cg-toolbar__acoes {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.cg-campo-inline .ag-select { width: auto; min-width: 9.5rem; }
+.cg-campo-busca .ag-input { min-width: 0; }
+
+/* O <details> de exportar reaproveita o menu suspenso do portal; só o gatilho
+   vira botão do DS. `summary` não herda display de botão: forçado aqui. */
+.cg-toolbar .menu-suspenso > summary.ag-btn {
+    list-style: none;
+    padding: 11px 18px 11px 22px;
+}
+
+.cg-toolbar .menu-suspenso > summary.ag-btn::-webkit-details-marker { display: none; }
+
+.cg-toolbar .menu-suspenso__seta { width: 16px; height: 16px; }
+
+.cg-toolbar .menu-suspenso__lista {
+    background: var(--bg-surface);
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+}
+
+.cg-toolbar .menu-suspenso__lista button {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    min-height: 44px;
+}
+
+/* "Atualizado em" e avisos de fonte: hierarquia discreta, separados dos
+   controles por espaço e tamanho, não por caixa. */
+.cg-status {
+    margin-top: var(--space-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    min-height: 1.25rem;
+}
+
+.cg-status__linha {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+.cg-status__linha:empty { display: none; }
+
+.cg-status__linha--aviso {
+    color: var(--warning-700);
+    font-weight: 600;
+}
+
+.cg-tabela-wrap { margin-top: var(--space-4); }
+
+/* ── Tabela ──────────────────────────────────────────────────────────── */
+
+/* Ordenação: o botão do cabeçalho herda a tipografia do th do DS e a coluna
+   ativa fala em tinta de marca (o único ouro do cabeçalho). */
+/* O botão de ordenar alinha como a célula abaixo dele: à esquerda. O
+   `width: 100%` + centralização herdados do portal flutuavam STATUS e NOME
+   centrados sobre colunas alinhadas à esquerda. */
+.cg-tabela .th-ordenar {
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    width: auto;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+/* O botão de ordenar ocupa a altura inteira do cabeçalho: 44px de alvo
+   (regra 9 do DS) sem o cabeçalho crescer — o padding vertical sai do th e
+   entra no botão. */
+.cg-tabela thead th { padding-top: 0; padding-bottom: 0; height: 44px; }
+.cg-tabela thead .th-ordenar { min-height: 44px; }
+.cg-tabela thead .ag-check { min-height: 44px; }
+
+/* O seletor "por página" vem do portal com 38px; aqui sobe ao alvo mínimo. */
+.cg-painel .cg-page-perpage-select { min-height: 44px; }
+.cg-tabela .th-ordenar:hover { color: var(--text-primary); }
+.cg-tabela .th-ordenar--ativa { color: var(--text-brand); }
+
+.cg-col-status { width: 1%; white-space: nowrap; }
+.cg-col-data { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cg-col-doc { white-space: nowrap; }
+
+/* CNPJ/CPF numa linha: tipo em texto apagado, número em mono — nada de azul
+   parecendo link. */
+.cg-doc {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+
+.cg-doc__tipo {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+/* O número não quebra no hífen: "0001-19" partido em duas linhas lê como
+   dois números. Quem quebra é o par tipo + número, no gap do .cg-doc. */
+.cg-doc__num { color: var(--text-primary); font-size: var(--text-sm); white-space: nowrap; }
+.cg-doc { flex-wrap: wrap; }
+
+/* Documento sob o nome: só existe abaixo de --bp-md (ver a media query).
+   Um degrau menor que o da coluna própria, para "CNPJ 00.000.000/0001-00"
+   caber numa linha ao lado de duas colunas de data. */
+.cg-doc--sob-nome { display: none; }
+.cg-doc--sob-nome .cg-doc { flex-wrap: nowrap; }
+/* Sob o nome vai só o número: o formato já diz se é CNPJ ou CPF, e o rótulo
+   empurrava o número para uma segunda linha na coluna estreita. */
+.cg-doc--sob-nome .cg-doc__tipo { display: none; }
+.cg-doc--sob-nome .cg-doc__num { font-size: var(--text-xs); color: var(--text-secondary); }
+
+/* Status e datas ocupam só o que precisam; a largura que sobra é do nome,
+   que é a coluna em que a pessoa lê e procura. */
+.cg-tabela th[data-col="emissao"],
+.cg-tabela th[data-col="vencimento"],
+.cg-tabela th.cg-col-status { width: 1%; }
+
+.cg-tabela .error-cell { color: var(--danger-700); }
+
+/* Selo de forma do badge (glifo) vem do helper compartilhado; no DS o badge
+   já tem gap próprio, então a margem antiga sai. */
+.cg-painel .ag-badge .badge-glifo { margin-right: 0; }
+
+/* ── Modo de seleção ─────────────────────────────────────────────────── */
+
+/* A coluna de checkbox não é usada no dia a dia: nasce escondida e só aparece
+   quando a pessoa pede "Selecionar para instalar". Fora desse modo a tabela
+   ganha a coluna de volta para o nome. */
+.cg-col-sel { width: 1%; padding-left: var(--space-3); padding-right: 0; }
+.cg-tabela-card:not(.is-selecionando) .cg-col-sel { display: none; }
+
+.cg-col-sel .ag-check { min-width: 44px; }
+
+/* O estado vazio compartilhado traz um ícone de texto (emoji) que o DS não
+   admite: a tela passa ícone vazio e o espaço some. */
+.cg-painel .empty-state-icon:empty { display: none; }
+
+/* ── Barra de seleção ────────────────────────────────────────────────── */
+
+/* A barra do portal (style.css) dá o sticky e o fluxo; a forma vem do DS:
+   um .ag-card com cabeça (contagem à esquerda, ações à direita) e linhas de
+   status abaixo. O padding do card legado sai para a cabeça do DS mandar. */
+.cg-painel .cg-barra {
+    display: block;
+    padding: 0;
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-surface);
+}
+
+.cg-barra__cabeca { padding: var(--space-4) var(--space-5); border-bottom: 0; }
+
+.cg-barra__acoes {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    align-items: center;
+    margin-left: auto;
+}
+
+.cg-barra__aviso {
+    margin: 0;
+    padding: 0 var(--space-5) var(--space-4);
+    font-size: var(--text-xs);
+    color: var(--warning-700);
+}
+
+.cg-barra__aviso:empty { display: none; }
+
+/* Rótulo do botão de alternância troca no JS; o span existe para o ícone
+   ficar fora do texto substituído. */
+.cg-btn__rotulo { display: inline; }
+
+/* ── Meus computadores ───────────────────────────────────────────────── */
+
+.cg-dispositivos__texto {
+    margin: 0;
+    padding: var(--space-4) var(--space-6) 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    max-width: 68ch;
+}
+
+.cg-dispositivos .ag-table-wrap {
+    margin: var(--space-4) var(--space-6) var(--space-6);
+}
+
+.cg-dispositivos .hint { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* ── Médio (--bp-md: a tabela rola dentro da moldura) ─────────────────── */
+
+/* Num portátil de 1366px a 125% o conteúdo tem ~670px ao lado da sidebar.
+   A tabela rola na horizontal dentro do próprio contêiner, como o DS manda
+   em --bp-md; com as células um pouco mais justas, as cinco colunas cabem
+   sem rolar na maioria dos nomes. */
+@media (max-width: 1024px) {
+    .cg-tabela th,
+    .cg-tabela td { padding: 10px; }
+    .cg-tabela td.cg-col-data { font-size: var(--text-xs); }
+    /* No modo de seleção a coluna do checkbox entra com 44px justos, senão
+       a tabela passa da moldura por uma dúzia de pixels e ganha rolagem. */
+    .cg-tabela .cg-col-sel { padding: 0; }
+    .cg-tabela .cg-col-status { padding-left: 8px; padding-right: 8px; }
+    .cg-kpi { gap: var(--space-3); }
+    .ag-kpi { padding: var(--space-5); }
+
+    /* A coluna CNPJ/CPF é a que sobra: some e o documento passa para a
+       segunda linha da célula do nome (padrão .ag-cell-stack do DS). A
+       ordenação por documento fica só nas telas largas. */
+    .cg-col-doc { display: none; }
+    .cg-doc--sob-nome { display: inline-flex; }
+
+    /* Filtros numa linha, ações na seguinte — e SÓ uma: grade fixa em vez de
+       flex com quebra, senão "Atualizar tabela" caía sozinho numa terceira
+       linha nos ~584px úteis do card a 936px. O primário fica com a folga;
+       os dois de contorno encolhem para o padding compacto do DS, sem perder
+       os 44px de altura. */
+    .cg-toolbar { grid-template-columns: minmax(0, 1fr); }
+    .cg-toolbar__acoes {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: var(--space-2);
+    }
+    .cg-toolbar__acoes .ag-btn--outline,
+    .cg-toolbar .menu-suspenso > summary.ag-btn { padding: 8px 14px; }
+    .cg-toolbar__acoes .ag-btn--primary { justify-self: stretch; }
+}
+
+/* ── Estreito (--bp-sm: grades viram uma coluna, ações empilham) ─────── */
+
+@media (max-width: 640px) {
+    .cg-painel > * + * { margin-top: var(--space-4); }
+
+    /* Um padrão só de empilhamento: coluna cheia, nunca 2 + 1 quebrado. */
+    .ag-kpi-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+    .ag-kpi { padding: var(--space-4) var(--space-5); }
+
+    /* O card da tabela perde a moldura: cartão dentro de cartão é branco
+       sobre branco separado por 1px, e custava 32px de largura do nome.
+       Toolbar e cartões de linha assentam direto no off-white da página. */
+    .cg-tabela-card {
+        padding: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
+    .cg-toolbar__acoes {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .cg-campo-inline .ag-select { width: 100%; }
+    .cg-toolbar .ag-btn,
+    .cg-toolbar .menu-suspenso { width: 100%; }
+    .cg-toolbar .menu-suspenso > summary.ag-btn { width: 100%; }
+
+    /* A tabela vira lista de cartões: nome + status na primeira linha,
+       documento e datas embaixo, sem rótulo em caixa alta por campo.
+       `display:block` em elementos de tabela apaga os papéis implícitos;
+       os `role` explícitos no HTML e no JS que gera as linhas os mantêm. */
+    .cg-tabela-wrap { border: 0; border-radius: 0; background: transparent; }
+    .ag-table-scroll { overflow: visible; }
+
+    .cg-tabela,
+    .cg-tabela tbody,
+    .cg-tabela tr,
+    .cg-tabela td { display: block; width: auto; }
+
+    /* A regra acima devolveria display:block à coluna de documento, que a
+       faixa --bp-md escondeu; sem isto ela entrava no cartão como item solto
+       e quebrava a grade. */
+    .cg-tabela td.cg-col-doc { display: none; }
+
+    .cg-tabela thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+
+    .cg-tabela tbody tr:not(.cg-state-row) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        /* Cada data na própria linha, ocupando a largura toda: com as duas
+           lado a lado, a coluna do badge herdava a largura de "Vence
+           dd/mm/aaaa" e o nome ficava com 129px, quebrando em quatro linhas. */
+        grid-template-areas:
+            "nome status"
+            "emissao emissao"
+            "vencimento vencimento";
+        gap: var(--space-1) var(--space-3);
+        align-items: start;
+        padding: var(--space-3) var(--space-4);
+        margin-bottom: var(--space-3);
+        background: var(--bg-surface);
+        border: var(--bw-1) solid var(--border-default);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-xs);
+    }
+
+    .cg-tabela tbody tr:not(.cg-state-row):hover { background: var(--bg-surface); }
+
+    .cg-tabela tbody tr:not(.cg-state-row) td {
+        padding: 0;
+        border: 0;
+        min-height: 0;
+        white-space: normal;
+    }
+
+    .cg-col-nome { grid-area: nome; }
+    /* break-word, não anywhere: só parte uma palavra quando ela sozinha não
+       cabe; "anywhere" partia "Empreendedora" no meio ao lado do checkbox. */
+    .cg-col-nome .ag-cell-main { font-size: var(--text-base); overflow-wrap: break-word; }
+    .cg-col-status { grid-area: status; justify-self: end; }
+    .cg-col-doc { grid-area: doc; }
+    .cg-col-emissao { grid-area: emissao; }
+    .cg-col-vencimento { grid-area: vencimento; }
+
+    .cg-col-data {
+        font-size: var(--text-xs);
+        color: var(--text-secondary);
+    }
+
+    /* Prefixo em sentence case, no lugar do rótulo de coluna que sumiu. */
+    .cg-col-emissao::before { content: "Emitido "; color: var(--text-muted); }
+    .cg-col-vencimento::before { content: "Vence "; color: var(--text-muted); }
+
+    /* Com o checkbox na linha, o badge desce para baixo do nome: caixa +
+       nome + badge na mesma linha deixavam o nome com 150px e quatro
+       quebras. A caixa ocupa 44px justos, sem coluna de folga. */
+    .cg-tabela-card.is-selecionando tbody tr:not(.cg-state-row) {
+        grid-template-columns: 44px minmax(0, 1fr);
+        grid-template-areas:
+            "sel nome"
+            "sel status"
+            "sel emissao"
+            "sel vencimento";
+    }
+
+    .cg-tabela-card.is-selecionando .cg-col-status { justify-self: start; }
+    .cg-col-sel { grid-area: sel; align-self: center; padding: 0; }
+    .cg-col-sel .ag-check { min-width: 44px; width: 44px; }
+
+    .cg-barra__cabeca { flex-direction: column; align-items: stretch; }
+    .cg-barra__acoes { margin-left: 0; }
+    .cg-barra__acoes .ag-btn { flex: 1 1 auto; }
+
+    /* Linhas de estado (vazio, erro, skeleton) ocupam a largura toda. */
+    .cg-tabela tbody tr.cg-state-row,
+    .cg-tabela tbody tr.cg-state-row td { display: block; width: 100%; }
+    .cg-tabela tbody tr.cg-skeleton-row td + td { display: none; }
+
+    /* Paginação: o controle segmentado do portal não quebra linha e rolava
+       dentro da própria fila em 360px. Aqui os botões viram pílulas soltas
+       e quebram linha — nada rola na horizontal (seção 38 do DS). */
+    .cg-painel .cg-page-nav__row { overflow: visible; }
+    .cg-painel .cg-page-nav__ul {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--space-2);
+    }
+    .cg-painel .cg-page-nav__ul > li + li .cg-page-link { margin-left: 0; }
+    .cg-painel .cg-page-link { border-radius: var(--radius-pill); }
+
+    .cg-dispositivos__texto { padding: var(--space-3) var(--space-4) 0; }
+    .cg-dispositivos .ag-table-wrap { margin: var(--space-3) var(--space-4) var(--space-4); }
+    .cg-dispositivos .ag-table-scroll { overflow-x: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cg-painel * { transition-duration: 0ms; }
+}

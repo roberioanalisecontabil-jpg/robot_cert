@@ -399,13 +399,25 @@ function _toastDuracao(message) {
  * Também desfaz uma ambiguidade: `erro` e `fora_do_padrao` dividem a classe
  * `badge-bad`, então eram visualmente idênticos. Agora `!` e `?` os separam.
  */
+// Glifos de forma dos badges como SVG de traço (Lucide, 12px, currentColor).
+// Eram caracteres de texto (✓ ⚠ ✕ ! ?), que dependem da fonte instalada e
+// que o Águia DS não admite como ícone; o SVG desenha igual em toda máquina.
+// `aria-hidden` vai no <span> que os envolve (ver badgeStatus).
+const BADGE_GLIFOS = {
+  check:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+  alerta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  x:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  ponto:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>',
+  duvida: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
+};
+
 const BADGE_STATUS = {
-  ativo:          { classe: "badge-ok",      texto: "Ativo",               glifo: "✓" },
-  expirando:      { classe: "badge-warning", texto: "Expirando",           glifo: "⚠" },
-  vencido:        { classe: "badge-expired", texto: "Vencido",             glifo: "✕" },
-  erro:           { classe: "badge-bad",     texto: "Erro",                glifo: "!" },
-  fora_do_padrao: { classe: "badge-bad",     texto: "Falha (sem padrão)", glifo: "?" },
-  nao_encontrado: { classe: "badge-bad",     texto: "Não encontrado", glifo: "?" },
+  ativo:          { classe: "badge-ok",      texto: "Ativo",               glifo: BADGE_GLIFOS.check },
+  expirando:      { classe: "badge-warning", texto: "Expirando",           glifo: BADGE_GLIFOS.alerta },
+  vencido:        { classe: "badge-expired", texto: "Vencido",             glifo: BADGE_GLIFOS.x },
+  erro:           { classe: "badge-bad",     texto: "Erro",                glifo: BADGE_GLIFOS.ponto },
+  fora_do_padrao: { classe: "badge-bad",     texto: "Falha (sem padrão)", glifo: BADGE_GLIFOS.duvida },
+  nao_encontrado: { classe: "badge-bad",     texto: "Não encontrado", glifo: BADGE_GLIFOS.duvida },
 };
 
 /**
@@ -429,20 +441,36 @@ const BADGE_STATUS = {
  */
 function badgeAviso(texto) {
   return (
-    '<span class="badge badge-bad">' +
-    '<span class="badge-glifo" aria-hidden="true">!</span>' +
+    '<span class="badge ag-badge badge-bad ag-badge--neutral">' +
+    '<span class="badge-glifo" aria-hidden="true">' + BADGE_GLIFOS.ponto + "</span>" +
     esc(texto) +
     "</span>"
   );
 }
 
+// Classe equivalente no Águia DS para cada badge legado. Vai junto na string
+// desde 22/09/2026: nas telas que carregam aguia-components.css (o Início foi
+// a primeira) o badge pinta pelo DS; nas outras a classe .ag-* não tem CSS e
+// nada muda. Assim o mapeamento estado→aparência continua num lugar só, que é
+// o que `test_status_de_certificado_nao_e_montado_a_mao_no_template` protege.
+const BADGE_AGUIA = {
+  "badge-ok": "ag-badge--success",
+  "badge-warning": "ag-badge--warning",
+  "badge-expired": "ag-badge--danger",
+  "badge-bad": "ag-badge--neutral",
+};
+
+function classesDeBadge(classe) {
+  return "badge ag-badge " + classe + " " + (BADGE_AGUIA[classe] || "ag-badge--neutral");
+}
+
 function badgeStatus(chave) {
   const d = BADGE_STATUS[chave];
   if (!d) {
-    return '<span class="badge badge-bad">' + esc(chave) + "</span>";
+    return '<span class="' + classesDeBadge("badge-bad") + '">' + esc(chave) + "</span>";
   }
   return (
-    '<span class="badge ' + d.classe + '">' +
+    '<span class="' + classesDeBadge(d.classe) + '">' +
     '<span class="badge-glifo" aria-hidden="true">' + d.glifo + "</span>" +
     esc(d.texto) +
     "</span>"

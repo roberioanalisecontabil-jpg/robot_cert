@@ -1,0 +1,155 @@
+/* Águia Design System — tokens (camada 1 da ordem de adoção, seção 41 do
+   systemdesign.html).
+
+   Copiado VERBATIM do bloco :root e do bloco de tema escuro do documento de
+   referência (Desktop/migracao-supabase/systemdesign.html, revisado em
+   17/08/2026). Nenhum valor foi alterado: a regra do DS é que o arquivo de
+   tokens não muda de projeto para projeto, senão viram dois sistemas
+   parecidos. Ajuste de valor se faz no documento e se recopia aqui.
+
+   Carregado DEPOIS do style.css e ANTES do aguia-components.css e do
+   painel-certificados.css, só nas telas que já adotaram o Águia. Como alguns
+   nomes coincidem com tokens legados do portal (--text-muted, --radius-*,
+   --shadow-*), a ordem faz o Águia vencer nessas telas e nada mudar nas
+   outras. O que o portal legado chama por outro nome (--bg, --surface,
+   --text, --accent...) é ligado ao Águia em painel-certificados.css, e não
+   aqui, para este arquivo continuar sendo cópia fiel. */
+
+:root {
+    /* --- Marca / Dourado (accent precioso) --- */
+    --gold-50: #FBF7EF; --gold-100: #F6EAD3; --gold-200: #ECD6AC; --gold-300: #E0C08A;
+    --gold-400: #D2AC74; --gold-500: #C9A06A; --gold-600: #B88157; --gold-700: #9A6A3D;
+    --gold-800: #7A5330; --gold-900: #533821;
+    --grad-gold: linear-gradient(135deg, #B07545 0%, #C9A06A 46%, #E4CC8F 100%);
+    --grad-gold-soft: linear-gradient(135deg, #C9A06A 0%, #E4CC8F 100%);
+
+    /* --- Tinta / Grafite quente (neutros) --- */
+    --ink-950: #171717; --ink-900: #212121; --ink-800: #2C2B29; --ink-700: #3D3B38;
+    --ink-600: #52504C; --ink-500: #6B6863; --ink-400: #8C8983; --ink-300: #B4B0A9;
+    --ink-200: #D8D4CC; --ink-150: #E7E3DB; --ink-100: #EFEBE3; --ink-50: #F7F4EE;
+    --white: #FFFFFF;
+
+    /* --- Semânticas (funcionais) --- */
+    --success-50: #E6F4EC; --success-500: #2F855A; --success-700: #22633F;
+    --warning-50: #FBF0DC; --warning-500: #B7791F; --warning-700: #8A5A12;
+    --danger-50: #FBE9E9; --danger-500: #C53030; --danger-700: #9B2323;
+    --info-50: #E7F0FA; --info-500: #2B6CB0; --info-700: #1F5185;
+
+    /* --- Papéis de superfície e texto --- */
+    --bg-page: var(--ink-50); --bg-surface: #FFFFFF; --bg-surface-alt: var(--ink-100);
+    --bg-inverse: var(--ink-900);
+    --text-primary: var(--ink-900); --text-secondary: var(--ink-600);
+    --text-muted: var(--ink-500); --text-on-brand: var(--ink-900);
+    --text-on-inverse: #FFFFFF; --text-brand: var(--gold-700);
+
+    /* --- Bordas --- */
+    --border-subtle: var(--ink-150); --border-default: var(--ink-200);
+    --border-strong: var(--ink-300); --border-brand: var(--gold-500);
+    --bw-1: 1px; --bw-2: 1.5px; --bw-3: 2px; --bw-4: 3px;
+
+    /* --- Tipografia --- */
+    --font-display: 'Exo', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --text-overline: .75rem; --text-caption: .75rem; --text-xs: .8125rem; --text-sm: .875rem;
+    --text-base: 1rem; --text-lg: 1.125rem; --text-xl: 1.375rem; --text-2xl: 1.625rem;
+    --text-3xl: 2rem; --text-4xl: 2.5rem; --text-5xl: 3rem; --text-6xl: 3.75rem;
+    --lh-tight: 1.1; --lh-snug: 1.25; --lh-normal: 1.5; --lh-relaxed: 1.65;
+    --tracking-tight: -.01em; --tracking-normal: 0; --tracking-wide: .04em; --tracking-caps: .12em;
+
+    /* --- Espaçamento (base 4px) --- */
+    --space-0: 0; --space-1: .25rem; --space-2: .5rem; --space-3: .75rem; --space-4: 1rem;
+    --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem;
+    --space-16: 4rem; --space-20: 5rem; --space-24: 6rem; --space-32: 8rem;
+
+    /* --- Radius --- */
+    --radius-none: 0; --radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+    --radius-xl: 20px; --radius-2xl: 28px; --radius-pill: 999px; --radius-circle: 50%;
+
+    /* --- Elevação (sombra com tinta quente) --- */
+    --shadow-xs: 0 1px 2px rgba(45, 32, 20, .06);
+    --shadow-sm: 0 1px 3px rgba(45, 32, 20, .08), 0 1px 2px rgba(45, 32, 20, .06);
+    --shadow-md: 0 4px 12px rgba(45, 32, 20, .10);
+    --shadow-lg: 0 12px 28px rgba(45, 32, 20, .12);
+    --shadow-xl: 0 24px 48px rgba(45, 32, 20, .16);
+    --shadow-gold: 0 10px 30px rgba(184, 129, 87, .34);
+    --focus-ring: 0 0 0 3px rgba(201, 160, 106, .5);
+
+    /* --- Z-index --- */
+    --z-base: 0; --z-dropdown: 1000; --z-sticky: 1100; --z-banner: 1200; --z-overlay: 1300;
+    --z-modal: 1400; --z-popover: 1500; --z-toast: 1600; --z-tooltip: 1700;
+
+    /* --- Movimento --- */
+    --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+    --ease-standard: cubic-bezier(.2, 0, 0, 1);
+
+    /* --- Layout (shell) --- */
+    --navbar-h: 60px;
+    --sidebar-w: 256px;
+    --sidebar-w-collapsed: 72px;
+
+    /* --- Aliases de cor (retrocompatibilidade) --- */
+    --color-gold-glow: rgba(201, 160, 106, 0.14);
+}
+
+/* ═══════════════════════════════════════════════════
+   TEMA ESCURO
+═══════════════════════════════════════════════════ */
+html.dark, :root[data-theme="dark"] {
+    --bg-page: var(--ink-950);
+    --bg-surface: var(--ink-900);
+    --bg-surface-alt: var(--ink-800);
+    --bg-inverse: var(--ink-50);
+
+    --text-primary: var(--ink-50);
+    --text-secondary: var(--ink-300);
+    --text-muted: var(--ink-400);
+    --text-on-brand: var(--ink-950);
+    --text-on-inverse: var(--ink-950);
+    --text-brand: var(--gold-300);
+
+    --border-subtle: var(--ink-800);
+    --border-default: var(--ink-700);
+    --border-strong: var(--ink-600);
+
+    --success-50: rgba(47, 133, 90, 0.16); --success-500: #48BB78; --success-700: #C6F6D5;
+    --warning-50: rgba(221, 107, 32, 0.16); --warning-500: #ECC94B; --warning-700: #FEFCBF;
+    --danger-50: rgba(229, 62, 62, 0.16); --danger-500: #FC8181; --danger-700: #FED7D7;
+    --info-50: rgba(66, 153, 225, 0.16); --info-500: #63B3ED; --info-700: #EBF8FF;
+
+    --color-gold-glow: rgba(201, 168, 106, 0.12);
+}
+
+/* O portal legado deixa a pessoa "seguir o sistema": nesse caso o JS REMOVE o
+   data-theme e o escuro vem só de prefers-color-scheme (ver applyTheme em
+   ui-common.js). O documento do DS não prevê esse modo, então este bloco é
+   acréscimo do portal: repete o tema escuro do DS sob a mesma guarda
+   `:root:not([data-theme="light"])` que o style.css usa, para quem força claro
+   num sistema escuro não receber os tokens escuros. O corpo é o MESMO do
+   bloco acima — se o documento mudar, os dois mudam juntos. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+    --bg-page: var(--ink-950);
+    --bg-surface: var(--ink-900);
+    --bg-surface-alt: var(--ink-800);
+    --bg-inverse: var(--ink-50);
+
+    --text-primary: var(--ink-50);
+    --text-secondary: var(--ink-300);
+    --text-muted: var(--ink-400);
+    --text-on-brand: var(--ink-950);
+    --text-on-inverse: var(--ink-950);
+    --text-brand: var(--gold-300);
+
+    --border-subtle: var(--ink-800);
+    --border-default: var(--ink-700);
+    --border-strong: var(--ink-600);
+
+    --success-50: rgba(47, 133, 90, 0.16); --success-500: #48BB78; --success-700: #C6F6D5;
+    --warning-50: rgba(221, 107, 32, 0.16); --warning-500: #ECC94B; --warning-700: #FEFCBF;
+    --danger-50: rgba(229, 62, 62, 0.16); --danger-500: #FC8181; --danger-700: #FED7D7;
+    --info-50: rgba(66, 153, 225, 0.16); --info-500: #63B3ED; --info-700: #EBF8FF;
+
+    --color-gold-glow: rgba(201, 168, 106, 0.12);
+    }
+}

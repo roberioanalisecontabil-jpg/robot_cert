@@ -1,0 +1,444 @@
+/* Águia Design System — componentes .ag-* (camadas 2 e 3 da ordem de adoção,
+   seção 41 do systemdesign.html: base tipográfica e primitivos).
+
+   O documento de referência descreve o HTML e as classes .ag-*, mas o CSS de
+   produção (aguia-components.css do CRM) não viaja com ele: o que viaja é a
+   demonstração (.sd-*), que é "o que se vê". Estas regras são a demonstração
+   transcrita para o namespace .ag-, valor por valor, só para as peças que o
+   Painel de Certificados usa — o DS manda trazer o resto "sob demanda", e DS
+   inteiro copiado por precaução vira CSS morto.
+
+   Regras que este arquivo NÃO pode quebrar (seção 2 do DS):
+   - botão primário: fundo ouro, rótulo grafite (--text-on-brand), nunca branco;
+   - ouro é acento: nenhuma área grande em --gold-*; lavado = --color-gold-glow;
+   - foco de 3px visível (--focus-ring), nunca outline: none sem substituto;
+   - alvo de toque de 44px em todo clicável;
+   - nenhum valor literal: tudo sai de var(--token). */
+
+/* ── Base tipográfica ─────────────────────────────────────────────────── */
+
+.ag-page__title,
+.ag-card__title,
+.ag-kpi__value,
+.ag-kpi__label,
+.ag-btn,
+.ag-table th {
+    font-family: var(--font-display);
+}
+
+.ag-cell-sub--mono,
+.ag-table .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Página ──────────────────────────────────────────────────────────── */
+
+.ag-page__head {
+    margin-bottom: var(--space-6);
+}
+
+.ag-page__title {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    line-height: var(--lh-tight);
+    color: var(--text-primary);
+    margin: 0 0 var(--space-2);
+}
+
+.ag-page__lead {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    max-width: 62ch;
+    margin: 0;
+}
+
+/* ── Botões ──────────────────────────────────────────────────────────── */
+
+.ag-btn {
+    font-weight: 700;
+    font-size: var(--text-sm);
+    letter-spacing: .01em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: 11px 22px;
+    /* 44px: o padding da demonstração dá 40px em Inter; a altura mínima
+       fecha o alvo de toque sem mudar o desenho. */
+    min-height: 44px;
+    border-radius: var(--radius-pill);
+    border: var(--bw-2) solid transparent;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: transform var(--dur-fast) var(--ease-standard),
+        background var(--dur-fast), box-shadow var(--dur-fast), color var(--dur-fast),
+        border-color var(--dur-fast);
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.ag-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ag-btn:active:not(:disabled) { transform: translateY(1px); }
+
+.ag-btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.ag-btn--primary { background: var(--gold-500); color: var(--text-on-brand); }
+.ag-btn--primary:hover:not(:disabled) { background: var(--gold-600); box-shadow: var(--shadow-gold); }
+.ag-btn--primary:focus-visible { box-shadow: var(--focus-ring), var(--shadow-gold); }
+
+/* Primário como alternância ligada: solta o preenchimento e fica em contorno
+   dourado, para o ouro sólido passar à ação que o modo abriu (um primário
+   visível por vez). O estado continua legível pela borda, pelo texto em
+   tinta de marca e pelo rótulo, que muda no JS. */
+.ag-btn--primary[aria-pressed="true"] {
+    background: var(--color-gold-glow);
+    color: var(--text-brand);
+    border-color: var(--gold-600);
+    box-shadow: none;
+}
+
+.ag-btn--outline { background: transparent; color: var(--text-primary); border-color: var(--border-strong); }
+.ag-btn--outline:hover:not(:disabled) {
+    border-color: var(--gold-600);
+    color: var(--text-brand);
+    background: var(--color-gold-glow);
+}
+/* Botão de alternância (aria-pressed): o estado ligado precisa de forma além
+   da cor — borda dourada + lavado, e o rótulo muda no JS. */
+.ag-btn--outline[aria-pressed="true"] {
+    border-color: var(--gold-600);
+    color: var(--text-brand);
+    background: var(--color-gold-glow);
+}
+
+.ag-btn--ghost { background: transparent; color: var(--text-secondary); border-color: transparent; }
+.ag-btn--ghost:hover:not(:disabled) { background: var(--bg-surface-alt); color: var(--text-primary); }
+
+.ag-btn--sm { padding: 8px 16px; font-size: var(--text-xs); min-height: 36px; }
+
+.ag-btn .ag-icon { width: 16px; height: 16px; flex: 0 0 auto; }
+
+/* Spinner do estado "enviando": mantém a largura do botão e diz que há
+   trabalho em andamento (contrato do botão, seção 7 da skill). */
+.ag-spin {
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-circle);
+    border: var(--bw-3) solid currentColor;
+    border-right-color: transparent;
+    animation: ag-spin .8s linear infinite;
+}
+
+@keyframes ag-spin { to { transform: rotate(360deg); } }
+
+/* ── Ícones ──────────────────────────────────────────────────────────── */
+
+.ag-icon {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    flex-shrink: 0;
+}
+
+/* ── Campos ──────────────────────────────────────────────────────────── */
+
+.ag-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.ag-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.ag-input,
+.ag-select {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    min-height: 44px;
+    width: 100%;
+    min-width: 0;
+    transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.ag-input::placeholder { color: var(--text-muted); }
+.ag-input:hover, .ag-select:hover { border-color: var(--border-strong); }
+.ag-input:focus, .ag-select:focus,
+.ag-input:focus-visible, .ag-select:focus-visible {
+    outline: none;
+    border-color: var(--gold-500);
+    box-shadow: var(--focus-ring);
+}
+
+/* O <select> mantém a seta nativa: desenhar uma exigiria um SVG em data URI
+   com cor literal, e o DS proíbe valor solto. */
+.ag-select { padding-right: var(--space-8); }
+
+.ag-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-width: 44px;
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.ag-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--gold-600);
+    cursor: inherit;
+}
+
+.ag-check input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-xs);
+}
+
+.ag-check input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .45; }
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+
+.ag-card {
+    background: var(--bg-surface);
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    color: var(--text-primary);
+}
+
+.ag-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    padding: var(--space-5) var(--space-6);
+    border-bottom: var(--bw-1) solid var(--border-subtle);
+}
+
+.ag-card__title {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* ── KPI ─────────────────────────────────────────────────────────────── */
+
+.ag-kpi-row {
+    display: grid;
+    /* A referência de componentes do DS usa 200px de piso; aqui é 180px
+       para três KPIs caberem lado a lado num portátil de 1366px a 125%, onde
+       a linha tem ~600px ao lado da sidebar — a 200px sobrava um card órfão
+       na segunda linha. min(…, 100%): o ponto de quebra é o espaço real, não
+       a tela; em 360px o piso fixo estouraria o contêiner (seção 38). */
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+    gap: var(--space-4);
+}
+
+.ag-kpi {
+    background: var(--bg-surface);
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* Filete dourado no topo: é o acento da marca no KPI, 3px — bem dentro dos
+   10% de ouro por tela. */
+.ag-kpi::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--grad-gold);
+}
+
+.ag-kpi__label {
+    font-size: var(--text-overline);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--text-muted);
+    margin: 0 0 var(--space-2);
+}
+
+.ag-kpi__value {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.ag-kpi__delta {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin: var(--space-2) 0 0;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────── */
+
+.ag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: var(--tracking-normal);
+    text-transform: none;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.ag-badge--gold    { background: var(--gold-100);       color: var(--gold-800); }
+.ag-badge--neutral { background: var(--bg-surface-alt); color: var(--text-secondary); }
+.ag-badge--success { background: var(--success-50);     color: var(--success-700); }
+.ag-badge--warning { background: var(--warning-50);     color: var(--warning-700); }
+.ag-badge--danger  { background: var(--danger-50);      color: var(--danger-700); }
+.ag-badge--info    { background: var(--info-50);        color: var(--info-700); }
+
+html.dark .ag-badge--gold, :root[data-theme="dark"] .ag-badge--gold {
+    background: var(--color-gold-glow);
+    color: var(--gold-200);
+}
+
+/* ── Tabela de dados ─────────────────────────────────────────────────── */
+
+.ag-table-wrap {
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+
+/* Rolagem fica DENTRO da moldura, nunca na página (seção 38, --bp-md). */
+.ag-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+
+.ag-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.ag-table th {
+    background: var(--bg-surface-alt);
+    text-align: left;
+    font-weight: 700;
+    font-size: var(--text-overline);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    padding: 12px 16px;
+    border: 0;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.ag-table td {
+    padding: 12px 16px;
+    border: 0;
+    border-top: var(--bw-1) solid var(--border-subtle);
+    color: var(--text-primary);
+    vertical-align: middle;
+    /* Densidade padrão (44px) coincide com o alvo de toque da linha. */
+    min-height: 44px;
+    text-transform: none;
+}
+
+/* Hover a 6% de ouro (seção 11: dobra para 12% no escuro, onde 6% some
+   sobre grafite). color-mix evita escrever o rgba à mão. */
+.ag-table tbody tr:hover {
+    background: color-mix(in srgb, var(--gold-500) 6%, transparent);
+}
+
+html.dark .ag-table tbody tr:hover, :root[data-theme="dark"] .ag-table tbody tr:hover {
+    background: color-mix(in srgb, var(--gold-500) 12%, transparent);
+}
+
+.ag-table .num, .ag-table th.num { text-align: right; }
+.ag-table .ag-th--estatico { cursor: default; }
+.ag-table .ag-td--acoes { text-align: right; white-space: nowrap; }
+
+.ag-table__vazio {
+    text-align: center;
+    color: var(--text-muted);
+    padding: var(--space-10) var(--space-6);
+}
+
+.ag-cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ag-cell-main {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.ag-cell-sub {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+}
+
+.ag-cell-sub--mono {
+    letter-spacing: var(--tracking-normal);
+}
+
+/* ── Alvo de toque ───────────────────────────────────────────────────── */
+
+.ag-tap-44 { position: relative; }
+.ag-tap-44::after {
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+}
+
+/* ── Movimento reduzido ──────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+    .ag-btn, .ag-input, .ag-select { transition: none; }
+    .ag-spin { animation-duration: 1.6s; }
+}
