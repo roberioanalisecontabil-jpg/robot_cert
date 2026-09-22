@@ -33,9 +33,10 @@
       o admin lê a saúde do acervo nos três números.
       FIRST VIEWPORT: título e frase; três KPIs, o de "Expirando" lavado de
       aviso; abaixo, um card com a toolbar numa linha acima de 1024px (Status,
-      busca à esquerda; Selecionar para instalar em ouro, Exportar e Atualizar
-      em contorno à direita) e a tabela. A 936px, o viewport real do portátil a
-      125%, a toolbar é de duas linhas: filtros e ações.
+      busca à esquerda; Selecionar, Exportar e Atualizar em contorno à direita;
+      "Instalar selecionados (N)" em ouro só aparece com algo marcado) e a
+      tabela. A 936px, o viewport real do portátil a 125%, a toolbar é de duas
+      linhas: filtros e ações.
       FORM: roll pulado — o pedido nomeia o systemdesign.html do Águia DS como
       norma (brief pinado, sem rodada de direção); composição derivada da
       receita "dashboard com KPIs + tabela" do DS.
@@ -49,7 +50,7 @@
     <main class="main-content cg-painel" id="main-content">
       <header class="ag-page__head">
         <h1 class="ag-page__title">Painel de Certificados</h1>
-        <p class="ag-page__lead">Certificados digitais mapeados pelo agente no servidor. Encontre o do cliente e instale nesta máquina.</p>
+        <p class="ag-page__lead">Gerencie e instale seus certificados das suas empresas.</p>
       </header>
 
       <!-- Resumo: três números, e só o terceiro pede ação — por isso só ele
@@ -133,13 +134,22 @@
                  do nome. Ela nasce escondida e este botão a revela — é o
                  único caminho para "instalar nesta máquina", então o rótulo
                  diz para que serve, não "selecionar múltiplos". -->
-            <!-- O ouro da tela vai para o caminho que a tese promete: instalar.
-                 Ligado, o botão perde o preenchimento (aria-pressed) e o ouro
-                 passa ao "Instalar nesta máquina" da barra — um primário por
-                 vez, como o DS pede. -->
-            <button type="button" id="btnModoSelecao" class="ag-btn ag-btn--primary" aria-pressed="false" aria-controls="table-container-dash">
+            <!-- Dois controles, e não um: o alternador só entra e sai do modo
+                 (rótulo "Selecionar"/"Cancelar", ícone de lista com check — o de
+                 download fica reservado a quem instala de fato), e o primário
+                 em ouro só existe com algo marcado, dizendo quantos vai
+                 instalar. Um botão que entra no modo E confirma a ação atrás de
+                 um rótulo só escondia o resultado do segundo clique. -->
+            <button type="button" id="btnModoSelecao" class="ag-btn ag-btn--outline" aria-pressed="false" aria-controls="table-container-dash">
+              <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+              <span class="cg-btn__rotulo">Selecionar</span>
+            </button>
+            <!-- Nasce escondido e só aparece com N ≥ 1 E agente vivo nesta
+                 máquina (único caminho desde 23/08/2026: o .exe saiu). Sem
+                 agente, a linha de status abaixo diz o que fazer. -->
+            <button type="button" id="btnInstalarAqui" class="ag-btn ag-btn--primary" hidden>
               <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span class="cg-btn__rotulo">Selecionar para instalar</span>
+              <span class="cg-btn__rotulo">Instalar selecionados</span>
             </button>
             <!-- Um gatilho no lugar de dois. Exportar é UMA intenção; o formato
                  é detalhe dela, e ocupava metade da fila de ações competindo em
@@ -166,6 +176,16 @@
           <p id="status-msg" class="cg-status__linha"></p>
           <p class="cg-status__linha" id="data-hint"></p>
           <p id="panel-hint" class="cg-status__linha cg-status__linha--aviso" style="display: none;"></p>
+        </div>
+
+        <!-- A antiga barra sticky virou a linha de status da seleção, aqui,
+             logo abaixo da toolbar: a ação de instalar mora na toolbar, e o
+             que sobra é informação — quantos estão marcados, o teto por
+             instalador e o que fazer quando não há agente nesta máquina. -->
+        <div id="barraSelecao" class="cg-selecao-status" role="status" hidden>
+          <span id="selContagem" class="cg-selecao-status__contagem"></span>
+          <span id="selAviso" class="cg-selecao-status__aviso"></span>
+          <span id="semAgente" class="cg-selecao-status__aviso" hidden>Sem agente ativo nesta máquina — abra o Hardlyze Agent e entre com sua conta.</span>
         </div>
 
         <div class="table-scroll-anchor">
@@ -254,26 +274,6 @@
            janela: fixa, ela taparia a paginação no celular, que é justamente o
            controle que o usuário precisa para continuar escolhendo. Só aparece
            quando há seleção. -->
-      <div id="barraSelecao" class="barra-selecao ag-card cg-barra" role="region"
-           aria-label="Certificados selecionados" hidden>
-        <div class="ag-card-head cg-barra__cabeca">
-          <strong id="selContagem" class="ag-card__title"></strong>
-          <div class="cg-barra__acoes">
-            <button id="btnLimparSel" class="ag-btn ag-btn--ghost ag-btn--sm" type="button">Limpar seleção</button>
-            <!-- Unico caminho desde 23/08/2026. O download do .exe saiu: o agente
-                 mora nas estacoes e instala na sessao da pessoa.
-                 Continua nascendo escondido — sem agente vivo nao ha o que
-                 oferecer, e um botao que falha e pior que botao nenhum. O aviso
-                 abaixo explica o que fazer nesse caso. -->
-            <button id="btnInstalarAqui" class="ag-btn ag-btn--primary" type="button" hidden>Instalar nesta máquina</button>
-          </div>
-        </div>
-        <!-- Linhas de status, abaixo das ações: o aviso de teto e o de "sem
-             agente" informam; não competem com o botão. -->
-        <p id="selAviso" class="cg-barra__aviso"></p>
-        <p id="semAgente" class="cg-barra__aviso" hidden>Sem agente ativo nesta máquina — abra o Hardlyze Agent e entre com sua conta.</p>
-      </div>
-
       <!-- Meus computadores.
            Mora no Início, e não em Configuração, porque não é ajuste de sistema:
            é a lista de máquinas que agem COM A CONTA de quem está olhando. Um
@@ -553,7 +553,7 @@
         document.getElementById("table-container-dash").classList.toggle("is-selecionando", ligado);
         const btn = document.getElementById("btnModoSelecao");
         btn.setAttribute("aria-pressed", String(ligado));
-        btn.querySelector(".cg-btn__rotulo").textContent = ligado ? "Concluir seleção" : "Selecionar para instalar";
+        btn.querySelector(".cg-btn__rotulo").textContent = ligado ? "Cancelar" : "Selecionar";
         if (!ligado) {
           _selecao.clear();
           sincronizarCheckboxesDaPagina();
@@ -607,11 +607,19 @@
 
       function atualizarBarraSelecao() {
         const barra = document.getElementById("barraSelecao");
+        const btn = document.getElementById("btnInstalarAqui");
+        const aviso = document.getElementById("semAgente");
         const n = _selecao.size;
-        barra.hidden = n === 0 || !_modoSelecao;
-        if (barra.hidden) return;
+        const ativa = _modoSelecao && n > 0;
+        barra.hidden = !ativa;
+        // O primario so existe com algo marcado E agente vivo: sem agente nao
+        // ha o que oferecer, e a linha de status diz o que fazer.
+        btn.hidden = !(ativa && _estacao);
+        if (aviso) aviso.hidden = !(ativa && !_estacao);
+        if (!ativa) return;
         document.getElementById("selContagem").textContent =
           n === 1 ? "1 certificado selecionado" : `${n} certificados selecionados`;
+        btn.querySelector(".cg-btn__rotulo").textContent = `Instalar selecionados (${n})`;
         const excedeu = n > MAX_CERTIFICADOS;
         document.getElementById("selAviso").textContent = excedeu
           ? `Máximo de ${MAX_CERTIFICADOS} por instalador — desmarque ${n - MAX_CERTIFICADOS}.`
@@ -673,19 +681,16 @@
           _estacao = null;
         }
         const btn = document.getElementById("btnInstalarAqui");
-        const aviso = document.getElementById("semAgente");
         if (!btn) return;
-        btn.hidden = !_estacao;
-        // Sem agente a pessoa nao fica sem saida nem sem explicacao: antes ela
-        // caia no download, que nao existe mais. Dizer O QUE FAZER e o minimo
-        // que substitui um botao que sumiu.
-        if (aviso) aviso.hidden = !!_estacao;
         if (_estacao) {
           // O nome da maquina no titulo, e nao no rotulo: o rotulo tem de caber
-          // no celular, e "nesta maquina" ja diz o essencial.
+          // no celular, e "selecionados" ja diz o essencial.
           btn.title = `Instalar em ${_estacao.nome || _estacao.machine_id}`;
-          // Com agente, instalar e o caminho principal e baixar vira a saida.
         }
+        // Sem agente a pessoa nao fica sem saida nem sem explicacao: antes ela
+        // caia no download, que nao existe mais. Quem mostra o botao ou o
+        // aviso e a linha de status, que depende tambem do que esta marcado.
+        atualizarBarraSelecao();
       }
 
       // A tela mentia por omissao: dizia "Pedido enviado" e nunca mais voltava
@@ -1306,12 +1311,6 @@
               _selecao.delete(c.dataset.fp);
             }
           });
-          sincronizarCheckboxesDaPagina();
-          atualizarBarraSelecao();
-        });
-
-        document.getElementById("btnLimparSel").addEventListener("click", () => {
-          _selecao.clear();
           sincronizarCheckboxesDaPagina();
           atualizarBarraSelecao();
         });

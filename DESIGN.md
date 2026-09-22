@@ -403,10 +403,10 @@ entra nas telas do Águia: a ponte já redireciona `--accent` para `gold-600` e
 `--accent-solid` para `ink-900`.
 
 **A Regra do Ouro Raro.** Ouro cobre no máximo ~10% da tela e nunca é fundo
-de bloco. Um botão primário preenchido por vez: quando "Selecionar para
-instalar" liga (`aria-pressed="true"`), ele solta o preenchimento (lavado +
-borda `gold-600` + texto de marca) e o ouro sólido passa a "Instalar nesta
-máquina".
+de bloco. Um botão primário preenchido por vez, e ele é a ação do momento:
+no Início, "Instalar selecionados (N)" só existe com algo marcado; o
+alternador "Selecionar / Cancelar" é de contorno e liga por `aria-pressed`
+(lavado + borda `gold-600` + texto de marca).
 
 **A Regra do Rótulo Grafite.** Texto sobre ouro é `ink-900`
 (`--text-on-brand`), nunca branco. Onde o legado carrega texto branco sobre
@@ -666,7 +666,7 @@ escondê-lo.
 
 - **Do** carregar, em toda tela que migrar, os três arquivos na ordem `aguia-tokens.css` → `aguia-components.css` → o CSS da tela, depois de `style.css` — a ordem é o que faz o Águia vencer os nomes coincidentes.
 - **Do** ligar todo nome legado novo (`--algo` de `style.css`) a um token do Águia na ponte da tela, e nunca redefinir um `--gold-*` / `--ink-*` no projeto.
-- **Do** manter um só botão primário preenchido por tela e trocá-lo por `aria-pressed` quando a ação passa a outro botão.
+- **Do** manter um só botão primário preenchido por tela: o da ação do momento, que pode nascer escondido e aparecer quando ela existe (como "Instalar selecionados (N)").
 - **Do** usar o trio completo de estado: fundo `-50`, texto `-700`, identidade `-500` na borda ou no ícone.
 - **Do** acompanhar cor de estado de um segundo canal: glifo no badge, palavra ao lado, borda no toggle.
 - **Do** dar 44px a todo clicável e 3px de anel em ouro a todo focável.
