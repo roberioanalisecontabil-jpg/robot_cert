@@ -377,36 +377,25 @@ html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selectio
 
 /* ── Barra de seleção ────────────────────────────────────────────────── */
 
-/* A barra do portal (style.css) dá o sticky e o fluxo; a forma vem do DS:
-   um .ag-card com cabeça (contagem à esquerda, ações à direita) e linhas de
-   status abaixo. O padding do card legado sai para a cabeça do DS mandar. */
-.cg-painel .cg-barra {
-    display: block;
-    padding: 0;
-    border: var(--bw-1) solid var(--border-default);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    background: var(--bg-surface);
-}
-
-.cg-barra__cabeca { padding: var(--space-4) var(--space-5); border-bottom: 0; }
-
-.cg-barra__acoes {
+/* Linha de status da seleção, no fluxo logo abaixo da toolbar: contagem em
+   texto primário, avisos (teto por instalador, sem agente) em cor de aviso.
+   A ação de instalar mora na toolbar; aqui é só informação. */
+.cg-selecao-status {
     display: flex;
-    gap: var(--space-2);
     flex-wrap: wrap;
-    align-items: center;
-    margin-left: auto;
-}
-
-.cg-barra__aviso {
-    margin: 0;
-    padding: 0 var(--space-5) var(--space-4);
+    gap: var(--space-1) var(--space-4);
+    margin: calc(-1 * var(--space-2)) 0 var(--space-3);
     font-size: var(--text-xs);
-    color: var(--warning-700);
 }
 
-.cg-barra__aviso:empty { display: none; }
+.cg-selecao-status__contagem { color: var(--text-primary); font-weight: 600; }
+.cg-selecao-status__aviso { color: var(--warning-700); }
+.cg-selecao-status__aviso:empty { display: none; }
+
+/* "Atualizado em" com respiro dos dois lados: --space-3 acima da linha e
+   abaixo dela, separado dos controles por espaço e tamanho. */
+.cg-status { margin-top: var(--space-3); margin-bottom: var(--space-3); }
+.cg-tabela-wrap { margin-top: 0; }
 
 /* Rótulo do botão de alternância troca no JS; o span existe para o ícone
    ficar fora do texto substituído. */
@@ -459,12 +448,15 @@ html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selectio
     .cg-toolbar { grid-template-columns: minmax(0, 1fr); }
     .cg-toolbar__acoes {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: repeat(3, auto);
+        justify-content: end;
         gap: var(--space-2);
     }
-    .cg-toolbar__acoes .ag-btn--outline,
+    .cg-toolbar__acoes .ag-btn,
     .cg-toolbar .menu-suspenso > summary.ag-btn { padding: 8px 14px; }
-    .cg-toolbar__acoes .ag-btn--primary { justify-self: stretch; }
+    /* Com algo marcado, o primário entra como quarto item e vai para a
+       frente, numa linha só dele, esticado: é a ação do momento. */
+    .cg-toolbar__acoes .ag-btn--primary { order: -1; grid-column: 1 / -1; justify-self: stretch; }
 }
 
 /* ── Estreito (--bp-sm: grades viram uma coluna, ações empilham) ─────── */
@@ -586,9 +578,10 @@ html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selectio
     .cg-col-sel { grid-area: sel; align-self: center; padding: 0; }
     .cg-col-sel .ag-check { min-width: 44px; width: 44px; }
 
-    .cg-barra__cabeca { flex-direction: column; align-items: stretch; }
-    .cg-barra__acoes { margin-left: 0; }
-    .cg-barra__acoes .ag-btn { flex: 1 1 auto; }
+    /* Toolbar empilhada e a linha "Atualizado em" com respiro maior: no
+       celular ela ficava colada no último botão. */
+    .cg-toolbar__acoes { display: flex; }
+    .cg-status { margin-top: var(--space-4); }
 
     /* Linhas de estado (vazio, erro, skeleton) ocupam a largura toda. */
     .cg-tabela tbody tr.cg-state-row,
