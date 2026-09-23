@@ -5,49 +5,89 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Histórico — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <!-- Segunda tela do portal no Águia DS. Mesma ordem de carregamento do
+       Início: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell e o CSS
+       da família de listas de certificados. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09b" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09" />
 </head>
-<body>
+<body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
-  <main class="main-content" id="main-content">
-    <header class="page-header">
-      <h1>Histórico de Certificados</h1>
-      <p>Certificados já mapeados em algum momento e a última data verificada.</p>
+  <main class="main-content cg-painel" id="main-content">
+    <header class="ag-page__head">
+      <h1 class="ag-page__title">Histórico de Certificados</h1>
+      <p class="ag-page__lead">Certificados já mapeados em algum momento e a última data verificada.</p>
     </header>
 
-    <div class="table-container table-container--cheia" id="table-container-hist">
-      <div class="toolbar">
-        <div class="toolbar__status" aria-live="polite">
-          <p id="status-msg" class="status-line"></p>
-          <p class="hint" id="count-hint"></p>
+    <section class="ag-card cg-tabela-card" id="table-container-hist" aria-label="Histórico de certificados">
+      <div class="cg-toolbar cg-toolbar--compacta">
+        <div class="cg-toolbar__filtros">
+          <div class="ag-field cg-campo-inline cg-campo-busca">
+            <label class="ag-label" for="busca-historico">Buscar</label>
+            <input class="ag-input"
+              type="search"
+              id="busca-historico"
+              placeholder="Nome, arquivo, CNPJ ou CPF"
+              title="Busca por nome do certificado, nome do arquivo ou CNPJ/CPF"
+              autocomplete="off"
+            />
+          </div>
         </div>
-        <div class="toolbar__actions">
-          <label for="busca-historico" class="cg-sr-only">Buscar no histórico por nome, arquivo ou documento</label>
-          <input class="form-control campo-busca" type="search" id="busca-historico" placeholder="Buscar por nome, arquivo ou documento" />
-          <button type="button" id="btn-refresh" class="primary">Atualizar</button>
-          <button type="button" id="btn-export-pdf">Exportar PDF</button>
-          <button type="button" id="btn-export-excel">Exportar Excel</button>
+        <div class="cg-toolbar__acoes">
+          <!-- Um gatilho de exportar, com o formato como detalhe — o mesmo
+               padrão do Início. Dois botões soltos ("Exportar PDF",
+               "Exportar Excel") competiam em peso com a busca e um deles
+               caía sozinho numa segunda linha. -->
+          <details class="menu-suspenso" id="menu-exportar">
+            <summary class="ag-btn ag-btn--outline" aria-haspopup="menu">
+              <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+              Exportar
+              <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+            </summary>
+            <div class="menu-suspenso__lista" role="menu">
+              <button type="button" role="menuitem" id="btn-export-excel">Planilha (Excel)</button>
+              <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
+            </div>
+          </details>
+          <!-- Atualizar é consulta, não a ação da tela: contorno, como no
+               Início. Em azul sólido parecia a ação primária de uma tela que
+               não tem nenhuma. -->
+          <button type="button" id="btn-refresh" class="ag-btn ag-btn--outline">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Atualizar
+          </button>
         </div>
       </div>
+
+      <!-- "Atualizado em" e a contagem de registros: hierarquia discreta,
+           separados dos controles por espaço e tamanho. -->
+      <div class="cg-status" aria-live="polite">
+        <p id="status-msg" class="cg-status__linha"></p>
+        <p id="count-hint" class="cg-status__linha"></p>
+      </div>
+
       <div class="table-scroll-anchor">
-        <div class="table-scroll" tabindex="0" role="region" aria-label="Histórico de certificados">
-          <table role="table">
-            <thead role="rowgroup">
-              <tr role="row">
-                <th role="columnheader">Nome</th>
-                <th role="columnheader">CNPJ/CPF</th>
-                <th role="columnheader">Última data verificada</th>
-                <th role="columnheader">Vencimento do certificado</th>
-              </tr>
-            </thead>
-            <tbody role="rowgroup" id="tbody-historico"></tbody>
-          </table>
+        <div class="ag-table-wrap cg-tabela-wrap">
+          <div class="ag-table-scroll" tabindex="0" role="region" aria-label="Histórico de certificados">
+            <table class="ag-table cg-tabela" role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th role="columnheader" class="ag-th--estatico">Nome</th>
+                  <th role="columnheader" class="ag-th--estatico cg-col-doc">CNPJ / CPF</th>
+                  <th role="columnheader" class="ag-th--estatico">Última verificação</th>
+                  <th role="columnheader" class="ag-th--estatico">Vencimento</th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup" id="tbody-historico"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <nav
@@ -80,10 +120,10 @@
           </div>
         </div>
       </nav>
-    </div>
+    </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_HIST = "cg_per_page_historico";
     const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
@@ -120,15 +160,61 @@
 
     // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
 
-    function fmtData(iso) {
-      if (!iso) return "—";
-      return new Date(iso).toLocaleString("pt-BR");
-    }
-
+    // Data e hora completas só na exportação e no `title` da célula; a lista
+    // mostra dd/mm/aaaa (seção 2 do DS), como no Início.
     function fmtDataUtc(iso) {
       if (!iso) return "—";
       const d = new Date(iso);
       return d.toLocaleString("pt-BR", { timeZone: "UTC" });
+    }
+
+    function fmtSoData(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+    }
+
+    function celulaData(iso, classe, prefixo) {
+      const texto = fmtSoData(iso);
+      const abre = "<td role='cell' class='cg-col-data " + classe + "' data-prefixo='" + esc(prefixo) + "'>";
+      if (texto === "—") return abre + "—</td>";
+      return abre + "<time datetime='" + esc(iso) + "' title='" + esc(fmtDataUtc(iso)) + "'>" + esc(texto) + "</time></td>";
+    }
+
+    // Mesma regra de exibição do Início: o nome vem em CAIXA ALTA do arquivo
+    // e vai para sentence case só na tela; o original fica no title, na
+    // busca (do servidor) e na exportação. Siglas curtas e tokens com barra
+    // ou ponto ficam como estão.
+    const PALAVRAS_MINUSCULAS = new Set(["de", "da", "do", "das", "dos", "e"]);
+
+    function nomeExibicao(nome) {
+      const s = String(nome || "");
+      if (s !== s.toUpperCase()) return s;
+      return s
+        .split(/(\s+)/)
+        .map((p, i) => {
+          if (!/\p{Lu}/u.test(p)) return p;
+          const baixo = p.toLowerCase();
+          if (i > 0 && PALAVRAS_MINUSCULAS.has(baixo)) return baixo;
+          if (/[\/.&]/.test(p) || /^\p{Lu}{1,3}$/u.test(p)) return p;
+          return baixo.replace(/(^|[-'])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+        })
+        .join("");
+    }
+
+    // O documento vem formatado do servidor (00.000.000/0001-00 ou
+    // 000.000.000-00); o tipo se deduz do formato. Sem documento, travessão:
+    // lacuna é informação (seção 35 do DS), não linha escondida.
+    function celulaDocumento(doc) {
+      if (!doc) return "<span class='cg-doc'><span class='ag-cell-sub ag-cell-sub--mono cg-doc__num'>—</span></span>";
+      const tipo = doc.includes("/") ? "CNPJ" : "CPF";
+      return (
+        "<span class='cg-doc'>" +
+        "<span class='cg-doc__tipo'>" + tipo + "</span>" +
+        "<span class='ag-cell-sub ag-cell-sub--mono cg-doc__num'>" + esc(doc) + "</span>" +
+        "</span>"
+      );
     }
 
     function atualizarPaginacaoHist(pg) {
@@ -151,6 +237,8 @@
       });
     }
 
+    // `icon: ""` de propósito: o helper compartilhado desenha emoji, que o DS
+    // não admite; o CSS da família esconde o espaço vazio.
     function renderLinhasHistorico(rows) {
       const tb = document.getElementById("tbody-historico");
       limparSkeleton(tb);
@@ -159,10 +247,10 @@
         const busca = (document.getElementById("busca-historico")?.value || "").trim();
         if (busca) {
           renderEmptyRow(tb, 4, {
-            icon: "🔍",
-            title: "Nenhum registro para “" + busca + "”",
-            description: "Tente outro nome, CNPJ ou CPF.",
-            actionText: "Limpar busca",
+            icon: "",
+            title: "Nada encontrado para “" + busca + "”",
+            description: "Tente outro nome, CNPJ ou CPF, ou volte à lista inteira.",
+            actionText: "Ver a lista inteira",
             onAction: () => {
               document.getElementById("busca-historico").value = "";
               paginaAtualHist = 1;
@@ -171,7 +259,7 @@
           });
         } else {
           renderEmptyRow(tb, 4, {
-            icon: "🕓",
+            icon: "",
             title: "Ainda não há histórico",
             description:
               "O histórico é montado a partir dos snapshots enviados pelo agente. Assim que houver leituras, elas aparecem aqui.",
@@ -181,17 +269,26 @@
         return;
       }
 
+      // role="row"/"cell" sustentam o layout de cartões abaixo de 640px
+      // (aguia-listas.css): `display:block` apagaria os papéis implícitos da
+      // tabela para o leitor de tela.
       tb.innerHTML = rows
-        .map(
-          (it) => `
-        <tr role="row">
-          <td role="cell" data-label="Nome">${esc(it.nome)}</td>
-          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento || "—")}</td>
-          <td role="cell" data-label="Última verificação">${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
-          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>
-      `
-        )
+        .map((it) => {
+          const nome = it.nome || "";
+          return (
+            "<tr role='row'>" +
+            "<td role='cell' class='cg-col-nome'>" +
+            "<div class='ag-cell-stack'>" +
+            "<span class='ag-cell-main' title='" + esc(nome) + "'>" + esc(nomeExibicao(nome)) + "</span>" +
+            "<span class='cg-doc--sob-nome'>" + celulaDocumento(it.documento) + "</span>" +
+            "</div>" +
+            "</td>" +
+            "<td role='cell' class='cg-col-doc td-doc'>" + celulaDocumento(it.documento) + "</td>" +
+            celulaData(it.ultima_data_registrada, "cg-col-emissao", "Verificado") +
+            celulaData(it.vencimento_certificado, "cg-col-vencimento", "Vence") +
+            "</tr>"
+          );
+        })
         .join("");
       itensVisiveis = rows;
     }
@@ -240,7 +337,7 @@
       const csv = all
         .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
         .join("\n");
-      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -280,10 +377,15 @@
             <meta charset="utf-8" />
             <title>Histórico de certificados filtrado</title>
             <style>
+              /* Documento À PARTE: nasce de window.open("") + document.write,
+                 sem o link de nenhum CSS, então NENHUM token existe aqui. Os
+                 valores são literais por necessidade, copiados dos tokens do
+                 tema claro — a exportação é sempre para papel. Sem crase
+                 neste comentário: o bloco é um template literal. */
               body { font-family: Segoe UI, Arial, sans-serif; padding: 20px; }
-              h1 { margin: 0 0 8px; font-size: 20px; }
-              p { margin: 0 0 14px; color: #555; }
-              table { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
+              h1 { margin: 0 0 8px; font-size: 1.375rem; }
+              p { margin: 0 0 14px; color: #6E6E73; }
+              table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
               th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
               th { background: #f3f4f6; }
             </style>
@@ -333,7 +435,7 @@
           st.textContent = `Erro ${r.status}`;
           showToast("Não foi possível carregar o histórico: " + detalhe, "error");
           renderEmptyRow("tbody-historico", 4, {
-            icon: "⚠️",
+            icon: "",
             title: "Erro ao carregar o histórico",
             description: detalhe || `O servidor respondeu com erro ${r.status}.`,
             actionText: "Tentar novamente",
@@ -349,18 +451,18 @@
           atualizarPaginacaoHist(null);
         }
         setBannerAviso("table-container-hist", mensagemLimiteExportacao(j.paginacao));
-        st.textContent = j.atualizado_em ? "Atualizado em: " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
+        st.textContent = j.atualizado_em ? "Atualizado em " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
         const rows = j.itens || [];
         renderLinhasHistorico(rows);
         document.getElementById("count-hint").textContent =
           typeof j.total === "number"
-            ? j.total + " registro(s)"
+            ? j.total.toLocaleString("pt-BR") + " registro(s)"
             : rows.length + " registro(s) nesta página";
       } catch (e) {
         st.textContent = "Falha de conexão.";
         showToast("Falha de conexão com o servidor: " + e, "error");
         renderEmptyRow("tbody-historico", 4, {
-          icon: "🔌",
+          icon: "",
           title: "Sem conexão com o servidor",
           description: "Verifique se o portal está em execução e tente novamente.",
           actionText: "Tentar novamente",
@@ -382,8 +484,18 @@
       clearTimeout(debounceHist);
       debounceHist = setTimeout(carregarHistorico, 320);
     });
-    document.getElementById("btn-export-excel").addEventListener("click", () => void exportarExcelVisivel());
-    document.getElementById("btn-export-pdf").addEventListener("click", () => void exportarPdfVisivel());
+    // `<details>` abre e fecha no gatilho, mas não fecha ao escolher nem ao
+    // clicar fora — fica por conta daqui, como no Início.
+    const menuExportar = document.getElementById("menu-exportar");
+    function exportarPor(fn) {
+      menuExportar.open = false;
+      void fn();
+    }
+    document.getElementById("btn-export-excel").addEventListener("click", () => exportarPor(exportarExcelVisivel));
+    document.getElementById("btn-export-pdf").addEventListener("click", () => exportarPor(exportarPdfVisivel));
+    document.addEventListener("click", (ev) => {
+      if (menuExportar.open && !menuExportar.contains(ev.target)) menuExportar.open = false;
+    });
     document.getElementById("btn-hist-prev").addEventListener("click", () => {
       if (paginaAtualHist > 1) {
         paginaAtualHist--;

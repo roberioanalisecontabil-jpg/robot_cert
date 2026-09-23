@@ -16,8 +16,9 @@
          desta tela. Esta é a primeira tela do portal no Águia; as outras
          continuam só com o style.css até serem levadas uma a uma. -->
     <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
-    <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09" />
-    <link rel="stylesheet" href="/static/painel-certificados.css?v=aguia-2026-09" />
+    <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09b" />
+    <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+    <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09" />
   </head>
   <body class="cg-aguia">
     <!--
@@ -360,11 +361,14 @@
 
       // Célula de data com o instante completo ao alcance (title), sem o
       // ocupar na coluna.
-      function celulaData(iso, classe) {
+      // `prefixo` é o rótulo curto que o cartão do celular põe antes da data
+      // ("Emitido", "Vence"), já que o cabeçalho da coluna some lá.
+      function celulaData(iso, classe, prefixo) {
         const texto = fmtData(iso);
-        if (texto === "—") return "<td role='cell' class='cg-col-data " + classe + "'>—</td>";
+        const abre = "<td role='cell' class='cg-col-data " + classe + "' data-prefixo='" + esc(prefixo) + "'>";
+        if (texto === "—") return abre + "—</td>";
         return (
-          "<td role='cell' class='cg-col-data " + classe + "'>" +
+          abre +
           "<time datetime='" + esc(iso) + "' title='" + esc(fmt(iso)) + "'>" + esc(texto) + "</time>" +
           "</td>"
         );
@@ -853,7 +857,7 @@
         }
 
         // role="row"/"cell" sustentam o layout de cartões abaixo de 640px
-        // (ver painel-certificados.css): `display:block` apagaria os papéis
+        // (ver aguia-listas.css): `display:block` apagaria os papéis
         // implícitos da tabela para o leitor de tela.
         tb.innerHTML = items
           .map((it) => {
@@ -872,8 +876,8 @@
               "<span class='cg-doc--sob-nome'>" + colTipo(it) + "</span>" +
               "</div>" +
               "</td>" +
-              celulaData(it.not_before, "cg-col-emissao") +
-              celulaData(it.not_after, "cg-col-vencimento") +
+              celulaData(it.not_before, "cg-col-emissao", "Emitido") +
+              celulaData(it.not_after, "cg-col-vencimento", "Vence") +
               "<td role='cell' class='cg-col-doc td-doc'>" +
               colTipo(it) +
               "</td></tr>"

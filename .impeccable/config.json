@@ -71,6 +71,42 @@
         ],
         "createdAt": "2026-09-22T23:05:27.526Z",
         "reason": "popup de exportacao em PDF sem tokens: fundo do cabecalho da tabela impressa, mesma excecao do #d1d5db de 24/08"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "arial",
+        "files": [
+          "templates/historico.html"
+        ],
+        "createdAt": "2026-09-22T23:58:45.623Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao registrada para o index.html"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.375rem",
+        "files": [
+          "templates/historico.html"
+        ],
+        "createdAt": "2026-09-22T23:58:45.710Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao registrada para o index.html"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#6e6e73",
+        "files": [
+          "templates/historico.html"
+        ],
+        "createdAt": "2026-09-22T23:58:45.853Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao registrada para o index.html"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f3f4f6",
+        "files": [
+          "templates/historico.html"
+        ],
+        "createdAt": "2026-09-22T23:58:45.988Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao registrada para o index.html"
       }
     ]
   }
