@@ -1,145 +1,12 @@
-/* Painel de Certificados (templates/index.html) sobre o Águia DS.
+/* Listas de certificados sobre o Águia DS: Início (index.html) e Histórico
+   (historico.html) — prefixo do projeto (.cg-). Carregado depois de
+   aguia-tokens.css, aguia-components.css e aguia-ponte.css.
 
-   Terceiro arquivo da ordem de carregamento do DS (tokens → componentes → o
-   que é só deste projeto), com o prefixo do projeto (.cg-). Ele NUNCA redefine
-   token do Águia — no momento em que escrever `--gold-500: outra coisa` o DS
-   deixa de ser compartilhado. O que ele faz:
-
-   1. Liga os nomes de token que o portal legado usa (--bg, --surface,
-      --text, --accent, --sp-*, --fs-*...) aos tokens do Águia. Assim a
-      sidebar, os toasts, o estado vazio, a paginação e a barra de seleção,
-      que continuam escritos com os nomes antigos em style.css, passam a
-      pintar com a paleta Águia NESTA tela sem que style.css mude — e as
-      outras telas, que não carregam este arquivo, ficam como estão.
-   2. Compõe a página com as peças .ag-* (KPI, tabela, toolbar) e resolve o
-      que o DS deixa a cargo da tela: a linha da tabela virando cartão no
-      celular, o modo de seleção, o destaque do KPI de urgência. */
-
-/* ── 1. Ponte de tokens legado → Águia ────────────────────────────────── */
-
-/* A lista de seletores existe por causa do tema escuro do style.css: ele
-   redefine os mesmos nomes (--bg, --surface, --accent, --sidebar-*...) em
-   `:root[data-theme="dark"]` e em `:root:not([data-theme="light"])` dentro da
-   media query do sistema, ambos mais específicos que `:root`. A ponte repete
-   as mesmas formas para vencer nos três estados (claro, escuro, sistema); o
-   valor certo para cada tema quem decide é o token do Águia do outro lado. */
-:root,
-:root:not([data-theme="light"]),
-:root[data-theme="light"],
-:root[data-theme="dark"] {
-    --bg: var(--bg-page);
-    --surface: var(--bg-surface);
-    --border: var(--border-default);
-    --border-focus: var(--gold-500);
-    --text: var(--text-primary);
-    /* --text-muted já é redefinido pelo próprio aguia-tokens.css. */
-
-    /* O azul de acento do portal legado sai desta tela: só grafite e ouro
-       (regra "duas famílias de cor por tela"). --accent-solid carrega texto
-       branco em quem o usa (skip-link, botão .primary do estado vazio), e
-       branco sobre ouro é a regra mais violada do DS — por isso vira grafite,
-       que é o "botão escuro" do próprio DS. */
-    --accent: var(--gold-600);
-    --accent-hover: var(--gold-700);
-    --accent-text: var(--text-brand);
-    --accent-solid: var(--ink-900);
-    --accent-soft: var(--gold-200);
-
-    /* Estados: os tokens semânticos do Águia no lugar dos do padrão Apple. */
-    --ok: var(--success-500);
-    --ok-bg: var(--success-50);
-    --ok-text: var(--success-700);
-    --warning: var(--warning-500);
-    --warning-bg: var(--warning-50);
-    --warning-text: var(--warning-700);
-    --expired: var(--danger-500);
-    --expired-bg: var(--danger-50);
-    --expired-text: var(--danger-700);
-    --expired-solid: var(--danger-700);
-    --danger-text: var(--danger-700);
-    --info: var(--info-500);
-    --info-bg: var(--info-50);
-    --total: var(--text-brand);
-    --total-bg: var(--bg-surface-alt);
-    --row-hover: color-mix(in srgb, var(--gold-500) 6%, transparent);
-    --row-tint-danger: var(--danger-50);
-    --row-tint-warning: var(--warning-50);
-
-    /* Sidebar: grafite do DS, item ativo em lavado dourado + texto gold-300
-       (seção 27 do DS), no lugar do azul sólido. */
-    --sidebar-bg: var(--ink-900);
-    --sidebar-text: var(--ink-400);
-    --sidebar-text-active: var(--gold-300);
-    --sidebar-hover: var(--color-gold-glow);
-    --sidebar-active-bg: var(--color-gold-glow);
-    --sidebar-danger: var(--danger-500);
-
-    /* Escala tipográfica e espaçamento: os papéis do portal apontam para a
-       escala do Águia. --fs-label deixa de ser 11px porque o DS não desce
-       abaixo de .75rem. */
-    --fs-title: var(--text-3xl);
-    --fs-section: var(--text-2xl);
-    --fs-subsection: var(--text-lg);
-    --fs-body: var(--text-base);
-    --fs-metric: var(--text-3xl);
-    --fs-ui: var(--text-sm);
-    --fs-ui-sm: var(--text-xs);
-    --fs-caption: var(--text-caption);
-    --fs-label: var(--text-overline);
-
-    --sp-1: var(--space-1);
-    --sp-2: var(--space-2);
-    --sp-3: var(--space-3);
-    --sp-4: var(--space-4);
-    --sp-5: var(--space-5);
-    --sp-6: var(--space-6);
-    --sp-8: var(--space-8);
-    --sp-10: var(--space-10);
-    --sp-12: var(--space-12);
-    --sp-16: var(--space-16);
-
-    --duration-fast: var(--dur-fast);
-    --duration-normal: var(--dur-base);
-    --duration-slow: var(--dur-slow);
-    --ease-out: var(--ease-standard);
-    --ease-spring: var(--ease-standard);
-    --ease-default: var(--ease-standard);
-}
-
-/* No escuro os degraus de perigo do DS são todos claros (feitos para texto
-   sobre grafite); o contador do sino, que é texto branco sobre fundo sólido,
-   precisa de um vermelho escurecido — misturado com a tinta, não escrito. */
-html.dark, :root[data-theme="dark"],
-:root:not([data-theme="light"]) {
-    --sidebar-danger: var(--danger-500);
-}
-html.dark, :root[data-theme="dark"] {
-    --expired-solid: color-mix(in srgb, var(--danger-500) 55%, var(--ink-950));
-}
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        --expired-solid: color-mix(in srgb, var(--danger-500) 55%, var(--ink-950));
-    }
-}
-
-body {
-    font-family: var(--font-body);
-    background: var(--bg-page);
-    color: var(--text-primary);
-}
-
-/* Seleção de texto e foco vêm do DS, não do navegador (superfícies que a
-   tela não desenha ainda carregam o design). */
-.cg-painel ::selection { background: var(--gold-200); color: var(--ink-900); }
-html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selection {
-    background: var(--gold-700);
-    color: var(--ink-50);
-}
-
-.cg-painel :is(a, button, summary, [tabindex]):focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
+   Compõe a página com as peças .ag-* (KPI, tabela, toolbar) e resolve o que
+   o DS deixa a cargo da tela: a linha da tabela virando cartão no celular, o
+   modo de seleção, o destaque do KPI de urgência, o documento que vai para
+   baixo do nome em telas médias. Era painel-certificados.css; virou o CSS da
+   família de listas quando o Histórico entrou no Águia (22/09/2026). */
 
 /* ── 2. Composição da página ──────────────────────────────────────────── */
 
@@ -238,6 +105,12 @@ html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selectio
 
 .cg-campo-inline .ag-select { width: auto; min-width: 9.5rem; }
 .cg-campo-busca .ag-input { min-width: 0; }
+
+/* Toolbar compacta (só busca + ações): a busca ocupa a coluna inteira dos
+   filtros, com teto de leitura — sozinha na grade "auto", ficava com a
+   largura mínima do campo. */
+.cg-toolbar--compacta .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
+.cg-toolbar--compacta .cg-campo-busca { max-width: 28rem; }
 
 /* O <details> de exportar reaproveita o menu suspenso do portal; só o gatilho
    vira botão do DS. `summary` não herda display de botão: forçado aqui. */
@@ -444,8 +317,10 @@ html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selectio
        flex com quebra, senão "Atualizar tabela" caía sozinho numa terceira
        linha nos ~584px úteis do card a 936px. O primário fica com a folga;
        os dois de contorno encolhem para o padding compacto do DS, sem perder
-       os 44px de altura. */
+       os 44px de altura. A toolbar compacta (Histórico: só busca + duas
+       ações) continua numa linha só, porque cabe. */
     .cg-toolbar { grid-template-columns: minmax(0, 1fr); }
+    .cg-toolbar--compacta { grid-template-columns: minmax(0, 1fr) auto; }
     .cg-toolbar__acoes {
         display: grid;
         grid-template-columns: repeat(3, auto);
@@ -558,9 +433,10 @@ html.dark .cg-painel ::selection, :root[data-theme="dark"] .cg-painel ::selectio
         color: var(--text-secondary);
     }
 
-    /* Prefixo em sentence case, no lugar do rótulo de coluna que sumiu. */
-    .cg-col-emissao::before { content: "Emitido "; color: var(--text-muted); }
-    .cg-col-vencimento::before { content: "Vence "; color: var(--text-muted); }
+    /* Prefixo em sentence case, no lugar do rótulo de coluna que sumiu. O
+       texto vem de data-prefixo na célula ("Emitido", "Vence", "Verificado"),
+       porque cada lista chama a data de um jeito. */
+    .cg-col-data[data-prefixo]::before { content: attr(data-prefixo) " "; color: var(--text-muted); }
 
     /* Com o checkbox na linha, o badge desce para baixo do nome: caixa +
        nome + badge na mesma linha deixavam o nome com 150px e quatro

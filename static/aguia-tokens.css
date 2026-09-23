@@ -7,12 +7,12 @@
    tokens não muda de projeto para projeto, senão viram dois sistemas
    parecidos. Ajuste de valor se faz no documento e se recopia aqui.
 
-   Carregado DEPOIS do style.css e ANTES do aguia-components.css e do
-   painel-certificados.css, só nas telas que já adotaram o Águia. Como alguns
+   Carregado DEPOIS do style.css e ANTES do aguia-components.css, do
+   aguia-ponte.css e do CSS da tela, só nas telas que já adotaram o Águia. Como alguns
    nomes coincidem com tokens legados do portal (--text-muted, --radius-*,
    --shadow-*), a ordem faz o Águia vencer nessas telas e nada mudar nas
    outras. O que o portal legado chama por outro nome (--bg, --surface,
-   --text, --accent...) é ligado ao Águia em painel-certificados.css, e não
+   --text, --accent...) é ligado ao Águia em aguia-ponte.css, e não
    aqui, para este arquivo continuar sendo cópia fiel. */
 
 :root {

@@ -287,9 +287,11 @@ quente, não preto; e o ouro da Análise Group aparece como um selo aplicado com
 parcimônia — um filete no alto de cada indicador, um único botão preenchido, o
 anel de foco. É o mundo do **Águia Design System** da Análise Group (documento
 `systemdesign.html`, Desktop/migracao-supabase, revisão de 17/08/2026), adotado
-pelo portal a partir de 22/09/2026. O Início (`templates/index.html`) é a
-primeira tela nele; as demais ainda vestem o mundo anterior ("A Mesa Limpa",
-acento azul derivado da Apple) e migram uma a uma. **Este arquivo descreve o
+pelo portal a partir de 22/09/2026. O Início (`templates/index.html`) foi a
+primeira tela nele e o Histórico (`templates/historico.html`) a segunda, no
+mesmo dia; as demais ainda vestem o mundo anterior ("A Mesa Limpa", acento
+azul derivado da Apple) e migram uma a uma, carregando `aguia-tokens.css`,
+`aguia-components.css`, `aguia-ponte.css` e o CSS da família da tela. **Este arquivo descreve o
 sistema de agora em diante, e não o legado.**
 
 O caráter é **institucional, quente e contido**. A custódia é de chave privada
@@ -303,7 +305,7 @@ confere dígito a dígito (CNPJ/CPF).
 
 O sistema é **de ponte**: os tokens do Águia chegam verbatim em
 `aguia-tokens.css` e nunca são editados no projeto; os primitivos `.ag-*`
-vivem em `aguia-components.css`; e `painel-certificados.css` liga os nomes de
+vivem em `aguia-components.css`; e `aguia-ponte.css` liga os nomes de
 token que o portal legado usa (`--bg`, `--surface`, `--text`, `--accent`,
 `--sidebar-*`, `--fs-*`, `--sp-*`) aos do Águia. Por isso sidebar, toasts,
 estado vazio, paginação e barra de seleção — escritos em `style.css` com os
