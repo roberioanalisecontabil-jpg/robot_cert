@@ -143,6 +143,11 @@
         ],
         "createdAt": "2026-09-24T11:26:49.953Z",
         "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao do index.html e do historico.html"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#000",
+        "createdAt": "2026-09-24T15:56:01.753Z"
       }
     ]
   }
