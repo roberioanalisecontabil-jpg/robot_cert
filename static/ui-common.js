@@ -464,7 +464,9 @@ function classesDeBadge(classe) {
   return "badge ag-badge " + classe + " " + (BADGE_AGUIA[classe] || "ag-badge--neutral");
 }
 
-function badgeStatus(chave) {
+// `rotulo` troca só o texto ("A vencer" no lugar de "Expirando" no
+// Acompanhamento); classe e glifo continuam os do estado.
+function badgeStatus(chave, rotulo) {
   const d = BADGE_STATUS[chave];
   if (!d) {
     return '<span class="' + classesDeBadge("badge-bad") + '">' + esc(chave) + "</span>";
@@ -472,7 +474,7 @@ function badgeStatus(chave) {
   return (
     '<span class="' + classesDeBadge(d.classe) + '">' +
     '<span class="badge-glifo" aria-hidden="true">' + d.glifo + "</span>" +
-    esc(d.texto) +
+    esc(rotulo || d.texto) +
     "</span>"
   );
 }
