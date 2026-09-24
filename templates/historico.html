@@ -90,40 +90,24 @@
           </div>
         </div>
       </div>
-      <nav
-        id="paginacao-toolbar-hist"
-        class="cg-page-nav"
-        aria-label="Navegação por páginas"
-      >
-        <div id="pag-meta-hist" class="cg-page-nav__meta"></div>
-        <div class="cg-page-nav__row">
-          <ul id="pag-ul-hist" class="cg-page-nav__ul" role="list">
-            <li>
-              <button type="button" id="btn-hist-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">
-                Anterior
-              </button>
-            </li>
-            <li id="pag-li-next-hist">
-              <button type="button" id="btn-hist-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">
-                Seguinte
-              </button>
-            </li>
-          </ul>
-          <div>
-            <label for="pag-perpage-hist" class="cg-sr-only">Registros por página</label>
-            <select id="pag-perpage-hist" class="cg-page-perpage-select" title="Itens por página">
-              <option value="10">10 por página</option>
-              <option value="25">25 por página</option>
-              <option value="50">50 por página</option>
-              <option value="100">100 por página</option>
-            </select>
-          </div>
+      <!-- Paginação em pílulas do DS (cgPaginacaoPilulas, ui-common.js):
+           o mesmo modelo do Início e do Vencidos. -->
+      <nav id="paginacao-toolbar-hist" class="cg-pag" aria-label="Navegação por páginas" hidden>
+        <ul id="pag-ul-hist" class="cg-pag__paginas"></ul>
+        <div class="cg-pag__por-pagina">
+          <label class="ag-label" for="pag-perpage-hist">Por página</label>
+          <select id="pag-perpage-hist" class="ag-select" title="Itens por página">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
         </div>
       </nav>
     </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09c"></script>
   <script nonce="{{ request.state.nonce }}">
     const LS_PER_PAGE_HIST = "cg_per_page_historico";
     const ALLOWED_PER_PAGE_HIST = [10, 25, 50, 100];
@@ -218,22 +202,14 @@
     }
 
     function atualizarPaginacaoHist(pg) {
-      cgPageNavRefresh({
-        bar: "paginacao-toolbar-hist",
-        meta: "pag-meta-hist",
+      cgPaginacaoPilulas({
+        nav: "paginacao-toolbar-hist",
         ul: "pag-ul-hist",
-        liNext: "pag-li-next-hist",
-        prev: "btn-hist-prev",
-        next: "btn-hist-next",
         pg: pg,
-        metaFormatter: (p) =>
-          "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " registro(s)",
-        hideWhenSingle: true,
         goToPage: (pn) => {
           paginaAtualHist = pn;
           carregarHistorico();
         },
-        maxButtons: 5,
       });
     }
 
@@ -454,10 +430,15 @@
         st.textContent = j.atualizado_em ? "Atualizado em " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
         const rows = j.itens || [];
         renderLinhasHistorico(rows);
-        document.getElementById("count-hint").textContent =
-          typeof j.total === "number"
-            ? j.total.toLocaleString("pt-BR") + " registro(s)"
-            : rows.length + " registro(s) nesta página";
+        // Uma linha só de contagem; a paginação embaixo não repete o total.
+        if (typeof j.total === "number" && j.total > 0) {
+          const inicio = (paginaAtualHist - 1) * porPaginaHist() + 1;
+          const fim = inicio + rows.length - 1;
+          document.getElementById("count-hint").textContent =
+            j.total.toLocaleString("pt-BR") + " registro" + (j.total === 1 ? "" : "s") + " · mostrando " + inicio + "–" + fim;
+        } else {
+          document.getElementById("count-hint").textContent = "";
+        }
       } catch (e) {
         st.textContent = "Falha de conexão.";
         showToast("Falha de conexão com o servidor: " + e, "error");
@@ -496,17 +477,6 @@
     document.addEventListener("click", (ev) => {
       if (menuExportar.open && !menuExportar.contains(ev.target)) menuExportar.open = false;
     });
-    document.getElementById("btn-hist-prev").addEventListener("click", () => {
-      if (paginaAtualHist > 1) {
-        paginaAtualHist--;
-        carregarHistorico();
-      }
-    });
-    document.getElementById("btn-hist-next").addEventListener("click", () => {
-      paginaAtualHist++;
-      carregarHistorico();
-    });
-
     (async function init() {
       // A revelação da sidebar por papel mora em ui-common.js
       // (initSidebarPorPapel) — era copiada por tela e as cópias divergiram.

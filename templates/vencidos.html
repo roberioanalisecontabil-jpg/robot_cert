@@ -145,7 +145,7 @@
     </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09b"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09c"></script>
   <script nonce="{{ request.state.nonce }}">
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
@@ -377,70 +377,23 @@
 
     // ─── Paginação ──────────────────────────────────────────────────────
 
-    // Desktop: Anterior, 1, 2, 3, …, última, Próxima. Celular: o CSS esconde
-    // os números e mostra "1 de N". Cada página é um link com a query
-    // completa, para funcionar sem JS; com JS o clique troca a página sem
-    // recarregar.
-    function paginasVisiveis(atual, total) {
-      if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-      const s = new Set([1, total, atual - 1, atual, atual + 1]);
-      if (atual <= 3) [2, 3].forEach((n) => s.add(n));
-      if (atual >= total - 2) [total - 1, total - 2].forEach((n) => s.add(n));
-      return [...s].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
-    }
-
-    function linkPagina(n, rotulo, extra) {
-      const a = document.createElement("a");
-      a.className = "cg-pag__link";
-      const q = queryDoEstado({ pagina: n > 1 ? n : null });
-      const s = q.toString();
-      a.href = location.pathname + (s ? "?" + s : "");
-      a.textContent = rotulo;
-      Object.entries(extra || {}).forEach(([k, v]) => a.setAttribute(k, v));
-      a.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        if (a.getAttribute("aria-disabled") === "true" || a.hasAttribute("aria-current")) return;
-        estado.pagina = n;
-        carregarVencidos();
-      });
-      return a;
-    }
-
+    // Pílulas do DS (cgPaginacaoPilulas, ui-common.js), o mesmo modelo do
+    // Início e do Histórico. Aqui cada página é um link com a query completa,
+    // para funcionar sem JS; com JS o clique troca a página sem recarregar.
     function renderPaginacao(pg) {
-      const nav = document.getElementById("paginacao-venc");
-      const ul = document.getElementById("pag-lista-venc");
-      ul.innerHTML = "";
-      if (!pg || !pg.total_paginas || pg.total_paginas <= 1) { nav.hidden = true; return; }
-      nav.hidden = false;
-      const atual = pg.pagina, total = pg.total_paginas;
-
-      const liPrev = document.createElement("li");
-      const prev = linkPagina(Math.max(1, atual - 1), "‹ Anterior", atual <= 1 ? { "aria-disabled": "true", tabindex: "-1" } : {});
-      liPrev.appendChild(prev); ul.appendChild(liPrev);
-
-      const liPos = document.createElement("li");
-      liPos.className = "cg-pag__posicao";
-      liPos.textContent = `${atual} de ${total}`;
-      ul.appendChild(liPos);
-
-      let anterior = 0;
-      paginasVisiveis(atual, total).forEach((n) => {
-        if (n - anterior > 1) {
-          const liR = document.createElement("li");
-          liR.setAttribute("data-reticencias", "1");
-          liR.innerHTML = "<span class='cg-pag__reticencias' aria-hidden='true'>…</span>";
-          ul.appendChild(liR);
-        }
-        const li = document.createElement("li");
-        li.setAttribute("data-numero", String(n));
-        li.appendChild(linkPagina(n, String(n), n === atual ? { "aria-current": "page" } : {}));
-        ul.appendChild(li);
-        anterior = n;
+      cgPaginacaoPilulas({
+        nav: "paginacao-venc",
+        ul: "pag-lista-venc",
+        pg: pg,
+        href: (n) => {
+          const s = queryDoEstado({ pagina: n > 1 ? n : null }).toString();
+          return location.pathname + (s ? "?" + s : "");
+        },
+        goToPage: (n) => {
+          estado.pagina = n;
+          carregarVencidos();
+        },
       });
-
-      const liNext = document.createElement("li");
-      const next = linkPagina(Math.min(total, atual + 1), "Próxima ›", atual >= total ? { "aria-disabled": "true", tabindex: "-1" } : {});
-      liNext.appendChild(next); ul.appendChild(liNext);
     }
 
     // ─── Dados ──────────────────────────────────────────────────────────
