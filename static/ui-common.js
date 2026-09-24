@@ -946,6 +946,47 @@ function cgPaginacaoPilulas(opts) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   Copiar (.ag-copiar, seção 39 do DS)
+
+   Copiar não muda nada na tela, então precisa de retorno escrito: o rótulo do
+   botão vira "Copiado" por 1,6s e volta. Os botões nascem ocultos no CSS e só
+   aparecem quando a área de transferência existe (<html class="ag-tem-clipboard">)
+   — sem ela, um botão de copiar mente. Um só ouvinte delegado no documento
+   serve a botões criados depois pelo JS da página.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function cgCopiarInit() {
+  if (document.documentElement._cgCopiar) return;
+  document.documentElement._cgCopiar = true;
+  if (navigator.clipboard && window.isSecureContext) {
+    document.documentElement.classList.add("ag-tem-clipboard");
+  }
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest && ev.target.closest(".ag-copiar[data-copiar]");
+    if (!btn || !navigator.clipboard) return;
+    ev.preventDefault();
+    const texto = btn.getAttribute("data-copiar") || "";
+    navigator.clipboard.writeText(texto).then(() => {
+      const rotulo = btn.querySelector(".cg-btn__rotulo") || btn;
+      if (rotulo._cgAntes == null) rotulo._cgAntes = rotulo.textContent;
+      rotulo.textContent = "Copiado";
+      btn.setAttribute("data-copiado", "1");
+      clearTimeout(btn._cgTimer);
+      btn._cgTimer = setTimeout(() => {
+        rotulo.textContent = rotulo._cgAntes;
+        btn.removeAttribute("data-copiado");
+      }, 1600);
+    }).catch(() => {
+      const rotulo = btn.querySelector(".cg-btn__rotulo") || btn;
+      if (rotulo._cgAntes == null) rotulo._cgAntes = rotulo.textContent;
+      rotulo.textContent = "Não copiou";
+      clearTimeout(btn._cgTimer);
+      btn._cgTimer = setTimeout(() => { rotulo.textContent = rotulo._cgAntes; }, 1600);
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    Troca de senha obrigatória
 
    Vive aqui, e não numa tela, porque precisa existir em TODAS: a pessoa entra

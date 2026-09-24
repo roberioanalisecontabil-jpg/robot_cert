@@ -3184,9 +3184,13 @@ def _fingerprint_hex_from_row(row: dict) -> str:
 
 def _item_resumo_duplicidade(it: dict) -> dict[str, Any]:
     fp = it.get("fingerprint_sha256") or it.get("cert_sha256")
+    nome = it.get("nome") or it.get("display_name")
     return {
         "file_name": it.get("file_name"),
-        "nome": it.get("nome") or it.get("display_name"),
+        "nome": nome,
+        # Caixa alta vira título no servidor (app/nomes.py), como no Início e
+        # no Vencidos; números e códigos do nome passam intactos.
+        "nome_exibicao": nomes.nome_exibicao(nome),
         "documento": it.get("documento_formatado") or it.get("documento_numero"),
         "documento_numero": it.get("documento_numero"),
         "not_after": it.get("not_after"),

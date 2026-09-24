@@ -659,3 +659,82 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
     .ag-btn, .ag-input, .ag-select { transition: none; }
     .ag-spin { animation-duration: 1.6s; }
 }
+
+/* ── Cabeçalho de seção ──────────────────────────────────────────────── */
+
+/* Seção 41 do DS: "flex row, título à esquerda, ação à direita". Serve ao
+   cabeçalho da página quando a tela tem uma ação de consulta (Atualizar)
+   que não merece toolbar própria. Abaixo de --bp-sm a ação desce para
+   baixo do texto e ocupa a largura toda. */
+.ag-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4) var(--space-6);
+    flex-wrap: wrap;
+}
+
+.ag-section-head > * { min-width: 0; }
+
+@media (max-width: 640px) {
+    .ag-section-head { flex-direction: column; align-items: stretch; }
+    .ag-section-head > .ag-btn { width: 100%; }
+}
+
+/* ── Acordeão ────────────────────────────────────────────────────────── */
+
+/* <details> nativo (seção 39 do DS): o cabeçalho continua legível fechado
+   e a seta é nossa — o triângulo do navegador tem um desenho em cada um e
+   o do Safari não aceita estilo. Transcrito do .sd-accordion da
+   documentação, sem o max-width de 420px do exemplo. */
+.ag-accordion { width: 100%; min-width: 0; }
+
+.ag-accordion__topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: 44px;
+    padding: var(--space-2) 0;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    list-style: none;
+    border-radius: var(--radius-sm);
+}
+
+.ag-accordion__topo::-webkit-details-marker { display: none; }
+.ag-accordion__topo::marker { content: ""; }
+.ag-accordion__topo:hover { color: var(--text-primary); }
+.ag-accordion__topo:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.ag-accordion__seta {
+    display: inline-flex;
+    flex: none;
+    color: var(--text-muted);
+    transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+.ag-accordion[open] > .ag-accordion__topo { color: var(--text-primary); }
+.ag-accordion[open] > .ag-accordion__topo .ag-accordion__seta { transform: rotate(180deg); }
+
+/* ── Copiar ──────────────────────────────────────────────────────────── */
+
+/* Copiar não muda nada na tela, então precisa de retorno escrito: o rótulo
+   vira "Copiado" por um instante (ui-common.js, cgCopiarInit). Nasce oculto
+   e só aparece quando a área de transferência existe — o script marca
+   <html class="ag-tem-clipboard">. Sem isso o botão mentiria. */
+.ag-copiar { display: none; }
+.ag-tem-clipboard .ag-copiar { display: inline-flex; }
+
+/* ── Carregando ──────────────────────────────────────────────────────── */
+
+/* Seção 35 do DS: o que já existe continua visível, esmaecido, e o texto
+   que diz "carregando" fica fora do bloco para continuar legível. */
+.is-carregando {
+    opacity: .55;
+    pointer-events: none;
+    transition: opacity var(--dur-base) var(--ease-standard);
+}
