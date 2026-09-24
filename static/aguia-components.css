@@ -1043,3 +1043,54 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
 }
 .ag-voltar:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
 @media (max-width: 1024px) { .ag-voltar { display: inline-flex; } }
+
+/* ── Abas em trilho ──────────────────────────────────────────────────── */
+
+/* Abas que rolam na horizontal no estreito (seção 39 do DS), com um
+   esmaecido na borda direita dizendo que há mais. */
+.ag-abas--trilho { position: relative; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.ag-abas--trilho::-webkit-scrollbar { display: none; }
+@media (max-width: 640px) {
+    .ag-abas--trilho { gap: var(--space-4); mask-image: linear-gradient(to right, #000 calc(100% - var(--space-8)), transparent); }
+}
+
+/* ── Campo com sufixo ────────────────────────────────────────────────── */
+
+/* Unidade dentro do campo ("minutos", "dias"): o valor e a unidade se leem
+   juntos, e o campo vazio fala pelo placeholder ("Padrão: 5"). */
+.ag-input-afixo { position: relative; display: block; }
+.ag-input-afixo .ag-input { width: 100%; padding-right: calc(var(--space-4) + var(--afixo-largura, 5rem)); }
+.ag-input-afixo__sufixo {
+    position: absolute;
+    right: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+/* ── Colunas de formulário ───────────────────────────────────────────── */
+
+.ag-form-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+    gap: var(--space-5) var(--space-6);
+    align-items: start;
+}
+.ag-form-cols .ag-field { margin: 0; }
+.ag-ajuda { margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--text-secondary); }
+.ag-ajuda--muted { color: var(--text-muted); }
+
+/* ── Etapas ──────────────────────────────────────────────────────────── */
+
+/* Mini indicador de etapas de uma cadeia: nome por extenso, ícone de traço
+   (check feita, círculo pendente), e o texto completo em sr-only. */
+.ag-etapas { list-style: none; margin: 0; padding: 0; display: inline-flex; gap: var(--space-3); flex-wrap: wrap; }
+.ag-etapas__item { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
+.ag-etapas__item .ag-icon { width: 14px; height: 14px; }
+.ag-etapas__item.is-feita { color: var(--text-primary); }
+.ag-etapas__item.is-feita .ag-icon { color: var(--success-700); }
+.ag-etapas__item.is-falha { color: var(--danger-700); }
+.ag-etapas__item.is-falha .ag-icon { color: var(--danger-500); }

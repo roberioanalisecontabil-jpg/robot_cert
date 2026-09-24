@@ -3049,6 +3049,10 @@ def listar_certificados(
         snap = get_latest_snapshot()
         base = _list_certificados_payload(sets, snap, fonte)
         base["itens"] = ordenar_por_titular(base.get("itens") or [])
+        # Caixa alta vira título no servidor (app/nomes.py), num lugar só,
+        # para toda tela que lista o inventário (Início, Custódia).
+        for it in base["itens"]:
+            it["nome_exibicao"] = nomes.nome_exibicao(it.get("nome") or it.get("display_name"))
 
         paged = pagina is not None and por_pagina is not None
         if not paged and not todas_filtradas:
@@ -5054,6 +5058,43 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     return _settings_dict(atual)
 
 
+@app.get("/api/cert-installer/expurgo-previa", dependencies=[Depends(require_modulo("instalador"))])
+def previa_do_expurgo() -> dict:
+    """
+    Quantos registros da trilha o expurgo apagaria agora, e até que data.
+
+    Existe porque o botão "Expurgar log agora" é irreversível: a confirmação
+    precisa dizer o tamanho do que vai apagar, não só que vai apagar.
+    """
+    from app.settings_state import _banco
+
+    dias = int(load_settings().trilha_retencao_dias or 0)
+    if dias <= 0:
+        return {"executado": False, "retencao_dias": 0, "registros": 0, "motivo": "retenção desligada (sem limite)"}
+    corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    client = _banco()
+    if not client:
+        return {"executado": False, "retencao_dias": dias, "registros": 0, "motivo": "Banco não configurado"}
+    # O PostgREST devolve no máximo 1.000 linhas e não avisa que truncou:
+    # conta em páginas.
+    n = 0
+    inicio = 0
+    try:
+        while True:
+            pagina = (
+                client.table("install_log").select("id").lt("created_at", corte).range(inicio, inicio + 999).execute().data
+                or []
+            )
+            n += len(pagina)
+            if len(pagina) < 1000 or inicio > 50_000:
+                break
+            inicio += 1000
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao contar registros para o expurgo")
+        return {"executado": False, "retencao_dias": dias, "registros": 0, "motivo": str(e)}
+    return {"executado": True, "retencao_dias": dias, "corte": corte, "registros": n}
+
+
 @app.post("/api/cert-installer/expurgar-log", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
 def expurgar_log_agora() -> dict:
     """
@@ -5177,6 +5218,33 @@ def diagnostico_do_instalador() -> dict:
         out["cofre"] = {"erro": str(e)}
         out["chaves"] = {"erro": str(e)}
 
+    # Situação geral ESCRITA (seção 2 do DS: nunca só por cor) e a lista do
+    # que está errado, com quantos. "Senha em claro" é o mais grave.
+    from app import texto as _texto
+    c = out.get("cofre") or {}
+    k = out.get("chaves") or {}
+    problemas: List[str] = []
+    if not c.get("erro"):
+        if c.get("senha_em_claro"):
+            problemas.append(_texto.plural(c["senha_em_claro"], "certificado com senha em claro no cofre", "certificados com senha em claro no cofre") + ".")
+        if c.get("sem_senha_cifrada"):
+            problemas.append(_texto.plural(c["sem_senha_cifrada"], "certificado sem senha cifrada", "certificados sem senha cifrada") + ".")
+    sem_chave = list(k.get("versoes_sem_chave") or []) if not k.get("erro") else []
+    if sem_chave:
+        problemas.append(
+            "Versões de chave sem chave configurada: " + ", ".join("v" + str(v) for v in sem_chave)
+            + ". Esse material está indecifrável agora; reponha a chave em CERT_ENCRYPTION_KEY_V<n> ou peça um rescan ao agente."
+        )
+    if c.get("erro") or k.get("erro"):
+        out["situacao"] = "erro"
+    else:
+        out["situacao"] = "atencao" if problemas else "ok"
+    out["problemas"] = problemas
+    out["textos"] = {
+        "maquinas": [f"{m} · " + _texto.plural(n, "certificado") for m, n in (c.get("por_maquina") or {}).items()],
+        "em_uso": [f"v{v} · " + _texto.plural(n, "certificado") for v, n in (k.get("linhas_por_versao") or {}).items()],
+        "ajuda_revalidar": "Confere de novo as senhas e chaves de todos os certificados guardados.",
+    }
     return out
 
 
@@ -5849,9 +5917,31 @@ def trilha_de_instalacao(
     cadeias = cert_installer.cadeias_de_instalacao(
         limite=limite, desde=desde, user_email=user_email, apenas_com_falha=apenas_falhas
     )
+    # `target_machine` é o identificador da estação (o MAC que o agente
+    # informa); o nome legível vem do cadastro de dispositivos, quando existe.
+    nomes_maq: Dict[str, str] = {}
+    try:
+        for d in agent_devices.listar():
+            mid = str(d.get("machine_id") or "")
+            if mid and d.get("nome") and mid not in nomes_maq:
+                nomes_maq[mid] = str(d["nome"])
+    except Exception:  # noqa: BLE001 — sem nomes a trilha continua servindo
+        logger.exception("Falha ao ler os nomes das estações para a trilha")
+    for c in cadeias:
+        c["target_nome"] = nomes_maq.get(str(c.get("target_machine") or ""), "")
+
+    from app import texto as _texto
+    resumo = cert_installer.resumo_das_cadeias(cadeias)
+    total = int(resumo.get("total") or 0)
+    concluidas = int(resumo.get("concluidas") or 0)
+    resumo["textos"] = {
+        "destaque": f"{concluidas} de {total}",
+        "subtitulo": ("tentativa concluída" if total == 1 else "tentativas concluídas") + " no período",
+    }
     return {
         "dias": dias,
-        "resumo": cert_installer.resumo_das_cadeias(cadeias),
+        "desde": desde,
+        "resumo": resumo,
         "cadeias": cadeias,
     }
 
@@ -5887,7 +5977,12 @@ def page_instalador(request: Request) -> HTMLResponse:
     # do Starlette com "TypeError: unhashable type: 'dict'", e a página do
     # módulo respondia 500 em toda requisição.
     # O nonce vem de request.state.nonce no template, como nos demais.
+    # As abas são links (?aba=…): sem JavaScript a página abre já na aba
+    # pedida; com JavaScript a troca é local e a URL acompanha.
+    aba = request.query_params.get("aba") or "diagnostico"
+    if aba not in ("diagnostico", "custodia", "trilha", "configuracao"):
+        aba = "diagnostico"
     return templates.TemplateResponse(
-        request=request, name="instalador.html", context={"pagina_ativa": "instalador"}
+        request=request, name="instalador.html", context={"pagina_ativa": "instalador", "aba": aba}
     )
 

@@ -278,7 +278,7 @@ def test_instalador_nao_instala_mais() -> None:
     html = _html("/instalador")
     assert "tblAvailableCerts" not in html
     assert "btnPrepareInstall" not in html
-    assert "Para instalar, use o Início" in html
+    assert "Para instalar um certificado, use o" in html
 
 
 def test_instalar_em_estacao_e_o_unico_caminho() -> None:
@@ -336,4 +336,4 @@ def test_maquina_da_custodia_fica_no_cabecalho() -> None:
     """
     html = _html("/instalador")
     assert 'id="badgeMaquina"' in html
-    assert "valem só para a máquina indicada" in html
+    assert "Vale só para a máquina indicada" in html

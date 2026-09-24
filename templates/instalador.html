@@ -1,737 +1,894 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Instalador de Certificados — Analise Certificado</title>
-    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-  </head>
-  <body>
-    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
-    {% include "_sidebar.html" %}
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Instalador — Analise Certificado</title>
+  <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+  <!-- Oitava tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
+       da família de listas (shell comum) e o desta tela. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09h" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-instalador.css?v=aguia-2026-09" />
+</head>
+<body class="cg-aguia">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
 
-    <!-- Main Content -->
-    <main class="main-content" id="main-content">
-      <header class="page-header">
-        <h1>Instalador de Certificados Digitais</h1>
-        <p>Configuração e diagnóstico do módulo. Para instalar, use o Início.</p>
-      </header>
+  <main class="main-content cg-painel" id="main-content">
+    <!-- A tela NÃO instala: título alinhado ao menu e subtítulo que manda
+         para o Início. Um único "Atualizar" para as quatro abas. -->
+    <header class="ag-page__head ag-section-head">
+      <div>
+        <h1 class="ag-page__title">Instalador</h1>
+        <p class="ag-page__lead">Diagnóstico do cofre, custódia dos certificados e trilha de instalações. Para instalar um certificado, use o <a href="/">Início</a>.</p>
+      </div>
+      <button type="button" id="btnAtualizar" class="ag-btn ag-btn--outline">
+        <svg class="ag-icon" id="btnAtualizarIcone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        <span class="ag-spin" id="btnAtualizarSpin" hidden aria-hidden="true"></span>
+        <span class="cg-btn__rotulo" id="btnAtualizarRotulo">Atualizar</span>
+      </button>
+    </header>
 
-      <!-- Diagnóstico: cada bloco corresponde a algo que já falhou em produção
-           sem aviso nenhum. Ver a docstring de /api/cert-installer/diagnostico. -->
-      <section class="card" style="margin-bottom: 2rem;">
-        <div class="secao-cabecalho">
-          <div>
-            <h2 style="margin-bottom: 0.25rem;">Diagnóstico</h2>
-            <p class="text-muted" style="font-size: var(--fs-ui);">
-              O que existe no servidor agora — cofre e chaves de cifragem.
-            </p>
-          </div>
-          <div class="linha-acoes">
-            <button id="btnRevalidarCofre" class="btn btn-secondary" style="font-size: var(--fs-ui);">
-              Revalidar cofre
-            </button>
-            <button id="btnRefreshDiag" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
-          </div>
+    <!-- Abas como links (?aba=): sem JS a página recarrega já na aba pedida.
+         Com JS a troca é local, com papéis de tablist e setas do teclado. -->
+    <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Seções do instalador">
+      <a class="ag-abas__aba" role="tab" id="tab-diagnostico" href="?aba=diagnostico" aria-controls="aba-diagnostico" data-aba="diagnostico"
+         aria-selected="{{ 'true' if aba == 'diagnostico' else 'false' }}" {% if aba != 'diagnostico' %}tabindex="-1"{% endif %}>Diagnóstico</a>
+      <a class="ag-abas__aba" role="tab" id="tab-custodia" href="?aba=custodia" aria-controls="aba-custodia" data-aba="custodia"
+         aria-selected="{{ 'true' if aba == 'custodia' else 'false' }}" {% if aba != 'custodia' %}tabindex="-1"{% endif %}>Custódia <span class="ag-abas__contagem" id="tab-custodia-contagem"></span></a>
+      <a class="ag-abas__aba" role="tab" id="tab-trilha" href="?aba=trilha" aria-controls="aba-trilha" data-aba="trilha"
+         aria-selected="{{ 'true' if aba == 'trilha' else 'false' }}" {% if aba != 'trilha' %}tabindex="-1"{% endif %}>Trilha</a>
+      <a class="ag-abas__aba" role="tab" id="tab-configuracao" href="?aba=configuracao" aria-controls="aba-configuracao" data-aba="configuracao"
+         aria-selected="{{ 'true' if aba == 'configuracao' else 'false' }}" {% if aba != 'configuracao' %}tabindex="-1"{% endif %}>Configuração</a>
+    </div>
+    <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
+
+    <!-- ── Diagnóstico ──────────────────────────────────────────────── -->
+    <section class="ag-card cg-inst-aba" id="aba-diagnostico" role="tabpanel" aria-labelledby="tab-diagnostico" {% if aba != 'diagnostico' %}hidden{% endif %}>
+      <div class="cg-inst-cab">
+        <div class="cg-inst-cab__texto">
+          <h2 class="ag-card__title">Diagnóstico <span id="diagSituacao"></span></h2>
+          <p class="cg-inst-cab__lead">O que existe no servidor agora: cofre e chaves de cifragem.</p>
         </div>
-
-        <div id="diagArea">
-          <p class="text-muted" style="font-size: var(--fs-ui);">Carregando diagnóstico...</p>
+      </div>
+      <div class="cg-inst-corpo">
+        <div id="diagAlerta" class="ag-alert ag-alert--danger" role="alert" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo" id="diagAlertaCorpo"></div>
         </div>
-        <div id="revalidarArea" style="margin-top: 1rem;"></div>
-      </section>
-
-      <!-- Configuração do módulo. Os três valores estavam fixos no código, e
-           cada um tem um trade-off que só quem administra o portal resolve. -->
-      <section class="card" style="margin-bottom: 2rem;">
-        <div style="margin-bottom: 1rem;">
-          <h2 style="margin-bottom: 0.25rem;">Configuração</h2>
-          <p class="text-muted" style="font-size: var(--fs-ui);">
-            Deixe em branco ou zero para usar o padrão do sistema.
-          </p>
+        <div id="diagErro" class="ag-alert ag-alert--danger" role="alert" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo"><p class="ag-alert__titulo">Não foi possível consultar o servidor.</p><p id="diagErroTexto"></p><p><button type="button" class="ag-btn ag-btn--outline ag-btn--sm" id="btnDiagTentar">Tentar de novo</button></p></div>
         </div>
+        <div class="cg-inst-diag" id="diagArea" aria-busy="true">
+          <div><h3 class="cg-inst-diag__titulo">Cofre</h3><ul class="ag-dados" id="diagCofre"><li class="ag-dados__item"><span class="ag-dados__rotulo">Carregando…</span></li></ul></div>
+          <div><h3 class="cg-inst-diag__titulo">Chaves de cifragem</h3><ul class="ag-dados" id="diagChaves"></ul></div>
+        </div>
+        <div class="cg-inst-revalidar">
+          <button type="button" id="btnRevalidarCofre" class="ag-btn ag-btn--outline">
+            <span class="ag-spin" id="btnRevalidarSpin" hidden aria-hidden="true"></span>
+            <span class="cg-btn__rotulo" id="btnRevalidarRotulo">Revalidar cofre</span>
+          </button>
+          <p class="cg-inst-revalidar__ajuda" id="revalidarAjuda">Confere de novo as senhas e chaves de todos os certificados guardados.</p>
+        </div>
+        <div class="cg-inst-revalidar__resultado" id="revalidarArea" aria-live="polite"></div>
+      </div>
+    </section>
 
-        <div id="cfgMessageArea"></div>
-
-        <div class="linha-acoes" style="gap: 1.5rem;">
-          <div class="form-field" style="flex: 1; min-width: 200px;">
-            <label for="cfgTtl">Validade do token (minutos)</label>
-            <input type="number" id="cfgTtl" class="form-control" min="0" max="1440" />
-            <p class="hint" style="margin-top: 0.4rem;">
-              Curto demais, a pessoa perde a janela; longo demais, o link segue
-              válido numa caixa de e-mail muito depois de ter servido.
-            </p>
-            <p class="hint" id="cfgTtlEfetivo" style="margin-top: 0.25rem;"></p>
+    <!-- ── Custódia ─────────────────────────────────────────────────── -->
+    <section class="ag-card cg-inst-aba" id="aba-custodia" role="tabpanel" aria-labelledby="tab-custodia" {% if aba != 'custodia' %}hidden{% endif %}>
+      <div class="cg-inst-cab">
+        <div class="cg-inst-cab__texto">
+          <h2 class="ag-card__title">Custódia dos certificados <span class="ag-badge ag-badge--neutral" id="badgeMaquina">Máquina: —</span></h2>
+        </div>
+      </div>
+      <div class="cg-inst-corpo">
+        <div class="ag-alert ag-alert--warning">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div class="ag-alert__corpo"><p><strong>Desativar apaga a cópia guardada.</strong> A chave privada deixa de ficar no cofre do portal e o agente passa a ignorar este certificado nas próximas varreduras. Vencidos e ilegíveis nunca entram na custódia. Vale só para a máquina indicada.</p></div>
+        </div>
+        <form class="cg-inst-filtros" method="get" action="/instalador" role="search">
+          <input type="hidden" name="aba" value="custodia" />
+          <div class="cg-inst-busca">
+            <label for="buscaOptin" class="cg-sr-only">Buscar certificado por nome ou CNPJ/CPF</label>
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="search" id="buscaOptin" name="q" class="ag-input" placeholder="Nome ou CNPJ/CPF" autocomplete="off" />
           </div>
-
-          <div class="form-field" style="flex: 1; min-width: 200px;">
-            <label for="cfgRetencao">Retenção do log (dias)</label>
-            <input type="number" id="cfgRetencao" class="form-control" min="0" />
-            <p class="hint" style="margin-top: 0.4rem;">
-              A trilha guarda <strong>e-mail e IP</strong> de quem instalou. Sem retenção, ela
-              cresce indefinidamente com dado pessoal. <code>0</code> guarda tudo.
-            </p>
-          </div>
+        </form>
+        <div class="cg-status" aria-live="polite"><p class="cg-status__linha" id="optinResumo"></p></div>
+        <div class="ag-table-scroll" role="region" aria-label="Certificados sob custódia">
+          <table class="ag-table cg-tabela-cust" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Titular</th>
+                <th role="columnheader" class="ag-th--estatico">Validade</th>
+                <th role="columnheader" class="ag-th--estatico cg-col-fp">Fingerprint</th>
+                <th role="columnheader" class="ag-th--estatico">Custódia</th>
+                <th role="columnheader" class="ag-th--estatico cg-col-acao"><span class="cg-sr-only">Ação</span></th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="tblOptinCerts"></tbody>
+          </table>
         </div>
-
-        <div class="linha-acoes" style="margin-top: 1rem;">
-          <button id="btnSalvarCfg" class="btn btn-primary">Salvar configuração</button>
-          <button id="btnExpurgarAgora" class="btn btn-secondary">Expurgar log agora</button>
-        </div>
-      </section>
-
-      <!-- Painel de Ação de Instalação -->
-      <!-- Passo 1: autorizar quais certificados podem ir para o cofre do servidor -->
-      <section class="card" style="margin-bottom: 2rem;">
-        <div class="secao-cabecalho">
-          <div>
-            <h2 style="margin-bottom: 0.25rem;">
-              Custódia dos certificados
-              <span id="badgeMaquina" class="badge"
-                    style="margin-left: 0.5rem; font-size: var(--fs-caption); vertical-align: middle;
-                           background: var(--bg); color: var(--text-muted);">—</span>
-            </h2>
-            <p class="text-muted" style="font-size: var(--fs-ui);">
-              Todo certificado válido do inventário vai ao cofre por padrão. Desative aqui os
-              que não devem ter a chave privada copiada para o servidor — o agente passa a ignorá-los.
-              <strong>As decisões desta tela valem só para a máquina indicada acima.</strong>
-            </p>
+        <nav id="pag-cust" class="cg-page-nav" aria-label="Paginação da custódia">
+          <div id="pag-meta-cust" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-cust" class="cg-page-nav__ul" role="list">
+              <li><button type="button" id="btn-cust-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button></li>
+              <li id="pag-li-next-cust"><button type="button" id="btn-cust-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button></li>
+            </ul>
+            <div>
+              <label for="pag-perpage-cust" class="cg-sr-only">Registros por página</label>
+              <select id="pag-perpage-cust" class="cg-page-perpage-select" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
           </div>
-          <div class="linha-acoes">
-            <label for="buscaOptin" class="cg-sr-only">Buscar certificado por nome ou documento</label>
-            <input type="search" id="buscaOptin" class="form-control" placeholder="Buscar por nome ou documento" style="width: min(260px, 100%);" />
-            <button id="btnRefreshOptin" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
-          </div>
+        </nav>
+        <p class="cg-inst-rodape" id="optinRodape"></p>
+      </div>
+    </section>
+
+    <!-- ── Trilha ───────────────────────────────────────────────────── -->
+    <section class="ag-card cg-inst-aba" id="aba-trilha" role="tabpanel" aria-labelledby="tab-trilha" {% if aba != 'trilha' %}hidden{% endif %}>
+      <div class="cg-inst-cab">
+        <div class="cg-inst-cab__texto">
+          <h2 class="ag-card__title">Trilha de instalações</h2>
+          <p class="cg-inst-cab__lead">Uma linha por tentativa, do pedido ao desfecho.</p>
         </div>
-
-        <div class="cg-banner cg-banner--info" style="margin-bottom: 1rem;">
-          <span class="cg-banner__icon" aria-hidden="true">🔐</span>
-          <span class="cg-banner__text">
-            A custódia copia a chave privada do certificado para o banco do portal, cifrada.
-            Desativar <strong>apaga o arquivo já armazenado</strong> e impede que ele volte na
-            próxima varredura. Vencidos e ilegíveis nunca entram.
-          </span>
-        </div>
-
-        <div id="optinMessageArea"></div>
-
-        <div class="table-scroll-anchor">
-          <div class="table-scroll">
-            <table class="data-table" role="table">
-              <thead role="rowgroup">
-                <tr role="row">
-                  <th role="columnheader">Titular / CNPJ / CPF</th>
-                  <th role="columnheader">Validade</th>
-                  <th role="columnheader">Fingerprint</th>
-                  <th role="columnheader">Custódia</th>
-                  <th role="columnheader">Ação</th>
-                </tr>
-              </thead>
-              <tbody role="rowgroup" id="tblOptinCerts"></tbody>
-            </table>
-          </div>
-        </div>
-        <p class="hint" id="optinResumo" style="margin-top: 0.75rem;"></p>
-      </section>
-
-      <!-- Trilha agrupada por token: uma linha por TENTATIVA, não por evento.
-           A lista plana mostrava eventos soltos em ordem cronológica, e o que
-           importa é onde a cadeia quebrou. Ver cadeias_de_instalacao(). -->
-      <section class="card">
-        <div class="secao-cabecalho">
-          <div>
-            <h2 style="margin-bottom: 0.25rem;">Trilha de instalações</h2>
-            <p class="text-muted" style="font-size: var(--fs-ui);">
-              Uma linha por tentativa, do pedido ao desfecho.
-            </p>
-          </div>
-          <div class="linha-acoes">
-            <label for="trilhaDias" class="cg-sr-only">Período</label>
-            <select id="trilhaDias" class="form-control" style="width: 150px;">
+      </div>
+      <div class="cg-inst-corpo">
+        <form class="cg-inst-form" id="formTrilha" method="get" action="/instalador">
+          <input type="hidden" name="aba" value="trilha" />
+          <div class="ag-field ag-field--periodo">
+            <label class="ag-label" for="trilhaDias">Período</label>
+            <select id="trilhaDias" name="dias" class="ag-select">
               <option value="7">Últimos 7 dias</option>
               <option value="30" selected>Últimos 30 dias</option>
               <option value="90">Últimos 90 dias</option>
               <option value="365">Último ano</option>
             </select>
-            <label for="trilhaEmail" class="cg-sr-only">Filtrar por solicitante</label>
-            <input type="search" id="trilhaEmail" class="form-control" placeholder="Filtrar por e-mail" style="width: 220px;" />
-            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: var(--fs-ui-sm);">
-              <input type="checkbox" id="trilhaSoFalhas" /> só falhas
-            </label>
-            <button id="btnRefreshLogs" class="btn btn-secondary" style="font-size: var(--fs-ui);">Atualizar</button>
           </div>
-        </div>
-
-        <div id="trilhaResumo" style="margin-bottom: 1rem;"></div>
-
-        <!-- overflow-x: a trilha tem 7 colunas e alargava a página em 320px;
-             as outras tabelas rolam via .table-scroll, esta rola aqui. -->
-        <div class="table-container" style="overflow-x: auto;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Quando</th>
-                <th>Solicitante</th>
-                <th>Destino</th>
-                <th>Certs</th>
-                <th>Cadeia</th>
-                <th>Desfecho</th>
+          <div class="ag-field ag-field--email">
+            <label class="ag-label" for="trilhaEmail">Solicitante</label>
+            <input type="search" id="trilhaEmail" name="email" class="ag-input" placeholder="E-mail" autocomplete="off" />
+          </div>
+          <label class="ag-check"><input type="checkbox" id="trilhaSoFalhas" name="falhas" value="1" /> Só falhas</label>
+          <button type="submit" class="ag-btn ag-btn--outline">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Filtrar
+          </button>
+        </form>
+        <div class="cg-inst-resumo" id="trilhaResumo"></div>
+        <div class="ag-table-scroll" role="region" aria-label="Trilha de instalações">
+          <table class="ag-table cg-tabela-trilha" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Quando</th>
+                <th role="columnheader" class="ag-th--estatico">Solicitante</th>
+                <th role="columnheader" class="ag-th--estatico">Máquina</th>
+                <th role="columnheader" class="ag-th--estatico cg-col-n">Certificados</th>
+                <th role="columnheader" class="ag-th--estatico">Etapas</th>
+                <th role="columnheader" class="ag-th--estatico">Desfecho</th>
               </tr>
             </thead>
-            <tbody id="tblInstallLogs">
-              <tr>
-                <td colspan="6" class="text-center" style="padding: 2rem;">Carregando trilha...</td>
-              </tr>
-            </tbody>
+            <tbody role="rowgroup" id="tblInstallLogs"></tbody>
           </table>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
 
-    <script src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
-    <script nonce="{{ request.state.nonce }}">
-      document.addEventListener("DOMContentLoaded", function() {
-        // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
-        // o gate da página.
-        const role = localStorage.getItem("user_role");
-        if (role !== "admin") {
-          window.location.href = "/";
+    <!-- ── Configuração ─────────────────────────────────────────────── -->
+    <section class="ag-card cg-inst-aba" id="aba-configuracao" role="tabpanel" aria-labelledby="tab-configuracao" {% if aba != 'configuracao' %}hidden{% endif %}>
+      <div class="cg-inst-cab">
+        <div class="cg-inst-cab__texto">
+          <h2 class="ag-card__title">Configuração</h2>
+          <p class="cg-inst-cab__lead">Deixe em branco para usar o padrão do sistema.</p>
+        </div>
+      </div>
+      <div class="cg-inst-corpo cg-inst-config">
+        <div id="cfgMsg" class="ag-alert ag-alert--danger" role="alert" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo" id="cfgMsgTexto"></div>
+        </div>
+        <form id="formCfg" class="ag-form-cols">
+          <div class="ag-field">
+            <label class="ag-label" for="cfgTtl">Validade do token</label>
+            <span class="ag-input-afixo">
+              <input type="number" id="cfgTtl" class="ag-input" min="1" max="1440" placeholder="Padrão: 5" />
+              <span class="ag-input-afixo__sufixo" aria-hidden="true">minutos</span>
+            </span>
+            <p class="ag-ajuda">Por quanto tempo o link de instalação enviado por e-mail continua válido.</p>
+            <p class="ag-ajuda ag-ajuda--muted" id="cfgTtlEfetivo"></p>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label" for="cfgRetencao">Retenção do log</label>
+            <span class="ag-input-afixo">
+              <input type="number" id="cfgRetencao" class="ag-input" min="1" placeholder="Sem limite" />
+              <span class="ag-input-afixo__sufixo" aria-hidden="true">dias</span>
+            </span>
+            <p class="ag-ajuda">Por quantos dias a trilha guarda o e-mail e o IP de quem instalou. Deixe vazio para guardar sem limite.</p>
+            <p class="ag-ajuda ag-ajuda--muted" id="cfgRetencaoEfetivo"></p>
+            <div class="ag-alert ag-alert--warning" id="cfgRetencaoAviso" hidden>
+              <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <div class="ag-alert__corpo"><p>A trilha está guardando e-mail e IP sem prazo de exclusão.</p></div>
+            </div>
+            <!-- Expurgar é destrutivo e mora junto do campo que o rege, num
+                 formulário próprio, longe do Salvar. -->
+            <div class="cg-inst-config__expurgo">
+              <button type="button" id="btnExpurgarAgora" class="ag-btn ag-btn--ghost-danger ag-btn--sm">
+                <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                Expurgar log agora
+              </button>
+            </div>
+          </div>
+        </form>
+        <div class="cg-inst-config__acoes">
+          <button type="button" id="btnSalvarCfg" class="ag-btn ag-btn--primary">Salvar configuração</button>
+          <span class="cg-inst-rodape" id="cfgStatus" role="status"></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Confirmação de "Desativar": nome, documento e a consequência. -->
+  <dialog class="ag-modal" id="modalDesativar" aria-labelledby="tit-desativar">
+    <form method="dialog">
+      <div class="ag-modal__head">
+        <h2 class="ag-modal__titulo" id="tit-desativar">Desativar custódia</h2>
+        <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <p><strong id="desNome"></strong><br><span class="ag-cell-sub ag-cell-sub--mono" id="desDoc"></span></p>
+        <p>A cópia guardada será apagada, e o certificado não volta ao cofre nas próximas varreduras. Vale só para a máquina <strong id="desMaquina"></strong>.</p>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button>
+        <button type="button" class="ag-btn ag-btn--danger" id="btnDesativarConfirmar">Desativar custódia</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Confirmação do expurgo: quantos registros e até que data. -->
+  <dialog class="ag-modal" id="modalExpurgo" aria-labelledby="tit-expurgo">
+    <form method="dialog">
+      <div class="ag-modal__head">
+        <h2 class="ag-modal__titulo" id="tit-expurgo">Expurgar a trilha</h2>
+        <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <p id="expTexto"></p>
+        <p class="ag-ajuda ag-ajuda--muted">Isso é irreversível.</p>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button>
+        <button type="button" class="ag-btn ag-btn--danger" id="btnExpurgarConfirmar">Expurgar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+  <script nonce="{{ request.state.nonce }}">
+    // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `renderSkeletonRows`,
+    // `limparSkeleton`, `cgPageNavRefresh`, `cgPageNavHide` e `cgCopiarInit`
+    // vêm de ui-common.js.
+    const ABAS = ["diagnostico", "custodia", "trilha", "configuracao"];
+    const AVISO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+    const CHECK = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    const CIRCULO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
+    const XIS = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+
+    /* ── Formatação ───────────────────────────────────────────────────── */
+
+    function num(v) { return v === null || v === undefined ? "—" : Number(v).toLocaleString("pt-BR"); }
+    function fmtHora(d) { return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+    function fmtData(iso) { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR"); }
+    function fmtDataHora(iso) { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR") + " " + fmtHora(d); }
+    // "hoje, 10:14" / "ontem, 15:08"; o resto em dd/mm/aaaa hh:mm, sem segundos.
+    function fmtQuando(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+      const dia = new Date(d); dia.setHours(0, 0, 0, 0);
+      if (dia.getTime() === hoje.getTime()) return "hoje, " + fmtHora(d);
+      if (dia.getTime() === ontem.getTime()) return "ontem, " + fmtHora(d);
+      return fmtDataHora(iso);
+    }
+    function tempo(iso, texto) {
+      return `<time datetime="${esc(iso)}" title="${esc(fmtDataHora(iso))}">${esc(texto)}</time>`;
+    }
+    function plural(n, s, p) { return num(n) + " " + (Number(n) === 1 ? s : (p || s + "s")); }
+
+    function itemDados(rotulo, valorHtml, opts) {
+      const o = opts || {};
+      const cls = "ag-dados__valor" + (o.zero ? " ag-dados__valor--zero" : "") + (o.secundario ? " ag-dados__valor--secundario" : "");
+      const conteudo = o.aviso ? `<span class="cg-valor-aviso">${AVISO}${valorHtml}</span>` : valorHtml;
+      return `<li class="ag-dados__item"><span class="ag-dados__rotulo">${esc(rotulo)}</span><span class="${cls}">${conteudo}</span></li>`;
+    }
+
+    /* ── Abas ─────────────────────────────────────────────────────────── */
+
+    function showTab(aba, anunciar) {
+      if (!ABAS.includes(aba)) aba = "diagnostico";
+      ABAS.forEach((a) => {
+        document.getElementById("aba-" + a).hidden = a !== aba;
+        const t = document.getElementById("tab-" + a);
+        t.setAttribute("aria-selected", a === aba ? "true" : "false");
+        t.tabIndex = a === aba ? 0 : -1;
+      });
+      const url = new URL(location.href);
+      if (aba === "diagnostico") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
+      history.replaceState(null, "", url.pathname + (url.search || ""));
+      if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById("tab-" + aba).textContent.trim() + " aberta.";
+    }
+
+    document.querySelectorAll(".ag-abas__aba").forEach((aba) => {
+      aba.addEventListener("click", (ev) => { ev.preventDefault(); showTab(aba.dataset.aba, true); aba.focus(); });
+      aba.addEventListener("keydown", (ev) => {
+        if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+        ev.preventDefault();
+        const i = ABAS.indexOf(aba.dataset.aba);
+        const prox = ABAS[(i + (ev.key === "ArrowRight" ? 1 : ABAS.length - 1)) % ABAS.length];
+        showTab(prox, true);
+        document.getElementById("tab-" + prox).focus();
+      });
+    });
+
+    /* ── Atualizar (único) ────────────────────────────────────────────── */
+
+    function setCarregando(on) {
+      const btn = document.getElementById("btnAtualizar");
+      btn.disabled = on;
+      document.getElementById("btnAtualizarIcone").hidden = on;
+      document.getElementById("btnAtualizarSpin").hidden = !on;
+      document.getElementById("btnAtualizarRotulo").textContent = on ? "Atualizando…" : "Atualizar";
+    }
+
+    async function recarregarTudo() {
+      setCarregando(true);
+      try {
+        await Promise.all([loadDiagnostico(), loadOptinPanel(), loadInstallLogs(), loadConfigInstalador()]);
+      } finally {
+        setCarregando(false);
+      }
+    }
+
+    /* ── Configuração ─────────────────────────────────────────────────── */
+
+    function cfgErro(texto) {
+      const caixa = document.getElementById("cfgMsg");
+      if (!texto) { caixa.hidden = true; return; }
+      document.getElementById("cfgMsgTexto").textContent = texto;
+      caixa.hidden = false;
+    }
+
+    let _retencaoEfetiva = 0;
+
+    async function loadConfigInstalador() {
+      try {
+        const r = await fetch("/api/settings", { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const s = await r.json();
+        // Campo vazio quando não foi personalizado; o que vale vai em "Em vigor".
+        document.getElementById("cfgTtl").value = s.install_token_ttl_min ? String(s.install_token_ttl_min) : "";
+        document.getElementById("cfgRetencao").value = s.trilha_retencao_dias ? String(s.trilha_retencao_dias) : "";
+        document.getElementById("cfgTtlEfetivo").textContent = "Em vigor: " + plural(s.install_token_ttl_efetivo || 0, "minuto");
+        _retencaoEfetiva = Number(s.trilha_retencao_dias || 0);
+        document.getElementById("cfgRetencaoEfetivo").textContent = "Em vigor: " + (_retencaoEfetiva ? plural(_retencaoEfetiva, "dia") : "sem limite");
+        // Retenção sem limite é dado pessoal guardado indefinidamente.
+        document.getElementById("cfgRetencaoAviso").hidden = _retencaoEfetiva > 0;
+        cfgErro("");
+      } catch (e) {
+        cfgErro("Não foi possível carregar a configuração: " + e.message);
+      }
+    }
+
+    async function salvarConfigInstalador() {
+      const btn = document.getElementById("btnSalvarCfg");
+      const st = document.getElementById("cfgStatus");
+      btn.disabled = true;
+      st.textContent = "Salvando…";
+      try {
+        const r = await fetch("/api/cert-installer/configuracao", {
+          method: "PUT",
+          headers: getHeaders(true),
+          body: JSON.stringify({
+            install_token_ttl_min: parseInt(document.getElementById("cfgTtl").value || "0", 10),
+            trilha_retencao_dias: parseInt(document.getElementById("cfgRetencao").value || "0", 10),
+          }),
+        });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        await loadConfigInstalador();
+        st.textContent = "Configuração salva.";
+        showToast("Configuração salva.", "success");
+      } catch (e) {
+        st.textContent = "";
+        cfgErro(e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function abrirExpurgo() {
+      const modal = document.getElementById("modalExpurgo");
+      const texto = document.getElementById("expTexto");
+      const btn = document.getElementById("btnExpurgarConfirmar");
+      texto.textContent = "Contando os registros…";
+      btn.disabled = true;
+      btn.textContent = "Expurgar";
+      modal.showModal();
+      try {
+        const r = await fetch("/api/cert-installer/expurgo-previa", { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        if (!d.executado) {
+          texto.textContent = "Nada a expurgar: " + (d.motivo || "retenção desligada") + ". Defina uma retenção em dias e salve antes.";
           return;
         }
+        texto.textContent = plural(d.registros, "registro da trilha", "registros da trilha") + " anteriores a " + fmtData(d.corte) + " (retenção de " + plural(d.retencao_dias, "dia") + ") serão apagados.";
+        btn.textContent = "Expurgar " + plural(d.registros, "registro");
+        btn.disabled = d.registros === 0;
+      } catch (e) {
+        texto.textContent = "Não foi possível contar os registros: " + e.message;
+      }
+    }
 
-        loadOptinPanel();
+    async function expurgarAgora() {
+      const modal = document.getElementById("modalExpurgo");
+      const btn = document.getElementById("btnExpurgarConfirmar");
+      btn.disabled = true;
+      try {
+        const r = await fetch("/api/cert-installer/expurgar-log", { method: "POST", headers: getHeaders(true) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Falha no expurgo");
+        const log = d.install_log || {};
+        modal.close();
+        if (log.executado) showToast(plural(log.apagados, "registro apagado", "registros apagados") + " (anteriores a " + fmtData(log.corte) + ").", "success");
+        else showToast("Nada a fazer: " + (log.motivo || ""), "warning");
         loadInstallLogs();
+      } catch (e) {
+        modal.close();
+        cfgErro(e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
 
-        document.getElementById("btnRefreshOptin").addEventListener("click", loadOptinPanel);
-        const buscaOptin = document.getElementById("buscaOptin");
-        let debounceOptin = null;
-        buscaOptin.addEventListener("input", () => {
-          clearTimeout(debounceOptin);
-          debounceOptin = setTimeout(renderOptinTable, 250);
+    /* ── Diagnóstico ──────────────────────────────────────────────────── */
+    //
+    // A regra de leitura é a mesma do módulo que gera os dados: na dúvida,
+    // dizer que não sabe.
+
+    function renderDiagnostico(d) {
+      const c = d.cofre || {};
+      const k = d.chaves || {};
+      const t = d.textos || {};
+      const badge = { ok: '<span class="ag-badge ag-badge--success">Tudo em ordem</span>', atencao: '<span class="ag-badge ag-badge--danger">Atenção</span>', erro: '<span class="ag-badge ag-badge--neutral">Sem leitura</span>' };
+      document.getElementById("diagSituacao").innerHTML = badge[d.situacao] || "";
+
+      const problemas = d.problemas || [];
+      const alerta = document.getElementById("diagAlerta");
+      alerta.hidden = !problemas.length;
+      document.getElementById("diagAlertaCorpo").innerHTML = problemas.length
+        ? `<p class="ag-alert__titulo">${esc(problemas[0])}</p>` + (problemas.length > 1 ? `<ul>${problemas.slice(1).map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : "")
+        : "";
+
+      // "Sem senha cifrada" é o número que mais importa aqui: foi a causa
+      // única das seis falhas de instalação registradas em produção.
+      const cofre = c.erro
+        ? itemDados("Erro", esc(c.erro), { aviso: true })
+        : itemDados("Certificados guardados", esc(num(c.total)))
+          + itemDados("Máquinas", (t.maquinas || []).map(esc).join("<br>") || "—", { secundario: true })
+          + itemDados("Sem senha cifrada", esc(num(c.sem_senha_cifrada)), { zero: !c.sem_senha_cifrada, aviso: !!c.sem_senha_cifrada })
+          + itemDados("Senha em claro", esc(num(c.senha_em_claro)), { zero: !c.senha_em_claro, aviso: !!c.senha_em_claro })
+          + itemDados("Custódia desativada", esc(num(c.bloqueios)), { zero: !c.bloqueios })
+          + itemDados("Último envio", c.ultimo_upload ? tempo(c.ultimo_upload, fmtQuando(c.ultimo_upload)) : "—", { secundario: true });
+      document.getElementById("diagCofre").innerHTML = cofre;
+
+      const semChave = k.versoes_sem_chave || [];
+      const chaves = k.erro
+        ? itemDados("Erro", esc(k.erro), { aviso: true })
+        : itemDados("Versão em vigor", k.versao_corrente != null ? "v" + esc(String(k.versao_corrente)) : "—")
+          + itemDados("Configuradas no ambiente", (k.versoes_configuradas || []).map((v) => "v" + esc(String(v))).join(", ") || "nenhuma", { zero: !(k.versoes_configuradas || []).length })
+          + itemDados("Em uso no cofre", (t.em_uso || []).map(esc).join("<br>") || "—", { secundario: true })
+          + itemDados("Versões sem chave", semChave.length ? semChave.map((v) => "v" + esc(String(v))).join(", ") : "nenhuma", { zero: !semChave.length, aviso: !!semChave.length });
+      document.getElementById("diagChaves").innerHTML = chaves;
+      document.getElementById("diagArea").removeAttribute("aria-busy");
+      if (t.ajuda_revalidar) document.getElementById("revalidarAjuda").textContent = t.ajuda_revalidar;
+    }
+
+    async function loadDiagnostico() {
+      const erro = document.getElementById("diagErro");
+      try {
+        const r = await fetch("/api/cert-installer/diagnostico", { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        erro.hidden = true;
+        document.getElementById("diagArea").hidden = false;
+        renderDiagnostico(await r.json());
+      } catch (e) {
+        // Valores anteriores nunca ficam como se fossem atuais.
+        document.getElementById("diagErroTexto").textContent = e.message;
+        erro.hidden = false;
+        document.getElementById("diagArea").hidden = true;
+        document.getElementById("diagSituacao").innerHTML = "";
+        document.getElementById("diagAlerta").hidden = true;
+      }
+    }
+
+    async function revalidarCofre() {
+      const btn = document.getElementById("btnRevalidarCofre");
+      const area = document.getElementById("revalidarArea");
+      btn.disabled = true;
+      document.getElementById("btnRevalidarSpin").hidden = false;
+      document.getElementById("btnRevalidarRotulo").textContent = "Revalidando…";
+      area.innerHTML = "";
+      try {
+        const r = await fetch("/api/cert-installer/revalidar-cofre", { method: "POST", headers: getHeaders(true) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Falha ao revalidar");
+        const res = d.resultados || [];
+        area.innerHTML = res.length
+          ? res.map((x) => `<div class="ag-alert ${x.ok ? "ag-alert--success" : "ag-alert--danger"}">${x.ok ? CHECK : AVISO}<div class="ag-alert__corpo">Chave v${esc(String(x.key_version))}: ${x.ok ? "decifrou a amostra" : "falhou"}. ${esc(x.detalhe || "")}</div></div>`).join("")
+          : `<p class="cg-inst-rodape">Cofre vazio: nada a revalidar.</p>`;
+        const falhas = res.filter((x) => !x.ok).length;
+        showToast(falhas ? plural(falhas, "chave falhou", "chaves falharam") + " na revalidação." : "Cofre revalidado: todas as chaves decifram.", falhas ? "error" : "success");
+      } catch (e) {
+        area.innerHTML = `<div class="ag-alert ag-alert--danger">${AVISO}<div class="ag-alert__corpo">${esc(e.message)}</div></div>`;
+      } finally {
+        btn.disabled = false;
+        document.getElementById("btnRevalidarSpin").hidden = true;
+        document.getElementById("btnRevalidarRotulo").textContent = "Revalidar cofre";
+      }
+    }
+
+    /* ── Custódia ─────────────────────────────────────────────────────── */
+    // A lista de candidatos vem do inventário (metadados do agente). O que
+    // está no cofre vem de /vault-optin. A tela cruza os dois.
+
+    let _optinCandidatos = [];
+    let _optinAutorizados = new Set();
+    let _optinTotalInventario = 0;
+    let _custPagina = 1;
+    // O machine_id vem na RAIZ do payload de /api/certificados, não em cada
+    // item. Gravar a autorização com machine_id errado é falha silenciosa.
+    let _optinMachineId = "default";
+    const LS_PER_PAGE_CUST = "cg_per_page_custodia";
+
+    function porPagCust() {
+      const n = parseInt(document.getElementById("pag-perpage-cust").value, 10);
+      return [10, 25, 50, 100].includes(n) ? n : 10;
+    }
+
+    async function loadOptinPanel() {
+      const tbody = document.getElementById("tblOptinCerts");
+      renderSkeletonRows(tbody, 5, 5);
+      try {
+        // Sequencial de propósito: o machine_id sai do inventário e entra na
+        // consulta de autorizações. A página pede o inventário inteiro
+        // (2000 é o teto da rota): com 500, 44 certificados ficavam de fora
+        // e a contagem "no inventário" saía menor que a do cofre.
+        const rCerts = await fetch(
+          "/api/certificados?fonte=auto&pagina=1&por_pagina=2000",
+          { headers: getHeaders() }
+        );
+        if (!rCerts.ok) throw new Error(`Inventário: HTTP ${rCerts.status}`);
+        const dCerts = await rCerts.json();
+
+        _optinMachineId = dCerts.machine_id || "default";
+        _optinTotalInventario = (dCerts.itens || []).length;
+
+        const rOptin = await fetch(
+          `/api/cert-installer/vault-optin?machine_id=${encodeURIComponent(_optinMachineId)}`,
+          { headers: getHeaders() }
+        );
+        if (!rOptin.ok) throw new Error(`Autorizações: HTTP ${rOptin.status}`);
+        const dOptin = await rOptin.json();
+
+        // Só entram candidatos com fingerprint: é a chave de autorização.
+        const vistos = new Set();
+        _optinCandidatos = (dCerts.itens || []).filter((c) => {
+          const fp = c.fingerprint_sha256;
+          if (!fp || vistos.has(fp)) return false;
+          vistos.add(fp);
+          return true;
         });
+        _optinAutorizados = new Set(dOptin.fingerprints || []);
+        _custPagina = 1;
+        renderOptinTable();
+      } catch (err) {
+        limparSkeleton(tbody);
+        renderEmptyRow(tbody, 5, {
+          title: "Não foi possível carregar os certificados",
+          description: err.message,
+          actionText: "Tentar novamente",
+          onAction: loadOptinPanel,
+        });
+      }
+    }
 
-        // Checkbox selecionar todos
+    function fpCurto(fp) { return fp.length > 12 ? fp.slice(0, 8) + "…" + fp.slice(-4) : fp; }
 
-        // Botão de instalar
-        document.getElementById("btnRefreshLogs").addEventListener("click", loadInstallLogs);
-        document.getElementById("trilhaDias").addEventListener("change", loadInstallLogs);
-        document.getElementById("trilhaSoFalhas").addEventListener("change", loadInstallLogs);
-        document.getElementById("trilhaEmail").addEventListener("change", loadInstallLogs);
-        document.getElementById("btnRefreshDiag").addEventListener("click", loadDiagnostico);
-        document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
-        document.getElementById("btnSalvarCfg").addEventListener("click", salvarConfigInstalador);
-        document.getElementById("btnExpurgarAgora").addEventListener("click", expurgarAgora);
-        loadDiagnostico();
-        loadConfigInstalador();
+    function renderOptinTable() {
+      const tbody = document.getElementById("tblOptinCerts");
+      limparSkeleton(tbody);
+
+      const q = (document.getElementById("buscaOptin").value || "").trim().toLowerCase();
+      const linhas = _optinCandidatos.filter((c) => {
+        if (!q) return true;
+        return [c.nome, c.display_name, c.nome_exibicao, c.documento_formatado, c.documento_numero]
+          .filter(Boolean).join(" ").toLowerCase().includes(q);
       });
 
-      // ─── Configuração do módulo ────────────────────────────────────────
+      document.getElementById("badgeMaquina").textContent = "Máquina: " + _optinMachineId;
+      document.getElementById("tab-custodia-contagem").textContent = "(" + _optinAutorizados.size + ")";
+      // Três números diferentes, cada um com o seu rótulo: o que está sob
+      // custódia (autorizações da máquina), o que é legível no inventário
+      // (tem fingerprint) e o inventário inteiro.
+      const foraDoInventario = [..._optinAutorizados].filter((fp) => !_optinCandidatos.some((c) => c.fingerprint_sha256 === fp)).length;
+      document.getElementById("optinRodape").textContent =
+        plural(_optinAutorizados.size, "certificado sob custódia", "certificados sob custódia") +
+        " · " + plural(_optinCandidatos.length, "legível no inventário desta máquina", "legíveis no inventário desta máquina") +
+        " · " + plural(_optinTotalInventario, "arquivo no inventário", "arquivos no inventário") +
+        (foraDoInventario ? " · " + plural(foraDoInventario, "sob custódia já não está no inventário", "sob custódia já não estão no inventário") : "");
+      document.getElementById("optinResumo").textContent = q
+        ? plural(linhas.length, "certificado", "certificados") + " para “" + q + "”"
+        : plural(_optinCandidatos.length, "certificado", "certificados");
 
-      function mostrarCfgMsg(texto, tipo) {
-        document.getElementById("cfgMessageArea").innerHTML =
-          `<div class="toast toast-${tipo}" style="margin-bottom: 1rem;">${esc(texto)}</div>`;
+      if (!linhas.length) {
+        cgPageNavHide("pag-cust", "pag-ul-cust", "pag-meta-cust");
+        tbody.innerHTML = q
+          ? `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nada encontrado para “${esc(q)}”. <a href="#" id="linkCustTodos">Ver a lista inteira</a>.</td></tr>`
+          : `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nenhum certificado sob custódia nesta máquina.</td></tr>`;
+        const l = document.getElementById("linkCustTodos");
+        if (l) l.addEventListener("click", (ev) => { ev.preventDefault(); document.getElementById("buscaOptin").value = ""; _custPagina = 1; renderOptinTable(); });
+        return;
       }
 
-      async function loadConfigInstalador() {
-        try {
-          const r = await fetch("/api/settings", { headers: getHeaders() });
-          if (!r.ok) return;
-          const s = await r.json();
-          document.getElementById("cfgTtl").value = s.install_token_ttl_min || 0;
-          document.getElementById("cfgRetencao").value = s.trilha_retencao_dias || 0;
-          // O "em vigor" existe porque o campo em branco não diz nada: quem
-          // olha precisa saber o que realmente vale agora, não o que está
-          // digitado.
-          document.getElementById("cfgTtlEfetivo").textContent =
-            "Em vigor: " + (s.install_token_ttl_efetivo || "—") + " min";
-        } catch (e) {
-          mostrarCfgMsg("Não foi possível carregar a configuração.", "error");
+      const psz = porPagCust();
+      const totalPag = Math.max(1, Math.ceil(linhas.length / psz));
+      if (_custPagina > totalPag) _custPagina = totalPag;
+      const fatia = linhas.slice((_custPagina - 1) * psz, _custPagina * psz);
+
+      tbody.innerHTML = "";
+      fatia.forEach((c) => {
+        const fp = c.fingerprint_sha256;
+        const autorizado = _optinAutorizados.has(fp);
+        const nome = c.nome_exibicao || c.nome || c.display_name || "Sem nome";
+        const doc = c.documento_formatado || c.documento_numero || "—";
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("role", "row");
+        tr.innerHTML =
+          `<td role="cell" class="cg-col-titular"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nome)}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(doc)}</span></span></td>` +
+          `<td role="cell" class="cg-col-validade">${c.not_after ? tempo(c.not_after, fmtData(c.not_after)) : "—"}</td>` +
+          `<td role="cell" class="cg-col-fp"><span title="${esc(fp)}">${esc(fpCurto(fp))}</span><button type="button" class="ag-btn ag-btn--ghost ag-btn--sm ag-copiar" data-copiar="${esc(fp)}" aria-live="polite"><span class="cg-btn__rotulo">Copiar</span></button></td>` +
+          `<td role="cell" class="cg-col-custodia">${autorizado ? '<span class="ag-badge ag-badge--success">Ativa</span>' : '<span class="ag-badge ag-badge--neutral">Desativada</span>'}</td>` +
+          `<td role="cell" class="cg-col-acao"></td>`;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = autorizado ? "ag-btn ag-btn--ghost-danger ag-btn--sm" : "ag-btn ag-btn--ghost ag-btn--sm";
+        btn.textContent = autorizado ? "Desativar" : "Reativar";
+        btn.setAttribute("aria-label", (autorizado ? "Desativar a custódia de " : "Reativar a custódia de ") + nome);
+        btn.addEventListener("click", () => alternarOptin(c, autorizado, btn));
+        tr.querySelector(".cg-col-acao").appendChild(btn);
+        tbody.appendChild(tr);
+      });
+
+      cgPageNavRefresh({
+        bar: "pag-cust", meta: "pag-meta-cust", ul: "pag-ul-cust", liNext: "pag-li-next-cust",
+        prev: "btn-cust-prev", next: "btn-cust-next",
+        pg: { pagina: _custPagina, total_paginas: totalPag, total_itens: linhas.length },
+        metaFormatter: (p) => "Página " + p.pagina + " de " + p.total_paginas + " · " + plural(p.total_itens, "certificado"),
+        hideWhenSingle: true,
+        goToPage: (n) => { _custPagina = n; renderOptinTable(); },
+        maxButtons: 5,
+      });
+    }
+
+    let _desativarPendente = null;
+
+    function alternarOptin(cert, autorizado, btn) {
+      // A custódia é por instalação, não por certificado: a mesma máquina
+      // que desativa é a que reativa. Mandar o machine_id é o que impede a
+      // ação de alcançar as outras estações.
+      const maquina = cert.machine_id || _optinMachineId;
+      if (!autorizado) return executarOptin(cert, false, btn, maquina);
+      // Desativar apaga a chave privada guardada: confirmação num modal com
+      // nome, documento e a consequência.
+      _desativarPendente = { cert, btn, maquina };
+      document.getElementById("desNome").textContent = cert.nome_exibicao || cert.nome || cert.display_name || "este certificado";
+      document.getElementById("desDoc").textContent = cert.documento_formatado || cert.documento_numero || "";
+      document.getElementById("desMaquina").textContent = maquina;
+      document.getElementById("modalDesativar").showModal();
+    }
+
+    async function executarOptin(cert, autorizado, btn, maquina) {
+      const fp = cert.fingerprint_sha256;
+      const nome = cert.nome_exibicao || cert.nome || cert.display_name || "este certificado";
+      btn.disabled = true;
+      try {
+        const res = autorizado
+          ? await fetch(
+              `/api/cert-installer/vault-optin/${encodeURIComponent(fp)}` +
+              `?machine_id=${encodeURIComponent(maquina)}`,
+              { method: "DELETE", headers: getHeaders() },
+            )
+          : await fetch("/api/cert-installer/vault-optin", {
+              method: "POST",
+              headers: getHeaders(true),
+              body: JSON.stringify({
+                fingerprint: fp,
+                machine_id: maquina,
+                nome_titular: cert.nome || cert.display_name || null,
+                documento: cert.documento_formatado || cert.documento_numero || null,
+              }),
+            });
+        if (!res.ok) throw new Error(await mensagemCorpoErro(res));
+        if (autorizado) {
+          _optinAutorizados.delete(fp);
+          showToast(`“${nome}” fora da custódia. A cópia foi apagada do servidor.`, "success");
+        } else {
+          _optinAutorizados.add(fp);
+          showToast(`“${nome}” de volta à custódia. O agente envia no próximo ciclo.`, "success");
         }
+        renderOptinTable();
+      } catch (err) {
+        btn.disabled = false;
+        showToast("Não foi possível concluir: " + err.message, "error");
       }
+    }
 
-      async function salvarConfigInstalador() {
-        const btn = document.getElementById("btnSalvarCfg");
-        btn.disabled = true;
-        try {
-          const r = await fetch("/api/cert-installer/configuracao", {
-            method: "PUT",
-            headers: getHeaders(true),
-            body: JSON.stringify({
-              install_token_ttl_min: parseInt(document.getElementById("cfgTtl").value || "0", 10),
-              trilha_retencao_dias: parseInt(document.getElementById("cfgRetencao").value || "0", 10),
-            }),
-          });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          await loadConfigInstalador();
-          mostrarCfgMsg("Configuração salva.", "success");
-        } catch (e) {
-          mostrarCfgMsg(e.message, "error");
-        } finally {
-          btn.disabled = false;
-        }
-      }
+    /* ── Trilha ───────────────────────────────────────────────────────── */
 
-      async function expurgarAgora() {
-        const dias = parseInt(document.getElementById("cfgRetencao").value || "0", 10);
-        if (dias > 0 && !confirm(
-          `Apagar da trilha os registros com mais de ${dias} dias?\n\n` +
-          `Isso é irreversível.`
-        )) return;
+    // Mesma ordem de ORDEM_DOS_EVENTOS em app/cert_installer.py. REDIMIDO é
+    // o resgate: o agente da estação recebeu o token e buscou o certificado.
+    const MARCOS = [["SOLICITADO", "Pedido"], ["REDIMIDO", "Resgate"], ["CONCLUIDO", "Conclusão"]];
 
-        const btn = document.getElementById("btnExpurgarAgora");
-        btn.disabled = true;
-        try {
-          const r = await fetch("/api/cert-installer/expurgar-log", {
-            method: "POST", headers: getHeaders(true),
-          });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.detail || "Falha no expurgo");
-          mostrarCfgMsg(
-            d.executado
-              ? `${d.apagados} registro(s) apagados (anteriores a ${d.retencao_dias} dias).`
-              : `Nada a fazer: ${d.motivo}`,
-            d.executado ? "success" : "warning"
-          );
-          loadInstallLogs();
-        } catch (e) {
-          mostrarCfgMsg(e.message, "error");
-        } finally {
-          btn.disabled = false;
-        }
-      }
+    function desenharEtapas(c) {
+      const nomes = new Set((c.eventos || []).map((e) => e.event));
+      const falhou = c.desfecho === "falhou";
+      const itens = MARCOS.map(([m, rotulo]) => {
+        const feita = nomes.has(m);
+        const parouAqui = falhou && c.parou_em === m;
+        const cls = feita ? (parouAqui ? "is-feita" : "is-feita") : "";
+        return `<li class="ag-etapas__item ${cls}">${feita ? CHECK : CIRCULO}${rotulo}</li>`;
+      }).join("");
+      const sr = MARCOS.map(([m, rotulo]) => rotulo + (nomes.has(m) ? " feito" : " pendente")).join(", ") + (falhou ? ", falhou" : "") + ".";
+      return `<ol class="ag-etapas" aria-hidden="true">${itens}</ol><span class="cg-sr-only">${esc(sr)}</span>`;
+    }
 
-      // ─── Diagnóstico ───────────────────────────────────────────────────
-      //
-      // A regra de leitura aqui é a mesma do módulo que gera os dados: na
-      // dúvida, dizer que não sabe. `assinado: null` significa "não consegui
-      // determinar" e NÃO pode ser mostrado como "não assinado" — o primeiro
-      // pede investigação, o segundo pede uma compra de certificado.
+    function badgeDesfecho(d) {
+      const mapa = {
+        concluido: '<span class="ag-badge ag-badge--success">Concluído</span>',
+        falhou: '<span class="ag-badge ag-badge--danger">Falhou</span>',
+        incompleto: '<span class="ag-badge ag-badge--warning">Sem desfecho</span>',
+      };
+      return mapa[d] || '<span class="ag-badge ag-badge--neutral">—</span>';
+    }
 
+    // O mesmo bloco do cartão "Instalações" do Dashboard: "2 de 5", barra
+    // empilhada e legenda escrita. Os dois lugares mostram o mesmo dado.
+    function renderResumoTrilha(r) {
+      const el = document.getElementById("trilhaResumo");
+      if (!r.total) { el.innerHTML = ""; return; }
+      const t = r.textos || {};
+      const total = r.total || 1;
+      const pct = (n) => Math.round(100 * (n || 0) / total);
+      const seg = (n, cls) => (n ? `<span class="ag-barra-empilhada__seg ag-barra-empilhada__seg--${cls}" style="width:${pct(n)}%"></span>` : "");
+      const causas = Object.entries(r.causas || {}).slice(0, 3);
+      el.innerHTML =
+        `<div><p class="cg-numerao">${esc(t.destaque || (r.concluidas + " de " + r.total))}</p><p class="cg-numerao__sub">${esc(t.subtitulo || "tentativas concluídas no período")}</p></div>` +
+        `<div><div class="ag-barra-empilhada" aria-hidden="true">${seg(r.concluidas, "ok")}${seg(r.falhadas, "falha")}${seg(r.incompletas, "neutro")}</div>` +
+        `<ul class="ag-legenda">` +
+        `<li class="ag-legenda__item"><span class="ag-legenda__cor ag-legenda__cor--ok"></span><span class="ag-legenda__n">${num(r.concluidas)}</span> concluídas</li>` +
+        `<li class="ag-legenda__item"><span class="ag-legenda__cor ag-legenda__cor--falha"></span><span class="ag-legenda__n">${num(r.falhadas)}</span> com falha</li>` +
+        `<li class="ag-legenda__item"><span class="ag-legenda__cor ag-legenda__cor--neutro"></span><span class="ag-legenda__n">${num(r.incompletas)}</span> sem desfecho</li>` +
+        `</ul></div>` +
+        (causas.length ? `<ul class="ag-dados">${causas.map(([m, n]) => `<li class="ag-dados__item"><span class="ag-dados__rotulo">${esc(m)}</span><span class="ag-dados__valor"><span class="cg-valor-aviso">${AVISO}${num(n)}</span></span></li>`).join("")}</ul>` : "");
+    }
 
-      function linhaDiag(rotulo, valor, tom) {
-        const cor = tom === "ruim" ? "var(--expired-text)"
-                  : tom === "bom" ? "var(--ok-text)"
-                  : "var(--text)";
-        return (
-          "<div style='display:flex;justify-content:space-between;gap:1rem;padding:0.35rem 0;" +
-          "border-bottom:0.5px solid var(--border)'>" +
-          "<span class='text-muted' style='font-size: var(--fs-ui-sm)'>" + esc(rotulo) + "</span>" +
-          "<span style='font-size: var(--fs-ui-sm);text-align:right;color:" + cor + "'>" + valor + "</span>" +
-          "</div>"
-        );
-      }
+    function trilhaVazia(soFalhas, dias, desde) {
+      if (soFalhas) return `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhuma falha no período.</td></tr>`;
+      const de = desde ? fmtData(desde) : "—";
+      const ate = fmtData(new Date().toISOString());
+      return `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhuma instalação entre ${esc(de)} e ${esc(ate)}. ${dias !== "90" ? '<a href="#" id="linkTrilha90">Ver últimos 90 dias</a>.' : ""}</td></tr>`;
+    }
 
-      function blocoDiag(titulo, linhas) {
-        return (
-          "<div style='flex:1;min-width:280px'>" +
-          "<h3 style='margin-bottom:0.5rem'>" + esc(titulo) + "</h3>" +
-          linhas.join("") +
-          "</div>"
-        );
-      }
-
-      function renderDiagnostico(d) {
-        const c = d.cofre || {};
-        const k = d.chaves || {};
-
-        // O bloco do binario saiu em 23/08/2026 com o instalador avulso: ele
-        // diagnosticava um .exe que o portal nao serve mais. Diagnostico de
-        // coisa que nao existe e ruido que envelhece para mentira.
-
-        // "Sem senha cifrada" é o número que mais importa aqui: foi a causa
-        // ÚNICA das seis falhas de instalação registradas em produção, e
-        // descobri-la exigiu ler o agent.log de uma máquina remota.
-        const blocoCofre = c.erro
-          ? blocoDiag("Cofre", [linhaDiag("Erro", esc(c.erro), "ruim")])
-          : blocoDiag("Cofre", [
-              linhaDiag("Certificados guardados", String(c.total ?? "—")),
-              linhaDiag("Máquinas", Object.entries(c.por_maquina || {})
-                .map(([m, n]) => esc(m) + ": " + n).join("<br>") || "—"),
-              linhaDiag("Sem senha cifrada", String(c.sem_senha_cifrada ?? "—"),
-                        c.sem_senha_cifrada ? "ruim" : "bom"),
-              linhaDiag("Senha em claro", String(c.senha_em_claro ?? "—"),
-                        c.senha_em_claro ? "ruim" : "bom"),
-              linhaDiag("Custódia desativada", String(c.bloqueios ?? "—")),
-              linhaDiag("Último envio", c.ultimo_upload ? new Date(c.ultimo_upload).toLocaleString("pt-BR") : "—"),
-            ]);
-
-        // Versão com linhas no cofre e sem chave no ambiente = material
-        // indecifrável AGORA. É o estado em que o cofre ficou em 15/08.
-        const semChave = (k.versoes_sem_chave || []);
-        const blocoChaves = k.erro
-          ? blocoDiag("Chaves de cifragem", [linhaDiag("Erro", esc(k.erro), "ruim")])
-          : blocoDiag("Chaves de cifragem", [
-              linhaDiag("Versão em vigor", String(k.versao_corrente ?? "—")),
-              linhaDiag("Configuradas no ambiente", (k.versoes_configuradas || []).join(", ") || "nenhuma"),
-              linhaDiag("Em uso no cofre", Object.entries(k.linhas_por_versao || {})
-                .map(([v, n]) => "v" + esc(v) + ": " + n).join("<br>") || "—"),
-              linhaDiag("Versões SEM chave", semChave.length ? semChave.join(", ") : "nenhuma",
-                        semChave.length ? "ruim" : "bom"),
-            ]);
-
-        let aviso = "";
-        if (semChave.length) {
-          aviso =
-            "<div class='cg-banner cg-banner--error' style='margin-bottom:1rem'>" +
-            "<span class='cg-banner__icon' aria-hidden='true'>⚠️</span><span class='cg-banner__text'>" +
-            "Há certificados cifrados sob versões de chave que não estão configuradas (" +
-            esc(semChave.join(", ")) + "). Esse material está <strong>indecifrável agora</strong>. " +
-            "Reponha a chave em CERT_ENCRYPTION_KEY_V&lt;n&gt; ou peça um rescan ao agente — " +
-            "o cofre se reconstrói a partir dos arquivos de origem." +
-            "</span></div>";
-        }
-
-        document.getElementById("diagArea").innerHTML =
-          aviso +
-          "<div style='display:flex;gap:2rem;flex-wrap:wrap'>" +
-           blocoCofre + blocoChaves +
-          "</div>";
-      }
-
-      async function loadDiagnostico() {
-        try {
-          const r = await fetch("/api/cert-installer/diagnostico", { headers: getHeaders() });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          renderDiagnostico(await r.json());
-        } catch (e) {
-          document.getElementById("diagArea").innerHTML =
-            "<p style='color:var(--expired-text);font-size: var(--fs-ui)'>Não foi possível carregar o diagnóstico: " +
-            esc(e.message) + "</p>";
-        }
-      }
-
-      async function revalidarCofre() {
-        const btn = document.getElementById("btnRevalidarCofre");
-        const area = document.getElementById("revalidarArea");
-        btn.disabled = true;
-        area.innerHTML = "<p class='text-muted' style='font-size: var(--fs-ui-sm)'>Decifrando uma amostra de cada versão...</p>";
-        try {
-          const r = await fetch("/api/cert-installer/revalidar-cofre", {
-            method: "POST", headers: getHeaders(true),
-          });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.detail || "Falha ao revalidar");
-          const res = d.resultados || [];
-          area.innerHTML = res.length
-            ? res.map((x) =>
-                "<div class='cg-banner " + (x.ok ? "cg-banner--success" : "cg-banner--error") + "' style='margin-bottom:0.5rem'>" +
-                "<span class='cg-banner__text'>Chave v" + esc(String(x.key_version)) + ": " +
-                (x.ok ? "decifrou a amostra" : "FALHOU") + " — " + esc(x.detalhe) + "</span></div>"
-              ).join("")
-            : "<p class='text-muted' style='font-size: var(--fs-ui-sm)'>Cofre vazio: nada a revalidar.</p>";
-        } catch (e) {
-          area.innerHTML = "<p style='color:var(--expired-text);font-size: var(--fs-ui)'>" + esc(e.message) + "</p>";
-        } finally {
-          btn.disabled = false;
-        }
-      }
-
-      // ─── Passo 1: opt-in do cofre ──────────────────────────────────────
-      // A lista de candidatos vem do inventário que o portal já tem (metadados
-      // vindos do agente). O que está no cofre vem de /vault-optin. A tela
-      // cruza os dois: candidato + está autorizado?
-
-      let _optinCandidatos = [];
-      let _optinAutorizados = new Set();
-      // O machine_id vem na RAIZ do payload de /api/certificados, não em cada
-      // item. Gravar a autorização com machine_id errado é falha silenciosa: o
-      // agente consulta filtrando pelo dele, não encontra, e nunca envia o PFX
-      // — enquanto a tela mostra "Autorizado".
-      let _optinMachineId = "default";
-
-      async function loadOptinPanel() {
-        const tbody = document.getElementById("tblOptinCerts");
-        renderSkeletonRows(tbody, 5, 5);
-        try {
-          // Sequencial de propósito: o machine_id sai do inventário e precisa
-          // entrar na consulta de autorizações. Buscar as duas em paralelo
-          // devolveria o opt-in de todas as máquinas, e o badge "Autorizado"
-          // apareceria para certificado que este agente não vai receber.
-          const rCerts = await fetch(
-            "/api/certificados?fonte=auto&pagina=1&por_pagina=500",
-            { headers: getHeaders() }
-          );
-          if (!rCerts.ok) throw new Error(`Inventário: HTTP ${rCerts.status}`);
-          const dCerts = await rCerts.json();
-
-          _optinMachineId = dCerts.machine_id || "default";
-
-          const rOptin = await fetch(
-            `/api/cert-installer/vault-optin?machine_id=${encodeURIComponent(_optinMachineId)}`,
-            { headers: getHeaders() }
-          );
-          if (!rOptin.ok) throw new Error(`Autorizações: HTTP ${rOptin.status}`);
-          const dOptin = await rOptin.json();
-
-          // Só entram candidatos com fingerprint: é a chave de autorização.
-          const vistos = new Set();
-          _optinCandidatos = (dCerts.itens || []).filter((c) => {
-            const fp = c.fingerprint_sha256;
-            if (!fp || vistos.has(fp)) return false;
-            vistos.add(fp);
-            return true;
-          });
-          _optinAutorizados = new Set(dOptin.fingerprints || []);
-          renderOptinTable();
-        } catch (err) {
-          limparSkeleton(tbody);
-          renderEmptyRow(tbody, 5, {
-            icon: "⚠️",
-            title: "Não foi possível carregar os certificados",
-            description: err.message,
-            actionText: "Tentar novamente",
-            onAction: loadOptinPanel,
-          });
-        }
-      }
-
-      function renderOptinTable() {
-        const tbody = document.getElementById("tblOptinCerts");
-        limparSkeleton(tbody);
-
-        const q = (document.getElementById("buscaOptin").value || "").trim().toLowerCase();
-        const linhas = _optinCandidatos.filter((c) => {
-          if (!q) return true;
-          return [c.nome, c.display_name, c.documento_formatado, c.documento_numero]
-            .filter(Boolean).join(" ").toLowerCase().includes(q);
-        });
-
-        // A máquina fica visível: a autorização vale para ela, e só o agente
-        // dela vai receber os certificados listados aqui.
-        // A máquina também vira badge no cabeçalho: quem vai clicar em
-        // "Desativar" precisa ver de qual estação ANTES de agir, não no rodapé.
-        document.getElementById("badgeMaquina").textContent = _optinMachineId;
-        document.getElementById("optinResumo").textContent =
-          `${_optinAutorizados.size} sob custódia de ${_optinCandidatos.length} certificado(s) no inventário` +
-          (q ? ` · ${linhas.length} correspondem à busca` : "");
-
-        if (!linhas.length) {
-          renderEmptyRow(tbody, 5, q
-            ? { icon: "🔍", title: `Nenhum certificado para “${q}”`, description: "Tente outro nome ou documento." }
-            : { icon: "📭", title: "Nenhum certificado no inventário", description: "O agente ainda não enviou leituras." });
+    async function loadInstallLogs() {
+      const tbody = document.getElementById("tblInstallLogs");
+      const dias = document.getElementById("trilhaDias").value;
+      const email = (document.getElementById("trilhaEmail").value || "").trim();
+      const soFalhas = document.getElementById("trilhaSoFalhas").checked;
+      const params = new URLSearchParams({ dias, apenas_falhas: soFalhas });
+      if (email) params.set("user_email", email);
+      try {
+        const res = await fetch("/api/cert-installer/trilha?" + params.toString(), { headers: getHeaders() });
+        if (!res.ok) throw new Error(await mensagemCorpoErro(res));
+        const data = await res.json();
+        renderResumoTrilha(data.resumo || {});
+        const cadeias = data.cadeias || [];
+        if (!cadeias.length) {
+          tbody.innerHTML = trilhaVazia(soFalhas, dias, data.desde);
+          const l = document.getElementById("linkTrilha90");
+          if (l) l.addEventListener("click", (ev) => { ev.preventDefault(); document.getElementById("trilhaDias").value = "90"; loadInstallLogs(); });
           return;
         }
-
-        tbody.innerHTML = "";
-        linhas.forEach((c) => {
-          const fp = c.fingerprint_sha256;
-          const autorizado = _optinAutorizados.has(fp);
-          const nome = c.nome || c.display_name || "Sem nome";
-          const doc = c.documento_formatado || c.documento_numero || "—";
-          const val = c.not_after ? new Date(c.not_after).toLocaleDateString("pt-BR") : "—";
-
-          const tr = document.createElement("tr");
-          tr.setAttribute("role", "row");
-
-          const tdNome = document.createElement("td");
-          tdNome.setAttribute("role", "cell");
-          tdNome.setAttribute("data-label", "Titular");
-          const forte = document.createElement("strong");
-          forte.textContent = nome;
-          tdNome.append(forte, document.createTextNode(` (${doc})`));
-
-          const tdVal = document.createElement("td");
-          tdVal.setAttribute("role", "cell");
-          tdVal.setAttribute("data-label", "Validade");
-          tdVal.textContent = val;
-
-          const tdFp = document.createElement("td");
-          tdFp.setAttribute("role", "cell");
-          tdFp.setAttribute("data-label", "Fingerprint");
-          const code = document.createElement("code");
-          code.style.fontSize = "0.8rem";
-          code.textContent = fp.substring(0, 16) + "…";
-          code.title = fp;
-          tdFp.appendChild(code);
-
-          const tdSt = document.createElement("td");
-          tdSt.setAttribute("role", "cell");
-          tdSt.setAttribute("data-label", "Custódia");
-          const badge = document.createElement("span");
-          badge.className = "badge " + (autorizado ? "badge-ok" : "badge-bad");
-          badge.textContent = autorizado ? "Ativa" : "Desativada";
-          tdSt.appendChild(badge);
-
-          const tdAcao = document.createElement("td");
-          tdAcao.setAttribute("role", "cell");
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = autorizado ? "danger" : "primary";
-          btn.textContent = autorizado ? "Desativar" : "Reativar";
-          btn.addEventListener("click", () => alternarOptin(c, autorizado, btn));
-          tdAcao.appendChild(btn);
-
-          tr.append(tdNome, tdVal, tdFp, tdSt, tdAcao);
-          tbody.appendChild(tr);
-        });
+        tbody.innerHTML = cadeias.map((c) => {
+          const motivo = (c.motivos || []).join(" · ");
+          const maq = c.target_nome
+            ? `<span class="ag-cell-stack"><span class="ag-cell-main">${esc(c.target_nome)}</span><span class="ag-cell-sub">${esc(c.target_machine || "")}</span></span>`
+            : `<span class="ag-cell-sub ag-cell-sub--mono">${esc(c.target_machine || "—")}</span>`;
+          return `
+            <tr role="row">
+              <td role="cell" class="cg-col-quando">${c.inicio ? tempo(c.inicio, fmtQuando(c.inicio)) : "—"}</td>
+              <td role="cell" class="cg-col-quem">${esc(c.user_email || "—")}</td>
+              <td role="cell" class="cg-col-maquina">${maq}</td>
+              <td role="cell" class="num cg-col-n">${num(c.certificados)}</td>
+              <td role="cell" class="cg-col-etapas">${desenharEtapas(c)}</td>
+              <td role="cell" class="cg-col-desfecho">${badgeDesfecho(c.desfecho)}${motivo ? `<span class="cg-inst-motivo">${esc(motivo)}</span>` : ""}</td>
+            </tr>`;
+        }).join("");
+      } catch (err) {
+        renderResumoTrilha({});
+        tbody.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Falha ao carregar a trilha: ${esc(err.message)}</td></tr>`;
       }
+    }
 
-      async function alternarOptin(cert, autorizado, btn) {
-        const fp = cert.fingerprint_sha256;
-        const nome = cert.nome || cert.display_name || "este certificado";
-        // A custódia é por instalação, não por certificado: a mesma máquina
-        // que desativa é a que reativa. Mandar o machine_id é o que impede a
-        // ação de alcançar as outras estações.
-        const maquina = cert.machine_id || _optinMachineId;
+    /* ── Início ───────────────────────────────────────────────────────── */
 
-        // Desativar apaga a chave privada guardada — merece confirmação explícita.
-        if (autorizado && !confirm(
-          `Desativar a custódia de “${nome}”?\n\n` +
-          `O arquivo já armazenado no servidor será apagado, e o certificado não ` +
-          `voltará ao cofre nas próximas varreduras.\n\n` +
-          `Isso vale só para a máquina ${maquina}.`
-        )) return;
+    (function init() {
+      // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
+      // o gate da página.
+      const role = localStorage.getItem("user_role");
+      if (role !== "admin") { window.location.href = "/"; return; }
 
-        btn.disabled = true;
-        try {
-          const res = autorizado
-            ? await fetch(
-                `/api/cert-installer/vault-optin/${encodeURIComponent(fp)}` +
-                `?machine_id=${encodeURIComponent(maquina)}`,
-                { method: "DELETE", headers: getHeaders() },
-              )
-            : await fetch("/api/cert-installer/vault-optin", {
-                method: "POST",
-                headers: getHeaders(true),
-                body: JSON.stringify({
-                  fingerprint: fp,
-                  machine_id: maquina,
-                  nome_titular: cert.nome || cert.display_name || null,
-                  documento: cert.documento_formatado || cert.documento_numero || null,
-                }),
-              });
+      const q = new URLSearchParams(location.search);
+      if (q.get("q")) document.getElementById("buscaOptin").value = q.get("q");
+      if (["7", "30", "90", "365"].includes(q.get("dias"))) document.getElementById("trilhaDias").value = q.get("dias");
+      if (q.get("email")) document.getElementById("trilhaEmail").value = q.get("email");
+      if (q.get("falhas") === "1") document.getElementById("trilhaSoFalhas").checked = true;
 
-          if (!res.ok) throw new Error(await mensagemCorpoErro(res));
+      const perPage = document.getElementById("pag-perpage-cust");
+      let v = parseInt(localStorage.getItem(LS_PER_PAGE_CUST) || "10", 10);
+      if (![10, 25, 50, 100].includes(v)) v = 10;
+      perPage.value = String(v);
+      perPage.addEventListener("change", () => { localStorage.setItem(LS_PER_PAGE_CUST, perPage.value); _custPagina = 1; renderOptinTable(); });
+      document.getElementById("btn-cust-prev").addEventListener("click", () => { if (_custPagina > 1) { _custPagina--; renderOptinTable(); } });
+      document.getElementById("btn-cust-next").addEventListener("click", () => { _custPagina++; renderOptinTable(); });
 
-          if (autorizado) {
-            _optinAutorizados.delete(fp);
-            showToast(`“${nome}” fora da custódia. O arquivo foi apagado do servidor.`, "success");
-          } else {
-            _optinAutorizados.add(fp);
-            showToast(`“${nome}” de volta à custódia. O agente enviará no próximo ciclo.`, "success");
-          }
-          renderOptinTable();
-          } catch (err) {
-          btn.disabled = false;
-          showToast("Não foi possível concluir: " + err.message, "error");
-        }
-      }
+      document.getElementById("btnAtualizar").addEventListener("click", recarregarTudo);
+      let debounceOptin = null;
+      document.getElementById("buscaOptin").addEventListener("input", () => { clearTimeout(debounceOptin); debounceOptin = setTimeout(() => { _custPagina = 1; renderOptinTable(); }, 250); });
+      document.querySelector(".cg-inst-filtros").addEventListener("submit", (ev) => { ev.preventDefault(); _custPagina = 1; renderOptinTable(); });
+      document.getElementById("formTrilha").addEventListener("submit", (ev) => { ev.preventDefault(); loadInstallLogs(); });
+      document.getElementById("btnDiagTentar").addEventListener("click", loadDiagnostico);
+      document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
+      document.getElementById("btnSalvarCfg").addEventListener("click", salvarConfigInstalador);
+      document.getElementById("btnExpurgarAgora").addEventListener("click", abrirExpurgo);
+      document.getElementById("btnExpurgarConfirmar").addEventListener("click", expurgarAgora);
+      document.getElementById("btnDesativarConfirmar").addEventListener("click", () => {
+        const p = _desativarPendente;
+        document.getElementById("modalDesativar").close();
+        if (p) executarOptin(p.cert, true, p.btn, p.maquina);
+        _desativarPendente = null;
+      });
+      document.querySelectorAll("[data-ag-modal-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+      cgCopiarInit();
 
-      // Mesma ordem de `ORDEM_DOS_EVENTOS` em app/cert_installer.py. Faltava
-      // desde que a trilha nasceu (7d6a0cc): a tabela caía em
-      // "MARCOS is not defined" e ninguém via as tentativas.
-      const MARCOS = ["SOLICITADO", "REDIMIDO", "CONCLUIDO"];
-
-      function desenharCadeia(c) {
-        const nomes = new Set((c.eventos || []).map((e) => e.event));
-        return MARCOS.map((m) => {
-          const alcancado = nomes.has(m);
-          const parouAqui = c.parou_em === m && c.desfecho !== "concluido";
-          const cor = parouAqui ? "var(--expired-text)"
-                    : alcancado ? "var(--ok-text)"
-                    : "var(--text-muted)";
-          const peso = alcancado ? "600" : "400";
-          return `<span style="color:${cor};font-weight:${peso};font-size: var(--fs-ui-sm)">` +
-                 `${m.slice(0, 4)}${alcancado ? "&nbsp;✓" : "&nbsp;·"}</span>`;
-        }).join("<span style='color:var(--text-muted)'>&nbsp;→&nbsp;</span>");
-      }
-
-      function badgeDesfecho(d) {
-        const mapa = {
-          // Tokens, não hex: os do projeto têm contraste medido e variante
-          // escura. Hex fixo aqui quebrava no modo escuro (achado M2).
-          concluido: ["CONCLUÍDO", "var(--ok-bg)", "var(--ok-text)"],
-          falhou: ["FALHOU", "var(--expired-bg)", "var(--expired-text)"],
-          incompleto: ["INCOMPLETO", "var(--warning-bg)", "var(--warning-text)"],
-        };
-        const [rot, bg, fg] = mapa[d] || ["?", "var(--bg)", "var(--text-muted)"];
-        return `<span class="badge" style="background:${bg};color:${fg}">${rot}</span>`;
-      }
-
-      function renderResumoTrilha(r) {
-        if (!r.total) {
-          document.getElementById("trilhaResumo").innerHTML = "";
-          return;
-        }
-        // As CAUSAS vêm antes da tabela de propósito: foi contando os motivos
-        // que se descobriu que as seis falhas de produção eram a mesma coisa.
-        const causas = Object.entries(r.causas || {});
-        const blocoCausas = causas.length
-          ? "<div style='margin-top:0.75rem'>" +
-            causas.map(([m, n]) =>
-              `<div class="falha-inline">` +
-              `<strong>${n}×</strong> ${esc(m)}</div>`
-            ).join("") + "</div>"
-          : "";
-
-        document.getElementById("trilhaResumo").innerHTML =
-          "<div class='cg-banner " + (r.falhadas ? "cg-banner--error" : "cg-banner--info") + "'>" +
-          "<span class='cg-banner__text'>" +
-          `<strong>${r.total}</strong> tentativa(s) · ` +
-          `<strong>${r.concluidas}</strong> concluída(s) · ` +
-          `<strong>${r.falhadas}</strong> com falha · ` +
-          `<strong>${r.incompletas}</strong> sem desfecho` +
-          (r.taxa_conclusao !== null ? ` · taxa de conclusão <strong>${r.taxa_conclusao}%</strong>` : "") +
-          blocoCausas +
-          "</span></div>";
-      }
-
-      async function loadInstallLogs() {
-        const tbody = document.getElementById("tblInstallLogs");
-        const dias = document.getElementById("trilhaDias").value;
-        const email = (document.getElementById("trilhaEmail").value || "").trim();
-        const soFalhas = document.getElementById("trilhaSoFalhas").checked;
-
-        const params = new URLSearchParams({ dias, apenas_falhas: soFalhas });
-        if (email) params.set("user_email", email);
-
-        try {
-          const res = await fetch("/api/cert-installer/trilha?" + params.toString(), {
-            headers: getHeaders(),
-          });
-          if (!res.ok) throw new Error(await mensagemCorpoErro(res));
-          const data = await res.json();
-          renderResumoTrilha(data.resumo || {});
-          const cadeias = data.cadeias || [];
-
-          if (!cadeias.length) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-muted);">Nenhuma instalação no período.</td></tr>`;
-            return;
-          }
-
-          tbody.innerHTML = cadeias.map((c) => {
-            const quando = c.inicio ? new Date(c.inicio).toLocaleString("pt-BR") : "—";
-            const motivo = (c.motivos || []).join(" · ");
-            return `
-              <tr>
-                <td style="font-size: var(--fs-ui-sm)">${quando}</td>
-                <td>${esc(c.user_email || "—")}</td>
-                <td><strong>${esc(c.target_machine || "—")}</strong></td>
-                <td style="text-align:center">${c.certificados}</td>
-                <td style="white-space:nowrap">${desenharCadeia(c)}</td>
-                <td>${badgeDesfecho(c.desfecho)}${
-                  motivo ? `<div style="font-size: var(--fs-caption);color:var(--expired-text);margin-top:0.25rem">${esc(motivo)}</div>` : ""
-                }</td>
-              </tr>`;
-          }).join("");
-        } catch (err) {
-          tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--danger-text); padding: 2rem;">Falha ao carregar a trilha: ${esc(err.message)}</td></tr>`;
-        }
-      }
-
-      function escapeHtml(str) {
-        if (!str) return "";
-        return String(str)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#039;");
-      }
-    </script>
-  </body>
+      recarregarTudo();
+    })();
+  </script>
+</body>
 </html>
