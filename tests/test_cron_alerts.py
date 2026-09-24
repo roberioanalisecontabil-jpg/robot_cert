@@ -114,7 +114,10 @@ def test_erro_na_varredura_vira_500(client: TestClient, com_segredo: str) -> Non
         )
 
     assert r.status_code == 500
-    assert "falha ao varrer" in r.json()["detail"]
+    # O texto da exceção fica no log, não na resposta (auditoria #35): o
+    # que chega ao cron é só que falhou.
+    assert "falha ao varrer" not in r.json()["detail"]
+    assert "log" in r.json()["detail"]
 
 
 def test_rota_do_disparo_agendado_mantem_o_caminho() -> None:

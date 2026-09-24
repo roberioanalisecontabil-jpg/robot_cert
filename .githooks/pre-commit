@@ -1,0 +1,24 @@
+#!/bin/sh
+# Recusa o commit se houver material de certificado ou chave no stage.
+#
+# Existe porque o .gitignore nao basta: `git add -f`, um rename, ou uma linha
+# removida do .gitignore (foi assim em 3175a05) passam por ele. Este hook olha
+# o que esta de fato indo para o commit.
+#
+# Ativar uma vez por clone:  git config core.hooksPath .githooks
+# (o caminho dos hooks e configuracao local; nao viaja com o push).
+
+set -e
+
+padrao='\.(p12|pfx|pem|key|cer|crt)$'
+
+suspeitos=$(git diff --cached --name-only --diff-filter=ACR | grep -Ei "$padrao" || true)
+
+if [ -n "$suspeitos" ]; then
+  echo "pre-commit: material de certificado/chave no stage. Commit recusado." >&2
+  echo "$suspeitos" | sed 's/^/  - /' >&2
+  echo "Se for mesmo intencional (nao deveria ser), use --no-verify e registre o porque." >&2
+  exit 1
+fi
+
+exit 0

@@ -306,7 +306,8 @@ def test_cron_reporta_o_expurgo_e_sobrevive_a_falha_dele(
 
 
 def test_gravacao_que_nao_chegou_ao_banco_nao_responde_salvo(
-    client: TestClient, settings_em_memoria: PortalSettings, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, settings_em_memoria: PortalSettings, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A tela não pode dizer "salvo" sobre um valor que ela vai recarregar diferente.
 
@@ -346,7 +347,11 @@ def test_gravacao_que_nao_chegou_ao_banco_nao_responde_salvo(
     )
 
     assert r.status_code == 503, r.text
-    assert "PGRST204" in r.text, "o motivo real precisa chegar a quem vai consertar"
+    # O motivo real chega a quem vai consertar pelo LOG, não pela resposta
+    # (auditoria #35: o texto do banco trazia nome de coluna e de tabela).
+    assert "PGRST204" not in r.text
+    assert "PGRST204" in caplog.text, "o motivo real precisa chegar a quem vai consertar"
+    assert "log do servidor" in r.json()["detail"]
 
 
 def test_o_ingest_do_agente_nao_e_derrubado_por_falha_de_gravacao(

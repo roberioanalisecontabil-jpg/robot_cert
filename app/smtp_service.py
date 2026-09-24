@@ -1,6 +1,9 @@
 import os
 import smtplib
+import socket
+import ssl
 import logging
+from typing import Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from cryptography.fernet import Fernet
@@ -89,10 +92,56 @@ def decrypt_password(encrypted: str) -> str:
         logger.error("Erro na descriptografia de senha (detalhes mascarados)")
         return ""
 
-def validate_smtp_config(use_tls: bool, use_ssl: bool) -> None:
-    """Garante que STARTTLS (TLS) e SSL implícito não estejam ativos juntos."""
+class ErroSmtp(RuntimeError):
+    """Falha ao enviar. As subclasses dizem QUAL, para a tela responder por
+    classe sem repetir o texto do servidor (achado #35)."""
+
+
+class ErroConexaoSmtp(ErroSmtp):
+    """Não conectou: nome não resolve, porta fechada, tempo esgotado."""
+
+
+class ErroTlsSmtp(ErroSmtp):
+    """A camada segura falhou: certificado inválido, STARTTLS recusado."""
+
+
+class ErroAutenticacaoSmtp(ErroSmtp):
+    """O servidor recusou usuário/senha."""
+
+
+_HOSTS_LOCAIS = ("localhost", "127.0.0.1", "::1")
+
+
+def _host_e_local(host: str) -> bool:
+    return (host or "").strip().lower() in _HOSTS_LOCAIS
+
+
+def validate_smtp_config(use_tls: bool, use_ssl: bool, host: Optional[str] = None) -> None:
+    """Garante uma escolha de segurança coerente.
+
+    STARTTLS e SSL juntos não existem. E "nenhuma" só existe para servidor
+    LOCAL (achado #15): com um relay na própria máquina o tráfego não sai
+    dela; com qualquer outro host, usuário e senha iriam em claro pela rede.
+    `host=None` mantém a checagem antiga, para quem só quer os dois booleanos.
+    """
     if use_tls and use_ssl:
         raise ValueError("STARTTLS (TLS) e SSL não podem estar ativos simultaneamente.")
+    if host is not None and not use_tls and not use_ssl and host.strip() and not _host_e_local(host):
+        raise ValueError(
+            "Sem TLS a senha do SMTP viajaria em claro. Escolha STARTTLS ou SSL/TLS; "
+            "\"Nenhuma\" só vale para um servidor na própria máquina (localhost)."
+        )
+
+
+def _contexto_tls() -> ssl.SSLContext:
+    """Contexto que VERIFICA o certificado do servidor e o nome do host.
+
+    `smtplib` sem `context=` usa um contexto que não verifica nada: qualquer
+    um no caminho apresentava um certificado próprio e recebia usuário e
+    senha (achado #15).
+    """
+    return ssl.create_default_context()
+
 
 def send_smtp_email(
     host: str,
@@ -110,31 +159,32 @@ def send_smtp_email(
     Conecta ao servidor SMTP e envia um e-mail.
     Garante o mascaramento de logs e prevenção de StartTLS/SSL concorrentes.
     """
-    validate_smtp_config(use_tls, use_ssl)
-    
+    validate_smtp_config(use_tls, use_ssl, host=host)
+
     decrypted_password = decrypt_password(password_enc)
-    
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_email or user
     msg["To"] = to_email
     msg.attach(MIMEText(html_content, "html", "utf-8"))
-    
+
     try:
+        ctx = _contexto_tls()
         if use_ssl:
-            server = smtplib.SMTP_SSL(host, port, timeout=10)
+            server = smtplib.SMTP_SSL(host, port, timeout=10, context=ctx)
         else:
             server = smtplib.SMTP(host, port, timeout=10)
-            
+
         with server:
             if not use_ssl and use_tls:
-                server.starttls()
-                
+                server.starttls(context=ctx)
+
             if user and decrypted_password:
                 server.login(user, decrypted_password)
-                
+
             server.sendmail(from_email or user, [to_email], msg.as_string())
-            
+
     except Exception as e:
         # Mascara o log de erro para nunca expor dados sensíveis ou senhas
         err_msg = str(e)
@@ -142,5 +192,17 @@ def send_smtp_email(
         for secret in [user, decrypted_password]:
             if secret and len(secret) > 2:
                 err_msg = err_msg.replace(secret, "***")
-        logger.error(f"Falha ao enviar e-mail via SMTP (conexão ou credenciais incorretas): {err_msg}")
-        raise RuntimeError(f"Erro no envio de e-mail SMTP: {err_msg}") from None
+        logger.error(f"Falha ao enviar e-mail via SMTP: {type(e).__name__}: {err_msg}")
+        raise _classificar(e, err_msg) from None
+
+
+def _classificar(e: BaseException, texto: str) -> ErroSmtp:
+    """Mapeia a exceção da `smtplib`/rede para a classe que a tela conhece."""
+    if isinstance(e, smtplib.SMTPAuthenticationError):
+        return ErroAutenticacaoSmtp(texto)
+    if isinstance(e, (ssl.SSLError, smtplib.SMTPNotSupportedError)):
+        return ErroTlsSmtp(texto)
+    if isinstance(e, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected,
+                      socket.gaierror, socket.timeout, TimeoutError, ConnectionError, OSError)):
+        return ErroConexaoSmtp(texto)
+    return ErroSmtp(texto)

@@ -155,7 +155,7 @@
     </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09f"></script>
   <script nonce="{{ request.state.nonce }}">
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
@@ -455,7 +455,7 @@
       const headers = ["Nome", "CNPJ/CPF", "Vencimento do certificado"];
       const rows = d.itens.map((it) => [it.nome || "", it.documento || "", fmtDataUtc(it.vencimento_certificado)]);
       const csv = [headers, ...rows]
-        .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
+        .map((r) => r.map(celulaCsv).join(";"))
         .join("\n");
       const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);

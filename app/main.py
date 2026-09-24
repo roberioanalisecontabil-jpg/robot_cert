@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import csv
+import hmac
 import html
 import io
 import json
@@ -315,7 +316,11 @@ async def require_auth(
     #    qualquer diferença aqui mudaria o alcance de rotas que hoje funcionam.
     if config.API_KEY:
         if x_api_key:
-            if x_api_key == config.API_KEY:
+            # Tempo constante (achado #41): `==` em str devolve no primeiro
+            # byte diferente, e a diferença de tempo é mensurável pela rede
+            # para adivinhar a chave byte a byte. `/api/cron/alerts` já fazia
+            # assim; aqui era a única credencial comparada com `==`.
+            if hmac.compare_digest(x_api_key.encode("utf-8"), config.API_KEY.encode("utf-8")):
                 # WARNING de propósito: é o que permite responder "já dá para
                 # desligar a chave compartilhada?" olhando o log, em vez de
                 # adivinhar. Some quando o ANALISESRV migrar (R2 fecha aí).
@@ -656,6 +661,9 @@ async def security_headers_middleware(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
+        # Sem isto uma tag <base> injetada redirecionaria todos os caminhos
+        # relativos (scripts, formulários) para outra origem (achado #49).
+        "base-uri 'none'; "
         "object-src 'none'; "
         "form-action 'self'; "
         "frame-ancestors 'none'; "
@@ -671,8 +679,42 @@ async def security_headers_middleware(request: Request, call_next):
         del response.headers["Server"]
     if "X-Powered-By" in response.headers:
         del response.headers["X-Powered-By"]
-        
+
     return response
+
+
+@app.middleware("http")
+async def hosts_permitidos_middleware(request: Request, call_next):
+    """Recusa um cabeçalho Host fora de `config.HOSTS_PERMITIDOS` (achado #36).
+
+    Lê a lista a cada requisição, e não na construção do app, para o teste
+    poder trocá-la — e porque a lista vazia é a janela de compatibilidade:
+    nenhum ambiente tem HOSTS_PERMITIDOS ainda, e sem ela o portal atende
+    qualquer Host, como sempre atendeu (`verificar_ambiente` avisa).
+    A porta é ignorada de propósito: o mesmo nome chega com e sem `:8020`.
+    """
+    permitidos = getattr(config, "HOSTS_PERMITIDOS", None) or []
+    if permitidos:
+        host = (request.headers.get("host") or "").split(":")[0].strip().lower()
+        if host not in permitidos:
+            return JSONResponse(status_code=400, content={"detail": "Host não atendido por este portal."})
+    return await call_next(request)
+
+
+@app.exception_handler(Exception)
+async def _erro_nao_tratado(request: Request, exc: Exception) -> JSONResponse:
+    """Erro inesperado sai com uma referência, nunca com o texto (achado #35).
+
+    O texto de uma exceção traz nome de tabela, DSN, caminho de arquivo, às
+    vezes o valor que falhou. A referência é o que a pessoa manda para o
+    suporte, e o log a liga ao traceback inteiro.
+    """
+    ref = secrets.token_hex(4)
+    logger.error(
+        "[%s] Erro não tratado em %s %s", ref, request.method, request.url.path,
+        exc_info=exc,
+    )
+    return JSONResponse(status_code=500, content={"detail": "Erro interno", "ref": ref})
 
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
 # `{{ nome | nome_exibicao }}` nos templates: a mesma regra que a API entrega
@@ -1135,7 +1177,14 @@ def _conferir_credenciais(email: str, senha: str, ip: Optional[str]) -> dict:
     r = _sb_do_login().table("users").select("*").eq("email", email_login).limit(1).execute()
     user = r.data[0] if r.data else None
 
-    if not user or not auth.verify_password(senha, user["password_hash"]):
+    # Sempre paga o bcrypt, exista a conta ou não (achado #26). O `or` que
+    # pulava a conferência quando `user` era None respondia em ~0 ms para
+    # e-mail inexistente e em ~250 ms para e-mail existente: a mensagem era
+    # idêntica, o tempo não — e isso enumerava contas com precisão.
+    hash_alvo = user["password_hash"] if user else _hash_falso()
+    senha_ok = auth.verify_password(senha, hash_alvo)
+
+    if not user or not senha_ok:
         # Só registra quando a conta EXISTE: e-mail inexistente viraria guardar
         # entrada arbitrária de quem chamou. Com conta existente, o registro
         # responde "alguém está tentando entrar aqui", que é o caso que importa.
@@ -1147,7 +1196,7 @@ def _conferir_credenciais(email: str, senha: str, ip: Optional[str]) -> dict:
                 client_ip=ip,
                 contexto={"motivo": "senha_incorreta"},
             )
-        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
+        raise HTTPException(status_code=401, detail=CREDENCIAL_INVALIDA)
 
     if not conta_ativa(user):
         atividade.registrar(
@@ -1157,9 +1206,30 @@ def _conferir_credenciais(email: str, senha: str, ip: Optional[str]) -> dict:
             client_ip=ip,
             contexto={"motivo": "conta_desativada"},
         )
-        raise HTTPException(status_code=403, detail="Usuário desativado. Procure um administrador.")
+        # Mesmo 401 da senha errada (achado #27). O 403 "Usuário desativado"
+        # só chegava depois de a senha conferir — e confirmava a quem tinha a
+        # credencial vazada que a conta existe e em que estado ficou. O motivo
+        # fica no registro de atividade, onde o administrador o lê.
+        raise HTTPException(status_code=401, detail=CREDENCIAL_INVALIDA)
 
     return user
+
+
+CREDENCIAL_INVALIDA = "E-mail ou senha incorretos."
+
+_HASH_FALSO: Optional[str] = None
+
+
+def _hash_falso() -> str:
+    """Um hash bcrypt de custo real para conferir quando a conta não existe.
+
+    Gerado uma vez, sob demanda: custa os mesmos ~250 ms de um hash de
+    verdade, e é isso que iguala o tempo dos dois caminhos do login.
+    """
+    global _HASH_FALSO
+    if _HASH_FALSO is None:
+        _HASH_FALSO = auth.get_password_hash(secrets.token_urlsafe(32))
+    return _HASH_FALSO
 
 
 @app.post("/api/login")
@@ -1197,9 +1267,9 @@ def login(body: LoginBody, request: Request) -> dict:
         # status errado, e todo tratamento no front que olhasse o código via
         # "erro do servidor" onde houve credencial inválida.
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Erro no login")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Não foi possível concluir o login. Tente de novo.")
 
 
 # Modulo `usuarios` na matriz de permissoes desde 20/08. Leitura e escrita
@@ -1271,7 +1341,7 @@ def _norm_header(v: str) -> str:
 
 
 @app.post("/api/users/import", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-async def import_users(file: UploadFile = File(...)) -> dict:
+async def import_users(file: UploadFile = File(...), ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
 
     sb = _banco()
@@ -1361,6 +1431,13 @@ async def import_users(file: UploadFile = File(...)) -> dict:
             erros.append({"linha": linha, "email": email,
                           "erro": f"Senha deve ter no mínimo {SENHA_MINIMA} caracteres."})
             continue
+        # A mesma barreira de `create_user`: a planilha não é um caminho
+        # paralelo para nascer administrador.
+        try:
+            _exigir_alcance_de_papel(ator, role)
+        except HTTPException as e:
+            erros.append({"linha": linha, "email": email, "erro": str(e.detail)})
+            continue
         # O CSV era o caminho que escapava de tudo: nem o formulário HTML o
         # cobre, nem a API validava.
         if not _EMAIL_PLAUSIVEL.match(email):
@@ -1377,11 +1454,23 @@ async def import_users(file: UploadFile = File(...)) -> dict:
                     "password_hash": auth.get_password_hash(senha),
                     "full_name": nome,
                     "role": role,
+                    # As mesmas duas colunas que `create_user` grava (achado
+                    # #10). A senha do CSV esteve numa planilha que circulou
+                    # por e-mail: serve para o primeiro acesso e nada mais.
+                    # Sem isto a coluna caía no DEFAULT false e a conta
+                    # nascia com uma senha conhecida por terceiros, válida
+                    # para sempre.
+                    "deve_trocar_senha": True,
+                    "ativo": True,
                 }
             ).execute()
             criados += 1
-        except Exception as e:  # noqa: BLE001
-            erros.append({"linha": linha, "email": email, "erro": str(e)})
+        except Exception:  # noqa: BLE001
+            # O texto do banco não vai para a planilha de resposta (achado
+            # #35): traz nome de tabela, constraint e às vezes o valor.
+            logger.exception("Falha ao importar a linha %d", linha)
+            erros.append({"linha": linha, "email": email,
+                          "erro": "Não foi possível gravar esta linha. Veja o log do servidor."})
 
     return {"ok": True, "criados": criados, "ignorados": ignorados, "erros": erros}
 
@@ -1396,6 +1485,52 @@ _EMAIL_PLAUSIVEL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 # permissivo que redefinir: dava para nascer com senha de um caractere e só
 # descobrir o rigor ao trocá-la.
 SENHA_MINIMA = 6
+
+SO_ADMIN_CONCEDE_ADMIN = "Só um administrador pode conceder o papel de administrador."
+SO_ADMIN_MEXE_EM_ADMIN = "Só um administrador pode alterar a conta de outro administrador."
+
+
+def _e_admin(ator: auth.TokenData) -> bool:
+    return (ator.role or "").strip().lower() in permissoes.PAPEIS_TOTAIS
+
+
+def _exigir_alcance_de_papel(ator: auth.TokenData, papel_alvo: Optional[str]) -> None:
+    """Só admin concede o papel de admin (achado #9).
+
+    Sem isto, `usuarios:editar` é indistinguível de admin: quem edita contas
+    cria um administrador novo, ou promove a si mesmo. A matriz de permissões
+    oferece esse nível a gestor como se fosse um degrau intermediário — e não
+    era. A barreira fica aqui, num lugar só, chamada por criar, editar e
+    importar.
+    """
+    if (papel_alvo or "").strip().lower() not in permissoes.PAPEIS_TOTAIS:
+        return
+    if not _e_admin(ator):
+        raise HTTPException(status_code=403, detail=SO_ADMIN_CONCEDE_ADMIN)
+
+
+def _exigir_alcance_sobre_conta(sb, ator: auth.TokenData, user_id: str) -> None:
+    """Conta de administrador só é alterada por administrador (achado #9).
+
+    Redefinir a senha do admin era o caminho óbvio; trocar o e-mail dele e
+    pedir um código de redefinição para o endereço novo era o menos óbvio e
+    dava no mesmo. Desativar, reativar e apagar entram pela mesma razão: cada
+    um é uma forma de decidir quem administra o portal. Falha fechada — se não
+    dá para ler o papel do alvo, não dá para provar que ele não é admin.
+    """
+    if _e_admin(ator):
+        return
+    try:
+        r = sb.table("users").select("id, role").eq("id", user_id).limit(1).execute()
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler o papel da conta alvo")
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível verificar a conta. Tente de novo.",
+        )
+    alvo = (r.data or [None])[0]
+    if alvo and (alvo.get("role") or "").strip().lower() in permissoes.PAPEIS_TOTAIS:
+        raise HTTPException(status_code=403, detail=SO_ADMIN_MEXE_EM_ADMIN)
 
 
 def _validar_email(email: str) -> str:
@@ -1433,11 +1568,11 @@ def _garantir_email_livre(sb: Any, email: str, ignorar_id: Optional[str] = None)
 
 
 @app.post("/api/users", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def create_user(body: UserCreateBody) -> dict:
+def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
     if not sb: raise HTTPException(status_code=503)
-    
+
     # A validação não existia aqui: qualquer string virava papel. Com o CHECK
     # no banco isso passaria a estourar como 400 genérico do PostgREST, sem
     # dizer qual valor era aceito.
@@ -1447,6 +1582,7 @@ def create_user(body: UserCreateBody) -> dict:
             status_code=422,
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
+    _exigir_alcance_de_papel(ator, role)
 
     email = _validar_email(body.email)
     if len((body.password or "").strip()) < SENHA_MINIMA:
@@ -1471,8 +1607,9 @@ def create_user(body: UserCreateBody) -> dict:
             "ativo": True,
         }).execute()
         return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao criar usuário")
+        raise HTTPException(status_code=400, detail="Não foi possível criar o usuário.")
 
 
 def _garantir_que_sobra_admin(
@@ -1533,11 +1670,12 @@ def _garantir_que_sobra_admin(
 
 
 @app.put("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def update_user(user_id: str, body: UserUpdateBody) -> dict:
+def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
     role = (body.role or "user").strip().lower()
     ativo = body.ativo
 
@@ -1553,6 +1691,7 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
             status_code=422,
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
+    _exigir_alcance_de_papel(ator, role)
 
     email = _validar_email(body.email)
     _garantir_email_livre(sb, email, ignorar_id=user_id)
@@ -1582,17 +1721,19 @@ def update_user(user_id: str, body: UserUpdateBody) -> dict:
     # aquele helper era o sinal de que o rechaveamento tinha terminado.
     try:
         sb.table("users").update(campos).eq("id", user_id).execute()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao atualizar usuário %s", user_id)
+        raise HTTPException(status_code=400, detail="Não foi possível salvar o usuário.")
     return {"ok": True}
 
 
 @app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
+def reset_user_password(user_id: str, body: UserResetPasswordBody, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
     new_pw = (body.password or "").strip()
     if len(new_pw) < 6:
         raise HTTPException(status_code=422, detail="Senha deve ter no mínimo 6 caracteres.")
@@ -1601,15 +1742,25 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody) -> dict:
         # Mesma razão do cadastro: o admin conhece a senha que acabou de
         # digitar. Sem isto ela valeria indefinidamente.
         sb.table("users").update(
-            {"password_hash": hash_pw, "deve_trocar_senha": True}
+            {
+                "password_hash": hash_pw,
+                "deve_trocar_senha": True,
+                # Mesmo carimbo de `senha_redefinir` e `senha_trocar` (achado
+                # #24): trocar a senha derruba as sessões abertas, venha a
+                # troca de quem vier. Sem ele, o token de quem acabou de ter a
+                # senha redefinida continuava válido — e a proteção inteira
+                # pendurava só em `deve_trocar_senha`.
+                "senha_alterada_em": datetime.now(timezone.utc).isoformat(),
+            }
         ).eq("id", user_id).execute()
         return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao redefinir a senha de %s", user_id)
+        raise HTTPException(status_code=400, detail="Não foi possível redefinir a senha.")
 
 
 @app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def deactivate_user(user_id: str) -> dict:
+def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
     """
     Desativa a conta **preservando o papel**.
 
@@ -1621,11 +1772,13 @@ def deactivate_user(user_id: str) -> dict:
     sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
     _garantir_que_sobra_admin(sb, user_id, novo_ativo=False)
     try:
         sb.table("users").update({"ativo": False}).eq("id", user_id).execute()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao desativar %s", user_id)
+        raise HTTPException(status_code=400, detail="Não foi possível desativar a conta.")
 
     # A carteira e removida DEPOIS de a conta cair, e nunca antes.
     #
@@ -1680,7 +1833,7 @@ def contar_carteira_do_usuario(user_id: str) -> dict:
 
 
 @app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def reactivate_user(user_id: str) -> dict:
+def reactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
     """
     Reativa a conta, devolvendo o papel que ela sempre teve.
 
@@ -1696,18 +1849,21 @@ def reactivate_user(user_id: str) -> dict:
     sb = _banco()
     if not sb:
         raise HTTPException(status_code=503)
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
     try:
         sb.table("users").update({"ativo": True}).eq("id", user_id).execute()
         return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao reativar %s", user_id)
+        raise HTTPException(status_code=400, detail="Não foi possível reativar a conta.")
 
 
 @app.delete("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def delete_user(user_id: str) -> dict:
+def delete_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
     if not sb: raise HTTPException(status_code=503)
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
     _garantir_que_sobra_admin(sb, user_id, apagar=True)
     sb.table("users").delete().eq("id", user_id).execute()
     return {"ok": True}
@@ -1813,7 +1969,7 @@ def criar_departamento(body: DepartamentoBody) -> dict:
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
             raise HTTPException(status_code=409, detail=f"Já existe um departamento chamado {nome}.")
         logger.exception("Falha ao criar departamento")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Não foi possível criar o departamento.")
     return {"ok": True, "id": str((r.data or [{}])[0].get("id", ""))}
 
 
@@ -1830,7 +1986,8 @@ def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
     except Exception as e:  # noqa: BLE001
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
             raise HTTPException(status_code=409, detail=f"Já existe um departamento chamado {nome}.")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.exception("Falha ao renomear departamento %s", dep_id)
+        raise HTTPException(status_code=400, detail="Não foi possível renomear o departamento.")
     return {"ok": True}
 
 
@@ -1851,8 +2008,9 @@ def apagar_departamento(dep_id: str) -> dict:
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
     try:
         sb.table("departamento").delete().eq("id", dep_id).execute()
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao apagar departamento %s", dep_id)
+        raise HTTPException(status_code=400, detail="Não foi possível apagar o departamento.")
     return {"ok": True}
 
 
@@ -1900,9 +2058,9 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
             sb.table("departamento_lider").insert(
                 [{"departamento_id": dep_id, "user_id": uid} for uid in ids]
             ).execute()
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         logger.exception("Falha ao definir líderes")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Não foi possível gravar os líderes.")
     return {"ok": True, "lideres": len(ids)}
 
 
@@ -1960,7 +2118,8 @@ def get_permissoes() -> dict:
             },
         }
     except permissoes.PermissoesIndisponiveis as e:
-        raise HTTPException(status_code=503, detail=f"Nao foi possivel ler as permissoes: {e}")
+        logger.error("Permissoes indisponiveis: %s", e)
+        raise HTTPException(status_code=503, detail="Nao foi possivel ler as permissoes. Tente de novo.")
 
 
 # `require_auth`, e nao `require_admin`: cada um le a PROPRIA linha, e e o que o
@@ -1975,7 +2134,8 @@ def get_minhas_permissoes(token: auth.TokenData = Depends(require_auth)) -> dict
         # 503, e nao um dicionario vazio: vazio faria o menu sumir inteiro e
         # parecer que a pessoa perdeu todos os acessos. O front trata o erro
         # mantendo o menu que ja estava.
-        raise HTTPException(status_code=503, detail=f"Nao foi possivel ler suas permissoes: {e}")
+        logger.error("Permissoes indisponiveis: %s", e)
+        raise HTTPException(status_code=503, detail="Nao foi possivel ler suas permissoes. Tente de novo.")
 
 
 @app.put("/api/permissoes", dependencies=[Depends(require_admin)])
@@ -1986,19 +2146,33 @@ def put_permissoes(body: PermissoesBody, token: auth.TokenData = Depends(require
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except permissoes.PermissoesIndisponiveis as e:
-        raise HTTPException(status_code=503, detail=f"Nao foi possivel gravar: {e}")
+        logger.error("Permissoes indisponiveis ao gravar: %s", e)
+        raise HTTPException(status_code=503, detail="Nao foi possivel gravar a matriz. Tente de novo.")
     return {"ok": True, "matriz": salva}
 
 
 @app.get("/api/health")
 def health() -> dict:
+    """Sinal de vida, e só.
+
+    Até o lote 1 da auditoria (achado #48) esta rota pública devolvia os
+    booleanos de postura do deploy — e `api_key_required: false` dizia a um
+    anônimo, numa requisição, que todas as rotas /api/* aceitavam identidade
+    anônima. Era o sinal mais valioso do portal para quem faz reconhecimento.
+    O detalhe continua existindo, em `/api/health/detalhado`, para admin.
+    """
+    return {"ok": True}
+
+
+@app.get("/api/health/detalhado", dependencies=[Depends(require_admin)])
+def health_detalhado() -> dict:
     """
     Estado de configuração do ambiente.
 
-    Devolve apenas BOOLEANOS de "está configurado?", nunca valores — a rota é
-    pública. Serve para conferir um deploy (Vercel/Render) sem descobrir por
-    tentativa e erro: o .env não sobe no deploy, então cada ambiente precisa
-    ter suas variáveis definidas no painel da plataforma.
+    Devolve apenas BOOLEANOS de "está configurado?", nunca valores. Serve para
+    conferir um deploy sem descobrir por tentativa e erro: o .env não sobe no
+    deploy, então cada ambiente precisa ter suas variáveis definidas.
+    `scripts/verificar_deploy.py --token` e a tela de Configuração leem daqui.
     """
     return {
         "ok": True,
@@ -2106,7 +2280,10 @@ def put_settings(body: SettingsBody) -> dict:
     old = load_settings()
 
     try:
-        validate_smtp_config(body.smtp_use_tls, body.smtp_use_ssl)
+        validate_smtp_config(
+            body.smtp_use_tls, body.smtp_use_ssl,
+            host=(body.smtp_host or old.smtp_host),
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -2205,11 +2382,14 @@ def put_settings(body: SettingsBody) -> dict:
     try:
         save_settings(s, exigir_banco=True)
     except GravacaoNaoPersistida as e:
+        # O motivo (código do banco, coluna que falta) vai para o log, onde
+        # quem vai consertar o lê; a resposta diz só o que aconteceu (#35).
+        logger.error("Gravação da configuração não persistida: %s", e)
         raise HTTPException(
             status_code=503,
             detail=(
                 "Não foi possível gravar no banco; nada foi alterado para o portal. "
-                "A cópia local ficou guardada. Detalhe: " + str(e)
+                "A cópia local ficou guardada. Veja o log do servidor."
             ),
         )
     return _settings_dict(s)
@@ -2229,6 +2409,8 @@ RESPOSTA_GENERICA = (
 )
 
 CODIGO_INVALIDO = "Código inválido ou expirado. Peça um novo se precisar."
+SENHA_NAO_GRAVADA = "Não foi possível gravar a senha nova. Tente de novo em instantes."
+ERRO_INTERNO_VEJA_LOG = "A operação falhou no servidor. Veja o log para o detalhe."
 
 
 class SenhaCodigoBody(BaseModel):
@@ -2314,8 +2496,21 @@ def _enviar_codigo_por_email(conta: dict, codigo: str) -> None:
     )
 
 
+def _enviar_codigo_em_segundo_plano(conta: dict, codigo: str) -> None:
+    """Corre depois da resposta. Aqui o `except` é obrigatório: uma exceção em
+    tarefa de fundo não tem quem a receba, e o log é o único sintoma."""
+    try:
+        _enviar_codigo_por_email(conta, codigo)
+    except Exception:  # noqa: BLE001
+        # ERROR e não warning: a pessoa está olhando para uma tela que diz que
+        # o código foi enviado, e ele não foi. Sem este log ninguém descobre.
+        logger.exception(
+            "Código gerado mas NÃO enviado — a pessoa vai esperar um e-mail que não chega."
+        )
+
+
 @app.post("/api/senha/codigo")
-def senha_pedir_codigo(body: SenhaCodigoBody, request: Request) -> dict:
+def senha_pedir_codigo(body: SenhaCodigoBody, request: Request, background: BackgroundTasks) -> dict:
     """
     Pede um código de redefinição. **Responde sempre a mesma coisa.**
 
@@ -2328,7 +2523,15 @@ def senha_pedir_codigo(body: SenhaCodigoBody, request: Request) -> dict:
     if not sb:
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
-    ip = request.client.host if request and request.client else None
+    ip = _ip_do_cliente(request)
+    # Teto por IP (achado #8). Os tetos de `senha_reset` são por CONTA: com
+    # uma lista de endereços, um anônimo disparava 3 e-mails/hora por endereço
+    # pelo SMTP da empresa, sem credencial nenhuma. Estourou → 200 genérico, e
+    # não 429: um 429 aqui já seria sinal para quem está enumerando.
+    if not taxa.permitir(f"reset-ip:{ip}", 5, 3600):
+        logger.warning("Teto de pedidos de código por IP atingido.")
+        return {"ok": True, "message": RESPOSTA_GENERICA}
+
     email = (body.email or "").strip().lower()
     if not email:
         return {"ok": True, "message": RESPOSTA_GENERICA}
@@ -2357,20 +2560,28 @@ def senha_pedir_codigo(body: SenhaCodigoBody, request: Request) -> dict:
             detail="Não foi possível gerar o código agora. Tente de novo em instantes.",
         )
 
-    try:
-        _enviar_codigo_por_email(conta, codigo)
-    except Exception:  # noqa: BLE001
-        # ERROR e não warning: a pessoa está olhando para uma tela que diz que
-        # o código foi enviado, e ele não foi. Sem este log ninguém descobre.
-        logger.exception(
-            "Código gerado mas NÃO enviado — a pessoa vai esperar um e-mail que não chega."
-        )
+    # O SMTP sai do caminho da resposta. Dentro dele, fazia duas coisas ruins:
+    # segurava o worker por até 10 s (o pool tem 6 conexões), e era o oráculo
+    # de timing — conta inexistente respondia na hora, existente esperava o
+    # servidor de e-mail. O 200 genérico não escondia nada.
+    background.add_task(_enviar_codigo_em_segundo_plano, conta, codigo)
 
     return {"ok": True, "message": RESPOSTA_GENERICA}
 
 
+def _exigir_teto_de_conferencia(request: Request) -> None:
+    """Teto por IP para conferir ou consumir código (achado #8).
+
+    Responde com o MESMO 400 de código errado: 429 seria uma terceira resposta,
+    e o fluxo inteiro foi desenhado para ter só duas.
+    """
+    if not taxa.permitir(f"reset-verif:{_ip_do_cliente(request)}", 20, 3600):
+        logger.warning("Teto de conferências de código por IP atingido.")
+        raise HTTPException(status_code=400, detail=CODIGO_INVALIDO)
+
+
 @app.post("/api/senha/verificar")
-def senha_verificar_codigo(body: SenhaVerificarBody) -> dict:
+def senha_verificar_codigo(body: SenhaVerificarBody, request: Request) -> dict:
     """
     Confere o código **sem consumi-lo**, para a tela avançar antes de a pessoa
     digitar a senha nova.
@@ -2384,6 +2595,7 @@ def senha_verificar_codigo(body: SenhaVerificarBody) -> dict:
     if not sb:
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
+    _exigir_teto_de_conferencia(request)
     conta = _conta_para_reset(sb, (body.email or "").strip().lower())
     if not conta:
         # Sem conta, não há código. Recusa com a mesma mensagem de código
@@ -2418,6 +2630,7 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
             detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
         )
 
+    _exigir_teto_de_conferencia(request)
     email = (body.email or "").strip().lower()
     conta = _conta_para_reset(sb, email)
     if not conta:
@@ -2440,9 +2653,9 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
                 "deve_trocar_senha": False,
             }
         ).eq("id", conta["id"]).execute()
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         logger.exception("Falha ao gravar a senha nova")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=SENHA_NAO_GRAVADA)
 
     atividade.registrar(
         atividade.EVENTO_SENHA_REDEFINIDA,
@@ -2521,9 +2734,9 @@ def senha_trocar(
                 "deve_trocar_senha": False,
             }
         ).eq("id", uid).execute()
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         logger.exception("Falha ao gravar a senha nova")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=SENHA_NAO_GRAVADA)
 
     atividade.registrar(
         atividade.EVENTO_SENHA_REDEFINIDA,
@@ -2564,8 +2777,25 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
             subject="Monitor de Certificados - E-mail de Teste",
             html_content="<p>Olá! Este é um e-mail de teste enviado a partir do seu <strong>Monitor de Certificados</strong> para validar as configurações de SMTP.</p>"
         )
-    except Exception as e:
+    # Uma mensagem fixa por CLASSE de falha (achado #35; item 91 da spec de
+    # telas). O texto do servidor SMTP trazia o usuário, às vezes o endereço
+    # do host resolvido, e a máscara por substring era frágil. O detalhe fica
+    # no log do `smtp_service`.
+    except ValueError as e:
+        # Validação nossa (sem TLS para servidor externo, TLS e SSL juntos):
+        # texto curado, escrito para a pessoa que está configurando.
         raise HTTPException(status_code=400, detail=str(e))
+    except smtp_service.ErroAutenticacaoSmtp:
+        raise HTTPException(status_code=400, detail="O servidor SMTP recusou o usuário ou a senha.")
+    except smtp_service.ErroTlsSmtp:
+        raise HTTPException(status_code=400, detail=(
+            "A conexão segura com o servidor SMTP falhou. Confira a opção de segurança e a porta."))
+    except smtp_service.ErroConexaoSmtp:
+        raise HTTPException(status_code=400, detail=(
+            "Não foi possível conectar ao servidor SMTP. Confira o endereço e a porta."))
+    except Exception:
+        logger.exception("Falha no e-mail de teste")
+        raise HTTPException(status_code=400, detail="Falha ao enviar o e-mail de teste. Veja o log do servidor.")
     return {"ok": True, "message": "E-mail de teste enviado com sucesso!"}
 
 
@@ -2610,8 +2840,9 @@ def trigger_alerts_manually() -> dict:
     try:
         stats = trigger_all_alerts()
         return {"ok": True, "stats": stats}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Falha no disparo manual de alertas")
+        raise HTTPException(status_code=500, detail="O disparo falhou. Veja o log do servidor.")
 
 
 @app.get("/api/cron/alerts")
@@ -2650,9 +2881,9 @@ def cron_alerts(request: Request) -> dict:
     try:
         stats = trigger_all_alerts()
         logger.info(f"Cron de alertas concluído: {stats}")
-    except Exception as e:
+    except Exception:
         logger.exception("Falha no cron de alertas")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="O cron de alertas falhou. Veja o log do servidor.")
 
     # Expurgo do install_log pendurado no mesmo disparo diário, e não num cron
     # próprio: os planos da Vercel limitam o número de crons, e um segundo
@@ -2694,8 +2925,9 @@ def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dic
         return build_notifications_payload(
             token.email, token.role, _user_id_da_sessao(token)
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Falha ao montar as notificações")
+        raise HTTPException(status_code=500, detail="Não foi possível carregar as notificações.")
 
 
 # Enfileirar comando para o agente e acao de operacao, e a unica chamadora e
@@ -2783,7 +3015,20 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
     rotas nesse estado, e deixar esta passar daria ao portador da senha
     provisória uma credencial durável, que sobreviveria à troca.
     """
-    ip = request.client.host if request and request.client else None
+    ip = _ip_do_cliente(request)
+    # MESMA chave do /api/login (achado #7): esta rota prova a senha do mesmo
+    # jeito, e sem teto era a porta por onde o spray de senhas entrava com o
+    # teto do login intacto. Chave separada daria 40 tentativas/min a quem
+    # alternasse as duas rotas.
+    if not taxa.permitir(f"login:{ip}", 20, 60):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+    # E um teto por CONTA, que trocar de IP não contorna. Só aqui, e não no
+    # login do navegador: lá, dez erros em cinco minutos trancariam a conta de
+    # quem está sendo atacado — aqui o registro de dispositivo é ato raro.
+    email_alvo = (body.email or "").strip().lower()
+    if not taxa.permitir(f"senha:{email_alvo}", 10, 300):
+        raise HTTPException(status_code=429, detail="Muitas tentativas nesta conta. Aguarde alguns minutos.")
+
     user = _conferir_credenciais(body.email, body.password, ip)
 
     if bool(user.get("deve_trocar_senha")):
@@ -2938,7 +3183,11 @@ class ProvisionarMaquinaBody(BaseModel):
 
 
 def _erro_maquina_indisponivel(e: Exception) -> HTTPException:
-    return HTTPException(status_code=503, detail=str(e))
+    logger.error("Credenciais de máquina indisponíveis: %s", e)
+    return HTTPException(
+        status_code=503,
+        detail="As credenciais de máquina estão indisponíveis. Tente de novo em instantes.",
+    )
 
 
 @app.post("/api/agent/maquinas/provisionar")
@@ -3154,7 +3403,7 @@ def listar_certificados(
         logger.exception("Erro em GET /api/certificados (fonte=%s)", fonte)
         raise HTTPException(
             status_code=500,
-            detail="Falha ao listar certificados. Veja o terminal do uvicorn. Resumo: " + str(e),
+            detail="Falha ao listar certificados. Veja o log do servidor.",
         ) from e
 
 
@@ -3624,9 +3873,10 @@ def marcar_notificacoes_como_lidas(token: auth.TokenData = Depends(require_auth)
     try:
         marcadas = marcar_notificacoes_lidas(uid, chaves)
     except GravacaoNaoPersistida as e:
+        logger.error("Notificações lidas não persistidas: %s", e)
         raise HTTPException(
             status_code=503,
-            detail="Não foi possível marcar como lido. Detalhe: " + str(e),
+            detail="Não foi possível marcar como lido. Veja o log do servidor.",
         )
     return {"marcadas": marcadas}
 
@@ -3694,9 +3944,10 @@ def salvar_preferencia_alerta(
             _user_id_da_sessao(token), body.notificar_email, ignorados
         )
     except GravacaoNaoPersistida as e:
+        logger.error("Preferência de alerta não persistida: %s", e)
         raise HTTPException(
             status_code=503,
-            detail="Não foi possível gravar a preferência. Detalhe: " + str(e),
+            detail="Não foi possível gravar a preferência. Veja o log do servidor.",
         )
     return obter_preferencia_alerta(token)
 
@@ -3797,7 +4048,7 @@ def _historico_carregar_agregados(limite_snapshots: int) -> Tuple[Dict[str, dict
                         break
             except Exception as e:  # noqa: BLE001
                 logger.exception("Falha ao ler histórico no banco")
-                raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
+                raise HTTPException(status_code=500, detail="Falha ao ler o histórico. Veja o log do servidor.") from e
         else:
             snap = get_latest_snapshot()
             if snap:
@@ -3970,7 +4221,7 @@ def historico_certificados(
                 rows_non_paginated = []
             else:
                 logger.exception("Falha inesperada ao ler cert_history no banco")
-                raise HTTPException(status_code=500, detail=f"Falha ao ler histórico: {e}") from e
+                raise HTTPException(status_code=500, detail="Falha ao ler o histórico. Veja o log do servidor.") from e
 
         if _use_history_table and rows_non_paginated and not pagination:
             itens = _normalize_rows(rows_non_paginated)
@@ -4389,7 +4640,10 @@ def upload_pfx(
         )
         return {"status": "ok", "id": cert_id, "fingerprint": body.fingerprint}
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # O texto vinha do cofre/banco e podia trazer nome de chave de
+        # ambiente ou de tabela (achado #35). Fica no log, com a rota.
+        logger.exception("Operação recusada pelo cofre ou pelo banco: %s", e)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
     except Exception:
         logger.exception("Erro ao processar upload de PFX")
         raise HTTPException(status_code=500, detail="Erro interno ao armazenar PFX")
@@ -4461,7 +4715,10 @@ def reativar_vault_custodia(
         )
         return {"status": "ok", "fingerprint": body.fingerprint, "custodia": "ativa"}
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # O texto vinha do cofre/banco e podia trazer nome de chave de
+        # ambiente ou de tabela (achado #35). Fica no log, com a rota.
+        logger.exception("Operação recusada pelo cofre ou pelo banco: %s", e)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
     except Exception:
         logger.exception("Erro ao reativar custódia do certificado")
         raise HTTPException(status_code=500, detail="Erro interno ao reativar custódia")
@@ -4503,7 +4760,10 @@ def bloquear_vault_custodia(
             "custodia": "bloqueada",
         }
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # O texto vinha do cofre/banco e podia trazer nome de chave de
+        # ambiente ou de tabela (achado #35). Fica no log, com a rota.
+        logger.exception("Operação recusada pelo cofre ou pelo banco: %s", e)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
     except Exception:
         logger.exception("Erro ao revogar certificado do cofre")
         raise HTTPException(status_code=500, detail="Erro interno ao revogar")
@@ -4821,7 +5081,10 @@ def atribuir_carteira(
         )
         return {"status": "ok", "gravados": gravados}
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # O texto vinha do cofre/banco e podia trazer nome de chave de
+        # ambiente ou de tabela (achado #35). Fica no log, com a rota.
+        logger.exception("Operação recusada pelo cofre ou pelo banco: %s", e)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
     except Exception:
         logger.exception("Erro ao atribuir carteira")
         raise HTTPException(status_code=500, detail="Erro interno ao atribuir carteira")
@@ -5023,7 +5286,10 @@ def remover_carteira(
         cert_installer.remover_da_carteira(user_id, documento)
         return {"status": "ok", "user_id": user_id, "documento": documento}
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # O texto vinha do cofre/banco e podia trazer nome de chave de
+        # ambiente ou de tabela (achado #35). Fica no log, com a rota.
+        logger.exception("Operação recusada pelo cofre ou pelo banco: %s", e)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
     except Exception:
         logger.exception("Erro ao remover da carteira")
         raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
@@ -5073,11 +5339,14 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     try:
         save_settings(atual, exigir_banco=True)
     except GravacaoNaoPersistida as e:
+        # O motivo (código do banco, coluna que falta) vai para o log, onde
+        # quem vai consertar o lê; a resposta diz só o que aconteceu (#35).
+        logger.error("Gravação da configuração não persistida: %s", e)
         raise HTTPException(
             status_code=503,
             detail=(
                 "Não foi possível gravar no banco; nada foi alterado para o portal. "
-                "A cópia local ficou guardada. Detalhe: " + str(e)
+                "A cópia local ficou guardada. Veja o log do servidor."
             ),
         )
     return _settings_dict(atual)
@@ -5285,7 +5554,8 @@ def revalidar_cofre() -> dict:
     try:
         return {"resultados": cert_installer.revalidar_cofre()}
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        logger.error("Revalidação do cofre indisponível: %s", e)
+        raise HTTPException(status_code=503, detail="O cofre está indisponível para revalidar. Veja o log do servidor.")
     except Exception:
         logger.exception("Falha ao revalidar o cofre")
         raise HTTPException(status_code=500, detail="Erro interno ao revalidar o cofre")
@@ -5445,7 +5715,10 @@ def preparar_instalacao(
             client_ip=client_ip,
         )
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # O texto vinha do cofre/banco e podia trazer nome de chave de
+        # ambiente ou de tabela (achado #35). Fica no log, com a rota.
+        logger.exception("Operação recusada pelo cofre ou pelo banco: %s", e)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
     except Exception:
         logger.exception("Erro ao emitir token de instalação pelo agente")
         raise HTTPException(status_code=500, detail="Erro interno ao preparar a instalação")
@@ -5455,11 +5728,19 @@ def preparar_instalacao(
     # daqui — e a trilha existe justamente para ser confiável.
     try:
         _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname, expires_at)
-    except Exception as e:  # noqa: BLE001
-        logger.exception("Falha ao pedir a instalação ao portal de inventário")
+    except PonteRecusou as e:
+        # Motivo curado pelo outro portal: "Erro interno" mandaria alguém ao
+        # log por algo que se resolve na tela (token da ponte, máquina).
+        logger.warning("Portal de inventário recusou o pedido: %s", e)
         raise HTTPException(
             status_code=502,
             detail=f"Não foi possível avisar o agente desta máquina: {e}",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao pedir a instalação ao portal de inventário")
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível avisar o agente desta máquina. Veja o log do servidor.",
         )
 
     for cid in body.certificate_ids:
@@ -5583,6 +5864,16 @@ def acompanhar_instalacao(
     )
 
 
+class PonteRecusou(RuntimeError):
+    """O portal de inventário respondeu, e disse não.
+
+    O `detail` dele é texto do NOSSO outro portal, escrito para o operador
+    ("CERT_PORTAL_TOKEN inválido", "máquina não encontrada"), e resolve na
+    tela. É diferente de uma falha de rede ou de um proxy no caminho, cujo
+    texto não é de ninguém de confiança — esse fica no log.
+    """
+
+
 def _pedir_instalacao_ao_invent(
     machine_id: str,
     token_raw: str,
@@ -5625,8 +5916,10 @@ def _pedir_instalacao_ao_invent(
         try:
             detalhe = str((r.json() or {}).get("detail") or "")
         except Exception:  # noqa: BLE001
-            detalhe = (r.text or "")[:200]
-        raise RuntimeError(detalhe or f"o portal de inventário respondeu {r.status_code}")
+            # Sem JSON não é o nosso portal falando (página de erro de proxy,
+            # HTML): o texto cru não vai para a tela (achado #35), só o status.
+            detalhe = ""
+        raise PonteRecusou(detalhe or f"o portal de inventário respondeu {r.status_code}")
 
 
 class RedeemRequest(BaseModel):
@@ -5696,17 +5989,32 @@ _CLAIM_MAX_POR_JANELA = 10
 
 
 def _ip_do_cliente(request: Request) -> str:
-    """O IP de quem chama, atrás do proxy da Vercel.
+    """O IP de quem chama, atrás de `config.NUM_PROXIES_CONFIAVEIS` proxies.
 
-    A plataforma põe o cliente real no primeiro valor de X-Forwarded-For; sem
-    o cabeçalho (dev local, testes), vale o socket. Antes disto os limites
-    usavam `request.client.host`, que atrás do proxy é o PROXY — o teto "por
-    IP" era na prática um teto global compartilhado por todo mundo.
+    Contado a partir do FIM do X-Forwarded-For: cada proxy anexa o IP de quem
+    falou com ele, então só os N últimos valores foram escritos por alguém de
+    confiança. O primeiro valor é o que o cliente mandou — até o lote 1 da
+    auditoria (24/09/2026) era ele que virava a chave do rate limit, e um
+    `X-Forwarded-For: 1.2.3.<n>` novo a cada requisição tornava os tetos do
+    login e do /claim decorativos (achado #6).
+
+    Sem proxy configurado, ou com cabeçalho mais curto que a cadeia esperada
+    (alguém forjou o cabeçalho sem passar por proxy nenhum), vale o socket.
+    Antes de existir esta função os limites usavam `request.client.host`, que
+    atrás do proxy é o PROXY — teto global compartilhado por todo mundo.
     """
-    encaminhado = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if encaminhado:
-        return encaminhado
-    return request.client.host if request.client else "desconhecido"
+    socket_ip = request.client.host if request.client else "desconhecido"
+    n = int(getattr(config, "NUM_PROXIES_CONFIAVEIS", 0) or 0)
+    if n <= 0:
+        return socket_ip
+    cadeia = [
+        p.strip()
+        for p in (request.headers.get("x-forwarded-for") or "").split(",")
+        if p.strip()
+    ]
+    if len(cadeia) >= n:
+        return cadeia[-n]
+    return socket_ip
 
 
 def _claim_rate_limit(ip: str) -> bool:

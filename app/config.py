@@ -45,6 +45,26 @@ def _env_int(name: str, default: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
 
 
+# Quantos proxies de confiança há entre a internet e este processo. É o que
+# decide QUAL valor do X-Forwarded-For é o cliente: cada proxy anexa o IP de
+# quem falou com ele ao FIM do cabeçalho, então só os N últimos valores foram
+# escritos por alguém em quem se confia — o resto é o que o cliente mandou.
+# Ler o primeiro valor (como se fazia até o lote 1 da auditoria de 24/09/2026)
+# deixava qualquer um escolher a chave do próprio rate limit. Padrão 1: o Caddy
+# do ANALISESRV. Zero desliga o cabeçalho e usa o socket (dev, testes).
+NUM_PROXIES_CONFIAVEIS = _env_int("NUM_PROXIES_CONFIAVEIS", default=1, lo=0, hi=5)
+
+# Nomes de host que este portal atende (sem porta, separados por vírgula).
+# Vazio = aceita qualquer Host, como sempre aceitou — é a janela de
+# compatibilidade, com aviso em `verificar_ambiente`. Preenchido, um Host fora
+# da lista recebe 400 antes de chegar a qualquer rota.
+HOSTS_PERMITIDOS = [
+    h.strip().lower()
+    for h in (os.getenv("HOSTS_PERMITIDOS") or "").split(",")
+    if h.strip()
+]
+
+
 # Máximo de linhas lidas na tabela cert_snapshots ao agregar histórico/vencidos (RAM ~ proporcional ao lote).
 
 
@@ -221,6 +241,16 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
         (fatais if producao else avisos).append(
             "API_KEY não definida — todas as rotas /api/* aceitam identidade "
             "anônima com papel agent (modo aberto)."
+        )
+
+    if producao and not HOSTS_PERMITIDOS:
+        # Aviso, não fatal: é a janela de compatibilidade do lote 1. Sem a
+        # lista o portal atende qualquer Host, como sempre atendeu; com ela,
+        # um Host forjado leva 400 antes de qualquer rota.
+        avisos.append(
+            "HOSTS_PERMITIDOS não definida — o portal aceita qualquer cabeçalho "
+            "Host. Defina os nomes atendidos (ex.: certificado.analisegroup.cnt.br,"
+            "10.200.0.4,127.0.0.1,localhost)."
         )
 
     if producao and not (os.getenv("CRON_SECRET") or "").strip():

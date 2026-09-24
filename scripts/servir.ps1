@@ -12,4 +12,7 @@ Set-Location $root
 
 Write-Host "A servir em http://${Host}:$Port/  | configuracao: http://${Host}:$Port/configuracao" -ForegroundColor Cyan
 Write-Host "Ctrl+C para parar." -ForegroundColor DarkGray
-python -m uvicorn app.main:app --host $Host --port $Port --reload
+# --no-server-header: o uvicorn escreve `server: uvicorn` DEPOIS do middleware
+# da aplicacao, entao apaga-lo em app/main.py nao tinha efeito (SECURITY_AUDIT
+# #50). Anunciar o servidor so ajuda quem procura CVE por versao.
+python -m uvicorn app.main:app --host $Host --port $Port --reload --no-server-header
