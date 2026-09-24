@@ -5,172 +5,195 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vencidos — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <!-- Terceira tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell e o CSS
+       da família de listas de certificados. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-  <style>
-    .ano-progress-wrap {
-      margin-top: 0.65rem;
-      width: 100%;
-      height: 4px;
-      background: var(--border);
-      border-radius: var(--radius-pill);
-      overflow: hidden;
-    }
-    .ano-progress-bar {
-      height: 100%;
-      /* Largura cheia e `scaleX(0)` de partida, em vez de `width: 0%`.
-
-         O contador escreve neste elemento a cada 100ms por 5 segundos: com
-         `width`, sao 50 passagens de layout + paint. `transform` roda no
-         compositor e nao toca no layout nenhuma vez.
-
-         O `transform-origin` ja estava aqui — alguem comecou essa troca e nao
-         terminou. */
-      width: 100%;
-      background: var(--accent);
-      transform: scaleX(0);
-      transform-origin: left center;
-      transition: transform 0.1s linear;
-    }
-  </style>
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09b" />
 </head>
-<body>
+<body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
-  <main class="main-content" id="main-content">
-    <header class="page-header">
-      <h1>Certificados Vencidos</h1>
-      <p>Lista de certificados vencidos. Deixe as datas em branco para ver todos; use De/Até para filtrar pelo vencimento.</p>
+  <main class="main-content cg-painel" id="main-content">
+    <header class="ag-page__head">
+      <p class="ag-page__eyebrow">Monitor de certificados</p>
+      <h1 class="ag-page__title">Certificados vencidos</h1>
+      <p class="ag-page__lead">Certificados das suas empresas que já passaram do vencimento. Filtre por período ou deixe as datas em branco para ver todos.</p>
     </header>
 
-    <div class="cards-grid" style="margin-bottom: 1rem;">
-      <div class="dashboard-card card-vencidos">
-        <div class="card-info">
-          <span class="card-title">Total de vencidos</span>
-          <span class="card-number" id="n-vencidos-total">0</span>
-          <span class="card-subtitle" id="n-vencidos-sub">na pasta/listagem atual</span>
+    <!-- Dois KPIs: o total, que é o dado grave da tela e por isso leva o
+         tratamento de perigo (um degrau acima do "Expirando" do Início), e
+         a distribuição por ano como gráfico de barras — antes o card mostrava
+         um ano em número grande e a contagem miúda embaixo, com a hierarquia
+         invertida e trocando sozinho a cada 5 segundos. -->
+    <section class="ag-kpi-row cg-kpis--largos" aria-label="Resumo dos vencidos">
+      <div class="ag-kpi cg-kpi cg-kpi--perigo">
+        <div class="cg-kpi__texto">
+          <p class="ag-kpi__label">Total de vencidos</p>
+          <p class="ag-kpi__value" id="n-vencidos-total" aria-busy="true">—</p>
+          <p class="ag-kpi__delta" id="n-vencidos-sub">Em todo o período, sem filtro de datas</p>
         </div>
-        <div class="card-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
+        <span class="cg-kpi__icone" aria-hidden="true">
+          <!-- Lucide "triangle-alert" -->
+          <svg class="ag-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </span>
       </div>
-      <div class="dashboard-card card-expirando">
-        <div class="card-info">
-          <span class="card-title">Vencidos por ano</span>
-          <span class="card-number" id="ano-vencido-atual">—</span>
-          <span class="card-subtitle" id="ano-vencido-total">Sem dados</span>
-          <div class="ano-progress-wrap" title="Troca automática a cada 5 segundos">
-            <div class="ano-progress-bar" id="ano-vencido-progress"></div>
+
+      <div class="ag-kpi cg-kpi cg-kpi--grafico">
+        <p class="ag-kpi__label">Vencidos por ano</p>
+        <div class="ag-barchart" id="grafico-anos" role="list" aria-label="Vencidos por ano"></div>
+        <p class="ag-kpi__delta" id="grafico-anos-nota">Aguardando os dados…</p>
+      </div>
+    </section>
+
+    <section class="ag-card cg-tabela-card" id="table-container-venc" aria-label="Certificados vencidos">
+      <!-- Formulário GET de verdade: os filtros viajam na URL (compartilhável
+           e recarregável) e Enter em qualquer campo filtra. Com JS, o envio é
+           interceptado e vira uma busca sem recarregar a página; sem JS a
+           página recarrega com a mesma query. -->
+      <form class="cg-filtros" id="form-filtros" method="get" action="/vencidos">
+        <div class="ag-field cg-filtros__busca">
+          <label class="ag-label" for="busca-vencidos">Buscar</label>
+          <input class="ag-input" type="search" id="busca-vencidos" name="busca" placeholder="Nome, CNPJ/CPF ou data" autocomplete="off" />
+        </div>
+        <div class="ag-field cg-filtros__de">
+          <label class="ag-label" for="dt-inicio">Vencimento de</label>
+          <div class="ag-data">
+            <span class="ag-data__ic" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg></span>
+            <input type="date" id="dt-inicio" name="de" class="ag-input" />
           </div>
         </div>
-        <div class="card-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 14l3-3 3 2 4-5" />
-          </svg>
+        <div class="ag-field cg-filtros__ate">
+          <label class="ag-label" for="dt-fim">Até</label>
+          <div class="ag-data">
+            <span class="ag-data__ic" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg></span>
+            <input type="date" id="dt-fim" name="ate" class="ag-input" />
+          </div>
         </div>
-      </div>
-    </div>
+        <!-- Filtrar é a única ação que envia algo nesta tela: primário. É
+             diferente do "Atualizar" do Histórico, que só recarrega. -->
+        <button type="submit" id="btn-filtrar" class="ag-btn ag-btn--primary cg-filtros__filtrar">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filtrar
+        </button>
+        <details class="menu-suspenso cg-filtros__exportar" id="menu-exportar">
+          <summary class="ag-btn ag-btn--outline" aria-haspopup="menu">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+            Exportar
+            <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+          </summary>
+          <div class="menu-suspenso__lista" role="menu">
+            <button type="button" role="menuitem" id="btn-export-excel">Planilha (Excel)</button>
+            <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
+          </div>
+        </details>
+        <!-- Ordem e paginação também viajam no formulário, para a URL contar
+             a história inteira. -->
+        <input type="hidden" name="ordem" id="campo-ordem" value="desc" />
+        <input type="hidden" name="pagina" id="campo-pagina" value="1" />
+      </form>
 
-    <div class="table-container table-container--cheia" id="table-container-venc">
-      <div class="toolbar">
-        <div class="toolbar__status">
-          <p id="status-msg" class="status-line"></p>
-          <p class="hint" id="count-hint"></p>
-        </div>
-        <div class="toolbar__actions">
-          <label for="busca-vencidos" class="cg-sr-only">Buscar vencidos por nome, documento ou data</label>
-          <input class="form-control campo-busca" type="search" id="busca-vencidos" placeholder="Buscar por nome, documento ou data" />
-          <label for="dt-inicio" class="hint">De</label>
-          <input type="date" id="dt-inicio" class="path-input" style="max-width: 170px;" />
-          <label for="dt-fim" class="hint">Até</label>
-          <input type="date" id="dt-fim" class="path-input" style="max-width: 170px;" />
-          <button type="button" id="btn-filtrar" class="primary">Filtrar</button>
-          <button type="button" id="btn-export-pdf">Exportar PDF</button>
-          <button type="button" id="btn-export-excel">Exportar Excel</button>
-        </div>
+      <!-- Uma linha só de contagem, entre a toolbar e a tabela. A paginação
+           embaixo não repete o total. -->
+      <div class="cg-status" aria-live="polite">
+        <p id="count-hint" class="cg-status__linha"></p>
+        <p id="status-msg" class="cg-status__linha"></p>
       </div>
 
       <div class="table-scroll-anchor">
-        <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados vencidos">
-          <table role="table">
-            <thead role="rowgroup">
-              <tr role="row">
-                <th role="columnheader">Nome</th>
-                <th role="columnheader">CNPJ/CPF</th>
-                <th role="columnheader">Vencimento do certificado</th>
-              </tr>
-            </thead>
-            <tbody role="rowgroup" id="tbody-vencidos"></tbody>
-          </table>
-        </div>
-      </div>
-      <nav id="paginacao-toolbar-venc" class="cg-page-nav" aria-label="Navegação por páginas">
-        <div id="pag-meta-venc" class="cg-page-nav__meta"></div>
-        <div class="cg-page-nav__row">
-          <ul id="pag-ul-venc" class="cg-page-nav__ul" role="list">
-            <li>
-              <button type="button" id="btn-venc-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">
-                Anterior
-              </button>
-            </li>
-            <li id="pag-li-next-venc">
-              <button type="button" id="btn-venc-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">
-                Seguinte
-              </button>
-            </li>
-          </ul>
-          <div>
-            <label for="pag-perpage-venc" class="cg-sr-only">Registros por página</label>
-            <select id="pag-perpage-venc" class="cg-page-perpage-select" title="Itens por página">
-              <option value="10">10 por página</option>
-              <option value="25">25 por página</option>
-              <option value="50">50 por página</option>
-              <option value="100">100 por página</option>
-            </select>
+        <div class="ag-table-wrap cg-tabela-wrap">
+          <div class="ag-table-scroll" role="region" aria-label="Tabela de certificados vencidos">
+            <table class="ag-table cg-tabela cg-tabela--duas" role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th role="columnheader" class="ag-th--estatico">Empresa</th>
+                  <th role="columnheader" aria-sort="descending" data-col="vencimento">
+                    <button type="button" class="th-ordenar th-ordenar--ativa" data-col="vencimento" title="Ordenar pelo vencimento">
+                      Vencimento<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup" id="tbody-vencidos"></tbody>
+            </table>
           </div>
         </div>
+      </div>
+
+      <!-- Paginação: pílulas do DS. Desktop: Anterior, 1, 2, 3, …, última,
+           Próxima. Celular: só Anterior · "1 de 49" · Próxima. As páginas são
+           links de verdade com a query completa, para funcionar sem JS. -->
+      <nav class="cg-pag" id="paginacao-venc" aria-label="Navegação por páginas" hidden>
+        <ul class="cg-pag__paginas" id="pag-lista-venc"></ul>
+        <form class="cg-pag__por-pagina" id="form-por-pagina" method="get" action="/vencidos">
+          <label class="ag-label" for="pag-perpage-venc">Por página</label>
+          <select id="pag-perpage-venc" name="por_pagina" class="ag-select">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <noscript><button type="submit" class="ag-btn ag-btn--outline ag-btn--sm">Aplicar</button></noscript>
+        </form>
       </nav>
-    </div>
+    </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09b"></script>
   <script nonce="{{ request.state.nonce }}">
-    const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
+    const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
 
-    function porPaginaVenc() {
-      const sel = document.getElementById("pag-perpage-venc");
-      const n = sel ? parseInt(sel.value, 10) : 10;
-      return ALLOWED_PER_PAGE_VENC.includes(n) ? n : 10;
+    // O estado da tela mora na URL: busca, datas, ordem, página e linhas
+    // por página. Recarregar, compartilhar ou voltar no histórico do
+    // navegador reproduz a mesma lista.
+    const estado = { busca: "", de: "", ate: "", ordem: "desc", pagina: 1, porPagina: 10 };
+    let ultimaPaginacao = null;
+
+    function lerEstadoDaUrl() {
+      const q = new URLSearchParams(location.search);
+      estado.busca = q.get("busca") || "";
+      estado.de = q.get("de") || "";
+      estado.ate = q.get("ate") || "";
+      estado.ordem = q.get("ordem") === "asc" ? "asc" : "desc";
+      estado.pagina = Math.max(1, parseInt(q.get("pagina") || "1", 10) || 1);
+      const pp = parseInt(q.get("por_pagina") || localStorage.getItem(LS_PER_PAGE_VENC) || "10", 10);
+      estado.porPagina = ALLOWED_PER_PAGE_VENC.includes(pp) ? pp : 10;
     }
 
-    function initPerPageVenc() {
-      const sel = document.getElementById("pag-perpage-venc");
-      if (!sel) return;
-      let stored = parseInt(localStorage.getItem(LS_PER_PAGE_VENC) || "10", 10);
-      if (!ALLOWED_PER_PAGE_VENC.includes(stored)) stored = 10;
-      sel.value = String(stored);
-      localStorage.setItem(LS_PER_PAGE_VENC, String(stored));
-      sel.addEventListener("change", () => {
-        localStorage.setItem(LS_PER_PAGE_VENC, sel.value);
-        paginaAtualVenc = 1;
-        carregarVencidos();
-      });
+    function escreverEstadoNosCampos() {
+      document.getElementById("busca-vencidos").value = estado.busca;
+      document.getElementById("dt-inicio").value = estado.de;
+      document.getElementById("dt-fim").value = estado.ate;
+      document.getElementById("campo-ordem").value = estado.ordem;
+      document.getElementById("campo-pagina").value = String(estado.pagina);
+      document.getElementById("pag-perpage-venc").value = String(estado.porPagina);
+      marcarCabecalho();
     }
 
-    let paginaAtualVenc = 1;
-    let debounceVencBusca = null;
-    let itensVisiveis = [];
-    let anosResumo = [];
-    let anosResumoIdx = 0;
-    let anosResumoTimer = null;
-    let anosProgressTimer = null;
+    function queryDoEstado(extra) {
+      const q = new URLSearchParams();
+      if (estado.busca) q.set("busca", estado.busca);
+      if (estado.de) q.set("de", estado.de);
+      if (estado.ate) q.set("ate", estado.ate);
+      if (estado.ordem !== "desc") q.set("ordem", estado.ordem);
+      if (estado.pagina > 1) q.set("pagina", String(estado.pagina));
+      if (estado.porPagina !== 10) q.set("por_pagina", String(estado.porPagina));
+      if (extra) Object.entries(extra).forEach(([k, v]) => (v == null ? q.delete(k) : q.set(k, String(v))));
+      return q;
+    }
+
+    function gravarEstadoNaUrl() {
+      const q = queryDoEstado();
+      const s = q.toString();
+      history.replaceState(null, "", location.pathname + (s ? "?" + s : ""));
+    }
 
     function toggleLoading(show, text) {
       if (typeof setTableLoading === "function") {
@@ -180,186 +203,272 @@
 
     // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
 
-    function apenasDigitos(v) {
-      return String(v || "").replace(/\D+/g, "");
-    }
-
-    function normalizarTexto(v) {
-      return String(v || "")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-    }
-
+    // Data e hora completas só no `title`, na exportação e no datetime do
+    // <time>; a lista mostra dd/mm/aaaa (seção 2 do DS).
     function fmtDataUtc(iso) {
       if (!iso) return "—";
       return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" });
     }
 
-    /** Sem datas por defeito: a API lista todos os vencidos (evita cortar por ano civil). */
-    function limparCamposDatasVencidos() {
-      const di = document.getElementById("dt-inicio");
-      const df = document.getElementById("dt-fim");
-      if (di) di.value = "";
-      if (df) df.value = "";
+    function fmtSoData(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
     }
 
-    function atualizarPaginacaoVenc(pg) {
-      cgPageNavRefresh({
-        bar: "paginacao-toolbar-venc",
-        meta: "pag-meta-venc",
-        ul: "pag-ul-venc",
-        liNext: "pag-li-next-venc",
-        prev: "btn-venc-prev",
-        next: "btn-venc-next",
-        pg: pg,
-        metaFormatter: (p) =>
-          "Página " +
-          p.pagina +
-          " de " +
-          p.total_paginas +
-          " · " +
-          p.total_itens +
-          " vencido(s)",
-        hideWhenSingle: true,
-        goToPage: (pn) => {
-          paginaAtualVenc = pn;
-          carregarVencidos();
-        },
-        maxButtons: 5,
+    // "há 1 dia", "há 44 dias": distância entre hoje e o vencimento, em dias
+    // inteiros. Vencido hoje é "hoje"; datas futuras não chegam aqui.
+    function haQuantoTempo(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "";
+      const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+      if (dias <= 0) return "hoje";
+      if (dias === 1) return "há 1 dia";
+      if (dias < 60) return `há ${dias} dias`;
+      const meses = Math.floor(dias / 30);
+      if (meses < 24) return `há ${meses} meses`;
+      return `há ${Math.floor(dias / 365)} anos`;
+    }
+
+    // O documento vem formatado do servidor; o tipo se deduz do formato.
+    // Sem documento, travessão: lacuna é informação (seção 35 do DS).
+    function celulaDocumento(doc) {
+      if (!doc) return "<span class='cg-doc'><span class='ag-cell-sub ag-cell-sub--mono cg-doc__num'>—</span></span>";
+      const tipo = doc.includes("/") ? "CNPJ" : "CPF";
+      return (
+        "<span class='cg-doc'>" +
+        "<span class='cg-doc__tipo'>" + tipo + "</span>" +
+        "<span class='ag-cell-sub ag-cell-sub--mono cg-doc__num'>" + esc(doc) + "</span>" +
+        "</span>"
+      );
+    }
+
+    function marcarCabecalho() {
+      const th = document.querySelector('th[data-col="vencimento"]');
+      if (!th) return;
+      th.setAttribute("aria-sort", estado.ordem === "asc" ? "ascending" : "descending");
+    }
+
+    // ─── KPIs ───────────────────────────────────────────────────────────
+
+    function definirKpi(id, valor) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = Number(valor ?? 0).toLocaleString("pt-BR");
+      el.removeAttribute("aria-busy");
+    }
+
+    function subtituloDoTotal() {
+      // O subtítulo descreve o número, não a página: quantas linhas a
+      // página mostra não é estatística.
+      if (estado.de || estado.ate) return "No período filtrado";
+      if (estado.busca) return "Na busca atual, em todo o período";
+      return "Em todo o período, sem filtro de datas";
+    }
+
+    function renderGraficoAnos(resumo, total) {
+      const el = document.getElementById("grafico-anos");
+      const nota = document.getElementById("grafico-anos-nota");
+      const anos = Array.isArray(resumo) ? resumo : [];
+      el.innerHTML = "";
+      if (!anos.length) {
+        nota.textContent = "Sem vencidos para distribuir por ano.";
+        return;
+      }
+      const maior = Math.max(...anos.map((a) => Number(a.total) || 0), 1);
+      anos.forEach((a) => {
+        const pct = total > 0 ? Math.round((Number(a.total) / total) * 100) : 0;
+        // A barra é proporcional ao maior ano, para a distribuição se ler;
+        // o valor à direita diz a contagem; o title diz a fração do total.
+        const largura = Math.round((Number(a.total) / maior) * 100);
+        const row = document.createElement("div");
+        row.className = "ag-barchart__row";
+        row.setAttribute("role", "listitem");
+        row.tabIndex = 0;
+        row.setAttribute("aria-label", `${a.ano}: ${Number(a.total).toLocaleString("pt-BR")} vencido${a.total === 1 ? "" : "s"}, ${pct}% do total`);
+        row.title = `${pct}% do total`;
+        row.innerHTML =
+          "<div class='ag-barchart__label ag-barchart__label--mono'>" + esc(String(a.ano)) + "</div>" +
+          "<div class='ag-barchart__track'><div class='ag-barchart__fill' style='--barra: " + largura + "%'></div></div>" +
+          "<div class='ag-barchart__value'>" + Number(a.total).toLocaleString("pt-BR") + "</div>";
+        el.appendChild(row);
       });
+      nota.textContent = anos.length === 1
+        ? "Um ano com vencidos"
+        : `${anos.length} anos, do mais recente ao mais antigo`;
+    }
+
+    // ─── Tabela ─────────────────────────────────────────────────────────
+
+    function renderEstadoVazio(tb) {
+      const filtrado = estado.busca || estado.de || estado.ate;
+      if (filtrado) {
+        const termo = estado.busca ? "“" + estado.busca + "”" : "esse período";
+        renderEmptyRow(tb, 2, {
+          icon: "",
+          title: "Nada encontrado para " + termo,
+          description: "Nenhum certificado vencido bate com os filtros. Amplie o período ou limpe a busca.",
+          actionText: "Ver todos os vencidos",
+          onAction: () => {
+            estado.busca = ""; estado.de = ""; estado.ate = ""; estado.pagina = 1;
+            escreverEstadoNosCampos();
+            carregarVencidos();
+          },
+        });
+      } else {
+        // Zero vencidos sem filtro é um bom resultado, não uma falha.
+        renderEmptyRow(tb, 2, {
+          icon: "",
+          title: "Nenhum certificado vencido",
+          description: "Todos os certificados monitorados estão dentro da validade. Quando algum vencer, ele aparece aqui.",
+        });
+      }
     }
 
     function renderTabelaVencidas(rows, totalServidor) {
-      itensVisiveis = rows;
-      document.getElementById("n-vencidos-total").textContent = String(typeof totalServidor === "number" ? totalServidor : rows.length);
-      document.getElementById("n-vencidos-sub").textContent =
-        typeof totalServidor === "number" && totalServidor > rows.length
-          ? `${rows.length} linhas nesta página`
-          : "no período com o filtro atual";
+      definirKpi("n-vencidos-total", typeof totalServidor === "number" ? totalServidor : rows.length);
+      document.getElementById("n-vencidos-sub").textContent = subtituloDoTotal();
       const tb = document.getElementById("tbody-vencidos");
       limparSkeleton(tb);
 
       if (!rows.length) {
-        const busca = (document.getElementById("busca-vencidos")?.value || "").trim();
-        const di = document.getElementById("dt-inicio")?.value || "";
-        const df = document.getElementById("dt-fim")?.value || "";
-        if (busca || di || df) {
-          renderEmptyRow(tb, 3, {
-            icon: "🔍",
-            title: "Nenhum vencido com esses filtros",
-            description: "Amplie o período ou limpe a busca para ver outros certificados.",
-            actionText: "Limpar filtros",
-            onAction: () => {
-              document.getElementById("busca-vencidos").value = "";
-              document.getElementById("dt-inicio").value = "";
-              document.getElementById("dt-fim").value = "";
-              paginaAtualVenc = 1;
-              carregarVencidos();
-            },
-          });
-        } else {
-          // Zero vencidos sem filtro é um bom resultado, não uma falha.
-          renderEmptyRow(tb, 3, {
-            icon: "✅",
-            title: "Nenhum certificado vencido",
-            description: "Todos os certificados monitorados estão dentro da validade.",
-          });
-        }
+        renderEstadoVazio(tb);
         return;
       }
 
+      // role="row"/"cell" sustentam o layout de cartões abaixo de 640px
+      // (aguia-listas.css): `display:block` apagaria os papéis implícitos.
       tb.innerHTML = rows
-        .map(
-          (it) => `
-        <tr role="row">
-          <td role="cell" data-label="Nome">${esc(it.nome)}</td>
-          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento || "—")}</td>
-          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>
-      `
-        )
+        .map((it) => {
+          const nome = it.nome || "";
+          const exib = it.nome_exibicao || nome;
+          const venc = it.vencimento_certificado;
+          const soData = fmtSoData(venc);
+          return (
+            "<tr role='row'>" +
+            "<td role='cell' class='cg-col-nome'>" +
+            "<div class='ag-cell-stack'>" +
+            "<span class='ag-cell-main' title='" + esc(nome) + "'>" + esc(exib) + "</span>" +
+            celulaDocumento(it.documento) +
+            "</div>" +
+            "</td>" +
+            "<td role='cell' class='cg-col-data cg-col-data--mono cg-col-vencimento'>" +
+            (soData === "—"
+              ? "—"
+              : "<time datetime='" + esc(venc) + "' title='" + esc(fmtDataUtc(venc)) + "'>" + esc(soData) + "</time>" +
+                "<span class='ag-cell-sub'>" + esc(haQuantoTempo(venc)) + "</span>") +
+            "</td>" +
+            "</tr>"
+          );
+        })
         .join("");
-      const hint = document.getElementById("count-hint");
-      const raw = (document.getElementById("busca-vencidos").value || "").trim();
-      if (typeof totalServidor === "number") {
-        hint.textContent = raw
-          ? `${rows.length} na página (${totalServidor} no período com busca)`
-          : `${totalServidor} no período (mostrando ${rows.length})`;
-      }
     }
 
-    function renderAnoAtual() {
-      const elAno = document.getElementById("ano-vencido-atual");
-      const elInfo = document.getElementById("ano-vencido-total");
-      if (!anosResumo.length) {
-        elAno.textContent = "—";
-        elInfo.textContent = "Sem dados";
-        return;
-      }
-      const cur = anosResumo[anosResumoIdx];
-      elAno.textContent = String(cur.ano);
-      elInfo.textContent = `${cur.total} vencido(s)`;
+    function renderContagem(pg, total, naPagina) {
+      const el = document.getElementById("count-hint");
+      if (!total) { el.textContent = ""; return; }
+      const inicio = ((pg ? pg.pagina : 1) - 1) * estado.porPagina + 1;
+      const fim = inicio + naPagina - 1;
+      const ordem = estado.ordem === "desc" ? "do vencimento mais recente ao mais antigo" : "do vencimento mais antigo ao mais recente";
+      el.textContent = `${total.toLocaleString("pt-BR")} vencido${total === 1 ? "" : "s"} · mostrando ${inicio}–${fim}, ${ordem}`;
     }
 
-    function iniciarRotacaoAnos() {
-      if (anosResumoTimer) {
-        clearInterval(anosResumoTimer);
-        anosResumoTimer = null;
-      }
-      if (anosProgressTimer) {
-        clearInterval(anosProgressTimer);
-        anosProgressTimer = null;
-      }
-      if (anosResumo.length <= 1) return;
-      iniciarBarraProgressoAno();
-      anosResumoTimer = setInterval(() => {
-        anosResumoIdx = (anosResumoIdx + 1) % anosResumo.length;
-        renderAnoAtual();
-        iniciarBarraProgressoAno();
-      }, 5000);
+    // ─── Paginação ──────────────────────────────────────────────────────
+
+    // Desktop: Anterior, 1, 2, 3, …, última, Próxima. Celular: o CSS esconde
+    // os números e mostra "1 de N". Cada página é um link com a query
+    // completa, para funcionar sem JS; com JS o clique troca a página sem
+    // recarregar.
+    function paginasVisiveis(atual, total) {
+      if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+      const s = new Set([1, total, atual - 1, atual, atual + 1]);
+      if (atual <= 3) [2, 3].forEach((n) => s.add(n));
+      if (atual >= total - 2) [total - 1, total - 2].forEach((n) => s.add(n));
+      return [...s].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
     }
 
-    function iniciarBarraProgressoAno() {
-      const bar = document.getElementById("ano-vencido-progress");
-      if (!bar) return;
-      if (anosProgressTimer) {
-        clearInterval(anosProgressTimer);
-        anosProgressTimer = null;
-      }
-      bar.style.transform = "scaleX(0)";
-      if (anosResumo.length <= 1) return;
-      let decorrido = 0;
-      const total = 5000;
-      const passo = 100;
-      anosProgressTimer = setInterval(() => {
-        decorrido += passo;
-        const pct = Math.min((decorrido / total) * 100, 100);
-        bar.style.transform = `scaleX(${pct / 100})`;
-        if (decorrido >= total) {
-          clearInterval(anosProgressTimer);
-          anosProgressTimer = null;
+    function linkPagina(n, rotulo, extra) {
+      const a = document.createElement("a");
+      a.className = "cg-pag__link";
+      const q = queryDoEstado({ pagina: n > 1 ? n : null });
+      const s = q.toString();
+      a.href = location.pathname + (s ? "?" + s : "");
+      a.textContent = rotulo;
+      Object.entries(extra || {}).forEach(([k, v]) => a.setAttribute(k, v));
+      a.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        if (a.getAttribute("aria-disabled") === "true" || a.hasAttribute("aria-current")) return;
+        estado.pagina = n;
+        carregarVencidos();
+      });
+      return a;
+    }
+
+    function renderPaginacao(pg) {
+      const nav = document.getElementById("paginacao-venc");
+      const ul = document.getElementById("pag-lista-venc");
+      ul.innerHTML = "";
+      if (!pg || !pg.total_paginas || pg.total_paginas <= 1) { nav.hidden = true; return; }
+      nav.hidden = false;
+      const atual = pg.pagina, total = pg.total_paginas;
+
+      const liPrev = document.createElement("li");
+      const prev = linkPagina(Math.max(1, atual - 1), "‹ Anterior", atual <= 1 ? { "aria-disabled": "true", tabindex: "-1" } : {});
+      liPrev.appendChild(prev); ul.appendChild(liPrev);
+
+      const liPos = document.createElement("li");
+      liPos.className = "cg-pag__posicao";
+      liPos.textContent = `${atual} de ${total}`;
+      ul.appendChild(liPos);
+
+      let anterior = 0;
+      paginasVisiveis(atual, total).forEach((n) => {
+        if (n - anterior > 1) {
+          const liR = document.createElement("li");
+          liR.setAttribute("data-reticencias", "1");
+          liR.innerHTML = "<span class='cg-pag__reticencias' aria-hidden='true'>…</span>";
+          ul.appendChild(liR);
         }
-      }, passo);
+        const li = document.createElement("li");
+        li.setAttribute("data-numero", String(n));
+        li.appendChild(linkPagina(n, String(n), n === atual ? { "aria-current": "page" } : {}));
+        ul.appendChild(li);
+        anterior = n;
+      });
+
+      const liNext = document.createElement("li");
+      const next = linkPagina(Math.min(total, atual + 1), "Próxima ›", atual >= total ? { "aria-disabled": "true", tabindex: "-1" } : {});
+      liNext.appendChild(next); ul.appendChild(liNext);
     }
 
-    function aplicarResumoAnosDoPayload(j) {
-      anosResumo = Array.isArray(j.resumo_anos) ? j.resumo_anos : [];
-      anosResumoIdx = 0;
-      renderAnoAtual();
-      iniciarBarraProgressoAno();
-      iniciarRotacaoAnos();
+    // ─── Dados ──────────────────────────────────────────────────────────
+
+    function paramsApi(opts) {
+      const { todasFiltradas = false } = opts || {};
+      const params = new URLSearchParams({
+        pagina: String(estado.pagina),
+        por_pagina: String(estado.porPagina),
+        busca: estado.busca,
+        ordem: estado.ordem,
+      });
+      if (estado.de) params.set("data_inicio", estado.de);
+      if (estado.ate) params.set("data_fim", estado.ate);
+      if (todasFiltradas) {
+        params.set("todas_filtradas", "true");
+        params.delete("pagina");
+        params.delete("por_pagina");
+      }
+      return params;
     }
 
-    async function fetchVencidosExportacao(qsDates) {
+    async function fetchVencidosExportacao() {
       toggleLoading(true, "Exportação...");
       try {
-        const params = qsDates || buildParamsVencidos({ todasFiltradas: true });
-        const r = await fetch(`/api/certificados/vencidos?${params.toString()}`, { headers: getHeaders() });
-        if (r.status === 401) {
-          logout();
-          return null;
-        }
+        // Exporta exatamente o que está filtrado: mesma query da lista.
+        const r = await fetch(`/api/certificados/vencidos?${paramsApi({ todasFiltradas: true }).toString()}`, { headers: getHeaders() });
+        if (r.status === 401) { logout(); return null; }
         if (!r.ok) {
           showToast("Não foi possível exportar (erro " + r.status + "): " + (await mensagemCorpoErro(r)), "error");
           return null;
@@ -370,47 +479,18 @@
       }
     }
 
-    function buildParamsVencidos(opts) {
-      const { todasFiltradas = false, pagina = paginaAtualVenc } = opts || {};
-      const inicio = document.getElementById("dt-inicio").value;
-      const fim = document.getElementById("dt-fim").value;
-      const params = new URLSearchParams({
-        pagina: String(pagina),
-        por_pagina: String(porPaginaVenc()),
-        busca: document.getElementById("busca-vencidos").value || "",
-      });
-      if (inicio) params.set("data_inicio", inicio);
-      if (fim) params.set("data_fim", fim);
-      if (todasFiltradas) {
-        params.set("todas_filtradas", "true");
-        params.delete("pagina");
-        params.delete("por_pagina");
-      }
-      return params;
-    }
-
     async function exportarExcelVisivel() {
       const d = await fetchVencidosExportacao();
       if (!d || !d.itens) return;
       if (d.lista_truncada) {
-        showToast(
-          "O arquivo contém apenas os primeiros " +
-            d.itens.length.toLocaleString("pt-BR") +
-            " registros — o filtro atual excede o limite de exportação.",
-          "warning"
-        );
+        showToast("O arquivo contém apenas os primeiros " + d.itens.length.toLocaleString("pt-BR") + " registros — o filtro atual excede o limite de exportação.", "warning");
       }
       const headers = ["Nome", "CNPJ/CPF", "Vencimento do certificado"];
-      const rows = d.itens.map((it) => [
-        it.nome || "",
-        it.documento || "",
-        fmtDataUtc(it.vencimento_certificado),
-      ]);
-      const all = [headers, ...rows];
-      const csv = all
+      const rows = d.itens.map((it) => [it.nome || "", it.documento || "", fmtDataUtc(it.vencimento_certificado)]);
+      const csv = [headers, ...rows]
         .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
         .join("\n");
-      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -425,12 +505,7 @@
       const d = await fetchVencidosExportacao();
       if (!d || !d.itens) return;
       if (d.lista_truncada) {
-        showToast(
-          "O PDF contém apenas os primeiros " +
-            d.itens.length.toLocaleString("pt-BR") +
-            " registros — o filtro atual excede o limite de exportação.",
-          "warning"
-        );
+        showToast("O PDF contém apenas os primeiros " + d.itens.length.toLocaleString("pt-BR") + " registros — o filtro atual excede o limite de exportação.", "warning");
       }
       const linhas = d.itens
         .map((it) => `
@@ -449,10 +524,15 @@
             <meta charset="utf-8" />
             <title>Certificados vencidos filtrado</title>
             <style>
+              /* Documento À PARTE: nasce de window.open("") + document.write,
+                 sem o link de nenhum CSS, então NENHUM token existe aqui. Os
+                 valores são literais por necessidade, copiados dos tokens do
+                 tema claro — a exportação é sempre para papel. Sem crase
+                 neste comentário: o bloco é um template literal. */
               body { font-family: Segoe UI, Arial, sans-serif; padding: 20px; }
-              h1 { margin: 0 0 8px; font-size: 20px; }
-              p { margin: 0 0 14px; color: #555; }
-              table { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
+              h1 { margin: 0 0 8px; font-size: 1.375rem; }
+              p { margin: 0 0 14px; color: #6E6E73; }
+              table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
               th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
               th { background: #f3f4f6; }
             </style>
@@ -462,9 +542,7 @@
             <p>Gerado em ${new Date().toLocaleString("pt-BR")} | Total exportado: ${d.itens.length}</p>
             <table>
               <thead>
-                <tr>
-                  <th>Nome</th><th>CNPJ/CPF</th><th>Vencimento do certificado</th>
-                </tr>
+                <tr><th>Nome</th><th>CNPJ/CPF</th><th>Vencimento do certificado</th></tr>
               </thead>
               <tbody>${linhas}</tbody>
             </table>
@@ -481,24 +559,22 @@
     async function carregarVencidos() {
       const st = document.getElementById("status-msg");
       st.textContent = "Carregando…";
+      gravarEstadoNaUrl();
+      document.getElementById("campo-pagina").value = String(estado.pagina);
       if (primeiroCarregamentoVenc) {
-        renderSkeletonRows("tbody-vencidos", Math.min(porPaginaVenc(), 10), 3);
+        renderSkeletonRows("tbody-vencidos", Math.min(estado.porPagina, 10), 2);
       } else {
         toggleLoading(true, "Carregando vencidos...");
       }
       try {
-        const qs = buildParamsVencidos({ todasFiltradas: false });
-        const r = await fetch(`/api/certificados/vencidos?${qs.toString()}`, { headers: getHeaders() });
-        if (r.status === 401) {
-          logout();
-          return;
-        }
+        const r = await fetch(`/api/certificados/vencidos?${paramsApi().toString()}`, { headers: getHeaders() });
+        if (r.status === 401) { logout(); return; }
         if (!r.ok) {
           const detalhe = await mensagemCorpoErro(r);
           st.textContent = `Erro ${r.status}`;
           showToast("Não foi possível carregar os vencidos: " + detalhe, "error");
-          renderEmptyRow("tbody-vencidos", 3, {
-            icon: "⚠️",
+          renderEmptyRow("tbody-vencidos", 2, {
+            icon: "",
             title: "Erro ao carregar os vencidos",
             description: detalhe || `O servidor respondeu com erro ${r.status}.`,
             actionText: "Tentar novamente",
@@ -507,21 +583,21 @@
           return;
         }
         const j = await r.json();
-        if (j.paginacao) {
-          paginaAtualVenc = j.paginacao.pagina;
-          atualizarPaginacaoVenc(j.paginacao);
-        } else {
-          atualizarPaginacaoVenc(null);
-        }
+        ultimaPaginacao = j.paginacao || null;
+        if (j.paginacao) estado.pagina = j.paginacao.pagina;
         setBannerAviso("table-container-venc", mensagemLimiteExportacao(j.paginacao));
-        st.textContent = j.atualizado_em ? "Atualizado em: " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
-        aplicarResumoAnosDoPayload(j);
-        renderTabelaVencidas(j.itens || [], j.total);
+        st.textContent = j.atualizado_em ? "Atualizado em " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
+        const rows = j.itens || [];
+        renderGraficoAnos(j.resumo_anos, j.total);
+        renderTabelaVencidas(rows, j.total);
+        renderContagem(j.paginacao, j.total, rows.length);
+        renderPaginacao(j.paginacao);
+        gravarEstadoNaUrl();
       } catch (e) {
         st.textContent = "Falha de conexão.";
         showToast("Falha de conexão com o servidor: " + e, "error");
-        renderEmptyRow("tbody-vencidos", 3, {
-          icon: "🔌",
+        renderEmptyRow("tbody-vencidos", 2, {
+          icon: "",
           title: "Sem conexão com o servidor",
           description: "Verifique se o portal está em execução e tente novamente.",
           actionText: "Tentar novamente",
@@ -534,32 +610,74 @@
       }
     }
 
-    document.getElementById("btn-filtrar").addEventListener("click", () => {
-      paginaAtualVenc = 1;
+    // ─── Ligações ───────────────────────────────────────────────────────
+
+    // O formulário filtra sem recarregar: lê os campos, volta à página 1 e
+    // busca. Sem JS, o mesmo formulário recarrega a página com a query.
+    document.getElementById("form-filtros").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      estado.busca = document.getElementById("busca-vencidos").value.trim();
+      estado.de = document.getElementById("dt-inicio").value;
+      estado.ate = document.getElementById("dt-fim").value;
+      estado.pagina = 1;
       carregarVencidos();
     });
+
+    let debounceBusca = null;
     document.getElementById("busca-vencidos").addEventListener("input", () => {
-      paginaAtualVenc = 1;
-      clearTimeout(debounceVencBusca);
-      debounceVencBusca = setTimeout(carregarVencidos, 320);
+      clearTimeout(debounceBusca);
+      debounceBusca = setTimeout(() => document.getElementById("form-filtros").requestSubmit(), 320);
     });
-    document.getElementById("btn-export-excel").addEventListener("click", () => void exportarExcelVisivel());
-    document.getElementById("btn-export-pdf").addEventListener("click", () => void exportarPdfVisivel());
-    document.getElementById("btn-venc-prev").addEventListener("click", () => {
-      if (paginaAtualVenc > 1) {
-        paginaAtualVenc--;
-        carregarVencidos();
+
+    document.getElementById("form-por-pagina").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+    });
+    document.getElementById("pag-perpage-venc").addEventListener("change", (ev) => {
+      const n = parseInt(ev.target.value, 10);
+      estado.porPagina = ALLOWED_PER_PAGE_VENC.includes(n) ? n : 10;
+      localStorage.setItem(LS_PER_PAGE_VENC, String(estado.porPagina));
+      estado.pagina = 1;
+      carregarVencidos();
+    });
+
+    // Ordenação pelo cabeçalho: dois estados (mais recente / mais antigo),
+    // sempre sobre a lista inteira, no servidor.
+    document.querySelector('.th-ordenar[data-col="vencimento"]').addEventListener("click", () => {
+      estado.ordem = estado.ordem === "desc" ? "asc" : "desc";
+      estado.pagina = 1;
+      document.getElementById("campo-ordem").value = estado.ordem;
+      marcarCabecalho();
+      carregarVencidos();
+    });
+
+    // O menu de exportar fecha ao escolher, ao clicar fora e por Esc.
+    const menuExportar = document.getElementById("menu-exportar");
+    function exportarPor(fn) {
+      menuExportar.open = false;
+      void fn();
+    }
+    document.getElementById("btn-export-excel").addEventListener("click", () => exportarPor(exportarExcelVisivel));
+    document.getElementById("btn-export-pdf").addEventListener("click", () => exportarPor(exportarPdfVisivel));
+    document.addEventListener("click", (ev) => {
+      if (menuExportar.open && !menuExportar.contains(ev.target)) menuExportar.open = false;
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && menuExportar.open) {
+        menuExportar.open = false;
+        menuExportar.querySelector("summary").focus();
       }
     });
-    document.getElementById("btn-venc-next").addEventListener("click", () => {
-      paginaAtualVenc++;
+
+    window.addEventListener("popstate", () => {
+      lerEstadoDaUrl();
+      escreverEstadoNosCampos();
       carregarVencidos();
     });
 
     (async function init() {
       // Sidebar por papel: ui-common.js (initSidebarPorPapel).
-      initPerPageVenc();
-      limparCamposDatasVencidos();
+      lerEstadoDaUrl();
+      escreverEstadoNosCampos();
       await carregarVencidos();
     })();
   </script>

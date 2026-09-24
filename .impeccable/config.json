@@ -107,6 +107,42 @@
         ],
         "createdAt": "2026-09-22T23:58:45.988Z",
         "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao registrada para o index.html"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "arial",
+        "files": [
+          "templates/vencidos.html"
+        ],
+        "createdAt": "2026-09-24T11:26:49.640Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao do index.html e do historico.html"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.375rem",
+        "files": [
+          "templates/vencidos.html"
+        ],
+        "createdAt": "2026-09-24T11:26:49.735Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao do index.html e do historico.html"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#6e6e73",
+        "files": [
+          "templates/vencidos.html"
+        ],
+        "createdAt": "2026-09-24T11:26:49.851Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao do index.html e do historico.html"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f3f4f6",
+        "files": [
+          "templates/vencidos.html"
+        ],
+        "createdAt": "2026-09-24T11:26:49.953Z",
+        "reason": "popup de exportacao em PDF (window.open+document.write, sem CSS do portal, nenhum token existe ali); mesma excecao do index.html e do historico.html"
       }
     ]
   }

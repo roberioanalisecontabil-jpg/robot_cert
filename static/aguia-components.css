@@ -54,6 +54,18 @@
     margin: 0;
 }
 
+/* Overline acima do título (seção 26 do DS): Exo, caixa alta, tinta de
+   marca — texto dourado só em --text-brand. */
+.ag-page__eyebrow {
+    font-family: var(--font-display);
+    font-size: var(--text-overline);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--text-brand);
+    margin: 0 0 var(--space-2);
+}
+
 /* ── Botões ──────────────────────────────────────────────────────────── */
 
 .ag-btn {
@@ -194,6 +206,43 @@
    com cor literal, e o DS proíbe valor solto. */
 .ag-select { padding-right: var(--space-8); }
 
+/* Campo de data (seção 39 do DS): ícone de calendário à esquerda, data em
+   mono e o seletor nativo mantido — o indicador do navegador fica invisível
+   sobre o campo inteiro, então clicar em qualquer ponto abre o calendário.
+   No escuro, color-scheme: dark pinta o seletor nativo do sistema no tema
+   certo. */
+.ag-data { position: relative; display: block; min-width: 0; }
+
+.ag-data__ic {
+    position: absolute;
+    left: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.ag-data__ic .ag-icon { width: 16px; height: 16px; }
+
+.ag-data .ag-input {
+    padding-left: var(--space-8);
+    width: 100%;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.ag-data .ag-input::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+html.dark .ag-data .ag-input, :root[data-theme="dark"] .ag-data .ag-input { color-scheme: dark; }
+
 .ag-check {
     display: inline-flex;
     align-items: center;
@@ -304,6 +353,99 @@
     font-size: var(--text-xs);
     color: var(--text-muted);
     margin: var(--space-2) 0 0;
+}
+
+/* ── Gráfico de barras (seção 22 do DS) ──────────────────────────────── */
+
+/* Uma linha por categoria: rótulo, trilho e valor. A largura da barra vem
+   da variável --barra (quantidade ÷ total, em %), escrita no elemento. O
+   preenchimento leva a tinta de marca: é gráfico de valor único, não série
+   categórica (seção 7 da skill). */
+.ag-barchart { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.ag-barchart__row {
+    display: grid;
+    grid-template-columns: minmax(3.5rem, 6rem) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 6px var(--space-2);
+    border-radius: var(--radius-sm);
+}
+
+.ag-barchart__row:hover, .ag-barchart__row:focus-visible { background: var(--bg-surface-alt); outline: none; }
+.ag-barchart__row:focus-visible { box-shadow: var(--focus-ring); }
+
+.ag-barchart__label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ag-barchart__label--mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.ag-barchart__track {
+    height: 10px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-surface-alt);
+    overflow: hidden;
+}
+
+.ag-barchart__fill {
+    height: 100%;
+    /* Piso visível: a categoria com 1 item não pode sumir. */
+    width: max(var(--barra, 0%), 4%);
+    border-radius: var(--radius-pill);
+    background: var(--grad-gold);
+}
+
+.ag-barchart__value {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ── Selo numérico (seção 39 do DS) ──────────────────────────────────── */
+
+/* Contagem que pede ação no canto de um ícone, com o número escrito. O selo
+   do sino do portal (`.notification-badge`, style.css) recebe esta classe
+   também; o que muda aqui é a forma do DS por cima da legada. */
+.ag-selo {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-pill);
+    background: var(--danger-500);
+    color: var(--white);
+    border: var(--bw-3) solid var(--bg-surface);
+    font-family: var(--font-display);
+    font-size: var(--text-overline);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-xs);
+}
+
+html.dark .ag-selo, :root[data-theme="dark"] .ag-selo {
+    /* Os degraus de perigo do DS no escuro são claros; o selo escurece o
+       vermelho na tinta para carregar o branco (mesma solução da ponte). */
+    background: color-mix(in srgb, var(--danger-500) 55%, var(--ink-950));
 }
 
 /* ── Badges ──────────────────────────────────────────────────────────── */

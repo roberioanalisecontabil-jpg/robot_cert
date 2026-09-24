@@ -103,7 +103,8 @@ def test_pagina_historico_200(client: TestClient) -> None:
 def test_pagina_vencidos_200(client: TestClient) -> None:
     r = client.get("/vencidos")
     assert r.status_code == 200
-    assert "Certificados Vencidos" in r.text
+    # Sentence case desde a spec do Aguia DS (22/09/2026).
+    assert "Certificados vencidos" in r.text
 
 
 def test_pagina_duplicidades_200(client: TestClient) -> None:
