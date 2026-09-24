@@ -65,6 +65,32 @@
    mostrar um zero que sugere "nenhum" (contrato de KPI, seção 7 da skill). */
 .ag-kpi__value[aria-busy="true"] { color: var(--text-muted); }
 
+/* KPI de perigo (Vencidos): um degrau acima do de aviso — o dado mais grave
+   da tela. Lavado --danger-50, borda e filete em --danger-500, ícone em
+   --danger-700 sobre a superfície. Cor de estado, não decoração. */
+.cg-kpi--perigo {
+    background: var(--danger-50);
+    border-color: var(--danger-500);
+}
+
+.cg-kpi--perigo::before { background: var(--danger-500); }
+.cg-kpi--perigo .ag-kpi__label,
+.cg-kpi--perigo .ag-kpi__delta { color: var(--danger-700); }
+.cg-kpi--perigo .cg-kpi__icone { background: var(--bg-surface); color: var(--danger-700); }
+
+/* Grade de KPIs do Vencidos: dois cards largos (o segundo carrega um
+   gráfico), que empilham numa coluna abaixo de ~18rem cada. */
+.cg-kpis--largos { grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
+
+/* Rótulo do KPI quebra linha; nunca trunca com reticências. */
+.cg-kpi .ag-kpi__label { white-space: normal; }
+
+/* KPI que carrega um gráfico no lugar do número: o rótulo em cima, o
+   gráfico ocupa o corpo. */
+.cg-kpi--grafico { display: block; }
+.cg-kpi--grafico .ag-barchart { margin-top: var(--space-2); }
+.cg-kpi--grafico .ag-kpi__delta { margin-top: var(--space-3); }
+
 /* ── Card da tabela ──────────────────────────────────────────────────── */
 
 .cg-tabela-card {
@@ -162,6 +188,116 @@
 
 .cg-tabela-wrap { margin-top: var(--space-4); }
 
+/* ── Filtros em grade (Vencidos) ─────────────────────────────────────── */
+
+/* Um <form method="get"> real. As três disposições vêm de grid-template-
+   areas, sem reordenar o HTML: desktop numa linha alinhada pela base;
+   tablet (≤1024) busca inteira, datas lado a lado, ações lado a lado;
+   celular (≤640) busca inteira, datas lado a lado, ações empilhadas. */
+.cg-filtros {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) auto auto auto auto;
+    grid-template-areas: "busca de ate filtrar exportar";
+    gap: var(--space-3);
+    align-items: end;
+}
+
+.cg-filtros__busca { grid-area: busca; }
+.cg-filtros__de { grid-area: de; }
+.cg-filtros__ate { grid-area: ate; }
+.cg-filtros__filtrar { grid-area: filtrar; }
+.cg-filtros__exportar { grid-area: exportar; }
+
+.cg-filtros .ag-data .ag-input { min-width: 10.5rem; }
+.cg-filtros .ag-btn { white-space: nowrap; }
+
+/* ── Paginação (Vencidos) ────────────────────────────────────────────── */
+
+/* Pílulas do DS no lugar do controle segmentado legado. A página atual leva
+   aria-current e se lê por três canais: contorno dourado, texto de marca e
+   lavado. "Anterior" desabilitado leva aria-disabled e fica atenuado. */
+.cg-pag {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.cg-pag__paginas {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.cg-pag__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    border: var(--bw-2) solid var(--border-strong);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-sm);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+}
+
+.cg-pag__link:hover:not([aria-disabled="true"]):not([aria-current]) {
+    border-color: var(--gold-600);
+    color: var(--text-brand);
+    background: var(--color-gold-glow);
+}
+
+.cg-pag__link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.cg-pag__link[aria-current="page"] {
+    border-color: var(--gold-500);
+    color: var(--text-brand);
+    background: var(--color-gold-glow);
+    cursor: default;
+}
+
+.cg-pag__link[aria-disabled="true"] {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.cg-pag__reticencias {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    color: var(--text-muted);
+    font-family: var(--font-display);
+    font-weight: 700;
+}
+
+/* "1 de 49": só no celular, entre Anterior e Próxima. */
+.cg-pag__posicao { display: none; }
+
+.cg-pag__por-pagina {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.cg-pag__por-pagina .ag-label { margin: 0; }
+.cg-pag__por-pagina .ag-select { width: auto; min-width: 5.5rem; }
+
 /* ── Tabela ──────────────────────────────────────────────────────────── */
 
 /* Ordenação: o botão do cabeçalho herda a tipografia do th do DS e a coluna
@@ -193,6 +329,16 @@
 .cg-col-status { width: 1%; white-space: nowrap; }
 .cg-col-data { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cg-col-doc { white-space: nowrap; }
+
+/* Vencimento com "há N dias" embaixo (Vencidos): data em mono tabular, o
+   tempo decorrido em texto de apoio. */
+.cg-col-data--mono time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cg-col-data .ag-cell-sub { display: block; white-space: nowrap; }
+
+/* A tabela do Vencidos tem duas colunas: nada rola dentro do cartão, a
+   página rola (seção 36 do DS). */
+.cg-tabela--duas .ag-table-scroll { overflow: visible; }
+.cg-tabela--duas th:last-child, .cg-tabela--duas td:last-child { width: 1%; white-space: nowrap; }
 
 /* CNPJ/CPF numa linha: tipo em texto apagado, número em mono — nada de azul
    parecendo link. */
@@ -312,6 +458,17 @@
        ordenação por documento fica só nas telas largas. */
     .cg-col-doc { display: none; }
     .cg-doc--sob-nome { display: inline-flex; }
+
+    /* Tablet: busca inteira; De e Até lado a lado; Filtrar e Exportar lado
+       a lado. */
+    .cg-filtros {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-areas:
+            "busca busca"
+            "de ate"
+            "filtrar exportar";
+    }
+    .cg-filtros .ag-data .ag-input { min-width: 0; }
 
     /* Filtros numa linha, ações na seguinte — e SÓ uma: grade fixa em vez de
        flex com quebra, senão "Atualizar tabela" caía sozinho numa terceira
@@ -453,6 +610,45 @@
     .cg-tabela-card.is-selecionando .cg-col-status { justify-self: start; }
     .cg-col-sel { grid-area: sel; align-self: center; padding: 0; }
     .cg-col-sel .ag-check { min-width: 44px; width: 44px; }
+
+    /* Celular: busca inteira; De e Até lado a lado; ações empilhadas em
+       largura total. */
+    .cg-filtros {
+        grid-template-areas:
+            "busca busca"
+            "de ate"
+            "filtrar filtrar"
+            "exportar exportar";
+    }
+    .cg-filtros .ag-btn, .cg-filtros .menu-suspenso, .cg-filtros .menu-suspenso > summary.ag-btn { width: 100%; }
+
+    /* Paginação compacta: "‹ Anterior · 1 de 49 · Próxima ›", números
+       escondidos, distribuídos na largura. */
+    .cg-pag { justify-content: stretch; }
+    .cg-pag__paginas { width: 100%; justify-content: space-between; flex-wrap: nowrap; }
+    .cg-pag__paginas > li[data-numero], .cg-pag__paginas > li[data-reticencias] { display: none; }
+    .cg-pag__posicao {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: var(--text-sm);
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .cg-pag__por-pagina { width: 100%; justify-content: space-between; }
+    .cg-pag__por-pagina .ag-select { flex: 1 1 auto; }
+
+    /* Lista de duas colunas no cartão: nome e documento à esquerda, data e
+       "há N dias" à direita. */
+    .cg-tabela--duas tbody tr:not(.cg-state-row) {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "nome vencimento";
+        align-items: start;
+    }
+    .cg-tabela--duas .cg-col-vencimento { grid-area: vencimento; text-align: right; }
+    .cg-tabela--duas .cg-col-vencimento::before { content: none; }
+    .cg-tabela--duas .cg-col-data { font-size: var(--text-sm); color: var(--text-primary); }
+    .cg-tabela--duas .cg-col-data .ag-cell-sub { font-size: var(--text-xs); }
 
     /* Toolbar empilhada e a linha "Atualizado em" com respiro maior: no
        celular ela ficava colada no último botão. */

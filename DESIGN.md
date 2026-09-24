@@ -288,8 +288,8 @@ parcimônia — um filete no alto de cada indicador, um único botão preenchido
 anel de foco. É o mundo do **Águia Design System** da Análise Group (documento
 `systemdesign.html`, Desktop/migracao-supabase, revisão de 17/08/2026), adotado
 pelo portal a partir de 22/09/2026. O Início (`templates/index.html`) foi a
-primeira tela nele e o Histórico (`templates/historico.html`) a segunda, no
-mesmo dia; as demais ainda vestem o mundo anterior ("A Mesa Limpa", acento
+primeira tela nele, o Histórico (`templates/historico.html`) a segunda, no
+mesmo dia, e os Vencidos (`templates/vencidos.html`) a terceira, em 24/09; as demais ainda vestem o mundo anterior ("A Mesa Limpa", acento
 azul derivado da Apple) e migram uma a uma, carregando `aguia-tokens.css`,
 `aguia-components.css`, `aguia-ponte.css` e o CSS da família da tela. **Este arquivo descreve o
 sistema de agora em diante, e não o legado.**
@@ -662,6 +662,12 @@ de 120ms em botão e campo; spinner de 0.8s linear; `prefers-reduced-motion`
 zera as transições da tela e desacelera o spinner para 1.6s em vez de
 escondê-lo.
 
+- **Eyebrow** (`.ag-page__eyebrow`): overline Exo em caixa alta acima do título, `tracking-caps`, tinta de marca (`text-brand`). Só quando a tela pertence a uma seção nomeada ("Monitor de certificados"); a maioria das telas não o leva.
+- **Gráfico de barras** (`.ag-barchart`): uma `__row` por categoria (rótulo, `__track`, `__value`), largura da barra por `--barra` em %, piso de 4% para o item unitário não sumir, preenchimento `grad-gold` porque é gráfico de valor único; rótulo em mono quando é ano ou número; cada linha focável com `aria-label` que diz o valor e a fração do total.
+- **Campo de data** (`.ag-data`): ícone de calendário à esquerda, valor em mono tabular, seletor nativo mantido e clicável no campo inteiro; `color-scheme: dark` no escuro.
+- **KPI de perigo** (`.cg-kpi--perigo`, da família de listas): lavado `danger-50`, borda e filete `danger-500`, ícone `danger-700` sobre superfície. Um degrau acima do KPI de aviso; no máximo um por tela.
+- **Paginação em pílulas** (`.cg-pag`, da família de listas): Anterior, 1, 2, 3, …, última, Próxima no desktop; "Anterior · 1 de N · Próxima" abaixo de 640px. Página atual com `aria-current="page"`, contorno `gold-500`, texto de marca e lavado dourado; desabilitado com `aria-disabled` e opacidade .45; alvos de 44px; "Por página" com rótulo visível.
+- **Selo** (`.ag-selo`): contagem no canto de um ícone, `danger-500` com número em Exo branco e borda da superfície; no escuro o vermelho escurece na tinta. O botão que o carrega diz a contagem no `aria-label` ("Notificações, 12 não lidas").
 - **Tooltip** (`.ag-tooltip` ou `[data-tooltip]`): balão à direita do elemento com o texto de `data-tooltip`, `ink-900` com texto branco nos dois temas (no escuro sobe para `ink-800` com borda `ink-700`), `radius-sm`, `shadow-md`, seta de 5px; entra com 180ms de atraso em `:hover` e em `:focus-visible`, some na hora. Sem JavaScript. Na sidebar só existe quando o rótulo está escondido (recolhida pelo botão ou na faixa 769–900px); cada item leva também `title` e `aria-label` com o mesmo nome. A gaveta do celular abre sempre expandida e não usa o balão.
 
 ## Do's and Don'ts

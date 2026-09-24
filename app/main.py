@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, permissoes, senha_reset, taxa
+from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, nomes, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -675,6 +675,10 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
+# `{{ nome | nome_exibicao }}` nos templates: a mesma regra que a API entrega
+# em `nome_exibicao`, para tela renderizada no servidor e tela montada por
+# JS não divergirem no jeito de escrever um nome.
+templates.env.filters["nome_exibicao"] = nomes.nome_exibicao
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
@@ -3993,6 +3997,7 @@ def vencidos_certificados(
     todas_filtradas: bool = Query(False, description="Lista completa filtrada (exportação; pode truncar)"),
     busca: Optional[str] = Query(None, max_length=200),
     limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
+    ordem: str = Query("desc", pattern="^(asc|desc)$", description="Ordem pelo vencimento: desc = mais recente primeiro"),
 ) -> dict:
     # Vencidos precisa de uma agregação tão ampla quanto a do histórico (fallback snapshots).
     lim_hist = max(limite_snapshots, config.HISTORICO_LIMITE_SNAPSHOTS)
@@ -4034,6 +4039,23 @@ def vencidos_certificados(
 
     venc_filtrados = _vencidos_filtrar_busca(venc_filtrados, busca_txt or "")
 
+    # Ordem pelo vencimento, mais recente primeiro por padrão: quem abre a
+    # tela quer o que acabou de vencer, não o de 2019. Antes a lista vinha na
+    # ordem da agregação do histórico, que a pessoa lia como aleatória. Quem
+    # não tem data vai para o fim nas duas direções. A ordenação é sobre a
+    # lista inteira, antes do corte da página.
+    venc_filtrados.sort(
+        key=lambda it: _parse_iso_utc(it.get("vencimento_certificado")),
+        reverse=(ordem == "desc"),
+    )
+    if ordem == "asc":
+        sem_data = [it for it in venc_filtrados if _parse_iso_utc(it.get("vencimento_certificado")) <= min_dt]
+        venc_filtrados = [it for it in venc_filtrados if _parse_iso_utc(it.get("vencimento_certificado")) > min_dt] + sem_data
+
+    # Nome legível decidido aqui, num lugar só (ver app/nomes.py); o original
+    # continua em `nome` para busca e exportação.
+    venc_filtrados = [{**it, "nome_exibicao": nomes.nome_exibicao(it.get("nome"))} for it in venc_filtrados]
+
     anos_cnt: defaultdict[int, int] = defaultdict(int)
     for it in venc_filtrados:
         venc_dt = _parse_iso_utc(it.get("vencimento_certificado"))
@@ -4066,6 +4088,7 @@ def vencidos_certificados(
         "total": total,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
+        "ordem": ordem,
         "snapshots_lidos": hist.get("snapshots_lidos", 0),
         "resumo_anos": resumo_anos,
         "paginacao": {
