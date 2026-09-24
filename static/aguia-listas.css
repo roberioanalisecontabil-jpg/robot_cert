@@ -386,25 +386,23 @@
     }
     .cg-filtros .ag-data .ag-input { min-width: 0; }
 
-    /* Filtros numa linha, ações na seguinte — e SÓ uma: grade fixa em vez de
-       flex com quebra, senão "Atualizar tabela" caía sozinho numa terceira
-       linha nos ~584px úteis do card a 936px. O primário fica com a folga;
-       os dois de contorno encolhem para o padding compacto do DS, sem perder
-       os 44px de altura. A toolbar compacta (Histórico: só busca + duas
-       ações) continua numa linha só, porque cabe. */
+    /* Filtros numa linha, ações na seguinte. Flex com wrap e justify-content
+       end: os botões de contorno ficam à direita, e quando o primário aparece
+       (order:-1) ele sobe para o início da fila numa linha só com flex:1 0
+       100%. Isso é mais robusto que grid com N colunas fixas quando o número
+       de botões varia dinamicamente. */
     .cg-toolbar { grid-template-columns: minmax(0, 1fr); }
     .cg-toolbar--compacta { grid-template-columns: minmax(0, 1fr) auto; }
     .cg-toolbar__acoes {
-        display: grid;
-        grid-template-columns: repeat(3, auto);
-        justify-content: end;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         gap: var(--space-2);
     }
     .cg-toolbar__acoes .ag-btn,
     .cg-toolbar .menu-suspenso > summary.ag-btn { padding: 8px 14px; }
-    /* Com algo marcado, o primário entra como quarto item e vai para a
-       frente, numa linha só dele, esticado: é a ação do momento. */
-    .cg-toolbar__acoes .ag-btn--primary { order: -1; grid-column: 1 / -1; justify-self: stretch; }
+    /* Com algo marcado, o primário vai para o início como faixa inteira. */
+    .cg-toolbar__acoes .ag-btn--primary { order: -1; flex: 1 0 100%; }
 }
 
 /* ── Estreito (--bp-sm: grades viram uma coluna, ações empilham) ─────── */
@@ -429,13 +427,18 @@
 
     .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
     .cg-toolbar__acoes {
+        display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: var(--space-2);
     }
-    .cg-campo-inline .ag-select { width: 100%; }
-    .cg-toolbar .ag-btn,
+    /* No celular, todos os botões em largura total — elimina cortes (seção
+       38 do DS: nunca rolagem horizontal sem indicação). O primário já vem
+       com order:-1 e fica no topo da pilha. */
+    .cg-toolbar .ag-btn { width: 100%; }
     .cg-toolbar .menu-suspenso { width: 100%; }
-    .cg-toolbar .menu-suspenso > summary.ag-btn { width: 100%; }
+    .cg-toolbar .menu-suspenso > summary.ag-btn { width: 100%; justify-content: center; }
+    .cg-campo-inline .ag-select { width: 100%; }
 
     /* A tabela vira lista de cartões: nome + status na primeira linha,
        documento e datas embaixo, sem rótulo em caixa alta por campo.
@@ -550,9 +553,8 @@
     .cg-tabela--duas .cg-col-data { font-size: var(--text-sm); color: var(--text-primary); }
     .cg-tabela--duas .cg-col-data .ag-cell-sub { font-size: var(--text-xs); }
 
-    /* Toolbar empilhada e a linha "Atualizado em" com respiro maior: no
-       celular ela ficava colada no último botão. */
-    .cg-toolbar__acoes { display: flex; }
+    /* "Atualizado em" com respiro maior: no celular ficava colada no último
+       botão. A toolbar já é flex-direction:column acima. */
     .cg-status { margin-top: var(--space-4); }
 
     /* Linhas de estado (vazio, erro, skeleton) ocupam a largura toda. */
