@@ -1,0 +1,68 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Configuração no Águia DS (24/09/2026) — só desta tela (prefixo .cg-cfg-)
+
+   Cobre a faixa do topo e a aba "Alertas por e-mail". Chave API, Pastas e
+   agente e Fila de comandos continuam com os componentes do DS sem
+   redesenho (item 97, aguardam print).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Faixa de status: badges escritos numa linha. */
+.cg-cfg-status { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.cg-cfg-status__aviso { margin: 0; flex: 1 1 100%; }
+
+.cg-cfg-aba[hidden] { display: none; }
+.cg-cfg-aba > .cg-cfg-corpo { padding: var(--space-5) var(--space-6); }
+.cg-cfg-lead { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--text-secondary); max-width: 62ch; }
+.cg-cfg-corpo .ag-field { margin: 0; }
+.cg-cfg-corpo .ag-input, .cg-cfg-corpo .ag-select { width: 100%; }
+.cg-cfg-corpo .ag-form-cols { margin-bottom: var(--space-4); }
+.cg-cfg-corpo .ag-form-cols:last-child { margin-bottom: 0; }
+.cg-cfg-corpo > .ag-alert { margin-bottom: var(--space-4); }
+.cg-cfg-campo-solto { margin-bottom: var(--space-4); }
+.cg-cfg-aviso-dest { margin-top: var(--space-3); }
+
+/* Interruptor geral no topo da aba, com o estado escrito e a frase. */
+.cg-cfg-chave { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.cg-cfg-chave__texto { min-width: 0; flex: 1 1 16rem; }
+.cg-cfg-chave__estado { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+
+/* Servidor e porta na mesma linha, a porta estreita e em mono. */
+.cg-cfg-servidor { display: grid; grid-template-columns: minmax(0, 1fr) 8rem; gap: var(--space-4); align-items: start; }
+.cg-cfg-servidor .ag-input--porta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cg-cfg-rotulo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.cg-cfg-rotulo .ag-badge .ag-icon { width: 12px; height: 12px; }
+
+/* Enviar teste: campo com rótulo e o botão na mesma linha. */
+.cg-cfg-teste { display: flex; align-items: end; gap: var(--space-3); flex-wrap: wrap; }
+.cg-cfg-teste .ag-field { flex: 1 1 16rem; max-width: 28rem; }
+.cg-cfg-resultado { margin-top: var(--space-3); }
+.cg-cfg-resultado:empty { display: none; }
+
+.cg-cfg-acoes { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-4); }
+.cg-cfg-modelo { margin: 0; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.cg-cfg-exemplo { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--text-primary); }
+
+/* Abas pendentes: campos legados com a moldura do DS. */
+.cg-cfg-legado .ag-field { margin-bottom: var(--space-4); }
+.cg-cfg-legado pre { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--bg-surface-alt); padding: var(--space-3); border-radius: var(--radius-md); overflow: auto; }
+.cg-cfg-legado code { font-family: var(--font-mono); }
+.cg-cfg-legado .cg-cfg-leitura { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.cg-cfg-legado .cg-cfg-leitura code { color: var(--text-secondary); overflow-wrap: anywhere; }
+
+/* Modal do texto do e-mail: campos à esquerda, prévia à direita. */
+.cg-cfg-email { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }
+.cg-cfg-email .ag-field { margin: 0 0 var(--space-3); }
+.cg-cfg-email .ag-input, .cg-cfg-email .ag-textarea { width: 100%; }
+.cg-cfg-previa { border: var(--bw-1) solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-3); display: grid; gap: var(--space-2); }
+.cg-cfg-previa__rotulo { font-family: var(--font-display); font-size: var(--text-overline); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--text-muted); }
+.cg-cfg-previa__quadro { width: 100%; min-height: 20rem; border: 0; background: var(--white); border-radius: var(--radius-sm); }
+.cg-cfg-marcadores { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.cg-cfg-marcadores .ag-btn { font-family: var(--font-mono); }
+
+@media (max-width: 640px) {
+    .cg-cfg-aba > .cg-cfg-corpo { padding: var(--space-4); }
+    .cg-cfg-servidor { grid-template-columns: minmax(0, 1fr) 7rem; }
+    .cg-cfg-teste .ag-field { max-width: none; }
+    .cg-cfg-email { grid-template-columns: minmax(0, 1fr); }
+    .ag-sticky-acoes { padding-inline: var(--space-4); }
+}

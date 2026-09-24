@@ -1,625 +1,365 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Usuários — Analise Certificado</title>
-    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-    <style>
-        .user-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-4); }
-        .user-table th, .user-table td { text-align: left; padding: 0.85rem var(--sp-4); border-bottom: 0.5px solid var(--border); }
-        .user-table th { 
-            color: var(--text-muted); 
-            font-weight: 600; 
-            font-size: var(--fs-label); 
-            text-transform: uppercase; 
-            letter-spacing: 0.10em; 
-            line-height: 1.4;
-        }
-        .user-table tbody tr {
-            transition: background-color var(--duration-fast) var(--ease-out);
-        }
-        /* `--row-hover` existe exatamente para isto.
-
-           Este bloco era uma COPIA VERBATIM do defeito corrigido em 19/08 no
-           `tbody tr:hover` do style.css: os mesmos dois valores literais, e uma
-           `@media (prefers-color-scheme: dark)` sem a guarda
-           `:root:not([data-theme="light"])`. Quem forcava tema claro num
-           Windows escuro recebia o hover escuro nesta tabela, e so nela.
-
-           O conserto de 19/08 criou o token e arrumou a folha global — e nao
-           alcancou esta copia, porque ela mora inline num template. E a terceira
-           vez que o mesmo erro aparece num lugar novo. */
-        .user-table tbody tr:hover {
-            background-color: var(--row-hover);
-        }
-        .role-badge { padding: 0.25rem 0.65rem; border-radius: var(--radius-pill); font-size: var(--fs-label); font-weight: 600; letter-spacing: 0.01em; }
-        .role-admin { background-color: var(--expired-bg); color: var(--expired-text); }
-        .role-user { background-color: var(--ok-bg); color: var(--ok-text); }
-        /* --expiring-* nunca existiu: o badge caía no fallback e ficava idêntico
-           ao de usuário comum. O token certo é --warning-*, com contraste medido. */
-        .role-gestor { background-color: var(--warning-bg); color: var(--warning-text); }
-        /* Contorno em vez de fundo: --text-muted sobre --border dava 4.25:1
-           no claro (11px exige 4.5:1); sobre a surface passa nos dois temas. */
-        .role-disabled { background-color: transparent; border: 1px solid var(--border); color: var(--text-muted); }
-        /* A coluna Ações quebrava em duas ou três linhas: `flex-wrap: wrap`
-           com três botões, um deles longo ("Redefinir senha"). A altura de
-           cada linha da tabela passava a depender do texto do botão.
-
-           Desde 19/08 a terceira ação (desativar/reativar) mora num menu, e a
-           coluna se dimensiona pelo conteúdo em vez de ser espremida:
-           `width: 1%` + `nowrap` é o par que faz uma coluna de tabela encolher
-           até o necessário e não além. */
-        .td-acoes, .th-acoes { white-space: nowrap; width: 1%; }
-        /* Mesmo defeito, uma coluna ao lado: quem esta INATIVO carrega DOIS
-           badges na celula de Nivel, e eles quebravam em duas linhas — as 5
-           linhas de inativo mediam 73px contra 60px das demais. A altura da
-           linha nao pode depender do dado que ela carrega. */
-        .user-table td[data-label="Nível"] { white-space: nowrap; }
-        /* Matriz de niveis de acesso. Modulos nas LINHAS e papeis nas colunas:
-           sao 10 modulos para 2 papeis, e a orientacao contraria daria uma
-           tabela de 10 colunas que nao cabe sem rolagem horizontal. */
-        .perm-tabela td, .perm-tabela th { vertical-align: middle; }
-        .perm-col { width: 12rem; }
-        .perm-modulo { font-weight: 600; }
-        .perm-modulo small { display: block; font-weight: 400; font-size: var(--fs-ui-sm); color: var(--text-muted); }
-
-        /* Histórico. Mesmo idioma da `.acoes-menu` acima: `<details>` nativo,
-           sem marcador do navegador, sem JS para abrir. */
-        .perm-trilha { margin-top: var(--sp-4); border-top: 1px dashed var(--border); }
-        .perm-trilha > summary {
-            list-style: none; cursor: pointer;
-            display: flex; align-items: baseline; gap: 0.5rem;
-            padding: var(--sp-3) 0; font-size: var(--fs-ui); font-weight: 600;
-        }
-        .perm-trilha > summary::-webkit-details-marker { display: none; }
-        .perm-trilha > summary::marker { content: ""; }
-        .perm-trilha > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-        .perm-trilha__contagem { font-weight: 400; font-size: var(--fs-ui-sm); color: var(--text-muted); }
-        .perm-trilha__corpo { padding-bottom: var(--sp-3); }
-        .perm-trilha__lista { list-style: none; margin: 0; padding: 0; }
-        .perm-trilha__lista li {
-            display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem;
-            padding: 0.45rem 0; border-bottom: 1px solid var(--border);
-            font-size: var(--fs-ui-sm);
-        }
-        .perm-trilha__quando { color: var(--text-muted); font-size: var(--fs-ui-sm); white-space: nowrap; }
-        .perm-trilha__quem { color: var(--text-muted); }
-        /* Concessão e revogação com cores diferentes: numa lista de auditoria,
-           "ganhou acesso" e "perdeu acesso" são as duas coisas que se procura,
-           e lê-las depende de distinguir uma da outra de relance. */
-        .perm-trilha__de { color: var(--text-muted); text-decoration: line-through; }
-        .perm-trilha__para { font-weight: 600; }
-        .perm-trilha__para--sobe { color: var(--warning-text); }
-        .perm-trilha__para--desce { color: var(--text-muted); }
-        .perm-nota { color: var(--text-muted); font-style: italic; }
-        /* Ambar de "pendente", o mesmo sentido do badge de expirando: algo que
-           ainda vai acontecer, e nao um erro. */
-        .perm-pendente { color: var(--warning-text); font-weight: 500; }
-        .perm-tabela select { width: 100%; }
-        /* Celula alterada e nao salva: o amarelo de "expirando" reaproveitado
-           como "pendente", que e o mesmo sentido — algo que ainda vai acontecer. */
-        .perm-tabela select[data-sujo="1"] {
-            border-color: var(--warning);
-            background: var(--warning-bg);
-        }
-        .row-actions { display: flex; flex-wrap: nowrap; gap: var(--sp-2);
-                       align-items: center; justify-content: flex-end; }
-        .btn-action { white-space: nowrap; }
-
-        /* Menu da terceira ação. `<details>` nativo: fecha no Esc, abre por
-           teclado e não precisa de uma linha de JS. */
-        .acoes-menu { position: relative; }
-        .acoes-menu > summary {
-            list-style: none; cursor: pointer;
-            width: 32px; height: 32px; border-radius: var(--radius-sm);
-            border: 1.5px solid var(--border); background: var(--surface);
-            display: inline-flex; align-items: center; justify-content: center;
-            color: var(--text-muted);
-            transition: background-color var(--duration-fast) var(--ease-out),
-                        color var(--duration-fast) var(--ease-out);
-        }
-        .acoes-menu > summary::-webkit-details-marker { display: none; }
-        .acoes-menu > summary:hover { background: var(--bg); color: var(--text); }
-        .acoes-menu > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-        .acoes-menu > summary svg { width: 18px; height: 18px; }
-        .acoes-menu__lista {
-            position: absolute; right: 0; top: calc(100% + 4px); z-index: 5;
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
-            padding: var(--sp-1); min-width: 10rem;
-        }
-        .acoes-menu__lista .btn-action {
-            width: 100%; text-align: left; border-color: transparent; background: transparent;
-        }
-        .acoes-menu__lista .btn-action:hover { background: var(--bg); }
-
-        /* Coluna Gestor: três estados que antes se pareciam. "—" mudo para
-           admin e gestor (não respondem a ninguém), badge contornado para a
-           pendência — mesmo idioma do INATIVO da coluna ao lado —, e o nome em
-           texto normal quando existe de verdade. */
-        .gestor-na { color: var(--text-muted); }
-        .gestor-pendente { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
-        .btn-action { 
-            border: 1.5px solid var(--border); 
-            background: var(--surface); 
-            border-radius: var(--radius-sm); 
-            padding: 0.4rem 0.75rem; 
-            font-size: var(--fs-ui-sm); 
-            color: var(--text);
-            cursor: pointer; 
-            transition: all var(--duration-fast) var(--ease-out);
-        }
-        .btn-action:hover { background: var(--bg); opacity: 0.9; }
-        .btn-danger { border-color: rgba(255, 59, 48, 0.25); background-color: var(--expired-bg); color: var(--expired-text); }
-        .btn-danger:hover { background-color: rgba(255, 59, 48, 0.2); border-color: rgba(255, 59, 48, 0.4); }
-        /* flex-start, não space-between: com poucos itens numa linha larga,
-           space-between os espalha com vãos enormes — controles relacionados
-           ficam juntos, e só a contagem vai para a direita. */
-        .users-toolbar { display: flex; justify-content: flex-start; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); flex-wrap: wrap; }
-        .users-toolbar #users-count { margin-left: auto; }
-        /* Marca um campo que registra informação sem conceder permissão. */
-        .modal__tag-informativo {
-            font-size: var(--fs-label);
-            font-weight: 600;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            padding: 0.1rem 0.4rem;
-            margin-left: 0.35rem;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-pill);
-            color: var(--text-muted);
-            vertical-align: middle;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Usuários — Analise Certificado</title>
+  <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+  <!-- Nona tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
+       da família de listas (shell comum) e o desta tela. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-09" />
 </head>
-<body>
-    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
-    {% include "_sidebar.html" %}
+<body class="cg-aguia">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
 
-    <main class="main-content" id="main-content">
-        <header class="page-header">
-            <h1>Gestão de Usuários</h1>
-            <p>Adicione ou remova membros da equipe com acesso ao portal.</p>
-        </header>
+  <main class="main-content cg-painel" id="main-content">
+    <!-- Título igual ao menu. As duas ações no cabeçalho: importar em
+         contorno e "Novo usuário" em ouro, a única ação principal da tela. -->
+    <header class="ag-page__head ag-section-head">
+      <div>
+        <h1 class="ag-page__title">Usuários</h1>
+        <p class="ag-page__lead">Adicione ou remova membros da equipe com acesso ao portal.</p>
+      </div>
+      <div class="cg-usu-cabecalho-menu">
+        <button type="button" id="btn-abrir-importar" class="ag-btn ag-btn--outline">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          Importar CSV
+        </button>
+        <button type="button" id="btn-novo-usuario" class="ag-btn ag-btn--primary">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Novo usuário
+        </button>
+      </div>
+    </header>
 
-        <!-- O formulário de cadastro que ficava aqui saiu em 18/08. Criar e
-             editar a MESMA entidade por dois desenhos diferentes — um em linha
-             no topo da página, outro em diálogo — faz a pessoa duvidar de qual
-             é o certo, e os dois divergem: o de cima nunca teve o campo de
-             gestor que o de edição ganhou. Agora é o mesmo diálogo. -->
+    <!-- Abas como links (?aba=): sem JS a página recarrega já na aba pedida. -->
+    <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Seções da gestão de acesso">
+      <a class="ag-abas__aba" role="tab" id="aba-usuarios" href="?aba=usuarios" aria-controls="painel-usuarios" data-aba="usuarios"
+         aria-selected="{{ 'true' if aba == 'usuarios' else 'false' }}" {% if aba != 'usuarios' %}tabindex="-1"{% endif %}>Usuários <span class="ag-abas__contagem" id="aba-usuarios-contagem"></span></a>
+      <a class="ag-abas__aba" role="tab" id="aba-departamentos" href="?aba=departamentos" aria-controls="painel-departamentos" data-aba="departamentos"
+         aria-selected="{{ 'true' if aba == 'departamentos' else 'false' }}" {% if aba != 'departamentos' %}tabindex="-1"{% endif %}>Departamentos</a>
+      <a class="ag-abas__aba" role="tab" id="aba-permissoes" href="?aba=permissoes" aria-controls="painel-permissoes" data-aba="permissoes"
+         aria-selected="{{ 'true' if aba == 'permissoes' else 'false' }}" {% if aba != 'permissoes' %}tabindex="-1"{% endif %}>Níveis de acesso</a>
+    </div>
+    <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
-        <!-- <details> recolhido: importar em massa é ação rara, e aberta ela
-             ocupava a posição nobre da página — acima da lista, que é o que
-             o admin veio ver. A ação comum ("Novo usuário") fica na toolbar
-             da lista. -->
-        <details class="doc-block">
-            <summary style="cursor: pointer; font-size: var(--fs-subsection); font-weight: 600; padding: 0.25rem 0;">Importar Usuários (CSV)</summary>
-            <div class="panel--nested" style="margin-top: 0.75rem;">
-                <form id="import-users-form" class="row-inline" style="flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
-                    <div class="form-field" style="min-width: min(280px, 100%); max-width: 100%;">
-                        <label for="import-users-file">Arquivo CSV</label>
-                        <input type="file" id="import-users-file" accept=".csv,text/csv" class="path-input" required>
-                    </div>
-                    <button type="submit" class="primary">Importar CSV</button>
-                </form>
-                <p class="hint" style="margin-top: 0.6rem;">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel/role</code>, use exatamente: <code>admin</code>, <code>gestor</code> ou <code>user</code>.</p>
-                <p id="msg-import" class="hint" style="margin-top: 0.8rem;"></p>
-                <!-- O servidor sempre devolveu `erros[]` com linha e motivo; a
-                     tela mostrava só a contagem. Quem importava 50 pessoas e
-                     lia "Erros: 3" não sabia quais três, e a saída era abrir a
-                     planilha e conferir uma a uma. -->
-                <div id="erros-import" class="import-erros" hidden>
-                  <p class="import-erros__titulo"></p>
-                  <ul class="import-erros__lista"></ul>
-                </div>
-            </div>
-        </details>
-
-        <div class="abas" role="tablist" aria-label="Seções da gestão de acesso">
-          <button type="button" class="aba ativa" id="aba-usuarios" role="tab"
-                  aria-selected="true" aria-controls="painel-usuarios">Usuários</button>
-          <button type="button" class="aba" id="aba-departamentos" role="tab"
-                  aria-selected="false" aria-controls="painel-departamentos">Departamentos</button>
-          <button type="button" class="aba" id="aba-permissoes" role="tab"
-                  aria-selected="false" aria-controls="painel-permissoes">Níveis de acesso</button>
-        </div>
-
-        <section class="doc-block" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios">
-            <!-- Era "Usuários Ativos", mas o filtro de status nasce em "Todos"
-                 e a lista mostra desativados junto — o título contradizia o
-                 conteúdo logo abaixo dele. -->
-            <h2>Usuários</h2>
-            <div class="users-toolbar">
-                <!-- A ação primária abre a fila: era um botão solto numa linha
-                     própria enquanto os filtros se espalhavam por space-between,
-                     com vãos enormes entre busca, nível e status. -->
-                <button type="button" class="primary" id="btn-novo-usuario">Novo usuário</button>
-                <label for="user-search" class="cg-sr-only">Pesquisar usuários por nome ou e-mail</label>
-                <input type="search" id="user-search" class="path-input" style="max-width: 320px;" placeholder="Pesquisar por nome ou e-mail" />
-                <label for="user-role-filter" class="cg-sr-only">Filtrar por nível de acesso</label>
-                <select id="user-role-filter" class="path-input" style="max-width: 180px;">
-                    <option value="todos">Nível: Todos</option>
-                    <option value="admin">Nível: Admin</option>
-                    <option value="gestor">Nível: Gestor</option>
-                    <option value="user">Nível: Usuário</option>
-                </select>
-                <label for="user-status-filter" class="cg-sr-only">Filtrar por status</label>
-                <select id="user-status-filter" class="path-input" style="max-width: 220px;">
-                    <option value="todos">Status: Todos</option>
-                    <option value="ativo">Status: Ativo</option>
-                    <option value="desativado">Status: Desativado</option>
-                </select>
-                <span class="hint" id="users-count"></span>
-            </div>
-            <div class="table-container" id="table-container-users">
-                <div class="table-scroll-anchor">
-                    <div class="table-scroll" tabindex="0" role="region" aria-label="Lista de usuários">
-                        <table class="user-table" role="table">
-                            <thead role="rowgroup">
-                                <tr role="row">
-                                    <th role="columnheader">Nome</th>
-                                    <th role="columnheader">E-mail</th>
-                                    <th role="columnheader">Nível</th>
-                                    <!-- "Criado em" saiu daqui em 18/08: a data de cadastro
-                                         quase nunca decide alguma coisa, e desde que `gestor_id`
-                                         passou a ser atribuível não havia como ver a quem cada
-                                         operador responde sem abrir o modal de um por um. -->
-                                    <th role="columnheader">Gestor</th>
-                                    <th role="columnheader" class="th-acoes">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody role="rowgroup" id="user-list-body">
-                                <!-- Preenchido via JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </section>
-        <section class="doc-block" id="painel-departamentos" role="tabpanel"
-                 aria-labelledby="aba-departamentos" hidden>
-            <h2>Departamentos</h2>
-            <p class="hint" style="margin: 0 0 1rem;">
-              O departamento define o alcance de quem lidera: o líder libera
-              certificados apenas para quem está no setor dele.
-            </p>
-            <p style="margin: 0 0 1rem;">
-              <button type="button" class="primary" id="btn-novo-departamento">Novo departamento</button>
-            </p>
-            <div class="table-container" id="table-container-deps">
-              <div class="table-scroll-anchor">
-                <div class="table-scroll" tabindex="0" role="region" aria-label="Departamentos">
-                  <table class="user-table" role="table">
-                    <thead role="rowgroup">
-                      <tr role="row">
-                        <th role="columnheader">Departamento</th>
-                        <th role="columnheader">Líderes</th>
-                        <th role="columnheader">Pessoas</th>
-                        <th role="columnheader">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody role="rowgroup" id="dep-list-body"></tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-        </section>
-
-        <section class="doc-block" id="painel-permissoes" role="tabpanel"
-                 aria-labelledby="aba-permissoes" hidden>
-          <h2>Níveis de acesso</h2>
-          <p class="hint" style="margin-bottom: var(--sp-4);">
-            <strong>Governa o servidor</strong>, e não só o menu: um perfil sem
-            acesso recebe recusa mesmo digitando o endereço.
-          </p>
-
-          <div class="cg-banner cg-banner--info" style="margin-bottom: var(--sp-4);">
-            <span class="cg-banner__icon" aria-hidden="true">🔒</span>
-            <span class="cg-banner__text">
-              <strong>Administrador alcança tudo, sempre.</strong> Não aparece como coluna
-              editável de propósito — se aparecesse, seria possível remover o próprio acesso
-              a esta tela e não haveria como voltar.
-            </span>
-          </div>
-
-          <div id="permMsg"></div>
-
-          <div class="table-container" id="table-container-permissoes">
-            <div class="table-scroll" tabindex="0" role="region" aria-label="Matriz de níveis de acesso">
-              <table class="user-table perm-tabela" role="table">
-                <thead role="rowgroup">
-                  <tr role="row">
-                    <th role="columnheader">Módulo</th>
-                    <th role="columnheader" class="perm-col">Gestor</th>
-                    <th role="columnheader" class="perm-col">Operador</th>
-                  </tr>
-                </thead>
-                <tbody role="rowgroup" id="perm-corpo">
-                  <tr><td colspan="3" class="text-muted" style="font-size: var(--fs-ui-sm)">Carregando…</td></tr>
-                </tbody>
-              </table>
+    <!-- ── Usuários ─────────────────────────────────────────────────── -->
+    <section class="ag-card cg-usu-aba" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios" {% if aba != 'usuarios' %}hidden{% endif %}>
+      <div class="cg-usu-corpo cg-usu-corpo--topo">
+        <!-- Filtros num formulário GET: com JS filtram ao mudar. -->
+        <form class="cg-usu-filtros" id="form-filtros" method="get" action="/usuarios">
+          <input type="hidden" name="aba" value="usuarios" />
+          <div class="ag-field ag-field--busca">
+            <label class="ag-label" for="user-search">Buscar</label>
+            <div class="cg-usu-busca">
+              <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="search" id="user-search" name="q" class="ag-input" placeholder="Nome ou e-mail" autocomplete="off" />
             </div>
           </div>
-
-          <div class="toolbar__actions" style="margin-top: var(--sp-4);">
-            <button type="button" class="btn-action" id="perm-desfazer" disabled>Desfazer alterações</button>
-            <button type="button" class="btn-action primary" id="perm-salvar" disabled>Salvar</button>
-          </div>
-
-          <!-- Fechado por padrão: o assunto da aba é a matriz, e o histórico é
-               consulta ocasional. Aberto, empurraria a tabela para fora da
-               primeira tela. -->
-          <details class="perm-trilha" id="perm-trilha">
-            <summary>
-              <span>Histórico de alterações</span>
-              <span class="perm-trilha__contagem" id="perm-trilha-contagem"></span>
-            </summary>
-            <div class="perm-trilha__corpo" id="perm-trilha-corpo">
-              <p class="hint">Carregando…</p>
-            </div>
-          </details>
-
-          <p class="hint" style="margin-top: var(--sp-3);">
-            <strong>Não entra</strong>: o módulo some do menu e as rotas recusam.
-            <strong>Só ver</strong>: entra e consulta, não altera nada.
-            <strong>Ver e editar</strong>: entra e altera.
-          </p>
-        </section>
-
-    </main>
-
-    <!-- Editar usuário.
-
-         Substitui três `prompt()` encadeados (nome, e-mail, nível). Além de
-         feios, eles tinham dois defeitos concretos: o nível era digitado como
-         TEXTO LIVRE — "Admin" com maiúscula, ou "adm", já eram recusados pelo
-         servidor sem a pessoa entender por quê — e cancelar no segundo prompt
-         descartava o primeiro sem aviso.
-
-         `<dialog>` nativo: prende o foco, torna o resto da página inerte,
-         fecha no Esc e empilha acima da sidebar sem disputa de z-index. -->
-    <dialog id="modal-editar" class="modal" aria-labelledby="modal-editar-titulo">
-      <form id="form-editar" class="modal__form" method="dialog">
-        <div class="modal__head">
-          <h2 id="modal-editar-titulo">Editar usuário</h2>
-          <p class="modal__sub" id="modal-editar-quem"></p>
-        </div>
-
-        <div class="modal__body">
-          <div class="modal__erro" id="modal-editar-erro" role="alert"></div>
-
-          <div class="modal__campo">
-            <label for="ed-nome">Nome completo</label>
-            <input type="text" id="ed-nome" required autocomplete="name">
-          </div>
-
-          <div class="modal__campo">
-            <label for="ed-email">E-mail</label>
-            <input type="email" id="ed-email" required autocomplete="email">
-            <span class="modal__dica">
-              É por ele que a pessoa entra. Alterar encerra a sessão aberta dela.
-            </span>
-          </div>
-
-          <!-- Só no cadastro: quem já existe troca a senha pelo botão
-               "Redefinir senha" da linha, que é outro fluxo e outra permissão. -->
-          <div class="modal__campo" id="ed-campo-senha" hidden>
-            <label for="ed-senha">Senha inicial</label>
-            <div class="campo-senha">
-              <!-- `new-password` impede o navegador de oferecer a senha do
-                   próprio admin que está cadastrando outra pessoa. -->
-              <input type="password" id="ed-senha" minlength="6"
-                     autocomplete="new-password" placeholder="mínimo 6 caracteres">
-              <button type="button" class="btn-olho" id="ed-olho"
-                      aria-controls="ed-senha" aria-pressed="false"
-                      aria-label="Mostrar senha">&#128065;</button>
-            </div>
-          </div>
-
-          <div class="modal__campo">
-            <label for="ed-nivel">Nível</label>
-            <!-- Select, e não texto livre: os três valores são os que
-                 `PAPEIS_VALIDOS` aceita no servidor. -->
-            <select id="ed-nivel">
-              <option value="user">Operador</option>
-              <option value="gestor">Gestor</option>
+          <div class="ag-field ag-field--nivel">
+            <label class="ag-label" for="user-role-filter">Nível</label>
+            <select id="user-role-filter" name="nivel" class="ag-select">
+              <option value="todos">Todos</option>
               <option value="admin">Administrador</option>
+              <option value="gestor">Gestor</option>
+              <option value="user">Operador</option>
             </select>
-            <span class="modal__dica" id="ed-nivel-dica"></span>
           </div>
-
-          <div class="modal__campo">
-            <label for="ed-departamento">Departamento</label>
-            <select id="ed-departamento">
-              <option value="">Sem departamento</option>
+          <div class="ag-field ag-field--status">
+            <label class="ag-label" for="user-status-filter">Status</label>
+            <select id="user-status-filter" name="status" class="ag-select">
+              <option value="todos">Todos</option>
+              <option value="ativo">Ativo</option>
+              <option value="desativado">Inativo</option>
             </select>
-            <span class="modal__dica">
-              Define quem pode liberar certificados para esta pessoa: os líderes
-              do setor.
-            </span>
           </div>
+          <noscript><button type="submit" class="ag-btn ag-btn--outline">Filtrar</button></noscript>
+          <p class="cg-usu-contagem" id="users-count" aria-live="polite"></p>
+        </form>
+        <div class="ag-table-scroll" role="region" aria-label="Lista de usuários" id="table-container-users">
+          <table class="ag-table cg-tabela-usu" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico" aria-sort="ascending">Nome</th>
+                <th role="columnheader" class="ag-th--estatico">Nível</th>
+                <th role="columnheader" class="ag-th--estatico">Gestor</th>
+                <th role="columnheader" class="ag-th--estatico">Status</th>
+                <th role="columnheader" class="ag-th--estatico">Carteira</th>
+                <th role="columnheader" class="ag-th--estatico cg-col-acoes"><span class="cg-sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="user-list-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-          <div class="modal__campo">
-            <label for="ed-gestor">Gestor responsável <span class="modal__tag-informativo">informativo</span></label>
-            <!-- Primeira vez que este campo é editável em qualquer tela. A API
-                 aceita `gestor_id` desde a Etapa 5 e `/carteiras` já o exibe,
-                 mas não havia como atribuí-lo — só por SQL direto.
+    <!-- ── Departamentos (item 87: aguarda print) ───────────────────── -->
+    <section class="ag-card cg-usu-aba" id="painel-departamentos" role="tabpanel" aria-labelledby="aba-departamentos" {% if aba != 'departamentos' %}hidden{% endif %}>
+      <div class="cg-usu-cab">
+        <h2 class="ag-card__title">Departamentos</h2>
+        <p class="cg-usu-cab__lead">O departamento define o alcance de quem lidera: o líder libera certificados apenas para quem está no setor dele.</p>
+      </div>
+      <div class="cg-usu-corpo">
+        <p><button type="button" class="ag-btn ag-btn--outline" id="btn-novo-departamento"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Novo departamento</button></p>
+        <div class="ag-table-scroll" role="region" aria-label="Departamentos" id="table-container-deps">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Departamento</th>
+                <th role="columnheader" class="ag-th--estatico">Líderes</th>
+                <th role="columnheader" class="ag-th--estatico">Pessoas</th>
+                <th role="columnheader" class="ag-th--estatico"><span class="cg-sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="dep-list-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-                 O rótulo diz "informativo" porque ele DE FATO é: nenhuma
-                 decisão de acesso lê `gestor_id`. Quem pode liberar
-                 certificados para alguém é o líder do DEPARTAMENTO dessa
-                 pessoa (ver `_exigir_alcance`). Sem o aviso, os dois campos
-                 parecem controlar a mesma coisa, e o admin sai daqui achando
-                 que concedeu um acesso que não concedeu. -->
-            <select id="ed-gestor">
-              <option value="">Sem gestor</option>
-            </select>
-            <span class="modal__dica">
-              Registra a quem a pessoa responde — <strong>não concede acesso</strong>.
-              Quem libera certificados para ela são os líderes do departamento
-              escolhido acima.
-            </span>
+    <!-- ── Níveis de acesso (item 87: aguarda print) ────────────────── -->
+    <section class="ag-card cg-usu-aba" id="painel-permissoes" role="tabpanel" aria-labelledby="aba-permissoes" {% if aba != 'permissoes' %}hidden{% endif %}>
+      <div class="cg-usu-cab">
+        <h2 class="ag-card__title">Níveis de acesso</h2>
+        <p class="cg-usu-cab__lead"><strong>Governa o servidor</strong>, e não só o menu: um perfil sem acesso recebe recusa mesmo digitando o endereço.</p>
+      </div>
+      <div class="cg-usu-corpo">
+        <div class="ag-alert ag-alert--info">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div class="ag-alert__corpo"><strong>Administrador alcança tudo, sempre.</strong> Não aparece como coluna editável de propósito: se aparecesse, seria possível remover o próprio acesso a esta tela e não haveria como voltar.</div>
+        </div>
+        <div id="permMsg"></div>
+        <div class="ag-table-scroll" role="region" aria-label="Matriz de níveis de acesso" id="table-container-permissoes">
+          <table class="ag-table perm-tabela" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Módulo</th>
+                <th role="columnheader" class="ag-th--estatico perm-col">Gestor</th>
+                <th role="columnheader" class="ag-th--estatico perm-col">Operador</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="perm-corpo">
+              <tr><td colspan="3" class="ag-table__vazio">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="cg-usu-cabecalho-menu">
+          <button type="button" class="ag-btn ag-btn--outline" id="perm-desfazer" disabled>Desfazer alterações</button>
+          <button type="button" class="ag-btn ag-btn--primary" id="perm-salvar" disabled>Salvar</button>
+        </div>
+        <details class="ag-accordion perm-trilha" id="perm-trilha">
+          <summary class="ag-accordion__topo"><span>Histórico de alterações <span class="ag-abas__contagem" id="perm-trilha-contagem"></span></span><span class="ag-accordion__seta" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></summary>
+          <div class="perm-trilha__corpo" id="perm-trilha-corpo"><p class="hint">Carregando…</p></div>
+        </details>
+        <p class="cg-usu-cab__lead"><strong>Não entra</strong>: o módulo some do menu e as rotas recusam. <strong>Só ver</strong>: entra e consulta, não altera nada. <strong>Ver e editar</strong>: entra e altera.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Editar / novo usuário. -->
+  <dialog id="modal-editar" class="ag-modal cg-usu-modal" aria-labelledby="modal-editar-titulo">
+    <form id="form-editar" method="dialog">
+      <div class="ag-modal__head">
+        <div><h2 class="ag-modal__titulo" id="modal-editar-titulo">Editar usuário</h2><p class="ag-ajuda" id="modal-editar-quem"></p></div>
+        <button type="button" class="ag-modal__x" id="ed-cancelar" aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <div class="ag-alert ag-alert--danger" id="modal-editar-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
+        <div class="ag-field">
+          <label class="ag-label" for="ed-nome">Nome completo</label>
+          <input type="text" id="ed-nome" class="ag-input" required autocomplete="name">
+        </div>
+        <div class="ag-field">
+          <label class="ag-label" for="ed-email">E-mail</label>
+          <input type="email" id="ed-email" class="ag-input" required autocomplete="email">
+          <p class="ag-ajuda">É por ele que a pessoa entra. Alterar encerra a sessão aberta dela.</p>
+        </div>
+        <!-- Só no cadastro: quem já existe troca a senha por "Redefinir senha". -->
+        <div class="ag-field modal__campo" id="ed-campo-senha" hidden>
+          <label class="ag-label" for="ed-senha">Senha inicial</label>
+          <div class="cg-usu-senha">
+            <input type="password" id="ed-senha" class="ag-input" minlength="6" autocomplete="new-password" placeholder="mínimo 6 caracteres">
+            <button type="button" class="ag-btn ag-btn--icon-sm" id="ed-olho" aria-controls="ed-senha" aria-pressed="false" aria-label="Mostrar senha"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </div>
-
-        <div class="modal__foot">
-          <button type="button" class="btn-action" id="ed-cancelar">Cancelar</button>
-          <button type="submit" class="primary" id="ed-salvar">Salvar</button>
+        <div class="ag-field">
+          <label class="ag-label" for="ed-nivel">Nível</label>
+          <select id="ed-nivel" class="ag-select">
+            <option value="user">Operador</option>
+            <option value="gestor">Gestor</option>
+            <option value="admin">Administrador</option>
+          </select>
+          <p class="ag-ajuda" id="ed-nivel-dica"></p>
         </div>
-      </form>
-    </dialog>
-
-    <!-- Redefinir senha.
-
-         O `prompt()` que estava aqui mostrava a senha em TEXTO CLARO na caixa
-         do navegador, enquanto era digitada, à vista de quem passasse atrás —
-         e sem campo de conferência, então um erro de digitação virava uma
-         senha que ninguém conhecia. -->
-    <dialog id="modal-senha" class="modal" aria-labelledby="modal-senha-titulo">
-      <form id="form-senha-admin" class="modal__form">
-        <div class="modal__head">
-          <h2 id="modal-senha-titulo">Redefinir senha</h2>
-          <p class="modal__sub" id="modal-senha-quem"></p>
+        <div class="ag-field">
+          <label class="ag-label" for="ed-departamento">Departamento</label>
+          <select id="ed-departamento" class="ag-select"><option value="">Sem departamento</option></select>
+          <p class="ag-ajuda">Define quem pode liberar certificados para esta pessoa: os líderes do setor.</p>
         </div>
-
-        <div class="modal__body">
-          <div class="modal__erro" id="modal-senha-erro" role="alert"></div>
-
-          <div class="modal__campo">
-            <label for="sn-nova">Nova senha</label>
-            <div class="campo-senha">
-              <input type="password" id="sn-nova" required minlength="6"
-                     autocomplete="new-password" placeholder="mínimo 6 caracteres">
-              <button type="button" class="btn-olho" id="sn-olho"
-                      aria-controls="sn-nova" aria-pressed="false"
-                      aria-label="Mostrar senha">&#128065;</button>
-            </div>
-          </div>
-
-          <div class="modal__campo">
-            <label for="sn-conf">Repita a senha</label>
-            <input type="password" id="sn-conf" required minlength="6"
-                   autocomplete="new-password">
-            <span class="modal__dica">
-              A pessoa continua conectada; trocar a senha por aqui não derruba a
-              sessão dela.
-            </span>
-          </div>
+        <div class="ag-field modal__campo">
+          <label class="ag-label" for="ed-gestor">Gestor responsável <span class="cg-usu-tag">informativo</span></label>
+          <select id="ed-gestor" class="ag-select"><option value="">Sem gestor</option></select>
+          <p class="ag-ajuda">Registra a quem a pessoa responde. <strong>Não concede acesso</strong>: quem libera certificados para ela são os líderes do departamento.</p>
         </div>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" id="ed-cancelar-2">Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="ed-salvar">Salvar</button>
+      </div>
+    </form>
+  </dialog>
 
-        <div class="modal__foot">
-          <button type="button" class="btn-action" id="sn-cancelar">Cancelar</button>
-          <button type="submit" class="primary" id="sn-salvar">Redefinir</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="modal-dep" class="modal" aria-labelledby="modal-dep-titulo">
-      <form id="form-dep" class="modal__form">
-        <div class="modal__head">
-          <h2 id="modal-dep-titulo">Novo departamento</h2>
-          <p class="modal__sub" id="modal-dep-sub"></p>
-        </div>
-        <div class="modal__body">
-          <div class="modal__erro" id="modal-dep-erro" role="alert"></div>
-
-          <div class="modal__campo">
-            <label for="dep-nome">Nome</label>
-            <input type="text" id="dep-nome" required maxlength="80"
-                   placeholder="Ex.: Fiscal" autocomplete="off">
-          </div>
-
-          <div class="modal__campo">
-            <label for="dep-lideres">Líderes</label>
-            <!-- Múltipla escolha porque um setor pode ter mais de um: férias,
-                 turnos, redundância. Com um só, a primeira ausência do titular
-                 deixaria o setor sem quem libere. -->
-            <select id="dep-lideres" multiple size="6"></select>
-            <span class="modal__dica">
-              Segure Ctrl (ou Cmd) para escolher mais de um. Só contas ativas
-              aparecem — líder que não entra no portal não libera nada.
-            </span>
+  <!-- Redefinir senha: o administrador define a nova senha aqui, e a pessoa
+       é obrigada a trocá-la no próximo acesso. -->
+  <dialog id="modal-senha" class="ag-modal cg-usu-modal" aria-labelledby="modal-senha-titulo">
+    <form id="form-senha-admin">
+      <div class="ag-modal__head">
+        <div><h2 class="ag-modal__titulo" id="modal-senha-titulo">Redefinir senha</h2><p class="ag-ajuda" id="modal-senha-quem"></p></div>
+        <button type="button" class="ag-modal__x" id="sn-cancelar" aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <div class="ag-alert ag-alert--danger" id="modal-senha-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
+        <p class="ag-ajuda">A nova senha vale a partir de agora e a pessoa terá de trocá-la no próximo acesso. A sessão aberta dela não cai.</p>
+        <div class="ag-field">
+          <label class="ag-label" for="sn-nova">Nova senha</label>
+          <div class="cg-usu-senha">
+            <input type="password" id="sn-nova" class="ag-input" required minlength="6" autocomplete="new-password" placeholder="mínimo 6 caracteres">
+            <button type="button" class="ag-btn ag-btn--icon-sm" id="sn-olho" aria-controls="sn-nova" aria-pressed="false" aria-label="Mostrar senha"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </div>
-        <div class="modal__foot">
-          <button type="button" class="btn-action" id="dep-cancelar">Cancelar</button>
-          <button type="submit" class="primary" id="dep-salvar">Salvar</button>
+        <div class="ag-field">
+          <label class="ag-label" for="sn-conf">Repita a senha</label>
+          <input type="password" id="sn-conf" class="ag-input" required minlength="6" autocomplete="new-password">
         </div>
-      </form>
-    </dialog>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" id="sn-cancelar-2">Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="sn-salvar">Redefinir</button>
+      </div>
+    </form>
+  </dialog>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
-    <script nonce="{{ request.state.nonce }}">
+  <!-- Importar CSV. -->
+  <dialog id="modal-importar" class="ag-modal ag-modal--lg" aria-labelledby="modal-importar-titulo">
+    <form id="import-users-form" method="dialog">
+      <div class="ag-modal__head">
+        <h2 class="ag-modal__titulo" id="modal-importar-titulo">Importar usuários por CSV</h2>
+        <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <div class="ag-dropzone ag-dropzone--drop">
+          <input type="file" id="import-users-file" accept=".csv,text/csv" class="ag-dropzone__input" required autofocus aria-label="Arquivo CSV" aria-describedby="dica-import" />
+          <svg class="ag-icon ag-dropzone__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          <div class="ag-dropzone__texto"><p class="ag-dropzone__titulo">Arraste o arquivo ou clique para escolher</p><p class="ag-dropzone__sub">.csv</p></div>
+          <p class="ag-dropzone__nome" aria-live="polite"></p>
+        </div>
+        <p class="ag-ajuda"><a href="data:text/csv;charset=utf-8,nome%2Cemail%2Csenha%2Cnivel%0A" download="modelo-usuarios.csv">Baixar o modelo (.csv)</a></p>
+        <p class="ag-ajuda" id="dica-import">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel</code>, use exatamente <code>admin</code>, <code>gestor</code> ou <code>user</code> (operador).</p>
+        <div class="ag-alert ag-alert--danger" id="msg-import" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
+        <div id="erros-import" class="ag-alert ag-alert--warning" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo"><p class="ag-alert__titulo import-erros__titulo"></p><ul class="import-erros__lista"></ul></div>
+        </div>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="btn-importar-usuarios">Importar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="modal-dep" class="ag-modal cg-usu-modal" aria-labelledby="modal-dep-titulo">
+    <form id="form-dep">
+      <div class="ag-modal__head">
+        <div><h2 class="ag-modal__titulo" id="modal-dep-titulo">Novo departamento</h2><p class="ag-ajuda" id="modal-dep-sub"></p></div>
+        <button type="button" class="ag-modal__x" id="dep-cancelar" aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <div class="ag-alert ag-alert--danger" id="modal-dep-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
+        <div class="ag-field">
+          <label class="ag-label" for="dep-nome">Nome</label>
+          <input type="text" id="dep-nome" class="ag-input" required maxlength="80" placeholder="Ex.: Fiscal" autocomplete="off">
+        </div>
+        <div class="ag-field">
+          <label class="ag-label" for="dep-lideres">Líderes</label>
+          <select id="dep-lideres" class="ag-select" multiple size="6"></select>
+          <p class="ag-ajuda">Segure Ctrl (ou Cmd) para escolher mais de um. Só contas ativas aparecem: líder que não entra no portal não libera nada.</p>
+        </div>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" id="dep-cancelar-2">Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="dep-salvar">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+  <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
         let depsCache = [];
+        let _novaId = null;
 
-        // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
+        // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `renderEmptyRow`,
+        // `limparSkeleton`, `badgeAviso`, `abrirModal`, `confirmarAcao` e
+        // `showToastAfterRedirect` vêm de ui-common.js.
 
         // Papel e estado da conta são colunas separadas desde 15/08. Espelha
         // `auth.conta_ativa`: 'disabled' era o único jeito antigo de desativar e
-        // continua barrando, senão um usuário vindo de base sem a migration
-        // apareceria como ativo (a coluna ausente vira undefined).
+        // continua barrando.
         function estaAtivo(u) {
             if (String(u.role || '').toLowerCase() === 'disabled') return false;
             return u.ativo === undefined || u.ativo === null ? true : !!u.ativo;
         }
 
+        // Terminologia unificada: o papel `user` se chama "Operador" em toda
+        // tela (Carteiras e o modal de edição já diziam isso).
         function roleLabel(role) {
             const r = String(role || '').toLowerCase();
-            if (r === 'admin') return 'ADMIN';
-            if (r === 'gestor') return 'GESTOR';
-            return 'USUÁRIO';
+            if (r === 'admin') return 'Administrador';
+            if (r === 'gestor') return 'Gestor';
+            return 'Operador';
         }
 
-        function roleClass(role) {
+        // Papel não é estado: badge neutro, e ouro só para o administrador.
+        function badgeNivel(role) {
             const r = String(role || '').toLowerCase();
-            if (r === 'admin') return 'role-admin';
-            if (r === 'gestor') return 'role-gestor';
-            return 'role-user';
+            return '<span class="ag-badge ' + (r === 'admin' ? 'ag-badge--gold' : 'ag-badge--neutral') + '">' + roleLabel(role) + '</span>';
         }
 
+        function nomeDe(u) { return u.nome_exibicao || u.full_name || u.email || '—'; }
+
         /**
-         * Nome do gestor de um operador, para a coluna da tabela.
-         *
-         * Admin e gestor têm alcance total e não respondem a ninguém — mostrar
-         * "—" para eles seria ambíguo com "operador ainda sem gestor", que é
-         * uma pendência de verdade. Por isso o traço só aparece para operador.
-         */
-        /**
-         * A célula de gestor pronta, com forma.
-         *
-         * Existe separada de `nomeDoGestor` porque devolve HTML, e o valor
-         * dinâmico (o nome, vindo do banco) continua passando por `esc`. Trocar
-         * a chamada por `${esc(nomeDoGestor(u))}` de novo faria o badge aparecer
-         * como texto literal `<span ...>` na tela.
+         * Célula de gestor. "—" quando não se aplica (gestor e administrador
+         * não têm gestor) e também para operador sem gestor: o vínculo é
+         * informativo, não concede acesso, então não é pendência.
          */
         function celulaGestor(u) {
             const papel = String(u.role || '').toLowerCase();
-            if (papel !== 'user') {
-                return '<span class="gestor-na" title="Admin e gestor têm alcance total e não respondem a ninguém">—</span>';
-            }
-            if (!u.gestor_id) {
-                return '<span class="role-badge gestor-pendente">SEM GESTOR</span>';
-            }
-            return esc(nomeDoGestor(u));
+            if (papel !== 'user' || !u.gestor_id) return '—';
+            const g = usersCache.find((x) => x.id === u.gestor_id);
+            return g ? esc(nomeDe(g)) : '<span class="ag-badge ag-badge--warning">Gestor não encontrado</span>';
         }
 
-        function nomeDoGestor(u) {
-            const papel = String(u.role || '').toLowerCase();
-            if (papel !== 'user') return '';
-            if (!u.gestor_id) return 'SEM GESTOR';
-            const g = usersCache.find((x) => x.id === u.gestor_id);
-            // Gestor que não está mais na lista: conta apagada, ou desativada e
-            // filtrada. Melhor dizer isso do que mostrar um traço igual ao de
-            // quem nunca teve gestor.
-            return g ? (g.full_name || g.email) : 'gestor não encontrado';
+        function celulaCarteira(u) {
+            if (String(u.role || '').toLowerCase() !== 'user') return '—';
+            const n = u.carteira || 0;
+            const href = '/carteiras?operador=' + encodeURIComponent(u.id);
+            return n
+                ? '<a href="' + href + '">' + esc((u.textos && u.textos.carteira) || (n + ' clientes')) + '</a>'
+                : '<a href="' + href + '" class="ag-badge ag-badge--danger">Sem carteira</a>';
         }
+
+        function plural(n, s, p) { return n + ' ' + (n === 1 ? s : (p || s + 's')); }
 
         function renderUsers() {
             const body = document.getElementById('user-list-body');
@@ -629,94 +369,78 @@
             const users = usersCache.filter((u) => {
                 const role = String(u.role || '').toLowerCase();
                 const ativo = estaAtivo(u);
-
                 if (roleFilter !== 'todos' && role !== roleFilter) return false;
                 if (statusFilter === 'ativo' && !ativo) return false;
                 if (statusFilter === 'desativado' && ativo) return false;
-
                 if (!q) return true;
-                const hay = [u.full_name || '', u.email || ''].join(' ').toLowerCase();
-                return hay.includes(q);
+                return [u.full_name || '', u.nome_exibicao || '', u.email || ''].join(' ').toLowerCase().includes(q);
             });
 
-            // Desativados no FIM, sempre — e por ordem alfabética dentro de cada
-            // grupo.
-            //
-            // Escolhido em vez de um segundo filtro porque o filtro de status já
-            // existe logo acima: quem quiser sumir com os desativados escolhe
-            // "Status: Desativado" ao contrário, ou "Ativo". Um botão a mais
-            // para o mesmo fim seria duas maneiras de dizer a mesma coisa, e a
-            // pessoa teria de descobrir qual das duas está valendo.
-            //
-            // A ordenação resolve a queixa real — conta encerrada ocupando o
-            // topo da lista de quem administra contas vivas — sem acrescentar
-            // controle nenhum à tela.
-            users.sort((a, b) => {
-                const ina = estaAtivo(a) ? 0 : 1;
-                const inb = estaAtivo(b) ? 0 : 1;
-                if (ina !== inb) return ina - inb;
-                return (a.full_name || a.email || '').localeCompare(
-                    b.full_name || b.email || '', 'pt-BR', { sensitivity: 'base' }
-                );
-            });
+            // Ordem alfabética pelo nome. Inativos ficam na lista com o status
+            // visível: a contagem e as linhas são o mesmo conjunto.
+            users.sort((a, b) => nomeDe(a).localeCompare(nomeDe(b), 'pt-BR', { sensitivity: 'base' }));
 
-            document.getElementById('users-count').textContent = `${users.length} usuário(s) encontrado(s)`;
+            document.getElementById('users-count').textContent = plural(users.length, 'usuário');
+            document.getElementById('aba-usuarios-contagem').textContent = '(' + usersCache.length + ')';
             limparSkeleton(body);
 
             if (!users.length) {
                 const temFiltro = q || roleFilter !== 'todos' || statusFilter !== 'todos';
-                renderEmptyRow(body, 5, temFiltro ? {
-                    icon: '🔍',
-                    title: 'Nenhum usuário corresponde ao filtro',
-                    description: 'Ajuste a busca, o nível ou o status para ver outros usuários.',
-                    actionText: 'Limpar filtros',
-                    onAction: () => {
-                        document.getElementById('user-search').value = '';
-                        document.getElementById('user-role-filter').value = 'todos';
-                        document.getElementById('user-status-filter').value = 'todos';
-                        renderUsers();
-                    },
-                } : {
-                    icon: '👥',
-                    title: 'Nenhum usuário cadastrado',
-                    description: 'Cadastre o primeiro usuário no formulário acima ou importe uma planilha.',
+                body.innerHTML = temFiltro
+                    ? '<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nada encontrado' + (q ? ' para “' + esc(q) + '”' : ' com esses filtros') + '. <a href="#" id="link-limpar-filtros">Limpar filtros</a>.</td></tr>'
+                    : '<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhum usuário cadastrado. Use “Novo usuário” ou importe um CSV.</td></tr>';
+                const l = document.getElementById('link-limpar-filtros');
+                if (l) l.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    document.getElementById('user-search').value = '';
+                    document.getElementById('user-role-filter').value = 'todos';
+                    document.getElementById('user-status-filter').value = 'todos';
+                    renderUsers();
                 });
                 return;
             }
 
-            body.innerHTML = users.map(u => `
-                <tr role="row">
-                    <td role="cell" data-label="Nome"><strong>${esc(u.full_name || '—')}</strong></td>
-                    <td role="cell" data-label="E-mail">${esc(u.email)}</td>
-                    <td role="cell" data-label="Nível">
-                        <span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span>
-                        ${estaAtivo(u) ? '' : '<span class="role-badge role-disabled" style="margin-left: 0.35rem;">INATIVO</span>'}
+            body.innerHTML = users.map((u) => {
+                const ativo = estaAtivo(u);
+                const nome = nomeDe(u);
+                const nova = _novaId && (u.id === _novaId || (u.email || '').toLowerCase() === String(_novaId).toLowerCase());
+                return `
+                <tr role="row" class="${ativo ? '' : 'is-inativa'}${nova ? ' is-nova' : ''}" data-id="${esc(u.id)}">
+                    <td role="cell" class="cg-col-nome"><a href="#" data-action="editar" data-id="${esc(u.id)}"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nome)}</span><span class="ag-cell-sub">${esc(u.email || '')}</span></span></a></td>
+                    <td role="cell" class="cg-col-nivel">${badgeNivel(u.role)}</td>
+                    <td role="cell" class="cg-col-gestor">${celulaGestor(u)}</td>
+                    <td role="cell" class="cg-col-status">${ativo ? '<span class="ag-badge ag-badge--success">Ativo</span>' : '<span class="ag-badge ag-badge--neutral">Inativo</span>'}</td>
+                    <td role="cell" class="cg-col-carteira">${celulaCarteira(u)}</td>
+                    <td role="cell" class="cg-col-meta">${badgeNivel(u.role)} ${ativo ? '<span class="ag-badge ag-badge--success">Ativo</span>' : '<span class="ag-badge ag-badge--neutral">Inativo</span>'}${String(u.role || '').toLowerCase() === 'user' ? ' <span>' + celulaCarteira(u) + '</span>' : ''}${u.gestor_id && String(u.role || '').toLowerCase() === 'user' ? '<span>Gestor: ' + celulaGestor(u) + '</span>' : ''}</td>
+                    <td role="cell" class="cg-col-acoes">
+                        <details class="ag-menu">
+                            <summary class="ag-btn ag-btn--icon-sm" aria-label="Ações para ${esc(nome)}" role="button">
+                                <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                            </summary>
+                            <div class="ag-menu__lista" role="menu">
+                                <button type="button" class="ag-menu__item" role="menuitem" data-action="editar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg> Editar</button>
+                                <button type="button" class="ag-menu__item" role="menuitem" data-action="redefinir" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg> Redefinir senha</button>
+                                ${ativo
+                                    ? `<button type="button" class="ag-menu__item ag-menu__item--perigo" role="menuitem" data-action="desativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Desativar</button>`
+                                    : `<button type="button" class="ag-menu__item" role="menuitem" data-action="reativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg> Reativar</button>`}
+                            </div>
+                        </details>
                     </td>
-                    <td role="cell" data-label="Gestor">${celulaGestor(u)}</td>
-                    <td role="cell" class="td-acoes">
-                        <div class="row-actions">
-                            <button class="btn-action" data-action="editar" data-id="${u.id}">Editar</button>
-                            <button class="btn-action" data-action="redefinir" data-id="${u.id}">Redefinir senha</button>
-                            <details class="acoes-menu">
-                                <summary aria-label="Mais ações para ${esc(u.full_name || u.email)}">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm6 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm6 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
-                                </summary>
-                                <div class="acoes-menu__lista">
-                                    ${estaAtivo(u)
-                                        ? `<button class="btn-action btn-danger" data-action="desativar" data-id="${u.id}">Desativar</button>`
-                                        : `<button class="btn-action" data-action="reativar" data-id="${u.id}">Reativar</button>`}
-                                </div>
-                            </details>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-            
-            // Adicionar event listener delegado
-            const bodyEl = document.getElementById('user-list-body');
-            bodyEl.onclick = (e) => {
-                const btn = e.target.closest('button[data-action]');
+                </tr>`;
+            }).join('');
+
+            if (_novaId) {
+                const linha = body.querySelector('tr.is-nova');
+                if (linha) { linha.scrollIntoView({ block: 'center' }); setTimeout(() => linha.classList.remove('is-nova'), 4000); }
+                _novaId = null;
+            }
+
+            body.onclick = (e) => {
+                const btn = e.target.closest('[data-action]');
                 if (!btn) return;
+                e.preventDefault();
+                const menu = btn.closest('details.ag-menu');
+                if (menu) menu.open = false;
                 const act = btn.getAttribute('data-action');
                 const id = btn.getAttribute('data-id');
                 if (act === 'editar') editarUsuario(id);
@@ -726,32 +450,44 @@
             };
         }
 
+        // Um menu aberto fecha ao clicar fora ou ao abrir outro.
+        document.addEventListener('click', (e) => {
+            document.querySelectorAll('details.ag-menu[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false; });
+        });
+
         function toggleLoading(show, text) {
-            if (typeof setTableLoading === "function") {
-                setTableLoading("table-container-users", show, text);
-            }
+            if (typeof setTableLoading === "function") setTableLoading("table-container-users", show, text);
         }
 
         // ── Abas ──────────────────────────────────────────────────────────
-        // Uma lista, e nao um `if` por aba: a versao anterior comparava com
-        // 'departamentos' e alternava dois paineis na mao. A terceira aba
-        // exigiria um segundo booleano, a quarta um terceiro, e cada uma
-        // acrescentaria quatro linhas que envelhecem juntas.
         const ABAS = ['usuarios', 'departamentos', 'permissoes'];
 
-        function trocarAba(qual) {
+        function trocarAba(qual, anunciar) {
+            if (!ABAS.includes(qual)) qual = 'usuarios';
             for (const nome of ABAS) {
                 const ativa = nome === qual;
                 document.getElementById('painel-' + nome).hidden = !ativa;
-                const botao = document.getElementById('aba-' + nome);
-                botao.classList.toggle('ativa', ativa);
-                botao.setAttribute('aria-selected', String(ativa));
+                const aba = document.getElementById('aba-' + nome);
+                aba.setAttribute('aria-selected', String(ativa));
+                aba.tabIndex = ativa ? 0 : -1;
             }
+            const url = new URL(location.href);
+            if (qual === 'usuarios') url.searchParams.delete('aba'); else url.searchParams.set('aba', qual);
+            history.replaceState(null, '', url.pathname + (url.search || ''));
+            if (anunciar) document.getElementById('abas-anuncio').textContent = 'Aba ' + document.getElementById('aba-' + qual).textContent.trim() + ' aberta.';
             if (qual === 'permissoes') carregarPermissoes();
         }
         for (const nome of ABAS) {
-            document.getElementById('aba-' + nome)
-                .addEventListener('click', () => trocarAba(nome));
+            const aba = document.getElementById('aba-' + nome);
+            aba.addEventListener('click', (ev) => { ev.preventDefault(); trocarAba(nome, true); aba.focus(); });
+            aba.addEventListener('keydown', (ev) => {
+                if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+                ev.preventDefault();
+                const i = ABAS.indexOf(nome);
+                const prox = ABAS[(i + (ev.key === 'ArrowRight' ? 1 : ABAS.length - 1)) % ABAS.length];
+                trocarAba(prox, true);
+                document.getElementById('aba-' + prox).focus();
+            });
         }
 
         // ── Niveis de acesso ──────────────────────────────────────────────
@@ -959,8 +695,8 @@
         // ── Departamentos ─────────────────────────────────────────────────
         function erroDoDep(texto) {
             const el = document.getElementById('modal-dep-erro');
-            el.textContent = texto || '';
-            el.setAttribute('data-visivel', texto ? '1' : '0');
+            el.querySelector('.ag-alert__corpo').textContent = texto || '';
+            el.hidden = !texto;
         }
 
         function renderDepartamentos() {
@@ -1141,15 +877,12 @@
             }
         }
 
-        // Id de quem está sendo editado. Mora fora da função porque o `submit`
-        // do formulário é ligado uma vez só — religar a cada abertura empilharia
-        // handlers e a mesma gravação sairia N vezes.
         let editandoId = null;
 
         function erroDoModal(texto) {
             const el = document.getElementById('modal-editar-erro');
-            el.textContent = texto || '';
-            el.setAttribute('data-visivel', texto ? '1' : '0');
+            el.querySelector('.ag-alert__corpo').textContent = texto || '';
+            el.hidden = !texto;
         }
 
         /** Preenche o select de gestor com os candidatos possíveis. */
@@ -1339,7 +1072,9 @@
                     erroDoModal(await mensagemCorpoErro(r));
                     return;
                 }
+                const salvo = await r.json().catch(() => null);
                 document.getElementById('modal-editar').close();
+                if (criando) _novaId = (salvo && (salvo.id || (salvo.user && salvo.user.id))) || corpo.email;
                 await loadUsers();
                 showToast(criando ? 'Usuário cadastrado.' : 'Usuário atualizado.', 'success');
             } catch (err) {
@@ -1354,8 +1089,8 @@
 
         function erroDaSenha(texto) {
             const el = document.getElementById('modal-senha-erro');
-            el.textContent = texto || '';
-            el.setAttribute('data-visivel', texto ? '1' : '0');
+            el.querySelector('.ag-alert__corpo').textContent = texto || '';
+            el.hidden = !texto;
         }
 
         function redefinirSenha(id) {
@@ -1443,7 +1178,7 @@
             }
 
             const aviso = carteira
-                ? ` A carteira dele será ZERADA: ${carteira} cliente(s) serão removidos, e reativar depois devolve a carteira vazia.`
+                ? ` ${carteira === 1 ? 'O 1 cliente da carteira dele ficará' : 'Os ' + carteira + ' clientes da carteira dele ficarão'} sem este operador, e reativar depois devolve a carteira vazia.`
                 : '';
 
             const ok = await confirmarAcao({
@@ -1472,7 +1207,7 @@
                 );
             } else if (res.carteira_removida) {
                 showToast(
-                    `Usuário desativado e ${res.carteira_removida} cliente(s) removidos da carteira dele.`,
+                    `Usuário desativado e ${res.carteira_removida} ${res.carteira_removida === 1 ? 'cliente removido' : 'clientes removidos'} da carteira dele.`,
                     'success'
                 );
             } else {
@@ -1548,10 +1283,14 @@
             const input = document.getElementById('import-users-file');
             const f = input.files && input.files[0];
             if (!f) {
-                msg.textContent = 'Selecione um arquivo CSV.';
-                msg.style.color = 'var(--danger-text)';
+                msg.querySelector('.ag-alert__corpo').textContent = 'Selecione um arquivo CSV.';
+                msg.className = 'ag-alert ag-alert--danger';
+                msg.hidden = false;
                 return;
             }
+            const botao = document.getElementById('btn-importar-usuarios');
+            botao.disabled = true;
+            botao.textContent = 'Importando…';
             const fd = new FormData();
             fd.append('file', f);
             const headers = getHeaders(false);
@@ -1560,11 +1299,13 @@
                 headers,
                 body: fd,
             });
+            botao.disabled = false;
+            botao.textContent = 'Importar';
             if (!r.ok) {
-                msg.textContent = 'Erro na importação: ' + (await mensagemCorpoErro(r));
-                msg.style.color = 'var(--danger-text)';
-                // Sem isto, os erros da tentativa ANTERIOR continuariam na tela
-                // ao lado da mensagem nova, como se fossem desta.
+                msg.querySelector('.ag-alert__corpo').textContent = 'Erro na importação: ' + (await mensagemCorpoErro(r));
+                msg.className = 'ag-alert ag-alert--danger';
+                msg.hidden = false;
+                // Sem isto, os erros da tentativa ANTERIOR continuariam na tela.
                 mostrarErrosImport([]);
                 return;
             }
@@ -1572,20 +1313,40 @@
             const erros = j.erros || [];
             const nErros = erros.length;
             mostrarErrosImport(erros);
-            msg.textContent = `Importação concluída. Criados: ${j.criados || 0}. Ignorados: ${j.ignorados || 0}. Erros: ${nErros}.`;
-            // Token, e não o âmbar literal que estava aqui. Ele sobreviveu ao
-            // M2 por estar dentro de um ternário em JavaScript, onde a
-            // varredura por `style="..."` não olhava — um ramo tokenizado e o
-            // outro não, na mesma linha. Em tema escuro ficava com contraste
-            // baixo, logo na mensagem que diz quantas linhas do CSV falharam.
-            msg.style.color = nErros ? 'var(--warning-text)' : 'var(--ok)';
+            const criados = j.criados || 0;
+            showToast(`${criados} ${criados === 1 ? 'usuário criado' : 'usuários criados'}` + (j.ignorados ? `, ${j.ignorados} ${j.ignorados === 1 ? 'ignorado' : 'ignorados'}` : '') + '.', nErros ? 'warning' : 'success');
+            msg.hidden = true;
             e.target.reset();
+            input.dispatchEvent(new Event('change'));
+            if (!nErros) document.getElementById('modal-importar').close();
             await loadUsers();
         });
 
         document.getElementById('user-search').addEventListener('input', renderUsers);
         document.getElementById('user-role-filter').addEventListener('change', renderUsers);
         document.getElementById('user-status-filter').addEventListener('change', renderUsers);
+        document.getElementById('form-filtros').addEventListener('submit', (ev) => { ev.preventDefault(); renderUsers(); });
+        document.getElementById('ed-cancelar-2').addEventListener('click', () => document.getElementById('modal-editar').close());
+        document.getElementById('sn-cancelar-2').addEventListener('click', () => document.getElementById('modal-senha').close());
+        document.getElementById('dep-cancelar-2').addEventListener('click', () => document.getElementById('modal-dep').close());
+        document.getElementById('btn-abrir-importar').addEventListener('click', () => document.getElementById('modal-importar').showModal());
+        document.querySelectorAll('[data-ag-modal-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
+        (function ligarDropzone() {
+            const zona = document.querySelector('.ag-dropzone');
+            const input = zona.querySelector('.ag-dropzone__input');
+            const nome = zona.querySelector('.ag-dropzone__nome');
+            ['dragenter', 'dragover'].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add('is-over'); }));
+            ['dragleave', 'drop'].forEach((ev) => zona.addEventListener(ev, () => zona.classList.remove('is-over')));
+            input.addEventListener('change', () => { const f = input.files && input.files[0]; zona.classList.toggle('is-selected', !!f); nome.textContent = f ? f.name : ''; });
+        })();
+
+        // Filtros vindos da URL (formulário GET sem JS).
+        (function lerFiltrosDaUrl() {
+            const q = new URLSearchParams(location.search);
+            if (q.get('q')) document.getElementById('user-search').value = q.get('q');
+            if (['admin', 'gestor', 'user'].includes(q.get('nivel'))) document.getElementById('user-role-filter').value = q.get('nivel');
+            if (['ativo', 'desativado'].includes(q.get('status'))) document.getElementById('user-status-filter').value = q.get('status');
+        })();
 
         // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
         // o gate da página.
@@ -1594,12 +1355,12 @@
             showToastAfterRedirect('Acesso restrito a administradores.', 'warning');
             window.location.href = '/';
         } else {
-            // Os departamentos carregam junto, e não ao abrir a aba: o modal de
-            // usuário precisa da lista para montar o select, e ele abre a
-            // partir da aba de usuários — sem isso, o campo apareceria vazio
-            // até alguém visitar a outra aba.
-            loadUsers().then(loadDepartamentos);
+            // Os departamentos carregam junto: o modal de usuário precisa da
+            // lista para montar o select.
+            loadUsers().then(loadDepartamentos).then(() => {
+                if ('{{ aba }}' === 'permissoes') carregarPermissoes();
+            });
         }
-    </script>
+  </script>
 </body>
 </html>

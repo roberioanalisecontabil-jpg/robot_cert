@@ -1094,3 +1094,133 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
 .ag-etapas__item.is-feita .ag-icon { color: var(--success-700); }
 .ag-etapas__item.is-falha { color: var(--danger-700); }
 .ag-etapas__item.is-falha .ag-icon { color: var(--danger-500); }
+
+/* ── Botão só-ícone ──────────────────────────────────────────────────── */
+
+/* 42px em toolbars, 32px dentro de tabela (a área de toque fecha em 44px
+   pelo pseudo-elemento). Sempre com aria-label: ícone sozinho não diz o
+   que faz. */
+.ag-btn--icon { width: 42px; height: 42px; min-height: 42px; padding: 0; justify-content: center; }
+.ag-btn--icon-sm { width: 32px; height: 32px; min-height: 32px; padding: 0; justify-content: center; position: relative; border-color: transparent; background: transparent; color: var(--text-secondary); }
+/* Sem pseudo-elemento de 44px: posicionado para fora do botão, ele
+   estourava a largura da página no celular. No toque o botão cresce. */
+@media (max-width: 640px) { .ag-btn--icon-sm { width: 44px; height: 44px; min-height: 44px; } }
+.ag-btn--icon-sm:hover:not(:disabled) { background: var(--bg-surface-alt); color: var(--text-primary); }
+.ag-btn--icon-sm .ag-icon { width: 18px; height: 18px; }
+
+/* ── Menu de ações ───────────────────────────────────────────────────── */
+
+/* <details> nativo: abre por teclado, fecha no Esc e não precisa de JS.
+   Uma lista de ações por linha, no lugar de três botões repetidos. */
+.ag-menu { position: relative; display: inline-block; }
+.ag-menu > summary { list-style: none; display: inline-flex; }
+.ag-menu > summary::-webkit-details-marker { display: none; }
+.ag-menu > summary::marker { content: ""; }
+.ag-menu__lista {
+    position: absolute;
+    right: 0;
+    top: calc(100% + var(--space-1));
+    z-index: 20;
+    min-width: 12rem;
+    padding: var(--space-1);
+    background: var(--bg-surface);
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+}
+.ag-menu__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 40px;
+    padding: var(--space-2) var(--space-3);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+}
+.ag-menu__item:hover { background: var(--bg-surface-alt); }
+.ag-menu__item:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ag-menu__item--perigo { color: var(--danger-700); }
+.ag-menu__item--perigo:hover { background: var(--danger-50); }
+.ag-menu__item .ag-icon { width: 16px; height: 16px; }
+
+/* ── Interruptor ─────────────────────────────────────────────────────── */
+
+/* Um checkbox com a cara de interruptor. O estado vai ESCRITO ao lado
+   ("Ligado"/"Desligado"): a posição da alavanca sozinha não conta. */
+.ag-switch { display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; min-height: 44px; }
+.ag-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ag-switch__trilho {
+    position: relative;
+    flex: none;
+    width: 44px;
+    height: 24px;
+    border-radius: var(--radius-pill);
+    background: var(--ink-300);
+    transition: background var(--dur-fast) var(--ease-standard);
+}
+.ag-switch__trilho::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-circle);
+    background: var(--white);
+    box-shadow: var(--shadow-xs);
+    transition: transform var(--dur-fast) var(--ease-standard);
+}
+.ag-switch input:checked + .ag-switch__trilho { background: var(--gold-600); }
+.ag-switch input:checked + .ag-switch__trilho::after { transform: translateX(20px); }
+.ag-switch input:focus-visible + .ag-switch__trilho { box-shadow: var(--focus-ring); }
+.ag-switch__rotulo { font-family: var(--font-display); font-weight: 700; font-size: var(--text-base); color: var(--text-primary); }
+
+/* ── Subtítulo de formulário ─────────────────────────────────────────── */
+
+/* Divisor de seção dentro de um formulário: título Exo e uma linha fina,
+   no lugar de caixa dentro de caixa. */
+.ag-form-subhead {
+    flex-wrap: wrap;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    margin: var(--space-8) 0 var(--space-4);
+    padding-bottom: var(--space-2);
+    border-bottom: var(--bw-1) solid var(--border-subtle);
+}
+.ag-form-subhead:first-child { margin-top: 0; }
+.ag-form-subhead__titulo { margin: 0; font-family: var(--font-display); font-size: var(--text-base); font-weight: 700; color: var(--text-primary); }
+.ag-form-subhead__nota { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ── Erro de validação ───────────────────────────────────────────────── */
+
+.ag-input.is-error, .ag-select.is-error { border-color: var(--danger-500); }
+.ag-error { margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--danger-700); }
+.ag-textarea { min-height: 5rem; resize: vertical; font-family: var(--font-body); line-height: var(--lh-normal); }
+
+/* ── Barra de ações grudada ──────────────────────────────────────────── */
+
+/* Salvar sempre à mão: gruda no rodapé da janela enquanto a aba estiver
+   visível. Sem JS o botão continua no fim, com o mesmo desenho. */
+.ag-sticky-acoes {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-6);
+    background: var(--bg-surface);
+    border-top: var(--bw-1) solid var(--border-subtle);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+.ag-sticky-acoes__estado { font-size: var(--text-xs); color: var(--text-muted); margin-right: auto; }
+.ag-sticky-acoes__estado:empty { display: none; }
