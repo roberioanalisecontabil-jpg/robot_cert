@@ -4662,20 +4662,43 @@ def listar_operadores(
         ]
 
     quantos = Counter(str(c.get("user_id")) for c in cart)
-    return {
-        "operadores": [
+    from app import texto as _texto
+    operadores = []
+    for u in visiveis:
+        n = quantos.get(str(u.get("id")), 0)
+        operadores.append(
             {
                 "id": str(u.get("id")),
                 "email": u.get("email"),
                 "full_name": u.get("full_name"),
+                # Só na exibição: "irla" → "Irla", caixa alta → título. O dado
+                # gravado não muda (a correção do cadastro é em Usuários).
+                "nome_exibicao": nomes.nome_pessoa(u.get("full_name")) or (u.get("email") or ""),
                 "role": u.get("role"),
                 "ativo": auth.conta_ativa(u),
                 "gestor_id": u.get("gestor_id"),
                 "departamento_id": u.get("departamento_id"),
-                "documentos": quantos.get(str(u.get("id")), 0),
+                "documentos": n,
+                "sem_carteira": n == 0,
+                "textos": {"clientes": _texto.plural(n, "cliente")},
             }
-            for u in visiveis
-        ]
+        )
+    # Sem carteira primeiro (é o único estado que pede ação; o Dashboard
+    # aponta para cá por isso), depois em ordem alfabética.
+    operadores.sort(key=lambda o: (0 if o["sem_carteira"] else 1, (o["nome_exibicao"] or "").lower()))
+
+    # Resumo da lista, com a mesma regra da tela: só operadores (role user)
+    # ativos, mais inativos que ainda tenham carteira a limpar.
+    na_lista = [o for o in operadores if (o["role"] or "").lower() == "user" and (o["ativo"] or o["documentos"] > 0)]
+    sem = sum(1 for o in na_lista if o["sem_carteira"])
+    total = len(na_lista)
+    if sem:
+        resumo_txt = _texto.plural(total, "operador", "operadores") + " · " + str(sem) + " sem carteira"
+    else:
+        resumo_txt = _texto.plural(total, "operador", "operadores") + (", todos com carteira" if total else "")
+    return {
+        "operadores": operadores,
+        "resumo": {"operadores": total, "sem_carteira": sem, "texto": resumo_txt},
     }
 
 
@@ -5084,8 +5107,14 @@ def dashboard_renovacoes(
 
 @app.get("/carteiras", response_class=HTMLResponse)
 def pagina_carteiras(request: Request) -> HTMLResponse:
+    # O operador selecionado viaja na URL (?operador=<id>): cada item da
+    # lista é um link, e no celular a tela vira duas etapas — só a lista
+    # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
+    operador = (request.query_params.get("operador") or "").strip()[:64]
     return templates.TemplateResponse(
-        request=request, name="carteiras.html", context={"pagina_ativa": "carteiras"}
+        request=request,
+        name="carteiras.html",
+        context={"pagina_ativa": "carteiras", "operador_id": operador},
     )
 
 

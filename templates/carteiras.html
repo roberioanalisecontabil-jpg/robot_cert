@@ -1,777 +1,682 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Carteiras — Analise Certificado</title>
-    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-    <style nonce="{{ request.state.nonce }}">
-      .cart-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(260px, 320px) 1fr; align-items: start; }
-      @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
-      .cart-painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
-      /* Lista de operadores — reformulada em 19/08/2026 a partir de "as linhas
-         parecem flutuar". Elas flutuavam mesmo: eram oito <button> transparentes,
-         sem borda, sem divisoria e sem nada que as alinhasse entre si.
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carteiras — Analise Certificado</title>
+  <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+  <!-- Sétima tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
+       da família de listas (shell comum) e o desta tela. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09g" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-09" />
+  <style nonce="{{ request.state.nonce }}">
+    /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
+       declara display, e display explícito vence o display:none que o
+       atributo hidden traz do navegador. */
+    .transfer__acao-lote[hidden] { display: none; }
+  </style>
+</head>
+<body class="cg-aguia{% if operador_id %} cg-tem-operador{% endif %}">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
 
-         A resposta escolhida entre tres foi dar BORDAS AO CONTEINER: a lista
-         vira uma caixa com fio e rolagem propria, espelhando o `.transfer__lista`
-         que ja existe nesta mesma folha. Resolve o flutuar e o comprimento de
-         uma vez — 480 operadores nao esticam mais a pagina. */
-      .op-titulo { font-size: var(--fs-body); margin: 0 0 var(--sp-3); }
-      .op-lista {
-        margin-top: var(--sp-3);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        max-height: 340px;
-        overflow-y: auto;
-        background: var(--bg);
-      }
-      .op-item {
-        display: block; width: 100%; text-align: left;
-        border: none; border-bottom: 0.5px solid var(--border); border-radius: 0;
-        background: transparent; color: var(--text); cursor: pointer;
-        font-family: inherit;
-        padding: 0.6rem 0.7rem;
-        transition: background-color var(--duration-fast) var(--ease-out);
-      }
-      .op-item:last-child { border-bottom: none; }
-      .op-item strong { display: block; font-size: var(--fs-ui); font-weight: 600; margin-bottom: 2px; }
-      .op-item__meta { display: block; font-size: var(--fs-caption); color: var(--text-muted); }
-      .op-item:hover { background: var(--surface); }
-      /* Selecionado em `--total-bg`, nao mais com borda `--ok-text`: verde e
-         estado de certificado neste sistema, e "o operador que estou vendo" e
-         navegacao. Ver "A Regra do Sinal Unico" no DESIGN.md. */
-      .op-item[aria-current="true"] { background: var(--total-bg); }
-      /* Offset NEGATIVO: dentro de uma caixa com rolagem, um anel para fora
-         fica cortado pela borda do conteiner. */
-      .op-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-      .doc-chip { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-                  padding: 0.5rem 0.6rem; border-bottom: 0.5px solid var(--border); }
-      .doc-chip__trilha { font-size: var(--fs-caption); color: var(--text-muted); }
-      /* Transfer list: disponíveis | na carteira */
-      .transfer { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: 0.75rem; }
-      /* Empilha antes do drawer mobile: dois painéis de lista lado a lado
-         viram duas colunas ilegíveis bem antes de 768px. */
-      @media (max-width: 1100px) { .transfer { grid-template-columns: 1fr; } }
-      .transfer__lado { min-width: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm, 8px); }
-      .transfer__cab { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-                       padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-      .transfer__cab h3 { font-size: var(--fs-ui); margin: 0; }
-      .transfer__cab .text-muted { font-weight: 400; font-size: var(--fs-ui-sm); }
-      .transfer__acao-lote { font-size: var(--fs-caption); padding: 0.2rem 0.5rem; }
-      /* `.btn` declara display, e display explícito vence o `display:none` que
-         o atributo `hidden` traz da folha do navegador — sem esta regra o
-         botão de lote ficava visível dizendo "os 491 filtrados" sem filtro
-         nenhum. Mesma armadilha de `.barra-selecao[hidden]` no style.css. */
-      .transfer__acao-lote[hidden] { display: none; }
-      /* Altura fixa nos dois lados: sem ela, um painel com 480 itens e outro
-         com 3 deixariam a página com metros de rolagem e o par ilegível. */
-      .transfer__lista { height: 320px; overflow-y: auto; }
-      .transfer__item { display: flex; justify-content: space-between; gap: 0.75rem; align-items: center;
-                        padding: 0.45rem 0.6rem; border-bottom: 0.5px solid var(--border); font-size: var(--fs-ui-sm); }
-      .transfer__item:last-child { border-bottom: none; }
-      .transfer__item__nome { min-width: 0; overflow-wrap: anywhere; }
-      .transfer__vazio { padding: 0.9rem 0.6rem; font-size: var(--fs-ui-sm); color: var(--text-muted); }
-      /* Selecao multipla + acoes de lote (19/08/2026). A linha inteira e o
-         alvo: clicar em qualquer ponto marca, e a marca aparece como ✓ à
-         esquerda. Nao ha mais botao por linha — mover UM agora custa dois
-         cliques (marcar, acionar) em troca de mover N com os mesmos dois. */
-      .transfer__item { cursor: pointer; user-select: none; }
-      .transfer__item:hover { background: var(--row-hover); }
-      .transfer__item.is-sel { background: var(--total-bg); }
-      .transfer__item.is-sel::before {
-        content: "✓"; color: var(--accent-text); font-weight: 700;
-        margin-right: var(--sp-2); flex-shrink: 0;
-      }
-      .transfer__item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-      .transfer__rodape {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: var(--sp-2); flex-wrap: wrap;
-        padding: var(--sp-2) 0.6rem; border-top: 1px solid var(--border);
-      }
-      .transfer__selecao { font-size: var(--fs-caption); font-weight: 600; color: var(--accent-text); }
-      .transfer__rodape__acoes { display: flex; gap: var(--sp-1); margin-left: auto; }
-      .transfer__acao { font-size: var(--fs-caption); padding: 0.25rem 0.6rem; display: inline-flex;
-                        align-items: center; gap: 4px; }
-      .transfer__acao svg { width: 14px; height: 14px; flex-shrink: 0; }
-      /* Desabilitado, e nao escondido: some so quando nao ha o que mover, e a
-         pessoa continua vendo que a acao existe. */
-      .transfer__acao:disabled { opacity: 0.4; cursor: not-allowed; }
-      .transfer__acao--todos { color: var(--text-muted); }
-      /* Importar por planilha — faixa de arrastar e soltar.
-         Escolhida entre três desenhos em 19/08/2026: bloco centralizado, duas
-         colunas e esta. Ganhou porque abrir o painel acrescenta ~56px de
-         altura, e não um bloco que empurra os dois painéis da página para
-         baixo — que é a razão de o `details` nascer fechado. */
-      /* A busca acompanha a largura do painel: e filtro da lista abaixo, nao
-         campo de formulario solto. Fica aqui, e nao na regra `.form-control`
-         do style.css, porque largura e decisao de layout desta tela — os 6
-         campos do instalador dividem a classe e nao querem 100%. */
-      .cart-painel .form-control { width: 100%; box-sizing: border-box; }
-      /* Reposta em 19/08/2026. O `<details>` tinha `style="margin-bottom:
-         var(--sp-4)"` e eu a perdi ao trocar o inline por classes no carbonize
-         anterior — os dois paineis ficaram encostados, e foi essa a queixa.
+  <main class="main-content cg-painel" id="main-content">
+    <!-- Importar é ação em lote e eventual: sobe para o cabeçalho, em
+         contorno, e abre um modal. Não vem antes da lista. -->
+    <header class="ag-page__head ag-section-head">
+      <div>
+        <h1 class="ag-page__title">Carteiras</h1>
+        <p class="ag-page__lead">Defina quais clientes cada operador pode instalar. Operador sem carteira não consegue instalar nenhum certificado.</p>
+      </div>
+      <button type="button" id="btnAbrirImportar" class="ag-btn ag-btn--outline">
+        <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+        Importar planilha
+      </button>
+    </header>
 
-         Volta em `--sp-6` e nao `--sp-4`: 16px era exatamente o padding INTERNO
-         dos cartoes, entao a distancia entre dois cartoes era igual ao respiro
-         dentro de cada um e nada dizia onde um acabava. Mora aqui, e nao na
-         secao de baixo, porque este elemento esta ACIMA da grade: empurrar por
-         ele desce as duas colunas juntas, e nao so a da esquerda. */
-      .cart-importar { margin-bottom: var(--sp-6); }
-      .cart-importar__sumario { cursor: pointer; font-weight: 600; font-size: var(--fs-ui); }
-      .cart-importar__faixa { margin-top: var(--sp-3); display: flex; align-items: center;
-                              gap: var(--sp-3); flex-wrap: wrap; }
-      .cart-importar__dica { flex: 1 1 100%; margin: 0; }
-      .dropzone { position: relative; flex: 1 1 22rem; display: flex; align-items: center;
-                  gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); min-height: 56px;
-                  background: var(--bg); border: 1.5px dashed var(--border);
-                  border-radius: var(--radius-md); color: var(--text); text-align: left;
-                  transition: border-color var(--duration-fast) var(--ease-out),
-                              background-color var(--duration-fast) var(--ease-out); }
-      /* Tracejado é o mesmo sinal que o empty-state do sistema usa para "aqui
-         ainda não há conteúdo"; ele vira sólido assim que há. */
-      .dropzone__input { position: absolute; inset: 0; width: 100%; height: 100%;
-                         opacity: 0; cursor: pointer; }
-      .dropzone__icone { width: 24px; height: 24px; flex-shrink: 0; color: var(--text-muted);
-                         transition: color var(--duration-fast) var(--ease-out); }
-      .dropzone__titulo { margin: 0; font-weight: 600; font-size: var(--fs-ui); }
-      .dropzone__sub { margin: 0; font-size: var(--fs-ui-sm); color: var(--text-muted); }
-      .dropzone__nome { margin: 0 0 0 auto; font-size: var(--fs-ui-sm); font-weight: 600;
-                        color: var(--accent-text); }
-      .dropzone:hover,
-      .dropzone:has(.dropzone__input:focus-visible) { border-color: var(--accent); background: var(--surface); }
-      /* O anel de foco é desenhado na zona, não no input invisível: sem isto o
-         foco de teclado existe e não aparece em lugar nenhum. */
-      .dropzone:has(.dropzone__input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-      .dropzone.is-over { border-color: var(--accent); background: var(--total-bg); border-style: solid; }
-      .dropzone.is-over .dropzone__icone { color: var(--accent-text); }
-      .dropzone.is-selected { border-style: solid; border-color: var(--ok); background: var(--ok-bg); }
-      .dropzone.is-selected .dropzone__icone,
-      .dropzone.is-selected .dropzone__nome { color: var(--ok-text); }
-      .import-erros { margin-top: var(--sp-3); }
-    </style>
-  </head>
-  <body>
-    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
-    {% include "_sidebar.html" %}
+    <!-- Erro que precisa ficar (o toast some). -->
+    <div id="cartMsg" class="ag-alert ag-alert--danger" role="alert" hidden>
+      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      <div class="ag-alert__corpo" id="cartMsgTexto"></div>
+    </div>
 
-    <main class="main-content" id="main-content">
-      <header class="page-header">
-        <h1>Carteiras</h1>
-        <p>Quais clientes cada operador pode instalar. Sem carteira, ninguém instala nada.</p>
-      </header>
-
-      <div id="cartMsg"></div>
-
-      <!-- Recolhido: importar é ação de quem já tem a lista pronta, não o
-           caminho comum. Aberto, empurraria os dois painéis para baixo.
-
-           A faixa foi escolhida entre três desenhos em 19/08/2026 justamente
-           por isso: abrir o painel acrescenta ~56px, não um bloco inteiro. -->
-      <details class="cart-painel cart-importar">
-        <summary class="cart-importar__sumario">Importar carteiras por planilha</summary>
-        <form id="formImportar" class="cart-importar__faixa">
-          <div class="dropzone">
-            {# O <input type="file"> cobre a zona inteira com opacidade 0. Isso
-               entrega, sem uma linha de JS: clique em qualquer ponto abre o
-               seletor, DROP nativo preenche `input.files` (que é o que
-               `importarPlanilha` lê) e o foco de teclado é o do próprio input.
-               O rótulo visível é o <p> abaixo; o `aria-describedby` liga o
-               campo à linha de formato. #}
-            <input type="file" id="arquivoCarteiras" accept=".xlsx,.csv"
-                   class="dropzone__input" required aria-label="Arquivo .xlsx ou .csv"
-                   aria-describedby="dicaImportar" />
-            <svg class="dropzone__icone" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 7.5 7.5 12M12 7.5V21"/></svg>
-            <p class="dropzone__titulo">Arraste a planilha ou clique para escolher</p>
-            <p class="dropzone__sub">.xlsx ou .csv</p>
-            <p class="dropzone__nome" aria-live="polite"></p>
-          </div>
-          <button type="submit" class="primary">Importar</button>
-          <p class="hint cart-importar__dica" id="dicaImportar">
-            Duas colunas: <code>email</code> (do colaborador) e <code>cnpj</code> (do cliente) —
-            uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code>, <code>cpf</code>.
-            Você só consegue importar para quem está nos departamentos que lidera.
-          </p>
-        </form>
-        <div id="importErros" class="import-erros" hidden>
-          <p class="import-erros__titulo"></p>
-          <ul class="import-erros__lista"></ul>
+    <div class="cg-cart-layout">
+      <!-- Lista de operadores: cada item é um link (?operador=), sem
+           rolagem interna; sem carteira primeiro. -->
+      <section class="ag-card cg-cart-lista" aria-labelledby="tit-operadores">
+        <div class="cg-cart-cab">
+          <h2 class="ag-card__title" id="tit-operadores">Operadores</h2>
+          <p class="cg-cart-resumo" id="opResumo"></p>
         </div>
-      </details>
-
-      <div class="cart-layout">
-        <section class="cart-painel">
-          <h2 class="op-titulo">Operadores</h2>
+        <form class="cg-cart-busca" method="get" action="/carteiras" role="search">
           <label for="buscaOperador" class="cg-sr-only">Buscar operador</label>
-          <input type="search" id="buscaOperador" class="form-control" placeholder="Buscar por nome ou e-mail" />
-          <div id="listaOperadores" class="op-lista">
-            <p class="text-muted" style="font-size: var(--fs-ui-sm);">Carregando…</p>
-          </div>
-        </section>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="buscaOperador" name="q" class="ag-input" placeholder="Nome ou e-mail" autocomplete="off" />
+        </form>
+        <ul id="listaOperadores" class="cg-op-lista">
+          <li class="cg-op-vazio">Carregando…</li>
+        </ul>
+      </section>
 
-        <section class="cart-painel">
-          <div id="semSelecao">
-            <p class="text-muted" style="font-size: var(--fs-ui);">
-              Escolha um operador à esquerda para ver e montar a carteira dele.
-            </p>
-          </div>
+      <section class="ag-card cg-cart-detalhe" aria-live="polite">
+        {% with voltar_href="/carteiras", voltar_texto="Voltar para operadores" %}
+        <div class="cg-cart-cab">{% include "_voltar.html" %}</div>
+        {% endwith %}
 
-          <div id="detalheCarteira" hidden>
-            <div class="secao-cabecalho">
-              <div>
-                <h2 id="opNome" style="margin-bottom: 0.15rem;"></h2>
-                <p id="opEmail" class="text-muted" style="font-size: var(--fs-ui-sm);"></p>
-              </div>
+        <!-- Nenhum operador selecionado: estado vazio de verdade, sem
+             "à esquerda" (no celular a lista está acima, não ao lado). -->
+        <div id="semSelecao" class="ag-vazio cg-cart-vazio">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
+          <h2 class="ag-vazio__titulo">Nenhum operador selecionado</h2>
+          <p class="ag-vazio__texto">Escolha um operador na lista para ver e montar a carteira dele.</p>
+          <a class="ag-btn ag-btn--outline" id="btnAtalhoSemCarteira" href="#" hidden></a>
+        </div>
+
+        <div id="detalheCarteira" hidden>
+          <div class="cg-cart-op">
+            <div>
+              <h2 class="cg-cart-op__nome" id="opNome"></h2>
+              <p class="cg-cart-op__email" id="opEmail"></p>
+            </div>
+            <div class="cg-cart-op__meta">
+              <span class="cg-cart-op__contagem" id="opContagem"></span>
               <span id="opAviso"></span>
             </div>
+          </div>
 
-            <!-- Dois painéis lado a lado (transfer list). Antes era um campo de
-                 busca que exigia digitar 2 caracteres para revelar qualquer
-                 coisa: o gestor precisava SABER o nome do cliente antes de
-                 poder procurá-lo, e não tinha como ver o que existe. São 491
-                 clientes / 33 KB — a lista inteira cabe numa chamada, então a
-                 busca virou filtro opcional sobre os dois lados. -->
-            <div style="margin-top: 1.25rem;">
+          <!-- Painel do operador (item 64, ainda sem spec): os dois painéis
+               lado a lado continuam, com os componentes do DS. -->
+          <div class="cg-cart-corpo">
+            <div class="ag-field">
               <label for="buscaDoc" class="cg-sr-only">Filtrar clientes por nome ou CNPJ/CPF</label>
-              <input type="search" id="buscaDoc" class="form-control"
-                     placeholder="Filtrar os dois lados por nome ou CNPJ/CPF" />
-              <p class="hint" id="dicaBusca" style="margin-top: 0.4rem;"></p>
+              <input type="search" id="buscaDoc" class="ag-input" placeholder="Filtrar por nome ou CNPJ/CPF" autocomplete="off" />
+              <p class="cg-cart-dica" id="dicaBusca"></p>
             </div>
 
-            <div class="transfer">
-              <section class="transfer__lado" aria-labelledby="tit-disponiveis">
-                <header class="transfer__cab">
-                  <h3 id="tit-disponiveis">Disponíveis <span id="contaDisponiveis" class="text-muted"></span></h3>
+            <div class="cg-transfer">
+              <section class="cg-transfer__lado" aria-labelledby="tit-disponiveis">
+                <header class="cg-transfer__cab">
+                  <h3 id="tit-disponiveis">Disponíveis <span id="contaDisponiveis"></span></h3>
                 </header>
-                <div class="transfer__lista" id="listaDisponiveis" role="listbox" aria-multiselectable="true"
+                <div class="cg-transfer__lista" id="listaDisponiveis" role="listbox" aria-multiselectable="true"
                      tabindex="0" aria-label="Clientes disponíveis para liberar"></div>
-                <footer class="transfer__rodape">
-                  <span class="transfer__selecao" id="selDisponiveis" hidden></span>
-                  <div class="transfer__rodape__acoes">
-                    <button type="button" id="btnLiberarSel" disabled class="btn transfer__acao" data-lote="disponiveis:selecionados">
-                      Liberar<span data-conta></span> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg></button>
-                    <button type="button" id="btnAddTodos" disabled class="btn transfer__acao transfer__acao--todos" data-lote="disponiveis:todos">
-                      Todos<span data-conta></span> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 19l7-7-7-7M4 19l7-7-7-7"/></svg></button>
+                <footer class="cg-transfer__rodape">
+                  <span class="cg-transfer__selecao" id="selDisponiveis" hidden></span>
+                  <div class="cg-transfer__acoes">
+                    <button type="button" id="btnLiberarSel" disabled class="ag-btn ag-btn--outline ag-btn--sm" data-lote="disponiveis:selecionados">
+                      Liberar<span data-conta></span> <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                    <button type="button" id="btnAddTodos" disabled class="ag-btn ag-btn--ghost ag-btn--sm" data-lote="disponiveis:todos">
+                      Todos<span data-conta></span> <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg></button>
                   </div>
                 </footer>
               </section>
 
-              <section class="transfer__lado" aria-labelledby="tit-carteira">
-                <header class="transfer__cab">
-                  <h3 id="tit-carteira">Na carteira <span id="contaDocs" class="text-muted"></span></h3>
+              <section class="cg-transfer__lado" aria-labelledby="tit-carteira">
+                <header class="cg-transfer__cab">
+                  <h3 id="tit-carteira">Na carteira <span id="contaDocs"></span></h3>
                 </header>
-                <div class="transfer__lista" id="listaCarteira" role="listbox" aria-multiselectable="true"
+                <div class="cg-transfer__lista" id="listaCarteira" role="listbox" aria-multiselectable="true"
                      tabindex="0" aria-label="Clientes na carteira desta pessoa"></div>
-                <footer class="transfer__rodape">
-                  <span class="transfer__selecao" id="selCarteira" hidden></span>
-                  <div class="transfer__rodape__acoes">
-                    <button type="button" id="btnRemoverSel" disabled class="btn transfer__acao" data-lote="carteira:selecionados">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg><span data-conta></span> Remover</button>
-                    <button type="button" id="btnRemoverTodos" disabled class="btn transfer__acao transfer__acao--todos" data-lote="carteira:todos">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 5l-7 7 7 7M20 5l-7 7 7 7"/></svg><span data-conta></span> Todos</button>
+                <footer class="cg-transfer__rodape">
+                  <span class="cg-transfer__selecao" id="selCarteira" hidden></span>
+                  <div class="cg-transfer__acoes">
+                    <button type="button" id="btnRemoverSel" disabled class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-lote="carteira:selecionados">
+                      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-conta></span> Remover</button>
+                    <button type="button" id="btnRemoverTodos" disabled class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-lote="carteira:todos">
+                      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg><span data-conta></span> Todos</button>
                   </div>
                 </footer>
               </section>
             </div>
 
-            <!-- Histórico -->
-            <div style="margin-top: 1.5rem;">
-              <h3 style="margin-bottom: 0.4rem;">Instalações desta pessoa</h3>
-              <div id="historicoOperador">
-                <p class="text-muted" style="font-size: var(--fs-ui-sm);">—</p>
-              </div>
+            <div class="cg-cart-hist">
+              <h3 class="cg-cart-hist__titulo">Instalações desta pessoa</h3>
+              <div id="historicoOperador"><p class="cg-cart-dica">—</p></div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modal de importação: <dialog> nativo prende o foco e fecha com Esc. -->
+  <dialog class="ag-modal ag-modal--lg" id="modalImportar" aria-labelledby="tit-importar">
+    <form id="formImportar" method="dialog">
+      <div class="ag-modal__head">
+        <h2 class="ag-modal__titulo" id="tit-importar">Importar carteiras por planilha</h2>
+        <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
       </div>
-    </main>
+      <div class="ag-modal__body">
+        <div class="ag-dropzone ag-dropzone--drop">
+          <input type="file" id="arquivoCarteiras" accept=".xlsx,.csv" class="ag-dropzone__input" required autofocus
+                 aria-label="Arquivo .xlsx ou .csv" aria-describedby="dicaImportar" />
+          <svg class="ag-icon ag-dropzone__icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          <div class="ag-dropzone__texto">
+            <p class="ag-dropzone__titulo">Arraste a planilha ou clique para escolher</p>
+            <p class="ag-dropzone__sub">.xlsx ou .csv</p>
+          </div>
+          <p class="ag-dropzone__nome" aria-live="polite"></p>
+        </div>
+        <p class="cg-cart-importar__modelo">
+          <a href="data:text/csv;charset=utf-8,email%2Ccnpj%0A" download="modelo-carteiras.csv">Baixar o modelo (.csv)</a>
+        </p>
+        <p class="cg-cart-importar__formato" id="dicaImportar">
+          Duas colunas, <code>email</code> do operador e <code>cnpj</code> do cliente, uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code> e <code>cpf</code>. Só para quem está nos departamentos que você lidera.
+        </p>
+        <!-- Linhas recusadas ficam aqui, com o motivo: um toast sumiria. -->
+        <div id="importErros" class="ag-alert ag-alert--warning" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo">
+            <p class="ag-alert__titulo import-erros__titulo"></p>
+            <ul class="import-erros__lista"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="btnImportar">Importar</button>
+      </div>
+    </form>
+  </dialog>
 
-    <script src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
-    <script nonce="{{ request.state.nonce }}">
-      let _operadores = [];
-      let _selecionado = null;
-      let _carteiraAtual = new Set();
-      let _papel = null;
-      let _universo = [];          // todos os clientes atribuíveis (491 hoje)
-      let _universoTruncado = 0;   // >0 se a rota cortou a lista
-      let _trilha = {};            // documento -> quem liberou e quando
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+  <script nonce="{{ request.state.nonce }}">
+    // `esc`, `getHeaders`, `mensagemCorpoErro` e `showToast` vêm de ui-common.js.
+    let _operadores = [];
+    let _resumo = null;
+    let _selecionado = null;
+    let _carteiraAtual = new Set();
+    let _papel = null;
+    let _universo = [];          // todos os clientes atribuíveis (491 hoje)
+    let _universoTruncado = 0;   // >0 se a rota cortou a lista
+    let _trilha = {};            // documento -> quem liberou e quando
+    const OPERADOR_INICIAL = {{ operador_id | tojson }};
 
-      function msg(texto, tipo) {
-        document.getElementById("cartMsg").innerHTML =
-          `<div class="toast toast-${tipo}" style="margin-bottom: 1rem;">${esc(texto)}</div>`;
+    // Sucesso vai no toast; erro fica num alerta em bloco E no toast — o
+    // toast some, e um erro que só passou não foi lido.
+    function msg(texto, tipo) {
+      const caixa = document.getElementById("cartMsg");
+      if (tipo === "error") {
+        document.getElementById("cartMsgTexto").textContent = texto;
+        caixa.hidden = false;
+      } else {
+        caixa.hidden = true;
       }
+      showToast(texto, tipo === "error" ? "error" : tipo === "warning" ? "warning" : "success");
+    }
 
-      // ─── Operadores ────────────────────────────────────────────────────
+    function nomeDe(o) { return o.nome_exibicao || o.full_name || o.email; }
+    // E-mail quebra no @ e nos pontos, não no meio de uma palavra
+    // ("analisegroup.cnt.b / r"): <wbr> dá ao navegador os pontos certos.
+    function emailQuebravel(email) {
+      return esc(email || "").replace(/@/g, "@<wbr>").replace(/\./g, ".<wbr>");
+    }
 
-      function renderOperadores() {
-        const q = (document.getElementById("buscaOperador").value || "").trim().toLowerCase();
-        const lista = _operadores.filter((o) => {
-          // Admin e gestor têm alcance total e não dependem de carteira —
-          // listá-los aqui sugeriria que precisam de uma.
-          if (o.role !== "user") return false;
+    // ─── Operadores ────────────────────────────────────────────────────
 
-          // Conta inativa some da lista: `require_auth` a recusa com 401, então
-          // atribuir um cliente a ela é uma ação sem efeito nenhum — e oferecer
-          // a ação é o mesmo defeito do menu que mostrava página que a pessoa
-          // não alcançava.
-          //
-          // A EXCEÇÃO importa mais que a regra: se a conta inativa ainda tiver
-          // clientes, ela CONTINUA na lista. Inativar zera a carteira, mas essa
-          // limpeza pode falhar (é registrada como ERROR e não derruba a
-          // inativação — ver `deactivate_user`). Esconder a carteira órfã
-          // deixaria a limpeza sem nenhum caminho pela tela.
-          if (!o.ativo && !(o.documentos > 0)) return false;
+    function operadoresVisiveis() {
+      return _operadores.filter((o) => {
+        // Admin e gestor têm alcance total e não dependem de carteira.
+        if (o.role !== "user") return false;
+        // Conta inativa some, SALVO se ainda tiver carteira a limpar (a
+        // limpeza automática pode falhar; esconder deixaria a carteira órfã).
+        if (!o.ativo && !(o.documentos > 0)) return false;
+        return true;
+      });
+    }
 
-          if (!q) return true;
-          return ((o.full_name || "") + " " + (o.email || "")).toLowerCase().includes(q);
-        });
+    function renderOperadores() {
+      const q = (document.getElementById("buscaOperador").value || "").trim().toLowerCase();
+      const todos = operadoresVisiveis();
+      const lista = todos.filter((o) => !q || (nomeDe(o) + " " + (o.full_name || "") + " " + (o.email || "")).toLowerCase().includes(q));
 
-        const el = document.getElementById("listaOperadores");
-        if (!lista.length) {
-          el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">Nenhum operador encontrado.</p>`;
-          return;
-        }
+      const el = document.getElementById("listaOperadores");
+      if (!lista.length) {
+        el.innerHTML = `<li class="cg-op-vazio">${q ? "Nenhum operador encontrado para “" + esc(q) + "”." : "Nenhum operador para listar."}</li>`;
+      } else {
         el.innerHTML = lista.map((o) => `
-          <button type="button" class="op-item" data-id="${esc(o.id)}"
-                  aria-current="${_selecionado && _selecionado.id === o.id}">
-            <strong>${esc(o.full_name || o.email)}</strong>
-            <span class="op-item__meta">
-              ${esc(o.email)} ·
-              <span style="color:${o.documentos ? "var(--ok-text)" : "var(--expired-text)"}">
-                ${o.documentos} cliente(s)
+          <li>
+            <a class="cg-op-item" href="?operador=${encodeURIComponent(o.id)}" data-id="${esc(o.id)}"
+               aria-current="${_selecionado && _selecionado.id === o.id ? "true" : "false"}">
+              <span class="ag-cell-stack">
+                <span class="ag-cell-main">${esc(nomeDe(o))}</span>
+                <span class="ag-cell-sub">${emailQuebravel(o.email)}</span>
+                ${o.ativo ? "" : `<span class="cg-op-item__inativa">Conta inativa, com carteira a limpar</span>`}
               </span>
-              ${o.ativo ? "" : " · <em>inativa, com carteira a limpar</em>"}
-            </span>
-          </button>`).join("");
-
-        el.querySelectorAll(".op-item").forEach((b) =>
-          b.addEventListener("click", () => selecionar(b.dataset.id))
+              ${o.sem_carteira
+                ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>`
+                : `<span class="cg-op-item__contagem">${esc((o.textos && o.textos.clientes) || (o.documentos + " clientes"))}</span>`}
+            </a>
+          </li>`).join("");
+        el.querySelectorAll(".cg-op-item").forEach((a) =>
+          a.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            history.pushState(null, "", "?operador=" + encodeURIComponent(a.dataset.id));
+            selecionar(a.dataset.id);
+          })
         );
       }
 
-      async function carregarOperadores() {
-        try {
-          const r = await fetch("/api/carteira/operadores", { headers: getHeaders() });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          _operadores = (await r.json()).operadores || [];
-          renderOperadores();
-        } catch (e) {
-          document.getElementById("listaOperadores").innerHTML =
-            `<p class="falha-inline">${esc(e.message)}</p>`;
-        }
+      // Resumo discreto: "6 operadores · 1 sem carteira"; o trecho é link
+      // que rola até o primeiro sem carteira.
+      const resumo = document.getElementById("opResumo");
+      const semCart = todos.filter((o) => o.sem_carteira);
+      const n = todos.length;
+      const nOps = n + (n === 1 ? " operador" : " operadores");
+      resumo.innerHTML = semCart.length
+        ? nOps + " · <a href=\"#\">" + semCart.length + " sem carteira</a>"
+        : nOps + (n ? ", todos com carteira" : "");
+      const link = resumo.querySelector("a");
+      if (link) link.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const alvo = el.querySelector(".cg-op-item .ag-badge--danger");
+        const item = alvo && alvo.closest(".cg-op-item");
+        if (item) { item.scrollIntoView({ block: "center" }); item.focus(); }
+      });
+
+      // Atalho do estado vazio: abre direto o primeiro sem carteira.
+      const atalho = document.getElementById("btnAtalhoSemCarteira");
+      if (semCart.length) {
+        const p = semCart[0];
+        atalho.hidden = false;
+        atalho.href = "?operador=" + encodeURIComponent(p.id);
+        atalho.textContent = "Montar carteira de " + nomeDe(p);
+        atalho.onclick = (ev) => { ev.preventDefault(); history.pushState(null, "", atalho.getAttribute("href")); selecionar(p.id); };
+      } else {
+        atalho.hidden = true;
       }
+    }
 
-      // ─── Carteira do selecionado ───────────────────────────────────────
-
-      async function selecionar(id) {
-        _selecionado = _operadores.find((o) => o.id === id) || null;
-        if (!_selecionado) return;
-
-        document.getElementById("semSelecao").hidden = true;
-        document.getElementById("detalheCarteira").hidden = false;
-        document.getElementById("opNome").textContent = _selecionado.full_name || _selecionado.email;
-        document.getElementById("opEmail").textContent = _selecionado.email;
-        document.getElementById("opAviso").innerHTML = _selecionado.ativo
-          ? ""
-          : `<span class="badge" style="background:var(--border);color:var(--text-muted)">CONTA INATIVA</span>`;
-        document.getElementById("buscaDoc").value = "";
-
-        renderOperadores();
-        try {
-          await carregarUniverso();
-        } catch (e) {
-          msg("Não foi possível carregar a lista de clientes: " + e.message, "error");
-        }
-        await Promise.all([carregarCarteira(), carregarHistorico()]);
-      }
-
-      async function carregarCarteira() {
-        const el = document.getElementById("listaCarteira");
-        el.innerHTML = `<p class="transfer__vazio">Carregando…</p>`;
-        try {
-          const r = await fetch(`/api/carteira/${encodeURIComponent(_selecionado.id)}`, { headers: getHeaders() });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          const d = await r.json();
-          _carteiraAtual = new Set(d.documentos || []);
-          // A trilha (quem liberou, quando) fica indexada por documento: o
-          // painel a mostra na linha, como antes.
-          _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
-          renderTransfer();
-        } catch (e) {
-          el.innerHTML = `<p class="falha-inline" style="padding:0.6rem">${esc(e.message)}</p>`;
-        }
-      }
-
-      async function carregarHistorico() {
-        const el = document.getElementById("historicoOperador");
-        // A trilha é de admin; para o gestor a seção some em vez de mostrar um
-        // erro que ele não pode resolver.
-        if (_papel !== "admin") {
-          el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">` +
-            `Disponível para administradores.</p>`;
-          return;
-        }
-        el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">Carregando…</p>`;
-        try {
-          const r = await fetch(
-            `/api/cert-installer/trilha?dias=365&user_email=${encodeURIComponent(_selecionado.email)}`,
-            { headers: getHeaders() }
-          );
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          const d = await r.json();
-          const cadeias = d.cadeias || [];
-          if (!cadeias.length) {
-            el.innerHTML = `<p class="text-muted" style="font-size: var(--fs-ui-sm)">Nenhuma instalação registrada.</p>`;
-            return;
-          }
-          const r2 = d.resumo || {};
-          el.innerHTML =
-            `<p class="text-muted" style="font-size: var(--fs-ui-sm);margin-bottom:0.4rem">` +
-            `${r2.total} tentativa(s) · ${r2.concluidas} concluída(s) · ${r2.falhadas} com falha</p>` +
-            cadeias.slice(0, 10).map((c) => `
-              <div class="doc-chip">
-                <div style="font-size: var(--fs-ui-sm)">
-                  ${c.inicio ? new Date(c.inicio).toLocaleString("pt-BR") : "—"}
-                  · ${c.certificados} certificado(s) · ${esc(c.target_machine || "—")}
-                </div>
-                <span style="font-size: var(--fs-ui-sm);color:${
-                  c.desfecho === "concluido" ? "var(--ok-text)" : "var(--expired-text)"
-                }">${esc(c.desfecho)}</span>
-              </div>`).join("");
-        } catch (e) {
-          el.innerHTML = `<p class="falha-inline">${esc(e.message)}</p>`;
-        }
-      }
-
-      // ─── Os dois painéis ───────────────────────────────────────────────
-
-      /** Universo completo, carregado uma vez por sessão de tela. */
-      async function carregarUniverso() {
-        if (_universo.length) return;
-        const r = await fetch("/api/carteira/documentos?limite=2000", { headers: getHeaders() });
+    async function carregarOperadores() {
+      try {
+        const r = await fetch("/api/carteira/operadores", { headers: getHeaders() });
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
-        _universo = d.documentos || [];
-        // Truncamento silencioso é o modo de falha desta rota: a lista
-        // pareceria completa e o cliente que faltasse seria "inexistente".
-        _universoTruncado = (d.total || 0) > _universo.length ? d.total : 0;
+        _operadores = d.operadores || [];
+        _resumo = d.resumo || null;
+        renderOperadores();
+      } catch (e) {
+        document.getElementById("listaOperadores").innerHTML =
+          `<li class="cg-op-vazio">${esc(e.message)}</li>`;
+      }
+    }
+
+    // ─── Carteira do selecionado ───────────────────────────────────────
+
+    async function selecionar(id) {
+      _selecionado = _operadores.find((o) => o.id === id) || null;
+      document.body.classList.toggle("cg-tem-operador", !!_selecionado);
+      if (!_selecionado) {
+        document.getElementById("semSelecao").hidden = false;
+        document.getElementById("detalheCarteira").hidden = true;
+        renderOperadores();
+        return;
       }
 
-      function filtrar(docs) {
-        const q = (document.getElementById("buscaDoc").value || "").trim().toLowerCase();
-        if (!q) return docs;
-        const digitos = q.replace(/\D/g, "");
-        return docs.filter(
-          (x) => (x.nome || "").toLowerCase().includes(q) || (digitos && x.documento.includes(digitos))
+      document.getElementById("semSelecao").hidden = true;
+      document.getElementById("detalheCarteira").hidden = false;
+      document.getElementById("opNome").textContent = nomeDe(_selecionado);
+      document.getElementById("opEmail").textContent = _selecionado.email;
+      document.getElementById("opAviso").innerHTML = (_selecionado.ativo ? "" : `<span class="ag-badge ag-badge--neutral">Conta inativa</span> `) +
+        (_selecionado.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "");
+      document.getElementById("buscaDoc").value = "";
+
+      renderOperadores();
+      try {
+        await carregarUniverso();
+      } catch (e) {
+        msg("Não foi possível carregar a lista de clientes: " + e.message, "error");
+      }
+      await Promise.all([carregarCarteira(), carregarHistorico()]);
+    }
+
+    function atualizarContagemOp() {
+      const n = _carteiraAtual.size;
+      document.getElementById("opContagem").textContent = n + (n === 1 ? " cliente na carteira" : " clientes na carteira");
+    }
+
+    async function carregarCarteira() {
+      const el = document.getElementById("listaCarteira");
+      el.innerHTML = `<p class="cg-transfer__vazio">Carregando…</p>`;
+      try {
+        const r = await fetch(`/api/carteira/${encodeURIComponent(_selecionado.id)}`, { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        _carteiraAtual = new Set(d.documentos || []);
+        _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
+        atualizarContagemOp();
+        renderTransfer();
+      } catch (e) {
+        el.innerHTML = `<p class="cg-transfer__vazio">${esc(e.message)}</p>`;
+      }
+    }
+
+    async function carregarHistorico() {
+      const el = document.getElementById("historicoOperador");
+      // A trilha é de admin; para o gestor a seção some em vez de mostrar um
+      // erro que ele não pode resolver.
+      if (_papel !== "admin") {
+        el.innerHTML = `<p class="cg-cart-dica">Disponível para administradores.</p>`;
+        return;
+      }
+      el.innerHTML = `<p class="cg-cart-dica">Carregando…</p>`;
+      try {
+        const r = await fetch(
+          `/api/cert-installer/trilha?dias=365&user_email=${encodeURIComponent(_selecionado.email)}`,
+          { headers: getHeaders() }
         );
-      }
-
-      function linhaTransfer(x, naCarteira) {
-        const t = naCarteira ? _trilha[x.documento] : null;
-        const trilha = t && (t.atribuido_por || t.atribuido_em)
-          ? `<div class="doc-chip__trilha">${esc(x.documento)}` +
-            (t.atribuido_por ? " · liberado por " + esc(t.atribuido_por) : "") +
-            (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
-            (t.no_inventario === false ? " · <em>fora do inventário atual</em>" : "") +
-            `</div>`
-          : `<div class="doc-chip__trilha">${esc(x.documento)}</div>`;
-        // Sem botao por linha desde 19/08: a LINHA e o alvo de selecao, e a
-        // acao vive no rodape do painel. `role="option"` + `aria-selected` e o
-        // par correto para uma lista de selecao multipla (o container e
-        // `role="listbox" aria-multiselectable`).
-        return `<div class="transfer__item" role="option" aria-selected="false" tabindex="0"
-                     data-doc="${esc(x.documento)}">
-          <div class="transfer__item__nome">
-            <div>${esc(x.nome || "(sem nome)")}</div>
-            ${trilha}
-          </div>
-        </div>`;
-      }
-
-      /** Documentos marcados em um dos lados. */
-      function selecionados(el) {
-        return [...el.querySelectorAll(".transfer__item.is-sel")].map((it) => it.dataset.doc);
-      }
-
-      /** Marca/desmarca uma linha e repinta os rotulos de lote. */
-      function alternarLinha(item) {
-        const ligado = !item.classList.contains("is-sel");
-        item.classList.toggle("is-sel", ligado);
-        item.setAttribute("aria-selected", ligado ? "true" : "false");
-        atualizarLote();
-      }
-
-      /**
-       * Reescreve contagem e estado dos quatro botoes de lote.
-       *
-       * Chamada sem argumentos quando so a selecao mudou; `renderTransfer`
-       * passa as listas filtradas, que sao a base do "Todos".
-       */
-      let _dispFiltrados = [];
-      let _cartFiltrados = [];
-      function atualizarLote(disp, cart) {
-        if (disp) _dispFiltrados = disp;
-        if (cart) _cartFiltrados = cart;
-
-        const elDisp = document.getElementById("listaDisponiveis");
-        const elCart = document.getElementById("listaCarteira");
-        const selD = selecionados(elDisp);
-        const selC = selecionados(elCart);
-
-        const rotulo = (id, n) => {
-          const b = document.getElementById(id);
-          b.disabled = !n;
-          b.querySelector("[data-conta]").textContent = n ? ` (${n})` : "";
-        };
-        rotulo("btnLiberarSel", selD.length);
-        rotulo("btnAddTodos", _dispFiltrados.length);
-        rotulo("btnRemoverSel", selC.length);
-        rotulo("btnRemoverTodos", _cartFiltrados.length);
-
-        const conta = (id, n) => {
-          const e = document.getElementById(id);
-          e.hidden = !n;
-          e.textContent = n ? `${n} selecionado${n > 1 ? "s" : ""}` : "";
-        };
-        conta("selDisponiveis", selD.length);
-        conta("selCarteira", selC.length);
-      }
-
-      /** Redesenha os dois lados a partir do universo, da carteira e do filtro. */
-      function renderTransfer() {
-        const naCarteira = _universo.filter((x) => _carteiraAtual.has(x.documento));
-        // Documento atribuído que saiu do inventário continua na carteira e
-        // não está no universo — sem isto ele sumiria da tela e ninguém
-        // conseguiria removê-lo.
-        for (const doc of _carteiraAtual) {
-          if (!naCarteira.some((x) => x.documento === doc)) {
-            naCarteira.push({ documento: doc, nome: (_trilha[doc] || {}).nome || "" });
-          }
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        const cadeias = d.cadeias || [];
+        if (!cadeias.length) {
+          el.innerHTML = `<p class="cg-cart-dica">Nenhuma instalação registrada.</p>`;
+          return;
         }
-        const disponiveis = _universo.filter((x) => !_carteiraAtual.has(x.documento));
-
-        const dispFiltrados = filtrar(disponiveis);
-        const cartFiltrados = filtrar(naCarteira);
-
-        document.getElementById("contaDisponiveis").textContent =
-          dispFiltrados.length === disponiveis.length
-            ? `(${disponiveis.length})`
-            : `(${dispFiltrados.length} de ${disponiveis.length})`;
-        document.getElementById("contaDocs").textContent =
-          cartFiltrados.length === naCarteira.length
-            ? `(${naCarteira.length})`
-            : `(${cartFiltrados.length} de ${naCarteira.length})`;
-
-        const elDisp = document.getElementById("listaDisponiveis");
-        const elCart = document.getElementById("listaCarteira");
-
-        elDisp.innerHTML = dispFiltrados.length
-          ? dispFiltrados.map((x) => linhaTransfer(x, false)).join("")
-          : `<p class="transfer__vazio">${disponiveis.length ? "Nenhum cliente com esse filtro." : "Todos os clientes já estão na carteira."}</p>`;
-
-        elCart.innerHTML = cartFiltrados.length
-          ? cartFiltrados.map((x) => linhaTransfer(x, true)).join("")
-          : naCarteira.length
-            ? `<p class="transfer__vazio">Nenhum cliente com esse filtro.</p>`
-            // O vazio precisa dizer a CONSEQUÊNCIA: é o comportamento correto
-            // (o acesso fecha por padrão), e é também o que trava a pessoa sem
-            // que ninguém saiba por quê.
-            : `<p class="transfer__vazio">Carteira vazia — esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
-
-        // A acao em lote deixou de ser escondida atras do filtro e passou a
-        // dizer o tamanho do que faz: cada botao imprime a contagem que vai
-        // mover e desabilita quando nao ha nada. A guarda antiga existia para
-        // que "liberar os 491" nao fosse um clique distraido — o que a protegia
-        // era a MAGNITUDE ficar visivel, e ela agora esta no proprio rotulo.
-        atualizarLote(dispFiltrados, cartFiltrados);
-
-        const dica = document.getElementById("dicaBusca");
-        dica.textContent = _universoTruncado
-          ? `Atenção: mostrando ${_universo.length} de ${_universoTruncado} clientes — a lista foi cortada.`
-          : "";
+        const r2 = d.resumo || {};
+        const pl = (n, s, p) => n + " " + (n === 1 ? s : p);
+        el.innerHTML =
+          `<p class="cg-cart-dica">${pl(r2.total || 0, "tentativa", "tentativas")} · ${pl(r2.concluidas || 0, "concluída", "concluídas")} · ${r2.falhadas || 0} com falha</p>` +
+          cadeias.slice(0, 10).map((c) => `
+            <div class="cg-cart-hist__linha">
+              <span>${c.inicio ? new Date(c.inicio).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                · ${pl(c.certificados || 0, "certificado", "certificados")} · ${esc(c.target_machine || "—")}</span>
+              <span>${esc(c.desfecho)}</span>
+            </div>`).join("");
+      } catch (e) {
+        el.innerHTML = `<p class="cg-cart-dica">${esc(e.message)}</p>`;
       }
+    }
 
-      async function atribuir(documentos) {
-        if (!documentos.length) return;
-        // Liberar em lote confirma; liberar um nao. A guarda antiga escondia o
-        // botao "liberar os 491" atras do filtro justamente para que a concessao
-        // em massa nao fosse um clique distraido — o botao agora e permanente,
-        // entao a protecao migrou para ca. A revogacao ja confirmava; sem isto,
-        // TIRAR acesso pediria confirmacao e DAR acesso a centenas nao pediria.
-        if (documentos.length > 1 && !confirm(
-          `Liberar ${documentos.length} clientes para esta pessoa?` +
-          `\n\nEla passa a conseguir instalar os certificados deles.`
-        )) return;
-        try {
-          const r = await fetch("/api/carteira", {
-            method: "POST",
-            headers: getHeaders(true),
-            body: JSON.stringify({ user_id: _selecionado.id, documentos }),
-          });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          msg(documentos.length === 1 ? "Cliente liberado." : `${documentos.length} clientes liberados.`, "success");
-          await Promise.all([carregarCarteira(), carregarOperadores()]);
-        } catch (e) {
-          msg("Não foi possível liberar: " + e.message, "error");
+    // ─── Os dois painéis ───────────────────────────────────────────────
+
+    /** Universo completo, carregado uma vez por sessão de tela. */
+    async function carregarUniverso() {
+      if (_universo.length) return;
+      const r = await fetch("/api/carteira/documentos?limite=2000", { headers: getHeaders() });
+      if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+      const d = await r.json();
+      _universo = d.documentos || [];
+      // Truncamento silencioso é o modo de falha desta rota.
+      _universoTruncado = (d.total || 0) > _universo.length ? d.total : 0;
+    }
+
+    function filtrar(docs) {
+      const q = (document.getElementById("buscaDoc").value || "").trim().toLowerCase();
+      if (!q) return docs;
+      const digitos = q.replace(/\D/g, "");
+      return docs.filter(
+        (x) => (x.nome || "").toLowerCase().includes(q) || (digitos && x.documento.includes(digitos))
+      );
+    }
+
+    function linhaTransfer(x, naCarteira) {
+      const t = naCarteira ? _trilha[x.documento] : null;
+      const trilha = t && (t.atribuido_por || t.atribuido_em)
+        ? `<span class="cg-transfer__trilha">${esc(x.documento)}` +
+          (t.atribuido_por ? " · liberado por " + esc(t.atribuido_por) : "") +
+          (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
+          (t.no_inventario === false ? " · fora do inventário atual" : "") +
+          `</span>`
+        : `<span class="cg-transfer__trilha">${esc(x.documento)}</span>`;
+      // A LINHA é o alvo de seleção; a ação vive no rodapé do painel.
+      return `<div class="cg-transfer__item" role="option" aria-selected="false" tabindex="0" data-doc="${esc(x.documento)}">
+        <svg class="ag-icon cg-transfer__marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span class="cg-transfer__nome"><span>${esc(x.nome || "(sem nome)")}</span>${trilha}</span>
+      </div>`;
+    }
+
+    function selecionados(el) {
+      return [...el.querySelectorAll('.cg-transfer__item[aria-selected="true"]')].map((it) => it.dataset.doc);
+    }
+
+    function alternarLinha(item) {
+      const ligado = item.getAttribute("aria-selected") !== "true";
+      item.setAttribute("aria-selected", ligado ? "true" : "false");
+      atualizarLote();
+    }
+
+    let _dispFiltrados = [];
+    let _cartFiltrados = [];
+    function atualizarLote(disp, cart) {
+      if (disp) _dispFiltrados = disp;
+      if (cart) _cartFiltrados = cart;
+      const selD = selecionados(document.getElementById("listaDisponiveis"));
+      const selC = selecionados(document.getElementById("listaCarteira"));
+      const rotulo = (id, n) => {
+        const b = document.getElementById(id);
+        b.disabled = !n;
+        b.querySelector("[data-conta]").textContent = n ? ` (${n})` : "";
+      };
+      rotulo("btnLiberarSel", selD.length);
+      rotulo("btnAddTodos", _dispFiltrados.length);
+      rotulo("btnRemoverSel", selC.length);
+      rotulo("btnRemoverTodos", _cartFiltrados.length);
+      const conta = (id, n) => {
+        const e = document.getElementById(id);
+        e.hidden = !n;
+        e.textContent = n ? `${n} selecionado${n > 1 ? "s" : ""}` : "";
+      };
+      conta("selDisponiveis", selD.length);
+      conta("selCarteira", selC.length);
+    }
+
+    function renderTransfer() {
+      const naCarteira = _universo.filter((x) => _carteiraAtual.has(x.documento));
+      // Documento atribuído que saiu do inventário continua na carteira.
+      for (const doc of _carteiraAtual) {
+        if (!naCarteira.some((x) => x.documento === doc)) {
+          naCarteira.push({ documento: doc, nome: (_trilha[doc] || {}).nome || "" });
         }
       }
+      const disponiveis = _universo.filter((x) => !_carteiraAtual.has(x.documento));
+      const dispFiltrados = filtrar(disponiveis);
+      const cartFiltrados = filtrar(naCarteira);
 
-      async function importarPlanilha(ev) {
-        ev.preventDefault();
-        const input = document.getElementById("arquivoCarteiras");
-        const caixaErros = document.getElementById("importErros");
-        const arquivo = input.files && input.files[0];
-        if (!arquivo) return;
+      document.getElementById("contaDisponiveis").textContent =
+        dispFiltrados.length === disponiveis.length ? `(${disponiveis.length})` : `(${dispFiltrados.length} de ${disponiveis.length})`;
+      document.getElementById("contaDocs").textContent =
+        cartFiltrados.length === naCarteira.length ? `(${naCarteira.length})` : `(${cartFiltrados.length} de ${naCarteira.length})`;
 
-        const botao = ev.target.querySelector("button[type=submit]");
-        botao.disabled = true;
-        botao.textContent = "Importando…";
-        caixaErros.hidden = true;
+      const elDisp = document.getElementById("listaDisponiveis");
+      const elCart = document.getElementById("listaCarteira");
+      elDisp.innerHTML = dispFiltrados.length
+        ? dispFiltrados.map((x) => linhaTransfer(x, false)).join("")
+        : `<p class="cg-transfer__vazio">${disponiveis.length ? "Nenhum cliente com esse filtro." : "Todos os clientes já estão na carteira."}</p>`;
+      elCart.innerHTML = cartFiltrados.length
+        ? cartFiltrados.map((x) => linhaTransfer(x, true)).join("")
+        : naCarteira.length
+          ? `<p class="cg-transfer__vazio">Nenhum cliente com esse filtro.</p>`
+          // O vazio diz a CONSEQUÊNCIA: é o que trava a pessoa sem que
+          // ninguém saiba por quê.
+          : `<p class="cg-transfer__vazio">Carteira vazia. Esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
 
-        try {
-          const fd = new FormData();
-          fd.append("file", arquivo);
-          // Sem Content-Type manual: o boundary do multipart é gerado pelo
-          // navegador, e fixá-lo aqui quebraria o parse no servidor.
-          const r = await fetch("/api/carteira/importar", {
-            method: "POST",
-            headers: getHeaders(),
-            body: fd,
-          });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          const d = await r.json();
+      atualizarLote(dispFiltrados, cartFiltrados);
+      document.getElementById("dicaBusca").textContent = _universoTruncado
+        ? `Atenção: mostrando ${_universo.length} de ${_universoTruncado} clientes. A lista foi cortada.`
+        : "";
+    }
 
-          const erros = d.erros || [];
-          msg(
-            `${d.atribuidos} atribuição(ões) em ${d.pessoas} pessoa(s)` +
-            (erros.length ? ` · ${erros.length} linha(s) com problema.` : "."),
-            erros.length ? "warning" : "success"
-          );
-
-          // Cada linha recusada com o motivo: "3 erros" sem dizer quais manda
-          // o gestor conferir a planilha inteira na mão.
-          if (erros.length) {
-            caixaErros.hidden = false;
-            caixaErros.querySelector(".import-erros__titulo").textContent =
-              `${erros.length} linha(s) não importada(s):`;
-            caixaErros.querySelector(".import-erros__lista").innerHTML = erros
-              .map((e) => `<li>${e.linha ? "Linha " + e.linha + ": " : ""}${esc(e.motivo)}</li>`)
-              .join("");
-          }
-
-          input.value = "";
-          await carregarOperadores();
-          if (_selecionado) await carregarCarteira();
-        } catch (e) {
-          msg("Não foi possível importar: " + e.message, "error");
-        } finally {
-          botao.disabled = false;
-          botao.textContent = "Importar";
-        }
-      }
-
-      async function removerVarios(documentos) {
-        if (!documentos.length) return;
-        // Singular/plural: desde 19/08 a remocao de UM item tambem passa por
-        // aqui (a linha virou alvo de selecao e o botao por linha saiu), entao
-        // "Remover 1 clientes" seria o texto do caso mais comum.
-        const um = documentos.length === 1;
-        if (!confirm(
-          (um
-            ? `Remover este cliente da carteira?`
-            : `Remover ${documentos.length} clientes da carteira?`) +
-          `\n\nA pessoa deixa de conseguir instalar os certificados ${um ? "dele" : "deles"}.`
-        )) return;
-        // Uma chamada por documento: a rota de remoção é por documento, e
-        // inventar um lote no servidor só para isto abriria uma segunda porta
-        // de revogação — com a mesma checagem de alcance para manter.
-        let falhas = 0;
-        for (const doc of documentos) {
-          try {
-            const r = await fetch(
-              `/api/carteira/${encodeURIComponent(_selecionado.id)}/${encodeURIComponent(doc)}`,
-              { method: "DELETE", headers: getHeaders() }
-            );
-            if (!r.ok) falhas++;
-          } catch (_e) { falhas++; }
-        }
-        msg(
-          falhas
-            ? `${documentos.length - falhas} removido(s); ${falhas} falharam.`
-            : `${documentos.length} clientes removidos da carteira.`,
-          falhas ? "error" : "success"
-        );
-        await Promise.all([carregarCarteira(), carregarOperadores()]);
-      }
-
-
-      (function init() {
-        // Sidebar por papel: ui-common.js (initSidebarPorPapel), que nasceu
-        // desta cópia — era a única que já conhecia todos os itens.
-        _papel = localStorage.getItem("user_role");
-
-        document.getElementById("buscaOperador").addEventListener("input", renderOperadores);
-
-        // Delegacao: as linhas sao recriadas a cada `renderTransfer`, entao o
-        // listener mora no container e nao em cada uma.
-        ["listaDisponiveis", "listaCarteira"].forEach((id) => {
-          const el = document.getElementById(id);
-          el.addEventListener("click", (e) => {
-            const item = e.target.closest(".transfer__item");
-            if (item) alternarLinha(item);
-          });
-          // Espaco e Enter alternam, como num listbox de verdade.
-          el.addEventListener("keydown", (e) => {
-            if (e.key !== " " && e.key !== "Enter") return;
-            const item = e.target.closest(".transfer__item");
-            if (!item) return;
-            e.preventDefault();
-            alternarLinha(item);
-          });
+    async function atribuir(documentos) {
+      if (!documentos.length) return;
+      // Liberar em lote confirma; liberar um não. A magnitude fica visível
+      // no rótulo, e a confirmação protege o clique distraído.
+      if (documentos.length > 1 && !confirm(
+        `Liberar ${documentos.length} clientes para esta pessoa?` +
+        `\n\nEla passa a conseguir instalar os certificados deles.`
+      )) return;
+      try {
+        const r = await fetch("/api/carteira", {
+          method: "POST",
+          headers: getHeaders(true),
+          body: JSON.stringify({ user_id: _selecionado.id, documentos }),
         });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        msg(documentos.length === 1 ? "Cliente liberado." : `${documentos.length} clientes liberados.`, "success");
+        await Promise.all([carregarCarteira(), carregarOperadores()]);
+        if (_selecionado) {
+          _selecionado = _operadores.find((o) => o.id === _selecionado.id) || _selecionado;
+          document.getElementById("opAviso").innerHTML = _selecionado.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "";
+        }
+      } catch (e) {
+        msg("Não foi possível liberar: " + e.message, "error");
+      }
+    }
 
-        document.getElementById("btnLiberarSel").addEventListener("click", () =>
-          atribuir(selecionados(document.getElementById("listaDisponiveis"))));
-        document.getElementById("btnAddTodos").addEventListener("click", () =>
-          atribuir(_dispFiltrados.map((x) => x.documento)));
-        document.getElementById("btnRemoverSel").addEventListener("click", () =>
-          removerVarios(selecionados(document.getElementById("listaCarteira"))));
-        document.getElementById("btnRemoverTodos").addEventListener("click", () =>
-          removerVarios(_cartFiltrados.map((x) => x.documento)));
-        // Sem debounce: o filtro roda sobre a lista já em memória, não faz
-        // requisição nenhuma — esperar 250ms a cada tecla só atrasaria.
-        document.getElementById("buscaDoc").addEventListener("input", renderTransfer);
+    // ─── Importação ────────────────────────────────────────────────────
 
-        document.getElementById("formImportar").addEventListener("submit", importarPlanilha);
+    async function importarPlanilha(ev) {
+      ev.preventDefault();
+      const input = document.getElementById("arquivoCarteiras");
+      const caixaErros = document.getElementById("importErros");
+      const arquivo = input.files && input.files[0];
+      if (!arquivo) return;
 
-        // O drop e o clique são nativos do <input type="file"> que cobre a
-        // zona; isto cuida só do que o navegador não dá de graça — o realce
-        // durante o arrasto e o nome do arquivo escolhido.
-        (function ligarDropzone() {
-          const zona = document.querySelector(".dropzone");
-          if (!zona) return;
-          const input = zona.querySelector(".dropzone__input");
-          const nome = zona.querySelector(".dropzone__nome");
-          // `preventDefault` no dragover é obrigatório: sem ele o navegador
-          // recusa o drop e abre o arquivo numa aba nova, perdendo a página.
-          ["dragenter", "dragover"].forEach((ev) =>
-            zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("is-over"); })
+      const botao = document.getElementById("btnImportar");
+      botao.disabled = true;
+      botao.textContent = "Importando…";
+      caixaErros.hidden = true;
+
+      try {
+        const fd = new FormData();
+        fd.append("file", arquivo);
+        // Sem Content-Type manual: o boundary do multipart é do navegador.
+        const r = await fetch("/api/carteira/importar", { method: "POST", headers: getHeaders(), body: fd });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        const erros = d.erros || [];
+        const n = d.pessoas || 0;
+        showToast(`${d.atribuidos} ${d.atribuidos === 1 ? "cliente liberado" : "clientes liberados"} em ${n} ${n === 1 ? "carteira atualizada" : "carteiras atualizadas"}.`, erros.length ? "warning" : "success");
+
+        // Cada linha recusada com o motivo, dentro do modal, que fica aberto.
+        if (erros.length) {
+          caixaErros.hidden = false;
+          caixaErros.querySelector(".import-erros__titulo").textContent =
+            erros.length === 1 ? "1 linha não importada:" : `${erros.length} linhas não importadas:`;
+          caixaErros.querySelector(".import-erros__lista").innerHTML = erros
+            .map((e) => `<li>${e.linha ? "Linha " + e.linha + ": " : ""}${esc(e.motivo)}</li>`)
+            .join("");
+        } else {
+          document.getElementById("modalImportar").close();
+        }
+
+        input.value = "";
+        input.dispatchEvent(new Event("change"));
+        await carregarOperadores();
+        if (_selecionado) await carregarCarteira();
+      } catch (e) {
+        msg("Não foi possível importar: " + e.message, "error");
+      } finally {
+        botao.disabled = false;
+        botao.textContent = "Importar";
+      }
+    }
+
+    async function removerVarios(documentos) {
+      if (!documentos.length) return;
+      const um = documentos.length === 1;
+      if (!confirm(
+        (um ? `Remover este cliente da carteira?` : `Remover ${documentos.length} clientes da carteira?`) +
+        `\n\nA pessoa deixa de conseguir instalar os certificados ${um ? "dele" : "deles"}.`
+      )) return;
+      let falhas = 0;
+      for (const doc of documentos) {
+        try {
+          const r = await fetch(
+            `/api/carteira/${encodeURIComponent(_selecionado.id)}/${encodeURIComponent(doc)}`,
+            { method: "DELETE", headers: getHeaders() }
           );
-          ["dragleave", "drop"].forEach((ev) =>
-            zona.addEventListener(ev, () => zona.classList.remove("is-over"))
-          );
-          input.addEventListener("change", () => {
-            const f = input.files && input.files[0];
-            zona.classList.toggle("is-selected", !!f);
-            nome.textContent = f ? f.name : "";
-          });
-        })();
-        carregarOperadores();
+          if (!r.ok) falhas++;
+        } catch (_e) { falhas++; }
+      }
+      msg(
+        falhas
+          ? `${documentos.length - falhas} removidos; ${falhas} falharam.`
+          : (um ? "Cliente removido da carteira." : `${documentos.length} clientes removidos da carteira.`),
+        falhas ? "error" : "success"
+      );
+      await Promise.all([carregarCarteira(), carregarOperadores()]);
+      if (_selecionado) {
+        _selecionado = _operadores.find((o) => o.id === _selecionado.id) || _selecionado;
+        document.getElementById("opAviso").innerHTML = _selecionado.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "";
+      }
+    }
+
+    (function init() {
+      // Sidebar por papel: ui-common.js (initSidebarPorPapel).
+      _papel = localStorage.getItem("user_role");
+
+      const busca = document.getElementById("buscaOperador");
+      busca.value = new URLSearchParams(location.search).get("q") || "";
+      busca.addEventListener("input", renderOperadores);
+      busca.form.addEventListener("submit", (ev) => { ev.preventDefault(); renderOperadores(); });
+
+      ["listaDisponiveis", "listaCarteira"].forEach((id) => {
+        const el = document.getElementById(id);
+        el.addEventListener("click", (e) => {
+          const item = e.target.closest(".cg-transfer__item");
+          if (item) alternarLinha(item);
+        });
+        el.addEventListener("keydown", (e) => {
+          if (e.key !== " " && e.key !== "Enter") return;
+          const item = e.target.closest(".cg-transfer__item");
+          if (!item) return;
+          e.preventDefault();
+          alternarLinha(item);
+        });
+      });
+
+      document.getElementById("btnLiberarSel").addEventListener("click", () =>
+        atribuir(selecionados(document.getElementById("listaDisponiveis"))));
+      document.getElementById("btnAddTodos").addEventListener("click", () =>
+        atribuir(_dispFiltrados.map((x) => x.documento)));
+      document.getElementById("btnRemoverSel").addEventListener("click", () =>
+        removerVarios(selecionados(document.getElementById("listaCarteira"))));
+      document.getElementById("btnRemoverTodos").addEventListener("click", () =>
+        removerVarios(_cartFiltrados.map((x) => x.documento)));
+      document.getElementById("buscaDoc").addEventListener("input", renderTransfer);
+
+      // Modal de importação.
+      const modal = document.getElementById("modalImportar");
+      document.getElementById("btnAbrirImportar").addEventListener("click", () => modal.showModal());
+      modal.querySelectorAll("[data-ag-modal-close]").forEach((b) => b.addEventListener("click", () => modal.close()));
+      document.getElementById("formImportar").addEventListener("submit", importarPlanilha);
+
+      (function ligarDropzone() {
+        const zona = document.querySelector(".ag-dropzone");
+        const input = zona.querySelector(".ag-dropzone__input");
+        const nome = zona.querySelector(".ag-dropzone__nome");
+        // preventDefault no dragover é obrigatório: sem ele o navegador abre
+        // o arquivo numa aba nova e a página se perde.
+        ["dragenter", "dragover"].forEach((ev) =>
+          zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("is-over"); })
+        );
+        ["dragleave", "drop"].forEach((ev) => zona.addEventListener(ev, () => zona.classList.remove("is-over")));
+        input.addEventListener("change", () => {
+          const f = input.files && input.files[0];
+          zona.classList.toggle("is-selected", !!f);
+          nome.textContent = f ? f.name : "";
+        });
       })();
-    </script>
-  </body>
+
+      // A seleção vive na URL: voltar do navegador troca de operador.
+      window.addEventListener("popstate", () => {
+        const id = new URLSearchParams(location.search).get("operador");
+        selecionar(id || null);
+      });
+
+      carregarOperadores().then(() => {
+        if (OPERADOR_INICIAL) selecionar(OPERADOR_INICIAL);
+      });
+    })();
+  </script>
+</body>
 </html>

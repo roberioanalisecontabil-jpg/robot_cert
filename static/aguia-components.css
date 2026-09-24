@@ -904,3 +904,142 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
     font-size: var(--text-sm);
     color: var(--text-secondary);
 }
+
+/* ── Botões de perigo ────────────────────────────────────────────────── */
+
+.ag-btn--danger { background: var(--danger-500); color: var(--white); border-color: var(--danger-500); }
+.ag-btn--danger:hover:not(:disabled) { background: var(--danger-700); border-color: var(--danger-700); }
+/* Excluir em contexto de linha: destrutivo, mas discreto. */
+.ag-btn--ghost-danger { background: transparent; color: var(--danger-700); border-color: transparent; }
+.ag-btn--ghost-danger:hover:not(:disabled) { background: var(--danger-50); }
+
+/* ── Alerta em bloco ─────────────────────────────────────────────────── */
+
+/* Mensagem que precisa FICAR (o toast some): erro de importação com as
+   linhas recusadas, falha que a pessoa precisa ler com calma. Cor de
+   estado lavada no fundo, texto no degrau 700 do mesmo matiz. */
+.ag-alert {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    border: var(--bw-1) solid transparent;
+    font-size: var(--text-sm);
+}
+.ag-alert .ag-icon { flex: none; margin-top: 2px; }
+.ag-alert__corpo { min-width: 0; }
+.ag-alert__titulo { margin: 0; font-weight: 600; }
+.ag-alert ul { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.ag-alert--info    { background: var(--info-50);    border-color: var(--info-500);    color: var(--info-700); }
+.ag-alert--success { background: var(--success-50); border-color: var(--success-500); color: var(--success-700); }
+.ag-alert--warning { background: var(--warning-50); border-color: var(--warning-500); color: var(--warning-700); }
+.ag-alert--danger  { background: var(--danger-50);  border-color: var(--danger-500);  color: var(--danger-700); }
+.ag-alert[hidden] { display: none; }
+
+/* ── Modal ───────────────────────────────────────────────────────────── */
+
+/* <dialog> nativo: showModal() prende o foco, Esc fecha e devolve o foco a
+   quem abriu — o que a seção 41.8 pede — sem JavaScript de armadilha. */
+.ag-modal {
+    width: min(32rem, calc(100vw - var(--space-8)));
+    max-height: calc(100vh - var(--space-8));
+    padding: 0;
+    border: var(--bw-1) solid var(--border-default);
+    border-radius: var(--radius-xl);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-lg);
+}
+.ag-modal--lg { width: min(44rem, calc(100vw - var(--space-8))); }
+.ag-modal::backdrop { background: rgba(23, 23, 23, .55); }
+.ag-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+    border-bottom: var(--bw-1) solid var(--border-subtle);
+}
+.ag-modal__titulo { margin: 0; font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; }
+.ag-modal__x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: var(--radius-circle);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.ag-modal__x:hover { background: var(--bg-surface-alt); color: var(--text-primary); }
+.ag-modal__x:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ag-modal__body { padding: var(--space-5) var(--space-6); display: grid; gap: var(--space-4); }
+.ag-modal__foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding: var(--space-4) var(--space-6);
+    border-top: var(--bw-1) solid var(--border-subtle);
+}
+@media (max-width: 640px) {
+    /* No celular o modal é a tela inteira. */
+    .ag-modal, .ag-modal--lg {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border: 0;
+        border-radius: 0;
+    }
+    .ag-modal__foot .ag-btn { flex: 1 1 auto; }
+}
+
+/* ── Zona de arquivo ─────────────────────────────────────────────────── */
+
+/* Arrastar-e-soltar com o <input type="file"> cobrindo a zona inteira em
+   opacidade zero: clique, drop e foco de teclado vêm do próprio input. O
+   tracejado é o sinal de "aqui ainda não há conteúdo" e vira sólido quando
+   há; o anel de foco é desenhado na zona, não no input invisível. */
+.ag-dropzone {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    min-height: 64px;
+    border: var(--bw-2) dashed var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface-alt);
+    color: var(--text-primary);
+    transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+}
+.ag-dropzone__input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.ag-dropzone__icone { flex: none; color: var(--text-muted); }
+.ag-dropzone__texto { min-width: 0; }
+.ag-dropzone__titulo { margin: 0; font-weight: 600; font-size: var(--text-sm); }
+.ag-dropzone__sub { margin: 0; font-size: var(--text-xs); color: var(--text-secondary); }
+.ag-dropzone__nome { margin: 0 0 0 auto; font-size: var(--text-xs); font-weight: 600; color: var(--text-brand); overflow-wrap: anywhere; }
+.ag-dropzone:hover { border-color: var(--gold-500); background: var(--bg-surface); }
+.ag-dropzone:has(.ag-dropzone__input:focus-visible) { box-shadow: var(--focus-ring); border-color: var(--gold-500); }
+.ag-dropzone.is-over { border-style: solid; border-color: var(--gold-500); background: var(--color-gold-glow); }
+.ag-dropzone.is-selected { border-style: solid; border-color: var(--success-500); background: var(--success-50); }
+.ag-dropzone.is-selected .ag-dropzone__icone { color: var(--success-700); }
+
+/* ── Voltar (duas etapas no celular) ─────────────────────────────────── */
+
+.ag-voltar {
+    display: none;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 44px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-brand);
+    text-decoration: none;
+}
+.ag-voltar:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+@media (max-width: 1024px) { .ag-voltar { display: inline-flex; } }

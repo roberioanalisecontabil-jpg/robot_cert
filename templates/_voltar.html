@@ -1,0 +1,7 @@
+{# Link de "voltar" da tela de duas etapas no celular (seção 38 do DS).
+   Uso: {% with voltar_href="/carteiras", voltar_texto="Voltar para operadores" %}{% include "_voltar.html" %}{% endwith %}
+   Só aparece em telas estreitas: no desktop a lista está ao lado. #}
+<a class="ag-voltar" href="{{ voltar_href }}">
+  <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+  {{ voltar_texto }}
+</a>
