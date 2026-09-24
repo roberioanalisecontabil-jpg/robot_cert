@@ -643,7 +643,7 @@ brilho além do que o ouro já traz.
 ### Navigation
 
 - **Sidebar:** a do portal (`style.css`, 250px, fixa) pintada pela ponte: fundo `ink-900`, texto `ink-400`, hover e ativo em lavado dourado, texto ativo `gold-300`, "Sair" em `danger-500`. Ícones Heroicons outline legados permanecem até a sidebar migrar.
-- **Paginação:** o controle segmentado do portal, 44px; no celular, pílulas soltas que quebram linha com gap `space-2`.
+- **Paginação:** as pílulas do DS (`.cg-pag`, ver "Paginação em pílulas"), renderizadas por `cgPaginacaoPilulas` em `ui-common.js`, nas três telas migradas. O controle segmentado legado (`.cg-page-nav`, "Anterior/Seguinte") só sobrevive nas telas ainda não migradas.
 
 ### Barra de seleção
 
@@ -666,7 +666,7 @@ escondê-lo.
 - **Gráfico de barras** (`.ag-barchart`): uma `__row` por categoria (rótulo, `__track`, `__value`), largura da barra por `--barra` em %, piso de 4% para o item unitário não sumir, preenchimento `grad-gold` porque é gráfico de valor único; rótulo em mono quando é ano ou número; cada linha focável com `aria-label` que diz o valor e a fração do total.
 - **Campo de data** (`.ag-data`): ícone de calendário à esquerda, valor em mono tabular, seletor nativo mantido e clicável no campo inteiro; `color-scheme: dark` no escuro.
 - **KPI de perigo** (`.cg-kpi--perigo`, da família de listas): lavado `danger-50`, borda e filete `danger-500`, ícone `danger-700` sobre superfície. Um degrau acima do KPI de aviso; no máximo um por tela.
-- **Paginação em pílulas** (`.cg-pag`, da família de listas): Anterior, 1, 2, 3, …, última, Próxima no desktop; "Anterior · 1 de N · Próxima" abaixo de 640px. Página atual com `aria-current="page"`, contorno `gold-500`, texto de marca e lavado dourado; desabilitado com `aria-disabled` e opacidade .45; alvos de 44px; "Por página" com rótulo visível.
+- **Paginação em pílulas** (`.cg-pag`, da família de listas; um só renderizador, `cgPaginacaoPilulas`, em `ui-common.js`): Anterior, 1, 2, 3, …, última, Próxima no desktop; "Anterior · 1 de N · Próxima" abaixo de 640px. Itens são `<a>` com a query completa quando o estado vive na URL (Vencidos) e `<button>` quando não vive (Início, Histórico). Uma linha de contagem acima da tabela ("N registros · mostrando a–b"); a paginação não repete o total. Página atual com `aria-current="page"`, contorno `gold-500`, texto de marca e lavado dourado; desabilitado com `aria-disabled` e opacidade .45; alvos de 44px; "Por página" com rótulo visível.
 - **Selo** (`.ag-selo`): contagem no canto de um ícone, `danger-500` com número em Exo branco e borda da superfície; no escuro o vermelho escurece na tinta. O botão que o carrega diz a contagem no `aria-label` ("Notificações, 12 não lidas").
 - **Tooltip** (`.ag-tooltip` ou `[data-tooltip]`): balão à direita do elemento com o texto de `data-tooltip`, `ink-900` com texto branco nos dois temas (no escuro sobe para `ink-800` com borda `ink-700`), `radius-sm`, `shadow-md`, seta de 5px; entra com 180ms de atraso em `:hover` e em `:focus-visible`, some na hora. Sem JavaScript. Na sidebar só existe quando o rótulo está escondido (recolhida pelo botão ou na faixa 769–900px); cada item leva também `title` e `aria-label` com o mesmo nome. A gaveta do celular abre sempre expandida e não usa o balão.
 
