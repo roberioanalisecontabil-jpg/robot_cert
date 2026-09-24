@@ -33,8 +33,12 @@ def test_health(client: TestClient) -> None:
     assert r.status_code == 200
     j = r.json()
     assert j.get("ok") is True
-    assert "banco" in j
-    assert "api_key_required" in j
+    # Os booleanos de postura saíram da rota pública (auditoria #48) e vivem
+    # em /api/health/detalhado, atrás de admin.
+    assert "banco" not in j
+    d = client.get("/api/health/detalhado", headers=_headers_portal("", "admin")).json()
+    assert "banco" in d
+    assert "api_key_required" in d
 
 
 def test_health_reporta_as_duas_chaves_do_cofre(
@@ -49,7 +53,7 @@ def test_health_reporta_as_duas_chaves_do_cofre(
     falha só se manifestava na máquina do usuário final, ao rodar o instalador
     avulso — "o portal não enviou a senha deste certificado".
     """
-    r = client.get("/api/health")
+    r = client.get("/api/health/detalhado", headers=_headers_portal("", "admin"))
     j = r.json()
 
     assert j["cert_senha_key_configurada"] is True
@@ -61,7 +65,7 @@ def test_health_acusa_chave_da_senha_ausente(
 ) -> None:
     monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "", raising=False)
 
-    j = client.get("/api/health").json()
+    j = client.get("/api/health/detalhado", headers=_headers_portal("", "admin")).json()
 
     assert j["cert_senha_key_configurada"] is False
     assert j["cert_senha_key_distinta"] is False
@@ -74,7 +78,7 @@ def test_health_acusa_chaves_iguais(
     monkeypatch.setattr("app.config.CERT_ENCRYPTION_KEY", "cc" * 32, raising=False)
     monkeypatch.setattr("app.config.CERT_PASSWORD_ENCRYPTION_KEY", "cc" * 32, raising=False)
 
-    j = client.get("/api/health").json()
+    j = client.get("/api/health/detalhado", headers=_headers_portal("", "admin")).json()
 
     assert j["cert_senha_key_configurada"] is True
     assert j["cert_senha_key_distinta"] is False, "chaves iguais têm de aparecer aqui"

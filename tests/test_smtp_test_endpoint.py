@@ -69,14 +69,15 @@ def test_envio_de_teste_chega_ao_smtp(client: TestClient) -> None:
 
 def test_erro_do_servidor_smtp_vira_400_com_a_mensagem(client: TestClient) -> None:
     """
-    O texto do erro precisa chegar ao usuário: é por ele que se distingue
-    "senha de app faltando" de "host errado".
+    A pessoa precisa distinguir "senha de app faltando" de "host errado" —
+    mas pela CLASSE da falha, não pelo texto do servidor (auditoria #35, item
+    91 da spec de telas): o texto trazia o usuário e o host resolvido.
     """
     with patch("app.main.load_settings", _configuracao_valida):
         with patch.object(
             smtp_service,
             "send_smtp_email",
-            side_effect=Exception("535 5.7.8 Username and Password not accepted"),
+            side_effect=smtp_service.ErroAutenticacaoSmtp("535 5.7.8 Username and Password not accepted"),
         ):
             r = client.post(
                 "/api/settings/smtp/test",
@@ -85,7 +86,8 @@ def test_erro_do_servidor_smtp_vira_400_com_a_mensagem(client: TestClient) -> No
             )
 
     assert r.status_code == 400
-    assert "535" in r.json()["detail"]
+    assert "usuário ou a senha" in r.json()["detail"]
+    assert "535" not in r.json()["detail"]
 
 
 def test_sem_host_configurado_recusa_antes_de_tentar(client: TestClient) -> None:

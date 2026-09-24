@@ -312,7 +312,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09f"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -969,7 +969,7 @@
         ]);
         const all = [headers, ...rows];
         const csv = all
-          .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"))
+          .map((r) => r.map(celulaCsv).join(";"))
           .join("\n");
         const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);

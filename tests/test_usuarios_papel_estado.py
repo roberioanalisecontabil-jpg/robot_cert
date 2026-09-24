@@ -180,15 +180,18 @@ def test_usuario_ativo_entra(client: TestClient, banco) -> None:
 
 
 def test_desativado_nao_entra_mesmo_com_papel_preservado(client: TestClient, banco) -> None:
-    """`u-off` continua com role='admin' — o que barra é `ativo`, não o papel."""
+    """`u-off` continua com role='admin' — o que barra é `ativo`, não o papel.
+
+    401, o mesmo da senha errada: desde a auditoria (#27) o login não conta
+    em que estado a conta ficou."""
     r = client.post("/api/login", json={"email": "saiu@empresa.com", "password": SENHA})
-    assert r.status_code == 403, r.text
+    assert r.status_code == 401, r.text
 
 
 def test_desativado_na_forma_antiga_nao_entra(client: TestClient, banco) -> None:
     """Sem a coluna `ativo`, `role='disabled'` ainda é o que diz que saiu."""
     r = client.post("/api/login", json={"email": "legado@empresa.com", "password": SENHA})
-    assert r.status_code == 403, r.text
+    assert r.status_code == 401, r.text
 
 
 # ──────────────────────────────────────────────────────────────────────────

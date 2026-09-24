@@ -160,8 +160,12 @@ async function mensagemCorpoErro(r) {
   }
 }
 
+// O detalhe de postura (banco, chave, cofre) saiu do /api/health público
+// (achado #48) e mora em /api/health/detalhado, que exige admin — a tela de
+// Configuração, única consumidora, já é de admin.
 async function health() {
-  const r = await fetch("/api/health");
+  const r = await fetch("/api/health/detalhado", { headers: getHeaders() });
+  if (!r.ok) return { ok: false };
   return r.json();
 }
 
@@ -479,10 +483,25 @@ function badgeStatus(chave, rotulo) {
   );
 }
 
+// Escape para HTML, inclusive dentro de ATRIBUTOS. A versão anterior passava
+// por `textContent` → `innerHTML`, que escapa só & < >: em `title="${esc(x)}"`
+// uma aspa no valor fechava o atributo e abria outro (achado #13 da auditoria
+// de 24/09/2026). Tabela fixa, sem DOM: o resultado não depende do navegador.
 function esc(v) {
-  const d = document.createElement("div");
-  d.textContent = v == null ? "" : String(v);
-  return d.innerHTML;
+  const tabela = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => tabela[c]);
+}
+
+// Uma célula de CSV, pronta para o Excel abrir sem executar nada. Célula que
+// começa com = + - @ ou tabulação é lida como FÓRMULA pela planilha (achado
+// #14): um titular chamado `=HYPERLINK(...)` no inventário viraria um link ao
+// exportar. O apóstrofo na frente é o que a própria planilha usa para dizer
+// "isto é texto". Usada pelas três exportações (Início, Histórico, Vencidos)
+// — copiar o escape em cada tela foi como o problema apareceu.
+function celulaCsv(c) {
+  let s = String(c == null ? "" : c);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 function showToast(message, type = "info", duration) {

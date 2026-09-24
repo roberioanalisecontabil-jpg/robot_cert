@@ -77,8 +77,11 @@ class Problema(Exception):
     pass
 
 
-def _buscar(url: str, timeout: int = 25) -> tuple[int, str, dict]:
-    req = urllib.request.Request(url, headers={"User-Agent": "verificar-deploy/1.0"})
+def _buscar(url: str, timeout: int = 25, token: str = "") -> tuple[int, str, dict]:
+    cabecalhos = {"User-Agent": "verificar-deploy/1.0"}
+    if token:
+        cabecalhos["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=cabecalhos)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", errors="replace"), dict(r.headers)
@@ -99,12 +102,21 @@ def _e_pagina_de_protecao(corpo: str) -> bool:
     return "Log in to Vercel" in corpo or "sso-api" in corpo
 
 
-def verificar(base: str) -> dict:
+def verificar(base: str, token: str = "") -> dict:
     base = base.rstrip("/")
     resultado: dict = {"url": base, "erros": [], "avisos": [], "ok": True}
 
     # ── 1. /api/health ────────────────────────────────────────────────────
-    status, corpo, headers = _buscar(f"{base}/api/health")
+    # Desde o lote 1 da auditoria (#48) o /api/health público só diz `ok`; os
+    # booleanos de postura vivem em /api/health/detalhado, atrás de admin. Com
+    # `--token` o script lê o detalhe; sem ele, confere só que o portal vive.
+    rota_health = "/api/health/detalhado" if token else "/api/health"
+    status, corpo, headers = _buscar(f"{base}{rota_health}", token=token)
+    if not token:
+        resultado["avisos"].append(
+            "sem --token o script só confere que o portal responde; passe um JWT "
+            "de admin para ler os campos de configuração"
+        )
     resultado["http_status"] = status
     # Cabeçalhos HTTP são case-insensitive, mas o dict que vem do urllib
     # preserva a caixa do servidor ("Server", não "server").
@@ -133,7 +145,7 @@ def verificar(base: str) -> dict:
 
     resultado["health"] = health
 
-    ausentes = [c for c in CAMPOS_DO_CODIGO_NOVO if c not in health]
+    ausentes = [c for c in CAMPOS_DO_CODIGO_NOVO if c not in health] if token else []
     if ausentes:
         resultado["erros"].append(
             "DEPLOY VELHO: faltam os campos "
@@ -239,10 +251,12 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("url", nargs="?", default=URL_PADRAO, help=f"padrão: {URL_PADRAO}")
     p.add_argument("--json", action="store_true", help="saída em JSON, para CI")
+    p.add_argument("--token", default="",
+                   help="JWT de admin, para ler /api/health/detalhado (sem ele só o `ok` é conferido)")
     args = p.parse_args()
 
     try:
-        r = verificar(args.url)
+        r = verificar(args.url, token=args.token)
     except Problema as e:
         if args.json:
             print(json.dumps({"url": args.url, "ok": False, "erros": [str(e)]}, ensure_ascii=False))

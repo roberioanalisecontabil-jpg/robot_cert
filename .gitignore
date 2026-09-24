@@ -12,7 +12,25 @@ venv/
 encryption_key.txt
 a.txt
 aa.txt
+# Material de certificado e chave, em qualquer extensão. O commit 3175a05
+# (23/04/2026) tirou `*.p12` daqui e, no mesmo commit, versionou um .p12 real
+# de cliente com a senha no nome — ele continua no histórico (SECURITY_AUDIT
+# #1). A lista cobre o que a pasta de certificados costuma ter, e o hook em
+# .githooks/pre-commit recusa o que escapar dela.
 *.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+certificados/
+certificados_vencidos/
+# Config do agente com a X-API-Key em claro, e cópias que editores deixam.
+agent_config.json
+*.bak
+*.old
+*.orig
+*.swp
 data/
 
 # PyInstaller / instalador (gerar com scripts/build_agent_installer.ps1)

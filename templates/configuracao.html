@@ -144,9 +144,9 @@
             <select id="sel-smtp-seguranca" class="ag-select">
               <option value="tls">STARTTLS</option>
               <option value="ssl">SSL/TLS</option>
-              <option value="nenhuma">Nenhuma</option>
+              <option value="nenhuma">Nenhuma (só para servidor local)</option>
             </select>
-            <p class="ag-ajuda">STARTTLS costuma usar a porta 587; SSL/TLS, a 465.</p>
+            <p class="ag-ajuda">STARTTLS costuma usar a porta 587; SSL/TLS, a 465. Sem TLS a senha viajaria em claro: o portal só aceita para localhost.</p>
           </div>
           <div class="ag-field"><label class="ag-label" for="inp-smtp-user">Usuário</label><input type="text" id="inp-smtp-user" class="ag-input" placeholder="alertas@empresa.com" autocomplete="off" /></div>
           <div class="ag-field">
@@ -292,7 +292,7 @@
     </form>
   </dialog>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09f"></script>
   <script nonce="{{ request.state.nonce }}">
       // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `health`,
       // `getDataFonte`, `setDataFonte`, `KEY_STORAGE` e `showToastAfterRedirect`

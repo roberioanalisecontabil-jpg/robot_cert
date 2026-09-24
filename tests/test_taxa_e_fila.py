@@ -182,13 +182,20 @@ def test_claim_estourado_vira_429(
     assert r.status_code == 429
 
 
-def test_ip_atras_do_proxy_vem_do_x_forwarded_for() -> None:
-    """Atrás da Vercel, `request.client.host` é o PROXY: sem ler o cabeçalho,
-    o teto "por IP" era um teto global de todo mundo junto."""
+def test_ip_atras_do_proxy_vem_do_x_forwarded_for(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Atrás do proxy, `request.client.host` é o PROXY: sem ler o cabeçalho,
+    o teto "por IP" era um teto global de todo mundo junto.
+
+    O valor certo é o ÚLTIMO (com um proxy de confiança): é o que o proxy
+    anexou. Até o lote 1 da auditoria este teste fixava o PRIMEIRO valor —
+    que é o que o cliente escreveu, e o achado #6 é exatamente isso."""
+    from app import config
     from app.main import _ip_do_cliente
 
+    monkeypatch.setattr(config, "NUM_PROXIES_CONFIAVEIS", 1, raising=False)
+
     class _Req:
-        headers = {"x-forwarded-for": "203.0.113.7, 10.0.0.1"}
+        headers = {"x-forwarded-for": "9.9.9.9, 203.0.113.7"}
         client = None
 
     assert _ip_do_cliente(_Req()) == "203.0.113.7"

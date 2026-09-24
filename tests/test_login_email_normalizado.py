@@ -126,4 +126,6 @@ def test_desativado_nao_entra_nem_com_a_caixa_certa(
     client: TestClient, banco: _Fake
 ) -> None:
     banco.tabelas["users"][0]["ativo"] = False
-    assert _login(client, "Ana@X.com").status_code == 403
+    # 401, e não mais 403: desde o lote 1 da auditoria (#27) conta desativada
+    # responde igual a senha errada, para não confirmar que a conta existe.
+    assert _login(client, "Ana@X.com").status_code == 401

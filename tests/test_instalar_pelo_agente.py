@@ -111,7 +111,7 @@ def test_falha_da_ponte_nao_deixa_rastro_de_pedido(client: TestClient, cenario) 
     auditoria isso é pior que não registrar nada.
     """
     def _explode(*_a, **_k):
-        raise RuntimeError("o portal de inventário respondeu 503")
+        raise m.PonteRecusou("o portal de inventário respondeu 503")
 
     cenario["monkeypatch"].setattr(m, "_pedir_instalacao_ao_invent", _explode)
 
@@ -122,12 +122,27 @@ def test_falha_da_ponte_nao_deixa_rastro_de_pedido(client: TestClient, cenario) 
 
 
 def test_falha_da_ponte_diz_o_motivo(client: TestClient, cenario) -> None:
-    """"Erro interno" mandaria alguém ao log; o motivo resolve na tela."""
+    """"Erro interno" mandaria alguém ao log; o motivo resolve na tela.
+
+    Só quando o motivo vem do OUTRO portal (`PonteRecusou`): é texto nosso,
+    escrito para o operador."""
     def _explode(*_a, **_k):
-        raise RuntimeError("CERT_PORTAL_TOKEN invalido")
+        raise m.PonteRecusou("CERT_PORTAL_TOKEN invalido")
 
     cenario["monkeypatch"].setattr(m, "_pedir_instalacao_ao_invent", _explode)
     assert "CERT_PORTAL_TOKEN" in _pedir(client).json()["detail"]
+
+
+def test_falha_de_rede_na_ponte_nao_vaza_o_texto(client: TestClient, cenario) -> None:
+    """Erro de rede ou de proxy não é de ninguém de confiança: fica no log
+    (auditoria #35)."""
+    def _explode(*_a, **_k):
+        raise ConnectionError("ECONNREFUSED 10.200.0.4:8021 <html>proxy</html>")
+
+    cenario["monkeypatch"].setattr(m, "_pedir_instalacao_ao_invent", _explode)
+    r = _pedir(client)
+    assert r.status_code == 502
+    assert "10.200.0.4" not in r.text and "proxy" not in r.text
 
 
 # ── 3. Configuração e entrada ────────────────────────────────────────────
