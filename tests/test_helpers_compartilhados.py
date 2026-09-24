@@ -313,51 +313,39 @@ def test_os_dois_blocos_de_tema_escuro_definem_os_mesmos_tokens() -> None:
     )
 
 
-def test_linhas_com_tooltip_sao_alcancaveis_por_teclado() -> None:
+def test_arquivos_duplicados_sao_alcancaveis_por_teclado() -> None:
     """
-    As linhas de duplicidade mostram, num balão, os caminhos dos arquivos —
-    a informação que responde "quais arquivos são esses". Até 17/08/2026 o
-    balão só respondia a `mouseover`: a linha tinha `cursor: help`, sugerindo
-    "passe o mouse para entender", e quem navega por teclado nunca chegava lá.
+    As linhas de duplicidade mostram os caminhos dos arquivos — a informação
+    que responde "quais arquivos são esses". Até 17/08/2026 isso vivia num
+    balão só de `mouseover`, e quem navega por teclado nunca chegava lá.
 
-    A auditoria classificou isso como B6, "`cursor: help` sem `title`". É menor
-    do que o problema real: não faltava um rótulo, faltava a funcionalidade
-    inteira para quem não usa mouse.
+    Em 24/09/2026 o balão saiu: a linha virou um `<details class="ag-accordion">`
+    (seção 39 do Águia DS), que abre por Enter/Espaço no `<summary>` sem
+    JavaScript nenhum — a acessibilidade vem do elemento nativo, não de
+    ouvintes de foco. Este teste confere a FORMA: que o acordeão continua sendo
+    o que carrega a lista de arquivos e que ele usa o `<summary>` (é o summary
+    que entra na ordem de Tab). A suíte não executa JavaScript nem renderiza.
 
-    **O que este teste garante e o que não garante.** Ele confere a FORMA — que
-    as linhas entram na ordem de Tab, que apontam para o balão que as descreve,
-    e que há tratamento de foco e de Esc. Não confere que funciona: a suíte lê
-    o HTML e nunca executa JavaScript nem renderiza. Um teste de verdade exigiria
-    navegador (o `playwright` está no venv, mas sem navegadores baixados).
-
-    Vale mesmo assim porque a regressão provável é de forma: alguém reescreve o
-    `<tr>` gerado e o `tabindex` não volta junto — e aí some em silêncio, do
-    mesmo jeito que estava.
+    Vale porque a regressão provável é de forma: alguém reescreve a linha com
+    um `<div>` clicável e a lista some do teclado em silêncio.
     """
     fonte = (TEMPLATES / "duplicidades.html").read_text(encoding="utf-8")
 
-    for classe, balao in (("dup-igual-row", "dup-path-tooltip"),
-                          ("dup-doc-row", "dup-doc-tooltip")):
-        # A tag <tr> inteira, que é gerada por template literal em várias linhas.
-        m = re.search(r"<tr[^>]*" + re.escape(classe) + r"[^>]*>", fonte, re.S)
-        assert m, f"não achei o <tr> de {classe}"
-        tag = m.group(0)
-        assert 'tabindex="0"' in tag, (
-            f"a linha .{classe} saiu da ordem de Tab; o balão volta a ser só de mouse"
-        )
-        assert f'aria-describedby="{balao}"' in tag, (
-            f"a linha .{classe} não aponta para {balao}; o leitor de tela lê as "
-            "células e segue, sem os caminhos"
-        )
-
-    assert fonte.count('addEventListener("focusin"') >= 2, (
-        "faltou tratar foco em um dos dois balões"
+    assert 'det.className = "ag-accordion cg-dup"' in fonte, (
+        "a linha de duplicidade deixou de ser um <details class=\"ag-accordion\">; "
+        "a lista de arquivos volta a depender de mouse"
     )
-    assert fonte.count('e.key === "Escape"') >= 2, (
-        "WCAG 2.2 §1.4.13: conteúdo mostrado por foco tem de ser dispensável "
-        "com Esc, sem tirar o foco do lugar"
+    assert 'document.createElement("summary")' in fonte and 'sum.className = "ag-accordion__topo"' in fonte, (
+        "o acordeão precisa de <summary class=\"ag-accordion__topo\">: é ele que "
+        "entra na ordem de Tab e abre por Enter/Espaço"
     )
-
+    assert "det.appendChild(elArquivos(" in fonte, (
+        "a lista de arquivos (elArquivos) tem de ficar DENTRO do <details>, "
+        "senão o acordeão abre nada"
+    )
+    # Caminho completo sempre acessível: no title do <code> e no botão de copiar.
+    assert "code.title = completo" in fonte
+    assert 'b.setAttribute("data-copiar", completo)' in fonte
 
 def test_status_de_certificado_nao_e_montado_a_mao_no_template() -> None:
     """
