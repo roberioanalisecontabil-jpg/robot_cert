@@ -35,7 +35,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from app import cert_installer
+from app import cert_installer, texto
 from app.settings_state import _banco
 
 logger = logging.getLogger(__name__)
@@ -111,6 +111,24 @@ def painel_instalacao(dias: int = 30) -> Dict[str, Any]:
     cadeias = cert_installer.cadeias_de_instalacao(limite=2000, desde=desde)
     resumo = cert_installer.resumo_das_cadeias(cadeias)
     resumo["dias"] = dias
+    total = int(resumo.get("total") or 0)
+    concluidas = int(resumo.get("concluidas") or 0)
+    # Estado escrito (regra da §2 do DS: nunca só por cor). O limiar de 80%
+    # de conclusão é o que a tela já usava; sem tentativa no período não há
+    # o que julgar.
+    taxa = resumo.get("taxa_conclusao")
+    resumo["estado"] = None if not total else ("ok" if (taxa or 0) >= 80 else "atencao")
+    resumo["textos"] = {
+        "destaque": f"{concluidas} de {total}",
+        "subtitulo": ("tentativa concluída" if total == 1 else "tentativas concluídas") + " no período",
+        "concluidas": texto.plural(concluidas, "concluída"),
+        "falhadas": texto.plural(resumo.get("falhadas"), "com falha", "com falha"),
+        "incompletas": texto.plural(resumo.get("incompletas"), "sem desfecho", "sem desfecho"),
+    }
+    resumo["causas_lista"] = [
+        {"motivo": m, "quantidade": q, "texto": f"{q}× {m}"}
+        for m, q in (resumo.get("causas") or {}).items()
+    ]
     return resumo
 
 
@@ -145,11 +163,18 @@ def painel_cofre() -> Dict[str, Any]:
 
     inventario = len(itens)
     guardados = len(linhas)
+    pct = round(100 * guardados / inventario) if inventario else None
     return {
         "guardados": guardados,
         "inventario": inventario,
-        "cobertura_pct": round(100 * guardados / inventario) if inventario else None,
+        "cobertura_pct": pct,
         "por_maquina": dict(Counter(str(l.get("machine_id") or "?") for l in linhas)),
+        # 80% é o limiar que a tela já usava.
+        "estado": None if pct is None else ("ok" if pct >= 80 else "atencao"),
+        "textos": {
+            "subtitulo": f"{texto.numero(guardados)} de {texto.plural(inventario, 'arquivo')} do inventário "
+                         + ("está" if guardados == 1 else "estão") + " no cofre",
+        },
     }
 
 
@@ -204,11 +229,21 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
             }
         )
 
+    em_dia = sum(1 for m in maquinas if not m["atrasado"])
     return {
         "dias": dias,
         "varreduras": len(linhas),
         "por_dia": dict(sorted(por_dia.items())),
         "maquinas": maquinas,
+        # Atrasada = mais de 36h sem varredura (o agente roda a cada 24h).
+        "estado": None if not maquinas else ("ok" if em_dia == len(maquinas) else "atencao"),
+        "textos": {
+            "destaque": f"{em_dia} de {len(maquinas)}" if maquinas else "—",
+            "subtitulo": (
+                ("máquina em dia" if len(maquinas) == 1 else "máquinas em dia")
+                + " · " + texto.plural(len(linhas), "varredura") + " no período"
+            ) if maquinas else "Nenhuma varredura no período",
+        },
     }
 
 
@@ -254,14 +289,39 @@ def painel_acervo() -> Dict[str, Any]:
     status = Counter(str(l.get("status_ultimo") or "?") for l in linhas)
     ilegiveis = status.get("erro", 0) + status.get("fora_do_padrao", 0)
 
+    # Chave interna vira rótulo aqui, num dicionário só (app/texto.py), e a
+    # ordem é fixa para a lista não pular de posição entre cargas.
+    chaves = [c for c in texto.ORDEM_STATUS if c in status] + sorted(c for c in status if c not in texto.ORDEM_STATUS)
+    por_status_rotulado = [
+        {"chave": c, "rotulo": texto.rotulo_status(c), "quantidade": status[c]} for c in chaves
+    ]
+    # "Nos próximos 30 dias" são as DUAS faixas: até 7 e de 8 a 30. A tela
+    # antiga mostrava só a segunda (43) e a lista somava 52.
+    proximos_30 = faixas["ate_7_dias"] + faixas["ate_30_dias"]
+
     return {
         "total": len(linhas),
         "vencimento": faixas,
+        "proximos_30_dias": proximos_30,
         "sem_data_de_vencimento": sem_data,
         "por_status": dict(status),
+        "por_status_rotulado": por_status_rotulado,
         # Somado de propósito: separados, "41 erro" e "36 fora do padrão"
         # parecem ruído; juntos, são 77 arquivos que ninguém consegue instalar.
         "ilegiveis": ilegiveis,
+        # Sem critério de negócio definido para "quantos vencendo é atenção"
+        # nem para "quantos ilegíveis é atenção": sem badge até alguém decidir.
+        "estado_vencimento": None,
+        "estado_ilegiveis": None,
+        "textos": {
+            "proximos_30": ("vence" if proximos_30 == 1 else "vencem") + " nos próximos 30 dias",
+            "sem_data": texto.plural(sem_data, "sem data de vencimento registrada", "sem data de vencimento registrada"),
+            "ilegiveis": (
+                "arquivo que não pôde ser lido e por isso não pode ser instalado" if ilegiveis == 1
+                else "arquivos que não puderam ser lidos e por isso não podem ser instalados"
+            ),
+            "total": texto.plural(len(linhas), "arquivo já visto desde o início", "arquivos já vistos desde o início"),
+        },
     }
 
 
@@ -283,11 +343,67 @@ def painel_alertas(dias: int = 30) -> Dict[str, Any]:
         logger.exception("Falha no painel de alertas")
         return {"erro": str(e)}
 
+    por_tipo = Counter(str(l.get("tipo_alerta") or "?") for l in linhas)
+    # Agregado por tipo legível: "digest:2026-08-26" × 15 dias vira uma linha
+    # "Resumo diário — 15". A lista chave a chave era o que estourava o card.
+    agregado: Counter = Counter()
+    for t, q in por_tipo.items():
+        agregado[texto.chave_alerta(t)] += q
+    por_tipo_agregado = [
+        {"chave": c, "rotulo": texto.rotulo_alerta(c), "quantidade": q}
+        for c, q in sorted(agregado.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+
+    # Dias do período sem resumo diário, em texto: a ausência visual sozinha
+    # não conta nada. Vai até ontem — o de hoje pode ainda não ter saído.
+    hoje = datetime.now(timezone.utc).date()
+    dias_digest = {t[len("digest:"):] for t in por_tipo if t.startswith("digest:")}
+    lacunas: List[str] = []
+    if dias_digest:
+        # Conta a partir do PRIMEIRO resumo do período: antes dele o recurso
+        # podia nem existir, e "sem envio" ali seria falso alarme.
+        primeiro = min(dias_digest)
+        try:
+            inicio = datetime.fromisoformat(primeiro).date()
+        except ValueError:
+            inicio = hoje - timedelta(days=dias)
+        aberto: Optional[Any] = None
+        anterior: Optional[Any] = None
+        d = inicio
+        while d < hoje:
+            falta = d.isoformat() not in dias_digest
+            if falta and aberto is None:
+                aberto = d
+            if not falta and aberto is not None:
+                lacunas.append((aberto, anterior))
+                aberto = None
+            anterior = d
+            d += timedelta(days=1)
+        if aberto is not None:
+            lacunas.append((aberto, anterior))
+    def _dm(x):
+        # dd/mm no ano corrente; com o ano quando o período cruza o ano.
+        return x.strftime("%d/%m") if x.year == hoje.year else x.strftime("%d/%m/%Y")
+    lacunas_texto = [
+        _dm(a) if a == b else f"de {_dm(a)} a {_dm(b)}" for a, b in lacunas
+    ]
+    destinatarios = len({str(l.get("destinatario") or "") for l in linhas if l.get("destinatario")})
+
     return {
         "dias": dias,
         "total": len(linhas),
-        "por_tipo": dict(Counter(str(l.get("tipo_alerta") or "?") for l in linhas)),
-        "destinatarios": len({str(l.get("destinatario") or "") for l in linhas if l.get("destinatario")}),
+        "por_tipo": dict(por_tipo),
+        "por_tipo_agregado": por_tipo_agregado,
+        "destinatarios": destinatarios,
+        "resumo_diario": {
+            "dias_com_envio": len(dias_digest),
+            "lacunas": lacunas_texto,
+        },
+        "textos": {
+            "resumo": texto.plural(len(linhas), "alerta enviado", "alertas enviados") + " para "
+                      + texto.plural(destinatarios, "destinatário"),
+            "lacunas": ("Resumo diário sem envio " + ", ".join(lacunas_texto) + ".") if lacunas_texto else "",
+        },
     }
 
 
@@ -305,7 +421,7 @@ def painel_acesso() -> Dict[str, Any]:
 
     try:
         us = _todas_as_linhas(
-            lambda i, f: client.table("users").select("role, ativo").range(i, f)
+            lambda i, f: client.table("users").select("id, email, full_name, role, ativo").range(i, f)
         )
         cart = _todas_as_linhas(
             lambda i, f: client.table("carteira").select("user_id").range(i, f)
@@ -319,13 +435,48 @@ def painel_acesso() -> Dict[str, Any]:
     ativos = [u for u in us if conta_ativa(u)]
     operadores = [u for u in ativos if (u.get("role") or "").lower() == "user"]
     com_carteira = {str(c.get("user_id")) for c in cart}
+    sem_carteira_n = len(operadores) - len(com_carteira)
+
+    # Quem está sem carteira, com nome: o número sozinho só gera pergunta.
+    from app import nomes
+    sem_carteira = [
+        {
+            "nome": nomes.nome_exibicao(u.get("full_name")) or str(u.get("email") or ""),
+            "email": str(u.get("email") or ""),
+        }
+        for u in operadores
+        if u.get("id") is not None and str(u.get("id")) not in com_carteira
+    ]
+    nomes_sc = [p["nome"] for p in sem_carteira if p["nome"]]
+    if len(nomes_sc) <= 3:
+        quem = ", ".join(nomes_sc[:-1]) + (" e " if len(nomes_sc) > 1 else "") + (nomes_sc[-1] if nomes_sc else "")
+    else:
+        quem = nomes_sc[0] + " e mais " + str(len(nomes_sc) - 1)
+
+    por_papel = Counter((u.get("role") or "?") for u in ativos)
+    ordem_papel = ["admin", "gestor", "user"]
+    chaves = [c for c in ordem_papel if c in por_papel] + sorted(c for c in por_papel if c not in ordem_papel)
 
     return {
         "usuarios_ativos": len(ativos),
-        "por_papel": dict(Counter((u.get("role") or "?") for u in ativos)),
+        "por_papel": dict(por_papel),
+        "por_papel_rotulado": [
+            {"chave": c, "rotulo": texto.rotulo_papel(c, por_papel[c]), "quantidade": por_papel[c]} for c in chaves
+        ],
         "operadores": len(operadores),
         "operadores_com_carteira": len(com_carteira),
+        "operadores_sem_carteira": sem_carteira,
         "documentos_atribuidos": len(cart),
+        # Operador sem carteira não instala nada: é o que trava a primeira
+        # pessoa que abre a tela. Um já é atenção.
+        "estado": "atencao" if sem_carteira_n > 0 else "ok",
+        "textos": {
+            "sem_carteira": (
+                "operador sem carteira, que não consegue instalar" if sem_carteira_n == 1
+                else "operadores sem carteira, que não conseguem instalar"
+            ),
+            "quem": quem,
+        },
     }
 
 
@@ -366,6 +517,19 @@ def painel_atividade(dias: int = 30) -> Dict[str, Any]:
         logger.exception("Falha no painel de atividade")
         return {"erro": str(e)}
 
+    # Nome da pessoa, quando existir: o e-mail sozinho é o que a tela mostrava.
+    nomes_por_email: Dict[str, str] = {}
+    try:
+        from app import nomes as _nomes
+        for u in _todas_as_linhas(
+            lambda i, f: client.table("users").select("email, full_name").range(i, f)
+        ):
+            em = str(u.get("email") or "").strip().lower()
+            if em and u.get("full_name"):
+                nomes_por_email[em] = _nomes.nome_exibicao(u.get("full_name"))
+    except Exception:  # noqa: BLE001 — sem nomes a tabela ainda serve
+        logger.exception("Falha ao ler nomes para o painel de atividade")
+
     por_usuario: Dict[str, Dict[str, Any]] = {}
 
     def _slot(email: str) -> Dict[str, Any]:
@@ -373,6 +537,7 @@ def painel_atividade(dias: int = 30) -> Dict[str, Any]:
             email,
             {
                 "user_email": email,
+                "nome": nomes_por_email.get(email, ""),
                 "logins": 0,
                 "logins_negados": 0,
                 "instalacoes_pedidas": 0,
@@ -418,12 +583,25 @@ def painel_atividade(dias: int = 30) -> Dict[str, Any]:
         u for u in usuarios
         if u["instalacoes_pedidas"] and not u["instalacoes_concluidas"]
     ]
+    for u in usuarios:
+        u["travado"] = bool(u["instalacoes_pedidas"] and not u["instalacoes_concluidas"])
+        # Linha compacta do celular, já pluralizada.
+        u["resumo"] = " · ".join([
+            texto.plural(u["logins"], "login"),
+            texto.plural(u["instalacoes_pedidas"], "pedida"),
+            texto.plural(u["instalacoes_concluidas"], "concluída"),
+            texto.plural(u["instalacoes_falhadas"], "falha"),
+        ])
 
     return {
         "dias": dias,
         "usuarios": usuarios,
         "ativos_no_periodo": len(usuarios),
         "sem_sucesso": len(travados),
+        "textos": {
+            "ativos": texto.plural(len(usuarios), "pessoa com atividade", "pessoas com atividade"),
+            "sem_sucesso": str(len(travados)) + (" pediu e não concluiu" if len(travados) == 1 else " pediram e não concluíram"),
+        },
         # Sem login registrado no período não quer dizer que ninguém entrou:
         # a instrumentação começou em 15/08. Dizer isso evita concluir que o
         # portal está abandonado quando só falta histórico.
@@ -541,4 +719,10 @@ def painel_renovacoes(dias: int = 30, machine_id: str = "ANALISESRV") -> Dict[st
         # desaparecimento alarmaria por engano.
         "sairam": len(sairam),
         "amostra_renovados": renovados[:20],
+        "textos": {
+            "renovados": (
+                "documento com validade estendida" if len(renovados) == 1
+                else "documentos com validade estendida"
+            ),
+        },
     }

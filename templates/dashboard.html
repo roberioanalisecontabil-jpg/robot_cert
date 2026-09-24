@@ -1,299 +1,509 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dashboard — Analise Certificado</title>
-    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-    <style nonce="{{ request.state.nonce }}">
-      /* min(320px, 100%): sem a guarda, o mínimo fixo estoura a página em
-         telas de 320px (mesma razão do .cards-grid global). */
-      .painel-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
-      /* A tabela de atividade rola no próprio contêiner, como as demais
-         tabelas fazem via .table-scroll — sem isto ela alarga a página. */
-      .painel .table-container { overflow-x: auto; }
-      .painel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md, 10px); padding: var(--sp-4); }
-      .painel h2 { font-size: var(--fs-body); margin-bottom: 0.75rem; }
-      .painel__nota { font-size: var(--fs-ui-sm); color: var(--text-muted); margin-top: 0.6rem; line-height: 1.45; }
-      .numerao { font-size: var(--fs-title); font-weight: 700; line-height: 1.1; }
-      .numerao--alerta { color: var(--expired-text); }
-      .numerao--ok { color: var(--ok-text); }
-      .linha-dado { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 0.5px solid var(--border); font-size: var(--fs-ui-sm); }
-      .barra { height: 6px; border-radius: var(--radius-xs); background: var(--border); overflow: hidden; margin-top: 0.35rem; }
-      .barra > span { display: block; height: 100%; background: var(--ok-text); }
-      .painel--carregando { opacity: 0.55; }
-    </style>
-  </head>
-  <body>
-    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
-    {% include "_sidebar.html" %}
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — Analise Certificado</title>
+  <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+  <!-- Quinta tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
+       da família (shell comum: .cg-painel, .cg-status) e o desta tela. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09e" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-dashboard.css?v=aguia-2026-09" />
+</head>
+<body class="cg-aguia">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
 
-    <main class="main-content" id="main-content">
-      <header class="page-header">
-        <h1>Dashboard</h1>
-        <p>Análise do acervo, do agente e das instalações. Para operar, use o Início.</p>
-      </header>
+  <main class="main-content cg-painel" id="main-content">
+    <header class="ag-page__head">
+      <h1 class="ag-page__title">Dashboard</h1>
+      <p class="ag-page__lead">Saúde do acervo, do agente e das instalações no período escolhido.</p>
+    </header>
 
-      <div class="toolbar" style="margin-bottom: 1rem;">
-        <div class="toolbar__status" aria-live="polite">
-          <p id="dashStatus" class="status-line"></p>
-        </div>
-        <div class="toolbar__actions">
-          <label for="dashDias" class="cg-sr-only">Período</label>
-          <select id="dashDias" class="form-control" style="width: 160px;">
+    <!-- Formulário GET de verdade: o período viaja na URL. Com JS, mudar o
+         select recarrega os dados sem sair da página; sem JS, "Aplicar"
+         recarrega com ?dias=. "Atualizar" só reconsulta: contorno. -->
+    <form class="cg-dash-barra" id="form-periodo" method="get" action="/dashboard">
+      <p class="cg-dash-barra__status" id="dashStatus" aria-live="polite"></p>
+      <div class="cg-dash-barra__controles">
+        <div class="ag-field">
+          <label class="ag-label cg-sr-only" for="dashDias">Período</label>
+          <select class="ag-select" name="dias" id="dashDias">
             <option value="7">Últimos 7 dias</option>
             <option value="30" selected>Últimos 30 dias</option>
             <option value="90">Últimos 90 dias</option>
             <option value="365">Último ano</option>
           </select>
-          <button type="button" id="btnDashRefresh" class="primary">Atualizar</button>
         </div>
+        <noscript><button type="submit" class="ag-btn ag-btn--outline">Aplicar</button></noscript>
+        <button type="button" id="btnDashRefresh" class="ag-btn ag-btn--outline">
+          <svg class="ag-icon" id="btnDashIcone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          <span class="ag-spin" id="btnDashSpin" hidden aria-hidden="true"></span>
+          <span class="cg-btn__rotulo" id="btnDashRotulo">Atualizar</span>
+        </button>
       </div>
+    </form>
 
-      <div class="painel-grid" id="painelGrid">
-        <div class="painel"><h2>Instalações</h2><div id="pInstalacao">—</div></div>
-        <div class="painel"><h2>Cofre</h2><div id="pCofre">—</div></div>
-        <div class="painel"><h2>Agente</h2><div id="pAgente">—</div></div>
-        <div class="painel"><h2>Vencimentos</h2><div id="pVencimento">—</div></div>
-        <div class="painel"><h2>Acervo ilegível</h2><div id="pAcervo">—</div></div>
-        <div class="painel"><h2>Acesso</h2><div id="pAcesso">—</div></div>
-        <div class="painel"><h2>Alertas</h2><div id="pAlertas">—</div></div>
-        <div class="painel" style="grid-column: 1 / -1;"><h2>Atividade por usuário</h2><div id="pAtividade">—</div></div>
-        <!-- Este carrega por conta própria: precisa de dois snapshots completos
-             (~1 MB) contra as poucas dezenas de KB dos outros. Fazer o barato
-             esperar o caro atrasaria a tela toda pelo painel menos urgente. -->
-        <div class="painel painel--carregando" id="painelRenovacoes">
-          <h2>Renovações</h2><div id="pRenovacoes">Carregando…</div>
+    <!-- Ordem: do que pede ação para o que é contexto. Atividade por último,
+         na linha inteira. Enquanto carrega, a grade fica esmaecida com
+         aria-busy e o conteúdo anterior continua visível. -->
+    <div class="cg-dash-grade" id="painelGrid">
+      <section class="ag-card cg-dash-card" id="card-vencimentos" aria-labelledby="t-vencimentos">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-vencimentos">Vencimentos</h2>
+          <span class="cg-dash-card__estado" id="e-vencimentos"></span>
         </div>
-      </div>
-    </main>
+        <div class="cg-dash-card__corpo" id="pVencimento"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nVencimento"></p>
+          <a class="ag-link-seta" href="/vencidos">Ver vencidos <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        </div>
+      </section>
 
-    <script src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
-    <script nonce="{{ request.state.nonce }}">
-      function n(v) { return v === null || v === undefined ? "—" : String(v); }
+      <section class="ag-card cg-dash-card" id="card-acervo" aria-labelledby="t-acervo">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-acervo">Acervo ilegível</h2>
+          <span class="cg-dash-card__estado" id="e-acervo"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pAcervo"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nAcervo"></p>
+          <!-- O Histórico não tem filtro por status: aponta para a tela
+               inteira (declarado na entrega). -->
+          <a class="ag-link-seta" href="/historico">Ver arquivos com erro <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        </div>
+      </section>
 
-      function linha(rotulo, valor, tom) {
-        const cor = tom === "ruim" ? "var(--expired-text)"
-                  : tom === "bom" ? "var(--ok-text)" : "var(--text)";
-        return `<div class="linha-dado"><span class="text-muted">${esc(rotulo)}</span>` +
-               `<span style="color:${cor}">${valor}</span></div>`;
+      <section class="ag-card cg-dash-card" id="card-acesso" aria-labelledby="t-acesso">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-acesso">Acesso</h2>
+          <span class="cg-dash-card__estado" id="e-acesso"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pAcesso"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nAcesso"></p>
+          <a class="ag-link-seta" href="/carteiras">Ver carteiras <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        </div>
+      </section>
+
+      <section class="ag-card cg-dash-card" id="card-instalacoes" aria-labelledby="t-instalacoes">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-instalacoes">Instalações</h2>
+          <span class="cg-dash-card__estado" id="e-instalacoes"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pInstalacao"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nInstalacao"></p>
+          <a class="ag-link-seta" href="/acompanhamento">Ver instalações <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        </div>
+      </section>
+
+      <section class="ag-card cg-dash-card" id="card-cofre" aria-labelledby="t-cofre">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-cofre">Cofre</h2>
+          <span class="cg-dash-card__estado" id="e-cofre"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pCofre"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nCofre"></p>
+          <a class="ag-link-seta" href="/">Ver acervo <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        </div>
+      </section>
+
+      <section class="ag-card cg-dash-card" id="card-agente" aria-labelledby="t-agente">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-agente">Agente</h2>
+          <span class="cg-dash-card__estado" id="e-agente"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pAgente"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nAgente"></p>
+          <a class="ag-link-seta" href="/historico">Ver varreduras <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        </div>
+      </section>
+
+      <!-- Renovações carrega por conta própria: precisa de dois snapshots
+           completos (~1 MB) contra as poucas dezenas de KB dos outros. -->
+      <section class="ag-card cg-dash-card" id="card-renovacoes" aria-labelledby="t-renovacoes">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-renovacoes">Renovações</h2>
+          <span class="cg-dash-card__estado" id="e-renovacoes"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pRenovacoes"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nRenovacoes"></p>
+        </div>
+      </section>
+
+      <section class="ag-card cg-dash-card" id="card-alertas" aria-labelledby="t-alertas">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-alertas">Alertas</h2>
+          <span class="cg-dash-card__estado" id="e-alertas"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pAlertas"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nAlertas"></p>
+          <!-- Sem link: o portal não tem tela de alertas enviados. Botão que
+               não leva a lugar nenhum é pior que botão ausente (§36). -->
+        </div>
+      </section>
+
+      <section class="ag-card cg-dash-card cg-dash-card--largo" id="card-atividade" aria-labelledby="t-atividade">
+        <div class="cg-dash-card__cab">
+          <h2 class="ag-card__title" id="t-atividade">Atividade por usuário</h2>
+          <span class="cg-dash-card__estado" id="e-atividade"></span>
+        </div>
+        <div class="cg-dash-card__corpo" id="pAtividade"><p class="cg-dash-card__vazio">Carregando…</p></div>
+        <div class="cg-dash-card__pe">
+          <p class="cg-dash-card__nota" id="nAtividade"></p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09d"></script>
+  <script nonce="{{ request.state.nonce }}">
+    // `esc`, `getHeaders`, `mensagemCorpoErro` e `showToast` vêm de ui-common.js.
+
+    const DIAS_PERMITIDOS = ["7", "30", "90", "365"];
+    const SETA = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+    const AVISO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+
+    /* ── Formatação ───────────────────────────────────────────────────── */
+
+    function num(v) {
+      if (v === null || v === undefined) return "—";
+      return Number(v).toLocaleString("pt-BR");
+    }
+
+    function fmtData(iso) {
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+    }
+
+    function fmtHora(d) {
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function fmtDataHora(iso) {
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR") + " " + fmtHora(d);
+    }
+
+    // "hoje, 10:14" e "ontem, 15:08"; o resto em dd/mm/aaaa hh:mm. Sem segundos.
+    function fmtQuando(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+      const dia = new Date(d); dia.setHours(0, 0, 0, 0);
+      if (dia.getTime() === hoje.getTime()) return "hoje, " + fmtHora(d);
+      if (dia.getTime() === ontem.getTime()) return "ontem, " + fmtHora(d);
+      return fmtDataHora(d.toISOString());
+    }
+
+    // "há 18h" até dois dias; depois "há 31 dias" — 736h não se lê.
+    function haQuanto(horas) {
+      if (horas === null || horas === undefined) return "—";
+      const h = Math.round(horas);
+      if (h < 48) return "há " + num(h) + "h";
+      const dias = Math.round(h / 24);
+      return "há " + num(dias) + (dias === 1 ? " dia" : " dias");
+    }
+
+    function tempo(iso, texto) {
+      return `<time datetime="${esc(iso)}" title="${esc(fmtDataHora(iso))}">${esc(texto)}</time>`;
+    }
+
+    /* ── Peças ────────────────────────────────────────────────────────── */
+
+    function numerao(valor, sub, quem) {
+      return `<div><p class="cg-numerao">${esc(String(valor))}</p>` +
+             (sub ? `<p class="cg-numerao__sub">${esc(sub)}</p>` : "") +
+             (quem ? `<p class="cg-numerao__quem">${esc(quem)}</p>` : "") + `</div>`;
+    }
+
+    // Lista rótulo/valor. `aviso` põe o ícone de alerta ao lado do valor —
+    // só quando o valor sozinho representa problema, e o rótulo diz o que é.
+    function lista(itens) {
+      const li = itens.map((it) => {
+        const v = it.valor;
+        const zero = v === 0 || v === "0";
+        const valorHtml = it.html != null ? it.html : esc(num(v));
+        const cls = "ag-dados__valor" + (zero ? " ag-dados__valor--zero" : "") + (it.secundario ? " ag-dados__valor--secundario" : "");
+        const conteudo = it.aviso && !zero ? `<span class="cg-valor-aviso">${AVISO}${valorHtml}</span>` : valorHtml;
+        return `<li class="ag-dados__item"><span class="ag-dados__rotulo">${esc(it.rotulo)}</span><span class="${cls}">${conteudo}</span></li>`;
+      }).join("");
+      return `<ul class="ag-dados">${li}</ul>`;
+    }
+
+    const ESTADOS = {
+      atencao: ["ag-badge--danger", "Atenção"],
+      acompanhar: ["ag-badge--warning", "Acompanhar"],
+      ok: ["ag-badge--success", "Em dia"],
+    };
+
+    // Estado escrito no cabeçalho; vem do backend. Sem estado, sem badge.
+    function estado(id, valor) {
+      const el = document.getElementById("e-" + id);
+      const e = ESTADOS[valor];
+      el.innerHTML = e ? `<span class="ag-badge ${e[0]}">${e[1]}</span>` : "";
+    }
+
+    function corpo(id, html) { document.getElementById(id).innerHTML = html; }
+    function nota(id, texto) { document.getElementById(id).textContent = texto || ""; }
+
+    function erroCard(id, msg) {
+      corpo(id, `<p class="cg-dash-card__erro">${AVISO}<span>Não foi possível calcular este painel: ${esc(msg)}. Os demais seguem válidos.</span></p>`);
+    }
+
+    /* ── Cartões ──────────────────────────────────────────────────────── */
+
+    function renderVencimento(d) {
+      estado("vencimentos", d.estado_vencimento);
+      if (d.erro) { nota("nVencimento", ""); return erroCard("pVencimento", d.erro); }
+      const v = d.vencimento || {};
+      const t = d.textos || {};
+      corpo("pVencimento",
+        numerao(num(d.proximos_30_dias), t.proximos_30 || "vencem nos próximos 30 dias") +
+        lista([
+          { rotulo: "Já vencidos pela data", valor: v.vencido, aviso: true },
+          { rotulo: "Em até 7 dias", valor: v.ate_7_dias, aviso: true },
+          { rotulo: "8 a 30 dias", valor: v.ate_30_dias },
+          { rotulo: "31 a 60 dias", valor: v.ate_60_dias },
+          { rotulo: "61 a 90 dias", valor: v.ate_90_dias },
+          { rotulo: "Acima de 90 dias", valor: v.acima_de_90 },
+        ]));
+      nota("nVencimento", d.sem_data_de_vencimento ? (t.sem_data || (d.sem_data_de_vencimento + " sem data de vencimento registrada")) + "." : "");
+    }
+
+    function renderAcervo(d) {
+      estado("acervo", d.estado_ilegiveis);
+      if (d.erro) { nota("nAcervo", ""); return erroCard("pAcervo", d.erro); }
+      const t = d.textos || {};
+      const linhas = (d.por_status_rotulado || []).slice(0, 6).map((s) => ({
+        rotulo: s.rotulo, valor: s.quantidade, aviso: s.chave === "erro" || s.chave === "fora_do_padrao",
+      }));
+      corpo("pAcervo", numerao(num(d.ilegiveis), t.ilegiveis || "arquivos que não puderam ser lidos e por isso não podem ser instalados") + lista(linhas));
+      nota("nAcervo", (t.total || (num(d.total) + " arquivos já vistos desde o início")) + ".");
+    }
+
+    function renderAcesso(d) {
+      estado("acesso", d.estado);
+      if (d.erro) { nota("nAcesso", ""); return erroCard("pAcesso", d.erro); }
+      const t = d.textos || {};
+      const semCarteira = (d.operadores || 0) - (d.operadores_com_carteira || 0);
+      const papeis = (d.por_papel_rotulado || []).map((p) => ({ rotulo: p.rotulo, valor: p.quantidade }));
+      corpo("pAcesso",
+        numerao(num(semCarteira), t.sem_carteira || "operadores sem carteira, que não conseguem instalar", semCarteira && t.quem ? "Sem carteira: " + t.quem : "") +
+        lista([{ rotulo: "Usuários ativos", valor: d.usuarios_ativos }]
+          .concat(papeis)
+          .concat([{ rotulo: "Documentos atribuídos", valor: d.documentos_atribuidos }])
+          .slice(0, 6)));
+      nota("nAcesso", "");
+    }
+
+    function renderInstalacao(d) {
+      estado("instalacoes", d.estado);
+      if (d.erro) { nota("nInstalacao", ""); return erroCard("pInstalacao", d.erro); }
+      if (!d.total) {
+        corpo("pInstalacao", `<p class="cg-dash-card__vazio">Nenhuma instalação no período.</p>`);
+        nota("nInstalacao", "");
+        return;
+      }
+      const t = d.textos || {};
+      const total = d.total || 1;
+      const pct = (n) => Math.round(100 * (n || 0) / total);
+      const seg = (n, cls) => (n ? `<span class="ag-barra-empilhada__seg ag-barra-empilhada__seg--${cls}" style="width:${pct(n)}%"></span>` : "");
+      const barra =
+        `<div><div class="ag-barra-empilhada" aria-hidden="true">${seg(d.concluidas, "ok")}${seg(d.falhadas, "falha")}${seg(d.incompletas, "neutro")}</div>` +
+        `<ul class="ag-legenda">` +
+        `<li class="ag-legenda__item"><span class="ag-legenda__cor ag-legenda__cor--ok"></span><span class="ag-legenda__n">${num(d.concluidas)}</span> concluídas</li>` +
+        `<li class="ag-legenda__item"><span class="ag-legenda__cor ag-legenda__cor--falha"></span><span class="ag-legenda__n">${num(d.falhadas)}</span> com falha</li>` +
+        `<li class="ag-legenda__item"><span class="ag-legenda__cor ag-legenda__cor--neutro"></span><span class="ag-legenda__n">${num(d.incompletas)}</span> sem desfecho</li>` +
+        `</ul></div>`;
+      // As CAUSAS vêm depois do número, e não num gráfico: contar motivos foi
+      // o que transformou "seis falhas" em "um problema" na investigação real.
+      const causas = (d.causas_lista || []).slice(0, 3).map((c) => ({ rotulo: c.motivo, valor: c.quantidade, aviso: true }));
+      corpo("pInstalacao", numerao(t.destaque || (d.concluidas + " de " + d.total), t.subtitulo || "tentativas concluídas no período") + barra + (causas.length ? lista(causas) : ""));
+      nota("nInstalacao", causas.length ? "Causas das falhas, por quantidade." : "");
+    }
+
+    function renderCofre(d) {
+      estado("cofre", d.estado);
+      if (d.erro) { nota("nCofre", ""); return erroCard("pCofre", d.erro); }
+      const t = d.textos || {};
+      const pct = d.cobertura_pct;
+      corpo("pCofre",
+        numerao(pct === null || pct === undefined ? "—" : num(pct) + "%", t.subtitulo || (num(d.guardados) + " de " + num(d.inventario) + " arquivos do inventário estão no cofre")) +
+        `<div class="ag-barra" role="img" aria-label="${esc(num(pct))}% do inventário no cofre"><span class="ag-barra__fill" style="width:${Math.min(100, pct || 0)}%"></span></div>`);
+      nota("nCofre", "Inventário: arquivos na pasta na última varredura. Só o que está no cofre é instalável pelo portal.");
+    }
+
+    function renderAgente(d) {
+      estado("agente", d.estado);
+      if (d.erro) { nota("nAgente", ""); return erroCard("pAgente", d.erro); }
+      const t = d.textos || {};
+      const maquinas = (d.maquinas || []).slice(0, 6).map((m) => ({
+        rotulo: m.machine_id,
+        valor: m.horas_atras,
+        secundario: true,
+        aviso: m.atrasado,
+        html: m.horas_atras === null ? "—" : tempo(m.ultima_varredura, haQuanto(m.horas_atras)),
+      }));
+      corpo("pAgente", numerao(t.destaque || "—", t.subtitulo || "") + (maquinas.length ? lista(maquinas) : ""));
+      nota("nAgente", (d.maquinas || []).length ? "Atrasada: mais de 36 horas sem varredura." : "");
+    }
+
+    function renderRenovacoes(d) {
+      estado("renovacoes", null);
+      if (d.erro) { nota("nRenovacoes", ""); return erroCard("pRenovacoes", d.erro); }
+      if (d.sem_referencia) {
+        corpo("pRenovacoes", `<p class="cg-dash-card__vazio">${esc(d.motivo)}</p>`);
+        nota("nRenovacoes", "");
+        return;
+      }
+      const t = d.textos || {};
+      // A data de referência fica visível porque as varreduras têm lacunas:
+      // pedir 30 dias pode comparar com uma de 54 dias atrás.
+      const ref = fmtData(d.referencia);
+      corpo("pRenovacoes",
+        numerao(num(d.renovados), (t.renovados || "documentos com validade estendida") + " desde " + ref) +
+        lista([
+          { rotulo: "Novos no acervo", valor: d.novos },
+          { rotulo: "Saíram do acervo", valor: d.sairam },
+          { rotulo: "Documentos distintos hoje", valor: d.documentos_hoje },
+        ]));
+      nota("nRenovacoes", "Comparado com a varredura de " + ref + ". Saídas são esperadas: o agente move os vencidos para a pasta de expirados.");
+    }
+
+    function renderAlertas(d) {
+      estado("alertas", null);
+      if (d.erro) { nota("nAlertas", ""); return erroCard("pAlertas", d.erro); }
+      const t = d.textos || {};
+      const tipos = (d.por_tipo_agregado || []).slice(0, 6).map((x) => ({ rotulo: x.rotulo, valor: x.quantidade }));
+      corpo("pAlertas", numerao(num(d.total), t.resumo || "alertas enviados no período") + (tipos.length ? lista(tipos) : `<p class="cg-dash-card__vazio">Nenhum alerta enviado no período.</p>`));
+      nota("nAlertas", t.lacunas || "");
+    }
+
+    function renderAtividade(d) {
+      estado("atividade", null);
+      if (d.erro) { nota("nAtividade", ""); return erroCard("pAtividade", d.erro); }
+      const us = d.usuarios || [];
+      const t = d.textos || {};
+      if (!us.length) {
+        corpo("pAtividade", `<p class="cg-dash-card__vazio">Nenhuma atividade registrada no período. O registro de login começou em 15/08/2026; antes disso não há histórico, o que é diferente de não ter havido uso.</p>`);
+        nota("nAtividade", "");
+        return;
+      }
+      const celNum = (v) => `<td role="cell" class="num cg-col-num${v ? "" : " ag-dados__valor--zero"}">${num(v)}</td>`;
+      const linhas = us.map((u) => `
+        <tr role="row">
+          <td role="cell" class="cg-col-usuario"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(u.nome || u.user_email)}</span>${u.nome ? `<span class="ag-cell-sub">${esc(u.user_email)}</span>` : ""}</span></td>
+          ${celNum(u.logins)}${celNum(u.instalacoes_pedidas)}${celNum(u.instalacoes_concluidas)}${celNum(u.instalacoes_falhadas)}
+          <td role="cell" class="cg-col-quando">${u.ultima_atividade ? tempo(u.ultima_atividade, fmtQuando(u.ultima_atividade)) : "—"}</td>
+          <td role="cell" class="cg-col-resumo">${esc(u.resumo || "")}${u.travado ? " · pediu e não concluiu" : ""}</td>
+        </tr>`).join("");
+      corpo("pAtividade",
+        `<div class="cg-dash-dupla">` +
+        numerao(num(d.ativos_no_periodo), t.ativos || "pessoas com atividade") +
+        numerao(num(d.sem_sucesso), t.sem_sucesso ? t.sem_sucesso.replace(/^\d+\s/, "") : "pediram e não concluíram") +
+        `</div>` +
+        `<div class="ag-table-scroll" role="region" aria-label="Atividade por usuário"><table class="ag-table cg-tabela-atividade" role="table"><thead role="rowgroup"><tr role="row">` +
+        `<th role="columnheader" class="ag-th--estatico">Usuário</th><th role="columnheader" class="ag-th--estatico num">Logins</th><th role="columnheader" class="ag-th--estatico num">Pedidas</th>` +
+        `<th role="columnheader" class="ag-th--estatico num">Concluídas</th><th role="columnheader" class="ag-th--estatico num">Falhas</th><th role="columnheader" class="ag-th--estatico">Última atividade</th>` +
+        `<th role="columnheader" class="ag-th--estatico cg-col-resumo"><span class="cg-sr-only">Resumo</span></th>` +
+        `</tr></thead><tbody role="rowgroup">${linhas}</tbody></table></div>`);
+      nota("nAtividade", "Conta ações registradas, não tempo conectado.");
+    }
+
+    /* ── Carregar ─────────────────────────────────────────────────────── */
+
+    function setCarregando(on) {
+      const btn = document.getElementById("btnDashRefresh");
+      btn.disabled = on;
+      document.getElementById("btnDashIcone").hidden = on;
+      document.getElementById("btnDashSpin").hidden = !on;
+      document.getElementById("btnDashRotulo").textContent = on ? "Atualizando…" : "Atualizar";
+      const grade = document.getElementById("painelGrid");
+      grade.classList.toggle("is-carregando", on);
+      if (on) grade.setAttribute("aria-busy", "true");
+      else grade.removeAttribute("aria-busy");
+    }
+
+    function diasEscolhidos() {
+      const v = document.getElementById("dashDias").value;
+      return DIAS_PERMITIDOS.includes(v) ? v : "30";
+    }
+
+    function gravarPeriodoNaUrl(dias) {
+      const url = new URL(location.href);
+      if (dias === "30") url.searchParams.delete("dias");
+      else url.searchParams.set("dias", dias);
+      history.replaceState(null, "", url.pathname + (url.search || ""));
+    }
+
+    async function carregarDashboard() {
+      const dias = diasEscolhidos();
+      const st = document.getElementById("dashStatus");
+      st.textContent = "Carregando…";
+      setCarregando(true);
+      gravarPeriodoNaUrl(dias);
+
+      try {
+        const r = await fetch(`/api/dashboard?dias=${dias}`, { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        renderVencimento(d.acervo || {});
+        renderAcervo(d.acervo || {});
+        renderAcesso(d.acesso || {});
+        renderInstalacao(d.instalacao || {});
+        renderCofre(d.cofre || {});
+        renderAgente(d.agente || {});
+        renderAlertas(d.alertas || {});
+        renderAtividade(d.atividade || {});
+        const g = new Date(d.gerado_em);
+        st.textContent = "Atualizado em " + g.toLocaleDateString("pt-BR") + " às " + fmtHora(g);
+      } catch (e) {
+        st.textContent = "Não foi possível atualizar. O que está na tela é a carga anterior.";
+        showToast("Não foi possível carregar o dashboard: " + e.message, "error");
+      } finally {
+        setCarregando(false);
       }
 
-      function erroPainel(el, msg) {
-        document.getElementById(el).innerHTML =
-          `<p class="falha-inline">${esc(msg)}</p>`;
+      // Depois e em separado, de propósito (o painel caro).
+      const cardRen = document.getElementById("card-renovacoes");
+      cardRen.classList.add("is-carregando");
+      cardRen.setAttribute("aria-busy", "true");
+      try {
+        const r = await fetch(`/api/dashboard/renovacoes?dias=${dias}`, { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        renderRenovacoes(await r.json());
+      } catch (e) {
+        renderRenovacoes({ erro: e.message });
+      } finally {
+        cardRen.classList.remove("is-carregando");
+        cardRen.removeAttribute("aria-busy");
       }
+    }
 
-      function renderInstalacao(d) {
-        if (d.erro) return erroPainel("pInstalacao", d.erro);
-        if (!d.total) {
-          document.getElementById("pInstalacao").innerHTML =
-            `<p class="painel__nota">Nenhuma instalação no período.</p>`;
-          return;
-        }
-        // As CAUSAS vêm depois do número, e não num gráfico: contar motivos foi
-        // o que transformou "seis falhas" em "um problema" na investigação real.
-        const causas = Object.entries(d.causas || {});
-        document.getElementById("pInstalacao").innerHTML =
-          `<div class="numerao ${d.taxa_conclusao >= 80 ? "numerao--ok" : "numerao--alerta"}">` +
-          `${n(d.taxa_conclusao)}%</div>` +
-          `<p class="painel__nota">de conclusão · ${d.total} tentativa(s)</p>` +
-          linha("Concluídas", d.concluidas, "bom") +
-          linha("Com falha", d.falhadas, d.falhadas ? "ruim" : "") +
-          linha("Sem desfecho", d.incompletas) +
-          (causas.length
-            ? `<p class="painel__nota"><strong>Causas:</strong><br>` +
-              causas.map(([m, q]) => `${q}× ${esc(m)}`).join("<br>") + `</p>`
-            : "");
-      }
-
-      function renderCofre(d) {
-        if (d.erro) return erroPainel("pCofre", d.erro);
-        const pct = d.cobertura_pct;
-        document.getElementById("pCofre").innerHTML =
-          `<div class="numerao ${pct >= 80 ? "numerao--ok" : "numerao--alerta"}">${n(pct)}%</div>` +
-          `<div class="barra"><span style="width:${Math.min(100, pct || 0)}%"></span></div>` +
-          `<p class="painel__nota">do inventário é instalável pelo portal</p>` +
-          linha("Guardados no cofre", d.guardados) +
-          linha("No inventário", d.inventario);
-      }
-
-      function renderAgente(d) {
-        if (d.erro) return erroPainel("pAgente", d.erro);
-        const maquinas = d.maquinas || [];
-        const atrasadas = maquinas.filter((m) => m.atrasado);
-        document.getElementById("pAgente").innerHTML =
-          `<div class="numerao ${atrasadas.length ? "numerao--alerta" : "numerao--ok"}">` +
-          `${maquinas.length - atrasadas.length}/${maquinas.length}</div>` +
-          `<p class="painel__nota">máquina(s) em dia · ${d.varreduras} varredura(s) no período</p>` +
-          maquinas.map((m) =>
-            linha(m.machine_id,
-                  m.horas_atras === null ? "—" : `há ${m.horas_atras}h`,
-                  m.atrasado ? "ruim" : "bom")
-          ).join("");
-      }
-
-      function renderVencimento(d) {
-        if (d.erro) return erroPainel("pVencimento", d.erro);
-        const v = d.vencimento || {};
-        document.getElementById("pVencimento").innerHTML =
-          `<div class="numerao ${v.ate_30_dias ? "numerao--alerta" : ""}">${n(v.ate_30_dias)}</div>` +
-          `<p class="painel__nota">vencem nos próximos 30 dias</p>` +
-          linha("Já vencidos", v.vencido, v.vencido ? "ruim" : "") +
-          linha("Em até 7 dias", v.ate_7_dias, v.ate_7_dias ? "ruim" : "") +
-          linha("8 a 30 dias", v.ate_30_dias) +
-          linha("31 a 60 dias", v.ate_60_dias) +
-          linha("61 a 90 dias", v.ate_90_dias) +
-          linha("Acima de 90 dias", v.acima_de_90) +
-          (d.sem_data_de_vencimento
-            ? `<p class="painel__nota">${d.sem_data_de_vencimento} sem data de vencimento registrada.</p>` : "");
-      }
-
-      function renderAcervo(d) {
-        if (d.erro) return erroPainel("pAcervo", d.erro);
-        // Somados de propósito: "42 erro" e "41 fora do padrão" separados
-        // parecem ruído; juntos, são arquivos que ninguém consegue instalar.
-        document.getElementById("pAcervo").innerHTML =
-          `<div class="numerao ${d.ilegiveis ? "numerao--alerta" : "numerao--ok"}">${n(d.ilegiveis)}</div>` +
-          `<p class="painel__nota">arquivo(s) que o robô não consegue ler — nunca vão ao cofre, ` +
-          `logo nunca são instaláveis pelo portal</p>` +
-          Object.entries(d.por_status || {}).map(([s, q]) =>
-            linha(s, q, (s === "erro" || s === "fora_do_padrao") ? "ruim" : "")
-          ).join("") +
-          `<p class="painel__nota">${d.total} arquivo(s) no histórico.</p>`;
-      }
-
-      function renderAcesso(d) {
-        if (d.erro) return erroPainel("pAcesso", d.erro);
-        const semCarteira = (d.operadores || 0) - (d.operadores_com_carteira || 0);
-        document.getElementById("pAcesso").innerHTML =
-          `<div class="numerao ${semCarteira ? "numerao--alerta" : "numerao--ok"}">${semCarteira}</div>` +
-          `<p class="painel__nota">operador(es) sem carteira — não conseguem instalar nada</p>` +
-          linha("Usuários ativos", d.usuarios_ativos) +
-          Object.entries(d.por_papel || {}).map(([p, q]) => linha(p, q)).join("") +
-          linha("Documentos atribuídos", d.documentos_atribuidos);
-      }
-
-      function renderAlertas(d) {
-        if (d.erro) return erroPainel("pAlertas", d.erro);
-        document.getElementById("pAlertas").innerHTML =
-          `<div class="numerao">${n(d.total)}</div>` +
-          `<p class="painel__nota">alerta(s) enviados no período para ${n(d.destinatarios)} destinatário(s)</p>` +
-          Object.entries(d.por_tipo || {}).map(([t, q]) => linha(t, q)).join("");
-      }
-
-      function renderAtividade(d) {
-        if (d.erro) return erroPainel("pAtividade", d.erro);
-        const us = d.usuarios || [];
-        if (!us.length) {
-          document.getElementById("pAtividade").innerHTML =
-            `<p class="painel__nota">Nenhuma atividade registrada no período. ` +
-            `O registro de login começou em 15/08 — antes disso não há histórico, ` +
-            `o que é diferente de não ter havido uso.</p>`;
-          return;
-        }
-        // "Sem sucesso" é a coluna que responde "quem travou": entrou, pediu, e
-        // não concluiu nenhuma. É gente provavelmente esperando alguém — o
-        // gestor atribuir carteira, o agente enviar — sem saber disso.
-        const linhas = us.map((u) => {
-          const travado = u.instalacoes_pedidas && !u.instalacoes_concluidas;
-          const quando = u.ultima_atividade
-            ? new Date(u.ultima_atividade).toLocaleString("pt-BR") : "—";
-          return `<tr>
-            <td>${esc(u.user_email)}</td>
-            <td style="text-align:center">${u.logins}</td>
-            <td style="text-align:center">${u.instalacoes_pedidas}</td>
-            <td style="text-align:center;color:${u.instalacoes_concluidas ? "var(--ok-text)" : "var(--text-muted)"}">${u.instalacoes_concluidas}</td>
-            <td style="text-align:center;color:${u.instalacoes_falhadas ? "var(--expired-text)" : "var(--text-muted)"}">${u.instalacoes_falhadas}</td>
-            <td style="font-size: var(--fs-ui-sm)">${quando}</td>
-            <td>${travado ? '<span class="badge" style="background:var(--warning-bg);color:var(--warning-text)">TRAVADO</span>' : ""}</td>
-          </tr>`;
-        }).join("");
-
-        document.getElementById("pAtividade").innerHTML =
-          `<div class="linha-acoes" style="gap:2rem; margin-bottom:0.75rem;">` +
-          `<div><div class="numerao">${d.ativos_no_periodo}</div>` +
-          `<p class="painel__nota">pessoa(s) com atividade</p></div>` +
-          `<div><div class="numerao ${d.sem_sucesso ? "numerao--alerta" : "numerao--ok"}">${d.sem_sucesso}</div>` +
-          `<p class="painel__nota">pediram e não concluíram</p></div></div>` +
-          `<div class="table-container"><table class="data-table"><thead><tr>` +
-          `<th>Usuário</th><th>Logins</th><th>Pedidas</th><th>Concluídas</th>` +
-          `<th>Falhas</th><th>Última atividade</th>` +
-          `<th><span class="cg-sr-only">Situação</span></th>` +
-          `</tr></thead><tbody>${linhas}</tbody></table></div>` +
-          // O PORQUE de medir evento em vez de permanencia esta no PRODUCT.md e
-          // no CHANGELOG. Aqui fica so o QUE o numero e — quem le um painel
-          // quer entender o dado, nao a decisao de quem o desenhou.
-          `<p class="painel__nota">Eventos discretos, não tempo de sessão.</p>`;
-      }
-
-      function renderRenovacoes(d) {
-        document.getElementById("painelRenovacoes").classList.remove("painel--carregando");
-        if (d.erro) return erroPainel("pRenovacoes", d.erro);
-        if (d.sem_referencia) {
-          document.getElementById("pRenovacoes").innerHTML =
-            `<p class="painel__nota">${esc(d.motivo)}</p>`;
-          return;
-        }
-        // A data de referência fica visível porque as varreduras têm lacunas:
-        // pedir 30 dias pode comparar com uma de 54 dias atrás, e apresentar
-        // isso como "últimos 30 dias" seria mentira.
-        const ref = new Date(d.referencia).toLocaleDateString("pt-BR");
-        document.getElementById("pRenovacoes").innerHTML =
-          `<div class="numerao numerao--ok">${n(d.renovados)}</div>` +
-          `<p class="painel__nota">documento(s) com validade estendida desde <strong>${ref}</strong></p>` +
-          linha("Novos no acervo", d.novos) +
-          linha("Saíram do acervo", d.sairam) +
-          linha("Documentos hoje", d.documentos_hoje) +
-          `<p class="painel__nota">Comparado com a varredura de ${ref} — a mais recente ` +
-          `anterior ao período pedido. Saídas são o fluxo normal: o agente move ` +
-          `vencidos para a pasta de expirados.</p>`;
-      }
-
-      async function carregarDashboard() {
-        const dias = document.getElementById("dashDias").value;
-        const st = document.getElementById("dashStatus");
-        st.textContent = "Carregando...";
-
-        try {
-          const r = await fetch(`/api/dashboard?dias=${dias}`, { headers: getHeaders() });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          const d = await r.json();
-          renderInstalacao(d.instalacao || {});
-          renderCofre(d.cofre || {});
-          renderAgente(d.agente || {});
-          renderVencimento(d.acervo || {});
-          renderAcervo(d.acervo || {});
-          renderAcesso(d.acesso || {});
-          renderAlertas(d.alertas || {});
-          renderAtividade(d.atividade || {});
-          st.textContent = "Atualizado em " + new Date(d.gerado_em).toLocaleString("pt-BR");
-        } catch (e) {
-          st.textContent = "Falha ao carregar.";
-          showToast("Não foi possível carregar o dashboard: " + e.message, "error");
-        }
-
-        // Depois e em separado, de propósito.
-        document.getElementById("painelRenovacoes").classList.add("painel--carregando");
-        try {
-          const r = await fetch(`/api/dashboard/renovacoes?dias=${dias}`, { headers: getHeaders() });
-          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-          renderRenovacoes(await r.json());
-        } catch (e) {
-          renderRenovacoes({ erro: e.message });
-        }
-      }
-
-      (async function init() {
-        // Sidebar por papel: ui-common.js (initSidebarPorPapel).
-        document.getElementById("btnDashRefresh").addEventListener("click", carregarDashboard);
-        document.getElementById("dashDias").addEventListener("change", carregarDashboard);
-        await carregarDashboard();
-      })();
-    </script>
-  </body>
+    (function init() {
+      // Sidebar por papel: ui-common.js (initSidebarPorPapel).
+      const q = new URLSearchParams(location.search).get("dias");
+      if (q && DIAS_PERMITIDOS.includes(q)) document.getElementById("dashDias").value = q;
+      document.getElementById("form-periodo").addEventListener("submit", (ev) => { ev.preventDefault(); carregarDashboard(); });
+      document.getElementById("btnDashRefresh").addEventListener("click", carregarDashboard);
+      document.getElementById("dashDias").addEventListener("change", carregarDashboard);
+      carregarDashboard();
+    })();
+  </script>
+</body>
 </html>

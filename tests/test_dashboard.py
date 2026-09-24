@@ -361,4 +361,6 @@ def test_rota_renovacoes(client: TestClient, banco: _Fake) -> None:
 def test_pagina_do_dashboard_responde(client: TestClient) -> None:
     r = client.get("/dashboard")
     assert r.status_code == 200
-    assert "painelRenovacoes" in r.text
+    # O painel caro (renovações) tem cartão próprio, que carrega em separado.
+    assert "card-renovacoes" in r.text
+    assert "/api/dashboard/renovacoes" in r.text

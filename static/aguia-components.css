@@ -738,3 +738,105 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
     pointer-events: none;
     transition: opacity var(--dur-base) var(--ease-standard);
 }
+
+/* ── Barras de proporção ─────────────────────────────────────────────── */
+
+/* Proporção, não estado: a barra leva o gradiente da marca (seção 43 da
+   spec do Dashboard). Estado vai escrito num badge, nunca na cor da barra. */
+.ag-barra {
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-surface-alt);
+    overflow: hidden;
+}
+.ag-barra__fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--grad-gold);
+}
+
+/* Empilhada: partes de um todo, cada segmento com legenda ESCRITA embaixo —
+   a cor sozinha não chega a quem não a distingue. */
+.ag-barra-empilhada {
+    display: flex;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-surface-alt);
+    overflow: hidden;
+}
+.ag-barra-empilhada__seg { height: 100%; }
+.ag-barra-empilhada__seg--ok { background: var(--success-500); }
+.ag-barra-empilhada__seg--falha { background: var(--danger-500); }
+.ag-barra-empilhada__seg--neutro { background: var(--ink-300); }
+
+.ag-legenda {
+    list-style: none;
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+}
+.ag-legenda__item { display: inline-flex; align-items: center; gap: var(--space-2); }
+.ag-legenda__cor { width: 10px; height: 10px; border-radius: var(--radius-xs); flex: none; }
+.ag-legenda__cor--ok { background: var(--success-500); }
+.ag-legenda__cor--falha { background: var(--danger-500); }
+.ag-legenda__cor--neutro { background: var(--ink-300); }
+.ag-legenda__n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+/* ── Link com seta ───────────────────────────────────────────────────── */
+
+/* Link discreto de "para onde ir a partir daqui": tinta de marca, seta
+   Lucide, área de 44px sem mudar o desenho. */
+.ag-link-seta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 44px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-brand);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+}
+.ag-link-seta .ag-icon { width: 16px; height: 16px; transition: transform var(--dur-fast) var(--ease-standard); }
+.ag-link-seta:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ag-link-seta:hover .ag-icon { transform: translateX(2px); }
+.ag-link-seta:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ── Lista rótulo / valor ────────────────────────────────────────────── */
+
+/* Linhas "rótulo à esquerda, número à direita" de um card de resumo. Valor
+   em mono tabular para as colunas de dígitos alinharem; zero em texto
+   apagado, mas presente — lacuna é informação (seção 35 do DS). */
+.ag-dados {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.ag-dados__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-bottom: var(--bw-1) solid var(--border-subtle);
+    font-size: var(--text-sm);
+    min-width: 0;
+}
+.ag-dados__item:last-child { border-bottom: 0; }
+.ag-dados__rotulo { color: var(--text-secondary); min-width: 0; overflow-wrap: break-word; }
+.ag-dados__valor {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    text-align: right;
+    white-space: nowrap;
+    flex: none;
+}
+.ag-dados__valor--zero { color: var(--text-muted); }
+.ag-dados__valor--secundario { color: var(--text-secondary); font-family: var(--font-body); }
