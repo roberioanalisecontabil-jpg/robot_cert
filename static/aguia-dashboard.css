@@ -1,0 +1,192 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Dashboard no Águia DS (24/09/2026) — CSS só desta tela (prefixo .cg-dash-)
+
+   Carrega DEPOIS de aguia-tokens, aguia-components, aguia-ponte e
+   aguia-listas (esta última pelo shell comum: .cg-painel, .cg-status,
+   .cg-btn__rotulo). Componentes reaproveitáveis (barras, link com seta,
+   lista rótulo/valor) vivem em aguia-components.css, não aqui.
+
+   O problema da tela não era visual, era de leitura: números pintados de
+   vermelho e verde sem dizer se aquilo é bom ou ruim, cartões de 3 e de 17
+   linhas na mesma grade deixando buracos, e nenhum caminho para resolver o
+   que cada número mostra. Daí: estado escrito no cabeçalho, no máximo seis
+   linhas por cartão, cartões esticados na altura da linha, e um link no pé.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Barra de período: "Atualizado em" à esquerda, período + Atualizar à
+   direita, numa linha. Sem a linha tracejada — o respiro já separa. */
+.cg-dash-barra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3) var(--space-4);
+    flex-wrap: wrap;
+}
+.cg-dash-barra__status {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    min-width: 0;
+}
+.cg-dash-barra__controles {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: none;
+}
+.cg-dash-barra .ag-field { margin: 0; }
+.cg-dash-barra .ag-select { width: auto; min-width: 11rem; }
+
+/* Grade: colunas de no mínimo 20rem, cartões esticados na altura da linha;
+   a nota e o link vão para o pé com margin-top:auto. */
+.cg-dash-grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+    gap: var(--space-4);
+    align-items: stretch;
+}
+.cg-dash-card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-5) var(--space-6);
+    min-width: 0;
+}
+.cg-dash-card--largo { grid-column: 1 / -1; }
+
+.cg-dash-card__cab {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+.cg-dash-card__cab .ag-card__title { font-size: var(--text-base); }
+.cg-dash-card__estado:empty { display: none; }
+
+.cg-dash-card__corpo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
+}
+.cg-dash-card__pe {
+    margin-top: auto;
+    padding-top: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+.cg-dash-card__nota {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: var(--lh-normal);
+}
+.cg-dash-card__nota:empty { display: none; }
+
+/* O número principal: sempre tinta primária. O estado vai no badge do
+   cabeçalho, escrito. */
+.cg-numerao {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-4xl);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.cg-numerao__sub {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+.cg-numerao__quem {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+}
+.cg-numerao__quem:empty { display: none; }
+.cg-dash-dupla { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+
+/* Erro só no cartão que falhou; os outros seguem. */
+.cg-dash-card__erro {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    margin: 0;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--danger-50);
+    color: var(--danger-700);
+    font-size: var(--text-sm);
+}
+.cg-dash-card__erro .ag-icon { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.cg-dash-card__vazio { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+
+/* Ícone de aviso ao lado de um valor que sozinho representa problema. */
+.cg-valor-aviso {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+.cg-valor-aviso .ag-icon { width: 14px; height: 14px; color: var(--danger-500); }
+
+/* Tabela de atividade: ocupa a largura do cartão, sem moldura própria. */
+.cg-tabela-atividade { margin-top: var(--space-2); }
+.cg-tabela-atividade .num { white-space: nowrap; }
+.cg-tabela-atividade .cg-col-resumo { display: none; }
+.cg-tabela-atividade .cg-col-quando { white-space: nowrap; color: var(--text-secondary); }
+.cg-dash-card .ag-table-scroll { overflow: visible; }
+.cg-dash-card .ag-table th:first-child, .cg-dash-card .ag-table td:first-child { padding-inline-start: 0; }
+.cg-dash-card .ag-table th:last-child, .cg-dash-card .ag-table td:last-child { padding-inline-end: 0; }
+
+@media (max-width: 640px) {
+    .cg-dash-barra { align-items: stretch; }
+    /* Dois controles curtos lado a lado, não empilhados em largura total. */
+    .cg-dash-barra__controles {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        width: 100%;
+    }
+    .cg-dash-barra .ag-select { width: 100%; min-width: 0; }
+    .cg-dash-card { padding: var(--space-4) var(--space-5); }
+    .cg-dash-dupla { gap: var(--space-6); }
+
+    /* A tabela de atividade vira blocos: nome e e-mail em cima, a última
+       atividade à direita, e embaixo a linha compacta já pluralizada. Os
+       `role` explícitos mantêm a semântica de tabela. */
+    .cg-tabela-atividade,
+    .cg-tabela-atividade tbody,
+    .cg-tabela-atividade tr,
+    .cg-tabela-atividade td { display: block; width: auto; }
+    .cg-tabela-atividade thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+    .cg-tabela-atividade tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "usuario quando"
+            "resumo resumo";
+        gap: var(--space-1) var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: var(--bw-1) solid var(--border-subtle);
+    }
+    .cg-tabela-atividade tbody tr:hover { background: transparent; }
+    .cg-tabela-atividade tbody tr td { padding: 0; border: 0; white-space: normal; }
+    .cg-tabela-atividade .cg-col-usuario { grid-area: usuario; }
+    .cg-tabela-atividade .cg-col-quando { grid-area: quando; justify-self: end; font-size: var(--text-xs); }
+    .cg-tabela-atividade .cg-col-num { display: none; }
+    .cg-tabela-atividade .cg-col-resumo {
+        display: block;
+        grid-area: resumo;
+        font-size: var(--text-xs);
+        color: var(--text-secondary);
+    }
+}
