@@ -1,462 +1,370 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Configuração — Certificados PFX</title>
-    <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-    <style>
-      .tab-container-navigation {
-        display: flex;
-        gap: 1.5rem;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-      }
-      .tab-btn {
-        background: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        padding: 0.75rem 0.25rem !important;
-        font-size: var(--fs-ui);
-        font-weight: 500;
-        color: var(--text-muted);
-        cursor: pointer;
-        position: relative;
-        box-shadow: none !important;
-        white-space: nowrap;
-      }
-      .tab-btn:hover {
-        color: var(--text);
-      }
-      .tab-btn.active {
-        color: var(--accent-text);
-        font-weight: 600;
-      }
-      .tab-btn.active::after {
-        content: '';
-        position: absolute;
-        bottom: -1px;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background-color: var(--accent);
-        border-radius: var(--radius-xs);
-      }
-    </style>
-  </head>
-  <body>
-    <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
-    {% include "_sidebar.html" %}
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configuração — Analise Certificado</title>
+  <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+  <!-- Décima tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
+       da família de listas (shell comum) e o desta tela. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-09" />
+</head>
+<body class="cg-aguia">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
 
-    <!-- Main Content -->
-    <main class="main-content" id="main-content">
-      <header class="page-header">
-        <h1>Configuração</h1>
-        <p>Gerencie segurança, pastas, alertas por e-mail e comandos remotos do agente Windows.</p>
-      </header>
+  <main class="main-content cg-painel" id="main-content">
+    <header class="ag-page__head">
+      <h1 class="ag-page__title">Configuração</h1>
+      <p class="ag-page__lead">Segurança, pastas, alertas por e-mail e comandos remotos do agente Windows.</p>
+    </header>
 
-      <!-- Status bar topo -->
-      <section class="panel--nested" style="margin-bottom: 1.5rem;" aria-label="Estado e caminhos">
-        <div class="linha-acoes" style="gap: 1rem;">
-          <span class="tag" id="tag-banco">Banco: …</span>
-          <span class="tag" id="tag-api-key" title="Só indica se o .env exige chave">Chave: …</span>
+    <!-- Faixa de status: badges escritos. "Fonte dos dados" é configuração
+         (do navegador) e foi para a aba "Pastas e agente". -->
+    <div class="cg-cfg-status" aria-label="Estado do servidor">
+      <span class="ag-badge ag-badge--neutral" id="tag-banco">Banco de dados: verificando…</span>
+      <span class="ag-badge ag-badge--neutral" id="tag-api-key" title="Só indica se o .env exige chave">Chave API: verificando…</span>
+      <div class="ag-alert ag-alert--warning cg-cfg-status__aviso" id="panel-auth-hint" hidden>
+        <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <div class="ag-alert__corpo"></div>
+      </div>
+    </div>
 
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
-            <label for="sel-fonte" style="font-size: var(--fs-ui); color: var(--text-muted); white-space: nowrap;">Fonte dos dados:</label>
-            <select id="sel-fonte" aria-describedby="fonte-hint" style="font-size: var(--fs-ui);">
+    <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Seções da configuração">
+      <a class="ag-abas__aba" role="tab" id="tab-chave" href="?aba=chave" aria-controls="sec-chave" data-aba="chave" aria-selected="{{ 'true' if aba == 'chave' else 'false' }}" {% if aba != 'chave' %}tabindex="-1"{% endif %}>Chave API</a>
+      <a class="ag-abas__aba" role="tab" id="tab-pastas" href="?aba=pastas" aria-controls="sec-pastas" data-aba="pastas" aria-selected="{{ 'true' if aba == 'pastas' else 'false' }}" {% if aba != 'pastas' %}tabindex="-1"{% endif %}>Pastas e agente</a>
+      <a class="ag-abas__aba" role="tab" id="tab-smtp" href="?aba=alertas" aria-controls="sec-smtp" data-aba="alertas" aria-selected="{{ 'true' if aba == 'alertas' else 'false' }}" {% if aba != 'alertas' %}tabindex="-1"{% endif %}>Alertas por e-mail</a>
+      <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
+    </div>
+    <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
+
+    <!-- ── Chave API (item 97: aguarda print) ───────────────────────── -->
+    <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">Se o servidor estiver protegido por uma <code>API_KEY</code>, informe a mesma chave abaixo para liberar as configurações. Fica gravada no seu navegador.</p>
+        <div class="ag-field">
+          <label class="ag-label" for="api-key">Chave API</label>
+          <input type="password" id="api-key" class="ag-input" autocomplete="off" placeholder="Insira a chave do .env" />
+        </div>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="btn-save-key" class="ag-btn ag-btn--outline">Guardar no navegador</button>
+          <span class="ag-ajuda" id="auth-hint" role="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Pastas e agente (item 97: aguarda print) ─────────────────── -->
+    <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">O <strong>agente</strong> lê estes caminhos para saber que pastas monitorar.</p>
+        <div class="ag-form-cols">
+          <div class="ag-field"><label class="ag-label" for="inp-source">Origem (.pfx)</label><input type="text" id="inp-source" class="ag-input" placeholder="C:\Certs" /></div>
+          <div class="ag-field"><label class="ag-label" for="inp-exp">Vencidos (destino)</label><input type="text" id="inp-exp" class="ag-input" placeholder="C:\Certs\Vencidos" /></div>
+          <div class="ag-field"><label class="ag-label" for="inp-machine">ID do servidor</label><input type="text" id="inp-machine" class="ag-input" placeholder="default ou nome do PC" /></div>
+          <div class="ag-field"><label class="ag-label" for="inp-agent-base-url">URL do portal para o agente</label><input type="text" id="inp-agent-base-url" class="ag-input" placeholder="https://certificado.exemplo" /></div>
+        </div>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="btn-save-cfg" class="ag-btn ag-btn--primary">Guardar e sincronizar</button>
+          <button type="button" id="btn-download-agent-json" class="ag-btn ag-btn--outline">Baixar agent_config.json</button>
+          <span class="ag-ajuda" id="cfg-msg" role="status"></span>
+        </div>
+        <p class="ag-ajuda">Baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado.</p>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Leitura local efetiva</h3></div>
+        <div class="cg-cfg-leitura">
+          <div><span class="ag-label">Origem</span> <code id="disp-source">—</code></div>
+          <div><span class="ag-label">Destino (vencidos)</span> <code id="disp-expired">—</code></div>
+        </div>
+
+        <!-- Fonte dos dados: preferência do navegador, não do servidor. Tem
+             formulário próprio com "Aplicar" e confirmação escrita. -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Fonte dos dados</h3><p class="ag-form-subhead__nota">Vale para este navegador</p></div>
+        <form id="form-fonte" class="cg-cfg-teste">
+          <div class="ag-field">
+            <label class="ag-label" for="sel-fonte">Fonte</label>
+            <select id="sel-fonte" class="ag-select" aria-describedby="fonte-hint">
               <option value="auto">Automático</option>
-              <option value="remoto">Só remoto</option>
-              <option value="local">Só local</option>
+              <option value="remoto">Só remoto (agente)</option>
+              <option value="local">Só local (servidor)</option>
             </select>
           </div>
-        </div>
-        <p id="path-sync-msg" class="hint" style="color: var(--ok-text); margin-top: 0.5rem; margin-bottom: 0;"></p>
-        <p id="panel-auth-hint" class="hint-warn" style="display: none; margin-top: 0.5rem; margin-bottom: 0;"></p>
-      </section>
+          <button type="submit" class="ag-btn ag-btn--outline">Aplicar</button>
+        </form>
+        <p class="ag-ajuda" id="fonte-hint">De onde o Início lê o inventário: do último envio do agente, da leitura local no servidor, ou o que houver.</p>
+        <p class="ag-ajuda" id="path-sync-msg" role="status"></p>
 
-      <!-- Abas de configuração -->
-      <div class="table-container" id="config-tabs-container">
-        <div class="tab-container-navigation">
-          <button type="button" id="tab-chave" class="tab-btn active">Chave API</button>
-          <button type="button" id="tab-pastas" class="tab-btn">Pastas e Agente</button>
-          <button type="button" id="tab-smtp" class="tab-btn">Alertas por e-mail</button>
-          <button type="button" id="tab-comandos" class="tab-btn">Fila de Comandos</button>
-        </div>
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Agente no Windows</h3></div>
+        <p class="ag-ajuda">Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code> e <code>CERT_ROBOT_API_KEY</code> (se houver chave).</p>
+        <pre>python agent\run_agent.py</pre>
+        <p class="ag-ajuda">O sistema interpreta os arquivos usando a palavra-chave "senha":</p>
+        <pre>MeuNome certificado senha aMinhaSenha.pfx</pre>
+      </div>
+    </section>
 
-        <!-- Aba 1: Chave API -->
-        <section id="sec-chave">
-          <h2 style="margin: 0 0 0.5rem;">Chave API (segurança)</h2>
-          <p class="hint">
-            Se o servidor estiver protegido por uma <code>API_KEY</code>, adicione a mesma chave abaixo para liberar as configurações. Fica gravado no seu navegador.
-          </p>
-          <div class="panel--nested">
-            <div class="row">
-              <label for="api-key">Chave API</label>
-              <input type="password" id="api-key" class="path-input" autocomplete="off" placeholder="Insira a chave do .env" />
-              <button type="button" id="btn-save-key" class="primary">Guardar no Navegador</button>
-            </div>
-            <p id="auth-hint" class="hint"></p>
-          </div>
-        </section>
-
-        <!-- Aba 2: Pastas e Agente -->
-        <section id="sec-pastas" style="display: none;">
-          <h2 style="margin: 0 0 0.5rem;">Pastas no Windows (origem e destino)</h2>
-          <p class="hint">
-            O <strong>agente</strong> lê estes caminhos para saber que pastas monitorar.
-          </p>
-          <div class="panel--nested">
-            <div class="row">
-              <label for="inp-source">Origem (.pfx)</label>
-              <input type="text" id="inp-source" class="path-input" placeholder="C:\Certs" />
-            </div>
-            <div class="row">
-              <label for="inp-exp">Vencidos (destino)</label>
-              <input type="text" id="inp-exp" class="path-input" placeholder="C:\Certs\Vencidos" />
-            </div>
-            <div class="row">
-              <label for="inp-machine">ID Servidor</label>
-              <input type="text" id="inp-machine" class="path-input" placeholder="default ou nome do PC" />
-            </div>
-            <div class="row">
-              <label for="inp-agent-base-url">URL do Portal para o Agente</label>
-              <input type="text" id="inp-agent-base-url" class="path-input" placeholder="https://seu-site.vercel.app" />
-            </div>
-            <div style="margin-top: 1.5rem;">
-              <button type="button" id="btn-save-cfg" class="primary">Guardar e Sincronizar</button>
-              <button type="button" id="btn-download-agent-json">Baixar agent_config.json</button>
-              <span id="cfg-msg" class="hint" style="margin-left: 1rem;"></span>
-            </div>
-            <p class="hint" style="margin-top: 0.75rem;">
-              Dica: baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado.
-            </p>
-          </div>
-
-          <!-- Leitura efetiva -->
-          <div class="panel--nested" style="margin-top: 1.5rem;">
-            <h3 style="margin: 0 0 0.75rem;">Leitura local efetiva</h3>
-            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-              <div>
-                <span class="path-label">Origem</span>
-                <code class="path-value" id="disp-source">—</code>
-              </div>
-              <div>
-                <span class="path-label">Destino (Vencidos)</span>
-                <code class="path-value" id="disp-expired">—</code>
-              </div>
-            </div>
-          </div>
-
-          <!-- Info lateral inline -->
-          <div class="linha-acoes" style="gap: 1.5rem; margin-top: 1.5rem;">
-            <div class="side-card" style="flex: 1; min-width: 220px;">
-              <h3>Agente no Windows</h3>
-              <p class="side-text">
-                Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code> e <code>CERT_ROBOT_API_KEY</code> (se houver chave).
-              </p>
-              <p class="side-text" style="background: var(--bg); padding: 0.5rem; border-radius: var(--radius-sm); font-family: monospace;">python agent\run_agent.py</p>
-            </div>
-            <div class="side-card" style="flex: 1; min-width: 220px;">
-              <h3>Nome dos arquivos</h3>
-              <p class="side-text">O sistema interpreta os arquivos usando a palavra-chave "senha".</p>
-              <p class="side-text" style="font-family: monospace; background: var(--bg); padding: 0.5rem; border-radius: var(--radius-sm);">
-                MeuNome certificado senha aMinhaSenha.pfx
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Aba 3: alertas por e-mail.
-
-             Reorganizada em 22/08. Antes eram onze controles empilhados numa
-             coluna so, com o mesmo peso visual: "Host SMTP" parecia a mesma
-             coisa que "Avisar quando faltarem". Tres assuntos dividiam o bloco
-             — credencial do servidor, entrega e teste — e so um deles tinha
-             titulo.
-
-             A ordem agora e a da pergunta que a pessoa faz: PRIMEIRO se o
-             portal manda e-mail; DEPOIS por onde ele manda; POR FIM para quem e
-             quando. Cada acao mora no bloco a que pertence, em vez de uma fila
-             de quatro botoes no rodape. -->
-        <section id="sec-smtp" style="display: none;">
-          <h2 style="margin: 0 0 0.5rem;">Alertas por e-mail</h2>
-
-          <!-- O interruptor sai do meio da lista e vira o cabecalho.
-
-               Era um checkbox em negrito e cor de acento, espremido entre
-               "Usar SSL Implicito" e o bloco de entrega — gritando de um lugar
-               onde ninguem procura. E a chave que governa todo o resto da aba:
-               agora abre a aba, e diz em texto o que esta valendo. -->
-          <div class="cfg-chave" id="cfg-chave-alertas">
-            <label class="cfg-chave__controle">
-              <input type="checkbox" id="chk-smtp-alerts-enabled" />
-              <span class="cfg-chave__titulo">Enviar alertas automaticamente</span>
-            </label>
-            <p class="cfg-chave__estado hint" id="smtp-estado"></p>
-          </div>
-
-          <!-- ── Bloco 1: por onde sai ─────────────────────────────────── -->
-          <section class="panel--nested cfg-bloco">
-            <h3>Servidor de e-mail</h3>
-
-            <div class="cfg-grade">
-              <div class="row">
-                <label for="inp-smtp-host">Servidor</label>
-                <input type="text" id="inp-smtp-host" class="path-input" placeholder="smtp.gmail.com" />
-              </div>
-              <div class="row cfg-grade__curto">
-                <label for="inp-smtp-port">Porta</label>
-                <input type="number" id="inp-smtp-port" class="path-input" value="587" placeholder="587" />
-              </div>
-            </div>
-
-            <div class="row">
-              <label for="inp-smtp-user">Usuário</label>
-              <input type="text" id="inp-smtp-user" class="path-input" placeholder="alertas@empresa.com" />
-            </div>
-
-            <div class="row">
-              <label for="inp-smtp-pass">Senha</label>
-              <input type="password" id="inp-smtp-pass" class="path-input" placeholder="Preencha apenas para alterar" />
-              <span class="hint" id="smtp-pass-set-label">Senha guardada: <span id="smtp-pass-status">—</span></span>
-            </div>
-
-            <div class="row">
-              <label for="inp-smtp-from">Nome do remetente</label>
-              <input type="text" id="inp-smtp-from" class="path-input" placeholder="Monitor de Certificados &lt;alertas@empresa.com&gt;" />
-              <span class="hint" id="smtp-from-efetivo"></span>
-            </div>
-
-            <!-- Um controle, e nao dois.
-
-                 Eram dois checkboxes independentes — e `validate_smtp_config`
-                 recusa os dois marcados com 422. A tela convidava a montar um
-                 estado que o servidor nunca aceitaria. Sao tres possibilidades
-                 excludentes, entao sao um `<select>`. -->
-            <div class="row">
-              <label for="sel-smtp-seguranca">Segurança da conexão</label>
-              <select id="sel-smtp-seguranca" class="path-input">
-                <option value="tls">STARTTLS — porta 587 (mais comum)</option>
-                <option value="ssl">SSL implícito — porta 465</option>
-                <option value="nenhuma">Sem criptografia</option>
-              </select>
-            </div>
-
-            <div class="linha-acoes cfg-bloco__acoes">
-              <label for="inp-smtp-test-dest" class="cg-sr-only">E-mail de destino para o teste de envio</label>
-              <input type="email" id="inp-smtp-test-dest" class="form-control" placeholder="Enviar teste para…" style="max-width: 15rem;" />
-              <button type="button" id="btn-test-smtp">Enviar teste</button>
-            </div>
-          </section>
-
-          <!-- ── Bloco 2: para quem e quando ───────────────────────────── -->
-          <section class="panel--nested cfg-bloco">
-            <h3>Para quem, e quando</h3>
-            <p class="hint">
-              Vale para o resumo do portal. Os avisos que cada pessoa recebe dos
-              certificados que acompanha não mudam.
-            </p>
-
-            <div class="row">
-              <label for="inp-alertas-dest">Destinatários do resumo</label>
-              <input type="text" id="inp-alertas-dest" class="path-input"
-                     placeholder="Deixe vazio para enviar a todos os administradores" />
-              <span class="hint" id="alertas-dest-efetivo"></span>
-              <!-- O aviso não é decorativo: em 09/08/2026 quatro linhas órfãs
-                   recebiam nome de titular, CNPJ/CPF e vencimento de
-                   certificados de clientes. Um endereço digitado aqui não tem
-                   conta para ser desativada. -->
-              <p class="cfg-aviso">
-                Endereço de fora do portal continua recebendo mesmo depois que a
-                pessoa sai da empresa — não há conta para desativar. O resumo traz
-                dados de certificados de clientes.
-              </p>
-            </div>
-
-            <div class="cfg-grade">
-              <div class="row">
-                <label for="inp-alertas-marcos">Avisar quando faltarem (dias)</label>
-                <input type="text" id="inp-alertas-marcos" class="path-input"
-                       placeholder="30, 15, 5" inputmode="numeric" />
-                <span class="hint" id="alertas-marcos-efetivo"></span>
-              </div>
-              <div class="row">
-                <label for="sel-alertas-intervalo">Verificar a cada</label>
-                <select id="sel-alertas-intervalo" class="path-input">
-                  <option value="0">20 horas (padrão)</option>
-                  <option value="12">12 horas</option>
-                  <option value="24">24 horas</option>
-                  <option value="168">7 dias</option>
-                </select>
-              </div>
-            </div>
-            <span class="hint">Intervalo entre verificações, não horário de disparo.</span>
-
-            <div class="linha-acoes cfg-bloco__acoes">
-              <button type="button" id="btn-trigger-alerts">Disparar agora</button>
-            </div>
-          </section>
-
-          <!-- ── Bloco 3: o que o e-mail diz ───────────────────────────── -->
-          <section class="panel--nested cfg-bloco">
-            <h3>Texto do e-mail</h3>
-            <p class="cfg-valor-atual">
-              Assunto: <strong id="email-assunto-atual">—</strong>
-            </p>
-            <div class="linha-acoes cfg-bloco__acoes">
-              <button type="button" id="btn-editar-email">Editar texto…</button>
-            </div>
-          </section>
-
-          <div class="linha-acoes cfg-salvar">
-            <button type="button" id="btn-save-smtp" class="primary">Salvar</button>
-            <span id="smtp-msg" class="hint" role="status"></span>
-          </div>
-        </section>
-
-        <!-- Aba 4: Fila de Comandos -->
-        <section id="sec-comandos" style="display: none;">
-          <h2 style="margin: 0 0 0.5rem;">Fila de Comandos (Remoto)</h2>
-          <p class="hint">
-            Envie comandos para o Agente executar na máquina dele. Por exemplo: <em>Forçar Scan</em> instrui o Watchdog do agente a reler a pasta ignorando o delay de 24 horas.
-          </p>
-          <div class="panel--nested">
-            <div class="row">
-              <label for="cmd-machine-id">Máquina Alvo</label>
-              <input type="text" id="cmd-machine-id" class="path-input" placeholder="default" />
-            </div>
-            <div class="toolbar" style="border: none; padding-bottom: 0; margin-bottom: 0.5rem;">
-              <div class="toolbar__actions">
-                <button type="button" id="cmd-rescan">Forçar Leitura (Rescan)</button>
-                <button type="button" id="cmd-ping">Ping</button>
-                <button type="button" id="cmd-refresh-q">Ver Fila</button>
-              </div>
-            </div>
-            <p id="cmd-msg" class="hint"></p>
-            <pre id="cmd-queue" class="cmd-pre" style="display: none"></pre>
-          </div>
-        </section>
-
-      </div><!-- /config-tabs-container -->
-
-    </main>
-
-    <!-- Editor do texto do e-mail de alerta.
-
-         A tabela de certificados NAO esta aqui, e a ausencia e a decisao: ela
-         e o inventario do dia, nao texto. Um campo editavel no lugar dela
-         produziria um e-mail que afirma vencimentos que ninguem conferiu.
-
-         A previa vem do servidor, montada pela MESMA funcao que monta o envio
-         (`_montar_resumo`). Uma previa desenhada aqui no JS concordaria com o
-         e-mail no dia em que fosse escrita e divergiria na primeira mudanca de
-         um lado so — e previa que diverge do que sai e pior que nenhuma,
-         porque e acreditada. -->
-    <dialog id="modal-email" class="modal modal--largo" aria-labelledby="modal-email-titulo">
-      <form id="form-email" class="modal__form" method="dialog">
-        <div class="modal__head">
-          <h2 id="modal-email-titulo">Texto do e-mail de alerta</h2>
-          <p class="modal__sub">Vale para o resumo do administrador e o do colaborador.</p>
+    <!-- ── Alertas por e-mail ───────────────────────────────────────── -->
+    <section class="ag-card cg-cfg-aba" id="sec-smtp" role="tabpanel" aria-labelledby="tab-smtp" {% if aba != 'alertas' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <div class="ag-alert ag-alert--danger" id="cfg-erro" role="alert" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo"></div>
         </div>
 
-        <div class="modal__body">
-          <div class="modal__erro" id="modal-email-erro" role="alert"></div>
+        <!-- Interruptor geral com o estado escrito. -->
+        <div class="cg-cfg-chave">
+          <label class="ag-switch">
+            <input type="checkbox" id="chk-smtp-alerts-enabled" />
+            <span class="ag-switch__trilho" aria-hidden="true"></span>
+            <span class="ag-switch__rotulo">Enviar alertas automaticamente</span>
+          </label>
+          <span id="smtp-estado-badge"></span>
+          <div class="cg-cfg-chave__texto"><p class="cg-cfg-chave__estado" id="smtp-estado"></p></div>
+        </div>
+        <div class="ag-alert ag-alert--info" id="alertas-desligados" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div class="ag-alert__corpo">Os alertas estão desligados. As configurações abaixo ficam guardadas.</div>
+        </div>
 
-          <div class="modal__colunas">
-            <div class="modal__coluna">
-              <div class="modal__campo">
-                <label for="em-assunto">Assunto</label>
-                <input type="text" id="em-assunto" data-campo="alerta_email_assunto" />
-              </div>
-
-              <div class="modal__campo">
-                <label for="em-titulo">Título</label>
-                <input type="text" id="em-titulo" data-campo="alerta_email_titulo" />
-              </div>
-
-              <div class="modal__campo">
-                <label for="em-abertura">Abertura</label>
-                <textarea id="em-abertura" rows="3" data-campo="alerta_email_abertura"></textarea>
-              </div>
-
-              <div class="modal__campo">
-                <label for="em-recado">Recado final</label>
-                <textarea id="em-recado" rows="3" data-campo="alerta_email_recado"></textarea>
-              </div>
-
-              <div class="modal__campo">
-                <span class="modal__dica" id="em-marcadores-rotulo">Clique para inserir:</span>
-                <div class="marcadores" id="em-marcadores" role="group"
-                     aria-labelledby="em-marcadores-rotulo"></div>
-                <span class="modal__dica">
-                  Campo vazio volta ao padrão. A linha que diz por que a pessoa
-                  recebeu não é editável.
-                </span>
-              </div>
-            </div>
-
-            <div class="modal__coluna">
-              <div class="email-previa">
-                <span class="email-previa__rotulo">Prévia</span>
-                <p class="email-previa__assunto">
-                  Assunto: <strong id="em-previa-assunto">—</strong>
-                </p>
-                <!-- `sandbox` sem `allow-scripts`: e um documento de e-mail,
-                     nao tem por que executar nada. -->
-                <iframe id="em-previa-quadro" class="email-previa__quadro"
-                        sandbox="" title="Prévia do e-mail"></iframe>
-                <p class="email-previa__exemplo" id="em-previa-exemplo" hidden>
-                  Nenhum certificado na janela agora — os nomes acima são exemplo.
-                </p>
-              </div>
-            </div>
+        <!-- ── Servidor de e-mail ─────────────────────────────────── -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Servidor de e-mail</h3></div>
+        <div class="ag-form-cols">
+          <div class="cg-cfg-servidor">
+            <div class="ag-field"><label class="ag-label" for="inp-smtp-host">Servidor</label><input type="text" id="inp-smtp-host" class="ag-input" placeholder="smtp.gmail.com" /></div>
+            <div class="ag-field"><label class="ag-label" for="inp-smtp-port">Porta</label><input type="number" id="inp-smtp-port" class="ag-input ag-input--porta" value="587" placeholder="587" min="1" max="65535" /></div>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label" for="sel-smtp-seguranca">Segurança da conexão</label>
+            <select id="sel-smtp-seguranca" class="ag-select">
+              <option value="tls">STARTTLS</option>
+              <option value="ssl">SSL/TLS</option>
+              <option value="nenhuma">Nenhuma</option>
+            </select>
+            <p class="ag-ajuda">STARTTLS costuma usar a porta 587; SSL/TLS, a 465.</p>
+          </div>
+          <div class="ag-field"><label class="ag-label" for="inp-smtp-user">Usuário</label><input type="text" id="inp-smtp-user" class="ag-input" placeholder="alertas@empresa.com" autocomplete="off" /></div>
+          <div class="ag-field">
+            <span class="cg-cfg-rotulo"><label class="ag-label" for="inp-smtp-pass">Senha</label><span id="smtp-pass-status"></span></span>
+            <input type="password" id="inp-smtp-pass" class="ag-input" placeholder="Deixe vazio para manter a atual" autocomplete="new-password" />
+          </div>
+          <div class="ag-field">
+            <!-- O campo guarda o ENDEREÇO do remetente (`smtp_from_email`);
+                 o rótulo antigo dizia "nome". -->
+            <label class="ag-label" for="inp-smtp-from">E-mail do remetente</label>
+            <input type="text" id="inp-smtp-from" class="ag-input" placeholder="alertas@empresa.com" autocomplete="off" />
+            <p class="ag-ajuda ag-ajuda--muted" id="smtp-from-efetivo"></p>
           </div>
         </div>
-
-        <div class="modal__foot">
-          <button type="button" class="btn-action" id="em-restaurar">Restaurar padrão</button>
-          <button type="button" class="btn-action" id="em-cancelar">Cancelar</button>
-          <button type="submit" class="primary" id="em-salvar">Salvar</button>
+        <div class="cg-cfg-teste">
+          <div class="ag-field">
+            <label class="ag-label" for="inp-smtp-test-dest">Enviar teste para</label>
+            <input type="email" id="inp-smtp-test-dest" class="ag-input" placeholder="voce@empresa.com" autocomplete="off" />
+          </div>
+          <button type="button" id="btn-test-smtp" class="ag-btn ag-btn--outline">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+            Enviar teste
+          </button>
         </div>
-      </form>
-    </dialog>
+        <p class="ag-ajuda">O teste usa os valores <strong>salvos</strong>: salve antes de testar.</p>
+        <div class="cg-cfg-resultado" id="smtp-teste-resultado" aria-live="polite"></div>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
-    <script nonce="{{ request.state.nonce }}">
-      // ── Lógica de abas ──────────────────────────────────────────────────────
-      const TABS = [
-        { btn: "tab-chave",    sec: "sec-chave"    },
-        { btn: "tab-pastas",   sec: "sec-pastas"   },
-        { btn: "tab-smtp",     sec: "sec-smtp"     },
-        { btn: "tab-comandos", sec: "sec-comandos" },
-      ];
+        <!-- ── Para quem, e quando ────────────────────────────────── -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Para quem, e quando</h3><p class="ag-form-subhead__nota">Vale para o resumo do portal. Os avisos de quem acompanha certificados não mudam.</p></div>
+        <div class="ag-field cg-cfg-campo-solto">
+          <label class="ag-label" for="inp-alertas-dest">Destinatários do resumo</label>
+          <input type="text" id="inp-alertas-dest" class="ag-input" placeholder="um@empresa.com, outro@empresa.com" autocomplete="off" />
+          <p class="ag-ajuda ag-ajuda--muted" id="alertas-dest-efetivo"></p>
+          <!-- Só quando houver endereço fora do domínio da empresa. -->
+          <div class="ag-alert ag-alert--warning cg-cfg-aviso-dest" id="alertas-dest-externo" hidden>
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <div class="ag-alert__corpo"><p class="ag-alert__titulo">Endereço fora da empresa</p><p>Quem recebe por um endereço externo continua recebendo depois de sair da empresa, porque não há conta para desativar. O resumo traz dados de certificados de clientes.</p></div>
+          </div>
+        </div>
+        <div class="ag-form-cols">
+          <div class="ag-field">
+            <label class="ag-label" for="inp-alertas-marcos">Prazos de aviso</label>
+            <input type="text" id="inp-alertas-marcos" class="ag-input" inputmode="numeric" autocomplete="off" />
+            <p class="ag-ajuda">Dias antes do vencimento, separados por vírgula. O aviso no dia do vencimento é sempre enviado.</p>
+            <p class="ag-ajuda ag-ajuda--muted" id="alertas-marcos-efetivo"></p>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label" for="sel-alertas-intervalo">Verificar a cada</label>
+            <select id="sel-alertas-intervalo" class="ag-select">
+              <option value="0">20 horas (padrão)</option>
+              <option value="12">12 horas</option>
+              <option value="24">24 horas</option>
+              <option value="168">7 dias</option>
+            </select>
+            <p class="ag-ajuda">Intervalo entre verificações, não horário de disparo.</p>
+            <p class="ag-ajuda ag-ajuda--muted" id="alertas-intervalo-efetivo"></p>
+          </div>
+        </div>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="btn-trigger-alerts" class="ag-btn ag-btn--outline">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+            Disparar agora
+          </button>
+        </div>
 
-      function switchTab(activeId) {
-        TABS.forEach(({ btn, sec }) => {
-          const b = document.getElementById(btn);
-          const s = document.getElementById(sec);
-          const isActive = btn === activeId;
-          b.classList.toggle("active", isActive);
-          s.style.display = isActive ? "" : "none";
+        <!-- ── Texto do e-mail ────────────────────────────────────── -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Texto do e-mail</h3></div>
+        <p class="ag-label">Assunto</p>
+        <p class="cg-cfg-modelo" id="email-assunto-atual">—</p>
+        <p class="cg-cfg-exemplo" id="email-assunto-exemplo"></p>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="btn-editar-email" class="ag-btn ag-btn--outline">Editar texto…</button>
+        </div>
+      </div>
+      <!-- Salvar sempre à mão: barra grudada no rodapé enquanto a aba está
+           visível; com JS diz se há alteração pendente. -->
+      <div class="ag-sticky-acoes">
+        <span class="ag-sticky-acoes__estado" id="smtp-msg" role="status"></span>
+        <button type="button" id="btn-save-smtp" class="ag-btn ag-btn--primary">Salvar alterações</button>
+      </div>
+    </section>
+
+    <!-- ── Fila de comandos (item 97: aguarda print) ────────────────── -->
+    <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">Envie comandos para o agente executar na máquina dele. <em>Forçar leitura</em> instrui o agente a reler a pasta ignorando o intervalo de 24 horas.</p>
+        <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Máquina alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="cmd-rescan" class="ag-btn ag-btn--outline">Forçar leitura</button>
+          <button type="button" id="cmd-ping" class="ag-btn ag-btn--outline">Ping</button>
+          <button type="button" id="cmd-refresh-q" class="ag-btn ag-btn--ghost">Ver fila</button>
+        </div>
+        <p class="ag-ajuda" id="cmd-msg" role="status"></p>
+        <pre id="cmd-queue" hidden></pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- Confirmação do disparo. -->
+  <dialog class="ag-modal" id="modalDisparo" aria-labelledby="tit-disparo">
+    <form method="dialog">
+      <div class="ag-modal__head"><h2 class="ag-modal__titulo" id="tit-disparo">Disparar o resumo agora</h2><button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      <div class="ag-modal__body"><p id="disparoTexto"></p></div>
+      <div class="ag-modal__foot"><button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button><button type="button" class="ag-btn ag-btn--primary" id="btnDisparoConfirmar">Enviar agora</button></div>
+    </form>
+  </dialog>
+
+  <!-- Editor do texto do e-mail. A prévia vem do servidor, montada pela
+       mesma função que monta o envio. -->
+  <dialog id="modal-email" class="ag-modal ag-modal--lg" aria-labelledby="modal-email-titulo">
+    <form id="form-email" method="dialog">
+      <div class="ag-modal__head">
+        <div><h2 class="ag-modal__titulo" id="modal-email-titulo">Texto do e-mail de alerta</h2><p class="ag-ajuda">Vale para o resumo do administrador e o do colaborador.</p></div>
+        <button type="button" class="ag-modal__x" id="em-fechar" aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="ag-modal__body">
+        <div class="ag-alert ag-alert--danger" id="modal-email-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
+        <div class="cg-cfg-email">
+          <div>
+            <div class="ag-field"><label class="ag-label" for="em-assunto">Assunto</label><input type="text" id="em-assunto" class="ag-input" data-campo="alerta_email_assunto" /></div>
+            <div class="ag-field"><label class="ag-label" for="em-titulo">Título</label><input type="text" id="em-titulo" class="ag-input" data-campo="alerta_email_titulo" /></div>
+            <div class="ag-field"><label class="ag-label" for="em-abertura">Abertura</label><textarea id="em-abertura" class="ag-input ag-textarea" rows="3" data-campo="alerta_email_abertura"></textarea></div>
+            <div class="ag-field"><label class="ag-label" for="em-recado">Recado final</label><textarea id="em-recado" class="ag-input ag-textarea" rows="3" data-campo="alerta_email_recado"></textarea></div>
+            <div class="ag-field">
+              <span class="ag-label" id="em-marcadores-rotulo">Variáveis disponíveis (clique para inserir)</span>
+              <div class="cg-cfg-marcadores" id="em-marcadores" role="group" aria-labelledby="em-marcadores-rotulo"></div>
+              <p class="ag-ajuda">Campo vazio volta ao padrão. A linha que diz por que a pessoa recebeu não é editável.</p>
+            </div>
+          </div>
+          <div class="cg-cfg-previa">
+            <span class="cg-cfg-previa__rotulo">Prévia</span>
+            <p class="ag-ajuda">Assunto: <strong id="em-previa-assunto">—</strong></p>
+            <iframe id="em-previa-quadro" class="cg-cfg-previa__quadro" sandbox="" title="Prévia do e-mail"></iframe>
+            <p class="ag-ajuda" id="em-previa-exemplo" hidden>Nenhum certificado na janela agora. Os nomes acima são exemplo.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--ghost" id="em-restaurar">Restaurar padrão</button>
+        <button type="button" class="ag-btn ag-btn--outline" id="em-cancelar">Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="em-salvar">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
+  <script nonce="{{ request.state.nonce }}">
+      // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `health`,
+      // `getDataFonte`, `setDataFonte`, `KEY_STORAGE` e `showToastAfterRedirect`
+      // vêm de ui-common.js.
+      const AVISO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+      const CHECK = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+      const DOMINIO_EMPRESA = "@analisegroup.cnt.br";
+      function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
+
+      // ── Abas por link ─────────────────────────────────────────────────
+      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos" };
+      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos" };
+      const ORDEM = Object.keys(ABAS);
+
+      function switchTab(aba, anunciar) {
+        if (!ABAS[aba]) aba = "chave";
+        ORDEM.forEach((a) => {
+          document.getElementById(ABAS[a]).hidden = a !== aba;
+          const t = document.getElementById(TAB_IDS[a]);
+          t.setAttribute("aria-selected", a === aba ? "true" : "false");
+          t.tabIndex = a === aba ? 0 : -1;
         });
-        try { sessionStorage.setItem("cfg_tab", activeId); } catch(_) {}
+        const url = new URL(location.href);
+        if (aba === "chave") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
+        history.replaceState(null, "", url.pathname + (url.search || ""));
+        if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
       }
-
-      TABS.forEach(({ btn }) => {
-        document.getElementById(btn).addEventListener("click", () => switchTab(btn));
+      ORDEM.forEach((a) => {
+        const t = document.getElementById(TAB_IDS[a]);
+        t.addEventListener("click", (ev) => { ev.preventDefault(); switchTab(a, true); t.focus(); });
+        t.addEventListener("keydown", (ev) => {
+          if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+          ev.preventDefault();
+          const i = ORDEM.indexOf(a);
+          const prox = ORDEM[(i + (ev.key === "ArrowRight" ? 1 : ORDEM.length - 1)) % ORDEM.length];
+          switchTab(prox, true);
+          document.getElementById(TAB_IDS[prox]).focus();
+        });
       });
 
-      // Restaura aba anterior se existir
-      (function restoreTab() {
-        const last = sessionStorage.getItem("cfg_tab");
-        if (last && TABS.some(t => t.btn === last)) switchTab(last);
-      })();
+      // ── Estado da aba de alertas ─────────────────────────────────────
+      function erroCfg(texto) {
+        const el = document.getElementById("cfg-erro");
+        el.querySelector(".ag-alert__corpo").textContent = texto || "";
+        el.hidden = !texto;
+      }
+      function pintarSenhaGuardada(guardada) {
+        document.getElementById("smtp-pass-status").innerHTML = guardada
+          ? '<span class="ag-badge ag-badge--success">' + CHECK + ' Senha guardada</span>'
+          : '<span class="ag-badge ag-badge--neutral">Sem senha guardada</span>';
+      }
+      // "Alterações não salvas" na barra, e aviso ao sair com pendência.
+      let _sujo = false;
+      function marcarSujo() { _sujo = true; document.getElementById("smtp-msg").textContent = "Alterações não salvas"; }
+      function marcarLimpo() { _sujo = false; document.getElementById("smtp-msg").textContent = ""; }
+      window.addEventListener("beforeunload", (ev) => { if (_sujo) { ev.preventDefault(); ev.returnValue = ""; } });
+      // Aviso de endereço externo só quando houver um.
+      function avisarEnderecoExterno() {
+        const lista = (document.getElementById("inp-alertas-dest").value || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+        const externo = lista.some((e) => !e.endsWith(DOMINIO_EMPRESA));
+        document.getElementById("alertas-dest-externo").hidden = !externo;
+      }
+      // Escolher a segurança sugere a porta, se ela ainda estiver no padrão
+      // da opção anterior.
+      const PORTAS = { tls: 587, ssl: 465 };
+      let _segAnterior = "tls";
+      document.getElementById("sel-smtp-seguranca").addEventListener("change", (ev) => {
+        const porta = document.getElementById("inp-smtp-port");
+        const nova = ev.target.value;
+        if (PORTAS[nova] && (!porta.value || Number(porta.value) === PORTAS[_segAnterior])) porta.value = String(PORTAS[nova]);
+        _segAnterior = nova;
+      });
 
       // ── Fonte de dados ───────────────────────────────────────────────────────
       function syncSelectFonteFromStorage() {
@@ -466,34 +374,36 @@
         if (["auto", "remoto", "local"].indexOf(v) >= 0) sf.value = v;
       }
 
-      document.getElementById("sel-fonte").addEventListener("change", () => {
+      document.getElementById("form-fonte").addEventListener("submit", (ev) => {
+        ev.preventDefault();
         setDataFonte(document.getElementById("sel-fonte").value);
-        document.getElementById("path-sync-msg").textContent = "Opção guardada. Volte ao Início e atualize a tabela.";
+        document.getElementById("path-sync-msg").textContent = "Aplicado neste navegador. O Início passa a usar esta fonte na próxima atualização da tabela.";
       });
 
       // ── API / caminhos ───────────────────────────────────────────────────────
       async function syncPathsFromApi() {
         const emptyHint = "(não definida — padrão do .env / servidor)";
-        const warn = document.getElementById("panel-auth-hint");
+        const warn = document.getElementById("panel-auth-hint").querySelector(".ag-alert__corpo");
+        const caixa = document.getElementById("panel-auth-hint");
         let r;
         try {
           r = await fetch("/api/settings", { headers: getHeaders() });
         } catch (e) {
           warn.textContent = "Não foi possível carregar as pastas. Confira a chave API e o endereço do servidor.";
-          warn.style.display = "block";
+          caixa.hidden = false;
           return;
         }
         if (r.status === 401) {
-          warn.innerHTML = 'A API exige chave. Cole o mesmo valor de <code>API_KEY</code> (no .env) no campo <strong>Chave API</strong> (aba 1) e clique em Guardar no Navegador.';
-          warn.style.display = "block";
+          warn.innerHTML = 'A API exige chave. Cole o mesmo valor de <code>API_KEY</code> (no .env) no campo <strong>Chave API</strong> e clique em Guardar no navegador.';
+          caixa.hidden = false;
           return;
         }
         if (!r.ok) {
           warn.textContent = "Erro " + r.status + " ao carregar /api/settings.";
-          warn.style.display = "block";
+          caixa.hidden = false;
           return;
         }
-        warn.style.display = "none";
+        caixa.hidden = true;
         const s = await r.json();
         document.getElementById("disp-source").textContent = s.effective_source || emptyHint;
         document.getElementById("disp-expired").textContent = s.effective_expired || emptyHint;
@@ -522,8 +432,7 @@
           document.getElementById("inp-smtp-port").value = s.smtp_port || 587;
           document.getElementById("inp-smtp-user").value = s.smtp_user || "";
           document.getElementById("inp-smtp-pass").value = "";
-          document.getElementById("smtp-pass-status").textContent = s.smtp_password_set ? "Sim" : "Não";
-          document.getElementById("smtp-pass-status").style.color = s.smtp_password_set ? "var(--ok)" : "var(--expired)";
+          pintarSenhaGuardada(!!s.smtp_password_set);
           document.getElementById("inp-smtp-from").value = s.smtp_from_email || "";
           // Diz o valor QUE VALE, em vez de explicar o conceito. O campo existe
           // so pelo nome de exibicao: `send_smtp_email` faz `from_email or user`,
@@ -615,8 +524,11 @@
         });
         // O assunto EFETIVO, e nao o campo: vazio aqui e "usar o padrao", e
         // mostrar um traco faria parecer que o e-mail sai sem assunto.
-        document.getElementById("email-assunto-atual").textContent =
-          modeloEmailSalvo.alerta_email_assunto || modeloEmailPadrao.assunto || "—";
+        const modelo = modeloEmailSalvo.alerta_email_assunto || modeloEmailPadrao.assunto || "";
+        document.getElementById("email-assunto-atual").textContent = modelo || "—";
+        document.getElementById("email-assunto-exemplo").textContent = modelo
+          ? modelo.replace(/\{a_vencer\}/g, "43").replace(/\{vencidos\}/g, "2").replace(/\{[a-z_]+\}/g, "…")
+          : "";
       }
 
       function preencherAlertas(s) {
@@ -634,8 +546,11 @@
           : "Vazio: enviando para todos os administradores ativos.";
 
         const marcos = (s.alertas_marcos_efetivos || []).join(", ");
-        document.getElementById("alertas-marcos-efetivo").textContent =
-          "Em uso: " + marcos + " dias antes, mais um aviso quando vencer.";
+        document.getElementById("inp-alertas-marcos").placeholder = marcos;
+        document.getElementById("alertas-marcos-efetivo").textContent = "Em uso: " + marcos + " dias antes.";
+        const h = s.alertas_intervalo_efetivo;
+        document.getElementById("alertas-intervalo-efetivo").textContent = h ? "Em uso: a cada " + plural(h, "hora") + "." : "";
+        avisarEnderecoExterno();
       }
 
       // ── Salvar pastas ────────────────────────────────────────────────────────
@@ -663,7 +578,6 @@
           if (elKey && elKey.value.trim()) localStorage.setItem(KEY_STORAGE, elKey.value.trim());
           const j = await r.json();
           st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
-          st.style.color = "var(--ok)";
           await loadSettingsToForm();
           await syncPathsFromApi();
         } catch (e) {
@@ -706,14 +620,15 @@
       function pintarEstadoAlertas() {
         const ligado = document.getElementById("chk-smtp-alerts-enabled").checked;
         const host = (document.getElementById("inp-smtp-host").value || "").trim();
-        const el = document.getElementById("smtp-estado");
-        const bloco = document.getElementById("cfg-chave-alertas");
-        bloco.classList.toggle("cfg-chave--ligada", ligado && !!host);
-        el.textContent = !ligado
-          ? "Desligado: nenhum alerta sai, mesmo com o servidor configurado."
+        document.getElementById("smtp-estado-badge").innerHTML = ligado
+          ? '<span class="ag-badge ag-badge--success">Ligado</span>'
+          : '<span class="ag-badge ag-badge--neutral">Desligado</span>';
+        document.getElementById("smtp-estado").textContent = !ligado
+          ? "Nenhum alerta sai, mesmo com o servidor configurado."
           : host
-            ? "Ligado: o portal verifica os vencimentos e envia o resumo."
-            : "Ligado, mas sem servidor configurado — nada será enviado até preencher o bloco abaixo.";
+            ? "O portal verifica os vencimentos e envia o resumo."
+            : "Sem servidor configurado: nada será enviado até preencher o bloco abaixo.";
+        document.getElementById("alertas-desligados").hidden = ligado;
       }
 
       document.getElementById("chk-smtp-alerts-enabled").addEventListener("change", pintarEstadoAlertas);
@@ -721,7 +636,7 @@
 
       document.getElementById("btn-save-smtp").addEventListener("click", async () => {
         const st = document.getElementById("smtp-msg");
-        st.textContent = "Salvando..."; st.style.color = "";
+        st.textContent = "Salvando…";
         try {
           const body = {
             source_folder: document.getElementById("inp-source").value,
@@ -738,41 +653,63 @@
             ...corpoModeloEmail(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
-          if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
-          if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); st.style.color = "red"; return; }
+          if (r.status === 401) { st.textContent = ""; erroCfg("Não autorizado: esta ação exige administrador."); return; }
+          if (!r.ok) { st.textContent = ""; erroCfg(await mensagemCorpoErro(r)); return; }
           const s = await r.json();
-          document.getElementById("smtp-pass-status").textContent = s.smtp_password_set ? "Sim" : "Não";
-          document.getElementById("smtp-pass-status").style.color = s.smtp_password_set ? "var(--ok)" : "var(--expired)";
+          pintarSenhaGuardada(!!s.smtp_password_set);
           document.getElementById("inp-smtp-pass").value = "";
-          st.textContent = "Configurações SMTP salvas com sucesso!"; st.style.color = "var(--ok)";
-        } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+          marcarLimpo();
+          st.textContent = "Salvo.";
+          showToast("Alterações salvas.", "success");
+          erroCfg("");
+        } catch (e) { st.textContent = ""; erroCfg("Erro: " + e); }
       });
+
+      function resultadoTeste(tipo, texto) {
+        const el = document.getElementById("smtp-teste-resultado");
+        el.innerHTML = texto
+          ? `<div class="ag-alert ag-alert--${tipo}">${tipo === "success" ? CHECK : AVISO}<div class="ag-alert__corpo">${esc(texto)}</div></div>`
+          : "";
+      }
 
       document.getElementById("btn-test-smtp").addEventListener("click", async () => {
-        const st = document.getElementById("smtp-msg");
         const dest = (document.getElementById("inp-smtp-test-dest").value || "").trim();
-        if (!dest) { st.textContent = "Insira um e-mail de destino para o teste."; st.style.color = "red"; return; }
-        st.textContent = "Enviando teste..."; st.style.color = "";
+        if (!dest) { resultadoTeste("danger", "Informe o e-mail que vai receber o teste."); return; }
+        const btn = document.getElementById("btn-test-smtp");
+        btn.disabled = true;
+        resultadoTeste("info", "Enviando o teste com a configuração salva…");
         try {
           const r = await fetch("/api/settings/smtp/test", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ target_email: dest }) });
-          if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
-          if (!r.ok) { st.textContent = "Erro: " + (await mensagemCorpoErro(r)); st.style.color = "red"; return; }
-          st.textContent = "E-mail de teste enviado com sucesso!"; st.style.color = "var(--ok)";
-        } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+          if (r.status === 401) { resultadoTeste("danger", "Não autorizado: esta ação exige administrador."); return; }
+          if (!r.ok) { resultadoTeste("danger", "O servidor de e-mail recusou: " + (await mensagemCorpoErro(r))); return; }
+          resultadoTeste("success", "E-mail de teste enviado para " + dest + ".");
+        } catch (e) { resultadoTeste("danger", "Erro: " + e); }
+        finally { btn.disabled = false; }
       });
 
-      document.getElementById("btn-trigger-alerts").addEventListener("click", async () => {
-        const st = document.getElementById("smtp-msg");
-        st.textContent = "Disparando alertas..."; st.style.color = "";
+      function destinatariosDoResumo() {
+        const lista = (document.getElementById("inp-alertas-dest").value || "").split(",").map((x) => x.trim()).filter(Boolean);
+        return lista.length ? plural(lista.length, "destinatário") : "todos os administradores ativos";
+      }
+
+      document.getElementById("btn-trigger-alerts").addEventListener("click", () => {
+        document.getElementById("disparoTexto").textContent = "Enviar o resumo agora para " + destinatariosDoResumo() + "? O e-mail sai com a configuração salva.";
+        document.getElementById("modalDisparo").showModal();
+      });
+
+      document.getElementById("btnDisparoConfirmar").addEventListener("click", async () => {
+        const modal = document.getElementById("modalDisparo");
+        const btn = document.getElementById("btnDisparoConfirmar");
+        btn.disabled = true;
         try {
           const r = await fetch("/api/settings/alerts/trigger", { method: "POST", headers: getHeaders(true) });
-          if (r.status === 401) { st.textContent = "401: Não autorizado (exige Admin)."; st.style.color = "red"; return; }
-          if (!r.ok) { st.textContent = "Erro: " + (await mensagemCorpoErro(r)); st.style.color = "red"; return; }
-          const res = await r.json();
-          const s = res.stats || {};
-          st.textContent = `Alertas processados! Enviados: ${s.alerts_sent || 0} | Ignorados: ${s.skipped_already_sent || 0} | Sem e-mail: ${s.skipped_no_recipient_email || 0} | Erros: ${s.errors || 0}`;
-          st.style.color = "var(--ok)";
-        } catch (e) { st.textContent = "Erro: " + e; st.style.color = "red"; }
+          modal.close();
+          if (r.status === 401) { erroCfg("Não autorizado: esta ação exige administrador."); return; }
+          if (!r.ok) { erroCfg("Não foi possível disparar: " + (await mensagemCorpoErro(r))); return; }
+          const s = (await r.json()).stats || {};
+          showToast(plural(s.alerts_sent || 0, "alerta enviado", "alertas enviados") + (s.errors ? ", " + plural(s.errors, "erro") : "") + (s.skipped_already_sent ? ", " + s.skipped_already_sent + " já enviados hoje" : "") + ".", s.errors ? "warning" : "success");
+        } catch (e) { modal.close(); erroCfg("Erro: " + e); }
+        finally { btn.disabled = false; }
       });
 
       // ── Modal do texto do e-mail ─────────────────────────────────────────
@@ -782,8 +719,8 @@
 
       function erroEmail(msg) {
         const el = document.getElementById("modal-email-erro");
-        el.textContent = msg || "";
-        el.setAttribute("data-visivel", msg ? "1" : "0");
+        el.querySelector(".ag-alert__corpo").textContent = msg || "";
+        el.hidden = !msg;
       }
 
       // Os marcadores vem do SERVIDOR (`alerta_email_marcadores`), e nao de uma
@@ -795,7 +732,7 @@
         marcadoresEmail.forEach((nome) => {
           const b = document.createElement("button");
           b.type = "button";
-          b.className = "marcador";
+          b.className = "ag-btn ag-btn--outline ag-btn--sm";
           b.textContent = "{" + nome + "}";
           b.addEventListener("click", () => inserirMarcador("{" + nome + "}"));
           box.appendChild(b);
@@ -909,9 +846,7 @@
           }
           preencherModeloEmail(await r.json());
           dlgEmail.close();
-          const st = document.getElementById("smtp-msg");
-          st.textContent = "Texto do e-mail salvo.";
-          st.style.color = "var(--ok)";
+          showToast("Texto do e-mail salvo.", "success");
         } catch (e) {
           modeloEmailSalvo = antes;
           erroEmail("Erro: " + e);
@@ -943,8 +878,8 @@
           if (r.status === 401 || !r.ok) return;
           const j = await r.json();
           const p = j.pendentes || [];
-          if (p.length) { pre.style.display = "block"; pre.textContent = JSON.stringify(p, null, 2); }
-          else { pre.style.display = "none"; pre.textContent = ""; }
+          if (p.length) { pre.hidden = false; pre.textContent = JSON.stringify(p, null, 2); }
+          else { pre.hidden = true; pre.textContent = ""; }
         } catch (_e) {}
       }
 
@@ -952,33 +887,40 @@
       document.getElementById("cmd-ping").addEventListener("click", () => enqueueRemoteCommand("ping"));
       document.getElementById("cmd-refresh-q").addEventListener("click", refreshCommandQueue);
 
-      // ── Init ─────────────────────────────────────────────────────────────────
+      // ── Init ─────────────────────────────────────────────────────────
       (async function init() {
         // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
         // o gate da página.
         const role = localStorage.getItem('user_role');
         if (role !== 'admin') {
-          // Toast na página de destino: um toast aqui sumiria junto com a
-          // navegação, e um alert() bloquearia o redirecionamento.
           showToastAfterRedirect('Acesso restrito a administradores.', 'warning');
           window.location.href = '/';
           return;
         }
+        document.querySelectorAll("[data-ag-modal-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+        document.getElementById("em-fechar").addEventListener("click", () => document.getElementById("modal-email").close());
+        document.getElementById("inp-alertas-dest").addEventListener("input", avisarEnderecoExterno);
+        document.querySelectorAll("#sec-smtp input, #sec-smtp select").forEach((el) => {
+          if (el.id === "inp-smtp-test-dest") return;
+          el.addEventListener("input", marcarSujo);
+          el.addEventListener("change", marcarSujo);
+        });
 
         syncSelectFonteFromStorage();
         const h = await health();
         const tagS = document.getElementById("tag-banco");
-        if (tagS) tagS.textContent = "Banco: " + (h.banco ? "Ligado" : "Desligado (Somente Local)");
+        tagS.className = "ag-badge " + (h.banco ? "ag-badge--success" : "ag-badge--danger");
+        tagS.textContent = h.banco ? "Banco de dados conectado" : "Banco de dados desconectado";
         const tagK = document.getElementById("tag-api-key");
-        if (tagK) tagK.textContent = h.api_key_required ? "Chave: Obrigatória" : "Chave: Aberta";
+        tagK.textContent = h.api_key_required ? "Chave API obrigatória" : "Chave API aberta";
         const ah = document.getElementById("auth-hint");
-        if (h.api_key_required) {
-          ah.textContent = "O servidor exige chave. Cole o mesmo valor de API_KEY do servidor para acessar.";
-        }
+        if (h.api_key_required) ah.textContent = "O servidor exige chave. Cole o mesmo valor de API_KEY do servidor para acessar.";
         await loadSettingsToForm();
+        marcarLimpo();
+        _segAnterior = document.getElementById("sel-smtp-seguranca").value;
         await syncPathsFromApi();
         await refreshCommandQueue();
       })();
-    </script>
-  </body>
+  </script>
+</body>
 </html>

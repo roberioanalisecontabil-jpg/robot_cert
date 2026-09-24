@@ -1025,8 +1025,12 @@ def painel(request: Request) -> HTMLResponse:
 
 @app.get("/configuracao", response_class=HTMLResponse)
 def pagina_configuracao(request: Request) -> HTMLResponse:
+    # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
+    aba = request.query_params.get("aba") or "chave"
+    if aba not in ("chave", "pastas", "alertas", "comandos"):
+        aba = "chave"
     return templates.TemplateResponse(
-        request=request, name="configuracao.html", context={"pagina_ativa": "configuracao"}
+        request=request, name="configuracao.html", context={"pagina_ativa": "configuracao", "aba": aba}
     )
 
 
@@ -1038,8 +1042,12 @@ def pagina_login(request: Request) -> HTMLResponse:
 
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_usuarios(request: Request) -> HTMLResponse:
+    # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
+    aba = request.query_params.get("aba") or "usuarios"
+    if aba not in ("usuarios", "departamentos", "permissoes"):
+        aba = "usuarios"
     return templates.TemplateResponse(
-        request=request, name="usuarios.html", context={"pagina_ativa": "usuarios"}
+        request=request, name="usuarios.html", context={"pagina_ativa": "usuarios", "aba": aba}
     )
 
 
@@ -1210,7 +1218,24 @@ def list_users() -> List[dict]:
     r = sb.table("users").select(
         "id, email, full_name, role, ativo, gestor_id, departamento_id, created_at"
     ).execute()
-    return r.data
+    usuarios = list(r.data or [])
+    # Contagem da carteira por pessoa, numa consulta só: a coluna "Carteira"
+    # liga esta tela ao cartão "Acesso" do Dashboard e à tela Carteiras.
+    quantos: Dict[str, int] = {}
+    try:
+        for c in sb.table("carteira").select("user_id").execute().data or []:
+            k = str(c.get("user_id"))
+            quantos[k] = quantos.get(k, 0) + 1
+    except Exception:  # noqa: BLE001 — sem a contagem a lista continua servindo
+        logger.exception("Falha ao contar carteiras para a lista de usuários")
+    from app import texto as _texto
+    for u in usuarios:
+        n = quantos.get(str(u.get("id")), 0)
+        # Só na exibição: "irla" → "Irla", caixa alta → título.
+        u["nome_exibicao"] = nomes.nome_pessoa(u.get("full_name")) or str(u.get("email") or "")
+        u["carteira"] = n
+        u["textos"] = {"carteira": _texto.plural(n, "cliente")}
+    return usuarios
 
 
 class UserCreateBody(BaseModel):
