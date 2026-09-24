@@ -103,16 +103,26 @@
             <tbody role="rowgroup" id="tbody-igual"></tbody>
           </table>
         </div>
-        <nav class="cg-pag cg-grupo__pag" id="pag-igual" aria-label="Páginas: mesmo certificado" hidden>
-          <ul class="cg-pag__paginas" id="pag-ul-igual"></ul>
-          <div class="cg-pag__por-pagina">
-            <label class="ag-label" for="pag-perpage-igual">Por página</label>
-            <select id="pag-perpage-igual" class="ag-select cg-por-pagina">
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+        <nav id="pag-igual" class="cg-page-nav cg-grupo__pag" aria-label="Paginação: mesmo certificado">
+          <div id="pag-meta-igual" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-igual" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-igual-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-igual">
+                <button type="button" id="btn-igual-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-igual" class="cg-sr-only">Registros por página</label>
+              <select id="pag-perpage-igual" class="cg-page-perpage-select cg-por-pagina" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
           </div>
         </nav>
       </section>
@@ -141,16 +151,26 @@
             <tbody role="rowgroup" id="tbody-doc"></tbody>
           </table>
         </div>
-        <nav class="cg-pag cg-grupo__pag" id="pag-doc" aria-label="Páginas: mesmo CPF/CNPJ" hidden>
-          <ul class="cg-pag__paginas" id="pag-ul-doc"></ul>
-          <div class="cg-pag__por-pagina">
-            <label class="ag-label" for="pag-perpage-doc">Por página</label>
-            <select id="pag-perpage-doc" class="ag-select cg-por-pagina">
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+        <nav id="pag-doc" class="cg-page-nav cg-grupo__pag" aria-label="Paginação: mesmo CPF/CNPJ">
+          <div id="pag-meta-doc" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-doc" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-doc-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-doc">
+                <button type="button" id="btn-doc-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-doc" class="cg-sr-only">Registros por página</label>
+              <select id="pag-perpage-doc" class="cg-page-perpage-select cg-por-pagina" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
           </div>
         </nav>
       </section>
@@ -169,16 +189,26 @@
         <!-- Duas colunas e uma delas é caminho longo: lista, não tabela
              (seção 36 do DS). Um bloco por conjunto de nomes parecidos. -->
         <ol class="cg-blocos" id="blocos-nome" aria-label="Grupos de nomes parecidos"></ol>
-        <nav class="cg-pag cg-grupo__pag" id="pag-nome" aria-label="Páginas: nomes parecidos" hidden>
-          <ul class="cg-pag__paginas" id="pag-ul-nome"></ul>
-          <div class="cg-pag__por-pagina">
-            <label class="ag-label" for="pag-perpage-nome">Por página</label>
-            <select id="pag-perpage-nome" class="ag-select cg-por-pagina">
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+        <nav id="pag-nome" class="cg-page-nav cg-grupo__pag" aria-label="Paginação: nomes parecidos">
+          <div id="pag-meta-nome" class="cg-page-nav__meta"></div>
+          <div class="cg-page-nav__row">
+            <ul id="pag-ul-nome" class="cg-page-nav__ul" role="list">
+              <li>
+                <button type="button" id="btn-nome-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+              </li>
+              <li id="pag-li-next-nome">
+                <button type="button" id="btn-nome-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+              </li>
+            </ul>
+            <div>
+              <label for="pag-perpage-nome" class="cg-sr-only">Registros por página</label>
+              <select id="pag-perpage-nome" class="cg-page-perpage-select cg-por-pagina" title="Itens por página">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
           </div>
         </nav>
       </section>
@@ -187,8 +217,8 @@
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09d"></script>
   <script nonce="{{ request.state.nonce }}">
-    // `esc`, `getHeaders`, `mensagemCorpoErro`, `cgPaginacaoPilulas` e
-    // `cgCopiarInit` vêm de ui-common.js.
+    // `esc`, `getHeaders`, `mensagemCorpoErro`, `cgPageNavRefresh`,
+    // `cgPageNavHide` e `cgCopiarInit` vêm de ui-common.js.
 
     const LS_PER_PAGE_DUP = "cg_per_page_duplicidades";
     const ALLOW_PER_PAGE_DUP = [10, 25, 50, 100];
@@ -410,6 +440,8 @@
 
     /* ── Render ───────────────────────────────────────────────────────── */
 
+    // Controle segmentado (cgPageNavRefresh, ui-common.js): o mesmo modelo
+    // do Início e do Histórico, um por grupo.
     function paginar(k) {
       const g = grupos[k];
       const psz = porPagina();
@@ -417,13 +449,36 @@
       if (g.pagina > total) g.pagina = total;
       if (g.pagina < 1) g.pagina = 1;
       const ini = (g.pagina - 1) * psz;
-      cgPaginacaoPilulas({
-        nav: g.nav,
-        ul: g.ul,
-        pg: g.linhas.length ? { pagina: g.pagina, total_paginas: total } : null,
-        goToPage: (n) => { g.pagina = n; renderGrupo(k); },
-      });
+      if (!g.linhas.length) {
+        cgPageNavHide("pag-" + k, "pag-ul-" + k, "pag-meta-" + k);
+      } else {
+        cgPageNavRefresh({
+          bar: "pag-" + k,
+          meta: "pag-meta-" + k,
+          ul: "pag-ul-" + k,
+          liNext: "pag-li-next-" + k,
+          prev: "btn-" + k + "-prev",
+          next: "btn-" + k + "-next",
+          pg: { pagina: g.pagina, total_paginas: total, total_itens: g.linhas.length },
+          metaFormatter: (p) => "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " grupo(s)",
+          hideWhenSingle: true,
+          goToPage: (n) => { g.pagina = n; renderGrupo(k); },
+          maxButtons: 5,
+        });
+      }
       return { ini, fatia: g.linhas.slice(ini, ini + psz), total };
+    }
+
+    function wirePrevNext(k) {
+      document.getElementById("btn-" + k + "-prev").addEventListener("click", () => {
+        const g = grupos[k];
+        if (g.pagina > 1) { g.pagina--; renderGrupo(k); }
+      });
+      document.getElementById("btn-" + k + "-next").addEventListener("click", () => {
+        const g = grupos[k];
+        const total = Math.max(1, Math.ceil(g.linhas.length / porPagina()));
+        if (g.pagina < total) { g.pagina++; renderGrupo(k); }
+      });
     }
 
     function renderGrupo(k) {
@@ -524,6 +579,7 @@
     document.getElementById("btn-atualizar").addEventListener("click", carregar);
     cgCopiarInit();
     initPorPagina();
+    Object.keys(grupos).forEach(wirePrevNext);
 
     (async function init() {
       // Sidebar por papel: ui-common.js (initSidebarPorPapel).

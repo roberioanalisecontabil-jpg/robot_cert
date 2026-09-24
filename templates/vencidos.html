@@ -126,26 +126,36 @@
         </div>
       </div>
 
-      <!-- Paginação: pílulas do DS. Desktop: Anterior, 1, 2, 3, …, última,
-           Próxima. Celular: só Anterior · "1 de 49" · Próxima. As páginas são
-           links de verdade com a query completa, para funcionar sem JS. -->
-      <nav class="cg-pag" id="paginacao-venc" aria-label="Navegação por páginas" hidden>
-        <ul class="cg-pag__paginas" id="pag-lista-venc"></ul>
-        <form class="cg-pag__por-pagina" id="form-por-pagina" method="get" action="/vencidos">
-          <label class="ag-label" for="pag-perpage-venc">Por página</label>
-          <select id="pag-perpage-venc" name="por_pagina" class="ag-select">
-            <option value="10">10</option>
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
-          <noscript><button type="submit" class="ag-btn ag-btn--outline ag-btn--sm">Aplicar</button></noscript>
-        </form>
+      <!-- Paginação: o mesmo controle segmentado do Início e do Histórico
+           (cgPageNavRefresh, ui-common.js). O "por página" continua num
+           formulário GET: sem JS, Aplicar recarrega com a query. -->
+      <nav id="paginacao-venc" class="cg-page-nav" aria-label="Navegação por páginas">
+        <div id="pag-meta-venc" class="cg-page-nav__meta"></div>
+        <div class="cg-page-nav__row">
+          <ul id="pag-ul-venc" class="cg-page-nav__ul" role="list">
+            <li>
+              <button type="button" id="btn-venc-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+            </li>
+            <li id="pag-li-next-venc">
+              <button type="button" id="btn-venc-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+            </li>
+          </ul>
+          <form id="form-por-pagina" method="get" action="/vencidos">
+            <label for="pag-perpage-venc" class="cg-sr-only">Registros por página</label>
+            <select id="pag-perpage-venc" name="por_pagina" class="cg-page-perpage-select" title="Itens por página">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50">50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
+            <noscript><button type="submit" class="ag-btn ag-btn--outline ag-btn--sm">Aplicar</button></noscript>
+          </form>
+        </div>
       </nav>
     </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09c"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09d"></script>
   <script nonce="{{ request.state.nonce }}">
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
@@ -377,22 +387,26 @@
 
     // ─── Paginação ──────────────────────────────────────────────────────
 
-    // Pílulas do DS (cgPaginacaoPilulas, ui-common.js), o mesmo modelo do
-    // Início e do Histórico. Aqui cada página é um link com a query completa,
-    // para funcionar sem JS; com JS o clique troca a página sem recarregar.
+    // Controle segmentado (cgPageNavRefresh, ui-common.js): o mesmo modelo
+    // do Início e do Histórico. Os botões trocam a página sem recarregar; a
+    // URL acompanha (gravarEstadoNaUrl) para o link continuar compartilhável.
     function renderPaginacao(pg) {
-      cgPaginacaoPilulas({
-        nav: "paginacao-venc",
-        ul: "pag-lista-venc",
+      cgPageNavRefresh({
+        bar: "paginacao-venc",
+        meta: "pag-meta-venc",
+        ul: "pag-ul-venc",
+        liNext: "pag-li-next-venc",
+        prev: "btn-venc-prev",
+        next: "btn-venc-next",
         pg: pg,
-        href: (n) => {
-          const s = queryDoEstado({ pagina: n > 1 ? n : null }).toString();
-          return location.pathname + (s ? "?" + s : "");
-        },
+        metaFormatter: (p) =>
+          "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " vencido(s)",
+        hideWhenSingle: true,
         goToPage: (n) => {
           estado.pagina = n;
           carregarVencidos();
         },
+        maxButtons: 5,
       });
     }
 
@@ -584,6 +598,16 @@
 
     document.getElementById("form-por-pagina").addEventListener("submit", (ev) => {
       ev.preventDefault();
+    });
+    document.getElementById("btn-venc-prev").addEventListener("click", () => {
+      if (estado.pagina > 1) {
+        estado.pagina--;
+        carregarVencidos();
+      }
+    });
+    document.getElementById("btn-venc-next").addEventListener("click", () => {
+      estado.pagina++;
+      carregarVencidos();
     });
     document.getElementById("pag-perpage-venc").addEventListener("change", (ev) => {
       const n = parseInt(ev.target.value, 10);
