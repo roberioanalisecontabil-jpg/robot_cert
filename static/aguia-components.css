@@ -840,3 +840,67 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
 }
 .ag-dados__valor--zero { color: var(--text-muted); }
 .ag-dados__valor--secundario { color: var(--text-secondary); font-family: var(--font-body); }
+
+/* ── Abas ────────────────────────────────────────────────────────────── */
+
+/* Abas que são links (?aba=…): funcionam sem JavaScript. A ativa leva
+   texto primário em 600 e um sublinhado de 2px em ouro; a inativa fica em
+   texto secundário e sobe para primário no hover. 44px de altura. */
+.ag-abas {
+    display: flex;
+    gap: var(--space-6);
+    border-bottom: var(--bw-1) solid var(--border-subtle);
+    overflow-x: auto;
+}
+.ag-abas__aba {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    padding: 0 var(--space-1);
+    margin-bottom: -1px;
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: var(--bw-3) solid transparent;
+    border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+}
+.ag-abas__aba:hover { color: var(--text-primary); }
+.ag-abas__aba:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ag-abas__aba[aria-selected="true"] {
+    color: var(--text-primary);
+    border-bottom-color: var(--gold-500);
+}
+.ag-abas__contagem {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+.ag-abas__contagem:empty { display: none; }
+
+/* ── Estado vazio ────────────────────────────────────────────────────── */
+
+/* Anatomia da seção 35 do DS: título, explicação e a ação que cria o
+   primeiro. É o único lugar em que um botão dourado aparece nesta tela. */
+.ag-vazio {
+    text-align: center;
+    padding: var(--space-10) var(--space-6);
+    max-width: 40rem;
+    margin: 0 auto;
+}
+.ag-vazio__titulo {
+    margin: 0 0 var(--space-2);
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.ag-vazio__texto {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}

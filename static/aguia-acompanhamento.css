@@ -1,0 +1,122 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Acompanhamento de certificados no Águia DS (24/09/2026) — só desta tela
+
+   Carrega depois de tokens, components, ponte e listas (a família de listas
+   dá o shell: .cg-painel, .cg-status, .cg-toolbar, .cg-kpi, a tabela que
+   vira lista). O que é reaproveitável (abas, estado vazio, acordeão) vive
+   em aguia-components.css.
+
+   A aba "Escolher certificados" ainda não foi especificada (item 56): fica
+   funcional com o CSS de tabela do DS, sem redesenho.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Os três indicadores: zero é neutro (ícone apagado, "Nenhum"); o
+   tratamento de alerta só entra com valor maior que zero, pela classe
+   que o JS põe. Ativo é o estado normal: ícone em tinta de marca. */
+.cg-acomp-kpis .cg-kpi--marca .cg-kpi__icone { color: var(--text-brand); }
+.cg-kpi__prazo { display: none; }
+
+/* Aviso por e-mail: linha informativa que abre (acordeão) para mudar a
+   preferência. Não parece campo nem botão. */
+.cg-aviso { border-top: var(--bw-1) solid var(--border-subtle); border-bottom: var(--bw-1) solid var(--border-subtle); }
+.cg-aviso > .ag-accordion__topo { padding: var(--space-3) 0; font-weight: 500; color: var(--text-primary); }
+.cg-aviso__linha {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.cg-aviso__linha .ag-icon { color: var(--text-secondary); flex: none; }
+/* O texto toma a largura que sobra ao lado do ícone; destinatário e badge
+   quebram para a linha de baixo no celular, o ícone não fica sozinho. */
+.cg-aviso__texto { font-size: var(--text-sm); color: var(--text-primary); flex: 1 1 14rem; min-width: 0; }
+.cg-aviso__texto strong { font-weight: 600; }
+.cg-aviso__dest { font-size: var(--text-xs); color: var(--text-secondary); }
+.cg-aviso__corpo { padding: var(--space-2) 0 var(--space-4); }
+.cg-aviso__opcao {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    min-height: 44px;
+    cursor: pointer;
+}
+.cg-aviso__marcos { border: 0; margin: 0; padding: var(--space-2) 0 0; }
+.cg-aviso__marcos legend {
+    padding: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-overline);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--text-muted);
+}
+.cg-aviso__marcos[disabled] { opacity: .5; }
+.cg-aviso__lista { display: flex; flex-wrap: wrap; gap: 0 var(--space-4); margin: var(--space-1) 0; }
+.cg-aviso__lista label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; font-size: var(--text-sm); cursor: pointer; }
+.cg-aviso__dica { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.cg-aviso__acoes { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
+.cg-aviso__msg { font-size: var(--text-xs); color: var(--text-secondary); }
+
+/* Busca: ocupa a largura disponível até 28rem, com o ícone dentro. */
+.cg-acomp-busca { position: relative; max-width: 28rem; width: 100%; }
+.cg-acomp-busca .ag-icon {
+    position: absolute;
+    left: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+.cg-acomp-busca .ag-input { padding-left: calc(var(--space-3) * 2 + 16px); width: 100%; }
+.cg-acomp-busca[hidden] { display: none; }
+
+/* Tabela de três colunas: empresa, vencimento (data + "em N dias"), status. */
+.cg-tabela-acomp .ag-table-scroll { overflow: visible; }
+.cg-tabela-acomp .cg-col-vencimento time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cg-tabela-acomp .cg-col-vencimento .ag-cell-sub { display: block; }
+.cg-tabela-acomp .cg-col-status { width: 1%; white-space: nowrap; }
+.cg-tabela-acomp .ag-table__vazio a { color: var(--text-brand); }
+
+/* Aba "Escolher certificados": a barra de salvar continua no fluxo. */
+.cg-acomp-barra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    padding: var(--space-4) 0 0;
+    border-top: var(--bw-1) solid var(--border-subtle);
+    margin-top: var(--space-4);
+}
+.cg-acomp-barra__texto { font-size: var(--text-sm); color: var(--text-secondary); }
+.cg-acomp-barra__texto strong { color: var(--text-primary); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+    /* Três colunas compactas numa linha: rótulo e número, sem ícone e sem
+       subtítulo; o prazo sobe para o rótulo ("A vencer em 30 dias"). */
+    .cg-acomp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+    .cg-acomp-kpis .ag-kpi { padding: var(--space-4) var(--space-3); }
+    .cg-acomp-kpis .cg-kpi__icone,
+    .cg-acomp-kpis .ag-kpi__delta { display: none; }
+    .cg-acomp-kpis .ag-kpi__label { white-space: normal; overflow-wrap: break-word; }
+    .cg-acomp-kpis .ag-kpi__value { font-size: var(--text-2xl); }
+    .cg-kpi__prazo { display: inline; }
+
+    /* Cartão de linha: nome e documento à esquerda, data e "em N dias" à
+       direita, o badge numa linha abaixo. */
+    .cg-tabela-acomp tbody tr:not(.cg-state-row) {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "nome vencimento"
+            "status status";
+    }
+    .cg-tabela-acomp .cg-col-vencimento { grid-area: vencimento; text-align: right; justify-self: end; }
+    .cg-tabela-acomp .cg-col-vencimento .ag-cell-sub { text-align: right; white-space: nowrap; }
+    .cg-tabela-acomp .cg-col-status { grid-area: status; justify-self: start; width: auto; }
+    .cg-acomp-busca { max-width: none; }
+}

@@ -3,327 +3,240 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Acompanhamento — Certificados</title>
+  <title>Acompanhamento — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <!-- Sexta tela do portal no Águia DS. Mesma ordem de carregamento das
+       outras: fontes servidas pelo portal, o style.css legado (shell), os
+       tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
+       da família de listas e o desta tela. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/style.css?v=texto-do-email-2026-08" />
-  <style>
-    .tab-container-navigation {
-      display: flex;
-      gap: 1.5rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 1.5rem;
-    }
-    .tab-btn {
-      background: transparent !important;
-      border: none !important;
-      border-radius: 0 !important;
-      padding: 0.75rem 0.25rem !important;
-      font-size: var(--fs-ui);
-      font-weight: 500;
-      color: var(--text-muted);
-      cursor: pointer;
-      position: relative;
-      box-shadow: none !important;
-    }
-    .tab-btn:hover {
-      color: var(--text);
-    }
-    .tab-btn.active {
-      color: var(--accent-text);
-      font-weight: 600;
-    }
-    .tab-btn.active::after {
-      content: '';
-      position: absolute;
-      bottom: -1px;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background-color: var(--accent);
-      border-radius: var(--radius-xs);
-    }
-
-    /* Preferência de aviso. `<details>` fechado por padrão: é uma decisão que
-       se toma uma vez, e aberta empurraria a tabela — que é o que a pessoa
-       veio ver. */
-    .pref-alerta {
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      background: var(--surface);
-      margin-bottom: 1.25rem;
-    }
-    .pref-alerta > summary {
-      list-style: none;
-      cursor: pointer;
-      display: flex;
-      align-items: baseline;
-      gap: 0.6rem;
-      padding: 0.7rem 0.9rem;
-      border-radius: var(--radius-md);
-    }
-    .pref-alerta > summary::-webkit-details-marker { display: none; }
-    .pref-alerta > summary::marker { content: ""; }
-    .pref-alerta > summary:hover { background: var(--bg); }
-    .pref-alerta > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .pref-alerta__titulo { font-weight: 600; font-size: var(--fs-ui); }
-    .pref-alerta__estado { font-size: var(--fs-ui-sm); color: var(--text-muted); }
-    .pref-alerta__corpo {
-      padding: 0 0.9rem 0.9rem;
-      border-top: 1px dashed var(--border);
-      padding-top: 0.9rem;
-    }
-    .pref-alerta__linha {
-      display: flex; align-items: center; gap: 0.5rem;
-      font-size: var(--fs-ui); cursor: pointer;
-    }
-    .pref-alerta__marcos {
-      border: 0; padding: 0.9rem 0 0; margin: 0;
-    }
-    .pref-alerta__marcos legend {
-      font-size: var(--fs-ui-sm); font-weight: 600; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.03em; padding: 0;
-    }
-    #pref-marcos {
-      display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0.5rem 0;
-    }
-    #pref-marcos label {
-      display: flex; align-items: center; gap: 0.4rem;
-      font-size: var(--fs-ui); cursor: pointer;
-    }
-    /* Desabilitado quando o aviso está desligado: as caixas de prazo não
-       significam nada nesse estado, e deixá-las clicáveis sugeriria que sim. */
-    .pref-alerta__marcos[disabled] { opacity: 0.5; }
-    .pref-alerta__acoes {
-      display: flex; align-items: center; gap: 0.75rem;
-      flex-wrap: wrap; margin-top: 0.9rem;
-    }
-  </style>
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09f" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-acompanhamento.css?v=aguia-2026-09" />
 </head>
-<body>
+<body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
-  <main class="main-content" id="main-content">
-    <header class="page-header">
-      <h1>Acompanhamento de Certificados</h1>
-      <p>Escolha os certificados a acompanhar e veja o painel com vencimentos.</p>
+  <main class="main-content cg-painel" id="main-content">
+    <header class="ag-page__head">
+      <h1 class="ag-page__title">Acompanhamento de certificados</h1>
+      <p class="ag-page__lead">Os certificados que você escolheu acompanhar, com os próximos vencimentos e o aviso por e-mail.</p>
     </header>
 
-    <!-- SEM `--cheia`, ao contrario de Inicio, Historico e Vencidos.
+    <!-- Abas como links: sem JS a página recarrega já na aba pedida (o
+         servidor lê ?aba=). Com JS a troca é local, com papéis de tablist e
+         setas do teclado, e a troca é anunciada. -->
+    <div class="ag-abas" role="tablist" aria-label="Seções do acompanhamento">
+      <a class="ag-abas__aba" role="tab" id="tab-painel" href="?aba=acompanhados" aria-controls="sec-painel"
+         aria-selected="{{ 'true' if aba == 'acompanhados' else 'false' }}" {% if aba != 'acompanhados' %}tabindex="-1"{% endif %}>
+        Acompanhados <span class="ag-abas__contagem" id="tab-contagem"></span>
+      </a>
+      <a class="ag-abas__aba" role="tab" id="tab-selecao" href="?aba=escolher" aria-controls="sec-selecao"
+         aria-selected="{{ 'true' if aba == 'escolher' else 'false' }}" {% if aba != 'escolher' %}tabindex="-1"{% endif %}>
+        Escolher certificados
+      </a>
+    </div>
+    <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
-           Esta tela e a mais complexa das quatro: duas abas trocadas por
-           `display`, um painel de preferencia em `<details>`, e uma barra de
-           salvar em `position: sticky`. Sticky depende do scrollport mais
-           proximo, e transformar a secao em coluna flex muda qual e ele —
-           risco real de a barra de salvar sair do alcance, que foi como o
-           cliente relatou ("nao consigo mais salvar minhas selecoes").
+    <section id="sec-painel" role="tabpanel" aria-labelledby="tab-painel" {% if aba != 'acompanhados' %}hidden{% endif %}>
+      <!-- Os três indicadores. Zero é neutro; o alerta só entra com valor
+           maior que zero (classes postas pelo JS). Somem no estado vazio:
+           três zeros não informam nada. -->
+      <section class="ag-kpi-row cg-acomp-kpis" id="painel-indicadores" aria-label="Resumo dos acompanhados">
+        <div class="ag-kpi cg-kpi" id="kpi-vencidos">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Vencidos</p>
+            <p class="ag-kpi__value" id="ind-vencidos" aria-busy="true">—</p>
+            <p class="ag-kpi__delta" id="sub-vencidos">Entre os acompanhados</p>
+          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <svg class="ag-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          </span>
+        </div>
+        <div class="ag-kpi cg-kpi" id="kpi-expirando">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">A vencer<span class="cg-kpi__prazo"> em 30 dias</span></p>
+            <p class="ag-kpi__value" id="ind-expirando" aria-busy="true">—</p>
+            <p class="ag-kpi__delta" id="sub-expirando">Nos próximos 30 dias</p>
+          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <svg class="ag-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </span>
+        </div>
+        <div class="ag-kpi cg-kpi cg-kpi--marca" id="kpi-ativos">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Ativos</p>
+            <p class="ag-kpi__value" id="ind-ativos" aria-busy="true">—</p>
+            <p class="ag-kpi__delta">Com mais de 30 dias de validade</p>
+          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <svg class="ag-icon" viewBox="0 0 24 24"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+          </span>
+        </div>
+        <!-- Quarto card, escondido enquanto for zero: erro, fora do padrão e
+             "não encontrado no inventário" não cabem em nenhum dos três. -->
+        <div class="ag-kpi cg-kpi" id="card-ind-sem-leitura" hidden>
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Sem leitura</p>
+            <p class="ag-kpi__value" id="ind-sem-leitura">0</p>
+            <p class="ag-kpi__delta">Erro ou fora do padrão</p>
+          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <svg class="ag-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          </span>
+        </div>
+      </section>
 
-           O ganho aqui tambem era menor: o tamanho da tabela nao e a queixa
-           desta tela. Fica de fora ate haver um motivo proprio. -->
-        <div class="table-container" id="table-container-colab">
-      <div class="tab-container-navigation">
-        <button type="button" id="tab-painel" class="tab-btn active">Painel</button>
-        <button type="button" id="tab-selecao" class="tab-btn">Seleção de Certificados</button>
+      <!-- Aviso por e-mail: uma linha informativa que ABRE para mudar a
+           preferência (acordeão com seta). Os prazos por extenso vêm do
+           servidor; o estado vai escrito no badge. -->
+      <details class="ag-accordion cg-aviso" id="pref-alerta">
+        <summary class="ag-accordion__topo">
+          <span class="cg-aviso__linha">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            <span class="cg-aviso__texto" id="pref-texto">Aviso por e-mail</span>
+            <span class="cg-aviso__dest" id="pref-dest"></span>
+            <span id="pref-estado"></span>
+          </span>
+          <span class="ag-accordion__seta" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+        </summary>
+        <div class="cg-aviso__corpo">
+          <p class="cg-aviso__dica" id="pref-indisponivel" hidden></p>
+          <label class="cg-aviso__opcao ag-check">
+            <input type="checkbox" id="chk-pref-notificar" />
+            <span>Quero receber aviso dos certificados que acompanho</span>
+          </label>
+          <fieldset class="cg-aviso__marcos" id="pref-marcos-campo">
+            <legend>Avisar quando faltarem</legend>
+            <div class="cg-aviso__lista" id="pref-marcos"></div>
+            <p class="cg-aviso__dica">Desmarcar um prazo dispensa só o lembrete. O aviso de vencimento continua chegando.</p>
+          </fieldset>
+          <div class="cg-aviso__acoes">
+            <button type="button" id="btn-pref-salvar" class="ag-btn ag-btn--outline" disabled>Salvar preferência</button>
+            <span class="cg-aviso__msg" id="pref-msg" role="status"></span>
+          </div>
+        </div>
+      </details>
+
+      <div class="cg-toolbar cg-toolbar--compacta">
+        <div class="cg-toolbar__filtros">
+          <div class="cg-acomp-busca" id="busca-painel-wrap" hidden>
+            <label for="busca-painel" class="cg-sr-only">Buscar nos acompanhados por nome ou CNPJ/CPF</label>
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input class="ag-input" type="search" id="busca-painel" placeholder="Nome ou CNPJ/CPF" autocomplete="off" />
+          </div>
+        </div>
       </div>
 
-      <section id="sec-painel">
-        <!-- Os mesmos cards do Inicio, com os mesmos tokens: quem acompanha 8
-             certificados nao deveria ter de contar linhas para saber quantos
-             ja venceram. Seguem o filtro de busca, como os do Inicio seguem o
-             deles — com a busca vazia, que e o caso normal, o numero e o da
-             selecao inteira. -->
-        <div class="cards-grid" id="painel-indicadores">
-          <div class="dashboard-card card-vencidos">
-            <div class="card-info">
-              <span class="card-title">Vencidos</span>
-              <span class="card-number" id="ind-vencidos">0</span>
-            </div>
-            <div class="card-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-          </div>
+      <div class="cg-status" aria-live="polite">
+        <p id="painel-hint" class="cg-status__linha"></p>
+      </div>
 
-          <div class="dashboard-card card-expirando">
-            <div class="card-info">
-              <span class="card-title">A vencer</span>
-              <span class="card-number" id="ind-expirando">0</span>
-              <span class="card-subtitle">Próximos 30 dias</span>
-            </div>
-            <div class="card-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
+      <!-- Estado vazio: a única ação da tela nesse estado, em ouro. -->
+      <div class="ag-vazio" id="painel-vazio" hidden>
+        <h2 class="ag-vazio__titulo">Você ainda não acompanha nenhum certificado</h2>
+        <p class="ag-vazio__texto">Escolha os certificados das suas empresas para receber o aviso de vencimento por e-mail.</p>
+        <a class="ag-btn ag-btn--primary" href="?aba=escolher" id="btn-vazio-escolher">Escolher certificados</a>
+      </div>
 
-          <div class="dashboard-card card-validos">
-            <div class="card-info">
-              <span class="card-title">Ativos</span>
-              <span class="card-number" id="ind-ativos">0</span>
-            </div>
-            <div class="card-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Quarto card, escondido enquanto for zero. Erro, fora do padrao e
-               "nao encontrado no inventario" nao cabem em nenhum dos tres
-               acima; sem ele a soma dos cards nao fecharia com o total da linha
-               abaixo, e o certificado ilegivel — o que MAIS precisa de atencao —
-               seria o unico invisivel. -->
-          <div class="dashboard-card card-sem-padrao" id="card-ind-sem-leitura" hidden>
-            <div class="card-info">
-              <span class="card-title">Sem leitura</span>
-              <span class="card-number" id="ind-sem-leitura">0</span>
-              <span class="card-subtitle">Erro ou fora do padrão</span>
-            </div>
-            <div class="card-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-              </svg>
-            </div>
+      <div class="ag-table-wrap cg-tabela-wrap" id="painel-tabela-wrap">
+        <div class="ag-table-scroll" role="region" aria-label="Certificados acompanhados">
+          <table class="ag-table cg-tabela cg-tabela-acomp" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Empresa</th>
+                <th role="columnheader" class="ag-th--estatico" aria-sort="ascending">Vencimento</th>
+                <th role="columnheader" class="ag-th--estatico">Status</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="tbody-painel"></tbody>
+          </table>
+        </div>
+      </div>
+      <nav id="paginacao-toolbar-colab-painel" class="cg-page-nav" aria-label="Paginação dos acompanhados">
+        <div id="pag-meta-colab-painel" class="cg-page-nav__meta"></div>
+        <div class="cg-page-nav__row">
+          <ul id="pag-ul-colab-painel" class="cg-page-nav__ul" role="list">
+            <li>
+              <button type="button" id="btn-colab-painel-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+            </li>
+            <li id="pag-li-next-colab-painel">
+              <button type="button" id="btn-colab-painel-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+            </li>
+          </ul>
+          <div>
+            <label for="pag-perpage-colab-painel" class="cg-sr-only">Registros por página</label>
+            <select id="pag-perpage-colab-painel" class="cg-page-perpage-select" title="Itens por página">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50">50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
           </div>
         </div>
+      </nav>
+    </section>
 
-        <!-- A preferência mora ao lado da lista a que se refere: é sobre
-             ESTES certificados, e não uma configuração geral do portal. -->
-        <details class="pref-alerta" id="pref-alerta">
-          <summary>
-            <span class="pref-alerta__titulo">Aviso por e-mail</span>
-            <span class="pref-alerta__estado" id="pref-estado">—</span>
-          </summary>
-          <div class="pref-alerta__corpo">
-            <p class="hint" id="pref-indisponivel" hidden></p>
-
-            <label class="pref-alerta__linha">
-              <input type="checkbox" id="chk-pref-notificar" />
-              <span>Quero receber aviso dos certificados que acompanho</span>
-            </label>
-
-            <fieldset class="pref-alerta__marcos" id="pref-marcos-campo">
-              <legend>Avisar quando faltarem</legend>
-              <div id="pref-marcos"></div>
-              <p class="hint">
-                Desmarcar um prazo dispensa só o lembrete. O aviso de vencimento
-                continua chegando.
-              </p>
-            </fieldset>
-
-            <div class="pref-alerta__acoes">
-              <button type="button" id="btn-pref-salvar" class="primary" disabled>Salvar preferência</button>
-              <span class="hint" id="pref-msg" role="status"></span>
-            </div>
-          </div>
-        </details>
-
-        <div class="toolbar">
-          <div class="toolbar__actions">
-            <label for="busca-painel" class="cg-sr-only">Buscar no painel por nome ou documento</label>
-            <input class="form-control campo-busca" type="search" id="busca-painel" placeholder="Buscar por nome ou documento" />
+    <!-- Aba "Escolher certificados": ainda sem spec (item 56). Fica
+         funcional com os componentes do DS, sem redesenho. -->
+    <section id="sec-selecao" role="tabpanel" aria-labelledby="tab-selecao" {% if aba != 'escolher' %}hidden{% endif %}>
+      <div class="cg-toolbar cg-toolbar--compacta">
+        <div class="cg-toolbar__filtros">
+          <div class="cg-acomp-busca">
+            <label for="busca-selecao" class="cg-sr-only">Buscar certificados para escolher</label>
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input class="ag-input" type="search" id="busca-selecao" placeholder="Nome ou CNPJ/CPF" autocomplete="off" />
           </div>
         </div>
-        <p class="hint" id="painel-hint"></p>
-        <div class="table-scroll-anchor">
-          <div class="table-scroll" tabindex="0" role="region" aria-label="Certificados do colaborador">
-            <table role="table">
-              <thead role="rowgroup">
-                <tr role="row"><th role="columnheader">Nome</th><th role="columnheader">CNPJ/CPF</th><th role="columnheader">Vencimento</th><th role="columnheader">Dias restantes</th><th role="columnheader">Status</th></tr>
-              </thead>
-              <tbody role="rowgroup" id="tbody-painel"></tbody>
-            </table>
+      </div>
+      <div class="ag-table-wrap cg-tabela-wrap">
+        <div class="ag-table-scroll" role="region" aria-label="Escolher certificados">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row"><th role="columnheader" class="ag-th--estatico">Acompanhar</th><th role="columnheader" class="ag-th--estatico">Empresa</th><th role="columnheader" class="ag-th--estatico">CNPJ/CPF</th><th role="columnheader" class="ag-th--estatico">Status</th><th role="columnheader" class="ag-th--estatico">Vencimento</th></tr></thead>
+            <tbody role="rowgroup" id="tbody-selecao"></tbody>
+          </table>
+        </div>
+      </div>
+      <nav id="paginacao-toolbar-colab-sel" class="cg-page-nav" aria-label="Paginação da escolha">
+        <div id="pag-meta-colab-sel" class="cg-page-nav__meta"></div>
+        <div class="cg-page-nav__row">
+          <ul id="pag-ul-colab-sel" class="cg-page-nav__ul" role="list">
+            <li>
+              <button type="button" id="btn-colab-sel-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
+            </li>
+            <li id="pag-li-next-colab-sel">
+              <button type="button" id="btn-colab-sel-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
+            </li>
+          </ul>
+          <div>
+            <label for="pag-perpage-colab-sel" class="cg-sr-only">Registros por página</label>
+            <select id="pag-perpage-colab-sel" class="cg-page-perpage-select" title="Itens por página">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50">50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
           </div>
         </div>
-        <nav id="paginacao-toolbar-colab-painel" class="cg-page-nav" aria-label="Paginação do painel">
-          <div id="pag-meta-colab-painel" class="cg-page-nav__meta"></div>
-          <div class="cg-page-nav__row">
-            <ul id="pag-ul-colab-painel" class="cg-page-nav__ul" role="list">
-              <li>
-                <button type="button" id="btn-colab-painel-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
-              </li>
-              <li id="pag-li-next-colab-painel">
-                <button type="button" id="btn-colab-painel-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
-              </li>
-            </ul>
-            <div>
-              <label for="pag-perpage-colab-painel" class="cg-sr-only">Registros por página</label>
-              <select id="pag-perpage-colab-painel" class="cg-page-perpage-select" title="Itens por página">
-                <option value="10">10 por página</option>
-                <option value="25">25 por página</option>
-                <option value="50">50 por página</option>
-                <option value="100">100 por página</option>
-              </select>
-            </div>
-          </div>
-        </nav>
-      </section>
-
-      <section id="sec-selecao" style="display:none;">
-        <div class="toolbar">
-          <div class="toolbar__actions">
-            <label for="busca-selecao" class="cg-sr-only">Buscar certificados para selecionar</label>
-            <input class="form-control campo-busca" type="search" id="busca-selecao" placeholder="Buscar por nome ou documento" />
-            <!-- "Salvar seleção" saiu daqui para a barra sticky no rodapé:
-                 quem marca checkboxes descendo pela tabela paginada não
-                 deveria voltar ao topo para salvar o que marcou. -->
-          </div>
-        </div>
-        <div class="table-scroll-anchor">
-          <div class="table-scroll" tabindex="0" role="region" aria-label="Seleção de certificados">
-            <table role="table">
-              <thead role="rowgroup"><tr role="row"><th role="columnheader">Selecionar</th><th role="columnheader">Nome</th><th role="columnheader">CNPJ/CPF</th><th role="columnheader">Status atual</th><th role="columnheader">Vencimento</th></tr></thead>
-              <tbody role="rowgroup" id="tbody-selecao"></tbody>
-            </table>
-          </div>
-        </div>
-        <nav id="paginacao-toolbar-colab-sel" class="cg-page-nav" aria-label="Paginação da seleção">
-          <div id="pag-meta-colab-sel" class="cg-page-nav__meta"></div>
-          <div class="cg-page-nav__row">
-            <ul id="pag-ul-colab-sel" class="cg-page-nav__ul" role="list">
-              <li>
-                <button type="button" id="btn-colab-sel-prev" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button>
-              </li>
-              <li id="pag-li-next-colab-sel">
-                <button type="button" id="btn-colab-sel-next" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button>
-              </li>
-            </ul>
-            <div>
-              <label for="pag-perpage-colab-sel" class="cg-sr-only">Registros por página</label>
-              <select id="pag-perpage-colab-sel" class="cg-page-perpage-select" title="Itens por página">
-                <option value="10">10 por página</option>
-                <option value="25">25 por página</option>
-                <option value="50">50 por página</option>
-                <option value="100">100 por página</option>
-              </select>
-            </div>
-          </div>
-        </nav>
-        <!-- Sempre visível (sem hidden, ao contrário do Início): salvar com
-             zero marcados é uma ação válida aqui — limpa o acompanhamento. -->
-        <div class="barra-selecao" role="region" aria-label="Seleção para acompanhamento">
-          <div class="barra-selecao__texto">
-            <strong id="selColabContagem">0 certificados marcados</strong>
-          </div>
-          <div class="barra-selecao__acoes">
-            <button type="button" id="btn-salvar-selecao" class="primary">Salvar seleção</button>
-          </div>
-        </div>
-      </section>
-    </div>
+      </nav>
+      <!-- Sempre visível: salvar com zero marcados é uma ação válida aqui —
+           limpa o acompanhamento. O rótulo diz o resultado (item 5). -->
+      <div class="cg-acomp-barra" role="region" aria-label="Escolha para acompanhamento">
+        <p class="cg-acomp-barra__texto" id="selColabContagem">0 certificados marcados</p>
+        <button type="button" id="btn-salvar-selecao" class="ag-btn ag-btn--primary">Salvar seleção (0)</button>
+      </div>
+    </section>
   </main>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-sem-piscar-2026-08"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09e"></script>
   <script nonce="{{ request.state.nonce }}">
-    function toggleLoading(show, text) { if (typeof setTableLoading === "function") setTableLoading("table-container-colab", show, text); }
-    // `esc` vem de ui-common.js desde 16/08 — era duplicada em seis telas.
-    function fmtDataUtc(iso) { if (!iso) return "—"; return new Date(iso).toLocaleString("pt-BR", { timeZone: "UTC" }); }
+    // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `badgeStatus`,
+    // `BADGE_STATUS`, `cgPageNavRefresh`, `cgPageNavHide` e `renderEmptyRow`
+    // vêm de ui-common.js.
     const LS_PER_PAGE_COLAB_P = "cg_per_page_colab_painel";
     const LS_PER_PAGE_COLAB_S = "cg_per_page_colab_selecao";
     const ALLOW_PER_PAGE_COLAB = [10, 25, 50, 100];
@@ -331,9 +244,23 @@
     let opcoes = [];
     let selecionados = new Set();
     let painelItens = [];
+    let painelTextos = {};
+    let painelMostrarBusca = false;
     let filteredPainelItens = [];
     let painelPagina = 1;
     let selecaoPagina = 1;
+
+    function fmtSoData(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+    }
+    function fmtDataHora(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("pt-BR", { timeZone: "UTC" });
+    }
+    function nomeDe(it) { return it.nome_exibicao || it.nome || "—"; }
 
     function porPagColabPainel() {
       const sel = document.getElementById("pag-perpage-colab-painel");
@@ -375,37 +302,65 @@
       });
     }
 
-    // Nome DIFERENTE do helper compartilhado, de propósito: chamava-se
-    // `badgeStatus` e passou a delegar para o `badgeStatus` de ui-common.js —
-    // que é ele mesmo, e a chamada virava recursão infinita. Foi o
-    // `test_nenhum_template_redefine_helper_compartilhado` que acusou.
-    //
-    // A aparência mora no helper compartilhado; o que sobra aqui é a regra
-    // desta tela: valor desconhecido vira "Não encontrado", e não o texto cru,
-    // porque a lista do colaborador mostra o que ele selecionou — um documento
-    // pode simplesmente não estar no inventário.
+    // Nome DIFERENTE do helper compartilhado, de propósito (delegar para o
+    // próprio `badgeStatus` virava recursão). A regra desta tela: valor
+    // desconhecido vira "Não encontrado", e "expirando" se lê "A vencer".
     function badgeDoColaborador(v) {
+      if (v === "expirando") return badgeStatus("expirando", "A vencer");
       return BADGE_STATUS[v] ? badgeStatus(v) : badgeStatus("nao_encontrado");
     }
+
+    /* ── Abas ─────────────────────────────────────────────────────────── */
+
+    function showTab(tab, anunciar) {
+      const painel = tab === "acompanhados";
+      document.getElementById("sec-painel").hidden = !painel;
+      document.getElementById("sec-selecao").hidden = painel;
+      const btP = document.getElementById("tab-painel");
+      const btS = document.getElementById("tab-selecao");
+      btP.setAttribute("aria-selected", painel ? "true" : "false");
+      btS.setAttribute("aria-selected", painel ? "false" : "true");
+      btP.tabIndex = painel ? 0 : -1;
+      btS.tabIndex = painel ? -1 : 0;
+      const url = new URL(location.href);
+      if (painel) url.searchParams.delete("aba"); else url.searchParams.set("aba", "escolher");
+      history.replaceState(null, "", url.pathname + (url.search || ""));
+      if (anunciar) {
+        document.getElementById("abas-anuncio").textContent = painel ? "Aba Acompanhados aberta." : "Aba Escolher certificados aberta.";
+      }
+    }
+
+    document.querySelectorAll(".ag-abas__aba").forEach((aba) => {
+      aba.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        showTab(aba.id === "tab-painel" ? "acompanhados" : "escolher", true);
+        aba.focus();
+      });
+      // Setas trocam a aba e o foco, como manda o padrão de tablist.
+      aba.addEventListener("keydown", (ev) => {
+        if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+        ev.preventDefault();
+        const outra = aba.id === "tab-painel" ? "escolher" : "acompanhados";
+        showTab(outra, true);
+        document.getElementById(outra === "acompanhados" ? "tab-painel" : "tab-selecao").focus();
+      });
+    });
+    document.getElementById("btn-vazio-escolher").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      showTab("escolher", true);
+      document.getElementById("tab-selecao").focus();
+    });
+
+    /* ── Aba Escolher certificados (sem redesenho ainda, item 56) ─────── */
 
     function renderSelecao() {
       const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
       const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
 
-      // Marcados no TOPO, e por ordem alfabética dentro de cada grupo.
-      //
-      // A lista tem 516 certificados em 21 páginas. Sem isto, conferir o que já
-      // se acompanha exige percorrer todas as páginas procurando caixas
-      // marcadas — e a resposta para "o que eu acompanho?" fica espalhada por
-      // um lugar onde ninguém consegue vê-la inteira.
-      //
-      // A ordenação acontece DEPOIS do filtro e ANTES da paginação: assim a
-      // primeira página traz os marcados mesmo com busca ativa, e o efeito não
-      // se limita à página visível.
-      //
-      // Não reordena enquanto se clica: `renderSelecao` só roda em busca,
-      // troca de página ou recarga. Uma linha que pula de lugar no instante do
-      // clique faria a pessoa perder o dedo de onde estava.
+      // Marcados no TOPO, e por ordem alfabética dentro de cada grupo: com
+      // 500 certificados em 21 páginas, é o único jeito de ver de uma vez o
+      // que já se acompanha. Só reordena em busca, troca de página ou
+      // recarga — nunca no clique.
       rows.sort((a, b) => {
         const ma = selecionados.has(String(a.documento_digitos)) ? 0 : 1;
         const mb = selecionados.has(String(b.documento_digitos)) ? 0 : 1;
@@ -424,7 +379,6 @@
 
       if (!pageRows.length) {
         renderEmptyRow("tbody-selecao", 5, q ? {
-          icon: "🔍",
           title: "Nenhum certificado para “" + q + "”",
           description: "Tente outro nome ou documento.",
           actionText: "Limpar busca",
@@ -434,27 +388,18 @@
             renderSelecao();
           },
         } : {
-          icon: "📭",
           title: "Nenhum certificado disponível",
-          description: "Não há certificados mapeados para selecionar no momento.",
+          description: "Não há certificados mapeados para escolher no momento.",
         });
       } else {
-      document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => {
-        let styleStr = "";
-        if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
-          styleStr = "background:var(--row-tint-danger);";
-        } else if (it.status === "expirando") {
-          styleStr = "background:var(--row-tint-warning);";
-        }
-        return `
-        <tr role="row" style="${styleStr}">
-          <td role="cell" data-label="Selecionar"><input type="checkbox" aria-label="Acompanhar ${esc(it.nome || it.documento || "certificado")}" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></td>
-          <td role="cell" data-label="Nome">${esc(it.nome || "—")}</td>
-          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento || "—")}</td>
-          <td role="cell" data-label="Status">${badgeDoColaborador(it.status)}</td>
-          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-        </tr>`;
-      }).join("");
+        document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => `
+        <tr role="row">
+          <td role="cell"><label class="ag-check"><input type="checkbox" aria-label="Acompanhar ${esc(it.nome || it.documento || "certificado")}" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></label></td>
+          <td role="cell"><span class="ag-cell-main">${esc(it.nome || "—")}</span></td>
+          <td role="cell"><span class="ag-cell-sub ag-cell-sub--mono">${esc(it.documento || "—")}</span></td>
+          <td role="cell">${badgeDoColaborador(it.status)}</td>
+          <td role="cell">${esc(fmtSoData(it.vencimento_certificado))}</td>
+        </tr>`).join("");
       }
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-sel",
@@ -464,32 +409,17 @@
         prev: "btn-colab-sel-prev",
         next: "btn-colab-sel-next",
         pg: { pagina: selecaoPagina, total_paginas: totalPag, total_itens: total },
-        metaFormatter: (pg) =>
-          "Página " +
-          pg.pagina +
-          " de " +
-          pg.total_paginas +
-          " · " +
-          pg.total_itens +
-          " opção(ões)",
+        metaFormatter: (pg) => "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + (pg.total_itens === 1 ? " opção" : " opções"),
         hideWhenSingle: true,
-        goToPage: (pn) => {
-          selecaoPagina = pn;
-          renderSelecao();
-        },
+        goToPage: (pn) => { selecaoPagina = pn; renderSelecao(); },
         maxButtons: 5,
       });
     }
 
-    /**
-     * Os quatro indicadores acima da tabela.
-     *
-     * Conta a partir do `status` que o SERVIDOR ja calculou (`vencido`,
-     * `expirando`, `ativo`, ...) e nao de `dias_restantes`: a regra dos 30 dias
-     * e de `_painel_docs_selecionados`, e recalcula-la aqui criaria uma segunda
-     * definicao de "a vencer" que envelheceria em ritmo proprio — o portal ja
-     * teve esse defeito com o filtro do Inicio.
-     */
+    /* ── Indicadores ──────────────────────────────────────────────────── */
+
+    // Conta a partir do `status` que o SERVIDOR já calculou: a regra dos 30
+    // dias mora lá, e recalculá-la aqui criaria uma segunda definição.
     function atualizarIndicadores(itens) {
       let vencidos = 0, expirando = 0, ativos = 0, semLeitura = 0;
       for (const it of itens) {
@@ -497,25 +427,27 @@
           case "vencido": vencidos++; break;
           case "expirando": expirando++; break;
           case "ativo": ativos++; break;
-          // erro, fora_do_padrao e nao_encontrado: o certificado existe na
-          // selecao mas o inventario nao consegue ler a validade dele.
           default: semLeitura++; break;
         }
       }
-      document.getElementById("ind-vencidos").textContent = vencidos;
-      document.getElementById("ind-expirando").textContent = expirando;
-      document.getElementById("ind-ativos").textContent = ativos;
-      document.getElementById("ind-sem-leitura").textContent = semLeitura;
+      const poe = (id, n) => { const el = document.getElementById(id); el.textContent = String(n); el.removeAttribute("aria-busy"); };
+      poe("ind-vencidos", vencidos);
+      poe("ind-expirando", expirando);
+      poe("ind-ativos", ativos);
+      poe("ind-sem-leitura", semLeitura);
+      // Zero é neutro; o alerta só entra com valor maior que zero.
+      document.getElementById("kpi-vencidos").classList.toggle("cg-kpi--perigo", vencidos > 0);
+      document.getElementById("sub-vencidos").textContent = vencidos > 0 ? "Entre os acompanhados" : "Nenhum";
+      document.getElementById("kpi-expirando").classList.toggle("cg-kpi--atencao", expirando > 0);
+      document.getElementById("sub-expirando").textContent = expirando > 0 ? "Nos próximos 30 dias" : "Nenhum nos próximos 30 dias";
       document.getElementById("card-ind-sem-leitura").hidden = semLeitura === 0;
     }
 
-    // ── Preferência de aviso por e-mail ──────────────────────────────────
+    /* ── Preferência de aviso por e-mail ──────────────────────────────── */
     //
-    // A tela monta uma caixa por marco QUE O PORTAL DISPARA, e não uma lista
-    // fixa: se o administrador mudar 30/15/7/1 para 30/15/5, é isso que
-    // aparece aqui. E o que se grava são os prazos DISPENSADOS — assim um
-    // marco novo entra ligado para quem já tinha salvo a preferência, em vez
-    // de nunca chegar.
+    // Uma caixa por marco QUE O PORTAL DISPARA (o administrador define em
+    // Configuração); o que se grava são os prazos DISPENSADOS, assim um marco
+    // novo entra ligado para quem já tinha salvo a preferência.
     let _prefOriginal = null;
 
     async function carregarPreferencia() {
@@ -526,69 +458,60 @@
         _prefOriginal = d;
         renderPreferencia(d);
       } catch (e) {
-        // Some em vez de mostrar um controle que não salva. Não é a tarefa da
-        // página, e um formulário quebrado ao lado da tabela sugeriria que o
-        // acompanhamento inteiro está com problema.
+        // Some em vez de mostrar um controle que não salva.
         document.getElementById("pref-alerta").hidden = true;
       }
     }
 
     function renderPreferencia(d) {
       document.getElementById("chk-pref-notificar").checked = !!d.notificar_email;
-
-      const ignorados = new Set(
-        String(d.marcos_ignorados || "").split(",").map((x) => x.trim()).filter(Boolean)
-      );
+      const ignorados = new Set(String(d.marcos_ignorados || "").split(",").map((x) => x.trim()).filter(Boolean));
       document.getElementById("pref-marcos").innerHTML = (d.marcos_do_portal || [])
-        .map(function (m) {
-          const marcado = ignorados.has(String(m)) ? "" : " checked";
-          return '<label><input type="checkbox" data-marco="' + m + '"' + marcado +
-                 '> ' + m + (m === 1 ? " dia" : " dias") + "</label>";
-        })
+        .map((m) => '<label class="ag-check"><input type="checkbox" data-marco="' + m + '"' + (ignorados.has(String(m)) ? "" : " checked") + '> ' + m + (m === 1 ? " dia" : " dias") + "</label>")
         .join("");
-
-      // Sem SMTP configurado a preferência é guardada, mas não produz e-mail
-      // nenhum — dizer isso é mais honesto do que deixar a pessoa esperando.
+      document.getElementById("pref-dest").textContent = d.destinatario ? "para " + d.destinatario : "";
       const aviso = document.getElementById("pref-indisponivel");
       aviso.hidden = !!d.envio_ativo;
-      aviso.textContent = d.envio_ativo
-        ? ""
-        : "O envio automático está desligado no portal. Sua escolha fica guardada e passa a valer quando um administrador ligar.";
-
+      aviso.textContent = d.envio_ativo ? "" : "O envio automático está desligado no portal. Sua escolha fica guardada e passa a valer quando um administrador ligar.";
       atualizarEstadoPref();
+    }
+
+    // A frase da linha reflete o que está marcado AGORA: "60, 30, 15 e 7
+    // dias antes e no dia do vencimento".
+    function fraseDosMarcos() {
+      const marcados = Array.from(document.querySelectorAll("#pref-marcos input[data-marco]"))
+        .filter((c) => c.checked).map((c) => parseInt(c.getAttribute("data-marco"), 10))
+        .sort((a, b) => b - a);
+      if (!marcados.length) return "só no dia do vencimento";
+      const l = marcados.map(String);
+      const antes = l.length > 1 ? l.slice(0, -1).join(", ") + " e " + l[l.length - 1] : l[0];
+      return antes + (l.length === 1 && marcados[0] === 1 ? " dia antes" : " dias antes") + " e no dia do vencimento";
     }
 
     function atualizarEstadoPref() {
       const liga = document.getElementById("chk-pref-notificar").checked;
       document.getElementById("pref-marcos-campo").disabled = !liga;
-
-      const marcados = Array.from(
-        document.querySelectorAll("#pref-marcos input[data-marco]")
-      ).filter((c) => c.checked).length;
-
-      document.getElementById("pref-estado").textContent = !liga
-        ? "desligado"
-        : marcados + (marcados === 1 ? " prazo" : " prazos") + " + vencimento";
-
+      const texto = document.getElementById("pref-texto");
+      texto.innerHTML = liga
+        ? "Aviso por e-mail <strong>" + esc(fraseDosMarcos()) + "</strong>"
+        : "Aviso por e-mail";
+      document.getElementById("pref-estado").innerHTML = liga
+        ? '<span class="ag-badge ag-badge--success">Ligado</span>'
+        : '<span class="ag-badge ag-badge--neutral">Desligado</span>';
       document.getElementById("btn-pref-salvar").disabled = !sujoPref();
     }
 
     function ignoradosDaTela() {
       return Array.from(document.querySelectorAll("#pref-marcos input[data-marco]"))
-        .filter((c) => !c.checked)
-        .map((c) => c.getAttribute("data-marco"))
-        .join(",");
+        .filter((c) => !c.checked).map((c) => c.getAttribute("data-marco")).join(",");
     }
 
     function sujoPref() {
       if (!_prefOriginal) return false;
       const notificar = document.getElementById("chk-pref-notificar").checked;
       if (notificar !== !!_prefOriginal.notificar_email) return true;
-      // Compara como conjunto: a ordem das caixas não é uma alteração.
       const atual = new Set(ignoradosDaTela().split(",").filter(Boolean));
-      const antes = new Set(
-        String(_prefOriginal.marcos_ignorados || "").split(",").map((x) => x.trim()).filter(Boolean)
-      );
+      const antes = new Set(String(_prefOriginal.marcos_ignorados || "").split(",").map((x) => x.trim()).filter(Boolean));
       if (atual.size !== antes.size) return true;
       for (const v of atual) if (!antes.has(v)) return true;
       return false;
@@ -609,8 +532,6 @@
           }),
         });
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-        // O que o SERVIDOR devolveu vira a nova referência: se ele normalizar
-        // algo, a tela passa a mostrar o que de fato vale.
         _prefOriginal = await r.json();
         renderPreferencia(_prefOriginal);
         msg.textContent = "Preferência salva.";
@@ -624,32 +545,63 @@
     document.getElementById("pref-marcos").addEventListener("change", atualizarEstadoPref);
     document.getElementById("btn-pref-salvar").addEventListener("click", salvarPreferencia);
 
+    /* ── Acompanhados ─────────────────────────────────────────────────── */
+
+    function trPainel(it) {
+      const venc = it.vencimento_certificado
+        ? `<time datetime="${esc(it.vencimento_certificado)}" title="${esc(fmtDataHora(it.vencimento_certificado))}">${esc(fmtSoData(it.vencimento_certificado))}</time>`
+        : "—";
+      return `
+        <tr role="row">
+          <td role="cell" class="cg-col-nome"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nomeDe(it))}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(it.documento || "—")}</span></span></td>
+          <td role="cell" class="cg-col-data cg-col-vencimento">${venc}${it.dias_texto ? `<span class="ag-cell-sub">${esc(it.dias_texto)}</span>` : ""}</td>
+          <td role="cell" class="cg-col-status">${badgeDoColaborador(it.status)}</td>
+        </tr>`;
+    }
+
+    function trSemResultado(q) {
+      return `<tr class="cg-state-row" role="row"><td role="cell" colspan="3" class="ag-table__vazio">Nada encontrado para “${esc(q)}”. <a href="#" id="link-ver-todos">Ver todos os acompanhados</a>.</td></tr>`;
+    }
+
     async function carregarPainel(refetch) {
       if (refetch !== false) {
         const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
         if (!r.ok) {
           const detalhe = await mensagemCorpoErro(r);
           document.getElementById("painel-hint").textContent = "";
-          showToast("Não foi possível carregar o painel: " + detalhe, "error");
-          renderEmptyRow("tbody-painel", 5, {
-            icon: "⚠️",
-            title: "Erro ao carregar o painel",
+          showToast("Não foi possível carregar os acompanhados: " + detalhe, "error");
+          renderEmptyRow("tbody-painel", 3, {
+            title: "Erro ao carregar os acompanhados",
             description: detalhe || "O servidor respondeu com erro " + r.status + ".",
             actionText: "Tentar novamente",
             onAction: () => void carregarPainel(true),
           });
           cgPageNavHide("paginacao-toolbar-colab-painel", "pag-ul-colab-painel", "pag-meta-colab-painel");
-          // Esconder, e nao zerar: "0 vencidos" numa tela que falhou em
-          // carregar afirma algo que ninguem verificou. O mesmo criterio do
-          // badge do sino, que limpa a contagem em vez de manter a anterior.
+          // Esconder, e não zerar: "0 vencidos" numa tela que falhou em
+          // carregar afirma algo que ninguém verificou.
           document.getElementById("painel-indicadores").hidden = true;
           return;
         }
         const j = await r.json();
         painelItens = j.itens || [];
+        painelTextos = j.textos || {};
+        painelMostrarBusca = !!j.mostrar_busca;
+        document.getElementById("tab-contagem").textContent = "(" + (j.total || 0) + ")";
       }
-      const q = (document.getElementById("busca-painel")?.value || "").trim().toLowerCase();
-      filteredPainelItens = painelItens.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+      const busca = document.getElementById("busca-painel");
+      const q = (busca.value || "").trim().toLowerCase();
+      filteredPainelItens = painelItens.filter((it) => !q || [it.nome || "", it.nome_exibicao || "", it.documento || ""].join(" ").toLowerCase().includes(q));
+
+      const vazio = painelItens.length === 0;
+      document.getElementById("painel-vazio").hidden = !vazio;
+      document.getElementById("painel-tabela-wrap").hidden = vazio;
+      document.getElementById("painel-indicadores").hidden = vazio;
+      document.getElementById("busca-painel-wrap").hidden = vazio || !painelMostrarBusca;
+      if (vazio) {
+        document.getElementById("painel-hint").textContent = "";
+        cgPageNavHide("paginacao-toolbar-colab-painel", "pag-ul-colab-painel", "pag-meta-colab-painel");
+        return;
+      }
 
       const psz = porPagColabPainel();
       const total = filteredPainelItens.length;
@@ -657,43 +609,22 @@
       if (painelPagina > totalPag) painelPagina = totalPag;
       const start = (painelPagina - 1) * psz;
       const pageRows = filteredPainelItens.slice(start, start + psz);
-      document.getElementById("painel-hint").textContent = `${total} certificado(s) acompanhados` + (q ? " (filtrado)" : "");
-      document.getElementById("painel-indicadores").hidden = false;
+      document.getElementById("painel-hint").textContent = q
+        ? total + (total === 1 ? " certificado" : " certificados") + " para “" + q + "”"
+        : (painelTextos.total || (total + " certificados acompanhados"));
       atualizarIndicadores(filteredPainelItens);
 
+      const tbody = document.getElementById("tbody-painel");
       if (!pageRows.length) {
-        renderEmptyRow("tbody-painel", 5, q ? {
-          icon: "🔍",
-          title: "Nenhum certificado para “" + q + "”",
-          description: "Tente outro nome ou documento.",
-          actionText: "Limpar busca",
-          onAction: () => {
-            document.getElementById("busca-painel").value = "";
-            painelPagina = 1;
-            void carregarPainel(false);
-          },
-        } : {
-          icon: "⭐",
-          title: "Você ainda não acompanha nenhum certificado",
-          description: "Use a aba de seleção para escolher quais certificados quer monitorar.",
+        tbody.innerHTML = trSemResultado(q);
+        document.getElementById("link-ver-todos").addEventListener("click", (ev) => {
+          ev.preventDefault();
+          busca.value = "";
+          painelPagina = 1;
+          void carregarPainel(false);
         });
       } else {
-      document.getElementById("tbody-painel").innerHTML = pageRows.map((it) => {
-        let styleStr = "";
-        if (it.status === "vencido" || it.status === "erro" || it.status === "fora_do_padrao") {
-          styleStr = "background:var(--row-tint-danger);";
-        } else if (it.status === "expirando") {
-          styleStr = "background:var(--row-tint-warning);";
-        }
-        return `
-        <tr role="row" style="${styleStr}">
-          <td role="cell" data-label="Nome">${esc(it.nome)}</td>
-          <td role="cell" data-label="CNPJ/CPF">${esc(it.documento)}</td>
-          <td role="cell" data-label="Vencimento">${esc(fmtDataUtc(it.vencimento_certificado))}</td>
-          <td role="cell" data-label="Dias restantes">${it.dias_restantes == null ? "—" : esc(it.dias_restantes)}</td>
-          <td role="cell" data-label="Status">${badgeDoColaborador(it.status)}</td>
-        </tr>`;
-      }).join("");
+        tbody.innerHTML = pageRows.map(trPainel).join("");
       }
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-painel",
@@ -703,13 +634,9 @@
         prev: "btn-colab-painel-prev",
         next: "btn-colab-painel-next",
         pg: { pagina: painelPagina, total_paginas: totalPag, total_itens: total },
-        metaFormatter: (pg) =>
-          "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + " no painel",
+        metaFormatter: (pg) => "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + (pg.total_itens === 1 ? " acompanhado" : " acompanhados"),
         hideWhenSingle: true,
-        goToPage: (pn) => {
-          painelPagina = pn;
-          void carregarPainel(false);
-        },
+        goToPage: (pn) => { painelPagina = pn; void carregarPainel(false); },
         maxButtons: 5,
       });
     }
@@ -721,7 +648,7 @@
       ]);
       if (!ro.ok || !rs.ok) {
         const det = !ro.ok ? await mensagemCorpoErro(ro) : await mensagemCorpoErro(rs);
-        document.getElementById("painel-hint").textContent = "Erro ao carregar opções: " + det;
+        showToast("Erro ao carregar as opções: " + det, "error");
         opcoes = [];
         renderSelecao();
         return;
@@ -736,15 +663,14 @@
 
     function atualizarBarraColab() {
       const n = selecionados.size;
-      document.getElementById("selColabContagem").textContent =
-        n === 1 ? "1 certificado marcado" : n + " certificados marcados";
+      document.getElementById("selColabContagem").innerHTML =
+        "<strong>" + n + "</strong>" + (n === 1 ? " certificado marcado" : " certificados marcados");
+      document.getElementById("btn-salvar-selecao").textContent = "Salvar seleção (" + n + ")";
     }
 
     async function salvarSelecao() {
       // Do Set, não do DOM: a tabela é paginada, e ler só os checkboxes
-      // renderizados descartaria em silêncio o que foi marcado nas OUTRAS
-      // páginas — quem marcasse na página 1, fosse à 2 e salvasse perderia
-      // a página 1 sem aviso nenhum.
+      // renderizados descartaria o que foi marcado nas OUTRAS páginas.
       const docs = Array.from(selecionados);
       const r = await fetch("/api/colaborador/certificados/selecionados", {
         method: "PUT",
@@ -767,51 +693,24 @@
       );
     }
 
-    function showTab(tab) {
-      const p = document.getElementById("sec-painel");
-      const s = document.getElementById("sec-selecao");
-      const btP = document.getElementById("tab-painel");
-      const btS = document.getElementById("tab-selecao");
-      const painel = tab === "painel";
-      p.style.display = painel ? "block" : "none";
-      s.style.display = painel ? "none" : "block";
-      btP.classList.toggle("active", painel);
-      btS.classList.toggle("active", !painel);
-    }
-
-    document.getElementById("tab-painel").addEventListener("click", () => showTab("painel"));
-    document.getElementById("tab-selecao").addEventListener("click", () => showTab("selecao"));
     document.getElementById("busca-painel").addEventListener("input", () => { painelPagina = 1; void carregarPainel(false); });
     document.getElementById("busca-selecao").addEventListener("input", () => { selecaoPagina = 1; renderSelecao(); });
     document.getElementById("btn-salvar-selecao").addEventListener("click", salvarSelecao);
     document.getElementById("btn-colab-painel-prev").addEventListener("click", () => {
-      if (painelPagina > 1) {
-        painelPagina--;
-        void carregarPainel(false);
-      }
+      if (painelPagina > 1) { painelPagina--; void carregarPainel(false); }
     });
     document.getElementById("btn-colab-painel-next").addEventListener("click", () => {
-      const psz = porPagColabPainel();
-      const totalPag = Math.max(1, Math.ceil(filteredPainelItens.length / psz));
-      if (painelPagina < totalPag) {
-        painelPagina++;
-        void carregarPainel(false);
-      }
+      const totalPag = Math.max(1, Math.ceil(filteredPainelItens.length / porPagColabPainel()));
+      if (painelPagina < totalPag) { painelPagina++; void carregarPainel(false); }
     });
     document.getElementById("btn-colab-sel-prev").addEventListener("click", () => {
-      if (selecaoPagina > 1) {
-        selecaoPagina--;
-        renderSelecao();
-      }
+      if (selecaoPagina > 1) { selecaoPagina--; renderSelecao(); }
     });
     document.getElementById("btn-colab-sel-next").addEventListener("click", () => {
       const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
       const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
       const totalPag = Math.max(1, Math.ceil(rows.length / porPagColabSelecao()));
-      if (selecaoPagina < totalPag) {
-        selecaoPagina++;
-        renderSelecao();
-      }
+      if (selecaoPagina < totalPag) { selecaoPagina++; renderSelecao(); }
     });
     document.getElementById("tbody-selecao").addEventListener("change", (e) => {
       const el = e.target;
@@ -826,17 +725,11 @@
       // Sidebar por papel: ui-common.js (initSidebarPorPapel).
       initPerPageColabPainel();
       initPerPageColabSelecao();
-      toggleLoading(true, "Carregando tela de acompanhamento...");
-      try {
-        await carregarSelecao();
-        await carregarPainel(true);
-        // Depois da tabela, e sem `await` no caminho crítico: a preferência é
-        // acessória, e uma demora nela não deve segurar o que a pessoa veio ver.
-        void carregarPreferencia();
-      } finally {
-        toggleLoading(false);
-      }
-      showTab("painel");
+      await carregarSelecao();
+      await carregarPainel(true);
+      // Depois da tabela, sem `await` no caminho crítico: a preferência é
+      // acessória e uma demora nela não deve segurar o que a pessoa veio ver.
+      void carregarPreferencia();
     })();
   </script>
 </body>

@@ -1066,8 +1066,15 @@ def pagina_duplicidades(request: Request) -> HTMLResponse:
 
 @app.get("/acompanhamento", response_class=HTMLResponse)
 def pagina_colaborador_certificados(request: Request) -> HTMLResponse:
+    # As abas são links (?aba=…): sem JavaScript a página recarrega já na
+    # aba certa; com JavaScript a troca é local e a URL acompanha.
+    aba = request.query_params.get("aba") or "acompanhados"
+    if aba not in ("acompanhados", "escolher"):
+        aba = "acompanhados"
     return templates.TemplateResponse(
-        request=request, name="colaborador_certificados.html", context={"pagina_ativa": "acompanhamento"}
+        request=request,
+        name="colaborador_certificados.html",
+        context={"pagina_ativa": "acompanhamento", "aba": aba},
     )
 
 
@@ -3537,7 +3544,29 @@ def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth
     email = (token.email or "").strip().lower()
     docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
     itens = _painel_docs_selecionados(docs)
-    return {"itens": itens, "total": len(itens)}
+    from app import texto as _texto
+    for it in itens:
+        it["nome_exibicao"] = nomes.nome_exibicao(it.get("nome"))
+        d = it.get("dias_restantes")
+        # "em 114 dias" / "hoje" / "há 3 dias": a coluna de número solto sai.
+        if d is None:
+            it["dias_texto"] = ""
+        elif d == 0:
+            it["dias_texto"] = "vence hoje"
+        elif d < 0:
+            it["dias_texto"] = "há " + _texto.plural(-d, "dia")
+        else:
+            it["dias_texto"] = "em " + _texto.plural(d, "dia")
+    total = len(itens)
+    return {
+        "itens": itens,
+        "total": total,
+        # Com poucos itens a lista inteira cabe na tela e a busca é ruído.
+        "mostrar_busca": total > 10,
+        "textos": {
+            "total": _texto.plural(total, "certificado acompanhado", "certificados acompanhados"),
+        },
+    }
 
 
 @app.post(
@@ -3594,10 +3623,23 @@ def obter_preferencia_alerta(token: auth.TokenData = Depends(require_auth)) -> d
     pref = load_preferencia_alerta(_user_id_da_sessao(token))
     s = load_settings()
     marcos = alertas_config.marcos_efetivos(s.alertas_marcos)
+    ignorados = set(alertas_config.marcos_ignorados(pref["alerta_marcos_ignorados"] or ""))
+    efetivos = [m for m in marcos if m not in ignorados]
+    # Frase pronta para a tela ("60, 30, 15 e 7 dias antes e no dia do
+    # vencimento"): os prazos por extenso, não "4 prazos".
+    if efetivos:
+        lista = [str(m) for m in efetivos]
+        antes = (", ".join(lista[:-1]) + " e " + lista[-1]) if len(lista) > 1 else lista[0]
+        frase = antes + (" dia antes" if len(lista) == 1 and efetivos[0] == 1 else " dias antes") + " e no dia do vencimento"
+    else:
+        frase = "só no dia do vencimento"
     return {
         "notificar_email": pref["notificar_email"],
         "marcos_ignorados": pref["alerta_marcos_ignorados"],
         "marcos_do_portal": list(marcos),
+        "marcos_efetivos": efetivos,
+        "destinatario": (token.email or "").strip().lower(),
+        "texto": frase,
         # Sem SMTP configurado, nenhuma preferência muda nada — e a tela
         # precisa dizer isso em vez de prometer e-mails que não saem.
         "envio_ativo": bool(s.smtp_alerts_enabled and s.smtp_host),

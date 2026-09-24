@@ -116,7 +116,11 @@ def test_pagina_duplicidades_200(client: TestClient) -> None:
 def test_pagina_colaborador_certificados_200(client: TestClient) -> None:
     r = client.get("/acompanhamento")
     assert r.status_code == 200
-    assert "Acompanhamento de Certificados" in r.text
+    assert "Acompanhamento de certificados" in r.text
+    # As abas são links de verdade: sem JS a página abre já na aba pedida.
+    r2 = client.get("/acompanhamento?aba=escolher")
+    assert r2.status_code == 200
+    assert 'aria-selected="true"' in r2.text
 
 
 def test_api_settings_sem_chave_200(client: TestClient) -> None:
