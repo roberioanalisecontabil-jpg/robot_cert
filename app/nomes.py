@@ -64,3 +64,18 @@ def nome_exibicao(nome: object) -> str:
             saida.append(_capitalizar(p))
         primeira = False
     return "".join(saida)
+
+
+def nome_pessoa(nome: object) -> str:
+    """Nome de PESSOA para exibição: "irla" → "Irla", "BEATRIZ VITORIA MELO DA
+    SILVA" → "Beatriz Vitoria Melo da Silva". Um nome todo em minúsculas é tão
+    "sem caixa" quanto um todo em maiúsculas — vem de cadastro apressado — e
+    subir a primeira letra não erra. Nome com maiúsculas e minúsculas
+    misturadas não é tocado. O dado gravado nunca muda: a correção do
+    cadastro é na tela Usuários."""
+    s = "" if nome is None else str(nome).strip()
+    if not s:
+        return s
+    if s == s.lower():
+        return nome_exibicao(s.upper())
+    return nome_exibicao(s)

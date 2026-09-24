@@ -37,3 +37,13 @@ def test_nao_inventa_acento() -> None:
 def test_vazio_e_none() -> None:
     assert nome_exibicao("") == ""
     assert nome_exibicao(None) == ""
+
+
+def test_nome_pessoa_sobe_minusculo_e_baixa_caixa_alta() -> None:
+    from app.nomes import nome_pessoa
+    assert nome_pessoa("irla") == "Irla"
+    assert nome_pessoa("BEATRIZ VITORIA MELO DA SILVA") == "Beatriz Vitoria Melo da Silva"
+    assert nome_pessoa("Kelsen") == "Kelsen"
+    # Misto não é tocado: veio de quem sabia o que estava fazendo.
+    assert nome_pessoa("Maria de Lourdes") == "Maria de Lourdes"
+    assert nome_pessoa(None) == ""
