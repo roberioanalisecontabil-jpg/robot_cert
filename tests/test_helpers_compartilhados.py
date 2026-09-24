@@ -407,7 +407,7 @@ def test_badge_de_status_tem_glifo_de_forma() -> None:
 
 # Telas que ainda usam `confirm()` nativo. A lista ENCOLHE: ao converter uma,
 # remova-a daqui. Deixá-la crescer é o sinal de que a conversão parou.
-DIALOGOS_NATIVOS_PENDENTES = {"carteiras.html", "instalador.html"}
+DIALOGOS_NATIVOS_PENDENTES = {"carteiras.html"}
 
 
 def _sem_comentarios(texto: str) -> str:
