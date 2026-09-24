@@ -513,7 +513,7 @@ os contornos no padding compacto de 8px 14px). Abaixo de 640px tudo empilha a
 | Largura | O que muda |
 |---|---|
 | ≤ 1024px (`--bp-md`) | Células a 10px, datas em `body-xs`, coluna CNPJ/CPF some e o documento desce para a segunda linha da célula do nome (`.ag-cell-stack`). Toolbar em duas linhas. |
-| ≤ 640px (`--bp-sm`) | KPIs em coluna; o card da tabela perde moldura (cartão dentro de cartão custava 32px do nome); a tabela vira lista de cartões de linha; paginação em pílulas soltas que quebram linha. |
+| ≤ 640px (`--bp-sm`) | KPIs em coluna; o card da tabela perde moldura (cartão dentro de cartão custava 32px do nome); a tabela vira lista de cartões de linha; paginação com os botões do controle segmentado soltos, quebrando linha. |
 | 1280px | Teto do conteúdo, herdado do portal. |
 
 **Densidade.** Linha de tabela com 44px (padding 12px 16px), sem zebra, sem
@@ -643,7 +643,7 @@ brilho além do que o ouro já traz.
 ### Navigation
 
 - **Sidebar:** a do portal (`style.css`, 250px, fixa) pintada pela ponte: fundo `ink-900`, texto `ink-400`, hover e ativo em lavado dourado, texto ativo `gold-300`, "Sair" em `danger-500`. Ícones Heroicons outline legados permanecem até a sidebar migrar.
-- **Paginação:** as pílulas do DS (`.cg-pag`, ver "Paginação em pílulas"), renderizadas por `cgPaginacaoPilulas` em `ui-common.js`, nas três telas migradas. O controle segmentado legado (`.cg-page-nav`, "Anterior/Seguinte") só sobrevive nas telas ainda não migradas.
+- **Paginação:** o controle segmentado do portal (`.cg-page-nav`, `cgPageNavRefresh` em `ui-common.js`): Anterior, janela de até 5 números, Seguinte, meta "Página X de N · T registro(s)" e select "10 por página", 44px; no celular os botões quebram linha com gap `space-2`. É o padrão do Início e vale para todas as telas migradas — o Vencidos e as Duplicidades o seguem.
 
 ### Barra de seleção
 
@@ -666,7 +666,6 @@ escondê-lo.
 - **Gráfico de barras** (`.ag-barchart`): uma `__row` por categoria (rótulo, `__track`, `__value`), largura da barra por `--barra` em %, piso de 4% para o item unitário não sumir, preenchimento `grad-gold` porque é gráfico de valor único; rótulo em mono quando é ano ou número; cada linha focável com `aria-label` que diz o valor e a fração do total.
 - **Campo de data** (`.ag-data`): ícone de calendário à esquerda, valor em mono tabular, seletor nativo mantido e clicável no campo inteiro; `color-scheme: dark` no escuro.
 - **KPI de perigo** (`.cg-kpi--perigo`, da família de listas): lavado `danger-50`, borda e filete `danger-500`, ícone `danger-700` sobre superfície. Um degrau acima do KPI de aviso; no máximo um por tela.
-- **Paginação em pílulas** (`.cg-pag`, da família de listas; um só renderizador, `cgPaginacaoPilulas`, em `ui-common.js`): Anterior, 1, 2, 3, …, última, Próxima no desktop; "Anterior · 1 de N · Próxima" abaixo de 640px. Itens são `<a>` com a query completa quando o estado vive na URL (Vencidos) e `<button>` quando não vive (Início, Histórico). Uma linha de contagem acima da tabela ("N registros · mostrando a–b"); a paginação não repete o total. Página atual com `aria-current="page"`, contorno `gold-500`, texto de marca e lavado dourado; desabilitado com `aria-disabled` e opacidade .45; alvos de 44px; "Por página" com rótulo visível.
 - **Selo** (`.ag-selo`): contagem no canto de um ícone, `danger-500` com número em Exo branco e borda da superfície; no escuro o vermelho escurece na tinta. O botão que o carrega diz a contagem no `aria-label` ("Notificações, 12 não lidas").
 - **Cabeçalho de seção** (`.ag-section-head`): título e lead à esquerda, uma ação de contorno à direita, para a tela cuja única ação é reconsultar (Duplicidades); abaixo de 640px a ação desce e ocupa a largura toda.
 - **Acordeão** (`.ag-accordion`): `<details>` nativo com `<summary class="ag-accordion__topo">` de 44px, seta própria (Lucide chevron-down, gira 180° aberto) e o anel de foco do DS; sem JavaScript. Nas Duplicidades a linha da tabela expande e lista os arquivos do grupo, que é o que permite agir sobre a duplicidade.

@@ -213,90 +213,6 @@
 
 /* ── Paginação (Vencidos) ────────────────────────────────────────────── */
 
-/* Pílulas do DS no lugar do controle segmentado legado. A página atual leva
-   aria-current e se lê por três canais: contorno dourado, texto de marca e
-   lavado. "Anterior" desabilitado leva aria-disabled e fica atenuado. */
-.cg-pag {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3) var(--space-4);
-    margin-top: var(--space-4);
-}
-
-.cg-pag__paginas {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2);
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.cg-pag__link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0 var(--space-3);
-    border-radius: var(--radius-pill);
-    border: var(--bw-2) solid var(--border-strong);
-    background: var(--bg-surface);
-    color: var(--text-primary);
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: var(--text-sm);
-    line-height: 1;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
-}
-
-.cg-pag__link:hover:not([aria-disabled="true"]):not([aria-current]) {
-    border-color: var(--gold-600);
-    color: var(--text-brand);
-    background: var(--color-gold-glow);
-}
-
-.cg-pag__link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-
-.cg-pag__link[aria-current="page"] {
-    border-color: var(--gold-500);
-    color: var(--text-brand);
-    background: var(--color-gold-glow);
-    cursor: default;
-}
-
-.cg-pag__link[aria-disabled="true"] {
-    opacity: .45;
-    cursor: not-allowed;
-}
-
-.cg-pag__reticencias {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    color: var(--text-muted);
-    font-family: var(--font-display);
-    font-weight: 700;
-}
-
-/* "1 de 49": só no celular, entre Anterior e Próxima. */
-.cg-pag__posicao { display: none; }
-
-.cg-pag__por-pagina {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-}
-
-.cg-pag__por-pagina .ag-label { margin: 0; }
-.cg-pag__por-pagina .ag-select { width: auto; min-width: 5.5rem; }
 
 /* ── Tabela ──────────────────────────────────────────────────────────── */
 
@@ -621,22 +537,6 @@
             "exportar exportar";
     }
     .cg-filtros .ag-btn, .cg-filtros .menu-suspenso, .cg-filtros .menu-suspenso > summary.ag-btn { width: 100%; }
-
-    /* Paginação compacta: "‹ Anterior · 1 de 49 · Próxima ›", números
-       escondidos, distribuídos na largura. */
-    .cg-pag { justify-content: stretch; }
-    .cg-pag__paginas { width: 100%; justify-content: space-between; flex-wrap: nowrap; }
-    .cg-pag__paginas > li[data-numero], .cg-pag__paginas > li[data-reticencias] { display: none; }
-    .cg-pag__posicao {
-        display: inline-flex;
-        align-items: center;
-        font-family: var(--font-mono);
-        font-size: var(--text-sm);
-        color: var(--text-secondary);
-        font-variant-numeric: tabular-nums;
-    }
-    .cg-pag__por-pagina { width: 100%; justify-content: space-between; }
-    .cg-pag__por-pagina .ag-select { flex: 1 1 auto; }
 
     /* Lista de duas colunas no cartão: nome e documento à esquerda, data e
        "há N dias" à direita. */

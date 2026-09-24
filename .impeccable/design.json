@@ -82,7 +82,7 @@
       { "name": "spin", "value": "ag-spin .8s linear infinite (1.6s sob prefers-reduced-motion)", "purpose": "Estado 'enviando' do botão." }
     ],
     "breakpoints": [
-      { "name": "bp-sm", "value": "640px", "note": "KPIs em coluna; card da tabela perde moldura; tabela vira cartões de linha; paginação em pílulas (Anterior · 1 de N · Próxima)." },
+      { "name": "bp-sm", "value": "640px", "note": "KPIs em coluna; card da tabela perde moldura; tabela vira cartões de linha; paginação com os botões do controle segmentado quebrando linha." },
       { "name": "bp-md", "value": "1024px", "note": "Toolbar em duas linhas; coluna CNPJ/CPF some e vai para a segunda linha do nome; células a 10px." },
       { "name": "content-max", "value": "1280px", "note": "Teto do conteúdo, herdado do portal." }
     ],
