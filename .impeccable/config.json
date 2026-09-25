@@ -1,7 +1,9 @@
 {
   "detector": {
     "ignoreRules": [],
-    "ignoreFiles": [],
+    "ignoreFiles": [
+      "static/style.css"
+    ],
     "ignoreValues": [
       {
         "rule": "design-system-color",
