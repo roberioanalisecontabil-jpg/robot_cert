@@ -1890,29 +1890,111 @@ def build_encrypted_bundle(
 # Enfileirar comando de instalação na agent_command_queue
 # ──────────────────────────────────────────────────────────────────────────
 
-def enqueue_install_command(
-    target_machine: str,
-    token_raw: str,
-) -> str:
+# `enqueue_install_command` saiu no lote 2 da auditoria (achado #62). Era o
+# caminho antigo, que punha o token de instalação na fila DESTE portal; desde
+# 23/08/2026 o /prepare pede ao INVENT, e a função só era chamada por teste.
+# Mantê-la mantinha viva a capacidade de injetar token na fila local.
+
+
+def alvo_do_token(token_raw: str) -> Optional[Dict[str, Any]]:
+    """A linha do token ainda válido, SEM consumi-lo.
+
+    Existe para conferir a máquina-alvo antes do compare-and-swap de
+    `validate_and_consume_token` (achado #21): recusar depois de consumir
+    queimaria o token da máquina certa. Devolve None para inexistente,
+    expirado ou já consumido — a mesma resposta única, para não virar oráculo.
     """
-    Enfileira um comando 'instalar_certificados' para o agente, carregando o
-    token de uso único no payload.
-
-    A versão anterior recebia `token_raw` e não o gravava: o insert só tinha
-    id/machine_id/command/status/created_at. O agente recebia o comando sem
-    token, registrava "instalar_certificados recebido sem token" e nunca
-    chamava /redeem — a instalação jamais acontecia.
-
-    Reusa `command_queue.enqueue` em vez de inserir direto, para herdar a
-    validação de comando e o fallback em disco quando o banco cai.
-    """
-    from app.command_queue import enqueue
-
+    client = _banco()
+    if not client:
+        return None
+    token_hash = hashlib.sha256(token_raw.encode()).hexdigest()
+    now = datetime.now(timezone.utc).isoformat()
     try:
-        return enqueue(target_machine, "instalar_certificados", payload=token_raw)
+        r = (
+            client.table("install_token")
+            .select("id, target_machine, user_id, expires_at, consumed_at")
+            .eq("token_hash", token_hash)
+            .is_("consumed_at", "null")
+            .gt("expires_at", now)
+            .limit(1)
+            .execute()
+        )
     except Exception:
-        logger.exception("Falha ao enfileirar comando de instalação")
-        raise
+        logger.exception("Falha ao consultar o alvo do install_token")
+        return None
+    linhas = r.data or []
+    return dict(linhas[0]) if linhas else None
+
+
+def revogar_tokens_pendentes(user_id: str) -> int:
+    """Queima os tokens de instalação ainda não resgatados desta conta (#22).
+
+    `/claim` não autentica — o token É a credencial. Sem isto, desativar ou
+    excluir alguém não alcançava as chaves privadas que ele já tinha pedido e
+    ainda não recebido, até o TTL (configurável até 24 h). Marca `consumed_at`
+    em vez de apagar: a trilha continua podendo ligar o `token_id` ao pedido.
+    """
+    client = _banco()
+    if not client:
+        return 0
+    agora = datetime.now(timezone.utc).isoformat()
+    try:
+        r = (
+            client.table("install_token")
+            .update({"consumed_at": agora})
+            .eq("user_id", user_id)
+            .is_("consumed_at", "null")
+            .execute()
+        )
+        return len(r.data or [])
+    except Exception:
+        logger.exception("Falha ao revogar tokens de instalação de %s", user_id)
+        return 0
+
+
+def ler_metadados_do_pfx(pfx_bytes: bytes, password: Optional[str]) -> Dict[str, Any]:
+    """O que o PFX diz de si mesmo: fingerprint, titular, documento e datas.
+
+    É a única fonte aceita para esses campos no cofre (achado #4). O agente
+    continua mandando os dele no corpo, e eles são ignorados — aceitá-los
+    deixava gravar um PFX qualquer sob o CNPJ de um cliente do operador-alvo,
+    e `assegurar_carteira` compara exatamente esse campo.
+
+    Levanta `ValueError` com texto para o chamador quando o PFX não abre com a
+    senha (ou sem senha): um PFX que o portal não lê é um PFX que ele não pode
+    prometer a ninguém.
+    """
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    from app.cert_scanner import extract_cn_rfc4514, parse_nome_cnpj_cpf_from_cn
+
+    tentativas = []
+    if password:
+        tentativas.append(password.encode("utf-8"))
+    tentativas.append(None)
+    cert = None
+    for senha in tentativas:
+        try:
+            _key, cert, _more = pkcs12.load_key_and_certificates(pfx_bytes, senha)
+            if cert is not None:
+                break
+        except Exception:  # noqa: BLE001
+            cert = None
+    if cert is None:
+        raise ValueError("PFX ilegível com a senha informada: o cofre não guarda o que não consegue abrir.")
+
+    subject = cert.subject.rfc4514_string() if cert.subject else None
+    nome, documento, tipo = parse_nome_cnpj_cpf_from_cn(extract_cn_rfc4514(subject))
+    return {
+        "fingerprint": cert.fingerprint(hashes.SHA256()).hex(),
+        "subject": subject,
+        "nome_titular": nome,
+        "documento": documento,
+        "documento_tipo": tipo,
+        "not_before": cert.not_valid_before_utc.isoformat(),
+        "not_after": cert.not_valid_after_utc.isoformat(),
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────

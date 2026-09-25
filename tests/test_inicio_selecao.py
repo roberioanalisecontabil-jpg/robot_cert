@@ -154,7 +154,6 @@ def _estados(client: TestClient, headers: dict) -> Dict[str, str]:
 
 @pytest.mark.parametrize("fp,esperado", [
     (FP_OK, "ok"),
-    (FP_ALHEIO, "fora_da_carteira"),
     (FP_BLOQUEADO, "bloqueado"),
     (FP_VENCIDO, "vencido"),
     (FP_ILEGIVEL, "ilegivel"),
@@ -164,6 +163,13 @@ def test_estado_por_certificado_para_o_operador(
     client: TestClient, banco: _Fake, fp: str, esperado: str
 ) -> None:
     assert _estados(client, _h("user", "operador@x.com"))[fp] == esperado
+
+
+def test_fora_da_carteira_nem_aparece_para_o_operador(client: TestClient, banco: _Fake) -> None:
+    """Até o lote 2 da auditoria (#30) o item saía com o rótulo "fora_da_carteira"
+    — e com o fingerprint e o id no cofre de um cliente que não é do operador.
+    O rótulo decidia a cor; o conjunto vazava. Agora o item não sai."""
+    assert FP_ALHEIO not in _estados(client, _h("user", "operador@x.com"))
 
 
 def test_vencido_ganha_do_motivo_da_carteira(client: TestClient, banco: _Fake) -> None:
@@ -176,7 +182,9 @@ def test_vencido_ganha_do_motivo_da_carteira(client: TestClient, banco: _Fake) -
     estados = _estados(client, _h("user", "operador@x.com"))
     assert estados[FP_VENCIDO] == "vencido"
     assert estados[FP_ILEGIVEL] == "ilegivel"
-    assert estados[FP_ALHEIO] == "fora_da_carteira"
+    # O que é só "fora da carteira" não sai (auditoria #30); vencido e
+    # ilegível saem com o motivo deles, que é o mais fundamental.
+    assert FP_ALHEIO not in estados
 
 
 def test_nao_enviado_e_distinto_de_bloqueado(client: TestClient, banco: _Fake) -> None:
@@ -224,7 +232,8 @@ def test_admin_e_gestor_nao_veem_fora_da_carteira(
         assert estados[FP_ALHEIO] == "ok"
     else:
         assert corpo["alcance_total"] is False, "gestor voltou a ter alcance total"
-        assert estados[FP_ALHEIO] == "fora_da_carteira"
+        # Sem alcance total, o que está fora da carteira nem sai (auditoria #30).
+        assert FP_ALHEIO not in estados
 
 
 def test_operador_nao_tem_alcance_total(client: TestClient, banco: _Fake) -> None:

@@ -26,6 +26,32 @@ _SUPABASE_LEGADO = bool((os.getenv("SUPABASE_URL") or "").strip())
 # Se definida, todas as rotas /api/* exigem o header X-API-Key (exceto se documentado)
 API_KEY = (os.getenv("API_KEY") or "").strip()
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on", "sim")
+
+
+# A X-API-Key COMPARTILHADA ainda autentica o agente? É o legado em transição
+# (Frente 1): cada estação deveria ter a própria credencial de máquina
+# (`app/machine_credentials.py`). Padrão: aceita em dev, recusa em produção
+# (lote 2 da auditoria de 24/09/2026). Ligue (=1) só enquanto houver estação
+# não migrada — o WARNING em `require_auth` diz quais. Mesmo ligada, a chave
+# compartilhada NUNCA puxa fila nem resgata token: sem identidade de máquina
+# não há como saber de quem é a fila ou o token (achados #3 e #21).
+ACEITAR_API_KEY_COMPARTILHADA = _env_bool(
+    "ACEITAR_API_KEY_COMPARTILHADA", default=not bool(DATABASE_URL)
+)
+
+# /claim exige credencial de MÁQUINA deste portal? Hoje quem resgata é o
+# agente do INVENT, que não tem credencial aqui — ele manda só o token. Ligar
+# antes de o agente do INVENT passar a apresentar uma credencial pararia toda
+# instalação. Desligada, o /claim confere o `X-Machine-Id` quando o agente o
+# manda e avisa no log quando não manda (janela do achado #21).
+CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA = _env_bool("CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA", default=False)
+
 # Se `/docs`, `/redoc` e `/openapi.json` ficam públicos. Desligado por padrão:
 # em produção o schema das ~97 rotas só ajuda quem está mapeando a API — era o
 # único dado que um visitante anônimo levava do portal (levantamento de
