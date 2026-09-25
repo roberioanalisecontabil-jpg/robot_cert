@@ -49,13 +49,15 @@
     <!-- ── Chave API (item 97: aguarda print) ───────────────────────── -->
     <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">Se o servidor estiver protegido por uma <code>API_KEY</code>, informe a mesma chave abaixo para liberar as configurações. Fica gravada no seu navegador.</p>
-        <div class="ag-field">
-          <label class="ag-label" for="api-key">Chave API</label>
-          <input type="password" id="api-key" class="ag-input" autocomplete="off" placeholder="Insira a chave do .env" />
-        </div>
+        <!-- A chave não passa mais pelo navegador (SECURITY_AUDIT #46, lote 7):
+             o portal autentica esta tela pelo login (JWT), e a X-API-Key é
+             credencial de ESTAÇÃO — entra no cofre local do agente pelo
+             instalador, nunca por localStorage nem pelo agent_config.json. -->
+        <p class="cg-cfg-lead">Esta tela usa o seu login. A <code>API_KEY</code> do servidor é credencial das <strong>estações</strong>: fica cifrada em cada uma (DPAPI), nunca no navegador nem no <code>agent_config.json</code>.</p>
+        <p class="ag-ajuda">Como a chave entra numa estação: o instalador do agente (1.4.0 ou mais novo) pede a chave numa página do assistente e a guarda no cofre local. Para trocar depois, grave a chave num arquivo e rode, como administrador:</p>
+        <pre>AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre>
+        <p class="ag-ajuda">O agente cifra a chave, restringe o acesso a SYSTEM e Administradores e apaga o arquivo. Um <code>agent_config.json</code> antigo que ainda traga a chave em claro é migrado para o cofre na primeira subida do agente 1.4.0.</p>
         <div class="cg-cfg-acoes">
-          <button type="button" id="btn-save-key" class="ag-btn ag-btn--outline">Guardar no navegador</button>
           <span class="ag-ajuda" id="auth-hint" role="status"></span>
         </div>
       </div>
@@ -76,7 +78,7 @@
           <button type="button" id="btn-download-agent-json" class="ag-btn ag-btn--outline">Baixar agent_config.json</button>
           <span class="ag-ajuda" id="cfg-msg" role="status"></span>
         </div>
-        <p class="ag-ajuda">Baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado.</p>
+        <p class="ag-ajuda">Baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado. O arquivo não leva a chave de API: ela entra pelo instalador (aba Chave API).</p>
 
         <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Leitura local efetiva</h3></div>
         <div class="cg-cfg-leitura">
@@ -102,7 +104,7 @@
         <p class="ag-ajuda" id="path-sync-msg" role="status"></p>
 
         <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Agente no Windows</h3></div>
-        <p class="ag-ajuda">Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code> e <code>CERT_ROBOT_API_KEY</code> (se houver chave).</p>
+        <p class="ag-ajuda">Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code>. A chave de API entra pelo cofre local (<code>--guardar-chave</code>) ou pela variável <code>CERT_ROBOT_API_KEY</code> do serviço.</p>
         <pre>python agent\run_agent.py</pre>
         <p class="ag-ajuda">O sistema interpreta os arquivos usando a palavra-chave "senha":</p>
         <pre>MeuNome certificado senha aMinhaSenha.pfx</pre>
@@ -394,7 +396,7 @@
           return;
         }
         if (r.status === 401) {
-          warn.innerHTML = 'A API exige chave. Cole o mesmo valor de <code>API_KEY</code> (no .env) no campo <strong>Chave API</strong> e clique em Guardar no navegador.';
+          warn.textContent = "Sessão sem acesso a esta configuração. Entre de novo no portal com um usuário administrador.";
           caixa.hidden = false;
           return;
         }
@@ -415,7 +417,7 @@
         try {
           const r = await fetch("/api/settings", { headers: getHeaders() });
           if (r.status === 401) {
-            st.textContent = "401: a chave acima tem de ser igual a API_KEY no .env do servidor.";
+            st.textContent = "401: a sessão expirou ou não tem acesso. Entre de novo no portal.";
             return;
           }
           if (!r.ok) {
@@ -463,19 +465,6 @@
           st.textContent = "Erro: " + e;
         }
       }
-
-      // ── Guardar chave ────────────────────────────────────────────────────────
-      function guardarChaveNoStorage() {
-        const v = (document.getElementById("api-key").value || "").trim();
-        if (v) localStorage.setItem(KEY_STORAGE, v);
-      }
-
-      document.getElementById("btn-save-key").addEventListener("click", () => {
-        guardarChaveNoStorage();
-        document.getElementById("auth-hint").textContent = "Chave armazenada no browser com sucesso!";
-        loadSettingsToForm();
-        syncPathsFromApi();
-      });
 
       // ── Alertas: para quem, e quando ─────────────────────────────────────────
       //
@@ -572,10 +561,8 @@
             ...corpoAlertas(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
-          if (r.status === 401) { st.textContent = "401: chave incompatível com API_KEY."; return; }
+          if (r.status === 401) { st.textContent = "401: a sessão expirou ou não tem acesso. Entre de novo no portal."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
-          const elKey = document.getElementById("api-key");
-          if (elKey && elKey.value.trim()) localStorage.setItem(KEY_STORAGE, elKey.value.trim());
           const j = await r.json();
           st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
           await loadSettingsToForm();
@@ -589,11 +576,12 @@
         const source = (document.getElementById("inp-source").value || "").trim();
         const expired = (document.getElementById("inp-exp").value || "").trim();
         const machineId = (document.getElementById("inp-machine").value || "default").trim() || "default";
-        const apiKey = (document.getElementById("api-key").value || "").trim();
         const baseUrlInput = document.getElementById("inp-agent-base-url");
         const baseUrl = ((baseUrlInput && baseUrlInput.value) || "").trim() || window.location.origin;
         localStorage.setItem("cert_robot_agent_base_url", baseUrl);
-        const payload = { cert_robot_base_url: baseUrl, cert_robot_api_key: apiKey, machine_id: machineId, source_folder: source, expired_folder: expired, interval_sec: 86400, mover_vencidos: true, poll_commands: true };
+        // Sem a chave de API (SECURITY_AUDIT #46): o arquivo baixado vai por e-mail,
+        // pendrive, pasta compartilhada — a chave entra na estação pelo instalador.
+        const payload = { cert_robot_base_url: baseUrl, machine_id: machineId, source_folder: source, expired_folder: expired, interval_sec: 86400, mover_vencidos: true, poll_commands: true };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -863,7 +851,7 @@
           const cmi = document.getElementById("cmd-machine-id");
           const mid = cmi && cmi.value.trim() ? cmi.value.trim() : "default";
           const r = await fetch("/api/agent/commands", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ machine_id: mid, command: cmd }) });
-          if (r.status === 401) { st.textContent = "401: guarde a chave acima ou confirme a API_KEY."; return; }
+          if (r.status === 401) { st.textContent = "401: a sessão expirou ou não tem acesso. Entre de novo no portal."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const j = await r.json();
           st.textContent = "Enfileirado: " + (j.command || cmd) + " (id " + (j.id || "—") + ").";
@@ -914,7 +902,7 @@
         const tagK = document.getElementById("tag-api-key");
         tagK.textContent = h.api_key_required ? "Chave API obrigatória" : "Chave API aberta";
         const ah = document.getElementById("auth-hint");
-        if (h.api_key_required) ah.textContent = "O servidor exige chave. Cole o mesmo valor de API_KEY do servidor para acessar.";
+        if (ah) ah.textContent = h.api_key_required ? "O servidor exige X-API-Key das estações; esta tela usa o seu login." : "O servidor não exige X-API-Key das estações.";
         await loadSettingsToForm();
         marcarLimpo();
         _segAnterior = document.getElementById("sel-smtp-seguranca").value;

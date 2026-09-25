@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Analise CertiDigital Agent
-AppVersion=1.3.0
+AppVersion=1.4.0
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
 DefaultGroupName=Analise CertiDigital
@@ -46,10 +46,14 @@ Name: "{autodesktop}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiD
 Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Description: "Iniciar o agente em bandeja agora"; Flags: nowait postinstall skipifsilent unchecked; Check: OfferTrayAfterInstall
 
 [Dirs]
-; Diretorio compartilhado de estado/comando entre Servico (LocalSystem) e Tray (Usuario).
-; Sem permissao de escrita aqui o botao "Forcar leitura agora" do tray nao consegue
-; entregar o pedido ao servico.
-Name: "{commonappdata}\Analise CertiDigital Agent"; Permissions: users-modify
+; Pasta da credencial de maquina (maquina.dat) e da chave de API (chave_api.dat).
+; SEM escrita para Users (SECURITY_AUDIT #45, lote 7): ate a 1.3.0 a pasta inteira
+; era users-modify, e uma pasta gravavel por qualquer conta ao lado de uma credencial
+; e convite a troca de arquivo. Os .dat ainda tem ACL propria (SYSTEM/Admins).
+Name: "{commonappdata}\Analise CertiDigital Agent"
+; UNICA subpasta gravavel por Users: e por aqui que o tray (usuario) deixa o
+; pedido "Forcar leitura agora" para o servico (LocalSystem) — agent_command.json.
+Name: "{commonappdata}\Analise CertiDigital Agent\pedidos"; Permissions: users-modify
 
 [Code]
 const
@@ -60,6 +64,7 @@ const
 var
   LastOperationError: string;
   ServiceAccountPage: TInputQueryWizardPage;
+  ApiKeyPage: TInputQueryWizardPage;
 
 function OfferTrayAfterInstall: Boolean;
 begin
@@ -80,6 +85,88 @@ begin
   );
   ServiceAccountPage.Add('Usuario (opcional):', False);
   ServiceAccountPage.Add('Senha:', True);
+
+  { A X-API-Key do portal entra por aqui, e nao pelo agent_config.json
+    (SECURITY_AUDIT #18, lote 7). Ela e gravada num arquivo temporario do
+    administrador e entregue ao agente com --guardar-chave, que a cifra com
+    DPAPI de maquina em chave_api.dat e apaga o arquivo. Assim ela nunca passa
+    pela linha de comando nem fica em claro na pasta do programa. }
+  ApiKeyPage := CreateInputQueryPage(
+    ServiceAccountPage.ID,
+    'Chave de API do portal',
+    'A chave e guardada cifrada nesta estacao (DPAPI), nao no agent_config.json.',
+    'Cole a X-API-Key definida no servidor (API_KEY do .env). ' +
+    'Deixe em branco para manter a chave ja guardada nesta estacao, ou se o ' +
+    'agente ja tem credencial de maquina propria.'
+  );
+  ApiKeyPage.Add('X-API-Key:', True);
+end;
+
+procedure RestringirPastaDaCredencial;
+var
+  RC: Integer;
+  Pasta: string;
+begin
+  { Atualizacao de uma 1.3.0: o [Dirs] sem Permissions NAO retira a ACE
+    users-modify que a versao anterior gravou na pasta — o Inno so acrescenta.
+    Modify na pasta inclui "excluir subpastas e arquivos", que passa por cima
+    da ACL propria de maquina.dat (#45). Retira so a ACE explicita de Users
+    (S-1-5-32-545); a leitura herdada do ProgramData fica, e e o que o tray
+    precisa para ler agent_status.json. Nao fatal: instalacao nova nao tem a
+    ACE, e o icacls devolve 0 do mesmo jeito. }
+  Pasta := ExpandConstant('{commonappdata}\Analise CertiDigital Agent');
+  if Exec(ExpandConstant('{sys}\icacls.exe'),
+          '"' + Pasta + '" /remove:g *S-1-5-32-545',
+          '', SW_HIDE, ewWaitUntilTerminated, RC) then
+    Log('icacls /remove:g Users na pasta da credencial retornou codigo: ' + IntToStr(RC))
+  else
+    Log('Nao foi possivel executar icacls na pasta da credencial.');
+end;
+
+function ApiKeyInformada: string;
+begin
+  if Assigned(ApiKeyPage) then
+    Result := Trim(ApiKeyPage.Values[0])
+  else
+    Result := '';
+end;
+
+function GuardarChaveDeApi: Boolean;
+var
+  RC: Integer;
+  Arquivo: string;
+begin
+  LastOperationError := '';
+  Result := True;
+  if ApiKeyInformada = '' then
+    Exit;
+  Arquivo := ExpandConstant('{tmp}\chave.txt');
+  if not SaveStringToFile(Arquivo, ApiKeyInformada, False) then
+  begin
+    LastOperationError := 'Nao foi possivel gravar o arquivo temporario da chave.';
+    Result := False;
+    Exit;
+  end;
+  Log('Guardando a chave de API no cofre local via --guardar-chave');
+  if Exec(ExpandConstant('{app}\AnaliseCertiDigital_Agent.exe'),
+          '--guardar-chave "' + Arquivo + '"',
+          '', SW_HIDE, ewWaitUntilTerminated, RC) then
+  begin
+    Log('--guardar-chave retornou codigo: ' + IntToStr(RC));
+    Result := (RC = 0);
+    if not Result then
+      LastOperationError :=
+        'O agente nao conseguiu guardar a chave de API (codigo ' + IntToStr(RC) + ').' + #13#10 +
+        'Veja o log do agente em ProgramData\Analise CertiDigital Agent.';
+  end
+  else
+  begin
+    Result := False;
+    LastOperationError := 'Falha ao executar o agente com --guardar-chave.';
+  end;
+  { O agente apaga o arquivo; se falhou antes disso, nao deixe a chave em claro. }
+  if FileExists(Arquivo) then
+    DeleteFile(Arquivo);
 end;
 
 function ServiceAccountUser: string;
@@ -492,6 +579,18 @@ begin
 
   if CurStep = ssPostInstall then
   begin
+    RestringirPastaDaCredencial;
+    { Antes do servico subir: a primeira subida ja encontra a chave no cofre. }
+    if not GuardarChaveDeApi then
+    begin
+      MsgBox(
+        'Nao foi possivel guardar a chave de API nesta estacao.' + #13#10 +
+        LastOperationError + #13#10 +
+        'A instalacao continua; guarde a chave depois com:' + #13#10 +
+        'AnaliseCertiDigital_Agent.exe --guardar-chave <arquivo com a chave>',
+        mbError, MB_OK
+      );
+    end;
     if not InstallOrUpdateService then
     begin
       MsgBox(
