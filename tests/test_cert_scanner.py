@@ -70,9 +70,12 @@ def test_cert_to_public_dict() -> None:
     )
     d = cert_to_public_dict(c)
     assert d["status"] == "ok"
-    assert d["file_name"] == "teste senha abc.pfx"
+    # Sem `file_name` nem `path` desde o lote 3 da auditoria (#2): o nome do
+    # arquivo carrega a senha. Sai o nome público e a pasta.
+    assert "file_name" not in d and "path" not in d
+    assert d["nome_publico"] == "teste"
+    assert d["pasta"] == "/x"
     assert d["nome"] == "teste"
-    assert "path" in d
     assert "not_before" in d and "not_after" in d
     assert d.get("fingerprint_sha256") is None
     assert d.get("issuer") is None

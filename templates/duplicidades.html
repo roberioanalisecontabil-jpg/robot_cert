@@ -326,9 +326,15 @@
       return (it && (it.nome_exibicao || it.nome)) ? String(it.nome_exibicao || it.nome).trim() : "";
     }
 
+    // O nome PÚBLICO do arquivo, com a pasta quando o servidor a manda (só
+    // para admin). O nome bruto carregava a senha do PFX e esta tela o
+    // mostrava copiável (SECURITY_AUDIT #2); o servidor não o devolve mais.
     function caminhoDe(it) {
       if (!it) return "";
-      return normalizarCaminho(it.path || it.file_name || "");
+      const nome = String(it.nome_publico || "").trim();
+      if (!nome) return "";
+      const pasta = normalizarCaminho(it.pasta || "");
+      return pasta ? pasta.replace(/\/+$/, "") + "/" + nome : nome;
     }
 
     // Lista de arquivos de um grupo: nome (quando difere do da linha),

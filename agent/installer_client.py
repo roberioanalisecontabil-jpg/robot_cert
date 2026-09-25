@@ -33,6 +33,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.cert_scanner import CertInfo
+from app.nome_publico import nome_publico_de_arquivo
 
 LOGGER = logging.getLogger("analise_certidigital_agent")
 
@@ -128,16 +129,16 @@ def upload_pfx_files(
             )
             if resp.status_code == 200:
                 enviados += 1
-                LOGGER.debug("PFX %s enviado com sucesso ao servidor.", c.file_name)
+                LOGGER.debug("PFX %s enviado com sucesso ao servidor.", nome_publico_de_arquivo(c.file_name))
             else:
                 LOGGER.warning(
                     "Aviso ao enviar PFX %s (%s): %s",
-                    c.file_name,
+                    nome_publico_de_arquivo(c.file_name),
                     resp.status_code,
                     resp.text,
                 )
         except Exception as ex:
-            LOGGER.exception("Falha ao enviar arquivo PFX %s: %s", c.file_name, ex)
+            LOGGER.exception("Falha ao enviar arquivo PFX %s: %s", nome_publico_de_arquivo(c.file_name), ex)
 
     if enviados:
         LOGGER.info(

@@ -244,16 +244,29 @@ def cert_to_public_dict(c: CertInfo) -> dict:
         nome_exibir = c.display_name
     if not nome_exibir:
         nome_exibir = c.path.stem
+    if c.status in (CertStatus.OUT_OF_PATTERN, CertStatus.ERROR):
+        # Veio do nome do arquivo, não do X.509: pode carregar a senha.
+        from app.nome_publico import nome_publico_de_arquivo as _limpar
+
+        nome_exibir = _limpar(nome_exibir) or nome_exibir
     if tipo == "cnpj":
         tipo_label = "CNPJ"
     elif tipo == "cpf":
         tipo_label = "CPF"
     else:
         tipo_label = None
+    # Sem `file_name` nem `path` (SECURITY_AUDIT #2): o nome do arquivo carrega
+    # a senha do PFX, e este dicionário é o que o agente manda ao portal e o
+    # que o portal devolve. O que sai é o nome público, a pasta e uma chave de
+    # deduplicação sem segredo — ver `app/nome_publico.py`.
+    from app.nome_publico import chave_de_arquivo, nome_publico_de_arquivo, pasta_de
+
+    nome_pub = nome_publico_de_arquivo(c.file_name) or nome_publico_de_arquivo(c.display_name)
     return {
-        "file_name": c.file_name,
-        "display_name": c.display_name,
-        "path": str(c.path),
+        "nome_publico": nome_pub,
+        "pasta": pasta_de(str(c.path)),
+        "arquivo_chave": chave_de_arquivo(nome_pub, c.fingerprint_sha256),
+        "display_name": nome_publico_de_arquivo(c.display_name) or nome_pub,
         "status": c.status.value,
         "not_before": not_before.isoformat() if not_before else None,
         "not_after": not_after.isoformat() if not_after else None,

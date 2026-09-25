@@ -39,6 +39,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 if getattr(sys, "frozen", False):
     load_dotenv(Path(sys.executable).resolve().parent / ".env", override=True)
 
+from app.nome_publico import nome_publico_de_arquivo  # noqa: E402
 from app.cert_scanner import (  # noqa: E402
     CertInfo,
     CertStatus,
@@ -1120,7 +1121,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                                 try:
                                     move_to_expired(c, exp)
                                 except OSError as ex:
-                                    LOGGER.error("Comando mover_vencidos (%s): %s", c.file_name, ex)
+                                    LOGGER.error("Comando mover_vencidos (%s): %s", nome_publico_de_arquivo(c.file_name), ex)
                             LOGGER.info("Comando remoto mover_vencidos executado (id %s).", j.get("id"))
                         elif cmd == "rescan":
                             LOGGER.info("Comando remoto: rescan; máquina %s.", mid)
@@ -1166,7 +1167,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                         try:
                             move_to_expired(c, exp)
                         except OSError as ex:
-                            LOGGER.error("Falha ao mover %s: %s", c.file_name, ex)
+                            LOGGER.error("Falha ao mover %s: %s", nome_publico_de_arquivo(c.file_name), ex)
                     itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
 
                 itens = _merge_itens_com_pasta_vencidos(itens, exp, src)

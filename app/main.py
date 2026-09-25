@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, nomes, permissoes, senha_reset, taxa
+from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, nome_publico, nomes, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -858,7 +858,7 @@ def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
     nome = _painel_busca_normalizada(row.get("nome") or row.get("display_name") or "")
     doc_f = _painel_busca_normalizada(row.get("documento_formatado") or "")
     doc_n = _painel_busca_normalizada(row.get("documento_numero") or "")
-    fn = _painel_busca_normalizada(row.get("file_name") or "")
+    fn = _painel_busca_normalizada(row.get("nome_publico") or "")
     na_txt = _painel_busca_normalizada(row.get("not_after") or "")
     dd = _digits_only_doc(row.get("documento_numero") or row.get("documento_formatado"))
     nd = _digits_only_doc(str(row.get("not_after") or ""))
@@ -915,7 +915,7 @@ def chave_alfabetica(item: dict) -> tuple:
     string vazia os jogaria para o topo, e a primeira página da lista seria
     justamente o que o robô não conseguiu ler — o oposto do útil.
     """
-    bruto = str(item.get("nome") or item.get("display_name") or item.get("file_name") or "").strip()
+    bruto = str(item.get("nome") or item.get("display_name") or item.get("nome_publico") or "").strip()
     if not bruto:
         return (1, "")
     sem_acento = "".join(
@@ -1020,6 +1020,9 @@ def _list_certificados_payload(
             "data_source": "local",
             "machine_id": sets.machine_id,
         }
+    # Sanitizado também na SAÍDA, e não só no ingest: um snapshot gravado antes
+    # da migração do lote 3 ainda tem o nome do arquivo (com a senha) em cada
+    # item, e a resposta da API não pode depender de a migração já ter rodado.
     if fonte == "remoto":
         if not snap:
             raise HTTPException(
@@ -1030,7 +1033,7 @@ def _list_certificados_payload(
             "source_dir": str(snap.get("source_folder", "") or ""),
             "expired_dir": str(snap.get("expired_folder", "") or ""),
             "atualizado_em": snap.get("scanned_at", datetime.now(timezone.utc).isoformat()),
-            "itens": list(snap.get("items", []) or []),
+            "itens": [nome_publico.sanitizar_item(it) for it in (snap.get("items", []) or [])],
             "data_source": "remoto",
             "machine_id": snap.get("machine_id"),
         }
@@ -1040,7 +1043,7 @@ def _list_certificados_payload(
             "source_dir": str(snap.get("source_folder", "") or ""),
             "expired_dir": str(snap.get("expired_folder", "") or ""),
             "atualizado_em": snap.get("scanned_at", datetime.now(timezone.utc).isoformat()),
-            "itens": list(snap.get("items", []) or []),
+            "itens": [nome_publico.sanitizar_item(it) for it in (snap.get("items", []) or [])],
             "data_source": "remoto",
             "machine_id": snap.get("machine_id"),
         }
@@ -3404,6 +3407,7 @@ def listar_certificados(
         description="nome | status | emissao | vencimento | documento. Vazio = ordem alfabética por titular",
     ),
     direcao: str = Query("asc", description="asc | desc"),
+    token: auth.TokenData = Depends(require_auth),
 ) -> JSONResponse:
     """
     * auto: usa o último snapshot ingerido se existir; senão leitura local.
@@ -3418,6 +3422,10 @@ def listar_certificados(
         snap = get_latest_snapshot()
         base = _list_certificados_payload(sets, snap, fonte)
         base["itens"] = ordenar_por_titular(base.get("itens") or [])
+        # A pasta do servidor só para admin (SECURITY_AUDIT #2): o operador
+        # precisa do titular e do documento, não da árvore de diretórios.
+        if (token.role or "").strip().lower() != "admin":
+            base["itens"] = [nome_publico.sem_pasta(it) for it in base["itens"]]
         # Caixa alta vira título no servidor (app/nomes.py), num lugar só,
         # para toda tela que lista o inventário (Início, Custódia).
         for it in base["itens"]:
@@ -3562,11 +3570,14 @@ def _fingerprint_hex_from_row(row: dict) -> str:
     return str(v).strip().lower()
 
 
-def _item_resumo_duplicidade(it: dict) -> dict[str, Any]:
+def _item_resumo_duplicidade(it: dict, incluir_pasta: bool = False) -> dict[str, Any]:
     fp = it.get("fingerprint_sha256") or it.get("cert_sha256")
     nome = it.get("nome") or it.get("display_name")
-    return {
-        "file_name": it.get("file_name"),
+    out = {
+        # O nome PÚBLICO do arquivo (SECURITY_AUDIT #2): o nome bruto carrega
+        # a senha, e esta tela o mostrava copiável. A pasta só vai para admin
+        # — é estrutura do servidor, e é ele quem vai lá apagar a cópia.
+        "nome_publico": it.get("nome_publico"),
         "nome": nome,
         # Caixa alta vira título no servidor (app/nomes.py), como no Início e
         # no Vencidos; números e códigos do nome passam intactos.
@@ -3576,12 +3587,14 @@ def _item_resumo_duplicidade(it: dict) -> dict[str, Any]:
         "not_after": it.get("not_after"),
         "not_before": it.get("not_before"),
         "status": it.get("status"),
-        "path": it.get("path"),
         "subject": it.get("subject"),
         "issuer": it.get("issuer"),
         "serial_number": it.get("serial_number"),
         "fingerprint_sha256": fp,
     }
+    if incluir_pasta:
+        out["pasta"] = it.get("pasta")
+    return out
 
 
 def _fingerprint_hex_resumo(m: dict) -> str:
@@ -3616,6 +3629,7 @@ def _filtrar_grupo_documento_apos_fingerprint(members: List[dict]) -> List[dict]
 
 def _agrupar_duplicidades(
     rows: List[dict],
+    incluir_pasta: bool = False,
 ) -> Tuple[List[dict], List[dict], List[dict]]:
     """
     Deteta duplicidades no mesmo inventário (último snapshot ou scan local):
@@ -3629,7 +3643,7 @@ def _agrupar_duplicidades(
     for it in rows:
         d = _digits_only_doc(it.get("documento_numero") or it.get("documento_formatado"))
         if len(d) >= 11:
-            by_doc[d].append(_item_resumo_duplicidade(it))
+            by_doc[d].append(_item_resumo_duplicidade(it, incluir_pasta))
 
     grupos_documento: List[dict] = []
     for doc_digits, members in by_doc.items():
@@ -3653,7 +3667,7 @@ def _agrupar_duplicidades(
         fp = _fingerprint_hex_from_row(it)
         if not fp:
             continue
-        by_fp[fp].append(_item_resumo_duplicidade(it))
+        by_fp[fp].append(_item_resumo_duplicidade(it, incluir_pasta))
 
     grupos_cert_igual: List[dict] = []
     for fp_hex, members in by_fp.items():
@@ -3685,8 +3699,8 @@ def _agrupar_duplicidades(
         for j in range(i + 1, n):
             if _fingerprint_hex_from_row(rows[i]) or _fingerprint_hex_from_row(rows[j]):
                 continue
-            fi = str(rows[i].get("file_name") or "").strip().lower()
-            fj = str(rows[j].get("file_name") or "").strip().lower()
+            fi = str(rows[i].get("nome_publico") or "").strip().lower()
+            fj = str(rows[j].get("nome_publico") or "").strip().lower()
             if not fi or fi == fj:
                 continue
             di = _digits_only_doc(
@@ -3698,10 +3712,10 @@ def _agrupar_duplicidades(
             if len(di) >= 11 and len(dj) >= 11 and di == dj:
                 continue
             ni = _normalize_name_dup(
-                rows[i].get("nome") or rows[i].get("display_name") or rows[i].get("file_name")
+                rows[i].get("nome") or rows[i].get("display_name") or rows[i].get("nome_publico")
             )
             nj = _normalize_name_dup(
-                rows[j].get("nome") or rows[j].get("display_name") or rows[j].get("file_name")
+                rows[j].get("nome") or rows[j].get("display_name") or rows[j].get("nome_publico")
             )
             if len(ni) < 5 or len(nj) < 5:
                 continue
@@ -3716,10 +3730,10 @@ def _agrupar_duplicidades(
     for _root, idxs in roots.items():
         if len(idxs) < 2:
             continue
-        members = [_item_resumo_duplicidade(rows[k]) for k in idxs]
+        members = [_item_resumo_duplicidade(rows[k], incluir_pasta) for k in idxs]
         nomes_cur = [
             _normalize_name_dup(
-                rows[k].get("nome") or rows[k].get("display_name") or rows[k].get("file_name")
+                rows[k].get("nome") or rows[k].get("display_name") or rows[k].get("nome_publico")
             )
             for k in idxs
         ]
@@ -3755,7 +3769,7 @@ def _lista_base_docs_historico() -> List[dict]:
     Le o INVENTARIO, e nao `cert_history`. A troca corrigiu um defeito que so
     aparecia em cliente que renovou o certificado:
 
-    `cert_history` faz upsert por `file_name`, e o fluxo normal do escritorio
+    `cert_history` faz upsert por `arquivo_chave` (nome publico + fingerprint), e o fluxo normal do escritorio
     produz DOIS arquivos com o mesmo nome — o novo na pasta de trabalho e o
     antigo movido para `99.CERTIFICADOS VENCIDOS`. Os dois colidiam numa linha
     so, e sobrava o ultimo processado. Em 22/08 eram 7 nomes repetidos, 5 deles
@@ -4048,10 +4062,14 @@ def salvar_preferencia_alerta(
 
 
 @app.get("/api/certificados/duplicidades", dependencies=[Depends(require_modulo("duplicidades"))])
-def certificados_duplicidades() -> dict[str, Any]:
+def certificados_duplicidades(token: auth.TokenData = Depends(require_auth)) -> dict[str, Any]:
     """
     Analisa o último snapshot recebido (dados atuais do agente) ou, na ausência,
     o scan local no servidor, e devolve grupos de possíveis duplicados.
+
+    Os itens saem com o nome PÚBLICO do arquivo; a pasta só para admin
+    (SECURITY_AUDIT #2). Sanitizado na saída porque um snapshot anterior à
+    migração do lote 3 ainda carrega o nome com a senha.
     """
     snap = get_latest_snapshot()
     origem = "ultimo_snapshot"
@@ -4065,8 +4083,10 @@ def certificados_duplicidades() -> dict[str, Any]:
         origem = "scan_local_servidor"
         scanned_at = datetime.now(timezone.utc).isoformat()
 
-    rows = [it for it in raw_items if str(it.get("file_name") or "").strip()]
-    gd, gn, gci = _agrupar_duplicidades(rows)
+    itens = [nome_publico.sanitizar_item(it) for it in raw_items]
+    rows = [it for it in itens if str(it.get("nome_publico") or "").strip()]
+    admin = (token.role or "").strip().lower() == "admin"
+    gd, gn, gci = _agrupar_duplicidades(rows, incluir_pasta=admin)
     return {
         "origem_dados": origem,
         "scanned_at": scanned_at,
@@ -4081,14 +4101,18 @@ def certificados_duplicidades() -> dict[str, Any]:
 
 
 def _historico_merge_snapshot_into_agregados(snap: dict[str, Any], agregados: Dict[str, dict]) -> None:
-    """Acumula itens de um snapshot no mapa por file_name (mantém linha do scan mais recente)."""
+    """Acumula itens de um snapshot no mapa por `arquivo_chave` (mantém linha do scan mais recente).
+
+    O item é sanitizado antes: snapshots anteriores à migração do lote 3 ainda
+    trazem o nome do arquivo com a senha, e este agregado vai para a API."""
     scanned_at = snap.get("scanned_at") or datetime.now(timezone.utc).isoformat()
     scanned_dt = _parse_iso_utc(scanned_at)
-    for it in (snap.get("items") or []):
-        file_name = str(it.get("file_name") or "").strip()
-        if not file_name:
+    for bruto in (snap.get("items") or []):
+        it = nome_publico.sanitizar_item(bruto)
+        nome_pub = str(it.get("nome_publico") or "").strip()
+        if not nome_pub:
             continue
-        key = file_name.lower()
+        key = it["arquivo_chave"]
         atual = agregados.get(key)
         if (not atual) or (scanned_dt > atual["_dt"]):
             doc_raw = (
@@ -4096,8 +4120,8 @@ def _historico_merge_snapshot_into_agregados(snap: dict[str, Any], agregados: Di
             )
             agregados[key] = {
                 "_dt": scanned_dt,
-                "file_name": file_name,
-                "nome": it.get("nome") or it.get("display_name") or file_name,
+                "nome_publico": nome_pub,
+                "nome": it.get("nome") or it.get("display_name") or nome_pub,
                 "status_ultimo": it.get("status"),
                 "documento": doc_raw,
                 "vencimento_certificado": it.get("not_after"),
@@ -4107,7 +4131,7 @@ def _historico_merge_snapshot_into_agregados(snap: dict[str, Any], agregados: Di
 
 def _historico_carregar_agregados(limite_snapshots: int) -> Tuple[Dict[str, dict], int]:
     """
-    Percorre snapshots (banco em lotes ou arquivo local) e devolve agregação por file_name.
+    Percorre snapshots (banco em lotes ou arquivo local) e devolve agregação por arquivo_chave.
     Resultado pode vir de cache em RAM (TTL configurável) por (banco ativo, limite).
     """
     from app.settings_state import _banco
@@ -4166,7 +4190,7 @@ def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
     out: List[dict] = []
     for it in itens:
         haystack = (
-            f"{it.get('file_name') or ''} {it.get('nome') or ''} {it.get('documento') or ''} "
+            f"{it.get('nome_publico') or ''} {it.get('nome') or ''} {it.get('documento') or ''} "
             f"{it.get('ultima_data_registrada') or ''} {it.get('vencimento_certificado') or ''}"
         ).lower()
         if q in haystack:
@@ -4208,7 +4232,7 @@ def _vencidos_filtrar_busca(rows: List[dict], busca_raw: str) -> List[dict]:
 def _cert_history_fetch_all(sb: Any) -> List[dict[str, Any]]:
     """Lê todas as linhas de cert_history (PostgREST limita ~1000 por pedido sem range)."""
     cols = (
-        "file_name, nome, documento, status_ultimo, "
+        "nome_publico, nome, documento, status_ultimo, "
         "vencimento_certificado, ultima_data_registrada"
     )
     batch = 1000
@@ -4253,7 +4277,7 @@ def historico_certificados(
     def _normalize_rows(rows_raw: List[dict[str, Any]]) -> List[dict[str, Any]]:
         return [
             {
-                "file_name":              row.get("file_name"),
+                "nome_publico":           row.get("nome_publico"),
                 "nome":                   row.get("nome"),
                 "documento":              row.get("documento"),
                 "status_ultimo":          row.get("status_ultimo"),
@@ -4267,7 +4291,7 @@ def historico_certificados(
         if not busca_txt:
             return qb
         pat = "%" + _escape_ilike_pattern(busca_txt) + "%"
-        filt = f"nome.ilike.{pat},file_name.ilike.{pat},documento.ilike.{pat}"
+        filt = f"nome.ilike.{pat},nome_publico.ilike.{pat},documento.ilike.{pat}"
         return qb.or_(filt)
 
     sb = _banco()
@@ -4277,7 +4301,7 @@ def historico_certificados(
         try:
             if pagination and page_limit is not None:
                 qc = _apply_cert_history_or_busca(
-                    sb.table("cert_history").select("file_name", count="exact", head=True)
+                    sb.table("cert_history").select("arquivo_chave", count="exact", head=True)
                 )
                 c_r = qc.execute()
                 total_count = c_r.count if c_r.count is not None else 0
@@ -4286,7 +4310,7 @@ def historico_certificados(
                     qp = _apply_cert_history_or_busca(
                         sb.table("cert_history")
                         .select(
-                            "file_name, nome, documento, status_ultimo, "
+                            "nome_publico, nome, documento, status_ultimo, "
                             "vencimento_certificado, ultima_data_registrada",
                         )
                         .order("ultima_data_registrada", desc=True)
@@ -4544,7 +4568,10 @@ def ingest(
     """
     machine_id = _machine_da_credencial(token, body.machine_id) or "default"
     scanned = datetime.now(timezone.utc)
-    items = _normalize_ingest_items_status(body.items, scanned)
+    # O nome do arquivo carrega a senha do PFX; ele não entra no banco por
+    # nenhum caminho (SECURITY_AUDIT #2). Um agente antigo ainda o manda —
+    # aqui ele vira nome público, pasta e chave, e o bruto é descartado.
+    items = [nome_publico.sanitizar_item(it) for it in _normalize_ingest_items_status(body.items, scanned)]
     save_snapshot(
         machine_id=machine_id,
         source_folder=body.source_folder.strip(),
@@ -4586,11 +4613,16 @@ def mover_vencidos() -> JSONResponse:
     for c in itens:
         if c.status != CertStatus.EXPIRED:
             continue
+        # Nome público e pasta, nunca o caminho completo: o nome do arquivo
+        # carrega a senha do PFX (SECURITY_AUDIT #2).
+        rotulo = nome_publico.nome_publico_de_arquivo(c.file_name) or "(sem nome)"
         try:
             novo = move_to_expired(c, exp)
-            movidos.append({"de": str(c.path), "para": str(novo)})
+            movidos.append({"arquivo": rotulo, "de": nome_publico.pasta_de(str(c.path)),
+                            "para": nome_publico.pasta_de(str(novo))})
         except OSError as e:
-            erros.append({"arquivo": c.file_name, "erro": str(e)})
+            logger.error("Falha ao mover %s: %s", rotulo, e)
+            erros.append({"arquivo": rotulo, "erro": "Não foi possível mover o arquivo. Veja o log do servidor."})
 
     return JSONResponse(
         {
@@ -5557,7 +5589,7 @@ def dashboard_renovacoes(
     Renovações: o inventário de hoje contra o de N dias atrás.
 
     Sai de `cert_snapshots`, não de `cert_history` — aquela é
-    `upsert(on_conflict="file_name")` e guarda só o estado atual, então o valor
+    `upsert(on_conflict="arquivo_chave")` e guarda só o estado atual, então o valor
     anterior já foi sobrescrito e a conta daria zero.
 
     A resposta traz `referencia`: as varreduras têm lacunas, e pedir 30 dias
