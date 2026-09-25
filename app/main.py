@@ -152,7 +152,9 @@ def _conta_da_sessao(email: str) -> Optional[dict]:
             # invalidação de sessão simplesmente nunca dispararia. Fixado por
             # `test_sessao_le_a_coluna_da_troca_de_senha`, porque o fake dos
             # testes devolve a linha inteira e não pega isto sozinho.
-            .select("id, email, role, ativo, senha_alterada_em, deve_trocar_senha")
+            # `sessao_versao` pelo mesmo motivo (lote 9, achado #23): sem ela
+            # aqui, "Sair" incrementaria a coluna e nenhum token morreria.
+            .select("id, email, role, ativo, senha_alterada_em, deve_trocar_senha, sessao_versao")
             .eq("email", email)
             .limit(1)
             .execute()
@@ -246,6 +248,16 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
             detail=SESSAO_ENCERRADA,
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if _sessao_encerrada_por_logout(conta, token_data):
+        # "Sair" (achado #23): a rota /api/logout incrementa
+        # `users.sessao_versao`; todo token emitido com a versão anterior
+        # morre aqui. Antes o botão só limpava o navegador, e um token copiado
+        # valia até o `exp`.
+        raise HTTPException(
+            status_code=401,
+            detail=SESSAO_ENCERRADA,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     # Reconstruído a partir da linha, nunca do token: é o ponto inteiro daqui.
     # Com `.get`, e não `[...]`: papel ausente vira None, que `require_admin`
     # reprova. Indexar levantaria KeyError, e a rota responderia 500 — falha
@@ -256,7 +268,27 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
         user_id=str(conta["id"]) if conta.get("id") is not None else None,
         emitido_em=token_data.emitido_em,
         deve_trocar_senha=bool(conta.get("deve_trocar_senha")),
+        sessao_versao=token_data.sessao_versao,
     )
+
+
+def _sessao_encerrada_por_logout(conta: dict, token_data: auth.TokenData) -> bool:
+    """O token é de uma versão de sessão anterior à da conta?
+
+    Token sem `sv` (anterior ao lote 9) vale como 0 — o DEFAULT da coluna —
+    para o deploy não deslogar ninguém; ele morre no primeiro "Sair" da
+    pessoa, como qualquer outro. Conta sem a coluna (migration ainda não
+    rodou) não derruba nada: é o mesmo fail-open deliberado de
+    `_senha_trocada_depois_do_token`, e pelo mesmo motivo.
+    """
+    atual = conta.get("sessao_versao")
+    if atual is None:
+        return False
+    try:
+        return int(token_data.sessao_versao or 0) != int(atual)
+    except (TypeError, ValueError):
+        logger.warning("sessao_versao ilegível para %s", conta.get("email"))
+        return False
 
 
 def _user_id_da_sessao(token: auth.TokenData) -> Optional[str]:
@@ -552,6 +584,43 @@ async def require_agent_or_admin(token: auth.TokenData = Depends(require_auth)) 
         raise HTTPException(status_code=403, detail=ERRO_ACESSO_MAQUINA)
     return token
 
+# O que se mascara no log (achado #57, lote 9): VALORES, não frases. Até aqui
+# qualquer mensagem com "token", "senha" ou "password" virava
+# "*** REDACTED ***" inteira — o que apagava o WARNING da X-API-Key
+# compartilhada (a lista de estações não migradas) e o log de resgate
+# recusado — enquanto o traceback de `exc_info` passava sem máscara nenhuma.
+_MASCARA = "***"
+_RE_SEGREDOS_POR_FORMA = [
+    # JWT: três blocos base64url, o primeiro começando em eyJ.
+    re.compile(r"eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}"),
+    # Depois de Bearer / Basic, o que vier.
+    re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"),
+    # Cabeçalho ou campo com valor: X-API-Key: xxx, api_key=xxx, token=xxx,
+    # senha=xxx, password: xxx. Mantém o nome, troca o valor.
+    re.compile(r"(?i)\b(x-api-key|api[_-]?key|authorization|token|senha|password|passwd|secret)\s*[:=]\s*\S+"),
+    # Cadeias longas de base64url/hex (token_urlsafe, chaves, hashes).
+    re.compile(r"(?<![A-Za-z0-9_/+-])[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_/+-])"),
+]
+# "token abc.def.ghi rejeitado": palavra-chave seguida de um valor que PARECE
+# segredo (tem dígito ou pontuação de codificação). "Token de instalação
+# recusado" fica inteiro: "de" e "recusado" não parecem segredo.
+_RE_SEGREDO_APOS_PALAVRA = re.compile(
+    r"(?i)\b(token|senha|password|chave|key)\s+(?=[A-Za-z0-9._~+/=-]{6,}(?:\s|$|[,;)]))"
+    r"((?=[^\s,;)]*[0-9._~+/=-])[A-Za-z0-9._~+/=-]{6,})"
+)
+
+
+def redigir_segredos(texto: str) -> str:
+    """Mascara valores que parecem credencial e preserva o resto da frase."""
+    if not texto:
+        return texto
+    saida = texto
+    for padrao in _RE_SEGREDOS_POR_FORMA:
+        saida = padrao.sub(lambda m: (m.group(1) + " " + _MASCARA) if m.lastindex else _MASCARA, saida)
+    saida = _RE_SEGREDO_APOS_PALAVRA.sub(lambda m: m.group(1) + " " + _MASCARA, saida)
+    return saida
+
+
 class SecureJSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         # [OWASP A09] Ocultação de segredos e geração de Log JSON estruturado para prevenir Log Injection
@@ -562,15 +631,12 @@ class SecureJSONFormatter(logging.Formatter):
             "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": redigir_segredos(record.getMessage()),
         }
-        # Filtrar possíveis senhas ou tokens da mensagem bruta
-        msg_lower = log_obj["message"].lower()
-        if "password" in msg_lower or "token" in msg_lower or "senha" in msg_lower:
-            log_obj["message"] = "*** REDACTED SENSITIVE DATA ***"
-            
         if record.exc_info:
-            log_obj["exc_info"] = self.formatException(record.exc_info)
+            # O traceback carrega os argumentos das exceções — e uma
+            # `ValueError(f"senha={senha}")` de biblioteca ia inteira para o log.
+            log_obj["exc_info"] = redigir_segredos(self.formatException(record.exc_info))
         return json.dumps(log_obj)
 
 logger = logging.getLogger(__name__)
@@ -1333,7 +1399,13 @@ def login(body: LoginBody, request: Request) -> dict:
             user_email=user["email"],
             client_ip=ip,
         )
-        token = auth.create_access_token({"sub": user["email"], "role": user["role"]})
+        token = auth.create_access_token({
+            "sub": user["email"],
+            "role": user["role"],
+            # Versão da sessão em vigor (#23): `/api/logout` a incrementa e
+            # este token deixa de valer. Coluna ausente (migration pendente) → 0.
+            "sv": int(user.get("sessao_versao") or 0),
+        })
         return {"access_token": token, "token_type": "bearer", "role": user["role"]}
     except HTTPException:
         # O `except Exception` abaixo engolia estas: uma senha errada saía como
@@ -1344,6 +1416,43 @@ def login(body: LoginBody, request: Request) -> dict:
     except Exception:
         logger.exception("Erro no login")
         raise HTTPException(status_code=500, detail="Não foi possível concluir o login. Tente de novo.")
+
+
+@app.post("/api/logout")
+def logout(request: Request, token: auth.TokenData = Depends(require_auth)) -> dict:
+    """
+    Sair de verdade (achado #23): incrementa `users.sessao_versao`, e todo
+    token desta conta emitido com a versão anterior passa a ser recusado por
+    `_sessao_do_token`. Até o lote 9 "Sair" só limpava o `localStorage`, e um
+    JWT copiado valia até o `exp`.
+
+    É a sessão inteira da conta, não só este token: sem um `jti` por token
+    (que exigiria tabela de revogados) é o que dá para revogar com uma coluna
+    — e é o que a pessoa espera de "sair em todos os dispositivos".
+    """
+    from app.settings_state import _banco
+
+    sb = _banco()
+    uid = _user_id_da_sessao(token)
+    if not sb or not uid:
+        # Sem banco não há sessão a encerrar (dev sem diretório de usuários).
+        return {"ok": True, "revogado": False}
+    try:
+        r = sb.table("users").select("sessao_versao").eq("id", uid).limit(1).execute()
+        linhas = r.data or []
+        if not linhas or "sessao_versao" not in linhas[0]:
+            logger.warning("Logout sem revogação: users.sessao_versao ausente (rode a migration 20260926110000).")
+            return {"ok": True, "revogado": False}
+        nova = int(linhas[0].get("sessao_versao") or 0) + 1
+        sb.table("users").update({"sessao_versao": nova}).eq("id", uid).execute()
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao encerrar a sessão no servidor")
+        raise HTTPException(status_code=503, detail="Não foi possível encerrar a sessão agora.")
+    # Sem evento em `user_activity`: a tabela tem CHECK fechado sobre os
+    # eventos e "logout" exigiria migration — fora do escopo do lote 9
+    # (anotado como achado novo). Fica no log do servidor.
+    logger.info("Sessão encerrada por logout: %s (v%d)", token.email, nova)
+    return {"ok": True, "revogado": True}
 
 
 # Modulo `usuarios` na matriz de permissoes desde 20/08. Leitura e escrita
@@ -1579,9 +1688,9 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
                 }
             )
             continue
-        if len(senha) < SENHA_MINIMA:
-            erros.append({"linha": linha, "email": email,
-                          "erro": f"Senha deve ter no mínimo {SENHA_MINIMA} caracteres."})
+        motivo_senha = auth.validar_senha(senha, email)
+        if motivo_senha:
+            erros.append({"linha": linha, "email": email, "erro": motivo_senha})
             continue
         # A mesma barreira de `create_user`: a planilha não é um caminho
         # paralelo para nascer administrador.
@@ -1633,10 +1742,18 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
 # funciona é uma mensagem chegar nele.
 _EMAIL_PLAUSIVEL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 
-# O mesmo mínimo que `reset_user_password` já exigia. Antes, criar era mais
-# permissivo que redefinir: dava para nascer com senha de um caractere e só
-# descobrir o rigor ao trocá-la.
-SENHA_MINIMA = 6
+# A política de senha mora em `auth.validar_senha` (lote 9, achado #25): um
+# mínimo só, teto de 72 bytes (o bcrypt trunca em silêncio), lista curta de
+# senhas comuns e nada de e-mail dentro da senha. Antes eram cinco cópias do
+# número 6. O nome fica para quem ainda o lê.
+SENHA_MINIMA = auth.SENHA_MINIMA
+
+
+def _exigir_senha_valida(senha: str, email: Optional[str] = None) -> None:
+    """422 com o motivo, para as quatro rotas que recebem senha nova."""
+    motivo = auth.validar_senha(senha, email)
+    if motivo:
+        raise HTTPException(status_code=422, detail=motivo)
 
 SO_ADMIN_CONCEDE_ADMIN = "Só um administrador pode conceder o papel de administrador."
 SO_ADMIN_MEXE_EM_ADMIN = "Só um administrador pode alterar a conta de outro administrador."
@@ -1709,10 +1826,12 @@ def _garantir_email_livre(sb: Any, email: str, ignorar_id: Optional[str] = None)
         )
     for u in existentes:
         if str(u.get("email") or "").strip().lower() == email and str(u.get("id")) != str(ignorar_id):
+            # Sem ecoar o endereço (achado #52): quem chamou já o tem, e a
+            # resposta não precisa carregá-lo de volta para logs e telas.
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    f"Já existe uma conta com o e-mail {email}. O e-mail identifica "
+                    "Já existe uma conta com esse e-mail. O e-mail identifica "
                     "a pessoa no login — duas contas com o mesmo endereço deixam "
                     "uma delas inacessível."
                 ),
@@ -1737,11 +1856,7 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
     _exigir_alcance_de_papel(ator, role)
 
     email = _validar_email(body.email)
-    if len((body.password or "").strip()) < SENHA_MINIMA:
-        raise HTTPException(
-            status_code=422,
-            detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
-        )
+    _exigir_senha_valida(body.password, email)
     _garantir_email_livre(sb, email)
 
     hash_pw = auth.get_password_hash(body.password)
@@ -1889,8 +2004,7 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody, ator: auth.To
         raise HTTPException(status_code=503)
     _exigir_alcance_sobre_conta(sb, ator, user_id)
     new_pw = (body.password or "").strip()
-    if len(new_pw) < 6:
-        raise HTTPException(status_code=422, detail="Senha deve ter no mínimo 6 caracteres.")
+    _exigir_senha_valida(new_pw)
     hash_pw = auth.get_password_hash(new_pw)
     try:
         # Mesma razão do cadastro: o admin conhece a senha que acabou de
@@ -2814,11 +2928,7 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     nova = (body.password or "").strip()
-    if len(nova) < SENHA_MINIMA:
-        raise HTTPException(
-            status_code=422,
-            detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
-        )
+    _exigir_senha_valida(nova, body.email)
 
     _exigir_teto_de_conferencia(request)
     email = (body.email or "").strip().lower()
@@ -2886,11 +2996,7 @@ def senha_trocar(
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
 
     nova = (body.nova_senha or "").strip()
-    if len(nova) < SENHA_MINIMA:
-        raise HTTPException(
-            status_code=422,
-            detail=f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres.",
-        )
+    _exigir_senha_valida(nova, token.email)
 
     uid = _user_id_da_sessao(token)
     if not uid:
@@ -5686,7 +5792,9 @@ async def importar_carteiras(
 
         user_id = por_email.get(email)
         if not user_id:
-            erros.append({"linha": i, "motivo": f"Não existe usuário com o e-mail {email}."})
+            # A linha identifica o registro na planilha de quem importou; o
+            # endereço não precisa voltar na resposta (achado #52).
+            erros.append({"linha": i, "motivo": "Não existe usuário com esse e-mail."})
             continue
 
         if user_id not in alcance:

@@ -1,12 +1,26 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Setup e verificacao de porta para o portal Analise CertiDigital
+    Setup e verificacao de portas para o portal Analise CertiDigital.
     Executar como ADMINISTRADOR no Windows Server de destino.
+
+.DESCRIPTION
+    Desenho (SECURITY_AUDIT #37/#38, lote 9): a aplicacao (uvicorn) faz bind
+    SO em 127.0.0.1:8020 e quem atende a rede e o Caddy (deploy/Caddyfile),
+    com TLS e redirecionamento de 80 para 443. Portanto o firewall abre 80 e
+    443 -- as portas do proxy -- e NUNCA a 8020. Este script:
+
+      1. informa a maquina;
+      2. confere que a 8020 esta ouvindo apenas em loopback (se ja subiu);
+      3. cria/atualiza a regra de firewall para 80 e 443 (TCP, entrada);
+      4. remove uma regra antiga que abria a 8020 para fora, se existir;
+      5. confere o Python e testa a resposta local da aplicacao.
 #>
 
-$PORTA = 8020
-$NOME_REGRA = "AnaliseCertiDigital-Portal"
+$PORTA_APP = 8020
+$PORTAS_PROXY = @(80, 443)
+$NOME_REGRA = "AnaliseCertiDigital-Proxy-HTTPS"
+$NOME_REGRA_ANTIGA = "AnaliseCertiDigital-Portal"
 $LOG = "$PSScriptRoot\resultado_porta.txt"
 
 function Write-Log {
@@ -19,8 +33,9 @@ function Write-Log {
 Clear-Host
 "" | Set-Content $LOG
 Write-Log "========================================" "Cyan"
-Write-Log "  SETUP DE PORTA - ANALISE CERTIDIGITAL " "Cyan"
-Write-Log "  Porta alvo: $PORTA                    " "Cyan"
+Write-Log "  SETUP DE PORTAS - ANALISE CERTIDIGITAL" "Cyan"
+Write-Log "  Aplicacao: 127.0.0.1:$PORTA_APP (loopback)" "Cyan"
+Write-Log "  Proxy TLS: portas $($PORTAS_PROXY -join ', ')" "Cyan"
 Write-Log "========================================" "Cyan"
 Write-Log ""
 
@@ -32,46 +47,40 @@ Write-Log "--- [1/5] INFORMACOES DA MAQUINA ---" "Yellow"
 $ip_local = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.InterfaceAlias -notlike "*Loopback*" -and $_.PrefixOrigin -ne "WellKnown" } |
     Select-Object -First 1).IPAddress
-
-try {
-    $ip_externo = (Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing -TimeoutSec 10).Content
-} catch {
-    $ip_externo = "Nao foi possivel obter (sem internet?)"
-}
-
 $hostname = $env:COMPUTERNAME
-$os = (Get-WmiObject Win32_OperatingSystem).Caption
+$os = (Get-CimInstance Win32_OperatingSystem).Caption
 
 Write-Log "  Hostname   : $hostname"
 Write-Log "  Sistema    : $os"
 Write-Log "  IP Local   : $ip_local"
-Write-Log "  IP Externo : $ip_externo"
 Write-Log ""
 
 # -------------------------------------------------------
-# PASSO 2: Verificar se a porta ja esta em uso
+# PASSO 2: A aplicacao so pode ouvir em loopback
 # -------------------------------------------------------
-Write-Log "--- [2/5] VERIFICANDO SE PORTA $PORTA JA ESTA EM USO ---" "Yellow"
+Write-Log "--- [2/5] BIND DA APLICACAO NA PORTA $PORTA_APP ---" "Yellow"
 
-$porta_em_uso = Get-NetTCPConnection -LocalPort $PORTA -ErrorAction SilentlyContinue
-if ($porta_em_uso) {
-    $pid_dono = $porta_em_uso.OwningProcess | Select-Object -First 1
-    $processo = Get-Process -Id $pid_dono -ErrorAction SilentlyContinue
-    Write-Log "  ATENCAO: Porta $PORTA ja esta sendo usada!" "Red"
-    Write-Log "  PID: $pid_dono | Processo: $($processo.Name)" "Red"
-    Write-Log "  Se for uma instancia antiga do portal, encerre com: Stop-Process -Id $pid_dono"
+$escutas = Get-NetTCPConnection -LocalPort $PORTA_APP -State Listen -ErrorAction SilentlyContinue
+if (-not $escutas) {
+    Write-Log "  INFO: nada ouvindo na $PORTA_APP (normal se o portal ainda nao subiu)" "Magenta"
 } else {
-    Write-Log "  OK - Porta $PORTA disponivel (nenhum processo usando)" "Green"
+    foreach ($e in $escutas) {
+        if ($e.LocalAddress -eq "127.0.0.1" -or $e.LocalAddress -eq "::1") {
+            Write-Log "  OK - $($e.LocalAddress):$PORTA_APP (loopback, como deve ser)" "Green"
+        } else {
+            Write-Log "  ATENCAO: $($e.LocalAddress):$PORTA_APP esta exposta na rede em HTTP puro!" "Red"
+            Write-Log "  Corrija o servico (NSSM/uvicorn) para --host 127.0.0.1 e reinicie." "Red"
+        }
+    }
 }
 Write-Log ""
 
 # -------------------------------------------------------
-# PASSO 3: Criar/Atualizar regra de Firewall
+# PASSO 3: Firewall - portas do proxy (80 e 443)
 # -------------------------------------------------------
-Write-Log "--- [3/5] CONFIGURANDO FIREWALL ---" "Yellow"
+Write-Log "--- [3/5] CONFIGURANDO FIREWALL ($($PORTAS_PROXY -join ', ')) ---" "Yellow"
 
 $regra_existente = Get-NetFirewallRule -DisplayName $NOME_REGRA -ErrorAction SilentlyContinue
-
 if ($regra_existente) {
     Write-Log "  Regra existente encontrada. Removendo para recriar limpa..." "Magenta"
     Remove-NetFirewallRule -DisplayName $NOME_REGRA
@@ -80,74 +89,64 @@ if ($regra_existente) {
 try {
     New-NetFirewallRule `
         -DisplayName $NOME_REGRA `
-        -Description "Portal FastAPI de monitoramento de certificados digitais" `
+        -Description "Caddy (TLS) na frente dos portais Analise CertiDigital e Hardlyze" `
         -Direction Inbound `
         -Protocol TCP `
-        -LocalPort $PORTA `
+        -LocalPort $PORTAS_PROXY `
         -Action Allow `
-        -Profile Any `
+        -Profile Domain,Private `
         -Enabled True | Out-Null
 
-    Write-Log "  OK - Regra de firewall criada com sucesso!" "Green"
+    Write-Log "  OK - Regra de firewall criada!" "Green"
     Write-Log "  Nome   : $NOME_REGRA"
-    Write-Log "  Porta  : $PORTA/TCP"
-    Write-Log "  Perfis : Dominio, Privado, Publico"
-    Write-Log "  Acao   : Permitir"
+    Write-Log "  Portas : $($PORTAS_PROXY -join ', ')/TCP"
+    Write-Log "  Perfis : Dominio, Privado (a rede e privada + VPN; nada vai para a internet)"
 } catch {
     Write-Log "  ERRO ao criar regra: $_" "Red"
 }
+
+# -------------------------------------------------------
+# PASSO 4: Fechar a porta da aplicacao, se algum dia foi aberta
+# -------------------------------------------------------
+Write-Log "--- [4/5] REGRA ANTIGA DA PORTA $PORTA_APP ---" "Yellow"
+$antiga = Get-NetFirewallRule -DisplayName $NOME_REGRA_ANTIGA -ErrorAction SilentlyContinue
+if ($antiga) {
+    Remove-NetFirewallRule -DisplayName $NOME_REGRA_ANTIGA
+    Write-Log "  Removida a regra '$NOME_REGRA_ANTIGA' que abria a $PORTA_APP para a rede." "Magenta"
+} else {
+    Write-Log "  OK - nenhuma regra abrindo a $PORTA_APP para fora." "Green"
+}
 Write-Log ""
 
 # -------------------------------------------------------
-# PASSO 4: Verificar se Python esta instalado
+# PASSO 5: Python e resposta local
 # -------------------------------------------------------
-Write-Log "--- [4/5] VERIFICANDO PYTHON ---" "Yellow"
+Write-Log "--- [5/5] PYTHON E RESPOSTA LOCAL ---" "Yellow"
 
 $python = Get-Command python -ErrorAction SilentlyContinue
 if ($python) {
-    $versao = python --version 2>&1
+    $versao = & python --version
     Write-Log "  OK - Python encontrado: $versao" "Green"
-    Write-Log "  Caminho: $($python.Source)"
 } else {
     Write-Log "  ATENCAO: Python NAO encontrado no PATH!" "Red"
-    Write-Log "  Baixe em: https://www.python.org/downloads/ (marcar 'Add to PATH')"
 }
-Write-Log ""
-
-# -------------------------------------------------------
-# PASSO 5: Teste de conectividade local
-# -------------------------------------------------------
-Write-Log "--- [5/5] TESTE RAPIDO DE CONECTIVIDADE LOCAL ---" "Yellow"
 
 $tcp = New-Object System.Net.Sockets.TcpClient
 try {
-    $tcp.Connect("127.0.0.1", $PORTA)
-    Write-Log "  OK - Porta $PORTA respondendo localmente (servico ja esta rodando!)" "Green"
+    $tcp.Connect("127.0.0.1", $PORTA_APP)
+    Write-Log "  OK - aplicacao respondendo em 127.0.0.1:$PORTA_APP" "Green"
     $tcp.Close()
 } catch {
-    Write-Log "  INFO: Porta $PORTA nao esta respondendo localmente" "Magenta"
-    Write-Log "  (Normal se o portal ainda nao foi iniciado)"
+    Write-Log "  INFO: 127.0.0.1:$PORTA_APP nao responde (normal se o portal ainda nao foi iniciado)" "Magenta"
 }
 Write-Log ""
 
-# -------------------------------------------------------
-# RESUMO FINAL
-# -------------------------------------------------------
 Write-Log "========================================" "Cyan"
-Write-Log "  RESUMO PARA CONFIGURAR O ROTEADOR    " "Cyan"
+Write-Log "  RESUMO" "Cyan"
 Write-Log "========================================" "Cyan"
-Write-Log ""
-Write-Log "  Para acesso EXTERNO, configure no roteador:" "White"
-Write-Log "  Protocolo   : TCP" "White"
-Write-Log "  Porta Ext.  : $PORTA" "White"
-Write-Log "  IP Interno  : $ip_local" "White"
-Write-Log "  Porta Int.  : $PORTA" "White"
-Write-Log ""
-Write-Log "  URL de acesso externo sera:" "White"
-Write-Log "  http://$ip_externo`:$PORTA" "Green"
-Write-Log ""
+Write-Log "  Acesso: https://certificado.analisegroup.cnt.br (via Caddy, 443)" "White"
+Write-Log "  A porta $PORTA_APP NAO deve ser encaminhada em roteador nenhum." "White"
 Write-Log "  Log salvo em: $LOG" "Cyan"
-Write-Log "========================================" "Cyan"
 
 Write-Host ""
 Write-Host "Pressione ENTER para fechar..." -ForegroundColor DarkGray

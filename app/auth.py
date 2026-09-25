@@ -8,7 +8,62 @@ from pydantic import BaseModel
 
 # Configurações de segurança
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
+
+# Validade da sessão de pessoa. Eram 24 h fixas; o lote 9 da auditoria
+# (achado #23) baixou para 8 h — uma jornada — e deixou o número no ambiente
+# (`SESSAO_HORAS`, 1 a 24) para o operador decidir sem mexer no código. O
+# token do agente tem validade própria (`agent_devices.VALIDADE_TOKEN_MIN`).
+SESSAO_HORAS_PADRAO = 8
+
+
+def _horas_de_sessao() -> int:
+    raw = (os.getenv("SESSAO_HORAS") or "").strip()
+    try:
+        return max(1, min(24, int(raw))) if raw else SESSAO_HORAS_PADRAO
+    except ValueError:
+        return SESSAO_HORAS_PADRAO
+
+
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * _horas_de_sessao()
+
+# ── Política de senha (achado #25) ────────────────────────────────────────
+# Uma regra, num lugar: até o lote 9 o mínimo (6) estava copiado em quatro
+# rotas e um literal numa quinta, e nada limitava o tamanho — o bcrypt trunca
+# em 72 bytes em silêncio, então o 73º caractere em diante não contava.
+SENHA_MINIMA = 12
+SENHA_MAX_BYTES = 72
+# Lista curta, exata (minúsculas): o que se vê em todo vazamento e passa no
+# comprimento. Não é dicionário — a proteção principal é o teto de tentativas
+# do login; isto só barra o óbvio no cadastro.
+SENHAS_PROIBIDAS = frozenset({
+    "123456789012", "1234567890123", "12345678901234", "password1234", "password12345",
+    "senha1234567", "senha12345678", "qwertyuiop12", "qwertyuiopas", "administrador",
+    "administrator", "certificado1", "certificados", "analisegroup", "analise2020!",
+    "abcdefghijkl", "aaaaaaaaaaaa", "111111111111", "000000000000", "mudar@123456",
+})
+
+
+def validar_senha(senha: str, email: Optional[str] = None) -> Optional[str]:
+    """Devolve o motivo da recusa, ou None quando a senha serve.
+
+    Texto pronto para a pessoa: quem chama só decide se levanta 422 ou anota
+    numa lista de erros (importação).
+    """
+    s = (senha or "").strip()
+    if len(s) < SENHA_MINIMA:
+        return f"A senha precisa ter no mínimo {SENHA_MINIMA} caracteres."
+    if len(s.encode("utf-8")) > SENHA_MAX_BYTES:
+        return f"A senha pode ter no máximo {SENHA_MAX_BYTES} bytes (o que passa disso seria ignorado)."
+    baixa = s.lower()
+    if len(set(baixa)) == 1:
+        return "A senha não pode ser um único caractere repetido."
+    if baixa in SENHAS_PROIBIDAS or baixa.isdigit() and baixa in "01234567890123456789":
+        return "Essa senha é comum demais; escolha outra."
+    if email:
+        local = (email or "").strip().lower().split("@")[0]
+        if baixa == (email or "").strip().lower() or (len(local) >= 4 and local in baixa):
+            return "A senha não pode conter o seu e-mail."
+    return None
 
 # Papel e estado da conta são coisas separadas desde 15/08/2026. Antes,
 # desativar alguém gravava role='disabled' e apagava o papel — reativar um
@@ -65,6 +120,12 @@ class TokenData(BaseModel):
     # autenticada e descartada — e todo `machine_id` que decidia fila,
     # custódia e cofre vinha do chamador (achados #3, #4, #21, #30).
     machine_id: Optional[str] = None
+    # Versão da sessão gravada no token (`sv`), comparada com
+    # `users.sessao_versao` por `main._sessao_do_token`: "Sair" incrementa a
+    # coluna e todo token da versão anterior morre (achado #23). None em token
+    # anterior ao lote 9 — vale como 0, que é o DEFAULT da coluna, para o
+    # deploy não deslogar ninguém.
+    sessao_versao: Optional[int] = None
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -129,6 +190,10 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         emitido = (
             datetime.fromtimestamp(int(bruto), tz=timezone.utc) if bruto else None
         )
-        return TokenData(email=email, role=role, emitido_em=emitido)
+        sv = payload.get("sv")
+        return TokenData(
+            email=email, role=role, emitido_em=emitido,
+            sessao_versao=int(sv) if sv is not None else None,
+        )
     except (JWTError, RuntimeError, TypeError, ValueError, OSError, OverflowError):
         return None

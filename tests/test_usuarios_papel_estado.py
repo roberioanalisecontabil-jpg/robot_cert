@@ -94,7 +94,7 @@ class _FakeBanco:
         return _Query(self.tabelas.setdefault(nome, []))
 
 
-SENHA = "segredo123"
+SENHA = "segredo-12345"  # 13 caracteres: a politica do lote 9 exige 12 (SECURITY_AUDIT #25)
 
 
 def _users() -> List[Dict[str, Any]]:
@@ -540,4 +540,5 @@ def test_senha_curta_e_recusada_ao_criar(client: TestClient, banco: _FakeBanco) 
         headers=_admin_headers(),
     )
     assert r.status_code == 422, r.text
-    assert "6" in r.json()["detail"]
+    # Lote 9 (#25): o mínimo saiu de 6 para `auth.SENHA_MINIMA`, num lugar só.
+    assert str(auth.SENHA_MINIMA) in r.json()["detail"]
