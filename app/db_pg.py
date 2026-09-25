@@ -293,7 +293,7 @@ class Query:
                 partes.append(sql.SQL("{} IS " + ("NULL" if val.lower() == "null" else "NOT NULL")).format(_ident(col)))
             elif op in _OPS:
                 partes.append(sql.SQL("{} " + _OPS[op] + " %s").format(_ident(col)))
-                params.append(val)
+                params.append(_desaspear(val))
             else:
                 raise DbError(f"operador não suportado em or_: {op!r}", "22023")
         if partes:
@@ -465,23 +465,64 @@ class Query:
 
 
 def _dividir_or(texto: str) -> List[str]:
-    """Divide `a.eq.1,b.ilike.%x,y%` respeitando parênteses (não usados, mas baratos)."""
+    """Divide `a.eq.1,b.ilike."%x,y%"` respeitando aspas e parênteses.
+
+    Valor entre aspas duplas (a sintaxe do PostgREST) pode conter vírgula e
+    ponto: sem isso uma busca com vírgula acrescentava cláusulas à DSL
+    (SECURITY_AUDIT #34). `\\"` dentro das aspas é uma aspa literal.
+    """
     partes: List[str] = []
     atual = []
     nivel = 0
-    for ch in texto:
-        if ch == "(":
+    em_aspas = False
+    i = 0
+    while i < len(texto):
+        ch = texto[i]
+        if em_aspas:
+            atual.append(ch)
+            if ch == "\\" and i + 1 < len(texto):
+                atual.append(texto[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                em_aspas = False
+            i += 1
+            continue
+        if ch == '"':
+            em_aspas = True
+            atual.append(ch)
+        elif ch == "(":
             nivel += 1
+            atual.append(ch)
         elif ch == ")":
             nivel -= 1
-        if ch == "," and nivel == 0:
+            atual.append(ch)
+        elif ch == "," and nivel == 0:
             partes.append("".join(atual).strip())
             atual = []
         else:
             atual.append(ch)
+        i += 1
     if atual:
         partes.append("".join(atual).strip())
     return [p for p in partes if p]
+
+
+def _desaspear(valor: str) -> str:
+    """`"%a,b%"` → `%a,b%`, desfazendo `\\"` e `\\\\`. Sem aspas, volta igual."""
+    if len(valor) >= 2 and valor[0] == '"' and valor[-1] == '"':
+        miolo = valor[1:-1]
+        saida = []
+        i = 0
+        while i < len(miolo):
+            if miolo[i] == "\\" and i + 1 < len(miolo):
+                saida.append(miolo[i + 1])
+                i += 2
+            else:
+                saida.append(miolo[i])
+                i += 1
+        return "".join(saida)
+    return valor
 
 
 # ── Cliente ───────────────────────────────────────────────────────────────

@@ -1,9 +1,10 @@
+import ipaddress
 import os
 import smtplib
 import socket
 import ssl
 import logging
-from typing import Optional
+from typing import List, Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from cryptography.fernet import Fernet
@@ -111,18 +112,25 @@ class ErroAutenticacaoSmtp(ErroSmtp):
 
 _HOSTS_LOCAIS = ("localhost", "127.0.0.1", "::1")
 
+# Portas em que um servidor SMTP atende. Qualquer outra é outra coisa —
+# banco, RDP, SSH — e a tela de SMTP não é o lugar para falar com ela (#33).
+PORTAS_SMTP = frozenset({25, 465, 587, 2525})
+
 
 def _host_e_local(host: str) -> bool:
     return (host or "").strip().lower() in _HOSTS_LOCAIS
 
 
-def validate_smtp_config(use_tls: bool, use_ssl: bool, host: Optional[str] = None) -> None:
+def validate_smtp_config(
+    use_tls: bool, use_ssl: bool, host: Optional[str] = None, port: Optional[int] = None
+) -> None:
     """Garante uma escolha de segurança coerente.
 
     STARTTLS e SSL juntos não existem. E "nenhuma" só existe para servidor
     LOCAL (achado #15): com um relay na própria máquina o tráfego não sai
     dela; com qualquer outro host, usuário e senha iriam em claro pela rede.
     `host=None` mantém a checagem antiga, para quem só quer os dois booleanos.
+    `port`, quando informada, tem de ser de SMTP (#33).
     """
     if use_tls and use_ssl:
         raise ValueError("STARTTLS (TLS) e SSL não podem estar ativos simultaneamente.")
@@ -131,6 +139,59 @@ def validate_smtp_config(use_tls: bool, use_ssl: bool, host: Optional[str] = Non
             "Sem TLS a senha do SMTP viajaria em claro. Escolha STARTTLS ou SSL/TLS; "
             "\"Nenhuma\" só vale para um servidor na própria máquina (localhost)."
         )
+    if port is not None and int(port) not in PORTAS_SMTP:
+        raise ValueError(f"Porta {port} não é de SMTP. Use 25, 465, 587 ou 2525.")
+
+
+def resolver_enderecos(host: str) -> List[str]:
+    """Os IPs para os quais o nome aponta. Separado para o teste substituir."""
+    infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    return sorted({str(sa[0]) for *_, sa in infos})
+
+
+def exigir_destino_publico(host: str, port: int) -> None:
+    """Recusa, ANTES de conectar, um destino que não é um servidor SMTP de
+    verdade (achado #33).
+
+    `PUT /api/settings` + `POST /smtp/test` era um primitivo de conexão TCP a
+    partir do servidor, com o erro devolvido: metadados da nuvem em
+    169.254.169.254, `127.0.0.1:<porta>`, a rede interna toda. Porta fora da
+    lista de SMTP, endereço link-local, multicast, reservado ou loopback
+    disfarçado são recusados sempre; rede privada só com o host em
+    `config.SMTP_HOSTS_PERMITIDOS`; `localhost` passa (é o "servidor local"
+    do lote 1). As mensagens não repetem o host nem o IP de propósito.
+    """
+    from app import config as _config
+
+    if int(port) not in PORTAS_SMTP:
+        raise ValueError(f"Porta {port} não é de SMTP. Use 25, 465, 587 ou 2525.")
+    h = (host or "").strip().lower()
+    if not h:
+        raise ValueError("Servidor SMTP não configurado.")
+    if _host_e_local(h):
+        return
+    try:
+        ips = resolver_enderecos(h)
+    except (socket.gaierror, OSError, UnicodeError) as e:
+        logger.warning("Servidor SMTP não resolve: %s", e)
+        raise ValueError("Não foi possível resolver o nome do servidor SMTP.") from None
+    if not ips:
+        raise ValueError("Não foi possível resolver o nome do servidor SMTP.")
+    permitidos = {x.lower() for x in (getattr(_config, "SMTP_HOSTS_PERMITIDOS", None) or [])}
+    for texto in ips:
+        try:
+            ip = ipaddress.ip_address(texto.split("%")[0])
+        except ValueError:
+            raise ValueError("Não foi possível resolver o nome do servidor SMTP.") from None
+        if ip.version == 6 and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            raise ValueError("Servidor SMTP aponta para endereço interno ou reservado — recusado.")
+        if ip.is_private and h not in permitidos:
+            raise ValueError(
+                "Servidor SMTP em rede interna não é permitido. Se for um relay da "
+                "empresa, inclua-o em SMTP_HOSTS_PERMITIDOS no servidor."
+            )
 
 
 def _contexto_tls() -> ssl.SSLContext:
@@ -160,6 +221,7 @@ def send_smtp_email(
     Garante o mascaramento de logs e prevenção de StartTLS/SSL concorrentes.
     """
     validate_smtp_config(use_tls, use_ssl, host=host)
+    exigir_destino_publico(host, port)
 
     decrypted_password = decrypt_password(password_enc)
 

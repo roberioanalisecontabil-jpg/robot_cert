@@ -80,6 +80,28 @@ def _env_int(name: str, default: int, lo: int, hi: int) -> int:
 # do ANALISESRV. Zero desliga o cabeçalho e usa o socket (dev, testes).
 NUM_PROXIES_CONFIAVEIS = _env_int("NUM_PROXIES_CONFIAVEIS", default=1, lo=0, hi=5)
 
+# Raízes em que as pastas de certificados podem estar (separadas por `;` no
+# Windows e `:` no Linux — `os.pathsep`). Vazio = qualquer pasta local, como
+# sempre foi (janela do lote 6, com aviso em `verificar_ambiente`); UNC e
+# caminhos que resolvem para fora da raiz são recusados sempre que a lista
+# existe. É o que impede `source_folder=C:\` ou `\\atacante\share` vindos
+# da tela de Configuração (SECURITY_AUDIT #16).
+PASTAS_PERMITIDAS = [
+    Path(p.strip()).resolve()
+    for p in (os.getenv("PASTAS_PERMITIDAS") or "").split(os.pathsep)
+    if p.strip()
+]
+
+# Servidores SMTP em rede PRIVADA que o portal pode usar (nomes ou IPs,
+# separados por vírgula). Endereço de rede interna só é aceito se estiver
+# aqui; link-local, multicast e reservado nunca; localhost sempre (é o
+# "servidor local" do lote 1). Fecha o SSRF pela tela de SMTP (#33).
+SMTP_HOSTS_PERMITIDOS = [
+    h.strip().lower()
+    for h in (os.getenv("SMTP_HOSTS_PERMITIDOS") or "").split(",")
+    if h.strip()
+]
+
 # Nomes de host que este portal atende (sem porta, separados por vírgula).
 # Vazio = aceita qualquer Host, como sempre aceitou — é a janela de
 # compatibilidade, com aviso em `verificar_ambiente`. Preenchido, um Host fora
@@ -267,6 +289,13 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
         (fatais if producao else avisos).append(
             "API_KEY não definida — todas as rotas /api/* aceitam identidade "
             "anônima com papel agent (modo aberto)."
+        )
+
+    if producao and not PASTAS_PERMITIDAS:
+        avisos.append(
+            "PASTAS_PERMITIDAS não definida — a tela de Configuração aceita qualquer "
+            "pasta local do servidor como origem/destino dos certificados. Defina as "
+            "raízes (ex.: F:\\07. CERTIFICADOS)."
         )
 
     if producao and not HOSTS_PERMITIDOS:

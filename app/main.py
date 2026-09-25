@@ -15,6 +15,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote
 
@@ -39,7 +40,9 @@ from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente, p
 from app.notification_service import build_notifications_payload, get_active_alerts
 from app.settings_state import (
     GravacaoNaoPersistida,
+    PastaRecusada,
     PortalSettings,
+    validar_pasta,
     carregar_notificacoes_lidas,
     marcar_notificacoes_lidas,
     load_preferencia_alerta,
@@ -2459,8 +2462,19 @@ def put_settings(body: SettingsBody) -> dict:
         validate_smtp_config(
             body.smtp_use_tls, body.smtp_use_ssl,
             host=(body.smtp_host or old.smtp_host),
+            port=body.smtp_port,
         )
     except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # As pastas passam por `validar_pasta` (achado #16): UNC nunca, e fora de
+    # PASTAS_PERMITIDAS nunca quando a lista existe. O mesmo filtro roda na
+    # leitura (`effective_source`), para um valor antigo no banco não abrir o
+    # que a tela recusaria.
+    try:
+        pasta_origem = validar_pasta(body.source_folder, "Pasta de origem")
+        pasta_vencidos = validar_pasta(body.expired_folder, "Pasta de vencidos")
+    except PastaRecusada as e:
         raise HTTPException(status_code=422, detail=str(e))
 
     ttl = int(
@@ -2533,8 +2547,8 @@ def put_settings(body: SettingsBody) -> dict:
             raise HTTPException(status_code=500, detail="Erro ao criptografar senha SMTP")
             
     s = PortalSettings(
-        source_folder=body.source_folder.strip(),
-        expired_folder=body.expired_folder.strip(),
+        source_folder=pasta_origem,
+        expired_folder=pasta_vencidos,
         machine_id=body.machine_id.strip() or "default",
         smtp_host=body.smtp_host.strip(),
         smtp_port=body.smtp_port,
@@ -3626,6 +3640,19 @@ def _escape_ilike_pattern(val: str) -> str:
     return val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _valor_or(val: str) -> str:
+    """Valor da DSL `or_` entre aspas: vírgula e ponto do usuário deixam de
+    ser sintaxe (SECURITY_AUDIT #34). `db_pg._desaspear` desfaz."""
+    return '"' + val.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _filtro_or_da_busca(busca: str) -> str:
+    """As três cláusulas da busca do histórico, com o texto do usuário como
+    UM valor cada, sem chance de virar cláusula nova."""
+    q = _valor_or("%" + _escape_ilike_pattern(busca) + "%")
+    return f"nome.ilike.{q},nome_publico.ilike.{q},documento.ilike.{q}"
+
+
 def _parse_iso_utc(iso_value: Optional[str]) -> datetime:
     if not iso_value:
         return datetime.min.replace(tzinfo=timezone.utc)
@@ -4502,9 +4529,7 @@ def historico_certificados(
     def _apply_cert_history_or_busca(qb: Any) -> Any:
         if not busca_txt:
             return qb
-        pat = "%" + _escape_ilike_pattern(busca_txt) + "%"
-        filt = f"nome.ilike.{pat},nome_publico.ilike.{pat},documento.ilike.{pat}"
-        return qb.or_(filt)
+        return qb.or_(_filtro_or_da_busca(busca_txt))
 
     sb = _banco()
     if sb:
@@ -4844,6 +4869,16 @@ def ingest(
 # Move arquivo de certificado no sistema de arquivos do servidor. Estava sob
 # `require_auth` — qualquer autenticado. Nenhum template ou script do portal
 # chama esta rota; ela e acionada fora da UI, e quem a aciona e operacao.
+def _pasta_relativa(pasta: Path, raiz: Path) -> str:
+    """`F:/certs/clientes` sob a raiz `F:/certs` → `clientes`; a própria raiz →
+    ""; fora da raiz → só o último nome. Nunca o caminho absoluto (#53)."""
+    try:
+        rel = Path(pasta).resolve().relative_to(Path(raiz).resolve())
+    except ValueError:
+        return Path(pasta).name
+    return "" if str(rel) == "." else rel.as_posix()
+
+
 @app.post("/api/mover-vencidos", dependencies=[Depends(require_admin)])
 def mover_vencidos() -> JSONResponse:
     """
@@ -4861,13 +4896,14 @@ def mover_vencidos() -> JSONResponse:
     for c in itens:
         if c.status != CertStatus.EXPIRED:
             continue
-        # Nome público e pasta, nunca o caminho completo: o nome do arquivo
-        # carrega a senha do PFX (SECURITY_AUDIT #2).
+        # Nome público e pasta RELATIVA à raiz configurada, nunca o caminho
+        # completo: o nome do arquivo carrega a senha do PFX (#2) e o caminho
+        # absoluto desenha o disco do servidor (#53).
         rotulo = nome_publico.nome_publico_de_arquivo(c.file_name) or "(sem nome)"
         try:
             novo = move_to_expired(c, exp)
-            movidos.append({"arquivo": rotulo, "de": nome_publico.pasta_de(str(c.path)),
-                            "para": nome_publico.pasta_de(str(novo))})
+            movidos.append({"arquivo": rotulo, "de": _pasta_relativa(c.path.parent, src),
+                            "para": _pasta_relativa(Path(novo).parent, exp)})
         except OSError as e:
             logger.error("Falha ao mover %s: %s", rotulo, e)
             erros.append({"arquivo": rotulo, "erro": "Não foi possível mover o arquivo. Veja o log do servidor."})
