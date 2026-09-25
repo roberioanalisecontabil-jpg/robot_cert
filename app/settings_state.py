@@ -330,18 +330,25 @@ def upsert_cert_history(
 ) -> None:
     """
     Mantém a tabela materializada cert_history atualizada.
-    Para cada item do scan faz UPSERT usando file_name como chave,
-    sobrescrevendo apenas se o scanned_at for mais recente que o registrado.
+
+    Chave: `arquivo_chave` (nome público + fingerprint), desde o lote 3 da
+    auditoria (25/09/2026). Antes era `file_name` — o nome do arquivo, que
+    carrega a senha do PFX e ficava em claro como chave primária. O item chega
+    já sanitizado do `/api/ingest`; se vier bruto (chamador antigo), sanitiza
+    aqui, para o nome não entrar nesta tabela por nenhum caminho.
     Silenciosamente ignorado se o banco não estiver configurado.
     """
+    from app.nome_publico import sanitizar_item
+
     client = _banco()
     if not client or not items:
         return
 
     rows = []
-    for it in items:
-        file_name = str(it.get("file_name") or "").strip()
-        if not file_name:
+    for bruto in items:
+        it = sanitizar_item(bruto)
+        nome_pub = str(it.get("nome_publico") or "").strip()
+        if not nome_pub:
             continue
 
         # Tenta parsear o vencimento para um valor compatível com timestamptz
@@ -358,9 +365,10 @@ def upsert_cert_history(
                 vencimento = None
 
         rows.append({
-            "file_name":              file_name,
+            "arquivo_chave":          it["arquivo_chave"],
+            "nome_publico":           nome_pub,
             "machine_id":             machine_id,
-            "nome":                   it.get("nome") or it.get("display_name") or file_name,
+            "nome":                   it.get("nome") or it.get("display_name") or nome_pub,
             "documento":              it.get("documento_formatado") or it.get("documento_numero"),
             "documento_numero":       it.get("documento_numero"),
             "status_ultimo":          it.get("status"),
@@ -379,7 +387,7 @@ def upsert_cert_history(
         try:
             client.table("cert_history").upsert(
                 batch,
-                on_conflict="file_name",
+                on_conflict="arquivo_chave",
             ).execute()
         except Exception:  # noqa: BLE001
             logger.exception(

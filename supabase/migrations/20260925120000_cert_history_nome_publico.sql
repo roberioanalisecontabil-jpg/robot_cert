@@ -1,0 +1,23 @@
+-- Lote 3 da auditoria (SECURITY_AUDIT #2): a senha do PFX sai do banco.
+--
+-- NÃO rode este arquivo direto: a transformação das linhas exige a regra de
+-- nome público do app (app/nome_publico.py) e a leitura dos snapshots, então
+-- ela é feita por scripts/migracao_lote3_nome_publico.py, que também aplica o
+-- DDL abaixo e guarda cópias para a volta. Este .sql existe para o esquema
+-- final ficar registrado junto das outras migrations.
+--
+-- Antes: cert_history (file_name text PRIMARY KEY, ...)
+--        — o nome do arquivo, com a senha do PFX, como chave primária.
+-- Depois:
+--   alter table public.cert_history add column arquivo_chave char(64), add column nome_publico text;
+--   -- (linhas reescritas pelo script: arquivo_chave = sha256(lower(nome_publico)|lower(fingerprint)))
+--   alter table public.cert_history drop constraint cert_history_pkey;
+--   alter table public.cert_history drop column file_name;
+--   alter table public.cert_history alter column arquivo_chave set not null, alter column nome_publico set not null;
+--   alter table public.cert_history add primary key (arquivo_chave);
+--   create index if not exists cert_history_nome_publico_idx on public.cert_history (nome_publico);
+--   -- cert_snapshots.items[]: cada item perde file_name/path e ganha nome_publico/pasta/arquivo_chave.
+--
+-- Volta: scripts/migracao_lote3_nome_publico.py --volta (restaura das cópias
+-- cert_history_bkp_lote3 e cert_snapshots_bkp_lote3).
+select 1;

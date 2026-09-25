@@ -57,8 +57,9 @@ SENHA = "senha-de-teste-123"
 # ──────────────────────────────────────────────────────────────────────────
 
 class _Res:
-    def __init__(self, data: List[Dict[str, Any]]) -> None:
+    def __init__(self, data: List[Dict[str, Any]], count: Optional[int] = None) -> None:
         self.data = data
+        self.count = count
 
 
 class _Query:
@@ -66,16 +67,27 @@ class _Query:
         self._l, self._n, self._b = linhas, nome, banco
         self._f: List = []
         self._op, self._p = "select", None
+        self._head = False
+        self._range: Optional[tuple] = None
+        self._on_conflict: Optional[List[str]] = None
 
-    def select(self, *_c: str) -> "_Query":
+    def select(self, *_c: str, **kw: Any) -> "_Query":
+        self._head = bool(kw.get("head"))
         return self
 
     def insert(self, p: Any) -> "_Query":
         self._op, self._p = "insert", p
         return self
 
-    def upsert(self, p: Any, **_k: Any) -> "_Query":
+    def upsert(self, p: Any, on_conflict: Optional[str] = None, **_k: Any) -> "_Query":
+        """`on_conflict` honrado: a linha com as mesmas colunas é substituída,
+        como no Postgres — sem isso um upsert repetido parecia duplicar."""
         self._op, self._p = "insert", p
+        self._on_conflict = [c.strip() for c in on_conflict.split(",")] if on_conflict else None
+        return self
+
+    def range(self, a: int, b: int) -> "_Query":
+        self._range = (a, b)
         return self
 
     def update(self, p: Dict[str, Any]) -> "_Query":
@@ -145,6 +157,14 @@ class _Query:
             saida = []
             for p in novas:
                 linha = dict(p)
+                if self._on_conflict:
+                    existente = next((r for r in self._l
+                                      if all(r.get(c) == linha.get(c) for c in self._on_conflict)), None)
+                    if existente is not None:
+                        existente.update(linha)
+                        self._b.gravados.append((self._n, dict(existente)))
+                        saida.append(dict(existente))
+                        continue
                 linha.setdefault("id", f"{self._n}-{len(self._l) + 1}")
                 self._l.append(linha)
                 self._b.gravados.append((self._n, dict(linha)))
@@ -162,7 +182,12 @@ class _Query:
             fora = [r for r in self._l if self._casa(r)]
             self._l[:] = [r for r in self._l if not self._casa(r)]
             return _Res(fora)
-        return _Res([dict(r) for r in self._l if self._casa(r)])
+        rows = [dict(r) for r in self._l if self._casa(r)]
+        total = len(rows)
+        if self._range:
+            a, b = self._range
+            rows = rows[a:b + 1]
+        return _Res([] if self._head else rows, count=total)
 
 
 class _Fake:

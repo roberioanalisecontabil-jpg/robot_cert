@@ -156,7 +156,9 @@ def test_exportacao_tambem_sai_ordenada(client: TestClient, inventario) -> None:
     ({"nome": "ACME"}, (0, "acme")),
     ({"nome": "Ágata"}, (0, "agata")),
     ({"nome": "", "display_name": "Fallback"}, (0, "fallback")),
-    ({"nome": "", "display_name": "", "file_name": "arquivo.pfx"}, (0, "arquivo.pfx")),
+    # `nome_publico`, e não mais `file_name`: o nome do arquivo carrega a senha
+    # e deixou de existir nos itens (auditoria #2, lote 3).
+    ({"nome": "", "display_name": "", "nome_publico": "arquivo"}, (0, "arquivo")),
     ({"nome": "   "}, (1, "")),
     ({}, (1, "")),
 ])
