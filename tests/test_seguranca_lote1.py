@@ -152,6 +152,10 @@ class _Query:
         return True
 
     def execute(self) -> _Res:
+        if self._b.quebrado.get(self._n):
+            # Uma tabela "fora do ar": é como se testa que a barreira falha
+            # FECHADA (503) e não aberta (lista vazia = "pode tudo").
+            raise RuntimeError(f"banco fora do ar ao ler {self._n}")
         if self._op == "insert":
             novas = self._p if isinstance(self._p, list) else [self._p]
             saida = []
@@ -194,9 +198,22 @@ class _Fake:
     def __init__(self, tabelas: Dict[str, List[Dict[str, Any]]]) -> None:
         self.tabelas = tabelas
         self.gravados: List = []
+        self.quebrado: Dict[str, bool] = {}
 
     def table(self, nome: str) -> _Query:
         return _Query(self.tabelas.setdefault(nome, []), nome, self)
+
+
+_HASHES: Dict[str, str] = {}
+
+
+def _hash_de(senha: str) -> str:
+    """bcrypt custo 12 leva ~0,6 s; quatro usuários por teste em quatro
+    arquivos de lote somavam minutos de suíte. O hash de uma mesma senha é
+    reaproveitado — o que se testa é a regra, não o custo do bcrypt."""
+    if senha not in _HASHES:
+        _HASHES[senha] = auth.get_password_hash(senha)
+    return _HASHES[senha]
 
 
 def _usuario(uid: str, email: str, papel: str, **extra: Any) -> Dict[str, Any]:
@@ -204,7 +221,7 @@ def _usuario(uid: str, email: str, papel: str, **extra: Any) -> Dict[str, Any]:
         "id": uid, "email": email, "full_name": email.split("@")[0].title(),
         "role": papel, "ativo": True, "deve_trocar_senha": False,
         "senha_alterada_em": None, "departamento_id": None,
-        "password_hash": auth.get_password_hash(SENHA),
+        "password_hash": _hash_de(SENHA),
     }
     linha.update(extra)
     return linha

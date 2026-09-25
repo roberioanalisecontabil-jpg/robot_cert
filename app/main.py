@@ -15,7 +15,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile, BackgroundTasks
@@ -3426,6 +3426,9 @@ def listar_certificados(
         # precisa do titular e do documento, não da árvore de diretórios.
         if (token.role or "").strip().lower() != "admin":
             base["itens"] = [nome_publico.sem_pasta(it) for it in base["itens"]]
+        # Recorte pela carteira ANTES de resumo, paginação e exportação (#5):
+        # tudo o que sai desta rota nasce desta lista.
+        base["itens"] = _recortar_pela_carteira(base["itens"], _documentos_ao_alcance(token))
         # Caixa alta vira título no servidor (app/nomes.py), num lugar só,
         # para toda tela que lista o inventário (Início, Custódia).
         for it in base["itens"]:
@@ -3762,6 +3765,42 @@ def _status_prioridade(status: str) -> int:
     return 0
 
 
+def _documentos_ao_alcance(token: auth.TokenData) -> Optional[Set[str]]:
+    """O que esta sessão pode LER, em documentos. `None` = tudo.
+
+    Um ponto só para todas as leituras do acervo (achados #5, #32): antes o
+    portal impedia INSTALAR fora da carteira e deixava LER a base inteira de
+    clientes. Sem banco configurado (modo local de arquivos) não há
+    diretório de usuários nem carteira — e nem login que emita sessão — então
+    não há por onde recortar; a leitura segue como sempre seguiu.
+    """
+    from app.settings_state import _banco
+
+    papel = (token.role or "").strip().lower()
+    if papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL or papel == "agent":
+        return None
+    if not _banco():
+        return None
+    try:
+        return cert_installer.documentos_ao_alcance(_user_id_da_sessao(token) or "", papel)
+    except (cert_installer.CarteiraIndisponivel, cert_installer.AlcanceIndisponivel) as e:
+        logger.warning("Alcance de leitura indisponível para %s: %s", token.email, e)
+        raise HTTPException(status_code=503, detail="Não foi possível verificar sua carteira. Tente de novo.")
+
+
+def _recortar_pela_carteira(itens: List[dict], alcance: Optional[Set[str]]) -> List[dict]:
+    """Só os itens cujo documento está no alcance. Item sem documento não é
+    de ninguém e fica de fora para quem não tem alcance total."""
+    if alcance is None:
+        return itens
+    saida = []
+    for it in itens:
+        doc = cert_installer.so_digitos(it.get("documento_numero") or it.get("documento_digitos") or it.get("documento"))
+        if doc and doc in alcance:
+            saida.append(it)
+    return saida
+
+
 def _lista_base_docs_historico() -> List[dict]:
     """Um item por DOCUMENTO, escolhendo o certificado que responde a pergunta
     "este cliente esta coberto?".
@@ -3881,8 +3920,10 @@ class ColaboradorSelecaoBody(BaseModel):
 
 
 @app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_modulo("acompanhamento"))])
-def colaborador_opcoes_certificados(_token: auth.TokenData = Depends(require_auth)) -> dict:
-    itens = _lista_base_docs_historico()
+def colaborador_opcoes_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
+    # O universo de clientes ia para todo mundo com `acompanhamento: ler`
+    # (padrão de user e gestor) — o mesmo furo do #5 por outro caminho.
+    itens = _recortar_pela_carteira(_lista_base_docs_historico(), _documentos_ao_alcance(token))
     now = datetime.now(timezone.utc)
     out = []
     for it in itens:
@@ -4198,6 +4239,23 @@ def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
     return out
 
 
+_RE_DATA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _data_da_query(valor: Optional[str], nome: str, sufixo: str) -> Optional[datetime]:
+    """YYYY-MM-DD de verdade, ou 422. Vazio é "sem filtro"."""
+    if not valor:
+        return None
+    v = valor.strip()
+    if not _RE_DATA.match(v):
+        raise HTTPException(status_code=422, detail=f"{nome} precisa estar no formato AAAA-MM-DD.")
+    try:
+        datetime.strptime(v, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{nome} não é uma data válida.")
+    return _parse_iso_utc(v + sufixo)
+
+
 def _vencidos_filtrar_busca(rows: List[dict], busca_raw: str) -> List[dict]:
     if not str(busca_raw or "").strip():
         return rows
@@ -4343,7 +4401,9 @@ def historico_certificados(
                 raise HTTPException(status_code=500, detail="Falha ao ler o histórico. Veja o log do servidor.") from e
 
         if _use_history_table and rows_non_paginated and not pagination:
-            itens = _normalize_rows(rows_non_paginated)
+            # A busca vale também aqui (achado #54): este é o caminho da
+            # exportação, e ele lia a tabela inteira ignorando o filtro.
+            itens = _historico_filtrar_busca(_normalize_rows(rows_non_paginated), busca_txt)
             return {
                 "itens": itens,
                 "total": len(itens),
@@ -4398,11 +4458,13 @@ def historico_certificados_http(
         max_length=200,
         description="Filtro parcial em nome, arquivo ou documento",
     ),
+    token: auth.TokenData = Depends(require_auth),
 ) -> dict:
     b = busca.strip() if busca else None
+    alcance = _documentos_ao_alcance(token)
     if todas_filtradas:
         raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b)
-        itens = list(raw.get("itens") or [])
+        itens = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
         lista_truncada = len(itens) > LISTAGEM_EXPORT_MAX
         return {
             "itens": itens[:LISTAGEM_EXPORT_MAX],
@@ -4413,12 +4475,21 @@ def historico_certificados_http(
         }
 
     off = (pagina - 1) * por_pagina
-    raw = historico_certificados(
-        limite_snapshots,
-        offset=off,
-        limit=por_pagina,
-        busca=b,
-    )
+    if alcance is not None:
+        # Com recorte, a página é cortada DEPOIS do recorte, aqui: paginar no
+        # banco e recortar depois daria páginas com buracos e um total que
+        # conta o que a pessoa não pode ver (#5).
+        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b)
+        recortados = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
+        raw = {**raw, "itens": recortados[off: off + por_pagina], "total": len(recortados),
+               "offset": off, "limit": por_pagina}
+    else:
+        raw = historico_certificados(
+            limite_snapshots,
+            offset=off,
+            limit=por_pagina,
+            busca=b,
+        )
     total = int(raw.get("total") or 0)
     total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1
     pagina_out = min(max(1, pagina), total_pags)
@@ -4443,13 +4514,18 @@ def vencidos_certificados(
     busca: Optional[str] = Query(None, max_length=200),
     limite_snapshots: int = Query(500, ge=1, le=2000, description="Quantidade máxima de snapshots lidos"),
     ordem: str = Query("desc", pattern="^(asc|desc)$", description="Ordem pelo vencimento: desc = mais recente primeiro"),
+    token: auth.TokenData = Depends(require_auth),
 ) -> dict:
+    # Data inválida é 422, não filtro ignorado (achado #54): `_parse_iso_utc`
+    # devolvia `datetime.min` para "abc" e a tela mostrava a lista inteira como
+    # se o filtro tivesse valido.
+    inicio_dt = _data_da_query(data_inicio, "data_inicio", "T00:00:00+00:00")
+    fim_dt = _data_da_query(data_fim, "data_fim", "T23:59:59+00:00")
+
     # Vencidos precisa de uma agregação tão ampla quanto a do histórico (fallback snapshots).
     lim_hist = max(limite_snapshots, config.HISTORICO_LIMITE_SNAPSHOTS)
     hist = historico_certificados(lim_hist, offset=None, limit=None, busca=None)
-    itens_hist = hist.get("itens", [])
-    inicio_dt = _parse_iso_utc(data_inicio + "T00:00:00+00:00") if data_inicio else None
-    fim_dt = _parse_iso_utc(data_fim + "T23:59:59+00:00") if data_fim else None
+    itens_hist = _recortar_pela_carteira(hist.get("itens", []), _documentos_ao_alcance(token))
     busca_txt = str(busca or "").strip() or None
 
     now_utc = datetime.now(timezone.utc)
@@ -6461,8 +6537,16 @@ def list_available_certificates(
     machine_id: Optional[str] = Query(None),
     token: auth.TokenData = Depends(require_modulo("instalador")),
 ):
-    """Lista certificados PFX disponíveis para instalação (sem dados cifrados)."""
+    """Lista certificados PFX disponíveis para instalação (sem dados cifrados).
+
+    Recortado pela carteira de quem pergunta (#32): a lista inteira do cofre
+    — titular, documento, subject e id de cada certificado — saía para quem
+    tivesse `instalador: ler`, concedível pela tela a qualquer papel.
+    """
     certs = cert_installer.list_available_pfx(machine_id=machine_id)
+    alcance = _documentos_ao_alcance(token)
+    if alcance is not None:
+        certs = [c for c in certs if cert_installer.so_digitos(c.documento) in alcance]
     return {
         "certificates": [
             {
@@ -6488,9 +6572,18 @@ def list_installer_logs(
     limit: int = Query(100, ge=1, le=500),
     token: auth.TokenData = Depends(require_modulo("instalador")),
 ):
-    """Lista logs de auditoria de instalação."""
-    logs = cert_installer.list_install_logs(limit=limit)
-    return {"logs": logs}
+    """Lista logs de auditoria de instalação.
+
+    Escopado (#31): quem não tem alcance total vê só os próprios eventos, e
+    sem `client_ip` — e-mail e IP dos colegas não são dado de operador.
+    """
+    if (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        return {"logs": cert_installer.list_install_logs(limit=limit)}
+    uid = _user_id_da_sessao(token)
+    if not uid:
+        return {"logs": []}
+    logs = cert_installer.list_install_logs(limit=limit, user_id=uid)
+    return {"logs": [{k: v for k, v in l.items() if k != "client_ip"} for l in logs]}
 
 
 @app.get("/api/cert-installer/trilha", dependencies=[Depends(require_modulo("instalador"))])
@@ -6499,19 +6592,29 @@ def trilha_de_instalacao(
     user_email: Optional[str] = Query(None),
     apenas_falhas: bool = Query(False),
     limite: int = Query(500, ge=1, le=1000),
+    token: auth.TokenData = Depends(require_auth),
 ) -> dict:
     """
     A trilha agrupada por token: uma linha por tentativa de instalação.
+
+    Escopada (#31): sem alcance total, `user_email` é o da própria sessão —
+    o parâmetro era filtro livre — e `client_ip` sai das cadeias.
 
     Substitui a lista plana, que mostrava eventos soltos em ordem cronológica.
     O que importa é **onde a cadeia quebrou** — e os números de produção
     mostram por quê: nove tentativas, seis mortas no mesmo ponto e pela mesma
     causa. Em fila, são 25 linhas sem forma.
     """
+    admin = (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL
+    if not admin:
+        user_email = (token.email or "").strip().lower() or "-"
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     cadeias = cert_installer.cadeias_de_instalacao(
         limite=limite, desde=desde, user_email=user_email, apenas_com_falha=apenas_falhas
     )
+    if not admin:
+        for c in cadeias:
+            c.pop("client_ip", None)
     # `target_machine` é o identificador da estação (o MAC que o agente
     # informa); o nome legível vem do cadastro de dispositivos, quando existe.
     nomes_maq: Dict[str, str] = {}
