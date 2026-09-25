@@ -134,7 +134,12 @@ class _FakeBanco:
         return _Query(self.tabelas[nome], self, nome)
 
 
-FP = "a" * 64
+# PFX de verdade: desde o lote 2 da auditoria (#4) o /upload-pfx LÊ o arquivo
+# e confere o fingerprint declarado com o do certificado dentro dele.
+from tests.pfx_de_teste import gerar_pfx
+
+PFX = gerar_pfx()
+FP = PFX["fingerprint"]
 FP_B = "b" * 64
 FP_VENCIDO = "c" * 64
 FP_ILEGIVEL = "d" * 64
@@ -499,7 +504,8 @@ def test_upload_aceita_o_caminho_legitimo(client: TestClient, banco: _FakeBanco)
     with patch.object(ci, "upsert_pfx", lambda **kw: "id-fake"):
         r = client.post(
             "/api/cert-installer/upload-pfx",
-            json={"fingerprint": FP, "pfx_b64": "AAAA", "machine_id": MAQUINA_A},
+            json={"fingerprint": FP, "pfx_b64": PFX["b64"], "password": PFX["senha"],
+                  "machine_id": MAQUINA_A},
             headers=_headers_agente(),
         )
     assert r.status_code == 200, r.text
@@ -520,7 +526,8 @@ def test_upload_do_mesmo_fingerprint_por_duas_maquinas_gera_duas_linhas(
             "/api/cert-installer/upload-pfx",
             json={
                 "fingerprint": FP,
-                "pfx_b64": base64.b64encode(f"pfx-de-{maquina}".encode()).decode(),
+                "pfx_b64": PFX["b64"],
+                "password": PFX["senha"],
                 "machine_id": maquina,
             },
             headers=_headers_agente(),

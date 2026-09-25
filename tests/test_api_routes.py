@@ -486,9 +486,12 @@ def test_operador_comum_nao_ingere_inventario(
     assert client_com_chave.post(
         "/api/ingest", json={"items": []}, headers=h_agente
     ).status_code != 403, "o agente foi barrado no ingest"
+    # A fila, não: desde o lote 2 da auditoria (#3) ela exige identidade de
+    # MÁQUINA, e a chave compartilhada não diz de quem é a fila. O caminho
+    # com credencial de máquina está em test_seguranca_lote2.py.
     assert client_com_chave.get(
         "/api/agent/next?machine_id=default", headers=h_agente
-    ).status_code == 200
+    ).status_code == 403
 
 
 def test_operador_comum_nao_enfileira_comando(
@@ -546,8 +549,10 @@ def test_fila_comando_ping(
         # a rota estava sob `require_auth`, que aceita qualquer autenticado —
         # inclusive o proprio agente, que e quem CONSOME a fila e nao tem por que
         # alimenta-la. A unica chamadora real e `configuracao.html`, pagina de
-        # admin. Consumir (`/api/agent/next`) segue com a chave do agente, que e
-        # quem faz isso em producao.
+        # admin. Consumir (`/api/agent/next`) exige identidade de MAQUINA desde
+        # o lote 2 da auditoria (#3): a chave compartilhada nao diz de quem e a
+        # fila. Aqui o consumidor e o admin, que pode ler qualquer fila; o
+        # caminho da credencial de maquina esta em test_seguranca_lote2.py.
         from app import auth as _auth
         h_admin = {
             "Authorization": "Bearer " + _auth.create_access_token(
@@ -563,13 +568,13 @@ def test_fila_comando_ping(
         assert en.json().get("ok") is True
 
         n1 = client_com_chave.get(
-            "/api/agent/next?machine_id=default", headers=h
+            "/api/agent/next?machine_id=default", headers=h_admin
         )
         assert n1.status_code == 200
         assert n1.json().get("command") == "ping"
 
         n2 = client_com_chave.get(
-            "/api/agent/next?machine_id=default", headers=h
+            "/api/agent/next?machine_id=default", headers=h_admin
         )
         assert n2.status_code == 200
         assert n2.json().get("command") is None

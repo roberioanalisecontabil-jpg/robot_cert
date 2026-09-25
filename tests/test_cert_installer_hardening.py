@@ -124,39 +124,20 @@ def test_bloquear_apaga_o_pfx_armazenado(monkeypatch) -> None:
 
 
 # ==========================================================================
-# 2. Token chega ao agente
+# 2. A fila não expõe o payload
+#
+# `ci.enqueue_install_command` saiu no lote 2 da auditoria (#62): era o
+# caminho morto que punha token de instalação na fila DESTE portal. O que
+# continua valendo é a propriedade da fila em si, guardada abaixo direto por
+# `command_queue.enqueue`.
 # ==========================================================================
 
-def test_token_e_gravado_no_payload_da_fila(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
-    monkeypatch.setattr(cq, "_banco", lambda: None)
-
-    ci.enqueue_install_command("SRV01", "token-secreto-123")
-
-    fila = cq._load_file_queue()
-    assert len(fila) == 1
-    assert fila[0]["command"] == "instalar_certificados"
-    assert fila[0]["payload"] == "token-secreto-123", "token não foi gravado — era o bug original"
-
-
-def test_agente_recebe_o_token_ao_puxar_o_comando(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
-    monkeypatch.setattr(cq, "_banco", lambda: None)
-
-    ci.enqueue_install_command("SRV01", "token-abc")
-    cmd = cq.pop_next_for_agent("SRV01")
-
-    assert cmd is not None
-    assert cmd.command == "instalar_certificados"
-    assert cmd.payload == "token-abc"
-
-
 def test_token_nao_vaza_na_listagem_publica_da_fila(monkeypatch, tmp_path) -> None:
-    """/api/agent/queue é de monitorização — não pode expor o token."""
+    """/api/agent/queue é de monitorização — não pode expor o payload."""
     monkeypatch.setattr(cq, "QUEUE_FILE", tmp_path / "fila.json")
     monkeypatch.setattr(cq, "_banco", lambda: None)
 
-    ci.enqueue_install_command("SRV01", "token-sigiloso")
+    cq.enqueue("SRV01", "instalar_certificados", payload="token-sigiloso")
     pendentes = cq.list_pending()
 
     assert len(pendentes) == 1

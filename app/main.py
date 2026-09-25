@@ -321,6 +321,19 @@ async def require_auth(
             # para adivinhar a chave byte a byte. `/api/cron/alerts` já fazia
             # assim; aqui era a única credencial comparada com `==`.
             if hmac.compare_digest(x_api_key.encode("utf-8"), config.API_KEY.encode("utf-8")):
+                if not config.ACEITAR_API_KEY_COMPARTILHADA:
+                    # Janela fechada (lote 2). 401 SEM o marcador de credencial
+                    # inválida: o agente não tem o que descartar — o problema é
+                    # a estação não ter migrado, e o log diz isso.
+                    logger.warning(
+                        "X-API-Key compartilhada RECUSADA (ACEITAR_API_KEY_COMPARTILHADA "
+                        "desligada). Provisione a credencial de máquina desta estação."
+                    )
+                    raise HTTPException(
+                        status_code=401,
+                        detail="A chave compartilhada não é mais aceita. Use a credencial de máquina.",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
                 # WARNING de propósito: é o que permite responder "já dá para
                 # desligar a chave compartilhada?" olhando o log, em vez de
                 # adivinhar. Some quando o ANALISESRV migrar (R2 fecha aí).
@@ -328,6 +341,9 @@ async def require_auth(
                     "Agente autenticou pela X-API-Key compartilhada (legado). "
                     "Estação ainda não migrada para credencial de máquina."
                 )
+                # Sem `machine_id`: a chave compartilhada não prova estação
+                # nenhuma. As rotas que precisam saber DE QUEM é a fila ou o
+                # token recusam esta identidade (`_machine_da_credencial`).
                 return auth.TokenData(email="agent@internal", role="agent")
 
             marcar = True
@@ -340,7 +356,13 @@ async def require_auth(
                 logger.warning("machine_credentials indisponível; só a X-API-Key vale.")
                 maquina, marcar = None, False
             if maquina:
-                return auth.TokenData(email="agent@internal", role="agent")
+                # A identidade da máquina VIAJA no TokenData: é ela, e não o
+                # `machine_id` declarado na requisição, que as rotas do agente
+                # usam para decidir fila, custódia e cofre (lote 2, #3/#4).
+                return auth.TokenData(
+                    email="agent@internal", role="agent",
+                    machine_id=str(maquina.get("machine_id") or "").strip().lower() or None,
+                )
 
             # X-API-Key presente e inválida: o marcador diz ao agente que o
             # problema é a CREDENCIAL (descarte e caia na chave compartilhada),
@@ -458,6 +480,48 @@ def require_modulo(
         )
 
     return _guarda
+
+
+ERRO_MAQUINA_SEM_IDENTIDADE = (
+    "Esta operação exige a credencial de máquina da própria estação. "
+    "A chave compartilhada não identifica a estação; provisione a credencial."
+)
+ERRO_MAQUINA_DIVERGENTE = "machine_id não confere com a credencial desta estação."
+
+
+def _machine_da_credencial(
+    token: auth.TokenData,
+    declarado: Optional[str],
+    *,
+    exigir_identidade: bool = False,
+) -> str:
+    """A máquina que a credencial PROVA ser — e só ela (achados #3 e #4).
+
+    Admin pode declarar qualquer máquina: é diagnóstico. Credencial de máquina
+    só fala por si: declarar outra é 403, e declarar nada vale a própria.
+
+    A X-API-Key compartilhada não tem identidade. Com `exigir_identidade`
+    (fila, resgate de token) ela é recusada sempre — não há como saber de quem
+    é a fila. Sem ele (inventário, cofre) ela ainda passa com o `machine_id`
+    declarado, avisando no log: é a janela para as estações não migradas, e
+    `ACEITAR_API_KEY_COMPARTILHADA` desligada a fecha antes de chegar aqui.
+    """
+    pedido = (declarado or "").strip()
+    if (token.role or "").strip().lower() == "admin":
+        return pedido
+    propria = (token.machine_id or "").strip().lower()
+    if not propria:
+        if exigir_identidade or token.email == ANONYMOUS_IDENTITY_EMAIL:
+            raise HTTPException(status_code=403, detail=ERRO_MAQUINA_SEM_IDENTIDADE)
+        logger.warning(
+            "Chave compartilhada agindo como a máquina declarada %r (janela de "
+            "compatibilidade). Provisione a credencial de máquina desta estação.",
+            pedido,
+        )
+        return pedido
+    if pedido and pedido.lower() != propria:
+        raise HTTPException(status_code=403, detail=ERRO_MAQUINA_DIVERGENTE)
+    return pedido or propria
 
 
 async def require_agent_or_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
@@ -1724,6 +1788,8 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     except Exception:
         logger.exception("Falha ao atualizar usuário %s", user_id)
         raise HTTPException(status_code=400, detail="Não foi possível salvar o usuário.")
+    if ativo is False:
+        _revogar_tokens_de_instalacao(user_id)
     return {"ok": True}
 
 
@@ -1779,6 +1845,7 @@ def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
     except Exception:
         logger.exception("Falha ao desativar %s", user_id)
         raise HTTPException(status_code=400, detail="Não foi possível desativar a conta.")
+    _revogar_tokens_de_instalacao(user_id)
 
     # A carteira e removida DEPOIS de a conta cair, e nunca antes.
     #
@@ -1865,8 +1932,29 @@ def delete_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> d
     if not sb: raise HTTPException(status_code=503)
     _exigir_alcance_sobre_conta(sb, ator, user_id)
     _garantir_que_sobra_admin(sb, user_id, apagar=True)
+    # Antes de apagar a linha: a chave estrangeira de `install_token` aponta
+    # para ela, e o token pendente é o que ainda entregaria chave privada.
+    _revogar_tokens_de_instalacao(user_id)
     sb.table("users").delete().eq("id", user_id).execute()
     return {"ok": True}
+
+
+def _revogar_tokens_de_instalacao(user_id: str) -> None:
+    """Desativar, excluir ou inativar alguém alcança os tokens que ele pediu (#22).
+
+    O comentário antigo em `deactivate_user` dizia que `require_auth` já
+    recusava a conta inativa — verdade para o portal, falso para `/claim`,
+    que não autentica. O token pendente continuava trocável por chave privada
+    até o TTL. Nunca levanta: a conta já foi desativada; falhar aqui não pode
+    desfazer isso, só avisar.
+    """
+    try:
+        n = cert_installer.revogar_tokens_pendentes(user_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao revogar tokens de instalação de %s", user_id)
+        return
+    if n:
+        logger.info("Conta %s: %d token(s) de instalação pendente(s) revogado(s).", user_id, n)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -2947,14 +3035,21 @@ def enqueue_agent_command(body: EnqueueCommandBody) -> dict:
     return {"ok": True, "id": cid, "command": body.command.strip()}
 
 
-@app.get("/api/agent/next", dependencies=[Depends(require_agent_or_admin)])
+@app.get("/api/agent/next")
 def agent_next_command(
     machine_id: str = Query("default", description="ID da máquina do agente"),
+    token: auth.TokenData = Depends(require_agent_or_admin),
 ) -> dict:
     """
     O agente chama isto no início de cada ciclo: retira um comando em fila ou null.
+
+    A fila é a da máquina que a credencial prova ser (achado #3, crítico): com
+    o `machine_id` vindo só da query, qualquer agente puxava — e consumia — a
+    fila de qualquer outra estação, inclusive o token de instalação que ela
+    esperava. A chave compartilhada não entra: sem identidade não há fila.
     """
-    q = pop_next_for_agent(machine_id)
+    maquina = _machine_da_credencial(token, machine_id, exigir_identidade=True)
+    q = pop_next_for_agent(maquina)
     if not q:
         return {"command": None, "id": None}
     out = {"command": q.command, "id": q.id, "machine_id": q.machine_id}
@@ -4432,14 +4527,22 @@ def vencidos_certificados(
 # sobrescrever o inventario inteiro. `require_agent_or_admin` e a mesma guarda
 # que `upload-pfx`, `redeem` e `report` ja usam, e o agente ja passa por ela em
 # producao (o cofre tem 491 certificados que so chegaram por `upload-pfx`).
-@app.post("/api/ingest", dependencies=[Depends(require_agent_or_admin)])
-def ingest(body: IngestBody, background_tasks: BackgroundTasks) -> dict:
+@app.post("/api/ingest")
+def ingest(
+    body: IngestBody,
+    background_tasks: BackgroundTasks,
+    token: auth.TokenData = Depends(require_agent_or_admin),
+) -> dict:
     """
     Recebe o resultado de um scan feito no Windows (agente em segundo plano).
     Persiste no banco (ou em data/last_ingest.json se o banco não estiver configurado).
     Também faz upsert na tabela materializada cert_history para acelerar o histórico.
+
+    O inventário é o da máquina que a credencial prova ser (achado #4): ele
+    alimenta a barreira de custódia do cofre, e um agente que escrevesse o
+    inventário de OUTRA estação escolhia o que ela pode enviar.
     """
-    machine_id = body.machine_id.strip() or "default"
+    machine_id = _machine_da_credencial(token, body.machine_id) or "default"
     scanned = datetime.now(timezone.utc)
     items = _normalize_ingest_items_status(body.items, scanned)
     save_snapshot(
@@ -4595,6 +4698,10 @@ def upload_pfx(
     if len(pfx_bytes) > 1 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="PFX excede 1 MB")
 
+    # A máquina é a da credencial, não a do corpo (achado #4).
+    machine_id = _machine_da_credencial(token, body.machine_id) or "default"
+    fingerprint = (body.fingerprint or "").strip().lower()
+
     # Barreira de servidor da custódia: mesmo que um agente desatualizado (ou
     # adulterado) envie o que não devia, só entra no cofre o que a política
     # permite. O filtro por machine_id é parte da barreira, não detalhe de
@@ -4607,15 +4714,15 @@ def upload_pfx(
     # bloqueado, pode gravar". Por isso `CustodiaIndisponivel` é tratada como
     # recusa explícita, e não cai no `except Exception` genérico lá embaixo.
     try:
-        autorizados = cert_installer.fingerprints_autorizados(body.machine_id)
+        autorizados = cert_installer.fingerprints_autorizados(machine_id)
     except cert_installer.CustodiaIndisponivel as e:
-        logger.warning("Upload recusado por custódia indisponível (%s): %s", body.machine_id, e)
+        logger.warning("Upload recusado por custódia indisponível (%s): %s", machine_id, e)
         raise HTTPException(
             status_code=503,
             detail="Custódia indisponível; o envio será retentado no próximo ciclo.",
         )
 
-    if body.fingerprint not in autorizados:
+    if fingerprint not in autorizados:
         raise HTTPException(
             status_code=403,
             detail=(
@@ -4624,21 +4731,38 @@ def upload_pfx(
             ),
         )
 
+    # Os metadados vêm de DENTRO do PFX, nunca do corpo (achado #4). O
+    # `documento` é o que `assegurar_carteira` compara com a carteira do
+    # operador: aceitá-lo declarado deixava um agente comprometido gravar o PFX
+    # de quem quisesse sob o CNPJ de um cliente do alvo. E o fingerprint
+    # declarado tem de ser o do certificado enviado — era o passo que fazia o
+    # PFX do atacante passar na custódia sob a identidade de um legítimo.
+    # Depois da custódia de propósito: só se abre o PFX de quem já podia mandar.
+    try:
+        lido = cert_installer.ler_metadados_do_pfx(pfx_bytes, body.password)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if fingerprint != lido["fingerprint"]:
+        raise HTTPException(
+            status_code=422,
+            detail="O fingerprint declarado não é o do certificado dentro do PFX.",
+        )
+
     try:
         cert_id = cert_installer.upsert_pfx(
-            fingerprint=body.fingerprint,
+            fingerprint=fingerprint,
             pfx_bytes=pfx_bytes,
-            machine_id=body.machine_id,
+            machine_id=machine_id,
             password=body.password,
-            nome_titular=body.nome_titular,
-            documento=body.documento,
-            documento_tipo=body.documento_tipo,
-            subject=body.subject,
-            not_before=body.not_before,
-            not_after=body.not_after,
+            nome_titular=lido["nome_titular"],
+            documento=lido["documento"],
+            documento_tipo=lido["documento_tipo"],
+            subject=lido["subject"],
+            not_before=lido["not_before"],
+            not_after=lido["not_after"],
             friendly_name=body.friendly_name,
         )
-        return {"status": "ok", "id": cert_id, "fingerprint": body.fingerprint}
+        return {"status": "ok", "id": cert_id, "fingerprint": fingerprint}
     except RuntimeError as e:
         # O texto vinha do cofre/banco e podia trazer nome de chave de
         # ambiente ou de tabela (achado #35). Fica no log, com a rota.
@@ -4660,7 +4784,7 @@ class VaultOptinRequest(BaseModel):
 @app.get("/api/cert-installer/vault-optin")
 def listar_vault_optin(
     machine_id: Optional[str] = Query(None),
-    _token: auth.TokenData = Depends(require_modulo("instalador", permitir_agente=True, recusar_anonimo=True)),
+    token: auth.TokenData = Depends(require_modulo("instalador", permitir_agente=True, recusar_anonimo=True)),
 ):
     """
     Fingerprints que esta máquina pode enviar ao cofre.
@@ -4679,6 +4803,11 @@ def listar_vault_optin(
             status_code=422,
             detail="machine_id é obrigatório: a custódia é definida por estação.",
         )
+    # Agente só pergunta pela própria estação (achado #30): a lista diz quais
+    # certificados estão em custódia lá, e uma estação não tem por que saber
+    # isso de outra. Gente com o módulo Instalador (admin) continua livre.
+    if (token.role or "") == "agent":
+        machine_id = _machine_da_credencial(token, machine_id) or machine_id
     try:
         return {"fingerprints": sorted(cert_installer.fingerprints_autorizados(machine_id))}
     except cert_installer.CustodiaIndisponivel as e:
@@ -5577,6 +5706,25 @@ def instalabilidade(
     user_id = _user_id_da_sessao(token)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    alcance_total = (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL
+
+    if not alcance_total:
+        # A estação tem de ser uma das desta pessoa (achado #30): a rota era
+        # `require_auth` puro com `machine_id` livre, e devolvia o inventário
+        # de qualquer estação a qualquer operador. Quem sabe o vínculo é o
+        # portal de inventário; sem ele, o vínculo não é verificável e a
+        # resposta segue — recortada pela carteira, abaixo — com aviso.
+        dispositivos = _dispositivos_da_pessoa((token.email or "").strip().lower())
+        if dispositivos is None:
+            logger.warning(
+                "Instalabilidade sem conferir o vínculo pessoa↔estação (%s): portal de "
+                "inventário indisponível ou ponte não configurada.", machine_id,
+            )
+        else:
+            minhas = {str(d.get("machine_id") or "").strip().lower() for d in dispositivos}
+            if machine_id.strip().lower() not in minhas:
+                raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
+
     try:
         itens = cert_installer.estado_de_instalabilidade(machine_id, user_id, token.role)
     except (cert_installer.CustodiaIndisponivel, cert_installer.CarteiraIndisponivel) as e:
@@ -5585,10 +5733,16 @@ def instalabilidade(
             status_code=503,
             detail="Não foi possível verificar quais certificados estão disponíveis.",
         )
+    if not alcance_total:
+        # O filtro de carteira decidia só o RÓTULO; o conjunto saía inteiro,
+        # com fingerprint e id do cofre de clientes fora da carteira (#30).
+        itens = {
+            fp: v for fp, v in itens.items()
+            if v.get("estado") != cert_installer.ESTADO_FORA_DA_CARTEIRA
+        }
     return {
         "machine_id": machine_id,
-        "alcance_total": (token.role or "").strip().lower()
-        in cert_installer.PAPEIS_COM_ALCANCE_TOTAL,
+        "alcance_total": alcance_total,
         "itens": itens,
     }
 
@@ -5633,6 +5787,27 @@ def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
     if not email:
         return {"disponivel": False, "motivo": "sem_email", "dispositivos": []}
 
+    dispositivos = _dispositivos_da_pessoa(email)
+    if dispositivos is None:
+        return {"disponivel": False, "motivo": "indisponivel", "dispositivos": []}
+
+    return {
+        "disponivel": bool(dispositivos),
+        "motivo": "" if dispositivos else "sem_agente_vivo",
+        "dispositivos": dispositivos,
+    }
+
+
+def _dispositivos_da_pessoa(email: str) -> Optional[List[dict]]:
+    """As estações com agente vivo desta pessoa, segundo o portal de inventário.
+
+    `None` quando não dá para saber (ponte não configurada ou indisponível) —
+    diferente de lista vazia, que é "sei, e não há nenhuma". Quem chama decide
+    o que fazer com a dúvida: o Início degrada para o caminho do .exe, e a
+    instalabilidade deixa de conferir o vínculo, avisando.
+    """
+    if not config.ponte_invent_configurada() or not (email or "").strip():
+        return None
     try:
         import httpx
 
@@ -5644,17 +5819,11 @@ def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
         )
         if r.status_code != 200:
             logger.warning("Portal de inventário respondeu %s ao consultar estações", r.status_code)
-            return {"disponivel": False, "motivo": "indisponivel", "dispositivos": []}
-        dispositivos = (r.json() or {}).get("dispositivos") or []
+            return None
+        return list((r.json() or {}).get("dispositivos") or [])
     except Exception:  # noqa: BLE001
         logger.warning("Não foi possível consultar as estações no portal de inventário", exc_info=True)
-        return {"disponivel": False, "motivo": "indisponivel", "dispositivos": []}
-
-    return {
-        "disponivel": bool(dispositivos),
-        "motivo": "" if dispositivos else "sem_agente_vivo",
-        "dispositivos": dispositivos,
-    }
+        return None
 
 
 class PrepararInstalacaoRequest(BaseModel):
@@ -5932,12 +6101,23 @@ class RedeemRequest(BaseModel):
 def redeem_install(
     body: RedeemRequest,
     request: Request,
-    _token: auth.TokenData = Depends(require_agent_or_admin),
+    token: auth.TokenData = Depends(require_agent_or_admin),
 ):
     """
     Agente consome o token e recebe o bundle de certificados criptografado via ECDH.
+
+    Só a máquina-alvo do token resgata (achado #21), e a chave compartilhada
+    nunca: um token é a entrega da chave privada, e "qualquer agente" não é
+    ninguém. A conferência vem ANTES do consumo, para o token sobrar para a
+    máquina certa.
     """
     client_ip = request.client.host if request.client else None
+
+    # 0. A máquina que pede é a máquina-alvo?
+    alvo = cert_installer.alvo_do_token(body.token)
+    if not alvo:
+        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já consumido")
+    _machine_da_credencial(token, alvo.get("target_machine"), exigir_identidade=True)
 
     # 1. Validar e consumir token
     token_data = cert_installer.validate_and_consume_token(body.token)
@@ -6028,6 +6208,48 @@ def _claim_rate_limit(ip: str) -> bool:
     return taxa.permitir(f"claim:{ip}", _CLAIM_MAX_POR_JANELA, _CLAIM_JANELA_SEC)
 
 
+def _exigir_maquina_alvo_no_claim(request: Request, target_machine: Optional[str]) -> None:
+    """Quem resgata é a máquina para a qual o token foi emitido (achado #21).
+
+    Com `CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA`: a X-API-Key precisa ser a
+    credencial de máquina da estação-alvo. A chave compartilhada nunca serve —
+    "qualquer agente" não é a máquina-alvo.
+
+    Sem a flag (janela): o agente do INVENT ainda não apresenta credencial
+    deste portal, então o resgate segue só com o token, mas um `X-Machine-Id`
+    presente tem de casar com o alvo, e a ausência dele fica no log. É o que
+    anula o roubo oportunista de token pela fila (#3) sem parar a instalação.
+    """
+    alvo = (target_machine or "").strip().lower()
+    if config.CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA:
+        segredo = (request.headers.get("x-api-key") or "").strip()
+        maquina = None
+        if segredo and not (config.API_KEY and hmac.compare_digest(
+            segredo.encode("utf-8"), config.API_KEY.encode("utf-8")
+        )):
+            try:
+                maquina = machine_credentials.autenticar(segredo)
+            except Exception:  # noqa: BLE001
+                logger.exception("Credenciais de máquina indisponíveis no /claim")
+                raise HTTPException(status_code=503, detail="Credenciais de máquina indisponíveis. Tente de novo.")
+        propria = str((maquina or {}).get("machine_id") or "").strip().lower()
+        if not propria or (alvo and propria != alvo):
+            logger.warning("Resgate recusado: credencial de máquina ausente ou de outra estação (alvo %r).", alvo)
+            raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
+        return
+
+    declarado = (request.headers.get("x-machine-id") or "").strip().lower()
+    if not declarado:
+        logger.warning(
+            "Resgate de token sem identificação da máquina (alvo %r). O agente ainda não "
+            "manda X-Machine-Id; janela do achado #21.", alvo,
+        )
+        return
+    if alvo and declarado != alvo:
+        logger.warning("Resgate recusado: X-Machine-Id %r não é a máquina-alvo %r.", declarado, alvo)
+        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
+
+
 @app.post("/api/cert-installer/claim")
 def claim_install(body: RedeemRequest, request: Request):
     """
@@ -6044,6 +6266,14 @@ def claim_install(body: RedeemRequest, request: Request):
 
     if not _claim_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+
+    # A máquina-alvo é conferida ANTES do consumo (achado #21): recusar depois
+    # queimaria o token da máquina certa. Mesma resposta para tudo que não é
+    # "a máquina-alvo com token válido", para não virar oráculo.
+    alvo = cert_installer.alvo_do_token(body.token)
+    if not alvo:
+        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
+    _exigir_maquina_alvo_no_claim(request, alvo.get("target_machine"))
 
     token_data = cert_installer.validate_and_consume_token(body.token)
     if not token_data:

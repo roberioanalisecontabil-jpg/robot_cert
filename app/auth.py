@@ -58,6 +58,13 @@ class TokenData(BaseModel):
     # pelo admin. Enquanto for True, `require_auth` recusa toda rota que não
     # seja a de trocar a senha. Vem do banco, nunca do token.
     deve_trocar_senha: bool = False
+    # A MÁQUINA que a credencial prova ser (`app/machine_credentials.py`).
+    # Preenchido só no caminho de credencial de máquina; None para pessoas,
+    # para a X-API-Key compartilhada (que não tem identidade) e para o
+    # anônimo. Até o lote 2 da auditoria (24/09/2026) a identidade era
+    # autenticada e descartada — e todo `machine_id` que decidia fila,
+    # custódia e cofre vinha do chamador (achados #3, #4, #21, #30).
+    machine_id: Optional[str] = None
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
