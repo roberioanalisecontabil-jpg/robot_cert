@@ -250,7 +250,9 @@ def test_limite_de_upload_e_1mb(client_com_chave: TestClient, api_key: str) -> N
     import base64
 
     fp = "f" * 64
-    grande = base64.b64encode(b"A" * (2 * 1024 * 1024)).decode()
+    # Pouco acima de 1 MB decodificado: passa pelo limite do modelo Pydantic
+    # (1,5 M caracteres de base64, lote 5 da auditoria) e cai no 413 da rota.
+    grande = base64.b64encode(b"A" * (1024 * 1024 + 4096)).decode()
     with patch.object(ci, "fingerprints_autorizados", lambda *a, **k: {fp}):
         r = client_com_chave.post(
             "/api/cert-installer/upload-pfx",
@@ -258,3 +260,11 @@ def test_limite_de_upload_e_1mb(client_com_chave: TestClient, api_key: str) -> N
             headers={"X-API-Key": api_key},
         )
     assert r.status_code == 413
+    # Muito acima: o modelo recusa antes de a rota decodificar qualquer coisa.
+    enorme = base64.b64encode(b"A" * (2 * 1024 * 1024)).decode()
+    r = client_com_chave.post(
+        "/api/cert-installer/upload-pfx",
+        json={"fingerprint": fp, "pfx_b64": enorme, "machine_id": "m1"},
+        headers={"X-API-Key": api_key},
+    )
+    assert r.status_code == 422

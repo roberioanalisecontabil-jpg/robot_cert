@@ -281,7 +281,10 @@ def test_teto_de_certificados_por_token(
     demais = [CERT_MEU] * (MAX_CERTIFICADOS_POR_TOKEN + 1)
     r = _pedir(client, rota, extra, demais, _h("admin"))
     assert r.status_code == 422, r.text
-    assert str(MAX_CERTIFICADOS_POR_TOKEN) in r.json()["detail"], "a mensagem diz o limite"
+    # Desde o lote 5 da auditoria (#29) o teto está também no modelo Pydantic,
+    # que responde antes da rota; o `detail` é a lista de erros do Pydantic e
+    # a mensagem dela também diz o limite.
+    assert str(MAX_CERTIFICADOS_POR_TOKEN) in r.text, "a mensagem diz o limite"
 
     no_limite = [CERT_MEU] * MAX_CERTIFICADOS_POR_TOKEN
     r = _pedir(client, rota, extra, no_limite, _h("admin"))

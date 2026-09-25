@@ -49,12 +49,14 @@ def main() -> None:
         if key:
             r = c.get("/api/settings", headers={"X-API-Key": key})
             print("6) GET /api/settings com chave do .env:", r.status_code)
-            r2 = c.get("/api/certificados?fonte=local", headers={"X-API-Key": key})
-            n = len(r2.json().get("itens", [])) if r2.status_code == 200 else -1
+            # Paginada por padrão desde o lote 5 da auditoria: o total vem em
+            # `paginacao.total_itens`, não no tamanho de `itens`.
+            r2 = c.get("/api/certificados?fonte=local&pagina=1&por_pagina=2000", headers={"X-API-Key": key})
+            n = (r2.json().get("paginacao") or {}).get("total_itens", len(r2.json().get("itens", []))) if r2.status_code == 200 else -1
             print("7) GET /api/certificados?fonte=local — itens:", n)
         else:
-            r2 = c.get("/api/certificados?fonte=local")
-            n = len(r2.json().get("itens", [])) if r2.status_code == 200 else -1
+            r2 = c.get("/api/certificados?fonte=local&pagina=1&por_pagina=2000")
+            n = (r2.json().get("paginacao") or {}).get("total_itens", len(r2.json().get("itens", []))) if r2.status_code == 200 else -1
             print("7) GET /api/certificados?fonte=local — itens:", n)
     except Exception as e:
         print("\nErro ao testar API:", e)
