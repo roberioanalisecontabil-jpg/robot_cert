@@ -70,6 +70,8 @@ class _Query:
         self._head = False
         self._range: Optional[tuple] = None
         self._on_conflict: Optional[List[str]] = None
+        self._order: Optional[tuple] = None
+        self._limit: Optional[int] = None
 
     def select(self, *_c: str, **kw: Any) -> "_Query":
         self._head = bool(kw.get("head"))
@@ -126,10 +128,15 @@ class _Query:
         self._f.append((c, "in", list(vs)))
         return self
 
-    def limit(self, _n: int) -> "_Query":
+    def limit(self, n: int) -> "_Query":
+        self._limit = n
         return self
 
-    def order(self, *_a: Any, **_k: Any) -> "_Query":
+    def order(self, coluna: str, desc: bool = False, **_k: Any) -> "_Query":
+        """Ordena de verdade: `get_latest_snapshot` é `order(scanned_at,
+        desc).limit(1)`, e um fake que ignorasse os dois devolveria sempre a
+        primeira linha — o cache das duplicidades pareceria nunca invalidar."""
+        self._order = (coluna, bool(desc))
         return self
 
     def _casa(self, r: Dict[str, Any]) -> bool:
@@ -186,11 +193,17 @@ class _Query:
             fora = [r for r in self._l if self._casa(r)]
             self._l[:] = [r for r in self._l if not self._casa(r)]
             return _Res(fora)
+        self._b.consultas.append(self._n)
         rows = [dict(r) for r in self._l if self._casa(r)]
+        if self._order:
+            col, desc = self._order
+            rows.sort(key=lambda r: (r.get(col) is None, str(r.get(col) or "")), reverse=desc)
         total = len(rows)
         if self._range:
             a, b = self._range
             rows = rows[a:b + 1]
+        if self._limit is not None:
+            rows = rows[: self._limit]
         return _Res([] if self._head else rows, count=total)
 
 
@@ -199,6 +212,9 @@ class _Fake:
         self.tabelas = tabelas
         self.gravados: List = []
         self.quebrado: Dict[str, bool] = {}
+        # Nome da tabela a cada SELECT executado: é como se prova que uma
+        # importação faz UMA consulta de e-mails, e não uma por linha.
+        self.consultas: List[str] = []
 
     def table(self, nome: str) -> _Query:
         return _Query(self.tabelas.setdefault(nome, []), nome, self)

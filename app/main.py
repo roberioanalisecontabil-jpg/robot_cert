@@ -1061,16 +1061,16 @@ def _list_certificados_payload(
 
 
 class SettingsBody(BaseModel):
-    source_folder: str = Field(default="", description="Pasta de certificados no Windows (caminho completo)")
-    expired_folder: str = Field(default="", description="Pasta destino dos vencidos")
-    machine_id: str = Field(default="default", description="Identificador lógico da máquina / agente")
-    smtp_host: str = Field(default="")
-    smtp_port: int = Field(default=587)
-    smtp_user: str = Field(default="")
-    smtp_password: Optional[str] = Field(default=None)
+    source_folder: str = Field(default="", max_length=1024, description="Pasta de certificados no Windows (caminho completo)")
+    expired_folder: str = Field(default="", max_length=1024, description="Pasta destino dos vencidos")
+    machine_id: str = Field(default="default", max_length=128, description="Identificador lógico da máquina / agente")
+    smtp_host: str = Field(default="", max_length=253)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str = Field(default="", max_length=320)
+    smtp_password: Optional[str] = Field(default=None, max_length=1024)
     smtp_use_tls: bool = Field(default=True)
     smtp_use_ssl: bool = Field(default=False)
-    smtp_from_email: str = Field(default="")
+    smtp_from_email: str = Field(default="", max_length=320)
     smtp_alerts_enabled: bool = Field(default=False)
     # ── Campos que este PUT não "possui" ───────────────────────────────────
     #
@@ -1102,11 +1102,13 @@ class SettingsBody(BaseModel):
 
 
 class IngestBody(BaseModel):
-    machine_id: str = "default"
-    source_folder: str
-    expired_folder: str
-    items: List[dict] = Field(default_factory=list)
-    scanned_at: Optional[str] = None
+    # Limites (achado #29): `items` era ilimitado e alimenta /duplicidades
+    # (n²) e todo alerta seguinte — um POST virava carga permanente.
+    machine_id: str = Field(default="default", max_length=128)
+    source_folder: str = Field(max_length=1024)
+    expired_folder: str = Field(max_length=1024)
+    items: List[dict] = Field(default_factory=list, max_length=20000)
+    scanned_at: Optional[str] = Field(default=None, max_length=64)
 
 
 class EnqueueCommandBody(BaseModel):
@@ -1208,8 +1210,10 @@ def favicon() -> Response:
 
 
 class LoginBody(BaseModel):
-    email: str
-    password: str
+    email: str = Field(max_length=320)
+    # Teto de DoS, não política de senha (essa é o #25): o bcrypt custa o
+    # mesmo para 20 ou 20.000 bytes, mas o corpo não precisa chegar a 20.000.
+    password: str = Field(max_length=1024)
 
 
 def _sb_do_login():
@@ -1376,10 +1380,10 @@ def list_users() -> List[dict]:
 
 
 class UserCreateBody(BaseModel):
-    email: str
-    password: str
-    full_name: str
-    role: str = "user"
+    email: str = Field(max_length=320)
+    password: str = Field(max_length=1024)
+    full_name: str = Field(max_length=200)
+    role: str = Field(default="user", max_length=16)
     departamento_id: Optional[str] = None
 
 
@@ -1407,8 +1411,73 @@ def _norm_header(v: str) -> str:
     return s
 
 
+# ── Tetos de recurso (lote 5 da auditoria) ────────────────────────────────
+#
+# Um worker só (`Procfile`): o que não tem teto derruba o portal inteiro, e
+# quem derruba é qualquer sessão comum. Cada limite abaixo tem o teste que o
+# derrubaria em `tests/test_seguranca_lote5.py`.
+
+LIMITE_UPLOAD_BYTES = 5 * 1024 * 1024
+# Um CSV de 5 MB cabe ~100.000 linhas; cada linha de usuário custa um bcrypt
+# (~0,25 s) — horas de CPU num worker só, com o gunicorn matando no meio.
+MAX_LINHAS_IMPORT = 2000
+# Inventário real de uma estação não passa de alguns milhares; sem teto um
+# snapshot vira carga permanente em /duplicidades e em todo alerta seguinte.
+MAX_ITENS_INGEST = 20000
+MAX_ITENS_DUPLICIDADE = 1500
+_JANELA_NOMES = 15
+_DUP_CACHE_TTL_SEG = 300.0
+_INGEST_ALERTA_DEBOUNCE_SEG = 600.0
+ERRO_UPLOAD_GRANDE = f"Arquivo muito grande (limite de {LIMITE_UPLOAD_BYTES // (1024 * 1024)} MB)."
+ERRO_LINHAS_DEMAIS = f"Planilha com mais de {MAX_LINHAS_IMPORT} linhas. Divida o arquivo."
+
+
+async def _ler_upload_limitado(request: Request, file: Any) -> bytes:
+    """Lê o arquivo enviado sem receber mais do que o teto (achado #11).
+
+    Antes: `await file.read()` bufferizava o corpo inteiro (o Starlette manda
+    para disco) e só DEPOIS o tamanho era conferido — um POST de 2 GB era
+    recebido até o fim para responder 413. Aqui a recusa vem em dois tempos:
+    pelo `Content-Length` declarado, antes de ler qualquer byte; e de novo
+    durante a leitura, porque o cabeçalho é declaração do cliente.
+    """
+    try:
+        declarado = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        declarado = 0
+    if declarado > LIMITE_UPLOAD_BYTES + 4096:
+        raise HTTPException(status_code=413, detail=ERRO_UPLOAD_GRANDE)
+    partes: List[bytes] = []
+    total = 0
+    while True:
+        pedaco = await file.read(64 * 1024)
+        if not pedaco:
+            break
+        total += len(pedaco)
+        if total > LIMITE_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=ERRO_UPLOAD_GRANDE)
+        partes.append(pedaco)
+    return b"".join(partes)
+
+
+def _limitar(prefixo: str, maximo: int, janela_seg: float):
+    """Teto por IDENTIDADE para rotas caras (achados #28, #60).
+
+    Por identidade, e não por IP: estas rotas exigem sessão, e a identidade é
+    o que o atacante não troca de graça. A janela é a durável de `app/taxa.py`.
+    """
+
+    async def _dep(request: Request, token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+        quem = (token.email or "").strip().lower() or _ip_do_cliente(request)
+        if not taxa.permitir(f"{prefixo}:{quem}", maximo, janela_seg):
+            raise HTTPException(status_code=429, detail="Muitas requisições. Aguarde alguns minutos.")
+        return token
+
+    return _dep
+
+
 @app.post("/api/users/import", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-async def import_users(file: UploadFile = File(...), ator: auth.TokenData = Depends(require_auth)) -> dict:
+async def import_users(request: Request, file: UploadFile = File(...), ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
 
     sb = _banco()
@@ -1422,14 +1491,10 @@ async def import_users(file: UploadFile = File(...), ator: auth.TokenData = Depe
             detail="Formato inválido. Exporte a planilha como CSV e envie um arquivo .csv.",
         )
 
-    raw = await file.read()
+    raw = await _ler_upload_limitado(request, file)
     if not raw:
         raise HTTPException(status_code=422, detail="Arquivo vazio.")
-        
-    # [OWASP A08] Validação de Limite de Tamanho
-    if len(raw) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Arquivo muito grande (limite de 5MB).")
-        
+
     # [OWASP A08] Validação de Magic Bytes (Assinatura real do arquivo)
     # Rejeita ativamente se for um binário executável ou arquivo restrito disfarçado de CSV
     if raw.startswith(b'MZ') or raw.startswith(b'\x7fELF') or raw.startswith(b'%PDF') or raw.startswith(b'PK'):
@@ -1474,8 +1539,25 @@ async def import_users(file: UploadFile = File(...), ator: auth.TokenData = Depe
     criados = 0
     ignorados = 0
     erros: List[dict[str, Any]] = []
+
+    # Teto de linhas ANTES de qualquer bcrypt (achado #11), e os e-mails que
+    # já existem numa consulta só — era uma ida ao banco por linha.
+    import itertools
+
+    linhas_csv = list(itertools.islice(reader, MAX_LINHAS_IMPORT + 1))
+    if len(linhas_csv) > MAX_LINHAS_IMPORT:
+        raise HTTPException(status_code=413, detail=ERRO_LINHAS_DEMAIS)
+    try:
+        ja_existem = {
+            str(u.get("email") or "").strip().lower()
+            for u in (sb.table("users").select("email").execute().data or [])
+        }
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler os e-mails existentes para a importação")
+        raise HTTPException(status_code=503, detail="Não foi possível ler as contas existentes. Tente de novo.")
+
     linha = 1
-    for row in reader:
+    for row in linhas_csv:
         linha += 1
         nome = str(row.get(h_nome) or "").strip()
         email = str(row.get(h_email) or "").strip().lower()
@@ -1511,10 +1593,10 @@ async def import_users(file: UploadFile = File(...), ator: auth.TokenData = Depe
             erros.append({"linha": linha, "email": email, "erro": "E-mail inválido."})
             continue
         try:
-            existe = sb.table("users").select("id").eq("email", email).limit(1).execute()
-            if existe.data:
+            if email in ja_existem:
                 ignorados += 1
                 continue
+            ja_existem.add(email)
             sb.table("users").insert(
                 {
                     "email": email,
@@ -2292,6 +2374,9 @@ def health_detalhado() -> dict:
         # senha SMTP parar de descriptografar se a JWT diferir entre ambientes.
         "smtp_key_dedicada": bool(os.getenv("ENCRYPTION_KEY")),
         "jwt_configurado": bool(os.getenv("JWT_SECRET_KEY")),
+        # O rate limit está usando o banco (vale para todas as instâncias) ou
+        # degradou para a memória do processo? None = ainda não foi exercido.
+        "rate_limit_persistente": taxa.estado_persistente(),
     }
 
 
@@ -2844,11 +2929,21 @@ def senha_trocar(
 
 
 class SmtpTestBody(BaseModel):
-    target_email: str
+    target_email: str = Field(max_length=320)
 
 
-@app.post("/api/settings/smtp/test", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
+@app.post(
+    "/api/settings/smtp/test",
+    dependencies=[
+        Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR)),
+        # Cinco por hora por identidade (achado #28): era relay autenticado
+        # sem teto, um e-mail do remetente corporativo por clique.
+        Depends(_limitar("smtp-test", 5, 3600)),
+    ],
+)
 def test_smtp_config(body: SmtpTestBody) -> dict:
+    # Endereço plausível e sem CR/LF: o valor ia direto para `msg["To"]`.
+    destino = _validar_email(body.target_email)
     s = load_settings()
     if not s.smtp_host:
         raise HTTPException(status_code=400, detail="Servidor SMTP não configurado.")
@@ -2864,7 +2959,7 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
             use_tls=s.smtp_use_tls,
             use_ssl=s.smtp_use_ssl,
             from_email=s.smtp_from_email,
-            to_email=body.target_email.strip(),
+            to_email=destino,
             subject="Monitor de Certificados - E-mail de Teste",
             html_content="<p>Olá! Este é um e-mail de teste enviado a partir do seu <strong>Monitor de Certificados</strong> para validar as configurações de SMTP.</p>"
         )
@@ -2926,7 +3021,15 @@ def preview_email_alerta(body: PreviaEmailBody) -> dict:
     return {"ok": True, **previa_do_resumo(old, modelo)}
 
 
-@app.post("/api/settings/alerts/trigger", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
+@app.post(
+    "/api/settings/alerts/trigger",
+    dependencies=[
+        Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR)),
+        # Varre o acervo inteiro e envia e-mail a todos os colaboradores, de
+        # forma síncrona: três por hora por identidade (achado #28).
+        Depends(_limitar("alerts-trigger", 3, 3600)),
+    ],
+)
 def trigger_alerts_manually() -> dict:
     try:
         stats = trigger_all_alerts()
@@ -3081,10 +3184,10 @@ def agent_queue_list() -> dict:
 
 
 class RegistrarDispositivoBody(BaseModel):
-    email: str
-    password: str
-    machine_id: str
-    nome: Optional[str] = None
+    email: str = Field(max_length=320)
+    password: str = Field(max_length=1024)
+    machine_id: str = Field(max_length=128)
+    nome: Optional[str] = Field(default=None, max_length=128)
 
 
 class TokenDoDispositivoBody(BaseModel):
@@ -3434,6 +3537,11 @@ def listar_certificados(
         for it in base["itens"]:
             it["nome_exibicao"] = nomes.nome_exibicao(it.get("nome") or it.get("display_name"))
 
+        # Paginação por padrão (achado #29): sem `pagina`/`por_pagina` a rota
+        # devolvia a lista inteira. A exportação continua pelo `todas_filtradas`,
+        # que já tem o próprio teto.
+        if pagina is None and por_pagina is None and not todas_filtradas:
+            pagina, por_pagina = 1, 100
         paged = pagina is not None and por_pagina is not None
         if not paged and not todas_filtradas:
             return JSONResponse({**base, "banco": banco_configurado()})
@@ -3698,29 +3806,38 @@ def _agrupar_duplicidades(
         if ra != rb:
             parent[rb] = ra
 
+    # Vizinhança ordenada (achado #12): os nomes normalizados vão em ordem e
+    # cada um se compara só com os `_JANELA_NOMES` seguintes. O laço era n²
+    # sobre o inventário inteiro — para 1.000 itens, 500 mil `SequenceMatcher`
+    # por requisição, num worker só, aberto a todo papel. Dois nomes com razão
+    # ≥ 0,86 diferem em poucos caracteres e ficam vizinhos na ordenação; o que
+    # a poda perde é o par que difere logo no início ("A PADARIA" / "PADARIA"),
+    # que a razão 0,86 também dificilmente aceitaria. Não é um bloco por
+    # prefixo de propósito: inventário em que todos os nomes começam pela
+    # mesma palavra cairia num bloco só, e voltaria a n².
+    candidatos: List[Tuple[int, str, str, str]] = []
     for i in range(n):
-        for j in range(i + 1, n):
-            if _fingerprint_hex_from_row(rows[i]) or _fingerprint_hex_from_row(rows[j]):
+        if _fingerprint_hex_from_row(rows[i]):
+            continue
+        fi = str(rows[i].get("nome_publico") or "").strip().lower()
+        if not fi:
+            continue
+        ni = _normalize_name_dup(
+            rows[i].get("nome") or rows[i].get("display_name") or rows[i].get("nome_publico")
+        )
+        if len(ni) < 5:
+            continue
+        di = _digits_only_doc(rows[i].get("documento_numero") or rows[i].get("documento_formatado"))
+        candidatos.append((i, fi, ni, di))
+
+    candidatos.sort(key=lambda c: c[2])
+    for a in range(len(candidatos)):
+        i, fi, ni, di = candidatos[a]
+        for b in range(a + 1, min(a + 1 + _JANELA_NOMES, len(candidatos))):
+            j, fj, nj, dj = candidatos[b]
+            if fi == fj:
                 continue
-            fi = str(rows[i].get("nome_publico") or "").strip().lower()
-            fj = str(rows[j].get("nome_publico") or "").strip().lower()
-            if not fi or fi == fj:
-                continue
-            di = _digits_only_doc(
-                rows[i].get("documento_numero") or rows[i].get("documento_formatado")
-            )
-            dj = _digits_only_doc(
-                rows[j].get("documento_numero") or rows[j].get("documento_formatado")
-            )
             if len(di) >= 11 and len(dj) >= 11 and di == dj:
-                continue
-            ni = _normalize_name_dup(
-                rows[i].get("nome") or rows[i].get("display_name") or rows[i].get("nome_publico")
-            )
-            nj = _normalize_name_dup(
-                rows[j].get("nome") or rows[j].get("display_name") or rows[j].get("nome_publico")
-            )
-            if len(ni) < 5 or len(nj) < 5:
                 continue
             if SequenceMatcher(None, ni, nj).ratio() >= 0.86:
                 union(i, j)
@@ -4102,8 +4219,17 @@ def salvar_preferencia_alerta(
     return obter_preferencia_alerta(token)
 
 
+_dup_cache: Dict[Tuple[str, str, bool], Tuple[float, Tuple[list, list, list]]] = {}
+_dup_cache_lock = threading.Lock()
+
+
+def _dup_cache_limpar() -> None:
+    with _dup_cache_lock:
+        _dup_cache.clear()
+
+
 @app.get("/api/certificados/duplicidades", dependencies=[Depends(require_modulo("duplicidades"))])
-def certificados_duplicidades(token: auth.TokenData = Depends(require_auth)) -> dict[str, Any]:
+def certificados_duplicidades(request: Request, token: auth.TokenData = Depends(require_auth)) -> dict[str, Any]:
     """
     Analisa o último snapshot recebido (dados atuais do agente) ou, na ausência,
     o scan local no servidor, e devolve grupos de possíveis duplicados.
@@ -4111,6 +4237,12 @@ def certificados_duplicidades(token: auth.TokenData = Depends(require_auth)) -> 
     Os itens saem com o nome PÚBLICO do arquivo; a pasta só para admin
     (SECURITY_AUDIT #2). Sanitizado na saída porque um snapshot anterior à
     migração do lote 3 ainda carrega o nome com a senha.
+
+    A análise é memoizada por varredura (achado #12): o snapshot não muda
+    entre duas leituras, e recalcular era o laço n² mais caro do portal num
+    worker só. Quem força varredura nova a cada chamada esbarra no teto por
+    identidade; quem manda um inventário maior que o teto recebe 413 em vez
+    de derrubar o processo.
     """
     snap = get_latest_snapshot()
     origem = "ultimo_snapshot"
@@ -4124,14 +4256,36 @@ def certificados_duplicidades(token: auth.TokenData = Depends(require_auth)) -> 
         origem = "scan_local_servidor"
         scanned_at = datetime.now(timezone.utc).isoformat()
 
-    itens = [nome_publico.sanitizar_item(it) for it in raw_items]
-    rows = [it for it in itens if str(it.get("nome_publico") or "").strip()]
+    if len(raw_items) > MAX_ITENS_DUPLICIDADE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Inventário com mais de {MAX_ITENS_DUPLICIDADE} itens: grande demais para a análise ao vivo.",
+        )
+
     admin = (token.role or "").strip().lower() == "admin"
-    gd, gn, gci = _agrupar_duplicidades(rows, incluir_pasta=admin)
+    chave = (origem, str(scanned_at or ""), admin)
+    agora = time.monotonic()
+    with _dup_cache_lock:
+        guardado = _dup_cache.get(chave)
+    if guardado and agora - guardado[0] < _DUP_CACHE_TTL_SEG and origem == "ultimo_snapshot":
+        gd, gn, gci = guardado[1]
+        rows_total = sum(1 for it in raw_items if str((it.get("nome_publico") or it.get("file_name") or "")).strip())
+    else:
+        quem = (token.email or "").strip().lower() or _ip_do_cliente(request)
+        if not taxa.permitir(f"dup:{quem}", 5, 300):
+            raise HTTPException(status_code=429, detail="Análise já em curso. Aguarde alguns minutos.")
+        itens = [nome_publico.sanitizar_item(it) for it in raw_items]
+        rows = [it for it in itens if str(it.get("nome_publico") or "").strip()]
+        rows_total = len(rows)
+        gd, gn, gci = _agrupar_duplicidades(rows, incluir_pasta=admin)
+        with _dup_cache_lock:
+            if len(_dup_cache) > 32:
+                _dup_cache.clear()
+            _dup_cache[chave] = (agora, (gd, gn, gci))
     return {
         "origem_dados": origem,
         "scanned_at": scanned_at,
-        "total_itens_analisados": len(rows),
+        "total_itens_analisados": rows_total,
         "grupos_documento": gd,
         "grupos_nome_similar": gn,
         "grupos_certificado_igual": gci,
@@ -4627,6 +4781,20 @@ def vencidos_certificados(
 # sobrescrever o inventario inteiro. `require_agent_or_admin` e a mesma guarda
 # que `upload-pfx`, `redeem` e `report` ja usam, e o agente ja passa por ela em
 # producao (o cofre tem 491 certificados que so chegaram por `upload-pfx`).
+_ultimo_disparo_por_ingest = 0.0
+_ingest_disparo_lock = threading.Lock()
+
+
+def _pode_disparar_alerta_por_ingest() -> bool:
+    global _ultimo_disparo_por_ingest
+    with _ingest_disparo_lock:
+        agora = time.monotonic()
+        if agora - _ultimo_disparo_por_ingest < _INGEST_ALERTA_DEBOUNCE_SEG:
+            return False
+        _ultimo_disparo_por_ingest = agora
+        return True
+
+
 @app.post("/api/ingest")
 def ingest(
     body: IngestBody,
@@ -4660,8 +4828,12 @@ def ingest(
         scanned_iso=scanned.isoformat(),
         items=items,
     )
-    # Dispara e-mails de alerta em segundo plano para não bloquear a resposta do agente
-    background_tasks.add_task(trigger_all_alerts)
+    # Dispara e-mails de alerta em segundo plano para não bloquear a resposta
+    # do agente — no máximo uma vez a cada `_INGEST_ALERTA_DEBOUNCE_SEG`
+    # (achado #28): cada ingestão varria o acervo e enviava e-mails; várias
+    # estações ingerindo em sequência eram várias varreduras completas.
+    if _pode_disparar_alerta_por_ingest():
+        background_tasks.add_task(trigger_all_alerts)
     return {
         "ok": True,
         "itens_recebidos": len(body.items),
@@ -4773,17 +4945,18 @@ from app import cert_installer
 
 class UploadPfxRequest(BaseModel):
     """Payload enviado pelo agente com o PFX cifrado em trânsito."""
-    fingerprint: str
-    machine_id: str = "default"
-    pfx_b64: str  # PFX em base64 (cifrado em trânsito via TLS)
-    password: Optional[str] = None
-    nome_titular: Optional[str] = None
-    documento: Optional[str] = None
-    documento_tipo: Optional[str] = None
-    subject: Optional[str] = None
-    not_before: Optional[str] = None
-    not_after: Optional[str] = None
-    friendly_name: Optional[str] = None
+    fingerprint: str = Field(max_length=64)
+    machine_id: str = Field(default="default", max_length=128)
+    # 1 MB de PFX em base64 (o teto real é conferido depois de decodificar).
+    pfx_b64: str = Field(max_length=1_500_000)  # PFX em base64 (cifrado em trânsito via TLS)
+    password: Optional[str] = Field(default=None, max_length=256)
+    nome_titular: Optional[str] = Field(default=None, max_length=512)
+    documento: Optional[str] = Field(default=None, max_length=64)
+    documento_tipo: Optional[str] = Field(default=None, max_length=16)
+    subject: Optional[str] = Field(default=None, max_length=2048)
+    not_before: Optional[str] = Field(default=None, max_length=64)
+    not_after: Optional[str] = Field(default=None, max_length=64)
+    friendly_name: Optional[str] = Field(default=None, max_length=512)
 
 
 @app.post("/api/cert-installer/upload-pfx")
@@ -5347,7 +5520,10 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
         try:
             wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
             ws = wb.active
-            linhas = list(ws.iter_rows(values_only=True))
+            # `max_row` limita a LEITURA: um .xlsx de 5 MB com dimensão gigante
+            # expandiria para GB em RAM se materializado inteiro (achado #11).
+            # Lê uma linha além do teto só para saber que ele foi passado.
+            linhas = list(ws.iter_rows(values_only=True, max_row=MAX_LINHAS_IMPORT + 2))
         except Exception:
             raise HTTPException(status_code=422, detail="Não consegui ler a planilha .xlsx.")
         finally:
@@ -5357,6 +5533,8 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
                 pass
         if not linhas:
             raise HTTPException(status_code=422, detail="Planilha vazia.")
+        if len(linhas) - 1 > MAX_LINHAS_IMPORT:
+            raise HTTPException(status_code=413, detail=ERRO_LINHAS_DEMAIS)
         cabecalho = [str(c or "").strip() for c in linhas[0]]
         return [
             {cabecalho[i]: ("" if v is None else str(v).strip())
@@ -5374,11 +5552,18 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
     leitor = csv.DictReader(io.StringIO(texto), delimiter=delim)
     if not leitor.fieldnames:
         raise HTTPException(status_code=422, detail="CSV sem cabeçalho.")
-    return [{(k or ""): (v or "") for k, v in linha.items()} for linha in leitor]
+    import itertools
+
+    linhas = [{(k or ""): (v or "") for k, v in linha.items()}
+              for linha in itertools.islice(leitor, MAX_LINHAS_IMPORT + 1)]
+    if len(linhas) > MAX_LINHAS_IMPORT:
+        raise HTTPException(status_code=413, detail=ERRO_LINHAS_DEMAIS)
+    return linhas
 
 
 @app.post("/api/carteira/importar", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
 async def importar_carteiras(
+    request: Request,
     file: UploadFile = File(...),
     token: auth.TokenData = Depends(require_admin_ou_lider),
 ) -> dict:
@@ -5404,11 +5589,9 @@ async def importar_carteiras(
             detail="Formato inválido. Envie a planilha em .xlsx ou .csv.",
         )
 
-    raw = await file.read()
+    raw = await _ler_upload_limitado(request, file)
     if not raw:
         raise HTTPException(status_code=422, detail="Arquivo vazio.")
-    if len(raw) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Arquivo muito grande (limite de 5MB).")
     # Executável disfarçado. O `PK` do zip é legítimo aqui — todo .xlsx começa
     # com ele —, então a checagem é por extensão declarada.
     if raw.startswith(b"MZ") or raw.startswith(b"\x7fELF") or raw.startswith(b"%PDF"):
@@ -5779,7 +5962,14 @@ def diagnostico_do_instalador() -> dict:
     return out
 
 
-@app.post("/api/cert-installer/revalidar-cofre", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
+@app.post(
+    "/api/cert-installer/revalidar-cofre",
+    dependencies=[
+        Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR)),
+        # Decifra o cofre inteiro: três por dez minutos por identidade (#60).
+        Depends(_limitar("revalidar", 3, 600)),
+    ],
+)
 def revalidar_cofre() -> dict:
     """
     Prova que a chave em vigor decifra o que está guardado.
@@ -5936,9 +6126,9 @@ def _dispositivos_da_pessoa(email: str) -> Optional[List[dict]]:
 
 class PrepararInstalacaoRequest(BaseModel):
     """Instalar na máquina onde a pessoa está, pelo agente residente."""
-    certificate_ids: List[str]
-    machine_id: str
-    hostname: Optional[str] = None
+    certificate_ids: List[str] = Field(max_length=MAX_CERTIFICADOS_POR_TOKEN)
+    machine_id: str = Field(max_length=128)
+    hostname: Optional[str] = Field(default=None, max_length=253)
 
 
 @app.post("/api/cert-installer/prepare")
@@ -6045,7 +6235,11 @@ def preparar_instalacao(
 
 @app.get("/api/cert-installer/acompanhar/{token_id}")
 def acompanhar_instalacao(
-    token_id: str, token: auth.TokenData = Depends(require_auth)
+    token_id: str,
+    # A tela pergunta em laço, e cada pergunta agrega a trilha inteira da
+    # pessoa: 120 por minuto por identidade é folga para o laço da tela e
+    # teto para quem o roda à mão (#60).
+    token: auth.TokenData = Depends(_limitar("acompanhar", 120, 60)),
 ) -> dict:
     """
     Em que pe esta aquele pedido de instalacao.
@@ -6201,8 +6395,8 @@ def _pedir_instalacao_ao_invent(
 
 class RedeemRequest(BaseModel):
     """Payload enviado pelo agente para resgatar o bundle criptografado."""
-    token: str
-    clientPublicKey: str  # SPKI base64 (ECDH P-256)
+    token: str = Field(max_length=256)
+    clientPublicKey: str = Field(max_length=4096)  # SPKI base64 (ECDH P-256)
 
 
 @app.post("/api/cert-installer/redeem")
@@ -6220,6 +6414,10 @@ def redeem_install(
     máquina certa.
     """
     client_ip = request.client.host if request.client else None
+
+    # Mesmo teto por IP do /claim gêmeo (#60): resgate é tentativa de token.
+    if not _claim_rate_limit(_ip_do_cliente(request)):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
 
     # 0. A máquina que pede é a máquina-alvo?
     alvo = cert_installer.alvo_do_token(body.token)
@@ -6448,8 +6646,8 @@ class InstallResultItem(BaseModel):
 
 class ReportRequest(BaseModel):
     """Payload enviado pelo agente após instalar os certificados."""
-    token: str
-    results: List[InstallResultItem]
+    token: str = Field(max_length=256)
+    results: List[InstallResultItem] = Field(max_length=200)
 
 
 @app.post("/api/cert-installer/report")

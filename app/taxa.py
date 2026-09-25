@@ -48,6 +48,16 @@ IDADE_MAXIMA_SEG = 3600.0
 _memoria: dict[str, list[float]] = {}
 _memoria_lock = threading.Lock()
 
+# O último `permitir` conseguiu usar o banco? None = nunca tentou. Vai para
+# /api/health/detalhado (achado #47): a degradação para memória de instância
+# era silenciosa para tudo que não fosse o log — e o log a apagava se a
+# mensagem contivesse "senha".
+_estado_persistente: bool | None = None
+
+
+def estado_persistente() -> bool | None:
+    return _estado_persistente
+
 
 def _banco():
     from app.settings_state import _banco as _sb
@@ -92,6 +102,8 @@ def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
                 .gte("quando", corte_janela)
                 .execute()
             )
+            global _estado_persistente
+            _estado_persistente = True
             if len(r.data or []) >= maximo:
                 return False
             client.table(TABELA).insert(
@@ -106,6 +118,7 @@ def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
                 ).execute()
             return True
         except Exception:  # noqa: BLE001
+            _estado_persistente = False
             logger.warning(
                 "Rate limit no banco indisponível (tabela %s ausente? rode a "
                 "migration 20260902100000); usando a janela em memória desta "
