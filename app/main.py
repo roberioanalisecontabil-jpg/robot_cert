@@ -5993,9 +5993,57 @@ def diagnostico_do_instalador() -> dict:
     out["textos"] = {
         "maquinas": [f"{m} · " + _texto.plural(n, "certificado") for m, n in (c.get("por_maquina") or {}).items()],
         "em_uso": [f"v{v} · " + _texto.plural(n, "certificado") for v, n in (k.get("linhas_por_versao") or {}).items()],
-        "ajuda_revalidar": "Confere de novo as senhas e chaves de todos os certificados guardados.",
+        # Lote 8 (#42): a ajuda antiga ("confere de novo as senhas e chaves de
+        # todos os certificados") dava a entender que o botão consertava o
+        # cofre. Ele só PROVA; quem corrige é o Recifrar.
+        "ajuda_revalidar": "Prova que as chaves em vigor decifram uma amostra de cada versão (PFX e senha). Não altera nada.",
+        "ajuda_recifrar": (
+            "Regrava os registros fora do estado em vigor com as chaves atuais e dados associados. "
+            "Use depois de rotacionar uma chave; quando 'para recifrar' chegar a zero, a chave antiga pode sair do ambiente."
+        ),
+        "para_recifrar": k.get("linhas_para_recifrar") if not k.get("erro") else None,
     }
+    if not c.get("erro") and c.get("sem_aad") and not k.get("exige_aad"):
+        problemas.append(
+            _texto.plural(c["sem_aad"], "registro no envelope antigo (sem dados associados)", "registros no envelope antigo (sem dados associados)")
+            + ". Recifre o cofre e ligue COFRE_EXIGE_AAD."
+        )
+        out["situacao"] = "atencao" if out["situacao"] == "ok" else out["situacao"]
+    sem_chave_senha = list((k.get("senha") or {}).get("versoes_sem_chave") or []) if not k.get("erro") else []
+    if sem_chave_senha:
+        problemas.append(
+            "Versões da chave da SENHA sem chave configurada: " + ", ".join("v" + str(v) for v in sem_chave_senha)
+            + ". Essas senhas estão indecifráveis agora; reponha CERT_PASSWORD_ENCRYPTION_KEY_V<n>."
+        )
+        out["situacao"] = "atencao" if out["situacao"] == "ok" else out["situacao"]
     return out
+
+
+@app.post(
+    "/api/cert-installer/recifrar-cofre",
+    dependencies=[
+        Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR)),
+        # Decifra e regrava o cofre: três por dez minutos por identidade (#60).
+        Depends(_limitar("recifrar", 3, 600)),
+    ],
+)
+def recifrar_cofre() -> dict:
+    """
+    Completa uma rotação de chave (lote 8: #42, #19, #55).
+
+    Regrava as linhas fora do estado em vigor — versão da chave do PFX, da
+    chave da senha ou envelope sem AAD — decifrando com a versão gravada e
+    cifrando com as em vigor. Linha que não decifra fica intocada e vem em
+    `falhas`. Chame de novo enquanto `restantes` > 0.
+    """
+    try:
+        return cert_installer.recifrar_cofre()
+    except RuntimeError as e:
+        logger.error("Recifra do cofre indisponível: %s", e)
+        raise HTTPException(status_code=503, detail="O cofre está indisponível para recifrar. Veja o log do servidor.")
+    except Exception:
+        logger.exception("Falha ao recifrar o cofre")
+        raise HTTPException(status_code=500, detail="Erro interno ao recifrar o cofre")
 
 
 @app.post(

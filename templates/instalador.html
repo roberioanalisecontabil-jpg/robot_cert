@@ -76,9 +76,20 @@
             <span class="ag-spin" id="btnRevalidarSpin" hidden aria-hidden="true"></span>
             <span class="cg-btn__rotulo" id="btnRevalidarRotulo">Revalidar cofre</span>
           </button>
-          <p class="cg-inst-revalidar__ajuda" id="revalidarAjuda">Confere de novo as senhas e chaves de todos os certificados guardados.</p>
+          <p class="cg-inst-revalidar__ajuda" id="revalidarAjuda">Prova que as chaves em vigor decifram uma amostra de cada versão (PFX e senha). Não altera nada.</p>
         </div>
         <div class="cg-inst-revalidar__resultado" id="revalidarArea" aria-live="polite"></div>
+        <!-- Lote 8 (#42): quem corrige o cofre depois de uma rotação é este
+             botão, não o Revalidar. Regrava só o que está fora do estado em
+             vigor; linha ilegível fica como está e é listada. -->
+        <div class="cg-inst-revalidar">
+          <button type="button" id="btnRecifrarCofre" class="ag-btn ag-btn--outline">
+            <span class="ag-spin" id="btnRecifrarSpin" hidden aria-hidden="true"></span>
+            <span class="cg-btn__rotulo" id="btnRecifrarRotulo">Recifrar cofre</span>
+          </button>
+          <p class="cg-inst-revalidar__ajuda" id="recifrarAjuda">Regrava os registros fora do estado em vigor com as chaves atuais e dados associados. Use depois de rotacionar uma chave.</p>
+        </div>
+        <div class="cg-inst-revalidar__resultado" id="recifrarArea" aria-live="polite"></div>
       </div>
     </section>
 
@@ -494,19 +505,58 @@
           + itemDados("Sem senha cifrada", esc(num(c.sem_senha_cifrada)), { zero: !c.sem_senha_cifrada, aviso: !!c.sem_senha_cifrada })
           + itemDados("Senha em claro", esc(num(c.senha_em_claro)), { zero: !c.senha_em_claro, aviso: !!c.senha_em_claro })
           + itemDados("Custódia desativada", esc(num(c.bloqueios)), { zero: !c.bloqueios })
+          // Lote 8: envelope antigo (sem AAD) e quantas linhas o Recifrar ainda tocaria.
+          + itemDados("Sem dados associados", esc(num(c.sem_aad)), { zero: !c.sem_aad, aviso: !!c.sem_aad && !k.exige_aad })
+          + itemDados("Para recifrar", esc(num(c.para_recifrar)), { zero: !c.para_recifrar, aviso: !!c.para_recifrar })
           + itemDados("Último envio", c.ultimo_upload ? tempo(c.ultimo_upload, fmtQuando(c.ultimo_upload)) : "—", { secundario: true });
       document.getElementById("diagCofre").innerHTML = cofre;
 
       const semChave = k.versoes_sem_chave || [];
+      const s = k.senha || {};
+      const semChaveSenha = s.versoes_sem_chave || [];
       const chaves = k.erro
         ? itemDados("Erro", esc(k.erro), { aviso: true })
-        : itemDados("Versão em vigor", k.versao_corrente != null ? "v" + esc(String(k.versao_corrente)) : "—")
+        : itemDados("Versão em vigor (PFX)", k.versao_corrente != null ? "v" + esc(String(k.versao_corrente)) : "—")
           + itemDados("Configuradas no ambiente", (k.versoes_configuradas || []).map((v) => "v" + esc(String(v))).join(", ") || "nenhuma", { zero: !(k.versoes_configuradas || []).length })
           + itemDados("Em uso no cofre", (t.em_uso || []).map(esc).join("<br>") || "—", { secundario: true })
-          + itemDados("Versões sem chave", semChave.length ? semChave.map((v) => "v" + esc(String(v))).join(", ") : "nenhuma", { zero: !semChave.length, aviso: !!semChave.length });
+          + itemDados("Versões sem chave", semChave.length ? semChave.map((v) => "v" + esc(String(v))).join(", ") : "nenhuma", { zero: !semChave.length, aviso: !!semChave.length })
+          + itemDados("Versão em vigor (senha)", s.versao_corrente != null ? "v" + esc(String(s.versao_corrente)) : "—")
+          + itemDados("Senhas por versão", Object.entries(s.linhas_por_versao || {}).map(([v, n]) => "v" + esc(String(v)) + " · " + esc(num(n))).join("<br>") || "—", { secundario: true })
+          + itemDados("Versões da senha sem chave", semChaveSenha.length ? semChaveSenha.map((v) => "v" + esc(String(v))).join(", ") : "nenhuma", { zero: !semChaveSenha.length, aviso: !!semChaveSenha.length })
+          + itemDados("Exige dados associados", k.exige_aad ? "sim" : "não (janela de transição)", { zero: !k.exige_aad });
       document.getElementById("diagChaves").innerHTML = chaves;
       document.getElementById("diagArea").removeAttribute("aria-busy");
       if (t.ajuda_revalidar) document.getElementById("revalidarAjuda").textContent = t.ajuda_revalidar;
+      if (t.ajuda_recifrar) document.getElementById("recifrarAjuda").textContent = t.ajuda_recifrar;
+    }
+
+    async function recifrarCofre() {
+      const btn = document.getElementById("btnRecifrarCofre");
+      const area = document.getElementById("recifrarArea");
+      btn.disabled = true;
+      document.getElementById("btnRecifrarSpin").hidden = false;
+      document.getElementById("btnRecifrarRotulo").textContent = "Recifrando…";
+      area.innerHTML = "";
+      try {
+        const r = await fetch("/api/cert-installer/recifrar-cofre", { method: "POST", headers: getHeaders(true) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Falha ao recifrar");
+        const falhas = d.falhas || [];
+        const resumo = d.candidatas
+          ? `${esc(num(d.recifradas))} de ${esc(num(d.candidatas))} recifrados para PFX v${esc(String(d.versao_pfx))} / senha v${esc(String(d.versao_senha))}; restam ${esc(num(d.restantes))}.`
+          : "Nada a recifrar: o cofre já está no estado em vigor.";
+        area.innerHTML = `<div class="ag-alert ${falhas.length ? "ag-alert--danger" : "ag-alert--success"}">${falhas.length ? AVISO : CHECK}<div class="ag-alert__corpo">${resumo}${
+          falhas.length ? `<ul>${falhas.map((f) => `<li>${esc(f.fingerprint)}… (${esc(f.machine_id || "?")}): ${esc(f.motivo)}</li>`).join("")}</ul>` : ""
+        }${d.restantes > falhas.length ? "<p>Clique de novo para continuar.</p>" : ""}</div></div>`;
+        showToast(falhas.length ? plural(falhas.length, "registro não pôde ser recifrado", "registros não puderam ser recifrados") + "." : (d.recifradas ? plural(d.recifradas, "registro recifrado", "registros recifrados") + "." : "Cofre já no estado em vigor."), falhas.length ? "error" : "success");
+        await loadDiagnostico();
+      } catch (e) {
+        area.innerHTML = `<div class="ag-alert ag-alert--danger">${AVISO}<div class="ag-alert__corpo">${esc(e.message)}</div></div>`;
+      } finally {
+        btn.disabled = false;
+        document.getElementById("btnRecifrarSpin").hidden = true;
+        document.getElementById("btnRecifrarRotulo").textContent = "Recifrar cofre";
+      }
     }
 
     async function loadDiagnostico() {
@@ -875,6 +925,7 @@
       document.getElementById("formTrilha").addEventListener("submit", (ev) => { ev.preventDefault(); loadInstallLogs(); });
       document.getElementById("btnDiagTentar").addEventListener("click", loadDiagnostico);
       document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
+      document.getElementById("btnRecifrarCofre").addEventListener("click", recifrarCofre);
       document.getElementById("btnSalvarCfg").addEventListener("click", salvarConfigInstalador);
       document.getElementById("btnExpurgarAgora").addEventListener("click", abrirExpurgo);
       document.getElementById("btnExpurgarConfirmar").addEventListener("click", expurgarAgora);

@@ -36,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
@@ -60,8 +61,55 @@ def _banco():
     return _sb()
 
 
-def _hash(codigo: str) -> str:
+PREFIXO_HASH = "v2$"
+
+
+def _segredo() -> bytes:
+    """A chave do HMAC é o segredo do JWT: já é o segredo do servidor que o
+    login exige, e não há motivo para um segundo."""
+    s = (os.getenv("JWT_SECRET_KEY") or "").strip()
+    if not s:
+        raise RuntimeError("JWT_SECRET_KEY não configurada no ambiente.")
+    return s.encode("utf-8")
+
+
+def _hash(codigo: str, sal: Optional[str] = None) -> str:
+    """`v2$<sal>$<hmac>` — HMAC-SHA256 com o segredo do servidor e sal por linha
+    (SECURITY_AUDIT #56, lote 8).
+
+    O SHA-256 puro de 6 dígitos era uma tabela de 10^6 entradas: quem lesse a
+    coluna revertia TODOS os códigos pendentes de uma vez. Com sal por linha
+    a tabela vale para uma linha só, e com o HMAC ela nem se monta sem o
+    segredo do servidor. Os limites (validade, 3 tentativas, 3 pedidos/hora)
+    continuam sendo a proteção principal — isto é defesa em profundidade.
+    """
+    sal = sal or secrets.token_hex(8)
+    mac = hmac.new(_segredo(), (sal + codigo.strip()).encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{PREFIXO_HASH}{sal}${mac}"
+
+
+def _hash_legado(codigo: str) -> str:
     return hashlib.sha256(codigo.strip().encode("utf-8")).hexdigest()
+
+
+def _confere(guardado: str, codigo: str) -> bool:
+    """O código bate com o hash guardado, no formato que ele tiver.
+
+    Formato antigo (sha256 puro) continua aceito: um código pedido antes do
+    deploy vale 15 minutos e tem de funcionar. A janela se fecha sozinha —
+    nenhum hash novo nasce no formato antigo — e o aceite fica no log.
+    """
+    guardado = str(guardado or "")
+    if guardado.startswith(PREFIXO_HASH):
+        partes = guardado.split("$", 2)
+        if len(partes) != 3:
+            return False
+        return hmac.compare_digest(guardado, _hash(codigo, sal=partes[1]))
+    ok = hmac.compare_digest(guardado, _hash_legado(codigo))
+    if ok:
+        logger.warning("Código de redefinição aceito no formato antigo (sha256 sem sal); "
+                       "some sozinho quando os códigos pendentes expirarem.")
+    return ok
 
 
 def gerar_codigo() -> str:
@@ -172,7 +220,7 @@ def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
     # primeiro byte diferente, e o tempo de resposta vaza quantos dígitos
     # iniciais estavam certos. Com 6 dígitos e 3 tentativas isso é margem
     # estreita, mas o custo de fechar é uma linha.
-    if hmac.compare_digest(str(linha.get("codigo_hash") or ""), _hash(codigo)):
+    if _confere(str(linha.get("codigo_hash") or ""), codigo):
         return True, str(linha["id"])
 
     tentativas = int(linha.get("tentativas") or 0) + 1
