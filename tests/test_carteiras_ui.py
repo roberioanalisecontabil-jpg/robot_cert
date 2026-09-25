@@ -474,7 +474,10 @@ def test_linha_ruim_nao_derruba_o_arquivo(client: TestClient, banco: _Fake) -> N
     assert d["atribuidos"] == 1
     motivos = " ".join(e["motivo"] for e in d["erros"])
     assert len(d["erros"]) == 3
-    assert "naoexiste@x.com" in motivos          # e-mail sem conta
+    # Lote 9 (#52): o motivo não ecoa mais o endereço — a LINHA (conferida
+    # abaixo) é o que o gestor precisa para corrigir a planilha.
+    assert "naoexiste@x.com" not in motivos
+    assert "esse e-mail" in motivos               # e-mail sem conta
     assert "99999999999999" in motivos           # documento fora do inventário
     assert "Falta o e-mail ou o CNPJ/CPF" in motivos
     # Cada erro aponta a LINHA da planilha (1 é o cabeçalho).

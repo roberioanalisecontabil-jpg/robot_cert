@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -233,6 +234,54 @@ def ponte_invent_configurada() -> bool:
     return bool(INVENT_API_URL and CERT_PORTAL_TOKEN)
 
 
+_HOSTS_LOCAIS = ("127.0.0.1", "localhost", "::1", "[::1]")
+
+
+def _host_da_url(url: str) -> str:
+    from urllib.parse import urlsplit
+
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def dsn_efetivo(dsn: Optional[str] = None) -> str:
+    """O DSN que o cliente do banco recebe (achado #51, lote 9).
+
+    Host fora da própria máquina sem `sslmode` na URL ganha `sslmode=require`:
+    sem isso a libpq negocia TLS só "se der" (`prefer`) e cai para texto claro
+    em silêncio — com a senha do banco e o cofre inteiro no fio. Quem tem um
+    Postgres remoto sem TLS e aceita o risco escreve `sslmode=disable` na URL,
+    e ganha um aviso no boot. Local (`127.0.0.1`/`localhost`) fica como está:
+    é o caso do ANALISESRV.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    d = (dsn if dsn is not None else DATABASE_URL).strip()
+    if not d:
+        return d
+    partes = urlsplit(d)
+    host = (partes.hostname or "").lower()
+    if not host or host in _HOSTS_LOCAIS:
+        return d
+    if "sslmode" in parse_qs(partes.query):
+        return d
+    return d + ("&" if partes.query else "?") + "sslmode=require"
+
+
+def _sslmode_fraco(dsn: str) -> Optional[str]:
+    """`sslmode` explícito que NÃO garante TLS num host remoto, ou None."""
+    from urllib.parse import parse_qs, urlsplit
+
+    partes = urlsplit(dsn)
+    host = (partes.hostname or "").lower()
+    if not host or host in _HOSTS_LOCAIS:
+        return None
+    modo = (parse_qs(partes.query).get("sslmode") or [""])[0].lower()
+    return modo if modo in ("disable", "allow", "prefer") else None
+
+
 # ── Verificação central do ambiente, na partida ───────────────────────────
 
 
@@ -375,5 +424,27 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
             "Ponte com o INVENT desligada (INVENT_API_URL/CERT_PORTAL_TOKEN) — "
             "o botão 'instalar nesta máquina' não aparece."
         )
+    elif (
+        producao
+        and INVENT_API_URL.lower().startswith("http://")
+        and _host_da_url(INVENT_API_URL) not in _HOSTS_LOCAIS
+    ):
+        # Fatal, não aviso (achado #40): por essa ponte viajam o
+        # CERT_PORTAL_TOKEN e o token de instalação em claro. Na própria
+        # máquina (127.0.0.1:8021, o caso do ANALISESRV) não há fio a escutar.
+        fatais.append(
+            "INVENT_API_URL usa http:// para fora desta máquina — o CERT_PORTAL_TOKEN e "
+            "os tokens de instalação viajariam em claro. Use https:// (ou 127.0.0.1 "
+            "quando o INVENT roda no mesmo servidor)."
+        )
+
+    if DATABASE_URL:
+        modo = _sslmode_fraco(DATABASE_URL)
+        if modo:
+            avisos.append(
+                f"DATABASE_URL aponta para outro host com sslmode={modo}: a conexão com o "
+                "banco pode ir em texto claro. Prefira sslmode=require (é o que o portal "
+                "aplica quando a URL não diz nada)."
+            )
 
     return fatais, avisos

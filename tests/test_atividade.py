@@ -112,7 +112,7 @@ class _Fake:
         return _Query(self.tabelas.setdefault(nome, []), self, nome)
 
 
-SENHA = "segredo123"
+SENHA = "segredo-12345"  # 13 caracteres: a politica do lote 9 exige 12 (SECURITY_AUDIT #25)
 
 
 @pytest.fixture

@@ -84,67 +84,49 @@ CERT_ROBOT_API_KEY=sua_chave_secreta_aqui
 
 ---
 
-## 🔌 PARTE 2 — Abrir a Porta no Firewall do Windows
+## 🔌 PARTE 2 — Firewall: só as portas do proxy TLS
 
-### 2.1 Via PowerShell (como Administrador)
+> **Desenho (auditoria de 24/09/2026, achados #37 e #38):** a aplicação (uvicorn) faz bind **só em `127.0.0.1:8020`**. Quem atende a rede é o **Caddy** (`deploy/Caddyfile`), com TLS (Let's Encrypt por DNS na Cloudflare) e redirecionamento automático de 80 para 443. O firewall abre **80 e 443**; a **8020 nunca** é aberta para fora — HTTP puro na rede entregaria JWT, X-API-Key e o cofre em claro.
+
+### 2.1 Via script (recomendado)
 
 ```powershell
-# Abrir porta 8020 TCP para entrada (acesso externo ao portal)
-New-NetFirewallRule `
-  -DisplayName "Analise CertiDigital Portal" `
-  -Direction Inbound `
-  -Protocol TCP `
-  -LocalPort 8020 `
-  -Action Allow `
-  -Profile Any
-
-# Verificar se a regra foi criada
-Get-NetFirewallRule -DisplayName "Analise CertiDigital Portal"
+# Como Administrador. Cria a regra para 80/443, remove uma regra antiga que
+# abrisse a 8020 e confere que a 8020 só ouve em loopback.
+.\scripts\setup_porta_servidor.ps1
 ```
 
-### 2.2 Via interface gráfica (alternativa)
-
-1. Abrir **Windows Defender Firewall** → "Configurações avançadas"
-2. Clicar em **Regras de Entrada** → "Nova Regra..."
-3. Tipo: **Porta** → TCP → Porta específica: `8020`
-4. Ação: **Permitir a conexão**
-5. Perfis: marcar todos (Domínio, Privado, Público)
-6. Nome: `Analise CertiDigital Portal`
-
-### 2.3 Verificar se a porta está ouvindo
+### 2.2 Via PowerShell, à mão
 
 ```powershell
-# Após iniciar o servidor, verificar:
+New-NetFirewallRule `
+  -DisplayName "AnaliseCertiDigital-Proxy-HTTPS" `
+  -Direction Inbound `
+  -Protocol TCP `
+  -LocalPort 80,443 `
+  -Action Allow `
+  -Profile Domain,Private
+
+# Se existir, remova a regra antiga que abria a 8020:
+Remove-NetFirewallRule -DisplayName "AnaliseCertiDigital-Portal" -ErrorAction SilentlyContinue
+```
+
+### 2.3 Verificar o bind da aplicação
+
+```powershell
+# Depois de iniciar o servidor: TEM de aparecer 127.0.0.1:8020, nunca [::]:8020 nem o IP da máquina.
 netstat -ano | findstr :8020
 ```
 
 ---
 
-## 🌐 PARTE 3 — Liberar Porta no Roteador (Acesso Externo)
+## 🌐 PARTE 3 — Acesso de fora
 
-> Necessário somente se o servidor estiver em rede local (não em datacenter com IP direto).
-
-### No roteador/modem:
-1. Acessar painel do roteador (geralmente `192.168.1.1` ou `192.168.0.1`)
-2. Ir em **Port Forwarding** / **Redirecionamento de Portas** / **NAT**
-3. Criar regra:
-   ```
-   Nome:          Analise CertiDigital
-   Protocolo:     TCP
-   Porta externa: 8020
-   IP interno:    [IP local do Windows Server, ex: 192.168.1.100]
-   Porta interna: 8020
-   ```
-4. Salvar e reiniciar o roteador se necessário
+Os portais são atendidos **só na rede interna e pela VPN** (os nomes `certificado.analisegroup.cnt.br` e `hardlyze.analisegroup.cnt.br` resolvem para `10.200.0.4`). Não há encaminhamento de porta no roteador, e não deve haver um para a 8020 em hipótese nenhuma. Se um dia for preciso expor à internet, o que se encaminha é a **443 para o Caddy**, e o Caddyfile passa a exigir revisão de cabeçalhos e limites — não a aplicação.
 
 ### Descobrir o IP local do servidor:
 ```powershell
 ipconfig | findstr "IPv4"
-```
-
-### Descobrir o IP externo:
-```powershell
-(Invoke-WebRequest -Uri "https://api.ipify.org").Content
 ```
 
 ---
@@ -157,11 +139,11 @@ ipconfig | findstr "IPv4"
 cd C:\Apps\robot_cert
 .venv\Scripts\Activate.ps1
 
-# Opção A: Uvicorn direto (mais simples no Windows)
-uvicorn app.main:app --host 0.0.0.0 --port 8020 --workers 2
+# Bind em 127.0.0.1: a rede é do Caddy (Parte 6). Sem --reload em produção.
+uvicorn app.main:app --host 127.0.0.1 --port 8020 --workers 2 --no-server-header
 
-# Opção B: Waitress (mais robusto para produção no Windows)
-python -c "from waitress import serve; from app.main import app; serve(app, host='0.0.0.0', port=8020, threads=4)"
+# Ou pelo script do repositório (mesmo bind; -Dev liga o --reload só em desenvolvimento)
+.\scripts\servir.ps1
 ```
 
 ### 4.2 Script de inicialização conveniente
@@ -171,7 +153,7 @@ Criar arquivo `start_portal.bat` na raiz:
 @echo off
 cd /d C:\Apps\robot_cert
 call .venv\Scripts\activate.bat
-uvicorn app.main:app --host 0.0.0.0 --port 8020 --workers 2
+uvicorn app.main:app --host 127.0.0.1 --port 8020 --workers 2 --no-server-header
 pause
 ```
 
@@ -201,14 +183,14 @@ nssm install AnaliseCertiDigital
 # Na janela que abre, preencher:
 # Path:            C:\Apps\robot_cert\.venv\Scripts\uvicorn.exe
 # Startup dir:     C:\Apps\robot_cert
-# Arguments:       app.main:app --host 0.0.0.0 --port 8020 --workers 2
+# Arguments:       app.main:app --host 127.0.0.1 --port 8020 --workers 2 --no-server-header
 ```
 
 ### 5.3 Ou instalar via linha de comando (sem GUI)
 
 ```powershell
 nssm install AnaliseCertiDigital "C:\Apps\robot_cert\.venv\Scripts\uvicorn.exe"
-nssm set AnaliseCertiDigital AppParameters "app.main:app --host 0.0.0.0 --port 8020"
+nssm set AnaliseCertiDigital AppParameters "app.main:app --host 127.0.0.1 --port 8020 --no-server-header"
 nssm set AnaliseCertiDigital AppDirectory "C:\Apps\robot_cert"
 nssm set AnaliseCertiDigital DisplayName "Analise CertiDigital Portal"
 nssm set AnaliseCertiDigital Description "Portal FastAPI de monitoramento de certificados"
@@ -238,37 +220,28 @@ Get-Service AnaliseCertiDigital     # status via PowerShell nativo
 
 ---
 
-## 🔒 PARTE 6 — HTTPS com Nginx (Opcional, mas Recomendado)
+## 🔒 PARTE 6 — HTTPS com Caddy (obrigatório)
 
-Se quiser acesso via `https://` com domínio próprio, instalar o **Nginx para Windows** como proxy reverso.
+O portal emite `Strict-Transport-Security`, então **precisa** estar atrás de TLS: quem faz a terminação e o redirecionamento HTTP→HTTPS é o Caddy. A configuração de referência está versionada em **`deploy/Caddyfile`** (reverse proxy para `127.0.0.1:8020` e `127.0.0.1:8021`, certificados Let's Encrypt por desafio DNS na Cloudflare). O binário e o instalador (`caddy.exe` com o plugin Cloudflare, `instalar-caddy.ps1`) ficam na pasta `Apps` do servidor, fora do repositório.
 
-### 6.1 Instalar Nginx
+### 6.1 Instalar
 
 ```powershell
-# Baixar nginx para Windows em: https://nginx.org/en/download.html
-# Extrair para C:\Apps\nginx
+# Como Administrador, na pasta Apps copiada para o servidor:
+.\instalar-caddy.ps1 -Token <token da API Cloudflare, só Zona > DNS > Editar>
+# O token vai para a variável de ambiente CLOUDFLARE_API_TOKEN do serviço; NUNCA para o Caddyfile.
 ```
 
-### 6.2 Configurar nginx.conf
+### 6.2 Conferir
 
-```nginx
-# C:\Apps\nginx\conf\nginx.conf
-server {
-    listen 80;
-    server_name seu-dominio.com.br;
-
-    location / {
-        proxy_pass         http://127.0.0.1:8020;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection keep-alive;
-        proxy_set_header   Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-    }
-}
+```powershell
+# 80 redireciona para 443 (é o que o HSTS pressupõe):
+curl.exe -I http://certificado.analisegroup.cnt.br/     # esperado: 308 + Location: https://...
+# TLS válido e o portal respondendo:
+curl.exe -I https://certificado.analisegroup.cnt.br/api/health
 ```
+
+Cabeçalhos: o Caddy acrescenta `X-Forwarded-For` e `X-Forwarded-Proto`; o portal confia em **um** proxy (`NUM_PROXIES_CONFIAVEIS=1`) e, com `HOSTS_PERMITIDOS` definido, recusa `Host` fora da lista.
 
 ---
 
@@ -278,10 +251,10 @@ server {
 [ ] Python instalado e no PATH
 [ ] .venv criado e dependências instaladas
 [ ] .env configurado com todas as chaves
-[ ] Porta 8020 aberta no Firewall do Windows
-[ ] Porta 8020 redirecionada no roteador (se rede local)
+[ ] Firewall: 80 e 443 abertas (scripts/setup_porta_servidor.ps1); 8020 fechada para fora
+[ ] netstat mostra a aplicação só em 127.0.0.1:8020
 [ ] Servidor inicia sem erros (testar manualmente primeiro)
-[ ] Acessar http://IP_EXTERNO:8020 de fora da rede ✓
+[ ] Caddy instalado; http:// redireciona (308) para https:// e o certificado é válido
 [ ] Serviço NSSM configurado e iniciando automaticamente
 [ ] Logs sendo gravados em C:\Apps\robot_cert\logs\
 [ ] Atualizar CERT_ROBOT_BASE_URL no .env dos agentes locais
@@ -294,11 +267,12 @@ server {
 
 | Problema | Causa Provável | Solução |
 |---|---|---|
-| `Connection refused` externamente | Porta não aberta no Firewall ou roteador | Rever Partes 2 e 3 |
+| `Connection refused` de outra máquina | 80/443 fechadas no firewall, ou Caddy parado | Rever Parte 2 e `Get-Service caddy` |
 | `gunicorn: command not found` / erro | Gunicorn não funciona no Windows | Usar `uvicorn` ou `waitress` |
 | `ImportError` ao iniciar | `.venv` não ativado ou dependência faltando | Ativar .venv e `pip install -r requirements.txt` |
 | Site cai após alguns minutos | Sessão PowerShell encerrou | Configurar serviço NSSM (Parte 5) |
 | `Address already in use` | Outra instância rodando na porta 8020 | `Get-Process -Id (Get-NetTCPConnection -LocalPort 8020).OwningProcess` |
+| Aplicação exposta em `[::]:8020` | Serviço subiu ouvindo em todas as interfaces | Corrigir o `AppParameters` do NSSM para `--host 127.0.0.1` |
 | Agente não consegue conectar | URL desatualizada no .env do agente | Atualizar `CERT_ROBOT_BASE_URL` |
 
 ---

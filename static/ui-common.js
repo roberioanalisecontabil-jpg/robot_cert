@@ -39,6 +39,17 @@ function getHeaders(json = false) {
 }
 
 function logout() {
+  // Sair no SERVIDOR também (SECURITY_AUDIT #23): a rota incrementa a versão
+  // da sessão e o token deixa de valer em qualquer lugar em que tenha sido
+  // copiado. `keepalive` porque a página vai embora logo abaixo; a limpeza
+  // local não espera a resposta — se a rede falhar, o navegador sai do mesmo
+  // jeito, como sempre saiu.
+  try {
+    const token = localStorage.getItem(KEY_STORAGE);
+    if (token) {
+      fetch("/api/logout", { method: "POST", headers: { Authorization: "Bearer " + token }, keepalive: true }).catch(() => {});
+    }
+  } catch (e) { /* sem storage, sem sessão a encerrar */ }
   localStorage.removeItem(KEY_STORAGE);
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_email');

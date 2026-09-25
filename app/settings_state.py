@@ -194,7 +194,9 @@ def _banco():
     if _banco_client is None:
         from app import db_pg
 
-        _banco_client = db_pg.Client(config.DATABASE_URL)
+        # `dsn_efetivo`: host remoto sem sslmode ganha `sslmode=require`
+        # (SECURITY_AUDIT #51); local fica como está.
+        _banco_client = db_pg.Client(config.dsn_efetivo())
     return _banco_client
 
 

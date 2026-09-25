@@ -1,0 +1,49 @@
+# Caddyfile - HTTPS na frente dos dois portais no ANALISESRV.
+#
+# Versionado no lote 9 da auditoria (SECURITY_AUDIT #37): o portal emite
+# Strict-Transport-Security, mas a terminacao TLS e o redirecionamento
+# HTTP->HTTPS acontecem AQUI, fora do processo Python -- e ate agora este
+# arquivo so existia na pasta de instalacao do servidor. E' a copia de
+# referencia; o instalar-caddy.ps1 (pasta Apps) o copia para C:\Apps\Caddyfile.
+#
+# O que este arquivo garante:
+#   * porta 80 responde 308 para https:// (comportamento padrao do Caddy
+#     quando um site tem TLS) -- e o "redirect" que o HSTS pressupoe;
+#   * certificados Let's Encrypt por desafio DNS na Cloudflare: os nomes
+#     resolvem para 10.200.0.4 (rede + VPN), sem porta 80/443 aberta para a
+#     internet, entao o desafio HTTP nao serviria;
+#   * a aplicacao so e alcancada por 127.0.0.1 -- uvicorn/NSSM fazem bind em
+#     loopback (ver docs/GUIA_MIGRACAO_WINDOWS_SERVER.md), e o firewall so
+#     abre 80/443 (scripts/setup_porta_servidor.ps1).
+#
+# Segredo: o token da API da Cloudflare vem da variavel de ambiente
+# CLOUDFLARE_API_TOKEN do servico do Caddy (permissao so Zona > DNS > Editar).
+# Nunca o escreva aqui.
+{
+	email ti@analisegroup.cnt.br
+}
+
+(portal) {
+	encode gzip
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		resolvers 1.1.1.1 8.8.8.8
+	}
+	# X-Forwarded-For/-Proto sao acrescentados pelo Caddy; o portal confia em
+	# UM proxy (NUM_PROXIES_CONFIAVEIS=1, lote 1) e le o penultimo valor.
+	reverse_proxy 127.0.0.1:{args[0]}
+	log {
+		output file C:\Apps\caddy\logs\acesso-{args[0]}.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
+
+certificado.analisegroup.cnt.br {
+	import portal 8020
+}
+
+hardlyze.analisegroup.cnt.br {
+	import portal 8021
+}
