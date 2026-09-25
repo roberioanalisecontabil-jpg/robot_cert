@@ -677,6 +677,13 @@ class _SmtpFalso:
         return None
 
 
+@pytest.fixture(autouse=True)
+def _dns_de_teste(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Desde o lote 6 o envio confere o destino (#33) e resolve o nome; sem
+    rede nem DNS de verdade, `smtp.exemplo.com` vira um IP público fixo."""
+    monkeypatch.setattr(smtp_service, "resolver_enderecos", lambda host: ["93.184.216.34"], raising=False)
+
+
 @pytest.fixture
 def smtplib_falso(monkeypatch: pytest.MonkeyPatch) -> type:
     _SmtpFalso.instancias = []

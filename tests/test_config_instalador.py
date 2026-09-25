@@ -123,7 +123,11 @@ def test_salvar_a_configuracao_geral_preserva_o_instalador(
     )
     assert r.status_code == 200, r.text
 
-    assert settings_em_memoria.source_folder == "F:/outra", "o que a tela mandou grava"
+    # Resolvido pelo `validar_pasta` do lote 6 da auditoria (#16): o que a
+    # tela mandou grava, na forma canônica do sistema de arquivos.
+    from pathlib import Path as _P
+
+    assert _P(settings_em_memoria.source_folder) == _P("F:/outra").resolve(), "o que a tela mandou grava"
     assert settings_em_memoria.instalador_nome_template == "{nome}-{token}.exe"
     assert settings_em_memoria.install_token_ttl_min == 15
     assert settings_em_memoria.trilha_retencao_dias == 90

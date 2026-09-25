@@ -55,16 +55,59 @@ class PortalSettings:
     alerta_email_recado: str = ""
 
     def effective_source(self) -> Path:
-        p = (self.source_folder or "").strip()
-        if p:
-            return Path(p)
-        return config.CERT_SOURCE_DIR
+        return _pasta_efetiva(self.source_folder, "Pasta de origem", config.CERT_SOURCE_DIR)
 
     def effective_expired(self) -> Path:
-        p = (self.expired_folder or "").strip()
-        if p:
-            return Path(p)
-        return config.CERT_EXPIRED_DIR
+        return _pasta_efetiva(self.expired_folder, "Pasta de vencidos", config.CERT_EXPIRED_DIR)
+
+
+class PastaRecusada(ValueError):
+    """Caminho que o portal não abre: UNC, ou fora das raízes permitidas."""
+
+
+def validar_pasta(bruto: Optional[str], rotulo: str) -> str:
+    """O caminho como o portal pode usá-lo, ou `PastaRecusada` (achado #16).
+
+    `Path(p)` sem `resolve()` e sem raiz permitida deixava a tela de
+    Configuração apontar o servidor para `C:\\` (um `rglob` que trava o
+    processo) ou para `\\\\atacante\\share` — no Windows, `is_dir()` num UNC já
+    dispara autenticação SMB e entrega o hash NTLM da conta de serviço.
+
+    UNC é recusado sempre. Com `config.PASTAS_PERMITIDAS`, o caminho resolvido
+    tem de estar sob uma das raízes; sem a lista, qualquer pasta local vale
+    (janela de compatibilidade). Vazio é "usar o padrão".
+    """
+    p = (bruto or "").strip()
+    if not p:
+        return ""
+    if p.startswith(("\\\\", "//")):
+        raise PastaRecusada(f"{rotulo}: caminho de rede (UNC) não é aceito.")
+    alvo = Path(p).resolve()
+    # Unidade mapeada para a rede resolve para UNC no Windows: mesma recusa.
+    if str(alvo).startswith(("\\\\", "//")):
+        raise PastaRecusada(f"{rotulo}: caminho de rede (UNC) não é aceito.")
+    raizes = list(getattr(config, "PASTAS_PERMITIDAS", None) or [])
+    if raizes and not any(alvo == r or r in alvo.parents for r in raizes):
+        raise PastaRecusada(
+            f"{rotulo}: precisa estar sob uma das pastas permitidas "
+            f"({', '.join(str(r) for r in raizes)})."
+        )
+    return str(alvo)
+
+
+def _pasta_efetiva(valor: Optional[str], rotulo: str, padrao: Path) -> Path:
+    """O valor gravado passa pela MESMA validação do PUT (defesa em
+    profundidade): um caminho antigo no banco não abre o que a tela recusaria.
+    Recusado, o portal segue no padrão — e diz isso no log, em ERROR, porque
+    a tela de Configuração vai mostrar o caminho efetivo diferente do salvo."""
+    p = (valor or "").strip()
+    if not p:
+        return padrao
+    try:
+        return Path(validar_pasta(p, rotulo))
+    except PastaRecusada as e:
+        logger.error("Pasta gravada recusada (%s); usando o padrão %s.", e, padrao)
+        return padrao
 
 
 def _from_row(row: dict) -> PortalSettings:

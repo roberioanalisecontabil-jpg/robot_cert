@@ -5,8 +5,11 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+import logging
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -144,10 +147,57 @@ def _is_under(child: Path, parent: Path) -> bool:
         return False
 
 
+# Tetos da varredura (SECURITY_AUDIT #16): apontar a origem para `C:\` fazia
+# um `rglob` do disco inteiro. A pasta real tem ~1.000 arquivos em 3 níveis.
+LIMITE_ARQUIVOS_VARREDURA = 20000
+PROFUNDIDADE_MAX_VARREDURA = 8
+
+
+def _candidatos(
+    source_dir: Path,
+    recursive: bool,
+    excludes: List[Path],
+    limite_arquivos: int,
+    profundidade_max: int,
+) -> List[Path]:
+    """Os .pfx/.p12 sob `source_dir`, até o teto de arquivos e de profundidade.
+
+    `os.walk` em vez de `rglob`: dá para PODAR a descida (profundidade,
+    pastas excluídas) em vez de enumerar tudo e filtrar depois.
+    """
+    import os
+
+    achados: List[Path] = []
+    base = len(source_dir.parts)
+    for raiz, dirs, arquivos in os.walk(source_dir):
+        raiz_p = Path(raiz)
+        profundidade = len(raiz_p.parts) - base
+        if not recursive or profundidade >= profundidade_max:
+            dirs[:] = []
+        else:
+            dirs[:] = [d for d in dirs if not any(_is_under(raiz_p / d, ex) for ex in excludes)]
+        for nome in arquivos:
+            p = raiz_p / nome
+            if p.suffix.lower() not in (".pfx", ".p12"):
+                continue
+            if any(_is_under(p, ex) for ex in excludes):
+                continue
+            achados.append(p)
+            if len(achados) >= limite_arquivos:
+                logger.warning(
+                    "Varredura de %s parou no teto de %d arquivos; o restante fica de fora.",
+                    source_dir, limite_arquivos,
+                )
+                return sorted(achados)
+    return sorted(achados)
+
+
 def scan_folder(
     source_dir: Path,
     recursive: bool = True,
     exclude_dirs: Optional[Iterable[Path]] = None,
+    limite_arquivos: int = LIMITE_ARQUIVOS_VARREDURA,
+    profundidade_max: int = PROFUNDIDADE_MAX_VARREDURA,
 ) -> List[CertInfo]:
     source_dir = Path(source_dir)
     if not source_dir.is_dir():
@@ -157,13 +207,8 @@ def scan_folder(
     now = _now_utc()
     excludes = [Path(p).resolve() for p in (exclude_dirs or [])]
 
-    scan_iter = source_dir.rglob("*") if recursive else source_dir.iterdir()
-    for p in sorted(scan_iter):
-        if any(_is_under(p, ex) for ex in excludes):
-            continue
+    for p in _candidatos(source_dir, recursive, excludes, limite_arquivos, profundidade_max):
         if not p.is_file():
-            continue
-        if p.suffix.lower() not in (".pfx", ".p12"):
             continue
 
         name = p.name
