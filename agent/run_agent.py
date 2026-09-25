@@ -97,11 +97,17 @@ def _read_agent_status() -> dict | None:
 
 
 def _command_file_path() -> Path:
-    """Arquivo de comandos enviados pelo tray do usuário para o serviço LocalSystem."""
+    """Arquivo de comandos enviados pelo tray do usuário para o serviço LocalSystem.
+
+    Na subpasta `pedidos`, a ÚNICA em que o instalador dá escrita a Users
+    (SECURITY_AUDIT #45): a pasta-mãe guarda `maquina.dat` e `chave_api.dat`,
+    e uma pasta gravável por qualquer conta ao lado de uma credencial é convite
+    a troca de arquivo.
+    """
     program_data = os.getenv("PROGRAMDATA", "").strip()
     if program_data:
-        return Path(program_data) / "Analise CertiDigital Agent" / "agent_command.json"
-    return _app_dir() / "agent_command.json"
+        return Path(program_data) / "Analise CertiDigital Agent" / "pedidos" / "agent_command.json"
+    return _app_dir() / "pedidos" / "agent_command.json"
 
 
 def _write_agent_command(command: str, **extra) -> bool:
@@ -238,6 +244,73 @@ def _repair_windows_paths(raw: str) -> str:
     return _INVALID_JSON_ESCAPE.sub(r"\\\\", raw)
 
 
+def _candidatos_de_config() -> list[Path]:
+    return [
+        Path(sys.executable).resolve().parent / "agent_config.json",
+        Path(__file__).resolve().parent / "agent_config.json",
+        ROOT / "agent_config.json",
+    ]
+
+
+def _arquivo_de_config() -> Path | None:
+    """O agent_config.json que `_load_local_agent_config` leria, ou None."""
+    for p in _candidatos_de_config():
+        if p.is_file():
+            return p
+    return None
+
+
+def normalizar_base_url(base: str) -> str:
+    """https:// fora da própria máquina (SECURITY_AUDIT #39).
+
+    Com `http://` no config, a primeira requisição saía em claro — com a
+    X-API-Key — e só então o portal respondia 308 para https. Reescrever aqui
+    fecha a janela sem exigir edição do config; o WARNING diz o que corrigir.
+    `localhost`/`127.0.0.1` continuam em http: é o portal na mesma máquina.
+    """
+    b = (base or "").strip().rstrip("/")
+    if b.lower().startswith("http://"):
+        host = b[len("http://"):].split("/")[0].split(":")[0].lower()
+        if host not in ("localhost", "127.0.0.1", "::1"):
+            LOGGER.warning(
+                "cert_robot_base_url em http:// (%s): usando https:// — corrija o agent_config.json.", b
+            )
+            return "https://" + b[len("http://"):]
+    return b
+
+
+def guardar_chave_de_arquivo(arquivo: Path, base_url: str = "") -> bool:
+    """`--guardar-chave <arquivo>`: lê a chave de um arquivo temporário do
+    administrador, guarda no cofre local e apaga o arquivo. É o que o
+    instalador chama — a chave não passa pela linha de comando (#18)."""
+    from agent import chave_api
+
+    arquivo = Path(arquivo)
+    try:
+        chave = arquivo.read_text(encoding="utf-8-sig").strip()
+    except OSError as e:
+        LOGGER.error("Não foi possível ler o arquivo com a chave (%s): %s", arquivo, e)
+        return False
+    try:
+        if chave:
+            chave_api.guardar(chave, base_url)
+    except Exception:  # noqa: BLE001
+        LOGGER.exception("Não foi possível guardar a chave de API no cofre local")
+        return False
+    finally:
+        try:
+            if arquivo.is_file():
+                arquivo.write_bytes(b"\x00" * max(1, arquivo.stat().st_size))
+                arquivo.unlink()
+        except OSError:
+            LOGGER.warning("Não foi possível apagar %s; apague manualmente.", arquivo)
+    if not chave:
+        LOGGER.error("Arquivo da chave vazio; nada guardado.")
+        return False
+    LOGGER.info("Chave de API guardada no cofre local.")
+    return True
+
+
 def _load_local_agent_config() -> dict:
     """
     Lê agent_config.json ao lado do executável/script, quando existir.
@@ -248,12 +321,7 @@ def _load_local_agent_config() -> dict:
     contra um portal que nunca esteve local. Por isso o erro vai para o
     LOGGER (agent.log) e caminhos Windows não escapados são recuperados.
     """
-    candidates = [
-        Path(sys.executable).resolve().parent / "agent_config.json",
-        Path(__file__).resolve().parent / "agent_config.json",
-        ROOT / "agent_config.json",
-    ]
-    for p in candidates:
+    for p in _candidatos_de_config():
         if not p.is_file():
             continue
         try:
@@ -337,7 +405,23 @@ def estado_do_pedido_rescan(
     return "aguardando"
 
 
-def _novo_http_client() -> httpx.Client:
+def _sem_credencial_fora_do_host(host_do_portal: str):
+    """Hook de requisição: a X-API-Key só viaja para o host do portal (#39).
+
+    O httpx remove `Authorization` ao seguir redirect para outra origem, mas
+    não cabeçalhos personalizados — um 302 do portal (ou de um MITM, com
+    http://) para outro host entregaria a credencial da estação a ele.
+    """
+    alvo = (host_do_portal or "").strip().lower()
+
+    def _hook(request: httpx.Request) -> None:
+        if alvo and (request.url.host or "").lower() != alvo:
+            request.headers.pop("X-API-Key", None)
+
+    return _hook
+
+
+def _novo_http_client(base_url: str | None = None) -> httpx.Client:
     """
     Client HTTP do agente.
 
@@ -357,10 +441,17 @@ def _novo_http_client() -> httpx.Client:
     """
     from agent import identidade_maquina
 
+    ganchos_de_requisicao = []
+    if base_url:
+        host = httpx.URL(base_url).host
+        ganchos_de_requisicao.append(_sem_credencial_fora_do_host(host))
     return httpx.Client(
         timeout=_httpx_timeout(),
         follow_redirects=True,
-        event_hooks={"response": [identidade_maquina.descartar_se_recusada]},
+        event_hooks={
+            "request": ganchos_de_requisicao,
+            "response": [identidade_maquina.descartar_se_recusada],
+        },
     )
 
 
@@ -632,17 +723,16 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     local_cfg = _load_local_agent_config()
 
     default_base = DEFAULT_ROBOT_BASE
-    base = (
+    base = normalizar_base_url(
         os.getenv("CERT_ROBOT_BASE_URL")
         or str(local_cfg.get("cert_robot_base_url") or "").strip()
         or default_base
-    ).strip().rstrip("/")
-    api_key = (
-        os.getenv("CERT_ROBOT_API_KEY")
-        or str(local_cfg.get("cert_robot_api_key") or "").strip()
-        or os.getenv("API_KEY")
-        or ""
-    ).strip()
+    )
+    # A chave vem do cofre local (DPAPI + ACL), não mais do JSON em claro
+    # (SECURITY_AUDIT #18). Um agent_config.json antigo é migrado aqui.
+    from agent import chave_api
+
+    api_key = chave_api.resolver(local_cfg, _arquivo_de_config())
     if not base:
         print(
             "Defina CERT_ROBOT_BASE_URL no .env (ex.: " + default_base + ")",
@@ -957,7 +1047,7 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             daemon=True,
         ).start()
 
-    with _novo_http_client() as client:
+    with _novo_http_client(base) as client:
         # Primeira subida do serviço sem credencial de máquina: provisiona.
         # É o seeding único do desenho (identidade-de-maquina-desenho.md) — a
         # X-API-Key que já autentica o agente prova posse, o portal emite o
@@ -1280,7 +1370,17 @@ def main() -> None:
         action="store_true",
         help="Inicia somente a bandeja (sem varredura/envio); use com serviço Windows ativo.",
     )
+    parser.add_argument(
+        "--guardar-chave",
+        metavar="ARQUIVO",
+        help="Lê a X-API-Key do ARQUIVO, guarda no cofre local (DPAPI) e apaga o arquivo. Usado pelo instalador.",
+    )
     args = parser.parse_args()
+    if args.guardar_chave:
+        _setup_logging()
+        cfg_local = _load_local_agent_config()
+        base_cfg = str(cfg_local.get("cert_robot_base_url") or os.getenv("CERT_ROBOT_BASE_URL") or "")
+        raise SystemExit(0 if guardar_chave_de_arquivo(Path(args.guardar_chave), base_cfg) else 1)
     run_agent_application(
         threading.Event(),
         AgentRunConfig(

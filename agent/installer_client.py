@@ -7,7 +7,8 @@ Responsável por:
    - Gera chaves efêmeras ECDH (P-256)
    - Executa handshake redeem com o servidor (/redeem)
    - Descriptografa PFXs e senhas exclusivamente em memória / temp seguro
-   - Importa no repositório do Windows marcado como NÃO-EXPORTÁVEL (certutil NoExport)
+   - Importa no repositório do Windows marcado como NÃO-EXPORTÁVEL (Import-PfxCertificate
+     sem -Exportable, script pelo stdin — a senha não vai na linha de comando)
    - Envia relatório de execução ao servidor (/report)
 """
 
@@ -179,10 +180,44 @@ def _decrypt_payload_ecdh(
     return aesgcm.decrypt(nonce, ciphertext + auth_tag, None)
 
 
+def _script_de_importacao(temp_pfx_path: str, password: str) -> str:
+    """O PowerShell que importa o PFX no repositório do usuário, não exportável.
+
+    Vai pelo STDIN do powershell, e não como argumento (SECURITY_AUDIT #43):
+    a linha de comando fica na tabela de processos (`wmic process get
+    CommandLine`, Sysmon, EDR) para qualquer usuário da estação, e o certutil
+    só aceitava a senha ali. `Import-PfxCertificate` sem `-Exportable` é o
+    equivalente do `NoExport`. Aspas simples no PowerShell escapam por
+    duplicação.
+    """
+    caminho = temp_pfx_path.replace("'", "''")
+    linhas = [
+        "$ErrorActionPreference = 'Stop'",
+        "Import-Module PKI -ErrorAction Stop",
+    ]
+    if password:
+        senha = password.replace("'", "''")
+        linhas.append(
+            f"$senha = ConvertTo-SecureString -String '{senha}' -AsPlainText -Force"
+        )
+        linhas.append(
+            f"Import-PfxCertificate -FilePath '{caminho}' -CertStoreLocation Cert:\\CurrentUser\\My "
+            "-Password $senha | Out-Null"
+        )
+    else:
+        linhas.append(
+            f"Import-PfxCertificate -FilePath '{caminho}' -CertStoreLocation Cert:\\CurrentUser\\My | Out-Null"
+        )
+    return "\n".join(linhas) + "\n"
+
+
 def _import_pfx_non_exportable(pfx_bytes: bytes, password: str) -> tuple[bool, str]:
     """
     Importa um PFX no Windows Certificate Store (My/User) marcado como NÃO-EXPORTÁVEL.
-    Usa certutil via subprocess.
+
+    Usa `Import-PfxCertificate` (PowerShell, módulo PKI) com o script pelo
+    stdin: a senha nunca aparece na linha de comando (#43). Até o agente 1.3.0
+    era `certutil -p <senha>`.
     """
     temp_dir = tempfile.mkdtemp(prefix="cert_inst_")
     temp_pfx_path = os.path.join(temp_dir, "temp_cert.pfx")
@@ -192,34 +227,30 @@ def _import_pfx_non_exportable(pfx_bytes: bytes, password: str) -> tuple[bool, s
         with open(temp_pfx_path, "wb") as f:
             f.write(pfx_bytes)
 
-        # Executa certutil para importar como NoExport no repositório do Usuário (My)
         cmd = [
-            "certutil",
-            "-f",
-            "-user",
-            "-p",
-            password or "",
-            "-importpfx",
-            "My",
-            temp_pfx_path,
-            "NoExport",
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy", "Bypass",
+            "-Command", "-",
         ]
 
         result = subprocess.run(
             cmd,
+            input=_script_de_importacao(temp_pfx_path, password or ""),
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
         if result.returncode == 0:
             LOGGER.info("Certificado importado com sucesso como NÃO-EXPORTÁVEL.")
-            return True, "Instalado com sucesso no Windows Certificate Store (NoExport)"
+            return True, "Instalado com sucesso no Windows Certificate Store (não exportável)"
         else:
-            err_msg = result.stderr.strip() or result.stdout.strip() or f"Código de saída {result.returncode}"
-            LOGGER.error("Falha ao importar PFX via certutil: %s", err_msg)
-            return False, f"Certutil falhou: {err_msg}"
+            err_msg = (result.stderr or "").strip() or (result.stdout or "").strip() or f"Código de saída {result.returncode}"
+            LOGGER.error("Falha ao importar PFX via Import-PfxCertificate: %s", err_msg)
+            return False, f"Importação falhou: {err_msg}"
 
     except Exception as ex:
         LOGGER.exception("Erro ao executar importação do PFX: %s", ex)
@@ -314,7 +345,9 @@ def process_install_command(
 
     certificates = data.get("certificates", [])
     if not certificates:
-        LOGGER.warning("Nenhum certificado retornado no bundle do token %s.", token)
+        # Só o prefixo (SECURITY_AUDIT #44): o token já foi consumido, mas o
+        # log do agente é legível por qualquer usuário da estação.
+        LOGGER.warning("Nenhum certificado retornado no bundle do token %s...", token[:8])
         return False
 
     results = []
@@ -341,7 +374,7 @@ def process_install_command(
                     password = pwd_bytes.decode("utf-8")
 
             if not password:
-                # Falhar aqui, com causa nomeada, em vez de deixar o certutil
+                # Falhar aqui, com causa nomeada, em vez de deixar a importação
                 # recusar por "senha incorreta" — que aponta para o lugar errado.
                 LOGGER.error(
                     "Senha não encontrada para o certificado %s. O arquivo precisa "
