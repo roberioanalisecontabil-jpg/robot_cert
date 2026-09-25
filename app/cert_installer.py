@@ -706,6 +706,44 @@ def listar_carteira(user_id: str) -> Set[str]:
         raise CarteiraIndisponivel(str(e)) from e
 
 
+def documentos_ao_alcance(user_id: str, role: str) -> Optional[Set[str]]:
+    """Os documentos que esta pessoa pode LER — o recorte do lote 4 (#5).
+
+    `None` = alcance total (admin): nenhum recorte. `user`: a própria carteira.
+    `gestor`: a própria carteira mais as carteiras de quem está nos setores
+    que ele lidera — é o mesmo alcance que `pode_gerir` lhe dá para atribuir;
+    ler menos do que atribui não faria sentido, ler mais seria o furo antigo.
+
+    Levanta `CarteiraIndisponivel`/`AlcanceIndisponivel` em vez de devolver
+    vazio: "não consegui ler a carteira" não é "não tem carteira".
+    """
+    papel = (role or "").strip().lower()
+    if papel in PAPEIS_COM_ALCANCE_TOTAL:
+        return None
+    if not user_id:
+        return set()
+    docs = set(listar_carteira(user_id))
+    if papel != "gestor":
+        return docs
+
+    setores = departamentos_que_lidera(user_id)
+    if not setores:
+        return docs
+    client = _banco()
+    if not client:
+        raise CarteiraIndisponivel("Banco não configurado")
+    try:
+        r = client.table("users").select("id").in_("departamento_id", sorted(setores)).execute()
+        ids = [str(u["id"]) for u in (r.data or []) if u.get("id")]
+        if ids:
+            c = client.table("carteira").select("documento").in_("user_id", ids).execute()
+            docs |= {so_digitos(row.get("documento")) for row in (c.data or []) if row.get("documento")}
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao ler as carteiras do setor de %s", user_id)
+        raise CarteiraIndisponivel(str(e)) from e
+    return docs
+
+
 def documentos_dos_certificados(certificate_ids: List[str]) -> Dict[str, str]:
     """
     Mapa `id do certificado -> documento`, para conferir contra a carteira.
