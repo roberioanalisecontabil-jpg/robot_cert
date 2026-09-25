@@ -179,7 +179,11 @@ def test_codigo_nao_e_guardado_em_claro(client: TestClient, banco: _Fake) -> Non
     linha = banco.tabelas[TABELA][0]
     assert "codigo" not in linha
     assert linha["codigo_hash"] != _codigo_enviado(banco)
-    assert len(linha["codigo_hash"]) == 64
+    assert _codigo_enviado(banco) not in linha["codigo_hash"]
+    # Lote 8 (#56): `v2$<sal>$<hmac-sha256>` — o hash puro de 64 hex era uma
+    # tabela de 10^6 entradas; agora há sal por linha e o segredo do servidor.
+    assert linha["codigo_hash"].startswith(sr.PREFIXO_HASH)
+    assert len(linha["codigo_hash"].split("$")[-1]) == 64
 
 
 # ──────────────────────────────────────────────────────────────────────────

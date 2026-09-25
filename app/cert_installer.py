@@ -40,14 +40,47 @@ logger = logging.getLogger(__name__)
 # Helpers de criptografia
 # ──────────────────────────────────────────────────────────────────────────
 
-# Versão atual da chave de cifragem em repouso. Gravada em cada linha de
-# cert_pfx_store para permitir rotação incremental: ao trocar a chave, sobe-se
-# esta constante e os registros antigos continuam decifráveis pela chave da
-# versão deles, em vez de exigir recifrar tudo numa janela só.
-CURRENT_KEY_VERSION = 1
+# Versão da chave de cifragem em repouso — vem do AMBIENTE desde o lote 8 da
+# auditoria (`config.CERT_ENCRYPTION_KEY_VERSION`). Até então era a constante
+# 1 aqui, e por isso a rotação documentada nunca funcionou (achado #42): a
+# chave "anterior" só é consultada para linhas de versão diferente da em
+# vigor, e a em vigor nunca deixava de ser 1. Cada linha de cert_pfx_store
+# grava a versão sob a qual foi cifrada; ao rotacionar, os registros antigos
+# continuam decifráveis pela chave da versão deles até `recifrar_cofre`
+# reprocessá-los.
 
 
-def _get_server_key(version: int = CURRENT_KEY_VERSION) -> bytes:
+def versao_corrente() -> int:
+    """Versão sob a qual CERT_ENCRYPTION_KEY está em vigor."""
+    return int(getattr(config, "CERT_ENCRYPTION_KEY_VERSION", 1) or 1)
+
+
+def versao_corrente_senha() -> int:
+    """Versão sob a qual CERT_PASSWORD_ENCRYPTION_KEY está em vigor (#19)."""
+    return int(getattr(config, "CERT_PASSWORD_ENCRYPTION_KEY_VERSION", 1) or 1)
+
+
+# Versão do ENVELOPE: 0 = AES-GCM sem dados associados (tudo o que foi gravado
+# antes do lote 8); 1 = com AAD "machine_id|fingerprint|key_version" (#55).
+# Guardada por linha em `aad_version` para a decifra saber o que esperar sem
+# adivinhar — tentar "com e sem" aceitaria o envelope antigo para sempre.
+AAD_VERSAO_ATUAL = 1
+
+
+class EnvelopeLegado(RuntimeError):
+    """Linha no envelope antigo (sem AAD) com `COFRE_EXIGE_AAD` ligada."""
+
+
+def _chave_hex(raw: str, nome: str) -> bytes:
+    if not raw or len(raw) != 64:
+        raise RuntimeError(
+            f"{nome} não configurada ou inválida. "
+            "Gere com: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    return bytes.fromhex(raw)
+
+
+def _get_server_key(version: Optional[int] = None) -> bytes:
     """
     Chave AES-256 do servidor (32 bytes) a partir do hex no .env.
 
@@ -56,98 +89,162 @@ def _get_server_key(version: int = CURRENT_KEY_VERSION) -> bytes:
     Até 15/08 esse segundo caminho não funcionava — o config não expunha as
     variáveis, e qualquer versão anterior estourava como "chave não configurada".
     """
-    if version == CURRENT_KEY_VERSION:
-        raw = config.CERT_ENCRYPTION_KEY
-    else:
-        raw = getattr(config, f"CERT_ENCRYPTION_KEY_V{version}", "") or ""
-
-    if not raw or len(raw) != 64:
-        raise RuntimeError(
-            f"CERT_ENCRYPTION_KEY (versão {version}) não configurada ou inválida. "
-            "Gere com: python -c \"import secrets; print(secrets.token_hex(32))\""
-        )
-    return bytes.fromhex(raw)
+    if version is None or version == versao_corrente():
+        return _chave_hex(config.CERT_ENCRYPTION_KEY, f"CERT_ENCRYPTION_KEY (versão {versao_corrente()})")
+    raw = getattr(config, f"CERT_ENCRYPTION_KEY_V{version}", "") or ""
+    return _chave_hex(raw, f"CERT_ENCRYPTION_KEY_V{version} (versão {version})")
 
 
-def _get_password_key() -> bytes:
+def _get_password_key(version: Optional[int] = None) -> bytes:
     """
-    Chave AES-256 dedicada à senha do PFX.
+    Chave AES-256 dedicada à senha do PFX, pela versão (#19).
 
     Separada de propósito de `_get_server_key`: guardar senha e certificado sob
     a mesma chave foi o defeito que tirou a senha do banco em 03/08. Recusa-se a
-    operar se as duas forem iguais — seria o mesmo defeito com outro nome.
+    operar se as duas em vigor forem iguais — seria o mesmo defeito com outro nome.
     """
-    raw = config.CERT_PASSWORD_ENCRYPTION_KEY
-    if not raw or len(raw) != 64:
-        raise RuntimeError(
-            "CERT_PASSWORD_ENCRYPTION_KEY não configurada ou inválida. "
-            "Gere com: python -c \"import secrets; print(secrets.token_hex(32))\""
-        )
-    if raw == config.CERT_ENCRYPTION_KEY:
-        raise RuntimeError(
-            "CERT_PASSWORD_ENCRYPTION_KEY não pode ser igual a CERT_ENCRYPTION_KEY: "
-            "senha e PFX sob a mesma chave anulam a separação que justifica guardar a senha."
-        )
-    return bytes.fromhex(raw)
+    if version is None or version == versao_corrente_senha():
+        raw = config.CERT_PASSWORD_ENCRYPTION_KEY
+        chave = _chave_hex(raw, "CERT_PASSWORD_ENCRYPTION_KEY")
+        if raw == config.CERT_ENCRYPTION_KEY:
+            raise RuntimeError(
+                "CERT_PASSWORD_ENCRYPTION_KEY não pode ser igual a CERT_ENCRYPTION_KEY: "
+                "senha e PFX sob a mesma chave anulam a separação que justifica guardar a senha."
+            )
+        return chave
+    raw = getattr(config, f"CERT_PASSWORD_ENCRYPTION_KEY_V{version}", "") or ""
+    return _chave_hex(raw, f"CERT_PASSWORD_ENCRYPTION_KEY_V{version} (versão {version})")
 
 
-def encrypt_password_at_rest(password: str) -> Tuple[str, str, str]:
-    """Cifra a senha do PFX com a chave dedicada. Retorna (ct_b64, iv_b64, tag_b64)."""
-    key = _get_password_key()
+def aad_do_pfx(machine_id: str, fingerprint: str, key_version: int) -> bytes:
+    """Dados associados do PFX (#55): amarram o ciphertext à linha. Trocar o
+    ciphertext de máquina ou de fingerprint — ou rebaixar a versão — faz a
+    tag do GCM falhar em vez de entregar o PFX de outro certificado."""
+    return f"{machine_id}|{fingerprint}|{int(key_version)}".encode("utf-8")
+
+
+def aad_da_senha(machine_id: str, fingerprint: str, password_key_version: int) -> bytes:
+    """Mesma ideia para a senha; o marcador "senha" impede usar o AAD do PFX
+    para a senha e vice-versa."""
+    return f"{machine_id}|{fingerprint}|senha|{int(password_key_version)}".encode("utf-8")
+
+
+def _cifrar(key: bytes, dados: bytes, aad: Optional[bytes]) -> Tuple[str, str, str]:
     aesgcm = AESGCM(key)
-    nonce = os.urandom(12)
-    ct = aesgcm.encrypt(nonce, password.encode("utf-8"), None)
+    nonce = os.urandom(12)  # 96 bits para AES-GCM
+    # AESGCM.encrypt appends the 16-byte tag to the ciphertext
+    ct_with_tag = aesgcm.encrypt(nonce, dados, aad)
     return (
-        base64.b64encode(ct[:-16]).decode(),
+        base64.b64encode(ct_with_tag[:-16]).decode(),
         base64.b64encode(nonce).decode(),
-        base64.b64encode(ct[-16:]).decode(),
+        base64.b64encode(ct_with_tag[-16:]).decode(),
     )
 
 
-def decrypt_password_at_rest(ct_b64: str, iv_b64: str, tag_b64: str) -> str:
-    """Inverso de `encrypt_password_at_rest`."""
-    key = _get_password_key()
+def _decifrar(key: bytes, ct_b64: str, iv_b64: str, tag_b64: str, aad: Optional[bytes]) -> bytes:
     aesgcm = AESGCM(key)
     nonce = base64.b64decode(iv_b64)
     ct = base64.b64decode(ct_b64)
     tag = base64.b64decode(tag_b64)
-    return aesgcm.decrypt(nonce, ct + tag, None).decode("utf-8")
+    # AESGCM.decrypt expects ciphertext || tag
+    return aesgcm.decrypt(nonce, ct + tag, aad)
 
 
-def encrypt_pfx_at_rest(pfx_bytes: bytes) -> Tuple[str, str, str]:
+def encrypt_password_at_rest(password: str, aad: Optional[bytes] = None) -> Tuple[str, str, str]:
+    """Cifra a senha do PFX com a chave dedicada EM VIGOR. Retorna (ct_b64, iv_b64, tag_b64)."""
+    return _cifrar(_get_password_key(), password.encode("utf-8"), aad)
+
+
+def decrypt_password_at_rest(
+    ct_b64: str, iv_b64: str, tag_b64: str, key_version: Optional[int] = None, aad: Optional[bytes] = None
+) -> str:
+    """Inverso de `encrypt_password_at_rest`, com a chave da versão gravada na linha."""
+    return _decifrar(_get_password_key(key_version), ct_b64, iv_b64, tag_b64, aad).decode("utf-8")
+
+
+def encrypt_pfx_at_rest(pfx_bytes: bytes, aad: Optional[bytes] = None) -> Tuple[str, str, str]:
     """
-    Cifra um PFX com AES-256-GCM usando a chave do servidor.
+    Cifra um PFX com AES-256-GCM usando a chave do servidor em vigor.
     Retorna (ciphertext_b64, iv_b64, auth_tag_b64).
     """
-    key = _get_server_key()
-    aesgcm = AESGCM(key)
-    nonce = os.urandom(12)  # 96 bits para AES-GCM
-    # AESGCM.encrypt appends the 16-byte tag to the ciphertext
-    ct_with_tag = aesgcm.encrypt(nonce, pfx_bytes, None)
-    # Split: last 16 bytes are the tag
-    ciphertext = ct_with_tag[:-16]
-    auth_tag = ct_with_tag[-16:]
-    return (
-        base64.b64encode(ciphertext).decode(),
-        base64.b64encode(nonce).decode(),
-        base64.b64encode(auth_tag).decode(),
-    )
+    return _cifrar(_get_server_key(), pfx_bytes, aad)
 
 
 def decrypt_pfx_at_rest(
     ciphertext_b64: str,
     iv_b64: str,
     auth_tag_b64: str,
-    key_version: int = CURRENT_KEY_VERSION,
+    key_version: Optional[int] = None,
+    aad: Optional[bytes] = None,
 ) -> bytes:
     """Decifra um PFX armazenado no banco, com a chave da versão em que foi gravado."""
-    key = _get_server_key(key_version)
-    aesgcm = AESGCM(key)
-    nonce = base64.b64decode(iv_b64)
-    ciphertext = base64.b64decode(ciphertext_b64)
-    auth_tag = base64.b64decode(auth_tag_b64)
-    # AESGCM.decrypt expects ciphertext || tag
-    return aesgcm.decrypt(nonce, ciphertext + auth_tag, None)
+    return _decifrar(_get_server_key(key_version), ciphertext_b64, iv_b64, auth_tag_b64, aad)
+
+
+# Uma vez por processo: com centenas de linhas no envelope antigo, avisar a
+# cada decifra afogaria o log — e o número certo está no diagnóstico.
+_avisou_envelope_legado = False
+
+
+def _aad_da_linha(row: Dict[str, Any], senha: bool) -> Optional[bytes]:
+    """O AAD que a linha exige, pelo `aad_version` gravado; None no envelope antigo.
+
+    Envelope antigo com `COFRE_EXIGE_AAD` ligada é recusado: depois de
+    `recifrar_cofre` zerar as linhas sem AAD, aceitar o envelope antigo só
+    serviria a quem rebaixasse uma linha para trocar o ciphertext (#55).
+    """
+    global _avisou_envelope_legado
+    aad_version = int(row.get("aad_version") or 0)
+    if aad_version >= 1:
+        if senha:
+            return aad_da_senha(str(row.get("machine_id") or ""), str(row.get("fingerprint") or ""),
+                                int(row.get("password_key_version") or 1))
+        return aad_do_pfx(str(row.get("machine_id") or ""), str(row.get("fingerprint") or ""),
+                          int(row.get("key_version") or 1))
+    if getattr(config, "COFRE_EXIGE_AAD", False):
+        raise EnvelopeLegado(
+            "registro no envelope antigo (sem dados associados) com COFRE_EXIGE_AAD ligada; "
+            "rode 'Recifrar cofre' ou desligue a variável."
+        )
+    if not _avisou_envelope_legado:
+        _avisou_envelope_legado = True
+        logger.warning(
+            "Cofre com registros no envelope antigo (sem AAD). Rode 'Recifrar cofre' no "
+            "Instalador até zerar as linhas sem AAD e ligue COFRE_EXIGE_AAD=1."
+        )
+    return None
+
+
+def decifrar_pfx_da_linha(row: Dict[str, Any]) -> bytes:
+    """O PFX em claro de uma linha de cert_pfx_store, seja qual for a versão da
+    chave e do envelope em que foi gravada. É o ÚNICO caminho de leitura."""
+    return decrypt_pfx_at_rest(
+        row["encrypted_pfx"], row["pfx_iv"], row["pfx_auth_tag"],
+        key_version=int(row.get("key_version") or 1),
+        aad=_aad_da_linha(row, senha=False),
+    )
+
+
+def decifrar_senha_da_linha(row: Dict[str, Any]) -> Optional[str]:
+    """A senha em claro, ou None quando a linha não a tem. Linha anterior à
+    migração do lote 8 não tem `password_key_version`: vale 1, a única
+    versão que existia."""
+    if not row.get("pfx_password_enc"):
+        return None
+    return decrypt_password_at_rest(
+        row["pfx_password_enc"], row["pfx_password_iv"], row["pfx_password_tag"],
+        key_version=int(row.get("password_key_version") or 1),
+        aad=_aad_da_linha(row, senha=True),
+    )
+
+
+def precisa_recifrar(row: Dict[str, Any]) -> bool:
+    """A linha está fora do estado em vigor (versão do PFX, da senha ou envelope)?"""
+    if int(row.get("key_version") or 1) != versao_corrente():
+        return True
+    if row.get("pfx_password_enc") and int(row.get("password_key_version") or 1) != versao_corrente_senha():
+        return True
+    return int(row.get("aad_version") or 0) < AAD_VERSAO_ATUAL
 
 
 def encrypt_bundle_for_client(
@@ -258,7 +355,11 @@ def upsert_pfx(
     if not client:
         raise RuntimeError("Banco não configurado")
 
-    encrypted_pfx, pfx_iv, pfx_auth_tag = encrypt_pfx_at_rest(pfx_bytes)
+    versao_pfx = versao_corrente()
+    versao_senha = versao_corrente_senha()
+    encrypted_pfx, pfx_iv, pfx_auth_tag = encrypt_pfx_at_rest(
+        pfx_bytes, aad=aad_do_pfx(machine_id, fingerprint, versao_pfx)
+    )
 
     # A senha volta ao banco — sob chave PRÓPRIA (ver `_get_password_key`).
     #
@@ -266,10 +367,12 @@ def upsert_pfx(
     # vazamento entregava os dois) e porque o agente podia lê-la do nome do
     # arquivo na pasta de origem. Esse segundo argumento vale para o agente, não
     # para o instalador avulso: a máquina do usuário final não tem a pasta, logo
-    # não tem de onde tirar a senha. Sem isto, o certutil recusa todo PFX.
+    # não tem de onde tirar a senha. Sem isto, a importação recusa todo PFX.
     pwd_ct = pwd_iv = pwd_tag = None
     if password:
-        pwd_ct, pwd_iv, pwd_tag = encrypt_password_at_rest(password)
+        pwd_ct, pwd_iv, pwd_tag = encrypt_password_at_rest(
+            password, aad=aad_da_senha(machine_id, fingerprint, versao_senha)
+        )
 
     now = datetime.now(timezone.utc).isoformat()
     row = {
@@ -290,7 +393,11 @@ def upsert_pfx(
         "pfx_password_enc": pwd_ct,
         "pfx_password_iv": pwd_iv,
         "pfx_password_tag": pwd_tag,
-        "key_version": CURRENT_KEY_VERSION,
+        "key_version": versao_pfx,
+        # Lote 8: versão da chave da senha (#19) e do envelope (#55). O banco
+        # precisa da migration 20260926100000 para ter as colunas.
+        "password_key_version": versao_senha,
+        "aad_version": AAD_VERSAO_ATUAL,
         "updated_at": now,
     }
 
@@ -1045,15 +1152,18 @@ def diagnostico_do_cofre() -> Dict[str, Any]:
 
     r = (
         client.table("cert_pfx_store")
-        .select("machine_id, key_version, updated_at, pfx_password_enc, pfx_password")
+        .select("machine_id, key_version, password_key_version, aad_version, updated_at, pfx_password_enc, pfx_password")
         .execute()
     )
     linhas = r.data or []
 
     por_maquina: Dict[str, int] = {}
     por_versao: Dict[str, int] = {}
+    senhas_por_versao: Dict[str, int] = {}
     sem_senha = 0
     senha_em_claro = 0
+    sem_aad = 0
+    para_recifrar = 0
     ultimo = None
     for row in linhas:
         por_maquina[str(row.get("machine_id") or "?")] = (
@@ -1063,8 +1173,16 @@ def diagnostico_do_cofre() -> Dict[str, Any]:
         por_versao[v] = por_versao.get(v, 0) + 1
         if not row.get("pfx_password_enc"):
             sem_senha += 1
+        else:
+            # Linha anterior à migração do lote 8 não tem a coluna: vale 1.
+            pv = str(row.get("password_key_version") or 1)
+            senhas_por_versao[pv] = senhas_por_versao.get(pv, 0) + 1
         if row.get("pfx_password"):
             senha_em_claro += 1
+        if int(row.get("aad_version") or 0) < AAD_VERSAO_ATUAL:
+            sem_aad += 1
+        if precisa_recifrar(row):
+            para_recifrar += 1
         u = row.get("updated_at")
         if u and (ultimo is None or u > ultimo):
             ultimo = u
@@ -1089,6 +1207,11 @@ def diagnostico_do_cofre() -> Dict[str, Any]:
         # chave do PFX, o que um vazamento entregava junto.
         "senha_em_claro": senha_em_claro,
         "bloqueios": bloqueios,
+        # Lote 8: senhas por versão de chave (#19), linhas no envelope antigo
+        # sem dados associados (#55) e quantas 'Recifrar cofre' ainda tocaria.
+        "senhas_por_key_version": senhas_por_versao,
+        "sem_aad": sem_aad,
+        "para_recifrar": para_recifrar,
     }
 
 
@@ -1103,24 +1226,32 @@ def diagnostico_das_chaves() -> Dict[str, Any]:
     from app import config
 
     diag = diagnostico_do_cofre()
-    versoes_no_cofre = {
-        int(v) for v in diag["por_key_version"] if str(v).isdigit()
-    }
 
-    configuradas = {CURRENT_KEY_VERSION} if getattr(config, "CERT_ENCRYPTION_KEY", "") else set()
-    prefixo = "CERT_ENCRYPTION_KEY_V"
-    for nome in dir(config):
-        if nome.startswith(prefixo) and nome[len(prefixo):].isdigit():
-            if (getattr(config, nome, "") or "").strip():
-                configuradas.add(int(nome[len(prefixo):]))
+    def _bloco(em_vigor: int, nome_em_vigor: str, prefixo: str, por_versao: Dict[str, int]) -> Dict[str, Any]:
+        no_cofre = {int(v) for v in por_versao if str(v).isdigit()}
+        configuradas = {em_vigor} if (getattr(config, nome_em_vigor, "") or "").strip() else set()
+        for nome in dir(config):
+            if nome.startswith(prefixo) and nome[len(prefixo):].isdigit():
+                if (getattr(config, nome, "") or "").strip():
+                    configuradas.add(int(nome[len(prefixo):]))
+        return {
+            "versao_corrente": em_vigor,
+            "versoes_configuradas": sorted(configuradas),
+            "versoes_no_cofre": sorted(no_cofre),
+            "versoes_sem_chave": sorted(no_cofre - configuradas),
+            "linhas_por_versao": por_versao,
+        }
 
-    return {
-        "versao_corrente": CURRENT_KEY_VERSION,
-        "versoes_configuradas": sorted(configuradas),
-        "versoes_no_cofre": sorted(versoes_no_cofre),
-        "versoes_sem_chave": sorted(versoes_no_cofre - configuradas),
-        "linhas_por_versao": diag["por_key_version"],
-    }
+    pfx = _bloco(versao_corrente(), "CERT_ENCRYPTION_KEY", "CERT_ENCRYPTION_KEY_V", diag["por_key_version"])
+    # Lote 8 (#19): a senha tem versão própria e bloco próprio no diagnóstico —
+    # senha em versão sem chave é tão indecifrável quanto o PFX.
+    pfx["senha"] = _bloco(
+        versao_corrente_senha(), "CERT_PASSWORD_ENCRYPTION_KEY", "CERT_PASSWORD_ENCRYPTION_KEY_V",
+        diag["senhas_por_key_version"],
+    )
+    pfx["linhas_para_recifrar"] = diag["para_recifrar"]
+    pfx["exige_aad"] = bool(getattr(config, "COFRE_EXIGE_AAD", False))
+    return pfx
 
 
 def descrever_falha_de_decifra(e: BaseException) -> str:
@@ -1136,7 +1267,19 @@ def descrever_falha_de_decifra(e: BaseException) -> str:
     if nome == "InvalidTag":
         return (
             "InvalidTag: a chave configurada não decifra este registro — "
-            "CERT_ENCRYPTION_KEY não é a que cifrou o cofre."
+            "CERT_ENCRYPTION_KEY não é a que cifrou o cofre (ou o registro foi alterado)."
+        )
+    texto = str(e).strip()
+    return f"{nome}: {texto}" if texto else nome
+
+
+def descrever_falha_de_decifra_da_senha(e: BaseException) -> str:
+    """Mesma coisa para a senha, que tem chave própria (#19)."""
+    nome = type(e).__name__
+    if nome == "InvalidTag":
+        return (
+            "InvalidTag: a chave configurada não decifra a senha deste registro — "
+            "CERT_PASSWORD_ENCRYPTION_KEY não é a que a cifrou (ou o registro foi alterado)."
         )
     texto = str(e).strip()
     return f"{nome}: {texto}" if texto else nome
@@ -1163,7 +1306,7 @@ def revalidar_cofre() -> List[Dict[str, Any]]:
     for versao in sorted(versoes):
         amostra = (
             client.table("cert_pfx_store")
-            .select("id, fingerprint, encrypted_pfx, pfx_iv, pfx_auth_tag")
+            .select("*")
             .eq("key_version", versao)
             .limit(1)
             .execute()
@@ -1173,21 +1316,115 @@ def revalidar_cofre() -> List[Dict[str, Any]]:
             continue
         row = linhas[0]
         try:
-            dados = decrypt_pfx_at_rest(
-                row["encrypted_pfx"], row["pfx_iv"], row["pfx_auth_tag"], key_version=versao
-            )
+            dados = decifrar_pfx_da_linha(row)
             ok, detalhe = True, f"{len(dados)} bytes decifrados"
         except Exception as e:  # noqa: BLE001
             ok, detalhe = False, descrever_falha_de_decifra(e)
+        # Lote 8 (#19): a senha tem chave própria e versão própria; provar só o
+        # PFX deixava a chave da senha sem prova nenhuma — e foi ela a causa
+        # das seis falhas de instalação registradas em produção.
+        senha_ok: Optional[bool] = None
+        if row.get("pfx_password_enc"):
+            try:
+                decifrar_senha_da_linha(row)
+                senha_ok = True
+                detalhe += "; senha decifrada"
+            except Exception as e:  # noqa: BLE001
+                senha_ok = False
+                detalhe += "; senha: " + descrever_falha_de_decifra_da_senha(e)
         out.append(
             {
                 "key_version": versao,
                 "ok": ok,
+                "senha_ok": senha_ok,
+                "aad_version": int(row.get("aad_version") or 0),
                 "detalhe": detalhe,
                 "fingerprint_amostra": str(row.get("fingerprint") or "")[:16],
             }
         )
     return out
+
+
+def recifrar_cofre(limite: int = 500) -> Dict[str, Any]:
+    """
+    Reprocessa as linhas fora do estado em vigor (#42, #19, #55): decifra com a
+    chave da versão gravada e recifra com as chaves em vigor, com AAD, gravando
+    `key_version`, `password_key_version` e `aad_version` novos.
+
+    Regras que valem mais que a velocidade:
+
+    * Uma linha só é regravada depois de PFX e senha terem sido decifrados
+      com sucesso. Linha ilegível fica exatamente como está e é reportada —
+      apagar ou sobrescrever material que não se provou legível é o incidente
+      de 15/08 de novo, agora por mão própria.
+    * `limite` por chamada: cada linha é uma decifra e uma cifra de AES-GCM
+      (rápido), mas o UPDATE é uma ida ao banco; a tela chama de novo enquanto
+      `restantes` > 0.
+    * Idempotente: linha já em vigor não é candidata.
+
+    É por aqui que uma rotação de chave se completa: quando `restantes` chega
+    a zero, nenhuma linha depende mais da chave antiga, e o operador pode
+    apagar `CERT_ENCRYPTION_KEY_V<n>` / `CERT_PASSWORD_ENCRYPTION_KEY_V<n>`.
+    """
+    client = _banco()
+    if not client:
+        raise RuntimeError("Banco não configurado")
+
+    todas = client.table("cert_pfx_store").select("*").execute().data or []
+    candidatas = [row for row in todas if precisa_recifrar(row)]
+    recifradas = 0
+    falhas: List[Dict[str, str]] = []
+    versao_pfx = versao_corrente()
+    versao_senha = versao_corrente_senha()
+    agora = datetime.now(timezone.utc).isoformat()
+
+    for row in candidatas[: max(0, int(limite))]:
+        fp = str(row.get("fingerprint") or "")
+        maq = str(row.get("machine_id") or "")
+        try:
+            pfx_bytes = decifrar_pfx_da_linha(row)
+        except Exception as e:  # noqa: BLE001
+            falhas.append({"fingerprint": fp[:16], "machine_id": maq, "motivo": descrever_falha_de_decifra(e)})
+            continue
+        try:
+            senha = decifrar_senha_da_linha(row)
+        except Exception as e:  # noqa: BLE001
+            falhas.append({"fingerprint": fp[:16], "machine_id": maq,
+                           "motivo": "senha: " + descrever_falha_de_decifra_da_senha(e)})
+            continue
+
+        ct, iv, tag = encrypt_pfx_at_rest(pfx_bytes, aad=aad_do_pfx(maq, fp, versao_pfx))
+        campos: Dict[str, Any] = {
+            "encrypted_pfx": ct, "pfx_iv": iv, "pfx_auth_tag": tag,
+            "key_version": versao_pfx,
+            "aad_version": AAD_VERSAO_ATUAL,
+            "updated_at": agora,
+        }
+        if senha is not None:
+            pct, piv, ptag = encrypt_password_at_rest(senha, aad=aad_da_senha(maq, fp, versao_senha))
+            campos.update({
+                "pfx_password_enc": pct, "pfx_password_iv": piv, "pfx_password_tag": ptag,
+                "password_key_version": versao_senha,
+            })
+        try:
+            client.table("cert_pfx_store").update(campos).eq("id", row["id"]).execute()
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Falha ao regravar linha recifrada do cofre")
+            falhas.append({"fingerprint": fp[:16], "machine_id": maq, "motivo": f"gravação: {type(e).__name__}"})
+            continue
+        recifradas += 1
+
+    if recifradas:
+        logger.warning("Cofre: %d registro(s) recifrado(s) para PFX v%d / senha v%d com AAD.",
+                       recifradas, versao_pfx, versao_senha)
+    return {
+        "candidatas": len(candidatas),
+        "recifradas": recifradas,
+        "falhas": falhas,
+        "restantes": len(candidatas) - recifradas,
+        "versao_pfx": versao_pfx,
+        "versao_senha": versao_senha,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -1884,13 +2121,9 @@ def build_encrypted_bundle(
 
     certificates = []
     for row in rows:
-        # Decifrar PFX do repouso, com a chave da versão em que foi gravado
-        pfx_bytes = decrypt_pfx_at_rest(
-            row["encrypted_pfx"],
-            row["pfx_iv"],
-            row["pfx_auth_tag"],
-            key_version=int(row.get("key_version") or CURRENT_KEY_VERSION),
-        )
+        # Decifrar PFX do repouso, com a chave da versão e o envelope em que
+        # foi gravado (lote 8: AAD amarra o ciphertext a esta linha).
+        pfx_bytes = decifrar_pfx_da_linha(row)
 
         # Re-cifrar para o cliente via ECDH
         bundle = encrypt_bundle_for_client(pfx_bytes, client_public_key_b64)
@@ -1904,12 +2137,8 @@ def build_encrypted_bundle(
         # quando o registro é anterior à volta da senha ao cofre; nesse caso o
         # agente ainda a resolve pelo nome do arquivo local.
         bundle["pfxPassword"] = None
-        if row.get("pfx_password_enc"):
-            senha = decrypt_password_at_rest(
-                row["pfx_password_enc"],
-                row["pfx_password_iv"],
-                row["pfx_password_tag"],
-            )
+        senha = decifrar_senha_da_linha(row)
+        if senha is not None:
             bundle["pfxPassword"] = encrypt_bundle_for_client(
                 senha.encode("utf-8"), client_public_key_b64
             )

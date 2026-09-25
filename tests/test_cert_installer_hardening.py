@@ -177,13 +177,14 @@ class _CapturaUpsert:
 def captura(monkeypatch):
     cap = _CapturaUpsert()
     monkeypatch.setattr(ci, "_banco", lambda: cap)
-    monkeypatch.setattr(ci, "encrypt_pfx_at_rest", lambda b: ("ct", "iv", "tag"))
+    # Lote 8: o upsert passa `aad=` (dados associados); o dublê aceita o argumento.
+    monkeypatch.setattr(ci, "encrypt_pfx_at_rest", lambda b, aad=None: ("ct", "iv", "tag"))
     return cap
 
 
 def test_key_version_e_gravado(captura) -> None:
     ci.upsert_pfx(fingerprint="d" * 64, pfx_bytes=b"x", machine_id="m1")
-    assert captura.linha["key_version"] == ci.CURRENT_KEY_VERSION
+    assert captura.linha["key_version"] == ci.versao_corrente()
 
 
 def test_senha_e_guardada_cifrada_sob_chave_propria(captura) -> None:
@@ -211,11 +212,9 @@ def test_senha_e_guardada_cifrada_sob_chave_propria(captura) -> None:
     assert captura.linha["pfx_password_enc"], "a senha deveria estar cifrada"
 
     # E o material cifrado só abre com a chave da senha, não com a do PFX.
-    assert ci.decrypt_password_at_rest(
-        captura.linha["pfx_password_enc"],
-        captura.linha["pfx_password_iv"],
-        captura.linha["pfx_password_tag"],
-    ) == "senha-super-secreta"
+    # (Lote 8: a decifra passa pela linha, que traz a versão da chave e os
+    # dados associados — máquina e fingerprint — que a senha agora exige.)
+    assert ci.decifrar_senha_da_linha(captura.linha) == "senha-super-secreta"
 
 
 def test_sem_senha_as_colunas_ficam_nulas(captura) -> None:
@@ -235,7 +234,7 @@ def test_chave_da_senha_igual_a_do_pfx_e_recusada(monkeypatch) -> None:
 
 def test_decrypt_usa_a_versao_de_chave_do_registro(monkeypatch) -> None:
     versoes = []
-    monkeypatch.setattr(ci, "_get_server_key", lambda v=ci.CURRENT_KEY_VERSION: versoes.append(v) or (b"\x00" * 32))
+    monkeypatch.setattr(ci, "_get_server_key", lambda v=None: versoes.append(v) or (b"\x00" * 32))
     with pytest.raises(Exception):
         # Vai falhar na decifragem (dados falsos); só importa a versão pedida.
         ci.decrypt_pfx_at_rest("AAAA", "AAAA", "AAAA", key_version=7)

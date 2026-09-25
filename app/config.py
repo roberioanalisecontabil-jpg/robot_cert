@@ -144,14 +144,42 @@ CERT_ENCRYPTION_KEY = (os.getenv("CERT_ENCRYPTION_KEY") or "").strip()
 # o que já está no cofre. Carregadas por varredura do ambiente para que uma nova
 # rotação não exija editar este arquivo.
 _PREFIXO_CHAVE_ANTERIOR = "CERT_ENCRYPTION_KEY_V"
+_PREFIXO_CHAVE_SENHA_ANTERIOR = "CERT_PASSWORD_ENCRYPTION_KEY_V"
 globals().update(
     {
         nome: (valor or "").strip()
         for nome, valor in os.environ.items()
-        if nome.startswith(_PREFIXO_CHAVE_ANTERIOR)
-        and nome[len(_PREFIXO_CHAVE_ANTERIOR) :].isdigit()
+        if any(
+            nome.startswith(p) and nome[len(p):].isdigit()
+            for p in (_PREFIXO_CHAVE_ANTERIOR, _PREFIXO_CHAVE_SENHA_ANTERIOR)
+        )
     }
 )
+
+# Versão sob a qual CERT_ENCRYPTION_KEY está em vigor (lote 8 da auditoria,
+# achado #42). Até aqui era a constante 1 no código, e por isso a rotação
+# documentada nunca funcionou: CERT_ENCRYPTION_KEY_V1 só é consultada para
+# linhas com key_version diferente da em vigor, e a em vigor nunca deixava de
+# ser 1. Rotação: gerar chave nova em CERT_ENCRYPTION_KEY, mover a antiga para
+# CERT_ENCRYPTION_KEY_V<versão antiga>, subir esta variável em 1, reiniciar,
+# "Recifrar cofre" no Instalador até zerar, e só então apagar a _V antiga.
+CERT_ENCRYPTION_KEY_VERSION = _env_int("CERT_ENCRYPTION_KEY_VERSION", default=1, lo=1, hi=999)
+
+# O mesmo para a chave da SENHA (achado #19): até o lote 8 o ciphertext da
+# senha não tinha versão e era sempre decifrado com a chave corrente — trocar
+# CERT_PASSWORD_ENCRYPTION_KEY tornava todas as senhas do cofre ilegíveis.
+# Linha sem `password_key_version` (anterior à migração) vale 1.
+CERT_PASSWORD_ENCRYPTION_KEY_VERSION = _env_int(
+    "CERT_PASSWORD_ENCRYPTION_KEY_VERSION", default=1, lo=1, hi=999
+)
+
+# O AES-GCM do cofre passou a levar dados associados (máquina|fingerprint|
+# versão — achado #55): um ciphertext trocado de linha deixa de decifrar.
+# Linhas anteriores (aad_version 0) continuam aceitas enquanto isto estiver
+# desligado, com aviso; depois de "Recifrar cofre" zerar as linhas sem AAD,
+# ligue (=1) e o envelope antigo passa a ser recusado. Padrão desligado: o
+# cofre real tem centenas de linhas no envelope antigo.
+COFRE_EXIGE_AAD = _env_bool("COFRE_EXIGE_AAD", default=False)
 
 # Chave AES-256 para a SENHA do PFX (hex, 64 chars). Tem de ser diferente de
 # CERT_ENCRYPTION_KEY: o motivo de a senha ter saído do banco em 03/08 foi estar
@@ -275,6 +303,31 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
     ):
         fatais.append(
             "CERT_PASSWORD_ENCRYPTION_KEY não pode ser igual a CERT_ENCRYPTION_KEY."
+        )
+
+    # Chave "anterior" com o número da versão em vigor nunca é lida (#42): a
+    # em vigor vem de CERT_ENCRYPTION_KEY. Foi assim que a rotação de 15/08
+    # pareceu configurada e não estava.
+    for prefixo, versao_em_vigor, nome_da_em_vigor in (
+        (_PREFIXO_CHAVE_ANTERIOR, CERT_ENCRYPTION_KEY_VERSION, "CERT_ENCRYPTION_KEY"),
+        (_PREFIXO_CHAVE_SENHA_ANTERIOR, CERT_PASSWORD_ENCRYPTION_KEY_VERSION, "CERT_PASSWORD_ENCRYPTION_KEY"),
+    ):
+        nome_v = f"{prefixo}{versao_em_vigor}"
+        if (globals().get(nome_v) or "").strip():
+            avisos.append(
+                f"{nome_v} está definida, mas a versão em vigor é {versao_em_vigor}: ela nunca será "
+                f"lida. Para rotacionar, ponha a chave nova em {nome_da_em_vigor}, a antiga em "
+                f"{prefixo}{versao_em_vigor} e suba {nome_da_em_vigor}_VERSION para {versao_em_vigor + 1}."
+            )
+        for nome, valor in list(globals().items()):
+            if nome.startswith(prefixo) and nome[len(prefixo):].isdigit() and valor and not _hex_de_32_bytes(valor):
+                fatais.append(f"{nome} precisa ser hex de 64 caracteres (32 bytes).")
+
+    if producao and not COFRE_EXIGE_AAD:
+        avisos.append(
+            "COFRE_EXIGE_AAD desligada — linhas do cofre no envelope antigo (sem dados "
+            "associados) ainda são aceitas. Rode 'Recifrar cofre' no Instalador até zerar "
+            "as linhas sem AAD e ligue COFRE_EXIGE_AAD=1."
         )
 
     if not (os.getenv("JWT_SECRET_KEY") or "").strip():
