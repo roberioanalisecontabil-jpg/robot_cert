@@ -239,8 +239,23 @@ def test_ponte_por_http_na_propria_maquina_e_aceita(monkeypatch) -> None:
     ("postgresql://u:p@db.exemplo:5432/x?application_name=a", "postgresql://u:p@db.exemplo:5432/x?application_name=a&sslmode=require"),
     ("postgresql://u:p@db.exemplo/x?sslmode=disable", "postgresql://u:p@db.exemplo/x?sslmode=disable"),
 ])
-def test_dsn_remoto_ganha_sslmode_require(dsn: str, esperado: str) -> None:
+def test_dsn_remoto_ganha_sslmode_require_com_a_flag(dsn: str, esperado: str, monkeypatch) -> None:
+    monkeypatch.setattr(config, "DATABASE_EXIGE_TLS", True, raising=False)
     assert config.dsn_efetivo(dsn) == esperado
+
+
+@pytest.mark.parametrize("dsn", [
+    "postgresql://u:p@127.0.0.1:5433/x",
+    "postgresql://u:p@ANALISESRV:5433/x",
+    "postgresql://u:p@10.200.0.4:5433/x",
+])
+def test_sem_a_flag_o_dsn_vai_como_esta(dsn: str, monkeypatch) -> None:
+    """Hotfix de 29/09/2026: o ANALISESRV usa o nome da própria máquina no
+    DATABASE_URL contra um PostgreSQL sem SSL; acrescentar `sslmode=require`
+    por padrão o deixou sem banco no deploy (login em 500 depois de 30 s de
+    timeout do pool). Padrão agora é não tocar na URL e avisar no boot."""
+    monkeypatch.setattr(config, "DATABASE_EXIGE_TLS", False, raising=False)
+    assert config.dsn_efetivo(dsn) == dsn
 
 
 def test_dsn_remoto_sem_tls_explicito_gera_aviso(monkeypatch) -> None:
@@ -248,6 +263,14 @@ def test_dsn_remoto_sem_tls_explicito_gera_aviso(monkeypatch) -> None:
     monkeypatch.setattr(config, "DATABASE_URL", "postgresql://u:p@db.exemplo/x?sslmode=disable")
     _, avisos = config.verificar_ambiente()
     assert any("sslmode" in a for a in avisos)
+
+
+def test_dsn_remoto_sem_sslmode_e_sem_flag_gera_aviso(monkeypatch) -> None:
+    _producao(monkeypatch)
+    monkeypatch.setattr(config, "DATABASE_EXIGE_TLS", False, raising=False)
+    monkeypatch.setattr(config, "DATABASE_URL", "postgresql://u:p@ANALISESRV:5433/x")
+    _, avisos = config.verificar_ambiente()
+    assert any("DATABASE_EXIGE_TLS" in a and "127.0.0.1" in a for a in avisos)
 
 
 def test_o_cliente_do_banco_usa_o_dsn_efetivo() -> None:

@@ -246,27 +246,43 @@ def _host_da_url(url: str) -> str:
         return ""
 
 
+# O portal acrescenta `sslmode=require` a um DATABASE_URL de host não local que
+# não diga nada sobre TLS? Padrão DESLIGADO (hotfix de 29/09/2026): a primeira
+# versão do lote 9 acrescentava sempre, e o ANALISESRV — cujo DATABASE_URL usa
+# o nome/IP da própria máquina, não 127.0.0.1, contra um PostgreSQL sem SSL —
+# ficou sem banco no deploy: cada conexão esperava o timeout do pool e o login
+# respondia 500 depois de 30 s. Foi exatamente a quebra em silêncio que a
+# regra de compatibilidade dos lotes existe para evitar. Desligado, o boot só
+# AVISA; ligue (=1) quando o Postgres tiver TLS ou escreva `sslmode=` na URL.
+DATABASE_EXIGE_TLS = _env_bool("DATABASE_EXIGE_TLS", default=False)
+
+
+def _dsn_sem_sslmode_fora_da_maquina(dsn: str) -> bool:
+    from urllib.parse import parse_qs, urlsplit
+
+    partes = urlsplit(dsn)
+    host = (partes.hostname or "").lower()
+    return bool(host) and host not in _HOSTS_LOCAIS and "sslmode" not in parse_qs(partes.query)
+
+
 def dsn_efetivo(dsn: Optional[str] = None) -> str:
     """O DSN que o cliente do banco recebe (achado #51, lote 9).
 
-    Host fora da própria máquina sem `sslmode` na URL ganha `sslmode=require`:
-    sem isso a libpq negocia TLS só "se der" (`prefer`) e cai para texto claro
-    em silêncio — com a senha do banco e o cofre inteiro no fio. Quem tem um
-    Postgres remoto sem TLS e aceita o risco escreve `sslmode=disable` na URL,
-    e ganha um aviso no boot. Local (`127.0.0.1`/`localhost`) fica como está:
-    é o caso do ANALISESRV.
+    Com `DATABASE_EXIGE_TLS=1`, host fora da própria máquina sem `sslmode` na
+    URL ganha `sslmode=require`: sem isso a libpq negocia TLS só "se der"
+    (`prefer`) e cai para texto claro em silêncio — com a senha do banco e o
+    cofre inteiro no fio. Desligada (padrão), a URL vai como está e o boot
+    avisa. Local (`127.0.0.1`/`localhost`) nunca muda. Quem quer texto claro
+    de propósito escreve `sslmode=disable` na URL e ganha o aviso do boot.
     """
     from urllib.parse import parse_qs, urlsplit
 
     d = (dsn if dsn is not None else DATABASE_URL).strip()
-    if not d:
+    if not d or not DATABASE_EXIGE_TLS:
+        return d
+    if not _dsn_sem_sslmode_fora_da_maquina(d):
         return d
     partes = urlsplit(d)
-    host = (partes.hostname or "").lower()
-    if not host or host in _HOSTS_LOCAIS:
-        return d
-    if "sslmode" in parse_qs(partes.query):
-        return d
     return d + ("&" if partes.query else "?") + "sslmode=require"
 
 
@@ -443,8 +459,13 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
         if modo:
             avisos.append(
                 f"DATABASE_URL aponta para outro host com sslmode={modo}: a conexão com o "
-                "banco pode ir em texto claro. Prefira sslmode=require (é o que o portal "
-                "aplica quando a URL não diz nada)."
+                "banco pode ir em texto claro. Prefira sslmode=require."
+            )
+        elif _dsn_sem_sslmode_fora_da_maquina(DATABASE_URL) and not DATABASE_EXIGE_TLS:
+            avisos.append(
+                "DATABASE_URL aponta para outro host sem sslmode: a libpq só usa TLS 'se der' "
+                "e cai para texto claro em silêncio. Se o host é esta máquina, use 127.0.0.1; "
+                "se o PostgreSQL tem TLS, escreva sslmode=require na URL ou defina DATABASE_EXIGE_TLS=1."
             )
 
     return fatais, avisos
