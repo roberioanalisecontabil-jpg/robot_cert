@@ -91,7 +91,12 @@ def upload_pfx_files(
         LOGGER.debug("Nenhum certificado autorizado ao cofre; nada a enviar.")
         return
 
+    # Conta ARQUIVOS enviados e CERTIFICADOS distintos (por fingerprint): o
+    # mesmo certificado em duas pastas é enviado duas vezes (o cofre faz
+    # upsert e fica com um), mas é UM certificado. A mensagem final dizia
+    # "483 de 477 autorizados" por misturar as duas contagens (29/09/2026).
     enviados = 0
+    certificados_enviados: set[str] = set()
     for c in items:
         if not c.path or not c.path.is_file():
             continue
@@ -130,6 +135,7 @@ def upload_pfx_files(
             )
             if resp.status_code == 200:
                 enviados += 1
+                certificados_enviados.add(c.fingerprint_sha256)
                 LOGGER.debug("PFX %s enviado com sucesso ao servidor.", nome_publico_de_arquivo(c.file_name))
             else:
                 LOGGER.warning(
@@ -142,10 +148,14 @@ def upload_pfx_files(
             LOGGER.exception("Falha ao enviar arquivo PFX %s: %s", nome_publico_de_arquivo(c.file_name), ex)
 
     if enviados:
+        duplicados = enviados - len(certificados_enviados)
         LOGGER.info(
-            "Cofre sincronizado: %d de %d certificados autorizados enviados.",
-            enviados,
+            "Cofre sincronizado: %d de %d certificados autorizados enviados (%d arquivos; %d duplicado%s).",
+            len(certificados_enviados),
             len(autorizados),
+            enviados,
+            duplicados,
+            "" if duplicados == 1 else "s",
         )
 
 

@@ -547,6 +547,12 @@ def _machine_da_credencial(
     propria = (token.machine_id or "").strip().lower()
     if not propria:
         if exigir_identidade or token.email == ANONYMOUS_IDENTITY_EMAIL:
+            # Com aviso (29/09/2026): a recusa silenciosa deixava o operador
+            # sem pista — só a diferença 401 × 403 nas sondas apontava aqui.
+            logger.warning(
+                "Recusado (403): a credencial não identifica a estação e a operação exige "
+                "identidade; machine_id declarado %r.", pedido,
+            )
             raise HTTPException(status_code=403, detail=ERRO_MAQUINA_SEM_IDENTIDADE)
         logger.warning(
             "Chave compartilhada agindo como a máquina declarada %r (janela de "
@@ -555,6 +561,15 @@ def _machine_da_credencial(
         )
         return pedido
     if pedido and pedido.lower() != propria:
+        # No ANALISESRV a credencial fora provisionada com o nome do arquivo de
+        # exemplo e o agente declarava outro: o inventário parou em 403 e nada
+        # no log dizia por quê. Agora diz — com os dois nomes, que é o que se
+        # precisa para corrigir (ajustar o agent_config.json ou a credencial).
+        logger.warning(
+            "Recusado (403): machine_id divergente — a credencial é da estação %r, "
+            "o agente declarou %r. Ajuste o machine_id do agent_config.json ou "
+            "reemita a credencial com o nome certo.", propria, pedido,
+        )
         raise HTTPException(status_code=403, detail=ERRO_MAQUINA_DIVERGENTE)
     return pedido or propria
 
