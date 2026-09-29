@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Analise CertiDigital Agent
-AppVersion=1.4.0
+AppVersion=1.4.1
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
 DefaultGroupName=Analise CertiDigital
@@ -65,26 +65,81 @@ var
   LastOperationError: string;
   ServiceAccountPage: TInputQueryWizardPage;
   ApiKeyPage: TInputQueryWizardPage;
+  ContaAnterior: string;
 
 function OfferTrayAfterInstall: Boolean;
 begin
   Result := not WizardSilent;
 end;
 
-procedure InitializeWizard;
+{ A conta com que o servico ja roda, lida do SCM ("sc qc"), ou '' se o servico
+  nao existe. O instalador REMOVE e RECRIA o servico a cada atualizacao, e uma
+  conta de dominio nao sobrevive a isso sem a senha -- em 29/09/2026 a pagina
+  em branco trocou a conta por LocalSystem, que nao alcanca a pasta de rede, e
+  o servico subiu, conectou ao portal e parou antes do watchdog sem erro no
+  log. Por isso a conta atual e mostrada na pagina, a senha passa a ser
+  exigida para mante-la, e trocar para LocalSystem pede confirmacao. }
+function ContaAtualDoServico: string;
+var
+  RC, I, P: Integer;
+  Arquivo, Linha: string;
+  Linhas: TArrayOfString;
 begin
+  Result := '';
+  Arquivo := ExpandConstant('{tmp}\sc_qc.txt');
+  if not Exec(ExpandConstant('{cmd}'),
+              '/C sc qc "' + ServiceName + '" > "' + Arquivo + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, RC) then
+    Exit;
+  if (RC <> 0) or (not LoadStringsFromFile(Arquivo, Linhas)) then
+    Exit;
+  for I := 0 to GetArrayLength(Linhas) - 1 do
+  begin
+    Linha := Linhas[I];
+    if Pos('SERVICE_START_NAME', Linha) > 0 then
+    begin
+      P := Pos(':', Linha);
+      if P > 0 then
+        Result := Trim(Copy(Linha, P + 1, Length(Linha)));
+    end;
+  end;
+  DeleteFile(Arquivo);
+  Log('Conta atual do servico: "' + Result + '"');
+end;
+
+function ContaEhLocalSystem(Conta: string): Boolean;
+begin
+  Result := (Conta = '') or (CompareText(Conta, 'LocalSystem') = 0)
+    or (CompareText(Conta, 'NT AUTHORITY\LocalSystem') = 0);
+end;
+
+procedure InitializeWizard;
+var
+  Texto: string;
+begin
+  ContaAnterior := ContaAtualDoServico;
+  if ContaEhLocalSystem(ContaAnterior) then
+    Texto :=
+      'Se a pasta de certificados estiver em rede ou exigir credenciais de dominio, ' +
+      'informe o usuario (formato DOMINIO\usuario, usuario@dominio ou .\usuario) e a senha. ' +
+      'Ambos em branco = LocalSystem, que NAO alcanca pastas de rede (\\servidor\pasta). ' +
+      'O usuario informado deve ter o direito "Logon as a service".'
+  else
+    Texto :=
+      'Hoje o servico roda como "' + ContaAnterior + '". Para MANTER essa conta, ' +
+      'informe a senha dela (a atualizacao recria o servico e o Windows exige a senha). ' +
+      'Para trocar de conta, informe usuario e senha. ' +
+      'Ambos em branco = LocalSystem, que NAO alcanca pastas de rede -- o instalador vai pedir confirmacao.';
   ServiceAccountPage := CreateInputQueryPage(
     wpSelectTasks,
     'Conta do servico AnaliseCertiDigitalAgent',
-    'Por padrao o servico roda como LocalSystem, que nao tem credenciais de dominio.',
-    'Se a pasta de certificados estiver em rede ou exigir credenciais de dominio, ' +
-    'informe o usuario (formato DOMINIO\usuario ou .\usuario) e a senha. ' +
-    'Deixe ambos em branco para usar LocalSystem (padrao). ' +
-    'Importante: o usuario informado deve ter o direito "Logon as a service". ' +
-    'Em ambientes de dominio isto geralmente requer politica de grupo.'
+    'Com que conta o servico deve rodar.',
+    Texto
   );
-  ServiceAccountPage.Add('Usuario (opcional):', False);
+  ServiceAccountPage.Add('Usuario:', False);
   ServiceAccountPage.Add('Senha:', True);
+  if not ContaEhLocalSystem(ContaAnterior) then
+    ServiceAccountPage.Values[0] := ContaAnterior;
 
   { A X-API-Key do portal entra por aqui, e nao pelo agent_config.json
     (SECURITY_AUDIT #18, lote 7). Ela e gravada num arquivo temporario do
@@ -188,6 +243,36 @@ end;
 function UseCustomServiceAccount: Boolean;
 begin
   Result := ServiceAccountUser <> '';
+end;
+
+{ Valida a pagina da conta antes de avancar: usuario sem senha nao sobe (o
+  Windows recusa a conta), e deixar tudo em branco quando o servico ja roda
+  com conta propria so passa com confirmacao explicita. }
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if not Assigned(ServiceAccountPage) or (CurPageID <> ServiceAccountPage.ID) then
+    Exit;
+  if (ServiceAccountUser <> '') and (ServiceAccountPassword = '') then
+  begin
+    MsgBox(
+      'Informe a senha da conta "' + ServiceAccountUser + '".' + #13#10 +
+      'Sem a senha o Windows nao inicia o servico com essa conta.',
+      mbError, MB_OK
+    );
+    Result := False;
+    Exit;
+  end;
+  if (ServiceAccountUser = '') and (not ContaEhLocalSystem(ContaAnterior)) then
+  begin
+    Result := MsgBox(
+      'O servico roda hoje como "' + ContaAnterior + '".' + #13#10 +
+      'Continuar em branco troca a conta por LocalSystem, que NAO alcanca pastas de rede ' +
+      '(a pasta de origem dos certificados pode ficar inacessivel e o agente para de enviar).' + #13#10#13#10 +
+      'Trocar para LocalSystem mesmo assim?',
+      mbConfirmation, MB_YESNO
+    ) = IDYES;
+  end;
 end;
 
 function StopRunningAgent: Boolean;

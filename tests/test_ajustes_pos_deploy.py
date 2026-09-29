@@ -27,6 +27,8 @@ from agent.installer_client import upload_pfx_files
 from app import auth
 from app.cert_scanner import CertInfo, CertStatus
 
+RAIZ = Path(__file__).resolve().parents[1]
+
 
 # ── 1. Divergência de machine_id vai para o log ────────────────────────────
 
@@ -97,3 +99,21 @@ def test_duplicata_conta_uma_vez_e_o_log_diz_quantos_arquivos(tmp_path: Path, mo
     assert "2 de 2 certificados autorizados" in caplog.text
     assert "3 arquivos" in caplog.text and "1 duplicado" in caplog.text
     assert "3 de 2" not in caplog.text
+
+
+# ── 3. O instalador não pode trocar a conta do serviço em silêncio ──────────
+#
+# 29/09/2026: o instalador da 1.4.0 remove e recria o serviço, e a página
+# "Conta do serviço" vem em branco. Em branco = LocalSystem, que não alcança
+# o compartilhamento de rede da pasta de origem. O serviço subiu, conectou ao
+# portal e parou antes do watchdog, sem erro no log. Agora o instalador lê a
+# conta atual (`sc qc`), a mostra na página, exige a senha para mantê-la e
+# pede confirmação explícita para trocar por LocalSystem.
+
+def test_instalador_le_a_conta_atual_e_exige_a_senha_para_mantê_la() -> None:
+    iss = (RAIZ / "agent_setup.iss").read_text(encoding="utf-8", errors="replace")
+    assert "SERVICE_START_NAME" in iss, "precisa ler a conta atual com sc qc"
+    assert "function NextButtonClick" in iss, "a pagina da conta precisa validar antes de avancar"
+    assert "Deixe ambos em branco para usar LocalSystem (padrao)" not in iss
+    assert "LocalSystem" in iss and "rede" in iss.lower()
+    assert "AppVersion=1.4.1" in iss
