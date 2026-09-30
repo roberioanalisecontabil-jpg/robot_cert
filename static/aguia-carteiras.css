@@ -20,13 +20,21 @@
 .cg-cart-lista { min-width: 0; }
 .cg-cart-detalhe { min-width: 0; }
 
-/* A lista pode grudar enquanto for mais curta que a janela. */
+/* A lista gruda no topo e ROLA por dentro (30/09/2026): com muitos
+   operadores a página inteira rolava até o fim; agora o cabeçalho e a busca
+   ficam parados e só a lista corre. A altura é o que sobra da janela depois
+   do título, da busca e das margens. No celular a lista é a tela inteira e a
+   rolagem da página basta. */
 @media (min-width: 1025px) {
     .cg-cart-lista { position: sticky; top: var(--space-4); }
+    .cg-op-rolagem { overflow-y: auto; max-height: calc(100vh - 15rem); overscroll-behavior: contain; }
 }
+.cg-op-rolagem { overflow-y: auto; max-height: none; }
+.cg-op-rolagem:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
 
 /* Cabeçalho do painel de operadores: título e o resumo discreto. */
 .cg-cart-cab { padding: var(--space-5) var(--space-6) var(--space-3); }
+.cg-cart-acoes-cab { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
 .cg-cart-cab .ag-card__title { font-size: var(--text-base); margin-bottom: var(--space-1); }
 .cg-cart-resumo { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
 .cg-cart-resumo a { color: var(--text-brand); font-weight: 600; text-decoration: none; }

@@ -206,16 +206,6 @@
           <select id="ed-departamento" class="ag-select"><option value="">Sem departamento</option></select>
           <p class="ag-ajuda">Define quem pode liberar certificados para esta pessoa: os líderes do setor.</p>
         </div>
-        <!-- Só para gestor, e só administrador altera (30/09/2026): o gestor
-             vê o acervo inteiro por padrão; ligado, volta a ver só a carteira
-             própria e as do setor que lidera. -->
-        <div class="ag-field" id="ed-campo-acesso" hidden>
-          <label class="ag-check">
-            <input type="checkbox" id="ed-acesso-restrito">
-            <span>Limitar aos certificados da carteira e do setor</span>
-          </label>
-          <p class="ag-ajuda" id="ed-acesso-dica">Desmarcado, o gestor vê todos os certificados. Só um administrador altera.</p>
-        </div>
         <div class="ag-field modal__campo">
           <label class="ag-label" for="ed-gestor">Gestor responsável <span class="cg-usu-tag">informativo</span></label>
           <select id="ed-gestor" class="ag-select"><option value="">Sem gestor</option></select>
@@ -947,19 +937,13 @@
             const campoGestor = document.getElementById('ed-gestor').closest('.modal__campo');
             const textos = {
                 user: 'Instala apenas os certificados da carteira dele.',
-                gestor: 'Vê todos os certificados, monta carteiras de operadores e vê a trilha de atribuições.',
+                gestor: 'Recebe todos os clientes na carteira ao virar gestor; o administrador pode retirar clientes dela em Carteiras. Monta carteiras de operadores do seu setor.',
                 admin: 'Alcance total, incluindo gestão de usuários e configuração.',
             };
             dica.textContent = textos[nivel] || '';
             // Gestor só faz sentido para operador — some em vez de ficar
             // habilitado e ser silenciosamente ignorado.
             campoGestor.style.display = nivel === 'user' ? '' : 'none';
-            // A limitação de alcance só existe para gestor, e só o
-            // administrador mexe nela: para os demais fica visível, mas
-            // desabilitada, para a pessoa saber que a regra existe.
-            const campoAcesso = document.getElementById('ed-campo-acesso');
-            campoAcesso.hidden = nivel !== 'gestor';
-            document.getElementById('ed-acesso-restrito').disabled = localStorage.getItem('user_role') !== 'admin';
         }
 
         /**
@@ -971,7 +955,6 @@
          */
         function novoUsuario() {
             editandoId = null;
-            document.getElementById('ed-acesso-restrito').checked = false;
             document.getElementById('modal-editar-titulo').textContent = 'Novo usuário';
             document.getElementById('modal-editar-quem').textContent =
                 'A pessoa entra com o e-mail e a senha definidos aqui.';
@@ -1021,7 +1004,6 @@
             document.getElementById('ed-nome').value = user.full_name || '';
             document.getElementById('ed-email').value = user.email || '';
             document.getElementById('ed-nivel').value = String(user.role || 'user').toLowerCase();
-            document.getElementById('ed-acesso-restrito').checked = !!user.acesso_restrito;
             preencherGestores(user);
             preencherDepartamentos(user.departamento_id);
             ajustarDicaDeNivel();
@@ -1057,12 +1039,6 @@
                 // gravado, e não haveria como tirar alguém de um setor.
                 departamento_id: document.getElementById('ed-departamento').value || '',
             };
-            // A flag só vai quando é gestor E quem edita é administrador: o
-            // servidor recusa (403) qualquer outro remetente, e mandar sempre
-            // faria a edição comum de um gestor falhar inteira.
-            if (nivel === 'gestor' && localStorage.getItem('user_role') === 'admin') {
-                corpo.acesso_restrito = document.getElementById('ed-acesso-restrito').checked;
-            }
 
             if (criando) {
                 const senha = document.getElementById('ed-senha').value;

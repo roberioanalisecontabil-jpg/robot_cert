@@ -1487,15 +1487,6 @@ def list_users() -> List[dict]:
         "id, email, full_name, role, ativo, gestor_id, departamento_id, created_at"
     ).execute()
     usuarios = list(r.data or [])
-    # `acesso_restrito` numa consulta à parte e tolerante: a coluna chegou em
-    # 30/09/2026 (migration 20260930100000) e a lista não pode cair num
-    # banco que ainda não a tem — sem a coluna, todo gestor está liberado.
-    restricao: Dict[str, bool] = {}
-    try:
-        for u in sb.table("users").select("id, acesso_restrito").execute().data or []:
-            restricao[str(u.get("id"))] = bool(u.get("acesso_restrito"))
-    except Exception:  # noqa: BLE001
-        logger.warning("users.acesso_restrito indisponível na listagem (migration 20260930100000?)")
     # Contagem da carteira por pessoa, numa consulta só: a coluna "Carteira"
     # liga esta tela ao cartão "Acesso" do Dashboard e à tela Carteiras.
     quantos: Dict[str, int] = {}
@@ -1511,7 +1502,6 @@ def list_users() -> List[dict]:
         # Só na exibição: "irla" → "Irla", caixa alta → título.
         u["nome_exibicao"] = nomes.nome_pessoa(u.get("full_name")) or str(u.get("email") or "")
         u["carteira"] = n
-        u["acesso_restrito"] = restricao.get(str(u.get("id")), False)
         u["textos"] = {"carteira": _texto.plural(n, "cliente")}
     return usuarios
 
@@ -1536,10 +1526,6 @@ class UserUpdateBody(BaseModel):
     # Omitir mantém o que está gravado; string vazia limpa. Sem a distinção,
     # não haveria como tirar alguém de um setor sem inventar um valor.
     departamento_id: Optional[str] = None
-    # Só faz sentido em gestor, e só administrador escreve (30/09/2026):
-    # ligada, o gestor deixa de ver o acervo inteiro e volta ao alcance da
-    # carteira própria + setor. Omitir mantém o que está gravado.
-    acesso_restrito: Optional[bool] = None
 
 
 class UserResetPasswordBody(BaseModel):
@@ -1890,7 +1876,7 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
 
     hash_pw = auth.get_password_hash(body.password)
     try:
-        sb.table("users").insert({
+        r = sb.table("users").insert({
             # Quem cadastrou sabe a senha que digitou. Ela serve para o primeiro
             # acesso e nada mais — `require_auth` recusa o resto do portal até a
             # pessoa escolher uma própria.
@@ -1902,10 +1888,22 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
             "role": role,
             "ativo": True,
         }).execute()
-        return {"ok": True}
     except Exception:
         logger.exception("Falha ao criar usuário")
         raise HTTPException(status_code=400, detail="Não foi possível criar o usuário.")
+    saida: Dict[str, Any] = {"ok": True}
+    if role == "gestor":
+        # Nasceu gestor: a carteira já nasce cheia (regra de 30/09/2026).
+        novo_id = str(((r.data or [{}])[0] or {}).get("id") or "")
+        if not novo_id:
+            try:
+                achado = sb.table("users").select("id").eq("email", email).limit(1).execute().data or []
+                novo_id = str(achado[0]["id"]) if achado else ""
+            except Exception:  # noqa: BLE001
+                novo_id = ""
+        if novo_id:
+            saida["regra_gestor"] = _regra_gestor_na_troca(novo_id, None, "gestor")
+    return saida
 
 
 def _garantir_que_sobra_admin(
@@ -1974,6 +1972,11 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     _exigir_alcance_sobre_conta(sb, ator, user_id)
     role = (body.role or "user").strip().lower()
     ativo = body.ativo
+    # O papel ANTES da gravação decide se a regra de gestor entra ou sai
+    # (30/09/2026): user→gestor enche a carteira; gestor→outro tira o que a
+    # regra deu. Editar um gestor sem trocar o papel não reaplica nada — senão
+    # renomear alguém devolveria o cliente que o administrador tirou.
+    papel_anterior = _papel_da_conta(sb, user_id)
 
     # Cliente antigo mandando role="disabled" quer dizer "desative" — nunca
     # quis dizer "o papel dele agora é disabled", embora fosse isso que
@@ -2009,15 +2012,6 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         if gid and gid == user_id:
             raise HTTPException(status_code=422, detail="Um usuário não pode ser gestor de si mesmo.")
         campos["gestor_id"] = gid or None
-    if body.acesso_restrito is not None:
-        # Um gestor pode editar contas não-admin — inclusive a própria. Se
-        # pudesse escrever esta flag, desligaria a própria limitação.
-        if not _e_admin(ator):
-            raise HTTPException(
-                status_code=403,
-                detail="Só um administrador pode limitar ou liberar o alcance de um gestor.",
-            )
-        campos["acesso_restrito"] = bool(body.acesso_restrito)
 
     # Nada a fazer com as seleções de alerta ao trocar o e-mail: desde a fase
     # 3c elas são chaveadas por `user_id`, então a identidade não se move. O
@@ -2031,7 +2025,34 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         raise HTTPException(status_code=400, detail="Não foi possível salvar o usuário.")
     if ativo is False:
         _revogar_tokens_de_instalacao(user_id)
-    return {"ok": True}
+    saida: Dict[str, Any] = {"ok": True}
+    if role is not None and role != papel_anterior:
+        saida["regra_gestor"] = _regra_gestor_na_troca(user_id, papel_anterior, role)
+    return saida
+
+
+def _papel_da_conta(sb, user_id: str) -> Optional[str]:
+    try:
+        r = sb.table("users").select("role").eq("id", user_id).limit(1).execute()
+        linhas = r.data or []
+        return (linhas[0].get("role") or "").strip().lower() if linhas else None
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler o papel atual de %s", user_id)
+        return None
+
+
+def _regra_gestor_na_troca(user_id: str, de: Optional[str], para: str) -> Dict[str, Any]:
+    """Aplica ou desfaz a regra de gestor numa troca de papel. Nunca levanta:
+    a conta já foi gravada; falhar aqui vira aviso na resposta e no log."""
+    try:
+        if para == "gestor" and de != "gestor":
+            return {"acrescentados": cert_installer.aplicar_regra_gestor(user_id)}
+        if de == "gestor" and para != "gestor":
+            return {"removidos": cert_installer.remover_regra_gestor(user_id)}
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Regra de gestor não aplicada a %s (%s -> %s)", user_id, de, para)
+        return {"erro": "A conta foi salva, mas a carteira não pôde ser ajustada. Use 'Aplicar regra de gestor' em Carteiras."}
+    return {}
 
 
 @app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
@@ -5574,25 +5595,14 @@ def listar_operadores(
         ]
 
     quantos = Counter(str(c.get("user_id")) for c in cart)
-    # `acesso_restrito` (30/09/2026) numa consulta tolerante: a coluna pode não
-    # existir ainda, e a lista não pode cair por isso — sem ela, gestor vê tudo.
-    restricao: Dict[str, bool] = {}
-    try:
-        for u in sb.table("users").select("id, acesso_restrito").execute().data or []:
-            restricao[str(u.get("id"))] = bool(u.get("acesso_restrito"))
-    except Exception:  # noqa: BLE001
-        logger.warning("users.acesso_restrito indisponível na lista de operadores (migration 20260930100000?)")
     from app import texto as _texto
     operadores = []
     for u in visiveis:
         n = quantos.get(str(u.get("id")), 0)
         papel_u = (u.get("role") or "").strip().lower()
-        restrito = restricao.get(str(u.get("id")), False)
-        # Só depende de carteira quem não tem alcance total: operador, e gestor
-        # LIMITADO pelo administrador. Um gestor sem limitação vê tudo, então
-        # "sem carteira" nele não é pendência — seria um alarme vermelho falso
-        # em cada gestor da lista.
-        depende_de_carteira = papel_u == "user" or (papel_u == "gestor" and restrito)
+        # Operador e gestor dependem da carteira (a do gestor a regra enche;
+        # 30/09/2026). Só o administrador tem alcance sem carteira.
+        depende_de_carteira = papel_u in ("user", "gestor")
         operadores.append(
             {
                 "id": str(u.get("id")),
@@ -5606,7 +5616,6 @@ def listar_operadores(
                 "gestor_id": u.get("gestor_id"),
                 "departamento_id": u.get("departamento_id"),
                 "documentos": n,
-                "acesso_restrito": restrito,
                 "depende_de_carteira": depende_de_carteira,
                 "sem_carteira": n == 0 and depende_de_carteira,
                 "textos": {"clientes": _texto.plural(n, "cliente")},
@@ -5631,6 +5640,46 @@ def listar_operadores(
         "operadores": operadores,
         "resumo": {"operadores": total, "sem_carteira": sem, "texto": resumo_txt},
     }
+
+
+@app.post(
+    "/api/carteira/regra-gestor/aplicar",
+    dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR)), Depends(require_admin)],
+)
+def aplicar_regra_gestor_a_todos() -> dict:
+    """Enche a carteira de TODOS os gestores ativos com o inventário atual.
+
+    Dois usos: os gestores que já existiam quando a regra nasceu (30/09/2026),
+    e completar as carteiras quando entram clientes novos no inventário — a
+    regra só roda sozinha na troca de papel. Idempotente: quem já tem tudo
+    recebe zero. O que o administrador tirou à mão VOLTA, porque a regra não
+    guarda memória de retiradas; é o mesmo comportamento de virar gestor de novo.
+    """
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    try:
+        gestores = [
+            u for u in (sb.table("users").select("id, email, role, ativo").execute().data or [])
+            if (u.get("role") or "").strip().lower() == "gestor" and auth.conta_ativa(u)
+        ]
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao listar gestores para a regra")
+        raise HTTPException(status_code=503, detail="Não foi possível listar os gestores.")
+    por_gestor = []
+    total = 0
+    for g in gestores:
+        try:
+            n = cert_installer.aplicar_regra_gestor(str(g["id"]))
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Regra de gestor falhou para %s", g.get("email"))
+            por_gestor.append({"email": g.get("email"), "erro": str(e)})
+            continue
+        total += n
+        por_gestor.append({"email": g.get("email"), "acrescentados": n})
+    return {"gestores": len(gestores), "acrescentados": total, "por_gestor": por_gestor}
 
 
 @app.get("/api/carteira/documentos", dependencies=[Depends(require_modulo("carteiras")), Depends(require_admin_ou_lider)])

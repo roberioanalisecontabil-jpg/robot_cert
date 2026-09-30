@@ -258,21 +258,21 @@ def test_admin_e_gestor_tem_alcance_total(
     como todo mundo; a diferença é que ele mesmo pode se atribuir, dentro do
     setor.
     """
-    # 30/09/2026: decisão de produto — o gestor volta a ter alcance total POR
-    # PADRÃO, e só o administrador o limita (`users.acesso_restrito`). O caso
-    # limitado está em `test_gestor_limitado_instala_so_o_alcance_do_setor`.
+    # 30/09/2026 (segunda versão): o gestor instala o que LÊ — a carteira
+    # própria + as do setor. A carteira dele nasce cheia pela regra de gestor,
+    # mas aqui ela não rodou: CERT_ALHEIO está fora, logo 403.
     r = _pedir(client, rota, extra, [CERT_ALHEIO, CERT_SEM_DOC], _h(papel))
-    assert r.status_code == 200, r.text
+    if papel == "admin":
+        assert r.status_code == 200, r.text
+    else:
+        assert r.status_code == 403, r.text
 
 
 @pytest.mark.parametrize("rota,extra", ROTAS)
-def test_gestor_limitado_instala_so_o_alcance_do_setor(
+def test_gestor_instala_a_carteira_propria_e_a_do_setor(
     client: TestClient, banco: _Fake, rota: str, extra: dict
 ) -> None:
-    """Limitado pelo administrador, o gestor instala o que LÊ: a própria
-    carteira e as carteiras do setor que lidera (DOC_MEU, do operador do
-    setor) — e nada além."""
-    next(u for u in banco.tabelas["users"] if u["id"] == "u-gestor")["acesso_restrito"] = True
+    """DOC_MEU está na carteira do operador do setor que o gestor lidera."""
     assert _pedir(client, rota, extra, [CERT_MEU], _h("gestor")).status_code == 200
     r = _pedir(client, rota, extra, [CERT_ALHEIO], _h("gestor"))
     assert r.status_code == 403, r.text

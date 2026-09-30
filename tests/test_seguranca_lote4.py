@@ -56,10 +56,10 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake = _Fake({
         "users": [
             _usuario("u-adm", "admin@x.com", "admin"),
-            # `acesso_restrito=True`: desde 30/09/2026 o gestor vê tudo por
-            # padrão e só o administrador o limita. Estes testes fixam o
-            # alcance do gestor LIMITADO (ver tests/test_gestor_alcance_total.py).
-            _usuario("u-lf", "lider@x.com", "gestor", departamento_id=FISCAL, acesso_restrito=True),
+            # Gestor com carteira própria (DOC_L) e líder do setor FISCAL. A
+            # regra de 30/09/2026 enche a carteira ao promover; aqui ela não
+            # rodou de propósito, para fixar o alcance carteira + setor.
+            _usuario("u-lf", "lider@x.com", "gestor", departamento_id=FISCAL),
             _usuario("u-fis", "fis@x.com", "user", departamento_id=FISCAL),
             _usuario("u-sol", "solto@x.com", "user"),
         ],
@@ -139,8 +139,9 @@ def test_operador_sem_setor_so_ve_a_propria_carteira(client: TestClient, banco: 
 
 
 def test_lider_ve_a_propria_carteira_e_as_do_seu_setor(client: TestClient, banco: _Fake) -> None:
-    """Gestor LIMITADO pelo administrador (`acesso_restrito`): o alcance é
-    o do setor que lidera. Sem a limitação ele vê tudo (decisão de 30/09/2026)."""
+    """O gestor lê a própria carteira e as do setor que lidera. Desde
+    30/09/2026 a carteira dele nasce cheia (regra de gestor), mas a leitura
+    continua sendo pela carteira — é isto que este teste fixa."""
     r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*GESTOR))
     assert _docs(r.json()["itens"]) == {DOC_A, DOC_L}
 

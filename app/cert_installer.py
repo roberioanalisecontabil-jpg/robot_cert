@@ -813,34 +813,44 @@ def listar_carteira(user_id: str) -> Set[str]:
         raise CarteiraIndisponivel(str(e)) from e
 
 
-_avisou_coluna_acesso_restrito = False
+# Regra de gestor (30/09/2026). Quem vira gestor recebe TODOS os clientes do
+# inventário na carteira, marcados com esta origem; o administrador tira um a
+# um se quiser. Quem deixa de ser gestor perde só o que a regra deu — o que
+# foi atribuído à mão fica. A carteira do gestor é lida como a de qualquer
+# pessoa (`documentos_ao_alcance`): a regra enche, não contorna.
+ORIGEM_REGRA_GESTOR = "regra:gestor"
 
 
-def gestor_com_acesso_restrito(user_id: str) -> bool:
-    """`users.acesso_restrito` da conta. Ausente (migration 20260930100000
-    ainda não rodou) = False, o padrão pedido — com um aviso único no log.
-    Qualquer OUTRA falha de leitura sobe como `CarteiraIndisponivel`: "não
-    consegui ler" não é "não é restrito"."""
-    global _avisou_coluna_acesso_restrito
+def aplicar_regra_gestor(user_id: str) -> int:
+    """Põe na carteira de `user_id` todo documento do inventário que ainda
+    não esteja lá. Idempotente. Devolve quantos entraram."""
     client = _banco()
     if not client:
-        raise CarteiraIndisponivel("Banco não configurado")
-    try:
-        r = client.table("users").select("id, acesso_restrito").eq("id", user_id).limit(1).execute()
-    except Exception as e:  # noqa: BLE001
-        texto = str(e).lower()
-        if "acesso_restrito" in texto or "42703" in texto:
-            if not _avisou_coluna_acesso_restrito:
-                _avisou_coluna_acesso_restrito = True
-                logger.warning(
-                    "users.acesso_restrito não existe (rode a migration 20260930100000); "
-                    "todo gestor está com alcance total."
-                )
-            return False
-        logger.exception("Falha ao ler acesso_restrito de %s", user_id)
-        raise CarteiraIndisponivel(str(e)) from e
-    linha = (r.data or [None])[0] or {}
-    return bool(linha.get("acesso_restrito"))
+        raise RuntimeError("Banco não configurado")
+    universo = {str(d.get("documento") or "") for d in universo_de_documentos()}
+    universo.discard("")
+    faltam = sorted(universo - set(listar_carteira(user_id)))
+    if not faltam:
+        return 0
+    return atribuir_carteira(user_id, faltam, None, ORIGEM_REGRA_GESTOR)
+
+
+def remover_regra_gestor(user_id: str) -> int:
+    """Tira da carteira só o que a regra deu. Devolve quantos saíram."""
+    client = _banco()
+    if not client:
+        raise RuntimeError("Banco não configurado")
+    r = (
+        client.table("carteira").select("documento")
+        .eq("user_id", user_id).eq("atribuido_por_email", ORIGEM_REGRA_GESTOR).execute()
+    )
+    n = len(r.data or [])
+    if n:
+        (
+            client.table("carteira").delete()
+            .eq("user_id", user_id).eq("atribuido_por_email", ORIGEM_REGRA_GESTOR).execute()
+        )
+    return n
 
 
 def documentos_ao_alcance(user_id: str, role: str) -> Optional[Set[str]]:
@@ -859,11 +869,6 @@ def documentos_ao_alcance(user_id: str, role: str) -> Optional[Set[str]]:
         return None
     if not user_id:
         return set()
-    # Decisão de produto de 30/09/2026: o gestor vê TUDO por padrão; só um
-    # administrador o limita, ligando `users.acesso_restrito`. Limitado, ele
-    # volta ao alcance do lote 4 (carteira própria + carteiras do setor).
-    if papel == "gestor" and not gestor_com_acesso_restrito(user_id):
-        return None
     docs = set(listar_carteira(user_id))
     if papel != "gestor":
         return docs

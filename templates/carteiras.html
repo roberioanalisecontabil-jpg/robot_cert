@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-09b" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-09c" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
        declara display, e display explícito vence o display:none que o
@@ -35,10 +35,19 @@
         <h1 class="ag-page__title">Carteiras</h1>
         <p class="ag-page__lead">Defina quais clientes cada operador pode instalar. Operador sem carteira não consegue instalar nenhum certificado.</p>
       </div>
-      <button type="button" id="btnAbrirImportar" class="ag-btn ag-btn--outline">
-        <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-        Importar planilha
-      </button>
+      <div class="cg-cart-acoes-cab">
+        <!-- Só administrador (JS esconde para os demais; o servidor recusa
+             de qualquer forma). Enche a carteira de todos os gestores com o
+             inventário atual: para os que já existiam antes da regra e para
+             completar quando entram clientes novos. -->
+        <button type="button" id="btnRegraGestor" class="ag-btn ag-btn--ghost" hidden title="Põe na carteira de cada gestor todos os clientes do inventário que ainda faltem">
+          Aplicar regra de gestor
+        </button>
+        <button type="button" id="btnAbrirImportar" class="ag-btn ag-btn--outline">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          Importar planilha
+        </button>
+      </div>
     </header>
 
     <!-- Erro que precisa ficar (o toast some). -->
@@ -60,9 +69,14 @@
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="search" id="buscaOperador" name="q" class="ag-input" placeholder="Nome ou e-mail" autocomplete="off" />
         </form>
-        <ul id="listaOperadores" class="cg-op-lista">
-          <li class="cg-op-vazio">Carregando…</li>
-        </ul>
+        <!-- Rolagem própria (30/09/2026): com muitos operadores a página
+             inteira rolava até o fim; agora só a lista rola, e a busca fica
+             visível no topo. Focável para quem navega por teclado. -->
+        <div class="cg-op-rolagem" tabindex="0" aria-label="Lista de operadores">
+          <ul id="listaOperadores" class="cg-op-lista">
+            <li class="cg-op-vazio">Carregando…</li>
+          </ul>
+        </div>
       </section>
 
       <section class="ag-card cg-cart-detalhe" aria-live="polite">
@@ -230,15 +244,12 @@
     const souAdmin = localStorage.getItem("user_role") === "admin";
     const meuEmail = (localStorage.getItem("user_email") || "").toLowerCase();
 
+    // Gestor: etiqueta do papel e, como todo mundo, "Sem carteira" quando
+    // não tem nada — a regra de gestor enche a carteira ao promover; vazia
+    // significa que a regra ainda não foi aplicada (botão no cabeçalho).
     function badgeDe(o) {
-      if (o.role === "gestor") {
-        const limitado = !!o.acesso_restrito;
-        return `<span class="ag-badge ag-badge--neutral">Gestor</span>` +
-          (limitado
-            ? (o.sem_carteira ? ` <span class="ag-badge ag-badge--danger">Sem carteira</span>` : "")
-            : ` <span class="ag-badge ag-badge--success">Vê tudo</span>`);
-      }
-      return o.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "";
+      const papel = o.role === "gestor" ? `<span class="ag-badge ag-badge--neutral">Gestor</span> ` : "";
+      return papel + (o.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "");
     }
 
     function operadoresVisiveis() {
@@ -273,9 +284,10 @@
                 <span class="ag-cell-sub">${emailQuebravel(o.email)}</span>
                 ${o.ativo ? "" : `<span class="cg-op-item__inativa">Conta inativa, com carteira a limpar</span>`}
               </span>
-              ${o.sem_carteira || o.role === "gestor"
+              ${o.sem_carteira
                 ? badgeDe(o)
-                : `<span class="cg-op-item__contagem">${esc((o.textos && o.textos.clientes) || (o.documentos + " clientes"))}</span>`}
+                : (o.role === "gestor" ? `<span class="ag-badge ag-badge--neutral">Gestor</span> ` : "") +
+                  `<span class="cg-op-item__contagem">${esc((o.textos && o.textos.clientes) || (o.documentos + " clientes"))}</span>`}
             </a>
           </li>`).join("");
         el.querySelectorAll(".cg-op-item").forEach((a) =>
@@ -348,10 +360,7 @@
       document.getElementById("opNome").textContent = nomeDe(_selecionado);
       document.getElementById("opEmail").textContent = _selecionado.email;
       document.getElementById("opAviso").innerHTML = (_selecionado.ativo ? "" : `<span class="ag-badge ag-badge--neutral">Conta inativa</span> `) +
-        badgeDe(_selecionado) +
-        (_selecionado.role === "gestor" && !_selecionado.acesso_restrito
-          ? ` <span class="ag-ajuda">Esta carteira só passa a valer se o administrador limitar o alcance deste gestor em Usuários.</span>`
-          : "");
+        badgeDe(_selecionado);
       document.getElementById("buscaDoc").value = "";
 
       renderOperadores();
@@ -446,7 +455,7 @@
       const t = naCarteira ? _trilha[x.documento] : null;
       const trilha = t && (t.atribuido_por || t.atribuido_em)
         ? `<span class="cg-transfer__trilha">${esc(x.documento)}` +
-          (t.atribuido_por ? " · liberado por " + esc(t.atribuido_por) : "") +
+          (t.atribuido_por ? (t.atribuido_por === "regra:gestor" ? " · pela regra de gestor" : " · liberado por " + esc(t.atribuido_por)) : "") +
           (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
           (t.no_inventario === false ? " · fora do inventário atual" : "") +
           `</span>`
@@ -671,6 +680,28 @@
       // Modal de importação.
       const modal = document.getElementById("modalImportar");
       document.getElementById("btnAbrirImportar").addEventListener("click", () => modal.showModal());
+
+      // "Aplicar regra de gestor" (30/09/2026): só administrador vê.
+      const btnRegra = document.getElementById("btnRegraGestor");
+      if (souAdmin) {
+        btnRegra.hidden = false;
+        btnRegra.addEventListener("click", async () => {
+          btnRegra.disabled = true;
+          try {
+            const r = await fetch("/api/carteira/regra-gestor/aplicar", { method: "POST", headers: getHeaders(true) });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.detail || ("Erro " + r.status));
+            const g = Number(d.gestores || 0), n = Number(d.acrescentados || 0);
+            showToast(g === 0 ? "Nenhum gestor ativo." : (n === 0 ? "Carteiras dos gestores já completas." : n + " cliente(s) acrescentado(s) em " + g + " gestor(es)."), "success");
+            await carregarOperadores();
+            if (_selecionado) await selecionar(_selecionado.id);
+          } catch (e) {
+            showToast("Não foi possível aplicar a regra: " + e.message, "error");
+          } finally {
+            btnRegra.disabled = false;
+          }
+        });
+      }
       modal.querySelectorAll("[data-ag-modal-close]").forEach((b) => b.addEventListener("click", () => modal.close()));
       document.getElementById("formImportar").addEventListener("submit", importarPlanilha);
 
