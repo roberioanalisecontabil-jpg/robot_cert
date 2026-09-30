@@ -2253,7 +2253,8 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 /* "Marcar como lida" de UM aviso (30/09/2026). Só o traço do check, na cor
    de texto apagada até o hover: é ação secundária dentro de um item que já
    tem prazo, nome e documento disputando o olhar. 28px de alvo dentro de um
-   item de 44px+; o item inteiro não é clicável, então o botão não compete. */
+   item de 44px+. O item inteiro abre a tela filtrada (clique fora do botão);
+   o botão para a propagação, então os dois alvos não se confundem. */
 .notif-item-lida-btn {
   margin-left: auto;
   width: 28px;
@@ -2315,6 +2316,69 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
 .notif-expiring {
   background: var(--warning-bg);
   border-left-color: var(--warning);
+}
+
+/* Certificado novo na pasta (30/09/2026): verde, a cor de "chegou e está
+   válido"; o vermelho e o âmbar continuam falando só de prazo. */
+.notif-novo {
+  background: var(--ok-bg);
+  border-left-color: var(--ok);
+}
+
+.notif-novo .notif-badge-type {
+  color: var(--ok-text);
+}
+
+/* O cartão leva à tela certa já filtrada (30/09/2026). Mão de link e foco
+   visível: é um `div[role=link]` porque o botão "lida" vive dentro dele. */
+.notification-item[role="link"] {
+  cursor: pointer;
+}
+
+.notification-item[role="link"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Filtro do sino: Todos / Novos / Expirando / Vencidos. Chips em pílula na
+   escala do "Li todos"; o ativo fica sólido para a leitura não depender só
+   da cor do texto. Quebram linha nos 320px do painel ("Vencidos 72" não
+   cabe ao lado dos outros três): duas linhas à vista valem mais que um
+   quarto chip escondido atrás de uma rolagem sem barra. */
+.notif-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem 0;
+}
+
+.notif-filtro {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  line-height: 1.4;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.notif-filtro:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.notif-filtro[aria-pressed="true"] {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.notif-filtro:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .notif-item-header {
@@ -2762,6 +2826,19 @@ body.sidebar-open .sidebar-backdrop {
 
 /* Responsividade: Dispositivos Móveis Muito Pequenos (< 480px) */
 @media (max-width: 480px) {
+  /* O painel do sino é absoluto à direita do sino, com 320px fixos: num
+     celular de 360px o sino está a menos de 320px da borda esquerda e o
+     painel saía da tela (left = -36px em 30/09/2026). Fixo às margens da
+     tela, abaixo da barra superior, com a largura que o aparelho tiver. */
+  .notifications-dropdown {
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: calc(env(safe-area-inset-top, 0px) + 4.5rem);
+    width: auto;
+    max-height: min(70vh, 480px);
+  }
+
   .cards-grid {
     /* minmax(0, 1fr), não 1fr: `1fr` sozinho é minmax(auto, 1fr), e o piso
        `auto` é o min-content do card — o rótulo "FALHA (SEM PADRÃO)" alargava

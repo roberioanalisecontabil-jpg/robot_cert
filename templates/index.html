@@ -11,7 +11,7 @@
          portal vive na VPN, e uma estação sem internet cairia na fonte do
          sistema se dependesse do Google Fonts. -->
     <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
-    <link rel="stylesheet" href="/static/style.css?v=menu-lateral-2026-09b" />
+    <link rel="stylesheet" href="/static/style.css?v=menu-lateral-2026-09c" />
     <!-- Ordem de adoção do DS (seção 41): tokens → componentes → o que é só
          desta tela. Esta é a primeira tela do portal no Águia; as outras
          continuam só com o style.css até serem levadas uma a uma. -->
@@ -312,7 +312,7 @@
 
     </main>
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09h"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09i"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -1322,6 +1322,17 @@
         document.getElementById("btnInstalarAqui").addEventListener("click", instalarNaEstacao);
 
         initPerPageDashboard();
+        // O sino manda para cá com ?busca=<documento> (30/09/2026): a busca
+        // chega preenchida e a primeira carga já vem filtrada. A URL é lida
+        // uma vez e limpa, para "Atualizar tabela" e o F5 não a ressuscitarem
+        // depois de a pessoa ter apagado o campo.
+        const buscaDaUrl = (new URLSearchParams(location.search).get("busca") || "").trim();
+        if (buscaDaUrl) {
+          const campoBusca = document.getElementById("busca-cert");
+          if (campoBusca) campoBusca.value = buscaDaUrl;
+          paginaAtual = 1;
+          history.replaceState(null, "", location.pathname);
+        }
         await carregarTabela();
         carregarDispositivos();
         carregarMinhaEstacao();

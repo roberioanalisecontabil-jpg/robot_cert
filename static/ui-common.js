@@ -1198,6 +1198,24 @@ function initThemeToggle() {
 }
 
 /** Atualiza o badge e o nome acessível do sino a partir dos totais. */
+// Filtro do sino (30/09/2026): "todos" | "novo" | "expiring" | "expired".
+// Vive só nesta aba, em memória: é um recorte de leitura, não uma
+// preferência — reabrir o painel volta a "todos", que é onde a contagem do
+// selo e a lista concordam.
+let _filtroNotif = "todos";
+let _ultimoPayloadNotif = null;
+
+/** Para onde o cartão leva: vencido vai à lista de vencidos; novo e
+ *  expirando estão no Início, que é onde se instala. A busca é o documento
+ *  (só dígitos, que as duas telas casam), ou o nome quando não houver. */
+function _destinoDaNotificacao(it) {
+  const doc = String(it.documento || "").replace(/\D/g, "");
+  const termo = doc || String(it.nome || "").trim();
+  if (!termo) return null;
+  if (it.tipo === "expired") return "/vencidos?busca=" + encodeURIComponent(termo);
+  return "/?busca=" + encodeURIComponent(termo);
+}
+
 function _aplicarBadgeNotificacoes(dados) {
   const badge = document.getElementById("notification-badge");
   const btn = document.getElementById("btn-notifications-toggle");
@@ -1236,7 +1254,31 @@ function _aplicarBadgeNotificacoes(dados) {
 /** Um item da lista, montado no DOM (nunca innerHTML: `nome` vem do CN do certificado). */
 function _criarItemNotificacao(it) {
   const div = document.createElement("div");
-  div.className = "notification-item " + (it.tipo === "expired" ? "notif-expired" : "notif-expiring");
+  const classePorTipo = { expired: "notif-expired", expiring: "notif-expiring", novo: "notif-novo" };
+  div.className = "notification-item " + (classePorTipo[it.tipo] || "notif-expiring");
+
+  // O cartão inteiro leva à tela certa, já filtrada por este certificado
+  // (30/09/2026). É um `div` com papel de link, e não um `<a>`, porque dentro
+  // dele vive o botão "marcar como lida" — link com botão dentro é inválido.
+  const destino = _destinoDaNotificacao(it);
+  if (destino) {
+    div.setAttribute("role", "link");
+    div.tabIndex = 0;
+    div.dataset.href = destino;
+    div.title = it.tipo === "expired" ? "Abrir em Vencidos" : "Abrir no Início";
+    const ir = () => { window.location.href = destino; };
+    div.addEventListener("click", (e) => {
+      if (e.target.closest("button, a")) return;
+      ir();
+    });
+    div.addEventListener("keydown", (e) => {
+      if (e.target !== div) return;
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        ir();
+      }
+    });
+  }
 
   const header = document.createElement("div");
   header.className = "notif-item-header";
@@ -1244,7 +1286,10 @@ function _criarItemNotificacao(it) {
   const tipo = document.createElement("span");
   tipo.className = "notif-badge-type";
   const dias = Number(it.dias_restantes);
-  if (it.tipo === "expired") {
+  if (it.tipo === "novo") {
+    const np = Number(it.dias_na_pasta) || 0;
+    tipo.textContent = np <= 0 ? "Novo hoje" : np === 1 ? "Novo ontem" : `Novo há ${np}d`;
+  } else if (it.tipo === "expired") {
     tipo.textContent = dias === 0 ? "Venceu hoje" : `Venceu há ${Math.abs(dias)}d`;
   } else {
     tipo.textContent = dias === 0 ? "Vence hoje" : `Vence em ${dias}d`;
@@ -1254,6 +1299,7 @@ function _criarItemNotificacao(it) {
   data.className = "notif-date";
   const d = new Date(it.vencimento);
   data.textContent = isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  if (it.tipo === "novo" && !isNaN(d.getTime())) data.title = "Vencimento";
 
   header.append(tipo, data);
 
@@ -1369,6 +1415,96 @@ async function marcarNotificacoesLidas() {
   btn.disabled = false;
 }
 
+/** Pinta a lista a partir do último payload, respeitando o filtro do sino. */
+function _renderizarNotificacoes(data) {
+  const body = document.getElementById("notifications-body");
+  if (!body) return;
+  const items = (data && data.itens) || [];
+
+  // Os chips mostram a contagem de cada recorte; um recorte vazio fica
+  // desabilitado em vez de sumir, para a barra não pular de tamanho.
+  const contagens = {
+    todos: items.length,
+    novo: Number(data && data.total_novos) || 0,
+    expiring: Number(data && data.total_expirando) || 0,
+    expired: Number(data && data.total_vencidos) || 0,
+  };
+  const filtros = document.getElementById("notif-filtros");
+  if (filtros) {
+    filtros.hidden = items.length === 0;
+    if (_filtroNotif !== "todos" && !contagens[_filtroNotif]) _filtroNotif = "todos";
+    filtros.querySelectorAll("[data-filtro]").forEach((b) => {
+      const f = b.dataset.filtro;
+      const n = contagens[f] || 0;
+      const rotulo = b.dataset.rotulo || b.textContent.trim();
+      b.dataset.rotulo = rotulo;
+      b.textContent = f === "todos" ? rotulo : `${rotulo} ${n}`;
+      b.disabled = f !== "todos" && n === 0;
+      b.setAttribute("aria-pressed", String(f === _filtroNotif));
+    });
+  }
+
+  body.innerHTML = "";
+
+  if (!items.length) {
+    body.appendChild(
+      Object.assign(document.createElement("div"), {
+        className: "notif-empty",
+        textContent: "Tudo em dia! Nenhum certificado novo, vencido ou a vencer.",
+      })
+    );
+    return;
+  }
+
+  // Três seções: o que acabou de chegar, o que ainda dá para evitar, o passivo.
+  const mostra = (t) => _filtroNotif === "todos" || _filtroNotif === t;
+  const novos = items.filter((x) => x.tipo === "novo");
+  const expirando = items.filter((x) => x.tipo === "expiring");
+  const vencidos = items.filter((x) => x.tipo === "expired");
+
+  if (mostra("novo") && novos.length) {
+    body.appendChild(_criarSecaoNotificacoes("Novos", contagens.novo || novos.length, novos));
+  }
+  if (mostra("expiring") && expirando.length) {
+    body.appendChild(_criarSecaoNotificacoes("Expirando", contagens.expiring || expirando.length, expirando));
+  }
+  if (mostra("expired") && vencidos.length) {
+    body.appendChild(_criarSecaoNotificacoes("Vencidos", contagens.expired || vencidos.length, vencidos));
+  }
+
+  // Rodapé: o que não coube continua alcançável, em vez de sumir.
+  if (data.truncado) {
+    const rodape = document.createElement("div");
+    rodape.className = "notif-footer";
+
+    const txt = document.createElement("span");
+    txt.textContent = `Mostrando ${data.exibidos} de ${data.total}`;
+
+    const link = document.createElement("a");
+    link.href = _filtroNotif === "expired" ? "/vencidos" : _filtroNotif === "todos" ? "/vencidos" : "/";
+    link.className = "notif-footer__link";
+    link.textContent = "Ver lista completa";
+
+    rodape.append(txt, link);
+    body.appendChild(rodape);
+  }
+}
+
+function _initFiltrosNotificacoes() {
+  const filtros = document.getElementById("notif-filtros");
+  if (!filtros) return;
+  filtros.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-filtro]");
+    if (!b || b.disabled) return;
+    e.stopPropagation();
+    _filtroNotif = b.dataset.filtro;
+    // Refaz a busca com o filtro: a lista é cortada em 50 no servidor, e só
+    // ele tem os 72 vencidos quando os 50 primeiros são novos e expirando.
+    if (_ultimoPayloadNotif) _renderizarNotificacoes(_ultimoPayloadNotif);
+    void fetchNotifications();
+  });
+}
+
 async function fetchNotifications() {
   const token = getToken();
   if (!token) return;
@@ -1376,7 +1512,8 @@ async function fetchNotifications() {
   if (!body) return;
 
   try {
-    const r = await fetch("/api/colaborador/notificacoes", { headers: getHeaders() });
+    const url = "/api/colaborador/notificacoes" + (_filtroNotif !== "todos" ? "?tipo=" + encodeURIComponent(_filtroNotif) : "");
+    const r = await fetch(url, { headers: getHeaders() });
     if (!r.ok) {
       if (r.status === 401) logout();
       // Sem isto, o badge mantinha a contagem antiga após uma falha.
@@ -1392,52 +1529,9 @@ async function fetchNotifications() {
     }
 
     const data = await r.json();
-    const items = data.itens || [];
+    _ultimoPayloadNotif = data;
     _aplicarBadgeNotificacoes(data);
-
-    body.innerHTML = "";
-
-    if (!items.length) {
-      body.appendChild(
-        Object.assign(document.createElement("div"), {
-          className: "notif-empty",
-          textContent: "Tudo em dia! Nenhum certificado vencido ou a vencer.",
-        })
-      );
-      return;
-    }
-
-    // Duas seções: primeiro o que ainda dá para evitar, depois o passivo.
-    const expirando = items.filter((x) => x.tipo === "expiring");
-    const vencidos = items.filter((x) => x.tipo === "expired");
-
-    if (expirando.length) {
-      body.appendChild(
-        _criarSecaoNotificacoes("Expirando", Number(data.total_expirando) || expirando.length, expirando)
-      );
-    }
-    if (vencidos.length) {
-      body.appendChild(
-        _criarSecaoNotificacoes("Vencidos", Number(data.total_vencidos) || vencidos.length, vencidos)
-      );
-    }
-
-    // Rodapé: o que não coube continua alcançável, em vez de sumir.
-    if (data.truncado) {
-      const rodape = document.createElement("div");
-      rodape.className = "notif-footer";
-
-      const txt = document.createElement("span");
-      txt.textContent = `Mostrando ${data.exibidos} de ${data.total}`;
-
-      const link = document.createElement("a");
-      link.href = "/vencidos";
-      link.className = "notif-footer__link";
-      link.textContent = "Ver lista completa";
-
-      rodape.append(txt, link);
-      body.appendChild(rodape);
-    }
+    _renderizarNotificacoes(data);
   } catch (e) {
     console.error("Erro ao carregar notificações", e);
     _aplicarBadgeNotificacoes(null);
@@ -1481,6 +1575,12 @@ function initNotifications() {
         <h3>Notificações</h3>
         <button type="button" id="btn-notif-lidas" class="notif-lidas-btn" hidden>Li todos</button>
       </div>
+      <div class="notif-filtros" id="notif-filtros" role="group" aria-label="Filtrar notificações" hidden>
+        <button type="button" class="notif-filtro" data-filtro="todos" aria-pressed="true">Todos</button>
+        <button type="button" class="notif-filtro" data-filtro="novo" aria-pressed="false">Novos</button>
+        <button type="button" class="notif-filtro" data-filtro="expiring" aria-pressed="false">Expirando</button>
+        <button type="button" class="notif-filtro" data-filtro="expired" aria-pressed="false">Vencidos</button>
+      </div>
       <div class="notifications-body" id="notifications-body">
         <div class="notif-loading">Carregando...</div>
       </div>
@@ -1514,6 +1614,8 @@ function initNotifications() {
     e.stopPropagation();
     definirDropdownAberto(dropdown.style.display !== "block", false);
   });
+
+  _initFiltrosNotificacoes();
 
   const btnLidas = document.getElementById("btn-notif-lidas");
   if (btnLidas) {

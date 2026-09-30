@@ -3,8 +3,10 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
 from app import alertas_config
+from app.cert_installer import documentos_ao_alcance
 from app.settings_state import (
     carregar_notificacoes_lidas,
+    chaves_registradas_recentemente,
     get_latest_snapshot,
     load_colaborador_selecao,
     load_settings,
@@ -22,6 +24,32 @@ JANELA_ACAO_DIAS = 30
 # custava 167 KB por requisição e enterrava o que importa. O restante continua
 # acessível em /vencidos.
 NOTIF_MAX_ITENS = 50
+
+# "Novo": apareceu na pasta há menos de tantos dias (30/09/2026). Depois disso
+# o certificado continua no Início como qualquer outro; o aviso é sobre o
+# evento de ter chegado, e evento velho não é aviso.
+JANELA_NOVOS_DIAS = 7
+
+
+def _so_digitos(valor: Any) -> str:
+    return "".join(c for c in str(valor or "") if c.isdigit())
+
+
+def _documento_do_item(it: Dict[str, Any]) -> str:
+    return _so_digitos(it.get("documento_numero")) or _so_digitos(it.get("documento_formatado"))
+
+
+def _alcance_para_novos(user_id: Optional[str], role: str) -> Optional[set]:
+    """Documentos cujos certificados novos esta pessoa vê: a carteira (o que
+    ela pode instalar). `None` = todos. Um certificado que acabou de chegar
+    nunca está na seleção de Acompanhamento — é por isso que o recorte dos
+    novos é a carteira, e não a seleção. Carteira ilegível = nenhum novo, e o
+    sino segue de pé."""
+    try:
+        return documentos_ao_alcance(user_id or "", role)
+    except Exception as e:  # noqa: BLE001 - CarteiraIndisponivel/AlcanceIndisponivel
+        logger.warning("Sem os certificados novos para %s: %s", user_id or "?", e)
+        return set()
 
 
 def _chave_dedup(item: Dict[str, Any]) -> str:
@@ -81,6 +109,50 @@ def get_active_alerts(
         selected_docs = ["".join(c for c in d if c.isdigit()) for d in selected_docs]
 
     alerts: List[Dict[str, Any]] = []
+
+    # ── Novos na pasta ─────────────────────────────────────────────────────
+    recentes = chaves_registradas_recentemente(JANELA_NOVOS_DIAS)
+    if recentes:
+        alcance = None if is_admin else _alcance_para_novos(user_id, user_role)
+        for it in itens:
+            quando = recentes.get(str(it.get("arquivo_chave") or ""))
+            if not quando:
+                continue
+            if alcance is not None and _documento_do_item(it) not in alcance:
+                continue
+            nome = it.get("nome") or it.get("display_name") or "Certificado sem nome"
+            try:
+                dias_na_pasta = (now.date() - _parse_iso_utc(quando).date()).days
+            except Exception:  # noqa: BLE001
+                dias_na_pasta = 0
+            if dias_na_pasta <= 0:
+                mensagem = f"O certificado '{nome}' foi adicionado à pasta hoje."
+            elif dias_na_pasta == 1:
+                mensagem = f"O certificado '{nome}' foi adicionado à pasta ontem."
+            else:
+                mensagem = f"O certificado '{nome}' foi adicionado à pasta há {dias_na_pasta} dias."
+            venc_iso = it.get("not_after")
+            dias_venc: Optional[int] = None
+            if venc_iso:
+                try:
+                    dias_venc = (_parse_iso_utc(venc_iso).date() - now.date()).days
+                except Exception:  # noqa: BLE001
+                    dias_venc = None
+            alerts.append(
+                {
+                    "chave": f"{it.get('fingerprint_sha256') or nome}|novo",
+                    "fingerprint_sha256": it.get("fingerprint_sha256"),
+                    "nome": nome,
+                    "documento": it.get("documento_formatado") or it.get("documento_numero") or "Sem documento",
+                    "tipo": "novo",
+                    "vencimento": venc_iso,
+                    "dias_restantes": dias_venc,
+                    "registrado_em": quando,
+                    "dias_na_pasta": dias_na_pasta,
+                    "mensagem": mensagem,
+                    "acionavel": True,
+                }
+            )
 
     for it in itens:
         venc_iso = it.get("not_after")
@@ -148,7 +220,8 @@ def get_active_alerts(
     # contagem de arquivos preservada para não esconder a duplicidade.
     unicos: Dict[str, Dict[str, Any]] = {}
     for a in alerts:
-        k = _chave_dedup(a)
+        # "Novo" e "vencendo" do mesmo certificado são dois avisos, não um.
+        k = ("novo:" if a.get("tipo") == "novo" else "") + _chave_dedup(a)
         if k in unicos:
             unicos[k]["ocorrencias"] += 1
         else:
@@ -162,18 +235,27 @@ def get_active_alerts(
     # e empurrava os "expirando" para o fim da lista.
     # Agora: expirando primeiro (dá para evitar a interrupção), do mais próximo
     # ao mais distante; depois vencidos, do mais recente ao mais antigo.
-    alerts.sort(
-        key=lambda x: (
-            0 if x.get("tipo") == "expiring" else 1,
-            x.get("dias_restantes") if x.get("tipo") == "expiring" else -x.get("dias_restantes", 0),
-        )
-    )
+    # Novos antes de tudo (30/09/2026): são o evento mais recente e o mais
+    # fácil de perder de vista; do que chegou por último ao mais antigo.
+    def _ordem(x: Dict[str, Any]):
+        tipo = x.get("tipo")
+        if tipo == "novo":
+            return (0, x.get("dias_na_pasta") or 0, "")
+        if tipo == "expiring":
+            return (1, x.get("dias_restantes") or 0, "")
+        return (2, -(x.get("dias_restantes") or 0), "")
+
+    alerts.sort(key=_ordem)
 
     return alerts
 
 
+TIPOS_DE_AVISO = ("novo", "expiring", "expired")
+
+
 def build_notifications_payload(
-    user_email: str, user_role: str, user_id: Optional[str] = None
+    user_email: str, user_role: str, user_id: Optional[str] = None,
+    tipo: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Monta a resposta de /api/colaborador/notificacoes: lista limitada + totais.
@@ -191,22 +273,31 @@ def build_notifications_payload(
     if lidas:
         alerts = [a for a in alerts if a.get("chave") not in lidas]
 
+    total_novos = sum(1 for a in alerts if a.get("tipo") == "novo")
     total_expirando = sum(1 for a in alerts if a.get("tipo") == "expiring")
     total_vencidos = sum(1 for a in alerts if a.get("tipo") == "expired")
     # Badge do sino: só o que está dentro da janela de ação.
     total_acionavel = sum(1 for a in alerts if a.get("acionavel"))
     agrupados = sum(int(a.get("ocorrencias") or 1) - 1 for a in alerts)
 
-    itens = alerts[:NOTIF_MAX_ITENS]
+    # Filtro do sino (30/09/2026). O teto de 50 é sobre a LISTA DEVOLVIDA:
+    # sem o recorte no servidor, "Vencidos 72" abria vazio quando os 50
+    # primeiros eram novos e expirando — o chip prometia o que o cliente não
+    # tinha. Os totais continuam os do conjunto inteiro, para os chips.
+    recorte = [a for a in alerts if a.get("tipo") == tipo] if tipo in TIPOS_DE_AVISO else alerts
+    itens = recorte[:NOTIF_MAX_ITENS]
 
     return {
         "itens": itens,
+        "tipo": tipo if tipo in TIPOS_DE_AVISO else None,
         "total": len(alerts),
+        "total_novos": total_novos,
         "total_expirando": total_expirando,
         "total_vencidos": total_vencidos,
         "total_acionavel": total_acionavel,
         "janela_acao_dias": JANELA_ACAO_DIAS,
+        "janela_novos_dias": JANELA_NOVOS_DIAS,
         "exibidos": len(itens),
-        "truncado": len(alerts) > len(itens),
+        "truncado": len(recorte) > len(itens),
         "arquivos_duplicados_agrupados": agrupados,
     }

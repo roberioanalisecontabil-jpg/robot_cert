@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from app import config
 from app.historico_agg_cache import invalidate_all as _invalidate_historico_agg_cache
@@ -368,33 +368,105 @@ def save_snapshot(
     _invalidate_historico_agg_cache()
 
 
+# Acima disto, uma ingestão em que NENHUM item já estava no histórico é a
+# primeira carga (ou o histórico foi recriado), e não centenas de certificados
+# novos no mesmo dia. Sem a trava, o primeiro scan depois da migration
+# mandaria um e-mail listando o acervo inteiro (546 certificados em 30/09).
+NOVOS_LIMIAR_CARGA_INICIAL = 50
+
+
+def _chaves_ja_no_historico(client: Any, chaves: List[str]) -> Optional[Set[str]]:
+    """Quais destas chaves já existem em cert_history. `None` = não deu para
+    ler: o chamador então não declara nada como novo (um e-mail a menos é
+    melhor que 500 avisos falsos)."""
+    existentes: Set[str] = set()
+    try:
+        for i in range(0, len(chaves), 200):
+            r = (
+                client.table("cert_history")
+                .select("arquivo_chave")
+                .in_("arquivo_chave", chaves[i : i + 200])
+                .execute()
+            )
+            existentes.update(str(row.get("arquivo_chave")) for row in (r.data or []))
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler cert_history para detectar certificados novos")
+        return None
+    return existentes
+
+
+def chaves_registradas_recentemente(dias: int) -> Dict[str, str]:
+    """`arquivo_chave` → `primeira_data_registrada` (ISO) do que apareceu na
+    pasta nos últimos `dias`. É o que o sino chama de "novo".
+
+    Linhas com a coluna NULL (anteriores à migration 20260930140000) não
+    entram: não se sabe quando apareceram. Se a coluna ainda não existir, a
+    consulta falha e devolve vazio — o sino segue sem a seção Novos, em vez
+    de derrubar o painel inteiro.
+    """
+    client = _banco()
+    if not client or dias <= 0:
+        return {}
+    limite = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    try:
+        r = (
+            client.table("cert_history")
+            .select("arquivo_chave, primeira_data_registrada")
+            .gte("primeira_data_registrada", limite)
+            .execute()
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Sem a lista de certificados novos (coluna primeira_data_registrada ausente?): %s", e)
+        return {}
+    out: Dict[str, str] = {}
+    for row in r.data or []:
+        chave = row.get("arquivo_chave")
+        quando = row.get("primeira_data_registrada")
+        if not chave or not quando:
+            continue
+        quando_s = quando.isoformat() if hasattr(quando, "isoformat") else str(quando)
+        # A base falsa dos testes não filtra por data; a real filtra, mas
+        # comparar aqui também custa nada e mantém uma regra só.
+        if quando_s < limite:
+            continue
+        out[str(chave)] = quando_s
+    return out
+
+
 def upsert_cert_history(
     machine_id: str,
     scanned_iso: str,
     items: List[dict[str, Any]],
-) -> None:
+) -> List[dict[str, Any]]:
     """
-    Mantém a tabela materializada cert_history atualizada.
+    Mantém a tabela materializada cert_history atualizada e devolve os itens
+    que NÃO estavam nela antes — os certificados novos na pasta.
 
     Chave: `arquivo_chave` (nome público + fingerprint), desde o lote 3 da
     auditoria (25/09/2026). Antes era `file_name` — o nome do arquivo, que
     carrega a senha do PFX e ficava em claro como chave primária. O item chega
     já sanitizado do `/api/ingest`; se vier bruto (chamador antigo), sanitiza
     aqui, para o nome não entrar nesta tabela por nenhum caminho.
-    Silenciosamente ignorado se o banco não estiver configurado.
+    Silenciosamente ignorado (lista vazia) se o banco não estiver configurado.
+
+    `primeira_data_registrada` nunca vai no upsert: o banco a preenche na
+    inserção e o DO UPDATE só toca o que foi enviado. Se ela fosse enviada,
+    cada scan diário a sobrescreveria e tudo seria "novo" para sempre.
     """
     from app.nome_publico import sanitizar_item
 
     client = _banco()
     if not client or not items:
-        return
+        return []
 
     rows = []
+    sanitizados: List[dict[str, Any]] = []
     for bruto in items:
         it = sanitizar_item(bruto)
         nome_pub = str(it.get("nome_publico") or "").strip()
         if not nome_pub:
             continue
+        sanitizados.append(it)
 
         # Tenta parsear o vencimento para um valor compatível com timestamptz
         not_after = it.get("not_after")
@@ -423,10 +495,15 @@ def upsert_cert_history(
         })
 
     if not rows:
-        return
+        return []
+
+    # O que já existia, ANTES de gravar: depois do upsert está tudo lá.
+    chaves = sorted({str(r["arquivo_chave"]) for r in rows})
+    existentes = _chaves_ja_no_historico(client, chaves)
 
     # Envia em lotes de 200 para não ultrapassar limites do banco
     BATCH = 200
+    falhou = False
     for i in range(0, len(rows), BATCH):
         batch = rows[i : i + BATCH]
         try:
@@ -435,11 +512,34 @@ def upsert_cert_history(
                 on_conflict="arquivo_chave",
             ).execute()
         except Exception:  # noqa: BLE001
+            falhou = True
             logger.exception(
                 "Falha ao fazer upsert em cert_history (lote %d/%d)",
                 i // BATCH + 1,
                 (len(rows) + BATCH - 1) // BATCH,
             )
+
+    if existentes is None or falhou:
+        return []
+    novas_chaves = [c for c in chaves if c not in existentes]
+    if not novas_chaves:
+        return []
+    if not existentes and len(novas_chaves) > NOVOS_LIMIAR_CARGA_INICIAL:
+        logger.info(
+            "cert_history recebeu %d itens sem nenhum conhecido: carga inicial, "
+            "nada tratado como certificado novo.", len(novas_chaves),
+        )
+        return []
+    novas = set(novas_chaves)
+    vistos: Set[str] = set()
+    novos: List[dict[str, Any]] = []
+    for it in sanitizados:
+        chave = str(it.get("arquivo_chave") or "")
+        if chave in novas and chave not in vistos:
+            vistos.add(chave)
+            novos.append(it)
+    logger.info("Ingestão de %s: %d certificado(s) novo(s) no histórico.", machine_id, len(novos))
+    return novos
 
 
 def get_latest_snapshot() -> Optional[dict]:

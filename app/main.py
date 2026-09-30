@@ -38,6 +38,7 @@ from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente, previa_do_resumo
 from app.notification_service import build_notifications_payload, get_active_alerts
+from app.novos_certificados import notificar_novos
 from app.settings_state import (
     GravacaoNaoPersistida,
     PastaRecusada,
@@ -3293,12 +3294,17 @@ def cron_alerts(request: Request) -> dict:
 # O nivel aqui governa SE a pessoa alcanca o modulo; o que esta dentro e dela.
 # Mesma carve-out de `/api/users/me/*`.
 @app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_modulo("acompanhamento"))])
-def get_user_notifications(token: auth.TokenData = Depends(require_auth)) -> dict:
+def get_user_notifications(
+    token: auth.TokenData = Depends(require_auth),
+    tipo: Optional[str] = Query(None, max_length=16, pattern=r"^(novo|expiring|expired)$"),
+) -> dict:
     try:
         # Devolve lista limitada + totais separados: antes eram 519 itens
         # (167 KB) a cada poll de 60s, com os acionáveis no fim da lista.
+        # `tipo` é o chip do sino (30/09/2026): a lista vem só daquele tipo,
+        # os totais continuam os do conjunto inteiro.
         return build_notifications_payload(
-            token.email, token.role, _user_id_da_sessao(token)
+            token.email, token.role, _user_id_da_sessao(token), tipo=tipo
         )
     except Exception:
         logger.exception("Falha ao montar as notificações")
@@ -5047,12 +5053,18 @@ def ingest(
         expired_folder=body.expired_folder.strip(),
         items=items,
     )
-    # Atualiza a tabela materializada — operação rápida, não bloqueia o retorno
-    upsert_cert_history(
+    # Atualiza a tabela materializada — operação rápida, não bloqueia o retorno.
+    # Devolve o que nunca esteve nela: os certificados novos na pasta.
+    novos = upsert_cert_history(
         machine_id=machine_id,
         scanned_iso=scanned.isoformat(),
         items=items,
-    )
+    ) or []
+    # Aviso de certificado novo (30/09/2026): quem tem o cliente na carteira
+    # e os administradores recebem por e-mail; o antispam por (certificado,
+    # destinatário) mora em `novos_certificados`, então não há debounce aqui.
+    if novos:
+        background_tasks.add_task(notificar_novos, novos)
     # Dispara e-mails de alerta em segundo plano para não bloquear a resposta
     # do agente — no máximo uma vez a cada `_INGEST_ALERTA_DEBOUNCE_SEG`
     # (achado #28): cada ingestão varria o acervo e enviava e-mails; várias
@@ -5062,6 +5074,7 @@ def ingest(
     return {
         "ok": True,
         "itens_recebidos": len(body.items),
+        "novos": len(novos),
         "grava_em": "banco" if banco_configurado() else "arquivo local (data/last_ingest.json)",
     }
 
