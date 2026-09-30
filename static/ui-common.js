@@ -223,19 +223,35 @@ function initSidebarToggle() {
     main.prepend(bar);
   }
 
-  const btn = document.createElement("button");
-  btn.id = "btn-sidebar-toggle";
-  btn.type = "button";
-  btn.className = "sidebar-toggle-btn";
-  btn.title = "Recolher/expandir menu";
-  btn.setAttribute("aria-label", "Recolher/expandir menu lateral");
   // Heroicons `bars-3`, mesmo traco 1.5 dos irmaos desta barra. Era
   // `&#9776;` (U+2630, TRIGRAM FOR HEAVEN): um caractere de texto fazendo
   // papel de icone, dimensionado por `font-size` e desenhado pela fonte do
   // sistema — sem relacao de peso nem de tamanho com os SVGs ao lado.
-  btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>';
-  btn.addEventListener("click", toggleSidebar);
-  bar.appendChild(btn);
+  const ICONE_MENU =
+    '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>';
+
+  function criarBotao(id, classe) {
+    const b = document.createElement("button");
+    b.id = id;
+    b.type = "button";
+    b.className = classe;
+    b.title = "Recolher/expandir menu";
+    b.setAttribute("aria-label", "Recolher/expandir menu lateral");
+    b.innerHTML = ICONE_MENU;
+    b.addEventListener("click", toggleSidebar);
+    return b;
+  }
+
+  // O sanduíche mora NA BARRA LATERAL (pedido de 30/09/2026): é dela que ele
+  // trata, e no topo da página ficava solto dos outros utilitários. No
+  // celular a barra sai da tela (translateX(-100%)) e levaria o botão junto,
+  // então ali continua existindo um no topo — o CSS mostra um ou outro
+  // conforme a largura, nunca os dois.
+  const header = sidebar.querySelector(".sidebar-header");
+  if (header) {
+    header.appendChild(criarBotao("btn-sidebar-toggle", "sidebar-toggle-btn sidebar-toggle-btn--lateral"));
+  }
+  bar.appendChild(criarBotao("btn-sidebar-toggle-mobile", "sidebar-toggle-btn sidebar-toggle-btn--mobile"));
 }
 
 /**
@@ -1241,6 +1257,26 @@ function _criarItemNotificacao(it) {
 
   header.append(tipo, data);
 
+  // "Marcar como lida", um a um (30/09/2026): o "Li todos" do cabeçalho
+  // esconde tudo de uma vez; quem quer tratar um aviso e deixar os outros à
+  // vista precisa disto. A chave vai para o servidor, que só grava se o aviso
+  // estiver mesmo entre os pendentes desta pessoa.
+  if (it.chave && it.acionavel !== false) {
+    const lida = document.createElement("button");
+    lida.type = "button";
+    lida.className = "notif-item-lida-btn";
+    lida.title = "Marcar como lida";
+    lida.setAttribute("aria-label", "Marcar como lida: " + (it.nome || "certificado"));
+    lida.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    lida.addEventListener("click", (e) => {
+      // O item vive dentro do dropdown, que fecha ao clique de fora.
+      e.stopPropagation();
+      void marcarNotificacaoLida(it.chave, lida, div);
+    });
+    header.appendChild(lida);
+  }
+
   const nome = document.createElement("div");
   nome.className = "notif-message";
   nome.textContent = it.nome || "Certificado sem nome";
@@ -1287,6 +1323,25 @@ function _criarSecaoNotificacoes(titulo, total, itens) {
  * não por (certificado). É a mesma chave que o e-mail usa para decidir se
  * reforça, então as duas coisas concordam sobre o que é "um aviso".
  */
+/** Marca UM aviso como lido e recarrega a lista (o servidor diz o que sobrou). */
+async function marcarNotificacaoLida(chave, btn, item) {
+  btn.disabled = true;
+  item.classList.add("notification-item--marcando");
+  try {
+    const r = await fetch("/api/colaborador/notificacoes/lida", {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify({ chave }),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    await fetchNotifications();
+  } catch (e) {
+    item.classList.remove("notification-item--marcando");
+    btn.disabled = false;
+    btn.title = "Não foi possível marcar. Tente de novo.";
+  }
+}
+
 async function marcarNotificacoesLidas() {
   const btn = document.getElementById("btn-notif-lidas");
   if (!btn) return;

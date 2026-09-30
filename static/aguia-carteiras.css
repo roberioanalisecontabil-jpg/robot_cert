@@ -45,8 +45,11 @@
 .cg-cart-busca .ag-input { width: 100%; padding-left: calc(var(--space-3) * 2 + 16px); }
 
 /* Itens: superfície do cartão, divididos por fio, sem rolagem interna — a
-   lista cresce com a página. Cada item é um link. */
-.cg-op-lista { list-style: none; margin: 0; padding: 0; border-top: var(--bw-1) solid var(--border-subtle); }
+   lista cresce com a página. Cada item é um link.
+   O fio é `--border-default` (30/09/2026): com `--border-subtle` a divisão
+   entre operadores sumia na tela — o mesmo fio que contorna as colunas
+   "Disponíveis" e "Na carteira", para as três listas lerem igual. */
+.cg-op-lista { list-style: none; margin: 0; padding: 0; border-top: var(--bw-1) solid var(--border-default); }
 .cg-op-item {
     display: flex;
     align-items: center;
@@ -54,7 +57,7 @@
     gap: var(--space-3);
     min-height: 44px;
     padding: var(--space-3) var(--space-6);
-    border-bottom: var(--bw-1) solid var(--border-subtle);
+    border-bottom: var(--bw-1) solid var(--border-default);
     border-left: var(--bw-4) solid transparent;
     color: var(--text-primary);
     text-decoration: none;

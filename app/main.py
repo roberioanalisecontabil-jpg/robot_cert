@@ -4319,6 +4319,39 @@ def marcar_notificacoes_como_lidas(token: auth.TokenData = Depends(require_auth)
     return {"marcadas": marcadas}
 
 
+class NotificacaoLidaBody(BaseModel):
+    chave: str = Field(min_length=1, max_length=200)
+
+
+@app.post(
+    "/api/colaborador/notificacoes/lida",
+    dependencies=[Depends(require_modulo("acompanhamento"))],
+)
+def marcar_notificacao_como_lida(body: NotificacaoLidaBody, token: auth.TokenData = Depends(require_auth)) -> dict:
+    """Marca UM aviso como lido (pedido de 30/09/2026: além do "Li todos").
+
+    A chave vem da tela, mas só vale se estiver entre os avisos acionáveis
+    desta pessoa AGORA — o servidor confere antes de gravar. Sem isso, a rota
+    aceitaria marcar como lida qualquer chave inventada (inofensivo para os
+    outros, porque a marca é por usuário, mas lixo na tabela).
+    """
+    uid = _user_id_da_sessao(token)
+    chave = body.chave.strip()
+    alertas = get_active_alerts(token.email or "", token.role or "", uid)
+    validas = {a.get("chave") for a in alertas if a.get("chave") and a.get("acionavel")}
+    if chave not in validas:
+        raise HTTPException(status_code=404, detail="Este aviso não está entre os seus avisos pendentes.")
+    try:
+        marcadas = marcar_notificacoes_lidas(uid, [chave])
+    except GravacaoNaoPersistida as e:
+        logger.error("Notificação lida não persistida: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível marcar como lido. Veja o log do servidor.",
+        )
+    return {"marcadas": marcadas}
+
+
 class PreferenciaAlertaBody(BaseModel):
     notificar_email: bool = Field(default=True)
     # Marcos que a pessoa DISPENSA. Ver a migration 20260820200000 para o

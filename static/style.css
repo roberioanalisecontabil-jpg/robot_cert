@@ -2250,6 +2250,37 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   background: var(--bg);
 }
 
+/* "Marcar como lida" de UM aviso (30/09/2026). Só o traço do check, na cor
+   de texto apagada até o hover: é ação secundária dentro de um item que já
+   tem prazo, nome e documento disputando o olhar. 28px de alvo dentro de um
+   item de 44px+; o item inteiro não é clicável, então o botão não compete. */
+.notif-item-lida-btn {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.notif-item-lida-btn svg { width: 16px; height: 16px; }
+.notif-item-lida-btn:hover:not(:disabled),
+.notif-item-lida-btn:focus-visible {
+  color: var(--accent-text);
+  border-color: var(--border);
+  background: var(--surface);
+}
+.notif-item-lida-btn:disabled { opacity: 0.5; cursor: default; }
+.notification-item--marcando { opacity: 0.55; }
+.notif-item-header .notif-date { margin-left: auto; }
+.notif-item-header .notif-date + .notif-item-lida-btn { margin-left: 0.5rem; }
+
 .notifications-body {
   padding: 0.5rem;
   overflow-y: auto;
@@ -2486,8 +2517,31 @@ body.sidebar-open .sidebar-backdrop {
   background-color: var(--bg);
 }
 
+/* O sanduíche na barra lateral (30/09/2026). Mesma caixa de 44px dos
+   irmãos, mas nas cores da sidebar (fundo escuro): sem a superfície clara e
+   sem sombra, que ali virariam um quadrado branco. Encostado à direita do
+   cabeçalho; com a barra recolhida o cabeçalho centraliza e o botão fica
+   sozinho sob a logo, ainda com 44px de alvo. */
+.sidebar-header .sidebar-toggle-btn--lateral {
+  margin-left: auto;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--sidebar-text);
+  box-shadow: none;
+}
+.sidebar-header .sidebar-toggle-btn--lateral:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+body.sidebar-collapsed .sidebar-header { flex-wrap: wrap; row-gap: 0.5rem; }
+body.sidebar-collapsed .sidebar-header .sidebar-toggle-btn--lateral { margin-left: 0; }
+/* No desktop só o da barra existe; o do topo é do celular. */
+.topbar-actions .sidebar-toggle-btn--mobile { display: none; }
+
 /* Responsividade: Telas Médias e Pequenas (Tablets e Mobiles < 768px) */
 @media (max-width: 768px) {
+  /* A barra sai da tela e levaria o botão junto: no celular vale o do topo. */
+  .sidebar-header .sidebar-toggle-btn--lateral { display: none; }
+  .topbar-actions .sidebar-toggle-btn--mobile { display: inline-flex; }
   .sidebar {
     transform: translateX(-100%);
     transition: transform 0.3s var(--ease-spring);
