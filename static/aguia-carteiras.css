@@ -82,6 +82,10 @@
    dourado, filete de 3px à esquerda e nome em tinta de marca. */
 .cg-op-item[aria-current="true"] { background: var(--color-gold-glow); border-left-color: var(--gold-500); }
 .cg-op-item[aria-current="true"] .ag-cell-main { color: var(--text-brand); }
+/* Nome em text-sm (30/09/2026): herdava o corpo (16px) e, com e-mail embaixo,
+   cada operador ocupava duas linhas grandes — a lista lia como títulos. Fica
+   um degrau acima do e-mail (xs), o suficiente para hierarquia. */
+.cg-op-item .ag-cell-main { font-size: var(--text-sm); line-height: 1.3; }
 .cg-op-item .ag-cell-stack { min-width: 0; }
 .cg-op-item .ag-cell-sub { overflow-wrap: break-word; }
 .cg-op-item__contagem {

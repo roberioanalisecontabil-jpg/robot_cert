@@ -179,7 +179,7 @@ def test_telas_sem_a_flag_e_com_a_lista_rolavel() -> None:
     css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
     bloco = css.split(".cg-op-rolagem {")[1].split("}")[0]
     assert "overflow-y: auto" in bloco and "max-height" in bloco
-    assert "aguia-carteiras.css?v=aguia-2026-09c" in carteiras
+    assert "aguia-carteiras.css?v=aguia-2026-09d" in carteiras
 
 
 def test_migration_que_descarta_a_flag_existe() -> None:
