@@ -2517,23 +2517,39 @@ body.sidebar-open .sidebar-backdrop {
   background-color: var(--bg);
 }
 
-/* O sanduíche na barra lateral (30/09/2026). Mesma caixa de 44px dos
-   irmãos, mas nas cores da sidebar (fundo escuro): sem a superfície clara e
-   sem sombra, que ali virariam um quadrado branco. Encostado à direita do
-   cabeçalho; com a barra recolhida o cabeçalho centraliza e o botão fica
-   sozinho sob a logo, ainda com 44px de alvo. */
+/* O sanduíche na barra lateral (30/09/2026). Redondo, sentado SOBRE o fio
+   que separa o cabeçalho (logo e título) dos itens do menu, encostado à
+   direita: metade em cada lado da linha, como um puxador. Nas cores da
+   sidebar, com o fundo sólido da própria barra para cobrir o fio por baixo.
+   Fora do fluxo do cabeçalho, então não empurra o título nem muda de lugar
+   com a barra recolhida — só acompanha a borda direita. 36px de alvo: é um
+   controle secundário do desktop (no celular vale o botão do topo, de 44). */
+.sidebar-header { position: relative; }
 .sidebar-header .sidebar-toggle-btn--lateral {
-  margin-left: auto;
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.14);
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0;
+  transform: translateY(50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin: 0;
+  background: var(--sidebar-bg);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--sidebar-text);
   box-shadow: none;
+  z-index: 1;
 }
+.sidebar-header .sidebar-toggle-btn--lateral svg { width: 18px; height: 18px; }
 .sidebar-header .sidebar-toggle-btn--lateral:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--sidebar-bg);
+  border-color: rgba(255, 255, 255, 0.4);
 }
-body.sidebar-collapsed .sidebar-header { flex-wrap: wrap; row-gap: 0.5rem; }
-body.sidebar-collapsed .sidebar-header .sidebar-toggle-btn--lateral { margin-left: 0; }
+.sidebar-header .sidebar-toggle-btn--lateral:focus-visible {
+  outline: 2px solid var(--sidebar-text);
+  outline-offset: 2px;
+}
+/* O menu já começa com 1.25rem de respiro (.sidebar-nav), onde o botão apoia a metade de baixo. */
 /* No desktop só o da barra existe; o do topo é do celular. */
 .topbar-actions .sidebar-toggle-btn--mobile { display: none; }
 

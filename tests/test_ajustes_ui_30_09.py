@@ -86,6 +86,10 @@ def test_sanduiche_vai_para_a_barra_lateral_e_o_topo_fica_so_no_celular() -> Non
     assert "sidebar-toggle-btn--lateral" in trecho and "sidebar-toggle-btn--mobile" in trecho
     css = (RAIZ / "static" / "style.css").read_text(encoding="utf-8")
     assert ".sidebar-header .sidebar-toggle-btn--lateral" in css
+    # Redondo, sobre o fio do cabeçalho, à direita (pedido de 30/09/2026).
+    bloco = css.split(".sidebar-header .sidebar-toggle-btn--lateral {")[1].split("}")[0]
+    assert "border-radius: 50%" in bloco and "position: absolute" in bloco
+    assert "translateY(50%)" in bloco and "right:" in bloco
     # No desktop o do topo some; no celular o da barra some (ela sai da tela).
     assert re.search(r"\.topbar-actions \.sidebar-toggle-btn--mobile\s*\{\s*display:\s*none", css)
     bloco_mobile = css.split("@media (max-width: 768px)")[-1]
@@ -111,10 +115,10 @@ def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
     assert "aguia-carteiras.css?v=aguia-2026-09d" in html
     assert "ui-common.js?v=aguia-2026-09h" in html
-    assert "style.css?v=menu-lateral-2026-09" in html
+    assert "style.css?v=menu-lateral-2026-09b" in html
     for nome in ("index.html", "usuarios.html", "vencidos.html"):
         t = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
-        assert "ui-common.js?v=aguia-2026-09h" in t and "style.css?v=menu-lateral-2026-09" in t
+        assert "ui-common.js?v=aguia-2026-09h" in t and "style.css?v=menu-lateral-2026-09b" in t
 
 
 # ── 4. Nomes em maiúsculas e Usuários com ativos por padrão (30/09, tarde) ──
