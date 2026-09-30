@@ -6234,7 +6234,13 @@ def instalabilidade(
     user_id = _user_id_da_sessao(token)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    alcance_total = (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL
+    # O mesmo alcance da leitura (30/09/2026): admin e gestor não limitado
+    # têm tudo; gestor limitado e operador, a carteira que `documentos_ao_alcance` diz.
+    try:
+        alcance_total = cert_installer.documentos_ao_alcance(user_id, token.role) is None
+    except (cert_installer.CustodiaIndisponivel, cert_installer.CarteiraIndisponivel) as e:
+        logger.warning("Instalabilidade sem conseguir ler o alcance (%s): %s", machine_id, e)
+        raise HTTPException(status_code=503, detail="Não foi possível verificar sua carteira. Tente de novo.")
 
     if not alcance_total:
         # A estação tem de ser uma das desta pessoa (achado #30): a rota era

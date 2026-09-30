@@ -226,14 +226,12 @@ def test_admin_e_gestor_nao_veem_fora_da_carteira(
     corpo = r.json()
     estados = {fp: v["estado"] for fp, v in corpo["itens"].items()}
 
-    if papel == "admin":
-        assert corpo["alcance_total"] is True
-        assert "fora_da_carteira" not in estados.values()
-        assert estados[FP_ALHEIO] == "ok"
-    else:
-        assert corpo["alcance_total"] is False, "gestor voltou a ter alcance total"
-        # Sem alcance total, o que está fora da carteira nem sai (auditoria #30).
-        assert FP_ALHEIO not in estados
+    # 30/09/2026: o gestor voltou a ter alcance total POR PADRÃO (decisão de
+    # produto); o caso limitado pelo administrador está em
+    # tests/test_gestor_alcance_total.py.
+    assert corpo["alcance_total"] is True
+    assert "fora_da_carteira" not in estados.values()
+    assert estados[FP_ALHEIO] == "ok"
 
 
 def test_operador_nao_tem_alcance_total(client: TestClient, banco: _Fake) -> None:

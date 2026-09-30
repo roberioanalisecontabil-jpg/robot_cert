@@ -141,3 +141,35 @@ def test_tela_de_usuarios_tem_o_controle_e_a_senha_minima_certa() -> None:
 def test_migration_da_flag_existe() -> None:
     sqls = list((RAIZ / "supabase" / "migrations").glob("*acesso_restrito*.sql"))
     assert sqls and "IF NOT EXISTS" in sqls[0].read_text(encoding="utf-8")
+
+
+# ── Instalar segue o mesmo alcance da leitura ──────────────────────────────
+#
+# Antes o gestor lia a carteira do setor (ou tudo) mas instalava só a PRÓPRIA
+# carteira: no ANALISESRV um gestor via o acervo e não conseguia instalar.
+
+from tests.test_inicio_selecao import FP_ALHEIO, FP_OK, MAQUINA  # noqa: E402
+from tests.test_inicio_selecao import _h as _h_inicio  # noqa: E402
+from tests.test_inicio_selecao import banco as banco_inicio  # noqa: E402,F401
+
+
+def _instalabilidade(client: TestClient, papel: str) -> dict:
+    r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQUINA}", headers=_h_inicio(papel))
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_gestor_limitado_ve_fora_da_carteira_na_instalabilidade(client: TestClient, banco_inicio) -> None:
+    users = banco_inicio.tabelas.setdefault("users", [])
+    linha = next((u for u in users if u.get("id") == "u-gestor"), None)
+    if linha is None:
+        linha = {"id": "u-gestor", "email": "gestor@x.com", "role": "gestor", "ativo": True}
+        users.append(linha)
+    linha["acesso_restrito"] = True
+    corpo = _instalabilidade(client, "gestor")
+    assert corpo["alcance_total"] is False
+    assert FP_ALHEIO not in {fp for fp in corpo["itens"]}, "fora do alcance nem sai (auditoria #30)"
+    linha["acesso_restrito"] = False
+    corpo = _instalabilidade(client, "gestor")
+    assert corpo["alcance_total"] is True
+    assert corpo["itens"][FP_ALHEIO]["estado"] == "ok"

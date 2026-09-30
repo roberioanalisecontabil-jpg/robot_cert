@@ -926,10 +926,14 @@ def assegurar_carteira(user_id: str, role: str, certificate_ids: List[str]) -> N
     Certificado sem documento é negado ao operador: não há como saber de quem
     ele é, logo não há como dizer que está na carteira de alguém.
     """
-    if (role or "").strip().lower() in PAPEIS_COM_ALCANCE_TOTAL:
+    # Instala-se exatamente o que se pode LER (30/09/2026): o mesmo
+    # `documentos_ao_alcance` das telas. Antes o gestor lia a carteira do setor
+    # (lote 4) — ou tudo, desde a decisão de 30/09 — mas instalava só a
+    # PRÓPRIA carteira: no ANALISESRV um gestor via o acervo e não conseguia
+    # instalar nada dele.
+    carteira = documentos_ao_alcance(user_id, role)
+    if carteira is None:
         return
-
-    carteira = listar_carteira(user_id)
     documentos = documentos_dos_certificados(certificate_ids)
 
     negados: List[str] = []
@@ -996,8 +1000,10 @@ def estado_de_instalabilidade(
     bloqueados = listar_bloqueios(machine_id)
     no_cofre = {c.fingerprint: c.id for c in list_available_pfx(machine_id=machine_id)}
 
-    alcance_total = (role or "").strip().lower() in PAPEIS_COM_ALCANCE_TOTAL
-    carteira: Set[str] = set() if alcance_total else listar_carteira(user_id)
+    # Mesmo alcance da leitura e de `assegurar_carteira` (30/09/2026).
+    alcance = documentos_ao_alcance(user_id, role)
+    alcance_total = alcance is None
+    carteira: Set[str] = alcance or set()
 
     out: Dict[str, Dict[str, Any]] = {}
     for item in itens:
