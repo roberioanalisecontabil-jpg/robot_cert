@@ -115,10 +115,10 @@ def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
     assert "aguia-carteiras.css?v=aguia-2026-09d" in html
     assert "ui-common.js?v=aguia-2026-09i" in html
-    assert "style.css?v=menu-lateral-2026-09c" in html
+    assert "style.css?v=menu-lateral-2026-09d" in html
     for nome in ("index.html", "usuarios.html", "vencidos.html"):
         t = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
-        assert "ui-common.js?v=aguia-2026-09i" in t and "style.css?v=menu-lateral-2026-09c" in t
+        assert "ui-common.js?v=aguia-2026-09i" in t and "style.css?v=menu-lateral-2026-09d" in t
 
 
 # ── 4. Nomes em maiúsculas e Usuários com ativos por padrão (30/09, tarde) ──
@@ -158,3 +158,35 @@ def test_tela_de_usuarios_abre_so_com_ativos() -> None:
     assert "['ativo', 'desativado', 'todos'].includes(q.get('status'))" in html
     assert 'class="ag-input cg-usu-maiusculas"' in html
     assert "aguia-usuarios.css?v=aguia-2026-09a" in html
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Botão de recolher: clique que não contava e alinhamento recolhido (30/09, noite)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _bloco_css(css: str, seletor: str) -> str:
+    """Corpo da regra, sem os comentários (o comentário explica o defeito e
+    cita o `translateY(50%)` que a regra não pode mais ter)."""
+    i = css.index(seletor)
+    bloco = css[i:css.index("}", i)]
+    return re.sub(r"/\*.*?\*/", "", bloco, flags=re.S)
+
+
+def test_botao_lateral_nao_depende_de_transform_para_ficar_sobre_o_fio() -> None:
+    """`.sidebar-toggle-btn:hover/:active` trocam o transform; se a posição
+    sobre o fio viesse de translateY(50%), o botão pulava ao receber o mouse
+    e o mouseup caía fora dele (rastreado: mousedown no botão, mouseup no
+    NAV, click no ASIDE)."""
+    css = (RAIZ / "static" / "style.css").read_text(encoding="utf-8")
+    bloco = _bloco_css(css, ".sidebar-header .sidebar-toggle-btn--lateral {")
+    assert "translateY(50%)" not in bloco
+    assert "bottom: -18px" in bloco and "transform: none" in bloco
+    assert re.search(r"\.sidebar-toggle-btn--lateral:hover,\s*\.sidebar-header \.sidebar-toggle-btn--lateral:active \{\s*transform: none;", css)
+
+
+def test_botao_lateral_centralizado_com_a_barra_recolhida() -> None:
+    css = (RAIZ / "static" / "style.css").read_text(encoding="utf-8")
+    bloco = _bloco_css(css, "body.sidebar-collapsed .sidebar-header .sidebar-toggle-btn--lateral {")
+    assert "right: auto" in bloco and "left: 50%" in bloco and "margin-left: -18px" in bloco
+    assert "transform" not in bloco, "centralizar por transform reabriria o pulo do hover"

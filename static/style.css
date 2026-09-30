@@ -2592,8 +2592,13 @@ body.sidebar-open .sidebar-backdrop {
 .sidebar-header .sidebar-toggle-btn--lateral {
   position: absolute;
   right: 0.75rem;
-  bottom: 0;
-  transform: translateY(50%);
+  /* Metade abaixo do fio por `bottom` negativo, e NÃO por
+     `transform: translateY(50%)`: a regra base `.sidebar-toggle-btn` troca o
+     transform no :hover (-1px) e no :active (0), e o botão pulava 18px para
+     cima ao receber o mouse — o mousedown caía nele e o mouseup já caía no
+     menu, e o clique não contava (rastreado em 30/09/2026). */
+  bottom: -18px;
+  transform: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -2605,9 +2610,28 @@ body.sidebar-open .sidebar-backdrop {
   z-index: 1;
 }
 .sidebar-header .sidebar-toggle-btn--lateral svg { width: 18px; height: 18px; }
+.sidebar-header .sidebar-toggle-btn--lateral:hover,
+.sidebar-header .sidebar-toggle-btn--lateral:active {
+  transform: none;
+}
 .sidebar-header .sidebar-toggle-btn--lateral:hover {
   background-color: var(--sidebar-bg);
   border-color: rgba(255, 255, 255, 0.4);
+}
+/* Barra recolhida (pelo botão, ou sozinha entre 769 e 900px): o botão sai
+   da direita e fica no eixo da barra, alinhado com a logo e os ícones do
+   menu — à direita ele sobrava 7px para fora do eixo. */
+body.sidebar-collapsed .sidebar-header .sidebar-toggle-btn--lateral {
+  right: auto;
+  left: 50%;
+  margin-left: -18px;
+}
+@media (min-width: 769px) and (max-width: 900px) {
+  .sidebar-header .sidebar-toggle-btn--lateral {
+    right: auto;
+    left: 50%;
+    margin-left: -18px;
+  }
 }
 .sidebar-header .sidebar-toggle-btn--lateral:focus-visible {
   outline: 2px solid var(--sidebar-text);
