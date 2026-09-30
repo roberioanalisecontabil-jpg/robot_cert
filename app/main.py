@@ -1487,6 +1487,15 @@ def list_users() -> List[dict]:
         "id, email, full_name, role, ativo, gestor_id, departamento_id, created_at"
     ).execute()
     usuarios = list(r.data or [])
+    # `acesso_restrito` numa consulta à parte e tolerante: a coluna chegou em
+    # 30/09/2026 (migration 20260930100000) e a lista não pode cair num
+    # banco que ainda não a tem — sem a coluna, todo gestor está liberado.
+    restricao: Dict[str, bool] = {}
+    try:
+        for u in sb.table("users").select("id, acesso_restrito").execute().data or []:
+            restricao[str(u.get("id"))] = bool(u.get("acesso_restrito"))
+    except Exception:  # noqa: BLE001
+        logger.warning("users.acesso_restrito indisponível na listagem (migration 20260930100000?)")
     # Contagem da carteira por pessoa, numa consulta só: a coluna "Carteira"
     # liga esta tela ao cartão "Acesso" do Dashboard e à tela Carteiras.
     quantos: Dict[str, int] = {}
@@ -1502,6 +1511,7 @@ def list_users() -> List[dict]:
         # Só na exibição: "irla" → "Irla", caixa alta → título.
         u["nome_exibicao"] = nomes.nome_pessoa(u.get("full_name")) or str(u.get("email") or "")
         u["carteira"] = n
+        u["acesso_restrito"] = restricao.get(str(u.get("id")), False)
         u["textos"] = {"carteira": _texto.plural(n, "cliente")}
     return usuarios
 
@@ -1526,6 +1536,10 @@ class UserUpdateBody(BaseModel):
     # Omitir mantém o que está gravado; string vazia limpa. Sem a distinção,
     # não haveria como tirar alguém de um setor sem inventar um valor.
     departamento_id: Optional[str] = None
+    # Só faz sentido em gestor, e só administrador escreve (30/09/2026):
+    # ligada, o gestor deixa de ver o acervo inteiro e volta ao alcance da
+    # carteira própria + setor. Omitir mantém o que está gravado.
+    acesso_restrito: Optional[bool] = None
 
 
 class UserResetPasswordBody(BaseModel):
@@ -1995,6 +2009,15 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         if gid and gid == user_id:
             raise HTTPException(status_code=422, detail="Um usuário não pode ser gestor de si mesmo.")
         campos["gestor_id"] = gid or None
+    if body.acesso_restrito is not None:
+        # Um gestor pode editar contas não-admin — inclusive a própria. Se
+        # pudesse escrever esta flag, desligaria a própria limitação.
+        if not _e_admin(ator):
+            raise HTTPException(
+                status_code=403,
+                detail="Só um administrador pode limitar ou liberar o alcance de um gestor.",
+            )
+        campos["acesso_restrito"] = bool(body.acesso_restrito)
 
     # Nada a fazer com as seleções de alerta ao trocar o e-mail: desde a fase
     # 3c elas são chaveadas por `user_id`, então a identidade não se move. O

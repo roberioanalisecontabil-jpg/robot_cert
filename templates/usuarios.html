@@ -188,7 +188,7 @@
         <div class="ag-field modal__campo" id="ed-campo-senha" hidden>
           <label class="ag-label" for="ed-senha">Senha inicial</label>
           <div class="cg-usu-senha">
-            <input type="password" id="ed-senha" class="ag-input" minlength="6" autocomplete="new-password" placeholder="mínimo 6 caracteres">
+            <input type="password" id="ed-senha" class="ag-input" minlength="12" autocomplete="new-password" placeholder="mínimo 12 caracteres">
             <button type="button" class="ag-btn ag-btn--icon-sm" id="ed-olho" aria-controls="ed-senha" aria-pressed="false" aria-label="Mostrar senha"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </div>
@@ -205,6 +205,16 @@
           <label class="ag-label" for="ed-departamento">Departamento</label>
           <select id="ed-departamento" class="ag-select"><option value="">Sem departamento</option></select>
           <p class="ag-ajuda">Define quem pode liberar certificados para esta pessoa: os líderes do setor.</p>
+        </div>
+        <!-- Só para gestor, e só administrador altera (30/09/2026): o gestor
+             vê o acervo inteiro por padrão; ligado, volta a ver só a carteira
+             própria e as do setor que lidera. -->
+        <div class="ag-field" id="ed-campo-acesso" hidden>
+          <label class="ag-check">
+            <input type="checkbox" id="ed-acesso-restrito">
+            <span>Limitar aos certificados da carteira e do setor</span>
+          </label>
+          <p class="ag-ajuda" id="ed-acesso-dica">Desmarcado, o gestor vê todos os certificados. Só um administrador altera.</p>
         </div>
         <div class="ag-field modal__campo">
           <label class="ag-label" for="ed-gestor">Gestor responsável <span class="cg-usu-tag">informativo</span></label>
@@ -233,13 +243,13 @@
         <div class="ag-field">
           <label class="ag-label" for="sn-nova">Nova senha</label>
           <div class="cg-usu-senha">
-            <input type="password" id="sn-nova" class="ag-input" required minlength="6" autocomplete="new-password" placeholder="mínimo 6 caracteres">
+            <input type="password" id="sn-nova" class="ag-input" required minlength="12" autocomplete="new-password" placeholder="mínimo 12 caracteres">
             <button type="button" class="ag-btn ag-btn--icon-sm" id="sn-olho" aria-controls="sn-nova" aria-pressed="false" aria-label="Mostrar senha"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </div>
         <div class="ag-field">
           <label class="ag-label" for="sn-conf">Repita a senha</label>
-          <input type="password" id="sn-conf" class="ag-input" required minlength="6" autocomplete="new-password">
+          <input type="password" id="sn-conf" class="ag-input" required minlength="12" autocomplete="new-password">
         </div>
       </div>
       <div class="ag-modal__foot">
@@ -937,13 +947,19 @@
             const campoGestor = document.getElementById('ed-gestor').closest('.modal__campo');
             const textos = {
                 user: 'Instala apenas os certificados da carteira dele.',
-                gestor: 'Monta carteiras de operadores e vê a trilha de atribuições.',
+                gestor: 'Vê todos os certificados, monta carteiras de operadores e vê a trilha de atribuições.',
                 admin: 'Alcance total, incluindo gestão de usuários e configuração.',
             };
             dica.textContent = textos[nivel] || '';
             // Gestor só faz sentido para operador — some em vez de ficar
             // habilitado e ser silenciosamente ignorado.
             campoGestor.style.display = nivel === 'user' ? '' : 'none';
+            // A limitação de alcance só existe para gestor, e só o
+            // administrador mexe nela: para os demais fica visível, mas
+            // desabilitada, para a pessoa saber que a regra existe.
+            const campoAcesso = document.getElementById('ed-campo-acesso');
+            campoAcesso.hidden = nivel !== 'gestor';
+            document.getElementById('ed-acesso-restrito').disabled = localStorage.getItem('user_role') !== 'admin';
         }
 
         /**
@@ -955,6 +971,7 @@
          */
         function novoUsuario() {
             editandoId = null;
+            document.getElementById('ed-acesso-restrito').checked = false;
             document.getElementById('modal-editar-titulo').textContent = 'Novo usuário';
             document.getElementById('modal-editar-quem').textContent =
                 'A pessoa entra com o e-mail e a senha definidos aqui.';
@@ -1004,6 +1021,7 @@
             document.getElementById('ed-nome').value = user.full_name || '';
             document.getElementById('ed-email').value = user.email || '';
             document.getElementById('ed-nivel').value = String(user.role || 'user').toLowerCase();
+            document.getElementById('ed-acesso-restrito').checked = !!user.acesso_restrito;
             preencherGestores(user);
             preencherDepartamentos(user.departamento_id);
             ajustarDicaDeNivel();
@@ -1039,14 +1057,21 @@
                 // gravado, e não haveria como tirar alguém de um setor.
                 departamento_id: document.getElementById('ed-departamento').value || '',
             };
+            // A flag só vai quando é gestor E quem edita é administrador: o
+            // servidor recusa (403) qualquer outro remetente, e mandar sempre
+            // faria a edição comum de um gestor falhar inteira.
+            if (nivel === 'gestor' && localStorage.getItem('user_role') === 'admin') {
+                corpo.acesso_restrito = document.getElementById('ed-acesso-restrito').checked;
+            }
 
             if (criando) {
                 const senha = document.getElementById('ed-senha').value;
                 // Checado aqui além do `minlength` porque o campo fica oculto
                 // na edição, e campo oculto não entra na validação nativa do
                 // formulário — o cadastro passaria com senha vazia.
-                if (senha.length < 6) {
-                    erroDoModal('A senha inicial precisa ter no mínimo 6 caracteres.');
+                // Mínimo 12 desde o lote 9 (SECURITY_AUDIT #25).
+                if (senha.length < 12) {
+                    erroDoModal('A senha inicial precisa ter no mínimo 12 caracteres.');
                     document.getElementById('ed-senha').focus();
                     return;
                 }

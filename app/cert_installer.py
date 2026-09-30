@@ -813,6 +813,36 @@ def listar_carteira(user_id: str) -> Set[str]:
         raise CarteiraIndisponivel(str(e)) from e
 
 
+_avisou_coluna_acesso_restrito = False
+
+
+def gestor_com_acesso_restrito(user_id: str) -> bool:
+    """`users.acesso_restrito` da conta. Ausente (migration 20260930100000
+    ainda não rodou) = False, o padrão pedido — com um aviso único no log.
+    Qualquer OUTRA falha de leitura sobe como `CarteiraIndisponivel`: "não
+    consegui ler" não é "não é restrito"."""
+    global _avisou_coluna_acesso_restrito
+    client = _banco()
+    if not client:
+        raise CarteiraIndisponivel("Banco não configurado")
+    try:
+        r = client.table("users").select("id, acesso_restrito").eq("id", user_id).limit(1).execute()
+    except Exception as e:  # noqa: BLE001
+        texto = str(e).lower()
+        if "acesso_restrito" in texto or "42703" in texto:
+            if not _avisou_coluna_acesso_restrito:
+                _avisou_coluna_acesso_restrito = True
+                logger.warning(
+                    "users.acesso_restrito não existe (rode a migration 20260930100000); "
+                    "todo gestor está com alcance total."
+                )
+            return False
+        logger.exception("Falha ao ler acesso_restrito de %s", user_id)
+        raise CarteiraIndisponivel(str(e)) from e
+    linha = (r.data or [None])[0] or {}
+    return bool(linha.get("acesso_restrito"))
+
+
 def documentos_ao_alcance(user_id: str, role: str) -> Optional[Set[str]]:
     """Os documentos que esta pessoa pode LER — o recorte do lote 4 (#5).
 
@@ -829,6 +859,11 @@ def documentos_ao_alcance(user_id: str, role: str) -> Optional[Set[str]]:
         return None
     if not user_id:
         return set()
+    # Decisão de produto de 30/09/2026: o gestor vê TUDO por padrão; só um
+    # administrador o limita, ligando `users.acesso_restrito`. Limitado, ele
+    # volta ao alcance do lote 4 (carteira própria + carteiras do setor).
+    if papel == "gestor" and not gestor_com_acesso_restrito(user_id):
+        return None
     docs = set(listar_carteira(user_id))
     if papel != "gestor":
         return docs
