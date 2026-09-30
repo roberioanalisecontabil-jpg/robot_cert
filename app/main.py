@@ -38,7 +38,7 @@ from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente, previa_do_resumo
 from app.notification_service import build_notifications_payload, get_active_alerts
-from app.novos_certificados import notificar_novos
+from app.novos_certificados import filtrar_ineditos, fingerprints_do_snapshot, notificar_novos
 from app.settings_state import (
     GravacaoNaoPersistida,
     PastaRecusada,
@@ -5047,6 +5047,13 @@ def ingest(
     # nenhum caminho (SECURITY_AUDIT #2). Um agente antigo ainda o manda —
     # aqui ele vira nome público, pasta e chave, e o bruto é descartado.
     items = [nome_publico.sanitizar_item(it) for it in _normalize_ingest_items_status(body.items, scanned)]
+    # O que o portal já conhecia, ANTES de gravar este inventário: é contra
+    # isto que "certificado novo" é decidido (cópia/renomeação não é novo).
+    try:
+        conhecidos = fingerprints_do_snapshot(get_latest_snapshot())
+    except Exception:  # noqa: BLE001
+        logger.exception("Sem o inventário anterior; todo arquivo inédito será tratado como certificado novo")
+        conhecidos = set()
     save_snapshot(
         machine_id=machine_id,
         source_folder=body.source_folder.strip(),
@@ -5055,11 +5062,11 @@ def ingest(
     )
     # Atualiza a tabela materializada — operação rápida, não bloqueia o retorno.
     # Devolve o que nunca esteve nela: os certificados novos na pasta.
-    novos = upsert_cert_history(
+    novos = filtrar_ineditos(upsert_cert_history(
         machine_id=machine_id,
         scanned_iso=scanned.isoformat(),
         items=items,
-    ) or []
+    ) or [], conhecidos)
     # Aviso de certificado novo (30/09/2026): quem tem o cliente na carteira
     # e os administradores recebem por e-mail; o antispam por (certificado,
     # destinatário) mora em `novos_certificados`, então não há debounce aqui.

@@ -78,6 +78,33 @@ def _vencimento_legivel(it: Dict[str, Any]) -> str:
         return "—"
 
 
+def fingerprints_do_snapshot(snapshot: Optional[Dict[str, Any]]) -> Set[str]:
+    """Fingerprints do inventário anterior: o que o portal já conhecia."""
+    out: Set[str] = set()
+    for it in ((snapshot or {}).get("items") or []):
+        fp = str(it.get("fingerprint_sha256") or it.get("cert_sha256") or "").strip().lower()
+        if fp:
+            out.add(fp)
+    return out
+
+
+def filtrar_ineditos(novos: List[Dict[str, Any]], conhecidos: Set[str]) -> List[Dict[str, Any]]:
+    """Só o que é certificado NOVO, e não arquivo novo de certificado velho.
+
+    A chave do histórico é nome do arquivo + fingerprint; copiar um PFX para
+    a pasta Copias, ou renomeá-lo, cria uma chave nova para o mesmo
+    certificado. Sem este filtro cada cópia mandava "certificado novo" para
+    todo mundo. Sem fingerprint (arquivo ilegível) não há como saber: passa.
+    """
+    out: List[Dict[str, Any]] = []
+    for it in novos:
+        fp = str(it.get("fingerprint_sha256") or "").strip().lower()
+        if fp and fp in conhecidos:
+            continue
+        out.append(it)
+    return out
+
+
 def _contas_ativas() -> List[Dict[str, Any]]:
     client = _banco()
     if not client:

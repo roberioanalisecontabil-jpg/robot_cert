@@ -407,12 +407,12 @@ def chaves_registradas_recentemente(dias: int) -> Dict[str, str]:
     client = _banco()
     if not client or dias <= 0:
         return {}
-    limite = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    limite_dt = datetime.now(timezone.utc) - timedelta(days=dias)
     try:
         r = (
             client.table("cert_history")
             .select("arquivo_chave, primeira_data_registrada")
-            .gte("primeira_data_registrada", limite)
+            .gte("primeira_data_registrada", limite_dt.isoformat())
             .execute()
         )
     except Exception as e:  # noqa: BLE001
@@ -424,13 +424,34 @@ def chaves_registradas_recentemente(dias: int) -> Dict[str, str]:
         quando = row.get("primeira_data_registrada")
         if not chave or not quando:
             continue
-        quando_s = quando.isoformat() if hasattr(quando, "isoformat") else str(quando)
-        # A base falsa dos testes não filtra por data; a real filtra, mas
-        # comparar aqui também custa nada e mantém uma regra só.
-        if quando_s < limite:
+        # O banco devolve o instante no fuso da sessão (-03:00) e o limite
+        # está em UTC: comparar como texto erra por horas na borda da janela.
+        # Compara-se o instante; o texto só sai para o payload.
+        quando_dt = _instante(quando)
+        if quando_dt is None or quando_dt < limite_dt:
             continue
-        out[str(chave)] = quando_s
+        out[str(chave)] = quando_dt.isoformat()
     return out
+
+
+def _instante(valor: Any) -> Optional[datetime]:
+    """timestamptz do banco (datetime) ou texto ISO → datetime com fuso (UTC
+    se vier sem)."""
+    if isinstance(valor, datetime):
+        dt = valor
+    else:
+        s = str(valor or "").strip()
+        if not s:
+            return None
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(s)
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def upsert_cert_history(

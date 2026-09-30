@@ -114,11 +114,11 @@ def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     """Sem isto o navegador segue com o CSS/JS antigo e nada do acima aparece."""
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
     assert "aguia-carteiras.css?v=aguia-2026-09d" in html
-    assert "ui-common.js?v=aguia-2026-09i" in html
+    assert "ui-common.js?v=aguia-2026-09j" in html
     assert "style.css?v=menu-lateral-2026-09d" in html
     for nome in ("index.html", "usuarios.html", "vencidos.html"):
         t = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
-        assert "ui-common.js?v=aguia-2026-09i" in t and "style.css?v=menu-lateral-2026-09d" in t
+        assert "ui-common.js?v=aguia-2026-09j" in t and "style.css?v=menu-lateral-2026-09d" in t
 
 
 # ── 4. Nomes em maiúsculas e Usuários com ativos por padrão (30/09, tarde) ──

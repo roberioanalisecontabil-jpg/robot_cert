@@ -130,6 +130,54 @@ def test_chaves_recentes_devolve_a_data_por_chave(historico: _Fake) -> None:
     assert set(recentes) == {"recente"}
 
 
+def test_chaves_recentes_comparam_instantes_e_nao_texto(historico: _Fake) -> None:
+    """O banco devolve o horário no fuso da sessão (-03:00) e o limite está em
+    UTC. Um registro de 6 dias e 23 h atrás, escrito em -03:00, fica com o
+    texto "menor" que o limite e sumia da janela na comparação de strings."""
+    agora = datetime.now(timezone.utc)
+    dentro = (agora - timedelta(days=6, hours=23)).astimezone(timezone(timedelta(hours=-3)))
+    fora = (agora - timedelta(days=7, hours=1)).astimezone(timezone(timedelta(hours=-3)))
+    linhas = [
+        {"arquivo_chave": "dentro", "primeira_data_registrada": dentro},
+        {"arquivo_chave": "fora", "primeira_data_registrada": fora},
+        {"arquivo_chave": "texto-z", "primeira_data_registrada": (agora - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+    ]
+
+    # O Postgres compara instantes e devolve as linhas com datetime no fuso da
+    # sessão; a base falsa compara texto (o defeito), então aqui o cliente é
+    # mínimo e devolve tudo — quem tem de filtrar certo é o código.
+    class _Q:
+        def select(self, *_a, **_k): return self
+        def gte(self, *_a, **_k): return self
+        def execute(self):
+            return type("R", (), {"data": [dict(l) for l in linhas]})()
+
+    class _C:
+        def table(self, _n): return _Q()
+
+    import app.settings_state as ss_mod
+    original = ss_mod._banco
+    ss_mod._banco = lambda: _C()
+    try:
+        assert set(ss.chaves_registradas_recentemente(7)) == {"dentro", "texto-z"}
+    finally:
+        ss_mod._banco = original
+
+
+def test_copia_ou_renomeacao_nao_e_certificado_novo() -> None:
+    """A chave do histórico é nome do arquivo + fingerprint: copiar o PFX
+    para a pasta Copias cria chave nova para o mesmo certificado."""
+    copia = _item("ALFA", "fp-a")
+    copia["nome_publico"] = "ALFA (2).pfx"
+    inedito = _item("BETA", "fp-b", DOC_B)
+    ilegivel = {"nome_publico": "x.pfx", "arquivo_chave": "k", "fingerprint_sha256": ""}
+    conhecidos = nc.fingerprints_do_snapshot({"items": [_item("ALFA", "FP-A")]})
+    assert conhecidos == {"fp-a"}
+    assert [n["nome"] for n in nc.filtrar_ineditos([copia, inedito], conhecidos)] == ["BETA"]
+    assert nc.filtrar_ineditos([ilegivel], conhecidos) == [ilegivel], "sem fingerprint não há como saber: passa"
+    assert nc.fingerprints_do_snapshot(None) == set()
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 2. O sino mostra os novos, com filtro e totais
 # ══════════════════════════════════════════════════════════════════════════
@@ -214,6 +262,17 @@ def test_novo_em_dois_arquivos_e_um_aviso(sino) -> None:
     p = montar([a, b])
     assert p["total_novos"] == 1
     assert p["itens"][0]["ocorrencias"] == 2
+
+
+def test_copia_de_certificado_antigo_nao_aparece_como_novo_no_sino(sino) -> None:
+    montar, recentes, _, _ = sino
+    antigo = _item("ALFA", "fp-a")
+    copia = dict(antigo, nome_publico="ALFA (2).pfx", arquivo_chave=chave_de_arquivo("ALFA (2).pfx", "fp-a"))
+    inedito = _item("BETA", "fp-b", DOC_B)
+    _recente(recentes, copia)
+    _recente(recentes, inedito)
+    p = montar([antigo, copia, inedito])
+    assert [a["nome"] for a in p["itens"] if a["tipo"] == "novo"] == ["BETA"]
 
 
 def test_operador_so_ve_os_novos_da_sua_carteira(sino) -> None:
@@ -453,10 +512,27 @@ def test_ingest_agenda_o_aviso_dos_novos(client: TestClient, monkeypatch: pytest
     assert r.status_code == 200 and r.json()["novos"] == 0
     assert len(recebidos) == 1
 
+    # O mesmo certificado copiado para outro arquivo: chave nova no histórico,
+    # mas o fingerprint já estava no inventário anterior — não é novo.
+    corpo["items"].append(dict(corpo["items"][0], file_name="Copias/ALFA_12345678000199 (2).pfx"))
+    r = client.post("/api/ingest", headers=_h(*ADMIN), json=corpo)
+    assert r.status_code == 200 and r.json()["novos"] == 0
+    assert len(recebidos) == 1
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # 5. A tela
 # ══════════════════════════════════════════════════════════════════════════
+
+
+def test_filtro_vazio_volta_para_todos_e_respostas_fora_de_ordem_sao_descartadas() -> None:
+    """Com o chip Novos ativo e o último novo marcado como lido, a lista
+    daquele tipo chega vazia: o painel voltava a "tudo em dia" com os chips
+    escondidos e 47 expirando no selo. E o poll de 60s podia chegar depois
+    do clique no chip e sobrescrever o recorte."""
+    assert "_seqNotif" in UI and "if (seq !== _seqNotif) return;" in UI
+    assert re.search(r'if \(_filtroNotif !== "todos" && !contagens\[_filtroNotif\] && Number\(data && data\.total\) > 0\) \{\s*_filtroNotif = "todos";\s*void fetchNotifications\(\);\s*return;', UI)
+    assert "filtros.hidden = !(Number(data && data.total) > 0);" in UI
 
 
 def test_sino_tem_filtro_todos_novos_expirando_vencidos() -> None:
@@ -482,7 +558,7 @@ def test_estilo_do_novo_e_busters() -> None:
     for t in (ROOT / "templates").glob("*.html"):
         s = t.read_text(encoding="utf-8")
         if "ui-common.js?v=" in s:
-            assert "ui-common.js?v=aguia-2026-09i" in s, t.name
+            assert "ui-common.js?v=aguia-2026-09j" in s, t.name
         if "style.css?v=" in s:
             assert "style.css?v=menu-lateral-2026-09d" in s, t.name
 

@@ -1204,6 +1204,9 @@ function initThemeToggle() {
 // selo e a lista concordam.
 let _filtroNotif = "todos";
 let _ultimoPayloadNotif = null;
+// Número da última busca disparada: a resposta de uma busca antiga (o poll
+// de 60s, ou um chip clicado antes) é descartada se outra saiu depois.
+let _seqNotif = 0;
 
 /** Para onde o cartão leva: vencido vai à lista de vencidos; novo e
  *  expirando estão no Início, que é onde se instala. A busca é o documento
@@ -1430,9 +1433,16 @@ function _renderizarNotificacoes(data) {
     expired: Number(data && data.total_vencidos) || 0,
   };
   const filtros = document.getElementById("notif-filtros");
+  // Um filtro cujo recorte ficou vazio (o último "novo" foi marcado como
+  // lido) volta para "todos" e busca de novo: a lista que chegou era só
+  // daquele tipo, e mostrá-la vazia diria "tudo em dia" com 47 expirando.
+  if (_filtroNotif !== "todos" && !contagens[_filtroNotif] && Number(data && data.total) > 0) {
+    _filtroNotif = "todos";
+    void fetchNotifications();
+    return;
+  }
   if (filtros) {
-    filtros.hidden = items.length === 0;
-    if (_filtroNotif !== "todos" && !contagens[_filtroNotif]) _filtroNotif = "todos";
+    filtros.hidden = !(Number(data && data.total) > 0);
     filtros.querySelectorAll("[data-filtro]").forEach((b) => {
       const f = b.dataset.filtro;
       const n = contagens[f] || 0;
@@ -1513,7 +1523,9 @@ async function fetchNotifications() {
 
   try {
     const url = "/api/colaborador/notificacoes" + (_filtroNotif !== "todos" ? "?tipo=" + encodeURIComponent(_filtroNotif) : "");
+    const seq = ++_seqNotif;
     const r = await fetch(url, { headers: getHeaders() });
+    if (seq !== _seqNotif) return; // outra busca saiu depois desta; a dela vale
     if (!r.ok) {
       if (r.status === 401) logout();
       // Sem isto, o badge mantinha a contagem antiga após uma falha.
@@ -1529,6 +1541,7 @@ async function fetchNotifications() {
     }
 
     const data = await r.json();
+    if (seq !== _seqNotif) return;
     _ultimoPayloadNotif = data;
     _aplicarBadgeNotificacoes(data);
     _renderizarNotificacoes(data);

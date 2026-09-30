@@ -114,9 +114,19 @@ def get_active_alerts(
     recentes = chaves_registradas_recentemente(JANELA_NOVOS_DIAS)
     if recentes:
         alcance = None if is_admin else _alcance_para_novos(user_id, user_role)
+        # Fingerprints que já existem num arquivo ANTIGO: uma cópia ou um
+        # arquivo renomeado tem chave nova, mas não é certificado novo.
+        fps_antigos = {
+            str(it.get("fingerprint_sha256") or "").strip().lower()
+            for it in itens
+            if it.get("fingerprint_sha256") and str(it.get("arquivo_chave") or "") not in recentes
+        }
         for it in itens:
             quando = recentes.get(str(it.get("arquivo_chave") or ""))
             if not quando:
+                continue
+            fp_item = str(it.get("fingerprint_sha256") or "").strip().lower()
+            if fp_item and fp_item in fps_antigos:
                 continue
             if alcance is not None and _documento_do_item(it) not in alcance:
                 continue
