@@ -115,3 +115,42 @@ def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     for nome in ("index.html", "usuarios.html", "vencidos.html"):
         t = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
         assert "ui-common.js?v=aguia-2026-09h" in t and "style.css?v=menu-lateral-2026-09" in t
+
+
+# ── 4. Nomes em maiúsculas e Usuários com ativos por padrão (30/09, tarde) ──
+
+from tests.test_seguranca_lote1 import _Fake, _usuario  # noqa: E402
+
+
+@pytest.fixture
+def banco_usuarios(monkeypatch: pytest.MonkeyPatch) -> _Fake:
+    fake = _Fake({"users": [_usuario("u-adm", "admin@x.com", "admin"), _usuario("u-ana", "ana@x.com", "user")],
+                  "user_activity": [], "rate_limit_tentativas": [], "carteira": [], "cert_snapshots": []})
+    monkeypatch.setattr("app.settings_state._banco", lambda: fake)
+    return fake
+
+
+def test_nome_e_gravado_em_maiusculas_no_cadastro_e_na_edicao(client: TestClient, banco_usuarios: _Fake) -> None:
+    r = client.post("/api/users", json={"email": "novo@x.com", "password": "senha-forte-123456",
+                                        "full_name": "  joão da silva ", "role": "user"}, headers=_admin())
+    assert r.status_code == 200, r.text
+    novo = next(u for u in banco_usuarios.tabelas["users"] if u["email"] == "novo@x.com")
+    assert novo["full_name"] == "JOÃO DA SILVA"
+    r = client.put("/api/users/u-ana", json={"email": "ana@x.com", "full_name": "Ana Paula", "role": "user"}, headers=_admin())
+    assert r.status_code == 200, r.text
+    assert next(u for u in banco_usuarios.tabelas["users"] if u["id"] == "u-ana")["full_name"] == "ANA PAULA"
+
+
+def test_listagem_exibe_nomes_em_maiusculas(client: TestClient, banco_usuarios: _Fake) -> None:
+    next(u for u in banco_usuarios.tabelas["users"] if u["id"] == "u-ana")["full_name"] = "ana antiga"
+    r = client.get("/api/users", headers=_admin())
+    assert {u["id"]: u["nome_exibicao"] for u in r.json()}["u-ana"] == "ANA ANTIGA"
+
+
+def test_tela_de_usuarios_abre_so_com_ativos() -> None:
+    html = (RAIZ / "templates" / "usuarios.html").read_text(encoding="utf-8")
+    assert '<option value="ativo" selected>' in html
+    assert "'user-status-filter').value = 'ativo';" in html, "limpar filtros volta ao padrão: ativos"
+    assert "['ativo', 'desativado', 'todos'].includes(q.get('status'))" in html
+    assert 'class="ag-input cg-usu-maiusculas"' in html
+    assert "aguia-usuarios.css?v=aguia-2026-09a" in html

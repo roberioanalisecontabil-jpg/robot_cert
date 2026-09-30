@@ -493,7 +493,8 @@ def test_manter_o_proprio_email_na_edicao_e_permitido(
         headers=_admin_headers(),
     )
     assert r.status_code == 200, r.text
-    assert _linha(banco, "u-gestor")["full_name"] == "Gestor Editado"
+    # Máscara de 30/09/2026: o nome é gravado em maiúsculas.
+    assert _linha(banco, "u-gestor")["full_name"] == "GESTOR EDITADO"
 
 
 def test_email_e_normalizado_para_minusculas(client: TestClient, banco: _FakeBanco) -> None:

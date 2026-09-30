@@ -81,3 +81,7 @@
     .cg-tabela-usu .cg-col-nivel, .cg-tabela-usu .cg-col-status, .cg-tabela-usu .cg-col-gestor, .cg-tabela-usu .cg-col-carteira { display: none; }
 }
 @media (min-width: 641px) { .cg-tabela-usu .cg-col-meta { display: none; } }
+
+/* Máscara visual do nome (30/09/2026): o servidor grava em maiúsculas; o
+   campo já mostra assim enquanto a pessoa digita, para não haver surpresa. */
+.cg-usu-maiusculas { text-transform: uppercase; }

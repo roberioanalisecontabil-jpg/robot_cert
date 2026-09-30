@@ -1728,7 +1728,7 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
                 {
                     "email": email,
                     "password_hash": auth.get_password_hash(senha),
-                    "full_name": nome,
+                    "full_name": str(nome or "").strip().upper(),
                     "role": role,
                     # As mesmas duas colunas que `create_user` grava (achado
                     # #10). A senha do CSV esteve numa planilha que circulou
@@ -1884,7 +1884,8 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
             "departamento_id": (body.departamento_id or "").strip() or None,
             "email": email,
             "password_hash": hash_pw,
-            "full_name": body.full_name,
+            # Máscara de nome (30/09/2026): gravado em maiúsculas, como a tela mostra.
+            "full_name": (body.full_name or "").strip().upper(),
             "role": role,
             "ativo": True,
         }).execute()
@@ -1998,7 +1999,8 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
 
     campos: Dict[str, Any] = {
         "email": email,
-        "full_name": body.full_name.strip(),
+        # Máscara de nome (30/09/2026): gravado em maiúsculas, como a tela mostra.
+        "full_name": body.full_name.strip().upper(),
     }
     if role is not None:
         campos["role"] = role

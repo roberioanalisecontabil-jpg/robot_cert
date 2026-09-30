@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-09a" />
 </head>
 <body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -77,9 +77,11 @@
           <div class="ag-field ag-field--status">
             <label class="ag-label" for="user-status-filter">Status</label>
             <select id="user-status-filter" name="status" class="ag-select">
-              <option value="todos">Todos</option>
-              <option value="ativo">Ativo</option>
+              <!-- Ativos por padrão (30/09/2026): a lista do dia a dia é de quem
+                   trabalha; inativos ficam a um clique, ou por ?status=todos. -->
+              <option value="ativo" selected>Ativo</option>
               <option value="desativado">Inativo</option>
+              <option value="todos">Todos</option>
             </select>
           </div>
           <noscript><button type="submit" class="ag-btn ag-btn--outline">Filtrar</button></noscript>
@@ -177,7 +179,7 @@
         <div class="ag-alert ag-alert--danger" id="modal-editar-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
         <div class="ag-field">
           <label class="ag-label" for="ed-nome">Nome completo</label>
-          <input type="text" id="ed-nome" class="ag-input" required autocomplete="name">
+          <input type="text" id="ed-nome" class="ag-input cg-usu-maiusculas" required autocomplete="name" placeholder="NOME COMPLETO">
         </div>
         <div class="ag-field">
           <label class="ag-label" for="ed-email">E-mail</label>
@@ -394,7 +396,7 @@
                     ev.preventDefault();
                     document.getElementById('user-search').value = '';
                     document.getElementById('user-role-filter').value = 'todos';
-                    document.getElementById('user-status-filter').value = 'todos';
+                    document.getElementById('user-status-filter').value = 'ativo';
                     renderUsers();
                 });
                 return;
@@ -1346,7 +1348,7 @@
             const q = new URLSearchParams(location.search);
             if (q.get('q')) document.getElementById('user-search').value = q.get('q');
             if (['admin', 'gestor', 'user'].includes(q.get('nivel'))) document.getElementById('user-role-filter').value = q.get('nivel');
-            if (['ativo', 'desativado'].includes(q.get('status'))) document.getElementById('user-status-filter').value = q.get('status');
+            if (['ativo', 'desativado', 'todos'].includes(q.get('status'))) document.getElementById('user-status-filter').value = q.get('status');
         })();
 
         // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
