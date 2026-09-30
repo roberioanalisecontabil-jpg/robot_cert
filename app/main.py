@@ -5574,10 +5574,25 @@ def listar_operadores(
         ]
 
     quantos = Counter(str(c.get("user_id")) for c in cart)
+    # `acesso_restrito` (30/09/2026) numa consulta tolerante: a coluna pode não
+    # existir ainda, e a lista não pode cair por isso — sem ela, gestor vê tudo.
+    restricao: Dict[str, bool] = {}
+    try:
+        for u in sb.table("users").select("id, acesso_restrito").execute().data or []:
+            restricao[str(u.get("id"))] = bool(u.get("acesso_restrito"))
+    except Exception:  # noqa: BLE001
+        logger.warning("users.acesso_restrito indisponível na lista de operadores (migration 20260930100000?)")
     from app import texto as _texto
     operadores = []
     for u in visiveis:
         n = quantos.get(str(u.get("id")), 0)
+        papel_u = (u.get("role") or "").strip().lower()
+        restrito = restricao.get(str(u.get("id")), False)
+        # Só depende de carteira quem não tem alcance total: operador, e gestor
+        # LIMITADO pelo administrador. Um gestor sem limitação vê tudo, então
+        # "sem carteira" nele não é pendência — seria um alarme vermelho falso
+        # em cada gestor da lista.
+        depende_de_carteira = papel_u == "user" or (papel_u == "gestor" and restrito)
         operadores.append(
             {
                 "id": str(u.get("id")),
@@ -5591,7 +5606,9 @@ def listar_operadores(
                 "gestor_id": u.get("gestor_id"),
                 "departamento_id": u.get("departamento_id"),
                 "documentos": n,
-                "sem_carteira": n == 0,
+                "acesso_restrito": restrito,
+                "depende_de_carteira": depende_de_carteira,
+                "sem_carteira": n == 0 and depende_de_carteira,
                 "textos": {"clientes": _texto.plural(n, "cliente")},
             }
         )
@@ -5599,9 +5616,11 @@ def listar_operadores(
     # aponta para cá por isso), depois em ordem alfabética.
     operadores.sort(key=lambda o: (0 if o["sem_carteira"] else 1, (o["nome_exibicao"] or "").lower()))
 
-    # Resumo da lista, com a mesma regra da tela: só operadores (role user)
-    # ativos, mais inativos que ainda tenham carteira a limpar.
-    na_lista = [o for o in operadores if (o["role"] or "").lower() == "user" and (o["ativo"] or o["documentos"] > 0)]
+    # Resumo da lista, com a mesma regra da tela: quem depende de carteira
+    # (operadores e gestores limitados) ativos, mais inativos que ainda tenham
+    # carteira a limpar. Gestores sem limitação aparecem para o administrador
+    # mas não contam como "operador" no resumo.
+    na_lista = [o for o in operadores if o["depende_de_carteira"] and (o["ativo"] or o["documentos"] > 0)]
     sem = sum(1 for o in na_lista if o["sem_carteira"])
     total = len(na_lista)
     if sem:

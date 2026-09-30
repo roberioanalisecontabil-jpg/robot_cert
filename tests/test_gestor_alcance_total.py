@@ -173,3 +173,34 @@ def test_gestor_limitado_ve_fora_da_carteira_na_instalabilidade(client: TestClie
     corpo = _instalabilidade(client, "gestor")
     assert corpo["alcance_total"] is True
     assert corpo["itens"][FP_ALHEIO]["estado"] == "ok"
+
+
+# ── Carteiras: o administrador monta a carteira de gestores ─────────────────
+#
+# A tela escondia todo mundo que não fosse operador; com o gestor limitável,
+# o administrador precisa ver os gestores para montar a carteira que vale
+# quando ele os limita. "Sem carteira" só é pendência em quem depende dela.
+
+from tests.test_carteiras_ui import _h as _h_cart  # noqa: E402
+from tests.test_carteiras_ui import banco as banco_cart  # noqa: E402,F401
+
+
+def test_lista_de_operadores_traz_gestores_com_a_flag_e_sem_alarme_falso(client: TestClient, banco_cart) -> None:
+    r = client.get("/api/carteira/operadores", headers=_h_cart("admin"))
+    assert r.status_code == 200, r.text
+    por_id = {o["id"]: o for o in r.json()["operadores"]}
+    g = por_id["u-gest"]
+    assert g["role"] == "gestor" and g["acesso_restrito"] is False
+    assert g["depende_de_carteira"] is False and g["sem_carteira"] is False, "gestor sem limitação vê tudo: não é pendência"
+    assert por_id["u-op2"]["sem_carteira"] is True, "operador sem carteira continua pendência"
+
+    next(u for u in banco_cart.tabelas["users"] if u["id"] == "u-gest")["acesso_restrito"] = True
+    g = {o["id"]: o for o in client.get("/api/carteira/operadores", headers=_h_cart("admin")).json()["operadores"]}["u-gest"]
+    assert g["acesso_restrito"] is True and g["depende_de_carteira"] is True and g["sem_carteira"] is True
+
+
+def test_tela_de_carteiras_mostra_gestores_ao_administrador() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert 'if (o.role !== "user") return false;' not in html
+    assert 'if (o.role === "admin") return false;' in html
+    assert "souAdmin" in html and "Vê tudo" in html

@@ -64,7 +64,10 @@
     background: var(--bg-surface);
     transition: background var(--dur-fast) var(--ease-standard);
 }
-.cg-op-item:last-child { border-bottom: 0; }
+/* O ultimo fio some no ultimo <li> — e nao em `.cg-op-item:last-child`: cada
+   link e filho unico do seu <li>, entao TODOS eram :last-child e a lista
+   ficou sem fio nenhum desde 24/09 (achado na sonda de 30/09/2026). */
+.cg-op-lista > li:last-child .cg-op-item { border-bottom: 0; }
 .cg-op-item:hover { background: var(--bg-surface-alt); }
 .cg-op-item:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
 /* Selecionado: o mesmo tratamento do item ativo da sidebar — lavado

@@ -100,12 +100,16 @@ def test_lista_de_operadores_tem_o_mesmo_fio_das_colunas_da_carteira() -> None:
     assert "border-bottom: var(--bw-1) solid var(--border-default)" in item
     lado = css.split(".cg-transfer__lado {")[1].split("}")[0]
     assert "var(--border-default)" in lado, "é este o fio que a pessoa vê nas colunas"
+    # A regra que apagava o fio: cada link é filho único do <li>, logo todos
+    # eram :last-child. O último fio só pode sumir no último <li>.
+    assert ".cg-op-item:last-child {" not in css
+    assert ".cg-op-lista > li:last-child .cg-op-item { border-bottom: 0; }" in css
 
 
 def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     """Sem isto o navegador segue com o CSS/JS antigo e nada do acima aparece."""
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "aguia-carteiras.css?v=aguia-2026-09a" in html
+    assert "aguia-carteiras.css?v=aguia-2026-09b" in html
     assert "ui-common.js?v=aguia-2026-09h" in html
     assert "style.css?v=menu-lateral-2026-09" in html
     for nome in ("index.html", "usuarios.html", "vencidos.html"):

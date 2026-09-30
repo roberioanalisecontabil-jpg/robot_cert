@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-09a" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-09b" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
        declara display, e display explícito vence o display:none que o
@@ -223,10 +223,31 @@
 
     // ─── Operadores ────────────────────────────────────────────────────
 
+    // Quem está olhando: o administrador monta a carteira de qualquer pessoa,
+    // inclusive de gestores (30/09/2026: gestor vê tudo por padrão e o admin
+    // pode limitá-lo — a carteira dele só vale limitado, mas pode ser montada
+    // antes). Um gestor vê os operadores do seu setor e a si mesmo.
+    const souAdmin = localStorage.getItem("user_role") === "admin";
+    const meuEmail = (localStorage.getItem("user_email") || "").toLowerCase();
+
+    function badgeDe(o) {
+      if (o.role === "gestor") {
+        const limitado = !!o.acesso_restrito;
+        return `<span class="ag-badge ag-badge--neutral">Gestor</span>` +
+          (limitado
+            ? (o.sem_carteira ? ` <span class="ag-badge ag-badge--danger">Sem carteira</span>` : "")
+            : ` <span class="ag-badge ag-badge--success">Vê tudo</span>`);
+      }
+      return o.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "";
+    }
+
     function operadoresVisiveis() {
       return _operadores.filter((o) => {
-        // Admin e gestor têm alcance total e não dependem de carteira.
-        if (o.role !== "user") return false;
+        // Administrador não entra na lista: tem alcance total sempre.
+        if (o.role === "admin") return false;
+        // Gestor: para o administrador, todos; para um gestor, só ele mesmo
+        // (o servidor já recorta a lista ao setor que ele lidera).
+        if (o.role === "gestor" && !souAdmin && (o.email || "").toLowerCase() !== meuEmail) return false;
         // Conta inativa some, SALVO se ainda tiver carteira a limpar (a
         // limpeza automática pode falhar; esconder deixaria a carteira órfã).
         if (!o.ativo && !(o.documentos > 0)) return false;
@@ -252,8 +273,8 @@
                 <span class="ag-cell-sub">${emailQuebravel(o.email)}</span>
                 ${o.ativo ? "" : `<span class="cg-op-item__inativa">Conta inativa, com carteira a limpar</span>`}
               </span>
-              ${o.sem_carteira
-                ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>`
+              ${o.sem_carteira || o.role === "gestor"
+                ? badgeDe(o)
                 : `<span class="cg-op-item__contagem">${esc((o.textos && o.textos.clientes) || (o.documentos + " clientes"))}</span>`}
             </a>
           </li>`).join("");
@@ -327,7 +348,10 @@
       document.getElementById("opNome").textContent = nomeDe(_selecionado);
       document.getElementById("opEmail").textContent = _selecionado.email;
       document.getElementById("opAviso").innerHTML = (_selecionado.ativo ? "" : `<span class="ag-badge ag-badge--neutral">Conta inativa</span> `) +
-        (_selecionado.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "");
+        badgeDe(_selecionado) +
+        (_selecionado.role === "gestor" && !_selecionado.acesso_restrito
+          ? ` <span class="ag-ajuda">Esta carteira só passa a valer se o administrador limitar o alcance deste gestor em Usuários.</span>`
+          : "");
       document.getElementById("buscaDoc").value = "";
 
       renderOperadores();
