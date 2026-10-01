@@ -33,7 +33,7 @@ from app import alertas_config
 from app.alert_state import _is_alert_already_sent, _record_sent_alert
 from app.auth import conta_ativa
 from app.cert_installer import documentos_ao_alcance
-from app.settings_state import _banco, load_settings
+from app.settings_state import _banco, load_preferencia_alerta, load_settings
 from app.smtp_service import send_smtp_email
 
 logger = logging.getLogger(__name__)
@@ -139,6 +139,11 @@ def _destinatarios(settings, novos: List[Dict[str, Any]]) -> Dict[str, List[Dict
         email = str(conta.get("email") or "").strip().lower()
         papel = str(conta.get("role") or "").strip().lower()
         if not email or email in out or papel == "admin":
+            continue
+        # "Quero receber aviso" desligado vale para TODO e-mail pessoal (A2,
+        # 01/10/2026), inclusive este. Administradores e a lista fixa não
+        # passam por aqui.
+        if not load_preferencia_alerta(str(conta.get("id") or "")).get("notificar_email", True):
             continue
         try:
             alcance: Optional[Set[str]] = documentos_ao_alcance(str(conta.get("id") or ""), papel)

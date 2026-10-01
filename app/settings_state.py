@@ -750,10 +750,10 @@ def save_preferencia_alerta(
 ) -> None:
     """Grava só as duas colunas da preferência.
 
-    UPDATE e não upsert, de propósito: a linha pertence à SELEÇÃO, e criá-la
-    aqui produziria uma linha com `documentos` vazio que a tela de seleção
-    depois sobrescreveria. Quem ainda não selecionou nada também não tem o que
-    ser avisado — a preferência dele é gravada quando ele selecionar.
+    Até 30/09 era UPDATE puro: quem ainda não tinha linha de seleção via
+    "Preferência salva." e nada era gravado (revisão de 01/10/2026). Agora, se
+    a linha não existe, ela nasce com `documentos` vazio — a tela de seleção
+    grava a lista depois, por upsert na mesma chave, sem apagar a preferência.
 
     Levanta `GravacaoNaoPersistida` se o banco recusar: esta função só é
     chamada por uma tela, e tela que diz "salvo" sobre gravação que falhou é o
@@ -763,19 +763,17 @@ def save_preferencia_alerta(
     client = _banco()
     if not client or not uid:
         return
+    campos = {
+        "notificar_email": bool(notificar),
+        "alerta_marcos_ignorados": ignorados,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
     try:
-        (
-            client.table("colaborador_cert_selecoes")
-            .update(
-                {
-                    "notificar_email": bool(notificar),
-                    "alerta_marcos_ignorados": ignorados,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-            .eq("user_id", uid)
-            .execute()
-        )
+        existe = client.table("colaborador_cert_selecoes").select("user_id").eq("user_id", uid).limit(1).execute().data
+        if existe:
+            client.table("colaborador_cert_selecoes").update(campos).eq("user_id", uid).execute()
+        else:
+            client.table("colaborador_cert_selecoes").insert({"user_id": uid, "documentos": [], **campos}).execute()
     except Exception as e:  # noqa: BLE001
         logger.exception("Falha ao gravar preferência de alerta de %s", uid)
         raise GravacaoNaoPersistida(str(e)) from e

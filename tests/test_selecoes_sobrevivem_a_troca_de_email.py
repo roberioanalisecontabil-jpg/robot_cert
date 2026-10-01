@@ -86,6 +86,9 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         # Sem `user_email`: é o estado depois da fase 3c.
         SELECOES: [{"user_id": "u-ana", "documentos": list(DOCS),
                     "updated_at": "2026-08-01T10:00:00Z"}],
+        # A seleção fica dentro do Alcance (I4, 01/10/2026): Ana precisa ter
+        # os documentos atribuídos para o alerta sair.
+        "carteira": [{"user_id": "u-ana", "documento": d, "atribuido_por_email": "chefe@x.com"} for d in DOCS],
         "user_activity": [],
     })
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)

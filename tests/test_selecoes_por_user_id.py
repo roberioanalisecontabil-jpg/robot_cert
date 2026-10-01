@@ -76,7 +76,13 @@ USERS = [
 
 
 def _banco(monkeypatch: pytest.MonkeyPatch, selecoes: List[Dict[str, Any]]) -> _Fake:
-    fake = _Fake({"users": [dict(u) for u in USERS], SELECOES: selecoes})
+    fake = _Fake({
+        "users": [dict(u) for u in USERS],
+        SELECOES: selecoes,
+        # A seleção fica dentro do Alcance (I4, 01/10/2026): sem Atribuição,
+        # a seleção não avisa. Todo mundo aqui tem os DOCS atribuídos.
+        "carteira": [{"user_id": u["id"], "documento": d, "atribuido_por_email": "x"} for u in USERS for d in DOCS],
+    })
     monkeypatch.setattr(st, "_banco", lambda: fake)
     monkeypatch.setattr(als, "_banco", lambda: fake)
     return fake

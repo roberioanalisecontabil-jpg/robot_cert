@@ -43,8 +43,15 @@ DOC_A = "12345678000199"
 DOC_B = "98765432000188"
 
 
-def _item(nome: str, fp: str, doc: str = DOC_A, dias: int = 200) -> Dict[str, Any]:
-    """Item já sanitizado, como o `/api/ingest` entrega ao histórico."""
+def _item(nome: str, fp: str, doc: str = "", dias: int = 200) -> Dict[str, Any]:
+    """Item já sanitizado, como o `/api/ingest` entrega ao histórico.
+
+    Sem `doc`, cada fingerprint vira um Cliente diferente: desde A1
+    (01/10/2026) o sino avisa um certificado por Cliente, o vigente, e itens
+    do mesmo documento se agrupariam — o que estes testes não querem medir.
+    """
+    import zlib
+    doc = doc or str(zlib.crc32(fp.encode("utf-8"))).rjust(14, "7")[:14]
     venc = datetime.now(timezone.utc) + timedelta(days=dias)
     return {
         "nome": nome,

@@ -139,7 +139,7 @@
       <!-- Estado vazio: a única ação da tela nesse estado, em ouro. -->
       <div class="ag-vazio" id="painel-vazio" hidden>
         <h2 class="ag-vazio__titulo">Você ainda não acompanha nenhum certificado</h2>
-        <p class="ag-vazio__texto">Escolha os certificados das suas empresas para receber o aviso de vencimento por e-mail.</p>
+        <p class="ag-vazio__texto">Escolha os certificados dos seus clientes para receber o aviso de vencimento por e-mail.</p>
         <a class="ag-btn ag-btn--primary" href="?aba=escolher" id="btn-vazio-escolher">Escolher certificados</a>
       </div>
 
@@ -148,7 +148,7 @@
           <table class="ag-table cg-tabela cg-tabela-acomp" role="table">
             <thead role="rowgroup">
               <tr role="row">
-                <th role="columnheader" class="ag-th--estatico">Empresa</th>
+                <th role="columnheader" class="ag-th--estatico">Cliente</th>
                 <th role="columnheader" class="ag-th--estatico" aria-sort="ascending">Vencimento</th>
                 <th role="columnheader" class="ag-th--estatico">Status</th>
               </tr>
@@ -181,8 +181,8 @@
       </nav>
     </section>
 
-    <!-- Aba "Escolher certificados": ainda sem spec (item 56). Fica
-         funcional com os componentes do DS, sem redesenho. -->
+    <!-- Aba "Escolher certificados": as opções vêm recortadas pelo Alcance;
+         a seleção gravada também é recortada ao ler e ao salvar (I4). -->
     <section id="sec-selecao" role="tabpanel" aria-labelledby="tab-selecao" {% if aba != 'escolher' %}hidden{% endif %}>
       <div class="cg-toolbar cg-toolbar--compacta">
         <div class="cg-toolbar__filtros">
@@ -196,7 +196,7 @@
       <div class="ag-table-wrap cg-tabela-wrap">
         <div class="ag-table-scroll" role="region" aria-label="Escolher certificados">
           <table class="ag-table" role="table">
-            <thead role="rowgroup"><tr role="row"><th role="columnheader" class="ag-th--estatico">Acompanhar</th><th role="columnheader" class="ag-th--estatico">Empresa</th><th role="columnheader" class="ag-th--estatico">CNPJ/CPF</th><th role="columnheader" class="ag-th--estatico">Status</th><th role="columnheader" class="ag-th--estatico">Vencimento</th></tr></thead>
+            <thead role="rowgroup"><tr role="row"><th role="columnheader" class="ag-th--estatico">Acompanhar</th><th role="columnheader" class="ag-th--estatico">Cliente</th><th role="columnheader" class="ag-th--estatico">CNPJ/CPF</th><th role="columnheader" class="ag-th--estatico">Status</th><th role="columnheader" class="ag-th--estatico">Vencimento</th></tr></thead>
             <tbody role="rowgroup" id="tbody-selecao"></tbody>
           </table>
         </div>
@@ -247,6 +247,8 @@
     let painelTextos = {};
     let painelMostrarBusca = false;
     let filteredPainelItens = [];
+    let _opcoesErro = "";      // erro ao carregar as opções (estado diferente de vazio)
+    let _alcanceVazio = false; // operador sem Atribuição: não é inventário vazio
     let painelPagina = 1;
     let selecaoPagina = 1;
 
@@ -358,8 +360,8 @@
       const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
 
       // Marcados no TOPO, e por ordem alfabética dentro de cada grupo: com
-      // 500 certificados em 21 páginas, é o único jeito de ver de uma vez o
-      // que já se acompanha. Só reordena em busca, troca de página ou
+      // centenas de clientes em várias páginas, é o único jeito de ver de uma
+      // vez o que já se acompanha. Só reordena em busca, troca de página ou
       // recarga — nunca no clique.
       rows.sort((a, b) => {
         const ma = selecionados.has(String(a.documento_digitos)) ? 0 : 1;
@@ -387,6 +389,14 @@
             selecaoPagina = 1;
             renderSelecao();
           },
+        } : _opcoesErro ? {
+          title: "Não foi possível carregar os clientes",
+          description: _opcoesErro,
+          actionText: "Tentar de novo",
+          onAction: () => carregarSelecao(),
+        } : _alcanceVazio ? {
+          title: "Nenhum cliente atribuído a você",
+          description: "Peça ao gestor do seu departamento para atribuir clientes à sua carteira; depois escolha aqui quais acompanhar.",
         } : {
           title: "Nenhum certificado disponível",
           description: "Não há certificados mapeados para escolher no momento.",
@@ -477,15 +487,15 @@
     }
 
     // A frase da linha reflete o que está marcado AGORA: "60, 30, 15 e 7
-    // dias antes e no dia do vencimento".
+    // dias antes e quando vencer".
     function fraseDosMarcos() {
       const marcados = Array.from(document.querySelectorAll("#pref-marcos input[data-marco]"))
         .filter((c) => c.checked).map((c) => parseInt(c.getAttribute("data-marco"), 10))
         .sort((a, b) => b - a);
-      if (!marcados.length) return "só no dia do vencimento";
+      if (!marcados.length) return "só quando vencer";
       const l = marcados.map(String);
       const antes = l.length > 1 ? l.slice(0, -1).join(", ") + " e " + l[l.length - 1] : l[0];
-      return antes + (l.length === 1 && marcados[0] === 1 ? " dia antes" : " dias antes") + " e no dia do vencimento";
+      return antes + (l.length === 1 && marcados[0] === 1 ? " dia antes" : " dias antes") + " e quando vencer";
     }
 
     function atualizarEstadoPref() {
@@ -498,7 +508,8 @@
       document.getElementById("pref-estado").innerHTML = liga
         ? '<span class="ag-badge ag-badge--success">Ligado</span>'
         : '<span class="ag-badge ag-badge--neutral">Desligado</span>';
-      document.getElementById("btn-pref-salvar").disabled = !sujoPref();
+      const bp = document.getElementById("btn-pref-salvar");
+      bp.disabled = !sujoPref() || bp.dataset.soVer === "1";
     }
 
     function ignoradosDaTela() {
@@ -612,7 +623,9 @@
       document.getElementById("painel-hint").textContent = q
         ? total + (total === 1 ? " certificado" : " certificados") + " para “" + q + "”"
         : (painelTextos.total || (total + " certificados acompanhados"));
-      atualizarIndicadores(filteredPainelItens);
+      // KPIs sobre o total acompanhado (A3): a busca filtra a tabela, não o
+      // indicador — KPI que muda ao digitar deixa de ser indicador.
+      atualizarIndicadores(painelItens);
 
       const tbody = document.getElementById("tbody-painel");
       if (!pageRows.length) {
@@ -650,12 +663,15 @@
         const det = !ro.ok ? await mensagemCorpoErro(ro) : await mensagemCorpoErro(rs);
         showToast("Erro ao carregar as opções: " + det, "error");
         opcoes = [];
+        _opcoesErro = det;
         renderSelecao();
         return;
       }
       const jo = await ro.json();
       const js = await rs.json();
       opcoes = jo.itens || [];
+      _opcoesErro = "";
+      _alcanceVazio = !!jo.alcance_vazio;
       selecionados = new Set((js.documentos || []).map(String));
       atualizarBarraColab();
       renderSelecao();
@@ -721,10 +737,29 @@
       atualizarBarraColab();
     });
 
+    // Com "Só ver" em Acompanhamento a pessoa acompanha, mas não escolhe; os
+    // dois PUT dão 403. Até 30/09 os botões ficavam ativos e o erro só chegava
+    // ao clicar.
+    async function aplicarNivel() {
+      try {
+        const r = await fetch("/api/permissoes/minhas", { headers: getHeaders() });
+        if (!r.ok) return;
+        const minhas = await r.json();
+        const nivel = (minhas.modulos || minhas.matriz || minhas)["acompanhamento"];
+        if (nivel !== "ler") return;
+        const motivo = "Seu perfil só consulta o acompanhamento; peça ao administrador para liberar a edição.";
+        ["btn-salvar-selecao", "btn-pref-salvar"].forEach((id) => {
+          const b = document.getElementById(id);
+          if (b) { b.disabled = true; b.title = motivo; b.dataset.soVer = "1"; }
+        });
+      } catch (_e) { /* sem a matriz a tela segue; o servidor recusa de qualquer forma */ }
+    }
+
     (async function init() {
       // Sidebar por papel: ui-common.js (initSidebarPorPapel).
       initPerPageColabPainel();
       initPerPageColabSelecao();
+      void aplicarNivel();
       await carregarSelecao();
       await carregarPainel(true);
       // Depois da tabela, sem `await` no caminho crítico: a preferência é

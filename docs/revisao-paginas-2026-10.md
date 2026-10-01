@@ -203,3 +203,44 @@ Usuários. O agente continua lendo a lista de custódia pela chave de API.
 ### Testes
 
 `tests/test_pagina_instalador.py`.
+
+---
+
+## 5. Acompanhamento (01/10/2026)
+
+**Para que existe**: a pessoa escolhe, dentro do seu Alcance, quais Clientes
+quer acompanhar e como quer ser avisada por e-mail. O sino e o e-mail de
+vencimento seguem essa seleção.
+
+**Quem vê**: pela matriz (`acompanhamento`: Gestor e Operador com "editar" por
+padrão; "Só ver" acompanha sem escolher). O sino não depende do módulo (I5).
+
+### Decisões
+
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| I4 (fechado) | Seleção gravada sem recorte; sobrevivia a Exceção, Atribuição retirada e troca de Papel. | **Recortada pelo Alcance ao gravar e ao ler**: painel, sino e job de e-mail. A linha não é apagada: se o Alcance voltar, a escolha volta (preferência, não acesso). | É o que I4 prometia; o ADR vale para acesso, a seleção é preferência. |
+| A1 | Painel por Cliente (certificado vigente); sino e e-mail por arquivo. Cliente renovado "venceu" no sino. | **Um aviso por Cliente, pelo certificado vigente** (`app/vigencia.py`), no sino e no e-mail, para todo papel. | Aviso de certificado já substituído ensina a ignorar o sino. |
+| A2 | E-mail de clientes novos ignorava "Quero receber aviso". | **A preferência vale para todo e-mail pessoal.** Administradores e lista fixa continuam. | Caixa que não desliga o que diz desligar. |
+| A3 | KPIs mudavam com a busca. | **KPIs fixos**; a busca filtra só a tabela. | KPI que muda ao digitar vira contagem do filtro. |
+| A4 | Administrador vê só a própria seleção no painel; sino dele vê tudo; sem visão por pessoa. | **Mantido** (sem resposta; recomendação). | Decisão de 20/08 continua boa; não há pergunta de negócio por trás da visão alheia. |
+
+### Defeitos corrigidos
+
+- Preferência de quem não tinha linha de seleção dizia "salva" e não gravava (UPDATE sem linha). Agora a linha nasce com seleção vazia.
+- Aba Escolher: alcance vazio e erro tinham a mesma mensagem. Agora "Nenhum cliente atribuído a você" e erro com "Tentar de novo" (`alcance_vazio` na resposta das opções).
+- "Só ver" mostrava os botões Salvar ativos e falhava com 403 ao clicar; agora desabilitados com o motivo.
+- "Empresa" nos cabeçalhos e "das suas empresas" → Cliente.
+- Texto "no dia do vencimento" (o aviso sai quando vence) → "quando vencer".
+- 403 da matriz sem acento, em todo o portal.
+- "Ver instalações" do Dashboard apontava para Acompanhamento; agora para a trilha do Instalador.
+- Comentários: PUT "em ler" (exige editar), docstring de "lidas" citando o módulo, "item 56", "500 certificados em 21 páginas".
+
+### Fica como está
+
+- Sem teto de quantidade na seleção; sem conferência de que o documento existe no inventário (a tela só oferece os do Alcance, e o painel marca "Não encontrado no inventário atual").
+- Vencidos sempre avisam, independente dos marcos dispensados; só o opt-in desliga.
+
+### Testes
+
+`tests/test_pagina_acompanhamento.py`.

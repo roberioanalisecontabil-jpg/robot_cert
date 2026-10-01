@@ -32,7 +32,9 @@ def _cert(nome: str, dias: int, fp: str) -> dict:
         "display_name": nome,
         "not_after": venc.isoformat(),
         "fingerprint_sha256": fp,
-        "documento_numero": "12345678000199",
+        # Um Cliente por fingerprint: desde A1 (01/10/2026) o sino avisa um
+        # certificado por Cliente, o vigente.
+        "documento_numero": str(__import__("zlib").crc32(fp.encode("utf-8"))).rjust(14, "7")[:14],
         "documento_formatado": "12.345.678/0001-99",
     }
 

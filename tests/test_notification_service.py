@@ -15,8 +15,14 @@ import pytest
 import app.notification_service as ns
 
 
-def _cert(nome: str, dias: int, fingerprint: str, doc: str = "12345678000199") -> dict:
-    """Certificado sintético que vence em `dias` (negativo = já vencido)."""
+def _cert(nome: str, dias: int, fingerprint: str, doc: str = "") -> dict:
+    """Certificado sintético que vence em `dias` (negativo = já vencido).
+
+    Sem `doc`, cada fingerprint é um Cliente diferente: desde A1 (01/10/2026)
+    o sino avisa um certificado por Cliente, o vigente.
+    """
+    import zlib
+    doc = doc or str(zlib.crc32(fingerprint.encode("utf-8"))).rjust(14, "7")[:14]
     venc = datetime.now(timezone.utc) + timedelta(days=dias)
     return {
         "nome": nome,
@@ -127,7 +133,17 @@ def test_usuario_comum_ve_apenas_o_que_selecionou(certificados) -> None:
         # O duplo recebe (email, user_id): desde a fase 2 do rechaveamento de
         # colaborador_cert_selecoes a seleção é procurada pela identidade, e o
         # e-mail é só a queda enquanto `user_email` existir.
-        with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: ["12345678000199"]):
-            assert len(ns.get_active_alerts("user@exemplo.com", "user")) == 5
-        with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: []):
-            assert ns.get_active_alerts("user@exemplo.com", "user") == []
+        docs = sorted({c["documento_numero"] for c in certificados})
+        # A seleção fica dentro do Alcance (I4): aqui o alcance é tudo.
+        with patch.object(ns, "documentos_ao_alcance", lambda uid, papel: None):
+            with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: docs):
+                assert len(ns.get_active_alerts("user@exemplo.com", "user")) == 5
+            with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: []):
+                assert ns.get_active_alerts("user@exemplo.com", "user") == []
+            # Só um cliente selecionado: só ele avisa.
+            with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: [docs[0]]):
+                assert len(ns.get_active_alerts("user@exemplo.com", "user")) <= 1
+        # Fora do alcance, nem a seleção vale.
+        with patch.object(ns, "documentos_ao_alcance", lambda uid, papel: set()):
+            with patch.object(ns, "load_colaborador_selecao", lambda e, uid=None: docs):
+                assert ns.get_active_alerts("user@exemplo.com", "user") == []

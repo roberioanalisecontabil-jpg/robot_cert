@@ -396,6 +396,7 @@ def _get_selecoes_com_preferencia() -> Dict[str, "PreferenciaDeAlerta"]:
         return {}
 
     contas = _por_id(ativas)
+    papel_de = {str(u.get("id")): str(u.get("role") or "").strip().lower() for u in ativas if u.get("id")}
     permitidas: Dict[str, List[str]] = {}
     descartadas: List[str] = []
     sem_identidade = 0
@@ -420,8 +421,22 @@ def _get_selecoes_com_preferencia() -> Dict[str, "PreferenciaDeAlerta"]:
         if not destino:
             descartadas.append(uid)
             continue
+        documentos = [str(x).strip() for x in docs if str(x).strip()]
+        # A seleção fica dentro do Alcance (I4): quem perdeu um cliente deixa
+        # de ser avisado dele. Alcance ilegível = sem aviso nesta rodada, e
+        # não "aviso de tudo".
+        # Alcance ilegível: segue com a seleção gravada, que já foi recortada
+        # ao salvar — este recorte é a segunda cerca, não a única.
+        try:
+            from app.cert_installer import documentos_ao_alcance
+            alcance = documentos_ao_alcance(uid, papel_de.get(uid, ""))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Alcance de %s ilegível; alerta sai pela seleção gravada: %s", destino, e)
+            alcance = None
+        if alcance is not None:
+            documentos = [d for d in documentos if "".join(c for c in d if c.isdigit()) in alcance]
         permitidas[destino] = PreferenciaDeAlerta(
-            documentos=[str(x).strip() for x in docs if str(x).strip()],
+            documentos=documentos,
             # `.get` com default: a coluna pode não existir ainda (migration
             # pendente), e ausência tem de significar o comportamento antigo.
             notificar=bool(row.get("notificar_email", True)),
@@ -680,7 +695,10 @@ def trigger_all_alerts() -> Dict[str, Any]:
     from app.main import _list_certificados_payload
     snap = get_latest_snapshot()
     payload = _list_certificados_payload(settings, snap, "auto")
-    itens = payload.get("itens") or []
+    # Um aviso por Cliente, pelo certificado vigente (A1, 01/10/2026): o
+    # arquivo antigo de um cliente renovado não gera e-mail de vencimento.
+    from app import vigencia
+    itens = vigencia.vigentes_por_documento(payload.get("itens") or [])
     
     # 3. Carrega seleções de colaboradores
     selecoes = _get_selecoes_com_preferencia()

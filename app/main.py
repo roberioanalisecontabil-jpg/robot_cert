@@ -511,11 +511,11 @@ def require_modulo(
             # Mesmo criterio de `require_admin_ou_gestor` e `_exigir_alcance`.
             raise HTTPException(
                 status_code=503,
-                detail="Nao foi possivel verificar suas permissoes. Tente de novo.",
+                detail="Não foi possível verificar suas permissões. Tente de novo.",
             )
         raise HTTPException(
             status_code=403,
-            detail=f"Seu perfil nao tem acesso a {modulo}.",
+            detail=f"Seu perfil não tem acesso a {modulo}.",
         )
 
     return _guarda
@@ -3370,11 +3370,9 @@ def cron_alerts(request: Request) -> dict:
     return {"ok": True, "stats": stats, "expurgo": expurgo}
 
 
-# Modulo `acompanhamento` na matriz desde 20/08. TODAS as cinco rotas ficam em
-# `ler`, inclusive o PUT — e a excecao merece explicacao: aquele PUT salva a
-# selecao do PROPRIO chamador (`token.email`), nao dado de outra pessoa. Exigir
-# `editar` ali tiraria de um operador o direito de escolher os proprios
-# certificados, que e a funcao inteira da tela.
+# Modulo `acompanhamento` na matriz desde 20/08: os GET pedem `ler`, os dois
+# PUT (selecao e preferencia) pedem `editar`. "So ver" acompanha o que ja
+# escolheu; "Ver e editar" escolhe. O padrao de gestor e operador e `editar`.
 #
 # O sino esta em TODA pagina, entao nao depende de modulo nenhum (decisao I5,
 # 01/10/2026): ate 30/09 era `require_modulo("acompanhamento")`, e um papel com
@@ -4342,11 +4340,26 @@ class ColaboradorSelecaoBody(BaseModel):
     documentos: List[str] = Field(default_factory=list)
 
 
+def _selecao_no_alcance(token: auth.TokenData, docs: List[str]) -> List[str]:
+    """A seleção de Acompanhamento fica dentro do Alcance (decisão I4).
+
+    Recortada ao gravar E ao ler: um Documento que saiu do Alcance (Exceção,
+    Atribuição retirada, troca de Papel) deixa de aparecer no painel, no sino
+    e no e-mail. A linha gravada não é apagada — se o Alcance voltar, a
+    escolha volta junto; é preferência, não acesso.
+    """
+    alcance = _documentos_ao_alcance(token)
+    if alcance is None:
+        return list(docs)
+    return [d for d in docs if d in alcance]
+
+
 @app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_opcoes_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
     # O universo de clientes ia para todo mundo com `acompanhamento: ler`
     # (padrão de user e gestor) — o mesmo furo do #5 por outro caminho.
-    itens = _recortar_pela_carteira(_lista_base_docs_historico(), _documentos_ao_alcance(token))
+    alcance = _documentos_ao_alcance(token)
+    itens = _recortar_pela_carteira(_lista_base_docs_historico(), alcance)
     now = datetime.now(timezone.utc)
     out = []
     for it in itens:
@@ -4370,13 +4383,15 @@ def colaborador_opcoes_certificados(token: auth.TokenData = Depends(require_auth
             **it,
             "status": status
         })
-    return {"itens": out, "total": len(out)}
+    # Operador sem Atribuição: a lista vem vazia porque ninguém lhe deu
+    # cliente, não porque o inventário está vazio. A tela diz coisas diferentes.
+    return {"itens": out, "total": len(out), "alcance_vazio": isinstance(alcance, set) and not alcance}
 
 
 @app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_get_selecionados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
-    docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
+    docs = _selecao_no_alcance(token, load_colaborador_selecao(email, _user_id_da_sessao(token)))
     return {"documentos": docs, "total": len(docs)}
 
 
@@ -4385,15 +4400,16 @@ def colaborador_put_selecionados(
     body: ColaboradorSelecaoBody, token: auth.TokenData = Depends(require_auth)
 ) -> dict:
     email = (token.email or "").strip().lower()
-    docs = sorted({_doc_norm(x) for x in body.documentos if _doc_norm(x)})
+    pedidos = sorted({_doc_norm(x) for x in body.documentos if _doc_norm(x)})
+    docs = _selecao_no_alcance(token, pedidos)
     save_colaborador_selecao(email, docs, _user_id_da_sessao(token))
-    return {"ok": True, "documentos": docs, "total": len(docs)}
+    return {"ok": True, "documentos": docs, "total": len(docs), "fora_do_alcance": len(pedidos) - len(docs)}
 
 
 @app.get("/api/colaborador/certificados/painel", dependencies=[Depends(require_modulo("acompanhamento"))])
 def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth)) -> dict:
     email = (token.email or "").strip().lower()
-    docs = load_colaborador_selecao(email, _user_id_da_sessao(token))
+    docs = _selecao_no_alcance(token, load_colaborador_selecao(email, _user_id_da_sessao(token)))
     itens = _painel_docs_selecionados(docs)
     from app import texto as _texto
     for it in itens:
@@ -4431,10 +4447,8 @@ def marcar_notificacoes_como_lidas(token: auth.TokenData = Depends(require_auth)
     um aviso que apareceu entre o carregamento do dropdown e o clique seria
     marcado como lido sem nunca ter sido visto — e some sem deixar rastro.
 
-    `require_modulo("acompanhamento")` no nível de leitura: marcar como lido é
-    uma preferência de exibição de quem está lendo, não uma edição de dado do
-    portal. Exigir `editar` tiraria o botão de quem só consulta, que é
-    justamente quem mais acumula aviso.
+    `require_auth`, sem módulo (decisão I5): marcar como lido é preferência de
+    exibição de quem está lendo, e o sino está em toda página.
     """
     uid = _user_id_da_sessao(token)
     # `get_active_alerts` e não o payload: o payload corta em 50 itens para o
@@ -4515,9 +4529,9 @@ def obter_preferencia_alerta(token: auth.TokenData = Depends(require_auth)) -> d
     if efetivos:
         lista = [str(m) for m in efetivos]
         antes = (", ".join(lista[:-1]) + " e " + lista[-1]) if len(lista) > 1 else lista[0]
-        frase = antes + (" dia antes" if len(lista) == 1 and efetivos[0] == 1 else " dias antes") + " e no dia do vencimento"
+        frase = antes + (" dia antes" if len(lista) == 1 and efetivos[0] == 1 else " dias antes") + " e quando vencer"
     else:
-        frase = "só no dia do vencimento"
+        frase = "só quando vencer"
     return {
         "notificar_email": pref["notificar_email"],
         "marcos_ignorados": pref["alerta_marcos_ignorados"],

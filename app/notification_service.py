@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
-from app import alertas_config
+from app import alertas_config, vigencia
 from app.cert_installer import documentos_ao_alcance
 from app.settings_state import (
     carregar_notificacoes_lidas,
@@ -109,6 +109,15 @@ def get_active_alerts(
     if not is_admin:
         selected_docs = load_colaborador_selecao(user_email_clean, user_id)
         selected_docs = ["".join(c for c in d if c.isdigit()) for d in selected_docs]
+        # A seleção fica dentro do Alcance (I4): o que saiu do alcance não
+        # avisa, mesmo que a linha gravada ainda o liste.
+        try:
+            alcance = documentos_ao_alcance(user_id or "", user_role)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Alcance ilegível para o sino de %s: %s", user_email_clean, e)
+            alcance = set()
+        if alcance is not None:
+            selected_docs = [d for d in selected_docs if d in alcance]
 
     alerts: List[Dict[str, Any]] = []
 
@@ -166,7 +175,9 @@ def get_active_alerts(
                 }
             )
 
-    for it in itens:
+    # Um aviso por Cliente, pelo certificado vigente (A1): o arquivo antigo de
+    # um cliente renovado não vence "de novo" no sino.
+    for it in vigencia.vigentes_por_documento(itens, now):
         venc_iso = it.get("not_after")
         if not venc_iso:
             continue
