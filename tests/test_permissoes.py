@@ -312,15 +312,11 @@ def _token(papel: str) -> dict:
         {"sub": f"{papel}@exemplo.com", "role": papel})}
 
 
-def test_dashboard_respeita_a_matriz(client) -> None:
-    """
-    `/api/dashboard` saiu de `require_admin` para `require_modulo("dashboard")`.
-
-    O comportamento tinha que continuar IDENTICO — a matriz da `nenhum` a gestor
-    e user para este modulo. Nenhum teste existente notou a troca, o que e o
-    resultado desejado e tambem o motivo de este teste existir: sem ele, a
-    camada nova estaria em producao sem uma linha que prove que ela barra.
-    """
+def test_dashboard_e_so_do_administrador(client) -> None:
+    """Dashboard voltou a `require_admin` em 01/10/2026 (revisão, D2): os
+    cards são do portal inteiro (usuários, cofre, agente, atividade) e
+    recortá-los pelo Alcance não faria sentido para a maioria."""
+    assert "dashboard" in permissoes.MODULOS_SO_ADMIN
     for rota in ("/api/dashboard", "/api/dashboard/renovacoes"):
         for papel in ("user", "gestor"):
             r = client.get(rota, headers=_token(papel))
@@ -346,7 +342,9 @@ def test_matriz_indisponivel_vira_503_e_nao_403(
 
     monkeypatch.setattr(permissoes, "pode", _explode)
 
-    r = client.get("/api/dashboard", headers=_token("gestor"))
+    # Histórico, e não Dashboard: desde 01/10/2026 o Dashboard é só do
+    # administrador e nem consulta a matriz.
+    r = client.get("/api/certificados/historico", headers=_token("gestor"))
     assert r.status_code == 503, f"esperava 503, veio {r.status_code}"
 
 
@@ -615,7 +613,8 @@ def test_gravar_recusa_editar_em_modulo_sem_escrita() -> None:
     ignora — a matriz passaria a afirmar um poder que ninguém tem, e a próxima
     pessoa a ler a tabela acreditaria nela.
     """
-    completa = {p: {m: permissoes.NIVEL_LER for m in permissoes.MODULOS}
+    completa = {p: {m: (permissoes.NIVEL_NENHUM if m in permissoes.MODULOS_SO_ADMIN else permissoes.NIVEL_LER)
+                    for m in permissoes.MODULOS}
                 for p in permissoes.PAPEIS_CONFIGURAVEIS}
     completa["gestor"]["vencidos"] = permissoes.NIVEL_EDITAR
     with pytest.raises(ValueError, match="não tem escrita"):

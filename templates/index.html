@@ -1342,6 +1342,13 @@
         // chega preenchida e a primeira carga já vem filtrada. A URL é lida
         // uma vez e limpa, para "Atualizar tabela" e o F5 não a ressuscitarem
         // depois de a pessoa ter apagado o campo.
+        // `?status=` vem do Dashboard ("Ver os que vencem em 30 dias"); só os
+        // valores do filtro são aceitos.
+        const statusDaUrl = (new URLSearchParams(location.search).get("status") || "").trim();
+        if (["validos", "prestes_vencer"].includes(statusDaUrl)) {
+          const sel = document.getElementById("filtro-status");
+          if (sel) sel.value = statusDaUrl;
+        }
         const buscaDaUrl = (new URLSearchParams(location.search).get("busca") || "").trim();
         if (buscaDaUrl) {
           const campoBusca = document.getElementById("busca-cert");

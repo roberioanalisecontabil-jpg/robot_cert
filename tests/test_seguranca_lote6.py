@@ -224,7 +224,10 @@ def test_or_com_valor_entre_aspas_vira_um_parametro_so() -> None:
 def test_busca_com_virgula_nao_injeta_clausula() -> None:
     filtro = m._filtro_or_da_busca("x,machine_id.eq.outra")
     partes = _dividir_or(filtro)
-    assert len(partes) == 3, partes
+    # Quatro cláusulas desde 01/10/2026: `documento_numero` entrou para a
+    # busca só com dígitos casar. O que o teste prova é que a vírgula não
+    # vira cláusula nova — o número de partes é o das colunas, e só delas.
+    assert len(partes) == 4, partes
     (texto, params), = _sql(_q().select("*").or_(filtro))
     assert "machine_id" not in texto
     assert all(p == "%x,machine\\_id.eq.outra%" for p in params)

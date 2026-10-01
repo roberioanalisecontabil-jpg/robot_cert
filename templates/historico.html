@@ -34,7 +34,7 @@
             <input class="ag-input"
               type="search"
               id="busca-historico"
-              placeholder="Nome, arquivo, CNPJ ou CPF"
+              placeholder="Nome, CNPJ ou CPF"
               title="Busca por nome do certificado, nome do arquivo ou CNPJ/CPF"
               autocomplete="off"
             />
@@ -52,7 +52,7 @@
               <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
             </summary>
             <div class="menu-suspenso__lista" role="menu">
-              <button type="button" role="menuitem" id="btn-export-excel">Planilha (Excel)</button>
+              <button type="button" role="menuitem" id="btn-export-excel">Planilha (CSV)</button>
               <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
             </div>
           </details>
@@ -83,6 +83,7 @@
                   <th role="columnheader" class="ag-th--estatico cg-col-doc">CNPJ / CPF</th>
                   <th role="columnheader" class="ag-th--estatico">Última verificação</th>
                   <th role="columnheader" class="ag-th--estatico">Vencimento</th>
+                  <th role="columnheader" class="ag-th--estatico">Status</th>
                 </tr>
               </thead>
               <tbody role="rowgroup" id="tbody-historico"></tbody>
@@ -175,6 +176,24 @@
       return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
     }
 
+    // Status da última verificação (D3, 01/10/2026): o servidor já mandava
+    // `status_ultimo` e a tela ignorava. Mesmos rótulos do Início.
+    let _alcanceVazio = false;
+    function rotuloStatusHistorico(it) {
+      const s = String(it.status_ultimo || "").toLowerCase();
+      const venceu = it.vencimento_certificado && new Date(it.vencimento_certificado) < new Date();
+      if (s === "expirado" || s === "vencido" || venceu) return "Vencido";
+      if (s === "erro") return "Erro";
+      if (s === "fora_do_padrao") return "Falha (sem padrão)";
+      if (s === "ok" || s === "valido") return "Ativo";
+      return s ? s : "—";
+    }
+    function badgeStatusHistorico(it) {
+      const r = rotuloStatusHistorico(it);
+      const cls = r === "Vencido" ? "ag-badge--danger" : (r === "Ativo" ? "ag-badge--success" : (r === "—" ? "ag-badge--neutral" : "ag-badge--warning"));
+      return `<span class="ag-badge ${cls}">${esc(r)}</span>`;
+    }
+
     function celulaData(iso, classe, prefixo) {
       const texto = fmtSoData(iso);
       const abre = "<td role='cell' class='cg-col-data " + classe + "' data-prefixo='" + esc(prefixo) + "'>";
@@ -246,7 +265,7 @@
       if (!rows.length) {
         const busca = (document.getElementById("busca-historico")?.value || "").trim();
         if (busca) {
-          renderEmptyRow(tb, 4, {
+          renderEmptyRow(tb, 5, {
             icon: "",
             title: "Nada encontrado para “" + busca + "”",
             description: "Tente outro nome, CNPJ ou CPF, ou volte à lista inteira.",
@@ -258,11 +277,16 @@
             },
           });
         } else {
-          renderEmptyRow(tb, 4, {
+          renderEmptyRow(tb, 5, _alcanceVazio ? {
+            icon: "",
+            title: "Sua carteira está vazia",
+            description:
+              "Nenhum cliente foi atribuído a você ainda, por isso não há histórico para ver. Peça ao gestor do seu departamento.",
+          } : {
             icon: "",
             title: "Ainda não há histórico",
             description:
-              "O histórico é montado a partir dos snapshots enviados pelo agente. Assim que houver leituras, elas aparecem aqui.",
+              "O histórico é montado a partir das varreduras enviadas pelo agente. Assim que houver leituras, elas aparecem aqui.",
           });
         }
         itensVisiveis = [];
@@ -286,6 +310,7 @@
             "<td role='cell' class='cg-col-doc td-doc'>" + celulaDocumento(it.documento) + "</td>" +
             celulaData(it.ultima_data_registrada, "cg-col-emissao", "Verificado") +
             celulaData(it.vencimento_certificado, "cg-col-vencimento", "Vence") +
+            "<td role='cell' class='cg-col-status'>" + badgeStatusHistorico(it) + "</td>" +
             "</tr>"
           );
         })
@@ -366,6 +391,7 @@
             <td>${esc(it.documento || "")}</td>
             <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
             <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+            <td>${esc(rotuloStatusHistorico(it))}</td>
           </tr>
         `)
         .join("");
@@ -396,7 +422,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nome</th><th>CNPJ/CPF</th><th>Última data verificada</th><th>Vencimento do certificado</th>
+                  <th>Nome</th><th>CNPJ/CPF</th><th>Última data verificada</th><th>Vencimento do certificado</th><th>Status</th>
                 </tr>
               </thead>
               <tbody>${linhas}</tbody>
@@ -452,6 +478,7 @@
         }
         setBannerAviso("table-container-hist", mensagemLimiteExportacao(j.paginacao));
         st.textContent = j.atualizado_em ? "Atualizado em " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
+        _alcanceVazio = !!j.alcance_vazio;
         const rows = j.itens || [];
         renderLinhasHistorico(rows);
         document.getElementById("count-hint").textContent =

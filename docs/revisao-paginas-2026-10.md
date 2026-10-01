@@ -244,3 +244,45 @@ padrão; "Só ver" acompanha sem escolher). O sino não depende do módulo (I5).
 ### Testes
 
 `tests/test_pagina_acompanhamento.py`.
+
+---
+
+## 6. Dashboard, Histórico, Vencidos e Duplicidades (01/10/2026)
+
+**Para que existem**: consulta. Dashboard é a saúde do portal (acervo, agente,
+acesso, instalações, cofre, alertas, atividade); Histórico é o registro por
+arquivo com a última verificação; Vencidos lista os Clientes com certificado
+vigente vencido; Duplicidades aponta arquivos repetidos na pasta.
+
+**Quem vê**: Dashboard só o Administrador (D2). Histórico, Vencidos e
+Duplicidades pela matriz ("ler" para Gestor e Operador por padrão), todos
+recortados pelo Alcance — Duplicidades passou a ser.
+
+### Decisões
+
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| D1 | Três números para "vencido": Dashboard (todo arquivo do histórico, sem recorte), Vencidos (por arquivo, status ou data, recortado) e Início/sino (cliente vigente). | **Vencido é o Cliente cujo certificado vigente venceu, no inventário atual.** Vencidos e o card do Dashboard contam assim; cliente renovado sai; arquivo que saiu da pasta sai. | A pergunta operacional é "quem está vencido agora". Arquivo antigo de cliente renovado é assunto de Duplicidades. |
+| D2 | Dashboard na matriz: "ler" a Gestor mostraria agregados do portal inteiro, sem recorte. | **Só Administrador** (`MODULOS_SO_ADMIN`). | Os cards são do portal; recortá-los não faz sentido para a maioria. |
+| D3 | Histórico por arquivo, cliente renovado em várias linhas. | **Mantido por arquivo**, com a coluna Status que o servidor já mandava. | "Última verificação" é atributo do arquivo. |
+
+### Defeitos corrigidos
+
+- **Duplicidades não recortava pelo Alcance**: operador com carteira vazia via nome, CNPJ, serial e fingerprint de todo o inventário. Agora recorta; o cache vale só para quem tem alcance total.
+- Histórico e Vencidos: carteira vazia tinha a mesma mensagem de "sem histórico"/"nenhum vencido" (`alcance_vazio`); "Atualizado em" ficava vazio (`atualizado_em` passa a vir, do snapshot); busca por CNPJ só com dígitos não achava (entra `documento_numero`).
+- 403 da matriz com a chave crua ("a historico"); agora com rótulo e artigo ("ao Histórico"), em `permissoes.ROTULO_MODULO`.
+- Dashboard: faixas "8 a 30 dias" cobriam 7 a 29 (agora fechadas como os rótulos); "Ver vencidos" num card cujo número é "vence em 30 dias" (agora "Ver os que vencem em 30 dias" → Início filtrado, e "Ver vencidos" como segundo link; o Início aceita `?status=`); "Ver arquivos com erro" e "Ver varreduras" levavam ao Histórico, que não tem nem um nem outro (saíram); erro na primeira carga deixava os cards em "Carregando…"; ponto duplo no erro; Instalações cortava em 1000 eventos sem avisar; "máquina(s) em dia".
+- "Planilha (Excel)" gera CSV (Histórico, Vencidos); "Empresa" e "das suas empresas" (Vencidos, Duplicidades); "snapshots" no vazio do Histórico; placeholder com "arquivo".
+- Duplicidades: "Tente de novo em instantes" para 403 e 413; 429 dizia "análise em curso" quando é limite por pessoa; "Copiar caminho" copiava só o nome para quem não é administrador (agora "Copiar nome").
+- Vencidos: gráfico por ano omitia vencidos sem data sem dizer; nota com a contagem.
+- Comentários: chave `file_name`, "outros seis", "Quinta tela".
+
+### Fica como está
+
+- Cofre e Agente no Dashboard misturam/listam por servidor da varredura; há um só em produção.
+- Renovações comparam só o servidor ANALISESRV (parâmetro fixo na tela).
+- Histórico sem deep link; a busca não vai para a URL.
+
+### Testes
+
+`tests/test_pagina_consulta.py`.

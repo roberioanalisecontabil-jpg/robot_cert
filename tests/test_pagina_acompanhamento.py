@@ -138,7 +138,7 @@ def test_403_com_acento(client: TestClient, banco: _Fake, monkeypatch: pytest.Mo
     matriz = {p: {mod: permissoes.NIVEL_NENHUM for mod in permissoes.MODULOS} for p in ("gestor", "user")}
     monkeypatch.setattr(permissoes, "_matriz", lambda: matriz)
     r = client.get("/api/colaborador/certificados/painel", headers=_h(*FISCAL_OP))
-    assert r.status_code == 403 and r.json()["detail"] == "Seu perfil não tem acesso a acompanhamento."
+    assert r.status_code == 403 and r.json()["detail"] == "Seu perfil não tem acesso ao Acompanhamento."
 
 
 def test_tela_de_acompanhamento_revisada() -> None:

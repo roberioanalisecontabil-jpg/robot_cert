@@ -515,7 +515,7 @@ def require_modulo(
             )
         raise HTTPException(
             status_code=403,
-            detail=f"Seu perfil não tem acesso a {modulo}.",
+            detail=f"Seu perfil não tem acesso {permissoes.ROTULO_MODULO.get(modulo, 'a ' + modulo)}.",
         )
 
     return _guarda
@@ -3927,7 +3927,8 @@ def _filtro_or_da_busca(busca: str) -> str:
     """As três cláusulas da busca do histórico, com o texto do usuário como
     UM valor cada, sem chance de virar cláusula nova."""
     q = _valor_or("%" + _escape_ilike_pattern(busca) + "%")
-    return f"nome.ilike.{q},nome_publico.ilike.{q},documento.ilike.{q}"
+    # `documento_numero` entra para a busca só com dígitos casar (01/10/2026).
+    return f"nome.ilike.{q},nome_publico.ilike.{q},documento.ilike.{q},documento_numero.ilike.{q}"
 
 
 def _parse_iso_utc(iso_value: Optional[str]) -> datetime:
@@ -4616,25 +4617,34 @@ def certificados_duplicidades(request: Request, token: auth.TokenData = Depends(
         )
 
     admin = (token.role or "").strip().lower() == "admin"
+    # Recorte pelo Alcance (revisão de 01/10/2026): era a única leitura do
+    # inventário sem recorte, num módulo aberto a Operador por padrão — um
+    # operador com carteira vazia via nome, CNPJ, serial e fingerprint de todo
+    # o acervo. Com recorte, o resultado é por pessoa e não vai ao cache.
+    alcance = _documentos_ao_alcance(token)
     chave = (origem, str(scanned_at or ""), admin)
     agora = time.monotonic()
-    with _dup_cache_lock:
-        guardado = _dup_cache.get(chave)
+    guardado = None
+    if alcance is None:
+        with _dup_cache_lock:
+            guardado = _dup_cache.get(chave)
     if guardado and agora - guardado[0] < _DUP_CACHE_TTL_SEG and origem == "ultimo_snapshot":
         gd, gn, gci = guardado[1]
         rows_total = sum(1 for it in raw_items if str((it.get("nome_publico") or it.get("file_name") or "")).strip())
     else:
         quem = (token.email or "").strip().lower() or _ip_do_cliente(request)
         if not taxa.permitir(f"dup:{quem}", 5, 300):
-            raise HTTPException(status_code=429, detail="Análise já em curso. Aguarde alguns minutos.")
+            raise HTTPException(status_code=429, detail="Limite de análises por pessoa atingido. Aguarde alguns minutos.")
         itens = [nome_publico.sanitizar_item(it) for it in raw_items]
         rows = [it for it in itens if str(it.get("nome_publico") or "").strip()]
+        rows = _recortar_pela_carteira(rows, alcance)
         rows_total = len(rows)
         gd, gn, gci = _agrupar_duplicidades(rows, incluir_pasta=admin)
-        with _dup_cache_lock:
-            if len(_dup_cache) > 32:
-                _dup_cache.clear()
-            _dup_cache[chave] = (agora, (gd, gn, gci))
+        if alcance is None:
+            with _dup_cache_lock:
+                if len(_dup_cache) > 32:
+                    _dup_cache.clear()
+                _dup_cache[chave] = (agora, (gd, gn, gci))
     return {
         "origem_dados": origem,
         "scanned_at": scanned_at,
@@ -4645,6 +4655,7 @@ def certificados_duplicidades(request: Request, token: auth.TokenData = Depends(
         "total_grupos_documento": len(gd),
         "total_grupos_nome_similar": len(gn),
         "total_grupos_certificado_igual": len(gci),
+        "alcance_vazio": isinstance(alcance, set) and not alcance,
     }
 
 
@@ -4739,6 +4750,7 @@ def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
     for it in itens:
         haystack = (
             f"{it.get('nome_publico') or ''} {it.get('nome') or ''} {it.get('documento') or ''} "
+            f"{_doc_norm(it.get('documento'))} "
             f"{it.get('ultima_data_registrada') or ''} {it.get('vencimento_certificado') or ''}"
         ).lower()
         if q in haystack:
@@ -4967,11 +4979,18 @@ def historico_certificados_http(
 ) -> dict:
     b = busca.strip() if busca else None
     alcance = _documentos_ao_alcance(token)
+    # A tela mostra "Atualizado em" e distingue carteira vazia de histórico
+    # vazio; os dois campos faltavam na resposta (revisão de 01/10/2026).
+    extras = {
+        "alcance_vazio": isinstance(alcance, set) and not alcance,
+        "atualizado_em": (get_latest_snapshot() or {}).get("scanned_at") or datetime.now(timezone.utc).isoformat(),
+    }
     if todas_filtradas:
         raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b)
         itens = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
         lista_truncada = len(itens) > LISTAGEM_EXPORT_MAX
         return {
+            **extras,
             "itens": itens[:LISTAGEM_EXPORT_MAX],
             "total": len(itens),
             "snapshots_lidos": raw.get("snapshots_lidos", 0),
@@ -4999,6 +5018,7 @@ def historico_certificados_http(
     total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1
     pagina_out = min(max(1, pagina), total_pags)
     out = dict(raw)
+    out.update(extras)
     out["paginacao"] = {
         "pagina": pagina_out,
         "total_paginas": total_pags,
@@ -5027,10 +5047,19 @@ def vencidos_certificados(
     inicio_dt = _data_da_query(data_inicio, "data_inicio", "T00:00:00+00:00")
     fim_dt = _data_da_query(data_fim, "data_fim", "T23:59:59+00:00")
 
-    # Vencidos precisa de uma agregação tão ampla quanto a do histórico (fallback snapshots).
-    lim_hist = max(limite_snapshots, config.HISTORICO_LIMITE_SNAPSHOTS)
-    hist = historico_certificados(lim_hist, offset=None, limit=None, busca=None)
-    itens_hist = _recortar_pela_carteira(hist.get("itens", []), _documentos_ao_alcance(token))
+    # Vencido é o CLIENTE cujo certificado vigente venceu, no inventário atual
+    # (decisão D1, 01/10/2026). Até 30/09 a lista vinha de `cert_history` por
+    # arquivo: um cliente renovado aparecia com o certificado antigo, e um
+    # arquivo que saiu da pasta continuava "vencido" para sempre. A base agora
+    # é a mesma do Acompanhamento e do sino — um item por Documento.
+    alcance = _documentos_ao_alcance(token)
+    itens_hist = _recortar_pela_carteira(_lista_base_docs_historico(), alcance)
+    snap_atual = get_latest_snapshot() or {}
+    hist = {"snapshots_lidos": 1 if snap_atual else 0}
+    extras = {
+        "alcance_vazio": isinstance(alcance, set) and not alcance,
+        "atualizado_em": snap_atual.get("scanned_at") or datetime.now(timezone.utc).isoformat(),
+    }
     busca_txt = str(busca or "").strip() or None
 
     now_utc = datetime.now(timezone.utc)
@@ -5095,6 +5124,7 @@ def vencidos_certificados(
     if todas_filtradas:
         lista_truncada = total > LISTAGEM_EXPORT_MAX
         return {
+            **extras,
             "itens": venc_filtrados[:LISTAGEM_EXPORT_MAX],
             "total": total,
             "data_inicio": data_inicio,
@@ -5110,6 +5140,7 @@ def vencidos_certificados(
     pagina_slice = venc_filtrados[off_pg : off_pg + por_pagina]
 
     return {
+        **extras,
         "itens": pagina_slice,
         "total": total,
         "data_inicio": data_inicio,
@@ -6406,13 +6437,13 @@ def expurgar_log_agora() -> dict:
     return {"install_log": cert_installer.expurgar_install_log()}
 
 
-@app.get("/api/dashboard", dependencies=[Depends(require_modulo("dashboard"))])
+@app.get("/api/dashboard", dependencies=[Depends(require_admin)])
 def dashboard_visao_geral(dias: int = Query(30, ge=1, le=365)) -> dict:
     """
     Os painéis baratos do dashboard, numa chamada (~1s).
 
     Separado das renovações de propósito: aquele precisa de dois snapshots
-    completos (~1 MB) e os outros seis somam poucas dezenas de KB. Fazer o
+    completos (~1 MB) e os outros sete somam poucas dezenas de KB. Fazer o
     barato esperar o caro atrasaria toda a tela pelo painel menos urgente.
     """
     from app import dashboard
@@ -6420,7 +6451,7 @@ def dashboard_visao_geral(dias: int = Query(30, ge=1, le=365)) -> dict:
     return dashboard.visao_geral(dias)
 
 
-@app.get("/api/dashboard/renovacoes", dependencies=[Depends(require_modulo("dashboard"))])
+@app.get("/api/dashboard/renovacoes", dependencies=[Depends(require_admin)])
 def dashboard_renovacoes(
     dias: int = Query(30, ge=1, le=365),
     machine_id: str = Query("ANALISESRV", min_length=1),

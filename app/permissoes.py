@@ -77,7 +77,6 @@ PAPEIS_TOTAIS = ("admin",)
 # Modulos que TEM rota governada pela matriz. Fora daqui, mexer na tela nao
 # muda comportamento nenhum: a rota continua com a guarda antiga.
 MODULOS_GOVERNADOS = (
-    "dashboard",
     "historico",
     "vencidos",
     "duplicidades",
@@ -97,7 +96,22 @@ MODULOS_COM_ESCRITA = ("configuracao", "carteiras", "acompanhamento")
 # do departamento (a trilha do Gestor mora em Carteiras). As rotas usam
 # `require_admin`; a matriz nao oferece a celula e, se o banco tiver uma linha
 # antiga, ela e ignorada na leitura.
-MODULOS_SO_ADMIN = ("usuarios", "instalador")
+MODULOS_SO_ADMIN = ("usuarios", "instalador", "dashboard")
+
+# Como o módulo se chama numa frase ("Seu perfil não tem acesso ao Histórico").
+# A chave crua ("a historico") saía sem acento e sem artigo no 403.
+ROTULO_MODULO = {
+    "inicio": "ao Início",
+    "dashboard": "ao Dashboard",
+    "historico": "ao Histórico",
+    "vencidos": "a Vencidos",
+    "duplicidades": "a Duplicidades",
+    "acompanhamento": "ao Acompanhamento",
+    "carteiras": "a Carteiras",
+    "instalador": "ao Instalador",
+    "usuarios": "a Usuários",
+    "configuracao": "à Configuração",
+}
 
 
 def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:

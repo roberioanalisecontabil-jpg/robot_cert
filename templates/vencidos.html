@@ -24,7 +24,7 @@
     <header class="ag-page__head">
       <p class="ag-page__eyebrow">Monitor de certificados</p>
       <h1 class="ag-page__title">Certificados vencidos</h1>
-      <p class="ag-page__lead">Certificados das suas empresas que já passaram do vencimento. Filtre por período ou deixe as datas em branco para ver todos.</p>
+      <p class="ag-page__lead">Clientes cujo certificado vigente já passou do vencimento. Filtre por período ou deixe as datas em branco para ver todos.</p>
     </header>
 
     <!-- Dois KPIs: o total, que é o dado grave da tela e por isso leva o
@@ -89,7 +89,7 @@
             <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
           </summary>
           <div class="menu-suspenso__lista" role="menu">
-            <button type="button" role="menuitem" id="btn-export-excel">Planilha (Excel)</button>
+            <button type="button" role="menuitem" id="btn-export-excel">Planilha (CSV)</button>
             <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
           </div>
         </details>
@@ -112,7 +112,7 @@
             <table class="ag-table cg-tabela cg-tabela--duas" role="table">
               <thead role="rowgroup">
                 <tr role="row">
-                  <th role="columnheader" class="ag-th--estatico">Empresa</th>
+                  <th role="columnheader" class="ag-th--estatico">Cliente</th>
                   <th role="columnheader" aria-sort="descending" data-col="vencimento">
                     <button type="button" class="th-ordenar th-ordenar--ativa" data-col="vencimento" title="Ordenar pelo vencimento">
                       Vencimento<svg class="th-ordenar__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
@@ -278,6 +278,7 @@
       return "Em todo o período, sem filtro de datas";
     }
 
+    let _alcanceVazio = false;
     function renderGraficoAnos(resumo, total) {
       const el = document.getElementById("grafico-anos");
       const nota = document.getElementById("grafico-anos-nota");
@@ -287,6 +288,11 @@
         nota.textContent = "Sem vencidos para distribuir por ano.";
         return;
       }
+      // A soma das barras pode ser menor que o total: vencido por status sem
+      // data registrada não entra em ano nenhum, e a diferença precisa ser dita.
+      const somaAnos = anos.reduce((a, b) => a + (Number(b.total) || 0), 0);
+      const semData = Math.max(0, (Number(total) || 0) - somaAnos);
+      if (semData) nota.textContent = semData + (semData === 1 ? " vencido sem data registrada não aparece no gráfico." : " vencidos sem data registrada não aparecem no gráfico.");
       const maior = Math.max(...anos.map((a) => Number(a.total) || 0), 1);
       anos.forEach((a) => {
         const pct = total > 0 ? Math.round((Number(a.total) / total) * 100) : 0;
@@ -331,8 +337,10 @@
         // Zero vencidos sem filtro é um bom resultado, não uma falha.
         renderEmptyRow(tb, 2, {
           icon: "",
-          title: "Nenhum certificado vencido",
-          description: "Todos os certificados monitorados estão dentro da validade. Quando algum vencer, ele aparece aqui.",
+          title: _alcanceVazio ? "Sua carteira está vazia" : "Nenhum certificado vencido",
+          description: _alcanceVazio
+            ? "Nenhum cliente foi atribuído a você ainda. Peça ao gestor do seu departamento."
+            : "Todos os clientes do seu alcance estão com o certificado dentro da validade. Quando algum vencer, ele aparece aqui.",
         });
       }
     }
@@ -554,6 +562,7 @@
         if (j.paginacao) estado.pagina = j.paginacao.pagina;
         setBannerAviso("table-container-venc", mensagemLimiteExportacao(j.paginacao));
         st.textContent = j.atualizado_em ? "Atualizado em " + new Date(j.atualizado_em).toLocaleString("pt-BR") : "";
+        _alcanceVazio = !!j.alcance_vazio;
         const rows = j.itens || [];
         renderGraficoAnos(j.resumo_anos, j.total);
         renderTabelaVencidas(rows, j.total);

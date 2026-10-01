@@ -63,7 +63,7 @@ class _Sb:
         return _Tabela(self, nome)
 
 
-def _matriz(gestor_configuracao: str = "ler", user_dashboard: str = "nenhum"):
+def _matriz(gestor_configuracao: str = "ler", user_vencidos: str = "nenhum"):
     """Matriz completa e válida, com duas células parametrizáveis."""
     base = {}
     for papel in permissoes.PAPEIS_CONFIGURAVEIS:
@@ -75,7 +75,7 @@ def _matriz(gestor_configuracao: str = "ler", user_dashboard: str = "nenhum"):
         for modulo in permissoes.MODULOS_SO_ADMIN:
             base[papel][modulo] = permissoes.NIVEL_NENHUM
     base["gestor"]["configuracao"] = gestor_configuracao
-    base["user"]["dashboard"] = user_dashboard
+    base["user"]["vencidos"] = user_vencidos
     return base
 
 
@@ -97,11 +97,11 @@ def gravacao(monkeypatch: pytest.MonkeyPatch):
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_registra_uma_linha_por_celula_alterada(gravacao) -> None:
-    antes = _matriz(gestor_configuracao="ler", user_dashboard="nenhum")
+    antes = _matriz(gestor_configuracao="ler", user_vencidos="nenhum")
     sb = gravacao(antes)
 
     permissoes.gravar(
-        _matriz(gestor_configuracao="editar", user_dashboard="ler"),
+        _matriz(gestor_configuracao="editar", user_vencidos="ler"),
         alterado_por="roberio@analisegroup.cnt.br",
     )
 
@@ -111,8 +111,8 @@ def test_registra_uma_linha_por_celula_alterada(gravacao) -> None:
     por_celula = {(t["papel"], t["modulo"]): t for t in trilha}
     assert por_celula[("gestor", "configuracao")]["de"] == "ler"
     assert por_celula[("gestor", "configuracao")]["para"] == "editar"
-    assert por_celula[("user", "dashboard")]["de"] == "nenhum"
-    assert por_celula[("user", "dashboard")]["para"] == "ler"
+    assert por_celula[("user", "vencidos")]["de"] == "nenhum"
+    assert por_celula[("user", "vencidos")]["para"] == "ler"
     assert all(t["alterado_por"] == "roberio@analisegroup.cnt.br" for t in trilha)
 
 

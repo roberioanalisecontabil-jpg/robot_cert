@@ -42,13 +42,16 @@ logger = logging.getLogger(__name__)
 
 # Faixas da curva de vencimento. O "já vencido" vem primeiro porque é o único
 # que exige ação imediata; o resto é planejamento.
+# Em dias inteiros, fechados nas pontas que os rótulos da tela prometem:
+# "Em até 7 dias" é 0..7, "8 a 30" é 8..30, e assim por diante. Até 30/09 os
+# limites eram [7, 30) etc., e "8 a 30 dias" contava quem vencia em 7.
 FAIXAS_VENCIMENTO = [
     ("vencido", None, 0),
-    ("ate_7_dias", 0, 7),
-    ("ate_30_dias", 7, 30),
-    ("ate_60_dias", 30, 60),
-    ("ate_90_dias", 60, 90),
-    ("acima_de_90", 90, None),
+    ("ate_7_dias", 0, 8),
+    ("ate_30_dias", 8, 31),
+    ("ate_60_dias", 31, 61),
+    ("ate_90_dias", 61, 91),
+    ("acima_de_90", 91, None),
 ]
 
 
@@ -111,6 +114,8 @@ def painel_instalacao(dias: int = 30) -> Dict[str, Any]:
     cadeias = cert_installer.cadeias_de_instalacao(limite=2000, desde=desde)
     resumo = cert_installer.resumo_das_cadeias(cadeias)
     resumo["dias"] = dias
+    # `cadeias_de_instalacao` corta em 1000 eventos em silêncio; a tela diz.
+    resumo["truncado"] = sum(len(c.get("eventos") or []) for c in cadeias) >= 1000
     total = int(resumo.get("total") or 0)
     concluidas = int(resumo.get("concluidas") or 0)
     # Estado escrito (regra da §2 do DS: nunca só por cor). O limiar de 80%
@@ -240,7 +245,7 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
         "textos": {
             "destaque": f"{em_dia} de {len(maquinas)}" if maquinas else "—",
             "subtitulo": (
-                ("máquina em dia" if len(maquinas) == 1 else "máquinas em dia")
+                ("servidor em dia" if len(maquinas) == 1 else "servidores em dia")
                 + " · " + texto.plural(len(linhas), "varredura") + " no período"
             ) if maquinas else "Nenhuma varredura no período",
         },
@@ -249,11 +254,18 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
 
 def painel_acervo() -> Dict[str, Any]:
     """
-    Vencimento e legibilidade, de `cert_history`.
+    Vencimento por Cliente vigente, e legibilidade de `cert_history`.
 
-    `status_ultimo` conta os arquivos que o robô **não consegue ler** — e esses
-    nunca vão ao cofre, logo nunca são instaláveis pelo portal. É trabalho
-    concreto: cada um é um arquivo para arrumar na origem.
+    A curva de vencimento conta CLIENTES pelo certificado vigente no inventário
+    atual (decisão D1, 01/10/2026) — a mesma base de Vencidos, do Acompanhamento
+    e do sino. Até 30/09 contava todo arquivo já visto em `cert_history`, que
+    nunca é apagado: cliente renovado e arquivo removido da pasta ficavam
+    "vencidos" para sempre, e o número não batia com nenhuma outra tela.
+
+    `status_ultimo` continua vindo de `cert_history`: conta os arquivos que o
+    robô **não consegue ler** — e esses nunca vão ao cofre, logo nunca são
+    instaláveis pelo portal. É trabalho concreto: cada um é um arquivo para
+    arrumar na origem.
     """
     client = _banco()
     if not client:
@@ -265,6 +277,8 @@ def painel_acervo() -> Dict[str, Any]:
             .select("vencimento_certificado, status_ultimo")
             .range(i, f)
         )
+        from app.main import _lista_base_docs_historico
+        clientes = _lista_base_docs_historico()
     except Exception as e:  # noqa: BLE001
         logger.exception("Falha no painel do acervo")
         return {"erro": str(e)}
@@ -272,12 +286,12 @@ def painel_acervo() -> Dict[str, Any]:
     agora = datetime.now(timezone.utc)
     faixas = {nome: 0 for nome, _, _ in FAIXAS_VENCIMENTO}
     sem_data = 0
-    for l in linhas:
+    for l in clientes:
         d = _dt(l.get("vencimento_certificado"))
         if not d:
             sem_data += 1
             continue
-        dias = (d - agora).total_seconds() / 86400
+        dias = int(((d - agora).total_seconds() / 86400) // 1)
         for nome, minimo, maximo in FAIXAS_VENCIMENTO:
             if minimo is None and dias < 0:
                 faixas[nome] += 1
@@ -654,7 +668,7 @@ def painel_renovacoes(dias: int = 30, machine_id: str = "ANALISESRV") -> Dict[st
     Certificados renovados: compara o inventário de hoje com o de N dias atrás.
 
     **Não sai de `cert_history`**, apesar do nome daquela tabela: ela é
-    `upsert(on_conflict="file_name")`, guarda só o estado atual, e o valor
+    `upsert(on_conflict="arquivo_chave")`, guarda só o estado atual, e o valor
     anterior foi sobrescrito. Quem tentar por lá obtém zero.
 
     Dois snapshots, ~1 MB — contra os ~160 MB que varrer todos custaria.

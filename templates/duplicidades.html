@@ -96,7 +96,7 @@
           <table class="ag-table cg-tabela cg-tabela--duas cg-tabela-dup" role="table">
             <thead role="rowgroup">
               <tr role="row">
-                <th role="columnheader" class="ag-th--estatico">Empresa</th>
+                <th role="columnheader" class="ag-th--estatico">Cliente</th>
                 <th role="columnheader" class="ag-th--estatico num">Arquivos</th>
               </tr>
             </thead>
@@ -144,7 +144,7 @@
           <table class="ag-table cg-tabela cg-tabela--duas cg-tabela-dup" role="table">
             <thead role="rowgroup">
               <tr role="row">
-                <th role="columnheader" class="ag-th--estatico">Empresa</th>
+                <th role="columnheader" class="ag-th--estatico">Cliente</th>
                 <th role="columnheader" class="ag-th--estatico num">Arquivos</th>
               </tr>
             </thead>
@@ -179,7 +179,7 @@
         <div class="ag-card-head cg-grupo__cab">
           <div class="cg-grupo__titulo">
             <h2 class="ag-card__title" id="tit-nome">Nomes parecidos</h2>
-            <p class="cg-grupo__explica">O arquivo não pôde ser aberto, então a comparação foi só pelo nome. Pode haver falso positivo com empresas homônimas.</p>
+            <p class="cg-grupo__explica">O arquivo não pôde ser aberto, então a comparação foi só pelo nome. Pode haver falso positivo com clientes homônimos.</p>
           </div>
           <p class="cg-grupo__meta">
             <span class="ag-badge ag-badge--neutral">Revisar</span>
@@ -296,13 +296,16 @@
       return code;
     }
 
+    // "Copiar caminho" só quando há caminho: para quem não é administrador o
+    // servidor manda só o nome público, e o rótulo não pode prometer a pasta.
     function elCopiar(completo) {
+      const temCaminho = /[\\/]/.test(String(completo || ""));
       const b = document.createElement("button");
       b.type = "button";
       b.className = "ag-btn ag-btn--ghost ag-btn--sm ag-copiar";
       b.setAttribute("data-copiar", completo);
       b.setAttribute("aria-live", "polite");
-      b.innerHTML = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span class="cg-btn__rotulo">Copiar caminho</span>';
+      b.innerHTML = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span class="cg-btn__rotulo">' + (temCaminho ? "Copiar caminho" : "Copiar nome") + '</span>';
       return b;
     }
 
@@ -542,8 +545,11 @@
       try {
         const r = await fetch("/api/certificados/duplicidades", { headers: getHeaders() });
         if (!r.ok) {
-          // O que já estava na tela fica; a mensagem diz o que fazer.
-          st.textContent = "Não foi possível atualizar (erro " + r.status + "): " + (await mensagemCorpoErro(r)) + " Tente de novo em instantes.";
+          // O que já estava na tela fica; a mensagem diz o que fazer — e o
+          // que fazer depende do erro: 403 e 413 não se resolvem tentando.
+          const det = await mensagemCorpoErro(r);
+          const fim = r.status === 403 ? "" : (r.status === 413 ? " Reduza o inventário ou peça a análise ao administrador." : (r.status === 429 ? " Limite de análises por pessoa; aguarde alguns minutos." : " Tente de novo em instantes."));
+          st.textContent = "Não foi possível atualizar (erro " + r.status + "): " + det + fim;
           return;
         }
         const j = await r.json();

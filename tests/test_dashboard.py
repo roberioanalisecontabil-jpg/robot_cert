@@ -265,7 +265,17 @@ def test_sem_snapshot_anterior_diz_isso_em_vez_de_zerar(banco: _Fake) -> None:
 # 4. Painéis
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_curva_de_vencimento_separa_as_faixas(banco: _Fake) -> None:
+def _clientes_do_historico(banco: _Fake):
+    """A curva passou a contar Clientes vigentes do inventário (D1,
+    01/10/2026); aqui o inventário é feito das mesmas linhas do histórico,
+    para as faixas continuarem medindo o que mediam."""
+    return [{"vencimento_certificado": r.get("vencimento_certificado"), "status_ultimo": r.get("status_ultimo")}
+            for r in banco.tabelas["cert_history"]]
+
+
+def test_curva_de_vencimento_separa_as_faixas(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.main as _m
+    monkeypatch.setattr(_m, "_lista_base_docs_historico", lambda: _clientes_do_historico(banco))
     v = dash.painel_acervo()["vencimento"]
     assert v["vencido"] == 1
     assert v["ate_7_dias"] == 3      # 3 dias + os dois com status ruim (5 dias)
@@ -275,11 +285,13 @@ def test_curva_de_vencimento_separa_as_faixas(banco: _Fake) -> None:
     assert v["acima_de_90"] == 1
 
 
-def test_ilegiveis_sao_somados(banco: _Fake) -> None:
+def test_ilegiveis_sao_somados(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Separados, "erro" e "fora do padrão" parecem ruído; juntos, são arquivos
     que ninguém consegue instalar pelo portal.
     """
+    import app.main as _m
+    monkeypatch.setattr(_m, "_lista_base_docs_historico", lambda: _clientes_do_historico(banco))
     a = dash.painel_acervo()
     assert a["ilegiveis"] == 2
     assert a["sem_data_de_vencimento"] == 1
