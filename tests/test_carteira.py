@@ -65,6 +65,11 @@ class _Query:
         self._em = (c, list(vs))
         return self
 
+    def order(self, *_a: Any, **_k: Any) -> "_Query":
+        # `universo_de_documentos` ordena o snapshot por `scanned_at`; sem
+        # isto a atribuição recusa tudo como "fora do inventário".
+        return self
+
     def limit(self, _n: int) -> "_Query":
         # O cliente real tem; sem isto, toda consulta que usa `.limit()` morre
         # com AttributeError e o erro chega disfarçado de "banco indisponível".
@@ -158,6 +163,13 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         {"departamento_id": "dep-fiscal", "user_id": "u-gestor"},
         {"departamento_id": "dep-fiscal", "user_id": "u-chefe"},
     ]
+    # Atribuição é sobre documento do Inventário (01/10/2026): sem snapshot,
+    # a rota recusa com 422 em vez de medir a normalização e a trilha.
+    fake.tabelas["cert_snapshots"] = [{"machine_id": "srv", "scanned_at": "2026-10-01T10:00:00Z", "items": [
+            {"documento_numero": "33706943000193", "nome": "CLIENTE MEU"},
+            {"documento_numero": "55993256000139", "nome": "CLIENTE ALHEIO"},
+            {"documento_numero": "02509642448", "nome": "PESSOA FISICA"},
+        ]}]
     monkeypatch.setattr(ci, "_banco", lambda: fake)
     monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-" + email.split("@")[0])
     # O que viria depois da barreira não interessa aqui; o que interessa é se

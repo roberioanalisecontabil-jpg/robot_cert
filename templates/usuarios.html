@@ -556,7 +556,9 @@
                 const aviso = info.so_admin
                     ? '<small class="perm-nota">só o administrador: aqui se nomeiam gestores e administradores</small>'
                     : (info.governado ? '' :
-                        '<small class="perm-pendente">ainda não governado por esta tela</small>');
+                        // Só o Início está aqui: é a tela de instalação, e
+                        // todo papel entra nela (decisão N3, 01/10/2026).
+                        '<small class="perm-pendente">todos os papéis entram: é a tela de instalação</small>');
                 const soLeitura = (info.governado && info.niveis.length < 3) ?
                     '<small class="perm-nota">' +
                     esc(par[2] || 'só consulta — não há o que editar') + '</small>' : '';

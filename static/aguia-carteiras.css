@@ -52,8 +52,8 @@
 }
 .cg-cart-busca .ag-input { width: 100%; padding-left: calc(var(--space-3) * 2 + 16px); }
 
-/* Itens: superfície do cartão, divididos por fio, sem rolagem interna — a
-   lista cresce com a página. Cada item é um link.
+/* Itens: superfície do cartão, divididos por fio, com rolagem própria em
+   .cg-op-rolagem (acima). Cada item é um link.
    O fio é `--border-default` (30/09/2026): com `--border-subtle` a divisão
    entre operadores sumia na tela — o mesmo fio que contorna as colunas
    "Disponíveis" e "Na carteira", para as três listas lerem igual. */

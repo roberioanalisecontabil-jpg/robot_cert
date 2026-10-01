@@ -58,10 +58,63 @@ tela expulsa quem não é admin e todas as APIs exigem `require_admin`.
 - Filtro de status padrão "Ativo" faz o estado vazio dizer "Nada encontrado com esses filtros" mesmo sem filtro escolhido. Aceitável: o link "Limpar filtros" resolve.
 - `inicio` não é governado pela matriz (todo papel vê o Início).
 
-### Pendente nesta página
+### Aba Níveis de acesso (decisões N1 a N3)
 
-- Aba Níveis de acesso: granularidade (por usuário; "apagar" separado de "editar") — a grelhar.
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| N1 | Separar "apagar" de "editar"? | **Não.** | Sob a matriz só há dois DELETE (tirar documento da carteira; tirar certificado da custódia), e os dois desfazem uma inclusão do mesmo módulo. Quem pode atribuir e não pode retirar deixaria erros sem conserto. |
+| N2 | Permissão por usuário? | **Não.** Continua por papel. | Com três papéis e departamentos, cada exceção pessoal vira uma investigação. A pendência existia desde agosto e ninguém precisou. Se precisar: papel novo ou revisão do padrão do papel. |
+| N3 | Início fora da matriz? | **Fica.** Texto da linha passa a "todos os papéis entram: é a tela de instalação". | É a tela de instalação; todo papel entra. |
+
+Fecha a §5 do `PLANO_niveis_de_acesso.md`.
 
 ### Testes
 
 `tests/test_pagina_usuarios.py` cobre U2 a U6, vocabulário e estados; `tests/test_permissoes.py` cobre U1.
+
+---
+
+## 2. Carteiras (01/10/2026)
+
+**Para que existe**: definir o Alcance de cada pessoa sobre os Clientes — as
+Atribuições de um Operador e as Exceções de um Gestor.
+
+**Quem vê**: pela matriz (`carteiras`: Gestor edita, Operador não entra) e pela
+liderança (`require_admin_ou_gestor`). O Gestor só edita Operadores dos
+departamentos que lidera; o Administrador edita qualquer carteira, inclusive as
+Exceções dos Gestores. A rota HTML não tem guarda (padrão de todas as páginas,
+a rever em Login).
+
+### Decisões
+
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| C1 | Botões "Liberar"/"Remover" para todo alvo. | **Pelo glossário**: Atribuir/Retirar (Operador); Devolver/Retirar (Gestor). Textos, toasts e confirmações acompanham. | "Liberar" é o verbo da era em que o gestor liberava tudo para todos. "Atribuir" é o que o modelo faz e o que a trilha já grava. |
+| C2 | "Cliente" na tela vs Documento no glossário. | **"Cliente" fica na tela** para o titular. Glossário ganha a entrada Cliente e distingue da chave. | Quem opera pensa em cliente, não em CNPJ. |
+| C3 | Histórico de instalações só para administrador. | **Gestor vê as instalações dos Operadores dos departamentos que lidera**, por `GET /api/carteira/{id}/instalacoes`, com o alcance da carteira; IP só para o administrador. | A pergunta "o fulano instalou o que eu atribuí?" é do Gestor. |
+| C4 | Atribuir um não confirma; lote e retirar confirmam. | **Fica.** | Retirar tira acesso; atribuir um é desfazível em um clique. |
+| C5 | Dashboard contava "sem carteira" com outro critério. | **Alinhado ao de Carteiras**: só Operadores ativos; linha de carteira de inativo ou ex-operador não conta. | Dois números diferentes para a mesma pergunta. |
+
+### Defeitos corrigidos
+
+- Universo oferecido ao Gestor não era recortado pelas Exceções dele: selecionava o que receberia 403, e "Todos" falhava inteiro. Agora `/api/carteira/documentos` devolve só o alcance de quem pergunta.
+- Atribuir e registrar Exceção pela tela não validavam inventário (a planilha validava). Agora 422 "Fora do inventário". Retirar atribuição de documento que saiu do inventário continua livre.
+- Planilha aceitava atribuir a conta inativa. Linha recusada com motivo.
+- Administrador aberto por `?operador=<id>` mostrava carteira de Atribuições. Agora 422: alcance total, sem carteira.
+- Badges "Gestor" e "Conta inativa" sumiam do cabeçalho depois de atribuir ou retirar.
+- Exceção de documento fora do inventário contava em "menos N exceções" mas não aparecia no painel; agora aparece marcada "fora do inventário atual".
+- Resumo "N operadores" da tela contava gestores; passa a usar o resumo do servidor.
+- Gestor inativo aparecia como "carteira a limpar" porque `documentos` dele é o inventário; o critério passou a ser as exceções.
+- Texto do modal de importação falava de "departamentos que você lidera" ao administrador; agora por papel.
+- Mensagens do servidor com "liberar" (porta de Carteiras, departamento obrigatório, fora do alcance) → "atribuir".
+- Variáveis mortas (`souAdmin`) e comentários desatualizados sobre rolagem (template e CSS).
+
+### Fica como está
+
+- Card da lista chama-se "Pessoas" para o administrador (vê gestores e operadores); o resumo do servidor conta só Operadores.
+- Documento atribuído que saiu do inventário continua na carteira, marcado; é decisão antiga e certa (a atribuição é uma decisão, e sumir com ela esconderia acesso a algo que pode voltar).
+- `atribuidos` da planilha conta linhas enviadas ao upsert, inclusive as que já existiam. Pequeno; anotado.
+
+### Testes
+
+`tests/test_pagina_carteiras.py`.

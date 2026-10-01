@@ -5560,8 +5560,8 @@ def _validar_pedido_de_instalacao(
 
 
 ERRO_SEM_ALCANCE = (
-    "Você não lidera nenhum departamento, então não é Gestor e não há para "
-    "quem liberar certificados. Peça a um administrador para designá-lo em "
+    "Você não lidera nenhum departamento, então não é Gestor e não há a "
+    "quem atribuir clientes. Peça a um administrador para designá-lo em "
     "Usuários › Departamentos."
 )
 
@@ -5648,7 +5648,28 @@ def _papel_do_alvo(user_id: str) -> str:
     papel = _papel_da_conta(sb, user_id)
     if papel is None:
         raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
+    if papel in permissoes.PAPEIS_TOTAIS:
+        # A lista da tela já o esconde; isto fecha o link direto (?operador=).
+        raise HTTPException(status_code=422, detail="Administrador tem alcance total e não tem carteira.")
     return papel
+
+
+def _exigir_documentos_no_inventario(documentos: List[str]) -> None:
+    """Atribuição e Exceção são sobre Documentos do Inventário (GLOSSARY).
+
+    A planilha já recusava documento fora do inventário; a tela e a API
+    aceitavam qualquer número. Um CNPJ digitado errado viraria uma linha de
+    carteira que nunca casa com certificado nenhum — e ninguém saberia.
+    Retirar continua livre: documento que saiu do inventário precisa poder
+    sair da carteira também.
+    """
+    universo = {d["documento"] for d in cert_installer.universo_de_documentos()}
+    fora = sorted({
+        cert_installer.so_digitos(d) for d in documentos
+        if cert_installer.so_digitos(d) and cert_installer.so_digitos(d) not in universo
+    })
+    if fora:
+        raise HTTPException(status_code=422, detail="Fora do inventário: " + ", ".join(fora))
 
 
 def _exigir_documentos_ao_alcance(token: auth.TokenData, documentos: List[str]) -> None:
@@ -5668,7 +5689,7 @@ def _exigir_documentos_ao_alcance(token: auth.TokenData, documentos: List[str]) 
     if negados:
         raise HTTPException(
             status_code=403,
-            detail="Fora do seu alcance, só o administrador libera: " + ", ".join(negados),
+            detail="Fora do seu alcance, só o administrador atribui: " + ", ".join(negados),
         )
 
 
@@ -5802,13 +5823,19 @@ def listar_operadores(
     }
 
 
-@app.get("/api/carteira/documentos", dependencies=[Depends(require_modulo("carteiras")), Depends(require_admin_ou_gestor)])
+@app.get("/api/carteira/documentos", dependencies=[Depends(require_modulo("carteiras"))])
 def listar_documentos_atribuiveis(
     q: Optional[str] = Query(None, max_length=120),
     limite: int = Query(500, ge=1, le=2000),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     """
     Universo de documentos para atribuir, filtrável por nome ou número.
+
+    Recortado pelo alcance de quem pergunta (01/10/2026): o Gestor só atribui
+    o que alcança, então oferecer-lhe o inventário inteiro era convidá-lo a
+    selecionar o que o servidor recusaria — e um "Todos" falhava inteiro.
+    Para o administrador, `None` = tudo.
 
     O teto era 500 e havia 491 clientes — a um cadastro de distância de
     truncar em silêncio, que é como a curva de vencimento perdeu 29
@@ -5820,6 +5847,9 @@ def listar_documentos_atribuiveis(
     poder dizer quando a lista foi cortada, em vez de parecer completa.
     """
     todos = cert_installer.universo_de_documentos()
+    alcance = _documentos_ao_alcance(token)
+    if alcance is not None:
+        todos = [d for d in todos if d["documento"] in alcance]
     termo = (q or "").strip().lower()
     if termo:
         digitos = cert_installer.so_digitos(termo)
@@ -5896,6 +5926,42 @@ def obter_carteira(
     }
 
 
+@app.get("/api/carteira/{user_id}/instalacoes", dependencies=[Depends(require_modulo("carteiras"))])
+def instalacoes_da_pessoa(
+    user_id: str,
+    dias: int = Query(365, ge=1, le=365),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """
+    As tentativas de instalação de quem está com a carteira aberta.
+
+    Até 30/09 a tela chamava `/api/cert-installer/trilha`, do módulo
+    Instalador, que o Gestor não alcança — ele via "Disponível para
+    administradores". Decisão C3 (01/10/2026): a pergunta "o fulano instalou
+    o que eu atribuí?" é do Gestor, sobre os Operadores dos departamentos que
+    lidera. O recorte é o mesmo da carteira (`_exigir_alcance`), e o IP de
+    origem só vai para o administrador.
+    """
+    _exigir_alcance(token, user_id)
+    sb = cert_installer._banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    try:
+        linhas = sb.table("users").select("email").eq("id", user_id).limit(1).execute().data or []
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler o e-mail de %s", user_id)
+        raise HTTPException(status_code=503, detail="Não foi possível ler a conta. Tente de novo.")
+    if not linhas:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
+    email_alvo = str(linhas[0].get("email") or "").strip().lower()
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    cadeias = cert_installer.cadeias_de_instalacao(limite=200, desde=desde, user_email=email_alvo)
+    if (token.role or "").strip().lower() not in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        for c in cadeias:
+            c.pop("client_ip", None)
+    return {"dias": dias, "resumo": cert_installer.resumo_das_cadeias(cadeias), "cadeias": cadeias}
+
+
 @app.post("/api/carteira", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
 def atribuir_carteira(
     body: CarteiraRequest,
@@ -5913,6 +5979,7 @@ def atribuir_carteira(
     administrador chega aqui com alvo Gestor — `pode_gerir` barra os demais.
     """
     _exigir_alcance(token, body.user_id)
+    _exigir_documentos_no_inventario(body.documentos)
     if _papel_do_alvo(body.user_id) == cert_installer.PAPEL_GESTOR:
         try:
             for doc in body.documentos:
@@ -6066,12 +6133,13 @@ async def importar_carteiras(
     if not sb:
         raise HTTPException(status_code=503, detail="Banco não configurado.")
     try:
-        contas = sb.table("users").select("id, email, role").execute().data or []
+        contas = sb.table("users").select("id, email, role, ativo").execute().data or []
     except Exception:
         logger.exception("Falha ao ler usuários na importação de carteiras")
         raise HTTPException(status_code=503, detail="Não foi possível ler os usuários.")
     por_email = {str(u.get("email") or "").strip().lower(): str(u.get("id")) for u in contas}
     papel_de = {str(u.get("id")): (u.get("role") or "").strip().lower() for u in contas}
+    inativa = {str(u.get("id")) for u in contas if not auth.conta_ativa(u)}
 
     universo = {d["documento"] for d in cert_installer.universo_de_documentos()}
     # Gestor só atribui o que alcança (ADR 0001); `None` é o administrador.
@@ -6110,6 +6178,11 @@ async def importar_carteiras(
             # Planilha é de Atribuições. A carteira de um Gestor é de Exceções
             # e se edita na tela, pelo administrador.
             erros.append({"linha": i, "motivo": f"{email} não é Operador; a planilha só atribui a Operadores."})
+            continue
+        if user_id in inativa:
+            # Desativar esvazia a carteira; atribuir a quem está desativado
+            # gravaria o que a reativação não devolve.
+            erros.append({"linha": i, "motivo": f"{email} está desativado; reative a conta antes de atribuir."})
             continue
         if not alcance[user_id]:
             erros.append({"linha": i, "motivo": f"{email} não está em um departamento que você lidera."})
@@ -6158,6 +6231,7 @@ def remover_carteira(
     if _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR:
         # Tirar um cliente da carteira de um Gestor é registrar uma Exceção
         # (ADR 0001). Só o administrador chega aqui com alvo Gestor.
+        _exigir_documentos_no_inventario([documento])
         try:
             cert_installer.registrar_excecoes(
                 user_id, [documento], _user_id_da_sessao(token), token.email or "desconhecido",

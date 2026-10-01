@@ -143,11 +143,13 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             {"tipo_alerta": "expiring:30", "sent_at": AGORA.isoformat(), "destinatario": "a@x.com"},
             {"tipo_alerta": "expiring:30", "sent_at": AGORA.isoformat(), "destinatario": "b@x.com"},
         ],
+        # Ids explícitos: desde 01/10/2026 (C5) só conta como "com carteira" a
+        # linha de carteira de um OPERADOR ATIVO — a do inativo não conta.
         "users": [
-            {"role": "admin", "ativo": True}, {"role": "user", "ativo": True},
-            {"role": "user", "ativo": True}, {"role": "user", "ativo": False},
+            {"id": "u-adm", "role": "admin", "ativo": True}, {"id": "u-1", "role": "user", "ativo": True},
+            {"id": "u-2", "role": "user", "ativo": True}, {"id": "u-off", "role": "user", "ativo": False},
         ],
-        "carteira": [{"user_id": "u-1"}],
+        "carteira": [{"user_id": "u-1"}, {"user_id": "u-off"}],
         "install_log": [],
     })
     monkeypatch.setattr(dash, "_banco", lambda: fake)

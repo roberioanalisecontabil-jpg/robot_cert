@@ -123,7 +123,9 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             {"departamento_id": CONTABIL, "user_id": "u-lc"},
         ],
         "carteira": [],
-        "cert_snapshots": [],
+        # Com o DOC no inventário: atribuição valida inventário desde 01/10/2026.
+        "cert_snapshots": [{"machine_id": "srv", "scanned_at": "2026-10-01T10:00:00Z",
+                            "items": [{"documento_numero": DOC, "nome": "CLIENTE"}]}],
     })
     monkeypatch.setattr(ci, "_banco", lambda: fake)
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)

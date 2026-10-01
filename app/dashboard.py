@@ -434,7 +434,11 @@ def painel_acesso() -> Dict[str, Any]:
 
     ativos = [u for u in us if conta_ativa(u)]
     operadores = [u for u in ativos if (u.get("role") or "").lower() == "user"]
-    com_carteira = {str(c.get("user_id")) for c in cart}
+    # Mesmo critério da tela de Carteiras (decisão C5, 01/10/2026): só
+    # Operadores ativos contam. Antes `com_carteira` incluía qualquer linha
+    # de `carteira` — inativos, ex-operadores — e o número divergia.
+    ids_operadores = {str(u.get("id")) for u in operadores}
+    com_carteira = {str(c.get("user_id")) for c in cart if str(c.get("user_id")) in ids_operadores}
     sem_carteira_n = len(operadores) - len(com_carteira)
 
     # Quem está sem carteira, com nome: o número sozinho só gera pergunta.

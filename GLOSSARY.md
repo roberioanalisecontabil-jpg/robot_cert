@@ -33,8 +33,12 @@ _Avoid_: setor, grupo
 Um arquivo de certificado digital (PFX) de um cliente, identificado pela impressão digital e ligado a um Documento. Um Documento tem vários Certificados ao longo do tempo (renovações).
 
 **Documento** (`documento`):
-O CNPJ ou CPF do cliente titular do Certificado, só dígitos. É a chave pela qual o cliente existe no portal; não há cadastro de cliente.
+O CNPJ ou CPF do titular do Certificado, só dígitos. É a chave pela qual o Cliente existe no portal; não há cadastro de cliente. Atribuições e Exceções são sobre Documentos do Inventário.
 _Avoid_: cliente, empresa (quando se refere à chave)
+
+**Cliente**:
+O titular de um Documento, como as telas o nomeiam: nome e CNPJ/CPF. Quem opera pensa em cliente; a regra de negócio trabalha com o Documento.
+_Avoid_: empresa, titular (nas telas)
 
 **Inventário** (`cert_snapshots`):
 A última foto dos Certificados encontrados na pasta do servidor. É o universo sobre o qual as Carteiras atuam.
@@ -44,11 +48,11 @@ _Avoid_: snapshot, pasta
 O conjunto de Documentos que um Usuário alcança. Todo Usuário tem uma Carteira ao ser criado, e o comportamento dela depende do Papel: a do Operador é feita de Atribuições (começa vazia, só alcança o que recebeu); a do Gestor é feita de Exceções (começa cheia, alcança todo o Inventário menos o que lhe foi retirado). A Carteira nunca guarda estado dormente: mudar de Papel ou Desativar a esvazia.
 
 **Atribuição** (`atribuido_por`):
-Um Documento posto na Carteira de um Operador pelo Gestor do seu Departamento ou pelo Administrador. O Gestor só atribui Documentos que estão no próprio Alcance.
-_Avoid_: inclusão, liberação
+Um Documento posto na Carteira de um Operador pelo Gestor do seu Departamento ou pelo Administrador. O Gestor só atribui Documentos que estão no próprio Alcance. Verbos nas telas: atribuir, retirar.
+_Avoid_: inclusão, liberação, liberar
 
 **Exceção**:
-Um Documento retirado da Carteira de um Gestor pelo Administrador. Só o Administrador registra Exceções; um Gestor não limita outro.
+Um Documento retirado da Carteira de um Gestor pelo Administrador. Só o Administrador registra Exceções; um Gestor não limita outro. Verbos nas telas: retirar (registra), devolver (remove).
 _Avoid_: restrição, bloqueio, acesso restrito
 
 **Alcance**:

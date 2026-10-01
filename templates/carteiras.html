@@ -50,11 +50,11 @@
     </div>
 
     <div class="cg-cart-layout">
-      <!-- Lista de operadores: cada item é um link (?operador=), sem
-           rolagem interna; sem carteira primeiro. -->
+      <!-- Lista de pessoas com carteira: cada item é um link (?operador=),
+           com rolagem própria (.cg-op-rolagem); sem carteira primeiro. -->
       <section class="ag-card cg-cart-lista" aria-labelledby="tit-operadores">
         <div class="cg-cart-cab">
-          <h2 class="ag-card__title" id="tit-operadores">Operadores</h2>
+          <h2 class="ag-card__title" id="tit-operadores">Pessoas</h2>
           <p class="cg-cart-resumo" id="opResumo"></p>
         </div>
         <form class="cg-cart-busca" method="get" action="/carteiras" role="search">
@@ -113,13 +113,13 @@
                   <h3 id="tit-disponiveis">Disponíveis <span id="contaDisponiveis"></span></h3>
                 </header>
                 <div class="cg-transfer__lista" id="listaDisponiveis" role="listbox" aria-multiselectable="true"
-                     tabindex="0" aria-label="Clientes disponíveis para liberar"></div>
+                     tabindex="0" aria-label="Clientes disponíveis para atribuir"></div>
                 <footer class="cg-transfer__rodape">
                   <span class="cg-transfer__selecao" id="selDisponiveis" hidden></span>
                   <div class="cg-transfer__acoes">
-                    <button type="button" id="btnLiberarSel" disabled class="ag-btn ag-btn--outline ag-btn--sm" data-lote="disponiveis:selecionados">
-                      Liberar<span data-conta></span> <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
-                    <button type="button" id="btnAddTodos" disabled class="ag-btn ag-btn--ghost ag-btn--sm" data-lote="disponiveis:todos">
+                    <button type="button" id="btnAtribuirSel" disabled class="ag-btn ag-btn--outline ag-btn--sm" data-lote="disponiveis:selecionados">
+                      <span data-rotulo>Atribuir</span><span data-conta></span> <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                    <button type="button" id="btnAddTodos" disabled class="ag-btn ag-btn--ghost ag-btn--sm" data-lote="disponiveis:todos" aria-label="Atribuir todos os listados">
                       Todos<span data-conta></span> <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg></button>
                   </div>
                 </footer>
@@ -135,8 +135,8 @@
                   <span class="cg-transfer__selecao" id="selCarteira" hidden></span>
                   <div class="cg-transfer__acoes">
                     <button type="button" id="btnRemoverSel" disabled class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-lote="carteira:selecionados">
-                      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-conta></span> Remover</button>
-                    <button type="button" id="btnRemoverTodos" disabled class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-lote="carteira:todos">
+                      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span data-conta></span> <span data-rotulo>Retirar</span></button>
+                    <button type="button" id="btnRemoverTodos" disabled class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-lote="carteira:todos" aria-label="Retirar todos os listados">
                       <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg><span data-conta></span> Todos</button>
                   </div>
                 </footer>
@@ -177,7 +177,7 @@
           <a href="data:text/csv;charset=utf-8,email%2Ccnpj%0A" download="modelo-carteiras.csv">Baixar o modelo (.csv)</a>
         </p>
         <p class="cg-cart-importar__formato" id="dicaImportar">
-          Duas colunas, <code>email</code> do operador e <code>cnpj</code> do cliente, uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code> e <code>cpf</code>. Só para operadores dos departamentos que você lidera; a carteira de um gestor é editada na tela, pelo administrador.
+          Duas colunas, <code>email</code> do operador e <code>cnpj</code> do cliente, uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code> e <code>cpf</code>. <span id="dicaImportarAlcance">Só para operadores; a carteira de um gestor é editada na tela.</span>
         </p>
         <!-- Linhas recusadas ficam aqui, com o motivo: um toast sumiria. -->
         <div id="importErros" class="ag-alert ag-alert--warning" hidden>
@@ -205,7 +205,7 @@
     let _papel = null;
     let _universo = [];          // todos os clientes atribuíveis (491 hoje)
     let _universoTruncado = 0;   // >0 se a rota cortou a lista
-    let _trilha = {};            // documento -> quem liberou e quando
+    let _trilha = {};            // documento -> quem atribuiu e quando
     const OPERADOR_INICIAL = {{ operador_id | tojson }};
 
     // Sucesso vai no toast; erro fica num alerta em bloco E no toast — o
@@ -234,7 +234,6 @@
     // qualquer pessoa — as Atribuições de um operador e as Exceções de um
     // gestor. O gestor edita só as Atribuições dos operadores dos
     // departamentos que lidera; o servidor já recorta a lista a eles.
-    const souAdmin = localStorage.getItem("user_role") === "admin";
 
     // Gestor: etiqueta do papel. "Sem carteira" é coisa de operador — a
     // carteira do gestor começa cheia e só encolhe por exceção.
@@ -249,7 +248,10 @@
         if (o.role === "admin") return false;
         // Conta inativa some, SALVO se ainda tiver carteira a limpar (a
         // limpeza automática pode falhar; esconder deixaria a carteira órfã).
-        if (!o.ativo && !(o.documentos > 0 || o.excecoes > 0)) return false;
+        // Para gestor, "carteira a limpar" são as exceções: `documentos` dele
+        // é o inventário inteiro e seria sempre > 0.
+        const sobrou = o.tipo_carteira === "excecoes" ? o.excecoes > 0 : o.documentos > 0;
+        if (!o.ativo && !sobrou) return false;
         return true;
       });
     }
@@ -294,14 +296,14 @@
       }
 
       // Resumo discreto: "6 operadores · 1 sem carteira"; o trecho é link
-      // que rola até o primeiro sem carteira.
+      // que rola até o primeiro sem carteira. Vem do servidor, que conta só
+      // Operadores — a tela contava gestores como operadores.
       const resumo = document.getElementById("opResumo");
       const semCart = todos.filter((o) => o.sem_carteira);
-      const n = todos.length;
-      const nOps = n + (n === 1 ? " operador" : " operadores");
-      resumo.innerHTML = semCart.length
-        ? nOps + " · <a href=\"#\">" + semCart.length + " sem carteira</a>"
-        : nOps + (n ? ", todos com carteira" : "");
+      const texto = (_resumo && _resumo.texto) || "";
+      resumo.innerHTML = semCart.length && _resumo
+        ? esc(texto).replace(esc(semCart.length + " sem carteira"), "<a href=\"#\">" + semCart.length + " sem carteira</a>")
+        : esc(texto);
       const link = resumo.querySelector("a");
       if (link) link.addEventListener("click", (ev) => {
         ev.preventDefault();
@@ -353,8 +355,7 @@
       document.getElementById("detalheCarteira").hidden = false;
       document.getElementById("opNome").textContent = nomeDe(_selecionado);
       document.getElementById("opEmail").textContent = _selecionado.email;
-      document.getElementById("opAviso").innerHTML = (_selecionado.ativo ? "" : `<span class="ag-badge ag-badge--neutral">Conta inativa</span> `) +
-        badgeDe(_selecionado);
+      atualizarAviso();
       document.getElementById("buscaDoc").value = "";
 
       renderOperadores();
@@ -364,6 +365,23 @@
         msg("Não foi possível carregar a lista de clientes: " + e.message, "error");
       }
       await Promise.all([carregarCarteira(), carregarHistorico()]);
+    }
+
+    /** Badges do cabeçalho (inativa, Gestor, Sem carteira). Depois de atribuir
+     *  ou retirar, só "Sem carteira" era reescrito e os outros sumiam. */
+    function atualizarAviso() {
+      if (!_selecionado) return;
+      document.getElementById("opAviso").innerHTML =
+        (_selecionado.ativo ? "" : `<span class="ag-badge ag-badge--neutral">Conta inativa</span> `) + badgeDe(_selecionado);
+    }
+
+    // Rótulos dos botões seguem o tipo de carteira (C1, 01/10/2026):
+    // Atribuir/Retirar para Operador; Devolver/Retirar para Gestor, em que
+    // "retirar" registra uma Exceção e "devolver" a remove.
+    function ajustarRotulosDosBotoes() {
+      document.querySelector("#btnAtribuirSel [data-rotulo]").textContent = deExcecoes() ? "Devolver" : "Atribuir";
+      document.querySelector("#btnRemoverSel [data-rotulo]").textContent = "Retirar";
+      document.getElementById("btnAddTodos").setAttribute("aria-label", deExcecoes() ? "Devolver todos os listados" : "Atribuir todos os listados");
     }
 
     function atualizarContagemOp() {
@@ -383,7 +401,7 @@
       document.getElementById("tit-disponiveis").firstChild.textContent = deExcecoes() ? "Exceções " : "Disponíveis ";
       document.getElementById("tit-carteira").firstChild.textContent = deExcecoes() ? "No alcance " : "Na carteira ";
       document.getElementById("listaDisponiveis").setAttribute("aria-label",
-        deExcecoes() ? "Clientes retirados do alcance deste gestor" : "Clientes disponíveis para liberar");
+        deExcecoes() ? "Clientes retirados do alcance deste gestor" : "Clientes disponíveis para atribuir");
       document.getElementById("listaCarteira").setAttribute("aria-label",
         deExcecoes() ? "Clientes no alcance deste gestor" : "Clientes na carteira desta pessoa");
     }
@@ -400,6 +418,7 @@
         _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
         _excecoes = Object.fromEntries((d.excecoes || []).map((i) => [i.documento, i]));
         ajustarTitulosDosPaineis();
+        ajustarRotulosDosBotoes();
         atualizarContagemOp();
         renderTransfer();
       } catch (e) {
@@ -409,16 +428,12 @@
 
     async function carregarHistorico() {
       const el = document.getElementById("historicoOperador");
-      // A trilha é de admin; para o gestor a seção some em vez de mostrar um
-      // erro que ele não pode resolver.
-      if (_papel !== "admin") {
-        el.innerHTML = `<p class="cg-cart-dica">Disponível para administradores.</p>`;
-        return;
-      }
+      // Rota da própria tela, com o alcance da carteira (C3, 01/10/2026): o
+      // gestor vê as instalações dos operadores dos departamentos que lidera.
       el.innerHTML = `<p class="cg-cart-dica">Carregando…</p>`;
       try {
         const r = await fetch(
-          `/api/cert-installer/trilha?dias=365&user_email=${encodeURIComponent(_selecionado.email)}`,
+          `/api/carteira/${encodeURIComponent(_selecionado.id)}/instalacoes?dias=365`,
           { headers: getHeaders() }
         );
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
@@ -474,10 +489,11 @@
         trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}` +
           (ex.registrado_por ? " · retirado por " + esc(ex.registrado_por) : "") +
           (ex.registrado_em ? " em " + new Date(ex.registrado_em).toLocaleDateString("pt-BR") : "") +
+          (x.fora_do_inventario ? " · fora do inventário atual" : "") +
           `</span>`;
       } else if (t && (t.atribuido_por || t.atribuido_em || t.origem === "papel")) {
         trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}` +
-          (t.origem === "papel" ? " · pelo papel de gestor" : (t.atribuido_por ? " · liberado por " + esc(t.atribuido_por) : "")) +
+          (t.origem === "papel" ? " · pelo papel de gestor" : (t.atribuido_por ? " · atribuído por " + esc(t.atribuido_por) : "")) +
           (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
           (t.no_inventario === false ? " · fora do inventário atual" : "") +
           `</span>`;
@@ -511,7 +527,7 @@
         b.disabled = !n;
         b.querySelector("[data-conta]").textContent = n ? ` (${n})` : "";
       };
-      rotulo("btnLiberarSel", selD.length);
+      rotulo("btnAtribuirSel", selD.length);
       rotulo("btnAddTodos", _dispFiltrados.length);
       rotulo("btnRemoverSel", selC.length);
       rotulo("btnRemoverTodos", _cartFiltrados.length);
@@ -533,6 +549,16 @@
         }
       }
       const disponiveis = _universo.filter((x) => !_carteiraAtual.has(x.documento));
+      // Exceção de documento que saiu do inventário: continua valendo e tem
+      // de aparecer para poder ser devolvida — senão a contagem "menos N
+      // exceções" dizia um número que o painel não mostrava.
+      if (deExcecoes()) {
+        for (const doc of Object.keys(_excecoes)) {
+          if (!disponiveis.some((x) => x.documento === doc)) {
+            disponiveis.push({ documento: doc, nome: _excecoes[doc].nome || "", fora_do_inventario: true });
+          }
+        }
+      }
       const dispFiltrados = filtrar(disponiveis);
       const cartFiltrados = filtrar(naCarteira);
 
@@ -555,7 +581,7 @@
           // ninguém saiba por quê.
           : deExcecoes()
             ? `<p class="cg-transfer__vazio">Todos os clientes foram retirados. Este gestor <strong>não consegue instalar nenhum certificado</strong>.</p>`
-            : `<p class="cg-transfer__vazio">Carteira vazia. Esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
+            : `<p class="cg-transfer__vazio">Carteira vazia. Esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Atribua clientes ao lado.</p>`;
 
       atualizarLote(dispFiltrados, cartFiltrados);
       document.getElementById("dicaBusca").textContent = _universoTruncado
@@ -565,13 +591,12 @@
 
     async function atribuir(documentos) {
       if (!documentos.length) return;
-      // Liberar em lote confirma; liberar um não. A magnitude fica visível
-      // no rótulo, e a confirmação protege o clique distraído.
+      // Atribuir em lote confirma; atribuir um não (C4): um é desfazível em
+      // um clique, e a confirmação protege o clique distraído no lote.
       if (documentos.length > 1 && !confirm(
-        (deExcecoes()
-          ? `Tirar ${documentos.length} exceções deste gestor?`
-          : `Liberar ${documentos.length} clientes para esta pessoa?`) +
-        `\n\nEla passa a conseguir instalar os certificados deles.`
+        deExcecoes()
+          ? `Devolver ${documentos.length} clientes a este gestor?\n\nEle volta a ver e instalar os certificados deles.`
+          : `Atribuir ${documentos.length} clientes a esta pessoa?\n\nEla passa a ver e instalar os certificados deles.`
       )) return;
       try {
         const r = await fetch("/api/carteira", {
@@ -581,15 +606,15 @@
         });
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         msg(deExcecoes()
-          ? (documentos.length === 1 ? "Exceção removida." : `${documentos.length} exceções removidas.`)
-          : (documentos.length === 1 ? "Cliente liberado." : `${documentos.length} clientes liberados.`), "success");
+          ? (documentos.length === 1 ? "Cliente devolvido ao gestor." : `${documentos.length} clientes devolvidos ao gestor.`)
+          : (documentos.length === 1 ? "Cliente atribuído." : `${documentos.length} clientes atribuídos.`), "success");
         await Promise.all([carregarCarteira(), carregarOperadores()]);
         if (_selecionado) {
           _selecionado = _operadores.find((o) => o.id === _selecionado.id) || _selecionado;
-          document.getElementById("opAviso").innerHTML = _selecionado.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "";
+          atualizarAviso();
         }
       } catch (e) {
-        msg("Não foi possível liberar: " + e.message, "error");
+        msg((deExcecoes() ? "Não foi possível devolver: " : "Não foi possível atribuir: ") + e.message, "error");
       }
     }
 
@@ -616,7 +641,7 @@
         const d = await r.json();
         const erros = d.erros || [];
         const n = d.pessoas || 0;
-        showToast(`${d.atribuidos} ${d.atribuidos === 1 ? "cliente liberado" : "clientes liberados"} em ${n} ${n === 1 ? "carteira atualizada" : "carteiras atualizadas"}.`, erros.length ? "warning" : "success");
+        showToast(`${d.atribuidos} ${d.atribuidos === 1 ? "cliente atribuído" : "clientes atribuídos"} em ${n} ${n === 1 ? "carteira atualizada" : "carteiras atualizadas"}.`, erros.length ? "warning" : "success");
 
         // Cada linha recusada com o motivo, dentro do modal, que fica aberto.
         if (erros.length) {
@@ -646,10 +671,11 @@
       if (!documentos.length) return;
       const um = documentos.length === 1;
       if (!confirm(
-        (deExcecoes()
-          ? (um ? `Registrar exceção para este cliente?` : `Registrar ${documentos.length} exceções?`)
-          : (um ? `Remover este cliente da carteira?` : `Remover ${documentos.length} clientes da carteira?`)) +
-        `\n\nA pessoa deixa de conseguir ver e instalar os certificados ${um ? "dele" : "deles"}.`
+        deExcecoes()
+          ? (um ? `Retirar este cliente do gestor (registrar exceção)?` : `Retirar ${documentos.length} clientes do gestor (registrar exceções)?`) +
+            `\n\nO gestor deixa de ver e instalar os certificados ${um ? "dele" : "deles"}.`
+          : (um ? `Retirar este cliente da carteira?` : `Retirar ${documentos.length} clientes da carteira?`) +
+            `\n\nA pessoa deixa de ver e instalar os certificados ${um ? "dele" : "deles"}.`
       )) return;
       let falhas = 0;
       for (const doc of documentos) {
@@ -663,22 +689,26 @@
       }
       msg(
         falhas
-          ? `${documentos.length - falhas} removidos; ${falhas} falharam.`
+          ? `${documentos.length - falhas} retirados; ${falhas} falharam.`
           : deExcecoes()
             ? (um ? "Exceção registrada." : `${documentos.length} exceções registradas.`)
-            : (um ? "Cliente removido da carteira." : `${documentos.length} clientes removidos da carteira.`),
+            : (um ? "Cliente retirado da carteira." : `${documentos.length} clientes retirados da carteira.`),
         falhas ? "error" : "success"
       );
       await Promise.all([carregarCarteira(), carregarOperadores()]);
       if (_selecionado) {
         _selecionado = _operadores.find((o) => o.id === _selecionado.id) || _selecionado;
-        document.getElementById("opAviso").innerHTML = _selecionado.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "";
+        atualizarAviso();
       }
     }
 
     (function init() {
       // Sidebar por papel: ui-common.js (initSidebarPorPapel).
       _papel = localStorage.getItem("user_role");
+      if (_papel === "gestor") {
+        document.getElementById("dicaImportarAlcance").textContent =
+          "Só para operadores dos departamentos que você lidera, e só com clientes do seu alcance.";
+      }
 
       const busca = document.getElementById("buscaOperador");
       busca.value = new URLSearchParams(location.search).get("q") || "";
@@ -700,7 +730,7 @@
         });
       });
 
-      document.getElementById("btnLiberarSel").addEventListener("click", () =>
+      document.getElementById("btnAtribuirSel").addEventListener("click", () =>
         atribuir(selecionados(document.getElementById("listaDisponiveis"))));
       document.getElementById("btnAddTodos").addEventListener("click", () =>
         atribuir(_dispFiltrados.map((x) => x.documento)));

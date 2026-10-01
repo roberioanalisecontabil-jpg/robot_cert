@@ -35,7 +35,7 @@ PAPEL_GESTOR_E_DERIVADO = (
 )
 DEPARTAMENTO_OBRIGATORIO = (
     "Escolha o departamento da pessoa. Sem ele, nenhum Gestor consegue "
-    "liberar certificados para ela."
+    "atribuir clientes a ela."
 )
 
 

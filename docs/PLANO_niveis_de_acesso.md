@@ -5,7 +5,11 @@
 > [ADR 0001](adr/0001-carteira-por-papel.md): quem lidera um departamento **é**
 > Gestor (o papel deriva da liderança), a carteira do Gestor passou a ser de
 > Exceções, e `require_admin_ou_lider` chama-se `require_admin_ou_gestor`.
-> O eixo da *matriz de permissões* (módulo × nível) continua como descrito.
+> O eixo da *matriz de permissões* (módulo × nível) continua como descrito,
+> com uma exceção: `usuarios` saiu da matriz e voltou a `require_admin`
+> (revisão de 01/10/2026). As duas perguntas da §5 (por usuário; `apagar`
+> separado de `editar`) foram respondidas com **não** em 01/10/2026 — ver
+> `docs/revisao-paginas-2026-10.md`, N1 e N2.
 > Vocabulário em `GLOSSARY.md`.
 > Elaborado em 2026-08-19. Todos os números vieram de `app/main.py` e
 > `static/ui-common.js` na data, contados por script, não estimados.

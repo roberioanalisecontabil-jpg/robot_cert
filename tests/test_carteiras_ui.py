@@ -349,7 +349,7 @@ def test_estado_vazio_diz_a_consequencia(html: str) -> None:
 
 def test_remover_pede_confirmacao(html: str) -> None:
     """Tirar acesso de alguém no meio de uma instalação merece confirmação."""
-    assert "Remover este cliente da carteira?" in html
+    assert "Retirar este cliente da carteira?" in html
 
 
 # ──────────────────────────────────────────────────────────────────────────
