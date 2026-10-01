@@ -27,7 +27,7 @@
     <header class="ag-page__head ag-section-head">
       <div>
         <h1 class="ag-page__title">Usuários</h1>
-        <p class="ag-page__lead">Adicione ou remova membros da equipe com acesso ao portal.</p>
+        <p class="ag-page__lead">Cadastre e administre quem entra no portal: contas, departamentos e níveis de acesso. Quem sai da equipe é desativado, não apagado.</p>
       </div>
       <div class="cg-usu-cabecalho-menu">
         <button type="button" id="btn-abrir-importar" class="ag-btn ag-btn--outline">
@@ -93,7 +93,6 @@
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico" aria-sort="ascending">Nome</th>
                 <th role="columnheader" class="ag-th--estatico">Nível</th>
-                <th role="columnheader" class="ag-th--estatico">Gestor</th>
                 <th role="columnheader" class="ag-th--estatico">Status</th>
                 <th role="columnheader" class="ag-th--estatico">Carteira</th>
                 <th role="columnheader" class="ag-th--estatico cg-col-acoes"><span class="cg-sr-only">Ações</span></th>
@@ -210,11 +209,6 @@
           <select id="ed-departamento" class="ag-select" required></select>
           <p class="ag-ajuda">Obrigatório. Define quem pode liberar certificados para esta pessoa: os gestores do departamento.</p>
         </div>
-        <div class="ag-field modal__campo">
-          <label class="ag-label" for="ed-gestor">Gestor responsável <span class="cg-usu-tag">informativo</span></label>
-          <select id="ed-gestor" class="ag-select"><option value="">Sem gestor</option></select>
-          <p class="ag-ajuda">Registra a quem a pessoa responde. <strong>Não concede acesso</strong>: quem libera certificados para ela são os gestores do departamento.</p>
-        </div>
       </div>
       <div class="ag-modal__foot">
         <button type="button" class="ag-btn ag-btn--outline" id="ed-cancelar-2">Cancelar</button>
@@ -233,7 +227,7 @@
       </div>
       <div class="ag-modal__body">
         <div class="ag-alert ag-alert--danger" id="modal-senha-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
-        <p class="ag-ajuda">A nova senha vale a partir de agora e a pessoa terá de trocá-la no próximo acesso. A sessão aberta dela não cai.</p>
+        <p class="ag-ajuda">A nova senha vale a partir de agora e a pessoa terá de trocá-la no próximo acesso. A sessão aberta dela é encerrada: quem redefine a senha de alguém sabe a senha, e a sessão antiga não pode sobreviver a isso.</p>
         <div class="ag-field">
           <label class="ag-label" for="sn-nova">Nova senha</label>
           <div class="cg-usu-senha">
@@ -268,7 +262,7 @@
           <p class="ag-dropzone__nome" aria-live="polite"></p>
         </div>
         <p class="ag-ajuda"><a href="data:text/csv;charset=utf-8,nome%2Cemail%2Csenha%2Cnivel%2Cdepartamento%0A" download="modelo-usuarios.csv">Baixar o modelo (.csv)</a></p>
-        <p class="ag-ajuda" id="dica-import">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code>, <code>nivel</code> (ou <code>role</code>) e <code>departamento</code> (o nome do setor, já cadastrado). Em <code>nivel</code>, use exatamente <code>admin</code> ou <code>user</code> (operador); gestor se designa em Departamentos.</p>
+        <p class="ag-ajuda" id="dica-import">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code>, <code>nivel</code> (ou <code>role</code>) e <code>departamento</code> (o nome do departamento, já cadastrado). Em <code>nivel</code>, use exatamente <code>admin</code> ou <code>user</code> (operador); gestor se designa em Departamentos.</p>
         <div class="ag-alert ag-alert--danger" id="msg-import" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
         <div id="erros-import" class="ag-alert ag-alert--warning" hidden>
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
@@ -342,18 +336,6 @@
 
         function nomeDe(u) { return u.nome_exibicao || u.full_name || u.email || '—'; }
 
-        /**
-         * Célula de gestor. "—" quando não se aplica (gestor e administrador
-         * não têm gestor) e também para operador sem gestor: o vínculo é
-         * informativo, não concede acesso, então não é pendência.
-         */
-        function celulaGestor(u) {
-            const papel = String(u.role || '').toLowerCase();
-            if (papel !== 'user' || !u.gestor_id) return '—';
-            const g = usersCache.find((x) => x.id === u.gestor_id);
-            return g ? esc(nomeDe(g)) : '<span class="ag-badge ag-badge--warning">Gestor não encontrado</span>';
-        }
-
         function celulaCarteira(u) {
             if (String(u.role || '').toLowerCase() !== 'user') return '—';
             const n = u.carteira || 0;
@@ -391,8 +373,8 @@
             if (!users.length) {
                 const temFiltro = q || roleFilter !== 'todos' || statusFilter !== 'todos';
                 body.innerHTML = temFiltro
-                    ? '<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nada encontrado' + (q ? ' para “' + esc(q) + '”' : ' com esses filtros') + '. <a href="#" id="link-limpar-filtros">Limpar filtros</a>.</td></tr>'
-                    : '<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhum usuário cadastrado. Use “Novo usuário” ou importe um CSV.</td></tr>';
+                    ? '<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nada encontrado' + (q ? ' para “' + esc(q) + '”' : ' com esses filtros') + '. <a href="#" id="link-limpar-filtros">Limpar filtros</a>.</td></tr>'
+                    : '<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nenhum usuário cadastrado. Use “Novo usuário” ou importe um CSV.</td></tr>';
                 const l = document.getElementById('link-limpar-filtros');
                 if (l) l.addEventListener('click', (ev) => {
                     ev.preventDefault();
@@ -412,10 +394,9 @@
                 <tr role="row" class="${ativo ? '' : 'is-inativa'}${nova ? ' is-nova' : ''}" data-id="${esc(u.id)}">
                     <td role="cell" class="cg-col-nome"><a href="#" data-action="editar" data-id="${esc(u.id)}"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nome)}</span><span class="ag-cell-sub">${esc(u.email || '')}</span></span></a></td>
                     <td role="cell" class="cg-col-nivel">${badgeNivel(u.role)}</td>
-                    <td role="cell" class="cg-col-gestor">${celulaGestor(u)}</td>
                     <td role="cell" class="cg-col-status">${ativo ? '<span class="ag-badge ag-badge--success">Ativo</span>' : '<span class="ag-badge ag-badge--neutral">Inativo</span>'}</td>
                     <td role="cell" class="cg-col-carteira">${celulaCarteira(u)}</td>
-                    <td role="cell" class="cg-col-meta">${badgeNivel(u.role)} ${ativo ? '<span class="ag-badge ag-badge--success">Ativo</span>' : '<span class="ag-badge ag-badge--neutral">Inativo</span>'}${String(u.role || '').toLowerCase() === 'user' ? ' <span>' + celulaCarteira(u) + '</span>' : ''}${u.gestor_id && String(u.role || '').toLowerCase() === 'user' ? '<span>Gestor: ' + celulaGestor(u) + '</span>' : ''}</td>
+                    <td role="cell" class="cg-col-meta">${badgeNivel(u.role)} ${ativo ? '<span class="ag-badge ag-badge--success">Ativo</span>' : '<span class="ag-badge ag-badge--neutral">Inativo</span>'}${String(u.role || '').toLowerCase() === 'user' ? ' <span>' + celulaCarteira(u) + '</span>' : ''}</td>
                     <td role="cell" class="cg-col-acoes">
                         <details class="ag-menu">
                             <summary class="ag-btn ag-btn--icon-sm" aria-label="Ações para ${esc(nome)}" role="button">
@@ -509,7 +490,7 @@
             acompanhamento: ['Acompanhamento', 'em "Só ver" a pessoa acompanha, mas não escolhe quais'],
             carteiras:      ['Carteiras', 'quais clientes cada operador instala'],
             instalador:     ['Instalador', 'o diagnóstico e o cofre'],
-            usuarios:       ['Usuários', 'contas, departamentos e esta tela'],
+            usuarios:       ['Usuários', 'contas, departamentos e níveis de acesso'],
             configuracao:   ['Configuração', 'pastas, alertas e SMTP'],
         };
         const PERM_NIVEIS = {
@@ -565,15 +546,17 @@
                     }).join('');
                     return '<td><select class="form-control" data-papel="' + papel +
                            '" data-modulo="' + mod + '"' +
-                           (info.governado ? '' : ' disabled') +
+                           ((info.governado && !info.so_admin) ? '' : ' disabled') +
                            ' aria-label="' + esc(par[0]) + ' para ' + papel + '">' +
                            opcoes + '</select></td>';
                 }).join('');
                 // Modulo ainda nao ligado: o controle fica desabilitado e diz
                 // por que. Deixa-lo ativo seria oferecer um botao que nao faz
                 // nada — o defeito que esta tela existe para nao repetir.
-                const aviso = info.governado ? '' :
-                    '<small class="perm-pendente">ainda não governado por esta tela</small>';
+                const aviso = info.so_admin
+                    ? '<small class="perm-nota">só o administrador: aqui se nomeiam gestores e administradores</small>'
+                    : (info.governado ? '' :
+                        '<small class="perm-pendente">ainda não governado por esta tela</small>');
                 const soLeitura = (info.governado && info.niveis.length < 3) ?
                     '<small class="perm-nota">' +
                     esc(par[2] || 'só consulta — não há o que editar') + '</small>' : '';
@@ -710,21 +693,21 @@
                 renderEmptyRow(body, 4, {
                     icon: '🏢',
                     title: 'Nenhum departamento cadastrado',
-                    description: 'Crie o primeiro setor para começar a definir quem libera certificados para quem.',
+                    description: 'Crie o primeiro departamento para definir quem libera certificados para quem.',
                 });
                 return;
             }
             body.innerHTML = depsCache.map((d) => {
                 const lideres = (d.lideres || []).length
                     ? d.lideres.map((l) => esc(l.nome)).join(', ')
-                    // Setor sem líder não é detalhe: ninguém pode liberar nada
+                    // Departamento sem gestor não é detalhe: ninguém pode liberar nada
                     // para quem está nele, e isso precisa saltar aos olhos.
                     : badgeAviso('sem gestor');
                 return `
                 <tr role="row">
                   <td role="cell" data-label="Departamento"><strong>${esc(d.nome)}</strong></td>
                   <td role="cell" data-label="Gestores">${lideres}</td>
-                  <td role="cell" data-label="Pessoas">${d.membros}</td>
+                  <td role="cell" data-label="Pessoas">${d.membros}${d.inativos ? ` <small class="text-muted">+ ${d.inativos} inativa${d.inativos === 1 ? '' : 's'}</small>` : ''}</td>
                   <td role="cell">
                     <div class="row-actions">
                       <button class="btn-action" data-dep-acao="editar" data-id="${d.id}">Editar</button>
@@ -746,12 +729,29 @@
         async function loadDepartamentos() {
             try {
                 const r = await fetch('/api/departamentos', { headers: getHeaders() });
-                if (!r.ok) return;
+                if (!r.ok) {
+                    erroNaTabela('dep-list-body', 4, 'Não foi possível carregar os departamentos: ' + (await mensagemCorpoErro(r)));
+                    return;
+                }
                 depsCache = await r.json();
                 renderDepartamentos();
             } catch (e) {
                 console.error(e);
+                erroNaTabela('dep-list-body', 4, 'Não foi possível carregar os departamentos: erro de conexão com o servidor');
             }
+        }
+
+        /** Toast com quem mudou de papel ao salvar gestores ou apagar departamento. */
+        function avisarPapeis(papeis) {
+            const nome = (id, email) => {
+                const u = usersCache.find((x) => x.id === id);
+                return (u && (u.full_name || u.email)) || email || id;
+            };
+            (papeis || []).forEach((m) => {
+                if (m.erro) { showToast(`${nome(m.id, m.email)}: ${m.erro}`, 'warning'); return; }
+                if (m.para === 'gestor') showToast(`${nome(m.id, m.email)} virou gestor e passou a ver todos os certificados.`, 'success');
+                else if (m.para === 'user') showToast(`${nome(m.id, m.email)} voltou a operador, com a carteira vazia.`, 'warning');
+            });
         }
 
         let depEditandoId = null;
@@ -763,7 +763,7 @@
             document.getElementById('modal-dep-titulo').textContent =
                 d ? 'Editar departamento' : 'Novo departamento';
             document.getElementById('modal-dep-sub').textContent =
-                d ? `${d.membros} pessoa(s) neste setor` : '';
+                d ? `${d.membros} pessoa(s) ativa(s) neste departamento${d.inativos ? ` e ${d.inativos} inativa(s)` : ''}` : '';
             document.getElementById('dep-nome').value = d ? d.nome : '';
 
             const sel = document.getElementById('dep-lideres');
@@ -771,7 +771,7 @@
             const escolhidos = new Set((d && d.lideres || []).map((l) => l.id));
             usersCache
                 // Só contas ativas: líder que não entra no portal não libera
-                // nada, e o setor pareceria resolvido sem estar.
+                // nada, e o departamento pareceria resolvido sem estar.
                 .filter(estaAtivo)
                 .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
                 .forEach((u) => {
@@ -828,8 +828,11 @@
                     await loadDepartamentos();
                     return;
                 }
+                const resultadoLideres = await rl.json().catch(() => ({}));
                 document.getElementById('modal-dep').close();
                 await loadDepartamentos();
+                await loadUsers();
+                avisarPapeis(resultadoLideres.papeis);
                 showToast('Departamento salvo.', 'success');
             } catch (err) {
                 erroDoDep('Erro de conexão com o servidor.');
@@ -845,7 +848,7 @@
             const ok = await confirmarAcao({
                 titulo: 'Apagar departamento',
                 // Diz o que acontece com as pessoas: elas NÃO são apagadas, mas
-                // ficam sem setor — e sem setor ninguém pode liberar nada para
+                // ficam sem departamento — e sem ele só o administrador libera para
                 // elas. É a consequência que decide se vale apagar.
                 mensagem: (d.membros
                     ? `${d.nome} tem ${d.membros} pessoa(s). Elas não serão apagadas, mas ficam sem departamento — só o administrador libera certificados para elas até serem colocadas em outro.`
@@ -863,20 +866,34 @@
                 showToast('Não foi possível apagar: ' + (await mensagemCorpoErro(r)), 'error');
                 return;
             }
+            const resultadoApagar = await r.json().catch(() => ({}));
             await loadDepartamentos();
             await loadUsers();
             showToast('Departamento apagado.', 'success');
+            avisarPapeis(resultadoApagar.papeis);
+        }
+
+        function erroNaTabela(idCorpo, colunas, texto) {
+            // Erro silencioso era o estado anterior: a tabela ficava vazia e a
+            // pessoa concluia que nao havia usuarios. O erro precisa dizer que
+            // e erro.
+            document.getElementById(idCorpo).innerHTML =
+                '<tr class="cg-state-row" role="row"><td role="cell" colspan="' + colunas + '" class="ag-table__vazio">' + esc(texto) + ' <a href="#" onclick="location.reload(); return false;">Recarregar</a>.</td></tr>';
         }
 
         async function loadUsers() {
             toggleLoading(true, "Carregando usuários...");
             try {
                 const r = await fetch('/api/users', { headers: getHeaders() });
-                if (!r.ok) return;
+                if (!r.ok) {
+                    erroNaTabela('user-list-body', 5, 'Não foi possível carregar os usuários: ' + (await mensagemCorpoErro(r)));
+                    return;
+                }
                 usersCache = await r.json();
                 renderUsers();
             } catch (e) {
                 console.error(e);
+                erroNaTabela('user-list-body', 5, 'Não foi possível carregar os usuários: erro de conexão com o servidor');
             } finally {
                 toggleLoading(false);
             }
@@ -890,42 +907,12 @@
             el.hidden = !texto;
         }
 
-        /** Preenche o select de gestor com os candidatos possíveis. */
-        function preencherGestores(user) {
-            const sel = document.getElementById('ed-gestor');
-            sel.textContent = '';
-            const vazio = document.createElement('option');
-            vazio.value = '';
-            vazio.textContent = 'Sem gestor';
-            sel.appendChild(vazio);
-
-            usersCache
-                // Só quem pode chefiar, e nunca a própria pessoa: o servidor
-                // recusa `gestor_id === user_id` com 422, e oferecer a opção
-                // seria convidar ao erro. Desativado também sai da lista —
-                // atribuir alguém a um gestor que não entra mais no portal
-                // deixa a carteira sem dono operacional.
-                .filter((u) => {
-                    const papel = String(u.role || '').toLowerCase();
-                    return u.id !== user.id && estaAtivo(u) && (papel === 'gestor' || papel === 'admin');
-                })
-                .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-                .forEach((u) => {
-                    const op = document.createElement('option');
-                    op.value = u.id;
-                    op.textContent = `${u.full_name || u.email} (${roleLabel(u.role)})`;
-                    sel.appendChild(op);
-                });
-
-            sel.value = user.gestor_id || '';
-        }
-
         function preencherDepartamentos(selecionado) {
             const sel = document.getElementById('ed-departamento');
             sel.textContent = '';
             // Sem a opção vazia de antes: departamento é obrigatório (ADR
             // 0001). O placeholder desabilitado força a escolha no cadastro e
-            // mostra a lacuna de quem ficou sem setor (departamento apagado).
+            // mostra a lacuna de quem ficou sem departamento (departamento apagado).
             const vazio = document.createElement('option');
             vazio.value = '';
             vazio.textContent = depsCache.length ? 'Escolha o departamento…' : 'Cadastre um departamento primeiro';
@@ -943,16 +930,12 @@
         function ajustarDicaDeNivel() {
             const nivel = document.getElementById('ed-nivel').value;
             const dica = document.getElementById('ed-nivel-dica');
-            const campoGestor = document.getElementById('ed-gestor').closest('.modal__campo');
             const textos = {
                 user: 'Instala apenas os clientes atribuídos à carteira dele pelo gestor do departamento ou pelo administrador.',
                 gestor: 'Papel de quem lidera um departamento: vê e instala todos os certificados, menos as exceções que o administrador registrar em Carteiras. Para mudar, edite o departamento.',
                 admin: 'Alcance total, incluindo gestão de usuários e configuração.',
             };
             dica.textContent = textos[nivel] || '';
-            // Gestor só faz sentido para operador — some em vez de ficar
-            // habilitado e ser silenciosamente ignorado.
-            campoGestor.style.display = nivel === 'user' ? '' : 'none';
         }
 
         /**
@@ -974,9 +957,6 @@
             document.getElementById('ed-campo-senha').hidden = false;
             document.getElementById('ed-senha').required = true;
             document.getElementById('ed-salvar').textContent = 'Cadastrar';
-            // Objeto vazio: `preencherGestores` só usa `id` (para não se
-            // oferecer como gestor de si mesma) e `gestor_id`.
-            preencherGestores({ id: null, gestor_id: '' });
             preencherDepartamentos('');
             ajustarDicaDeNivel();
             erroDoModal('');
@@ -1013,7 +993,6 @@
             document.getElementById('ed-nome').value = user.full_name || '';
             document.getElementById('ed-email').value = user.email || '';
             document.getElementById('ed-nivel').value = String(user.role || 'user').toLowerCase();
-            preencherGestores(user);
             preencherDepartamentos(user.departamento_id);
             ajustarDicaDeNivel();
             erroDoModal('');
@@ -1043,9 +1022,6 @@
                 // "gestor" não se pede: o servidor deriva da liderança e
                 // recusaria o literal. Quem lidera continua gestor ao salvar.
                 role: nivel === 'gestor' ? 'user' : nivel,
-                // Só operador tem gestor. Enviar o campo para admin/gestor
-                // gravaria um vínculo que nenhuma tela mostra.
-                gestor_id: nivel === 'user' ? (document.getElementById('ed-gestor').value || '') : '',
                 // Obrigatório: o servidor recusa vazio com 422.
                 departamento_id: document.getElementById('ed-departamento').value || '',
             };
@@ -1189,14 +1165,18 @@
             }
 
             const aviso = carteira
-                ? ` ${carteira === 1 ? 'O 1 cliente da carteira dele ficará' : 'Os ' + carteira + ' clientes da carteira dele ficarão'} sem este operador, e reativar depois devolve a carteira vazia.`
+                ? ` A carteira dele (${carteira === 1 ? '1 cliente ou exceção' : carteira + ' clientes ou exceções'}) é apagada, e reativar depois devolve a carteira vazia.`
                 : '';
 
+            const eGestor = String((u && u.role) || '').toLowerCase() === 'gestor';
+            const sobrePapel = eGestor
+                ? ' Deixa de ser gestor dos departamentos que lidera; reativar depois volta como operador, e o administrador o nomeia de novo se quiser.'
+                : ' O nível de acesso é preservado, então reativar depois devolve o mesmo papel.';
             const ok = await confirmarAcao({
                 titulo: 'Desativar usuário',
                 // Diz DE QUEM se trata: o `confirm()` perguntava "este
                 // usuário?" sobre uma tabela de dezenas de linhas.
-                mensagem: `${quem} perde o acesso ao portal na próxima requisição. O nível de acesso é preservado, então reativar depois devolve o mesmo papel.${aviso}`,
+                mensagem: `${quem} perde o acesso ao portal na próxima requisição.${sobrePapel}${aviso}`,
                 textoConfirmar: carteira ? `Desativar e remover ${carteira}` : 'Desativar',
                 perigo: true,
             });
@@ -1222,7 +1202,9 @@
                     'success'
                 );
             } else {
-                showToast('Usuário desativado. O nível de acesso foi preservado.', 'success');
+                showToast(res.papel && res.papel.para === 'user'
+                    ? 'Usuário desativado. Deixou de ser gestor; reativar devolve a conta como operador.'
+                    : 'Usuário desativado. O nível de acesso foi preservado.', 'success');
             }
         }
 
@@ -1321,7 +1303,11 @@
                 return;
             }
             const j = await r.json();
-            const erros = j.erros || [];
+            // Erros e ignoradas na mesma lista: a pessoa quer saber QUAIS
+            // linhas nao entraram, seja qual for a razao.
+            const erros = (j.erros || []).concat(
+                (j.ignoradas || []).map((i) => ({ linha: i.linha, email: i.email, erro: i.motivo, ignorada: true }))
+            );
             const nErros = erros.length;
             mostrarErrosImport(erros);
             const criados = j.criados || 0;

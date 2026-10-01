@@ -487,7 +487,6 @@ def test_gestor_nao_se_promove(client: TestClient, banco: _Fake, gestor_edita_us
     ("post", "/api/users/u-adm/reset-password", {"password": "senha-123456"}),
     ("put", "/api/users/u-adm", {"email": "gestor-controla@x.com", "full_name": "Admin", "role": "admin"}),
     ("post", "/api/users/u-adm/deactivate", None),
-    ("delete", "/api/users/u-adm", None),
 ])
 def test_gestor_nao_mexe_em_conta_de_admin(
     client: TestClient, banco: _Fake, gestor_edita_usuarios: None, acao
@@ -507,11 +506,13 @@ def test_admin_continua_podendo_criar_admin(client: TestClient, banco: _Fake) ->
     assert r.status_code == 200, r.text
 
 
-def test_gestor_continua_gerindo_operadores(
+def test_gestor_nao_gere_contas_mesmo_com_a_matriz_liberada(
     client: TestClient, banco: _Fake, gestor_edita_usuarios: None
 ) -> None:
+    """Até 30/09 um gestor com `usuarios: editar` redefinia senhas de
+    operadores. Desde 01/10/2026 Usuários é só do administrador."""
     r = client.post("/api/users/u-ana/reset-password", headers=_h(*GESTOR), json={"password": "senha-123456"})
-    assert r.status_code == 200, r.text
+    assert r.status_code == 403, r.text
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -546,8 +547,9 @@ def test_gestor_nao_importa_admin_por_csv(
 ) -> None:
     r = client.post("/api/users/import", headers=_h(*GESTOR),
                     files=_csv("nome;email;senha;nivel;departamento\nBia;bia@x.com;senha-123456;admin;Fiscal\n"))
-    assert r.status_code == 200, r.text
-    assert r.json()["criados"] == 0
+    # Desde 01/10/2026 a importação é só do administrador: a recusa vem na
+    # porta (403), antes de qualquer linha ser lida.
+    assert r.status_code == 403, r.text
     assert not any(u["email"] == "bia@x.com" for u in banco.tabelas["users"])
 
 

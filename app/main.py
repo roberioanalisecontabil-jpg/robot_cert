@@ -1482,13 +1482,13 @@ def logout(request: Request, token: auth.TokenData = Depends(require_auth)) -> d
 # `/api/users/me/export` e `/api/users/me/delete` NAO entram: sao LGPD sobre a
 # propria conta, e amarra-las a permissao do modulo Usuarios tiraria de um
 # operador o direito de exportar os proprios dados.
-@app.get("/api/users", dependencies=[Depends(require_modulo("usuarios"))])
+@app.get("/api/users", dependencies=[Depends(require_admin)])
 def list_users() -> List[dict]:
     from app.settings_state import _banco
     sb = _banco()
     if not sb: return []
     r = sb.table("users").select(
-        "id, email, full_name, role, ativo, gestor_id, departamento_id, created_at"
+        "id, email, full_name, role, ativo, departamento_id, created_at"
     ).execute()
     usuarios = list(r.data or [])
     # Contagem da carteira por pessoa, numa consulta só: a coluna "Carteira"
@@ -1526,9 +1526,10 @@ class UserUpdateBody(BaseModel):
     # forma antiga de desativar (ver `update_user`), mas não escreve mais em
     # `role` — o papel deixou de ser o lugar onde o estado mora.
     ativo: Optional[bool] = None
-    gestor_id: Optional[str] = None
-    # Omitir mantém o que está gravado; string vazia limpa. Sem a distinção,
-    # não haveria como tirar alguém de um setor sem inventar um valor.
+    # `gestor_id` ("Gestor responsável") saiu em 01/10/2026: era informativo,
+    # não autorizava nada e divergia do que Departamentos diz. A coluna fica no
+    # banco até uma migration futura.
+    # Omitir mantém o departamento gravado; vazio é recusado (obrigatório).
     departamento_id: Optional[str] = None
 
 
@@ -1607,7 +1608,7 @@ def _limitar(prefixo: str, maximo: int, janela_seg: float):
     return _dep
 
 
-@app.post("/api/users/import", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.post("/api/users/import", dependencies=[Depends(require_admin)])
 async def import_users(request: Request, file: UploadFile = File(...), ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
 
@@ -1673,12 +1674,15 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
         # formulário, pelo nome do departamento — é o que a operação conhece.
         raise HTTPException(
             status_code=422,
-            detail="Cabeçalho obrigatório também para departamento: coluna 'departamento' com o nome do setor.",
+            detail="Cabeçalho obrigatório também para departamento: coluna 'departamento' com o nome do departamento.",
         )
 
     criados = 0
     ignorados = 0
     erros: List[dict[str, Any]] = []
+    # Quem importa 40 linhas e le "3 ignoradas" abre a planilha para adivinhar
+    # quais. Cada ignorada diz a linha e o motivo (decisao de 01/10/2026).
+    ignoradas: List[dict[str, Any]] = []
 
     # Teto de linhas ANTES de qualquer bcrypt (achado #11), e os e-mails que
     # já existem numa consulta só — era uma ida ao banco por linha.
@@ -1712,6 +1716,8 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
 
         if not nome or not email or not senha or not role:
             ignorados += 1
+            faltam = [c for c, v in (("nome", nome), ("email", email), ("senha", senha), ("nivel", role)) if not v]
+            ignoradas.append({"linha": linha, "email": email, "motivo": "Campo vazio: " + ", ".join(faltam) + "."})
             continue
         if role == papeis.GESTOR:
             erros.append({"linha": linha, "email": email, "erro": papeis.PAPEL_GESTOR_E_DERIVADO})
@@ -1749,6 +1755,7 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
         try:
             if email in ja_existem:
                 ignorados += 1
+                ignoradas.append({"linha": linha, "email": email, "motivo": "Já existe uma conta com esse e-mail."})
                 continue
             ja_existem.add(email)
             sb.table("users").insert(
@@ -1776,7 +1783,7 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
             erros.append({"linha": linha, "email": email,
                           "erro": "Não foi possível gravar esta linha. Veja o log do servidor."})
 
-    return {"ok": True, "criados": criados, "ignorados": ignorados, "erros": erros}
+    return {"ok": True, "criados": criados, "ignorados": ignorados, "ignoradas": ignoradas, "erros": erros}
 
 
 # Validação deliberadamente frouxa: exige um "@" com algo dos dois lados e um
@@ -1881,7 +1888,7 @@ def _garantir_email_livre(sb: Any, email: str, ignorar_id: Optional[str] = None)
             )
 
 
-@app.post("/api/users", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.post("/api/users", dependencies=[Depends(require_admin)])
 def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
@@ -2005,7 +2012,7 @@ def _garantir_que_sobra_admin(
         )
 
 
-@app.put("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.put("/api/users/{user_id}", dependencies=[Depends(require_admin)])
 def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
@@ -2056,11 +2063,6 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         # String vazia já não tira ninguém do setor: departamento é
         # obrigatório (ADR 0001). Para mudar de setor, escolhe-se outro.
         campos["departamento_id"] = _exigir_departamento(sb, body.departamento_id)
-    if body.gestor_id is not None:
-        gid = body.gestor_id.strip()
-        if gid and gid == user_id:
-            raise HTTPException(status_code=422, detail="Um usuário não pode ser gestor de si mesmo.")
-        campos["gestor_id"] = gid or None
 
     # Nada a fazer com as seleções de alerta ao trocar o e-mail: desde a fase
     # 3c elas são chaveadas por `user_id`, então a identidade não se move. O
@@ -2090,7 +2092,7 @@ def _papel_da_conta(sb, user_id: str) -> Optional[str]:
         return None
 
 
-@app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_admin)])
 def reset_user_password(user_id: str, body: UserResetPasswordBody, ator: auth.TokenData = Depends(require_auth)) -> dict:
     from app.settings_state import _banco
     sb = _banco()
@@ -2121,7 +2123,7 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody, ator: auth.To
         raise HTTPException(status_code=400, detail="Não foi possível redefinir a senha.")
 
 
-@app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.post("/api/users/{user_id}/deactivate", dependencies=[Depends(require_admin)])
 def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
     """
     Desativa a conta **preservando o papel**.
@@ -2143,6 +2145,20 @@ def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
         raise HTTPException(status_code=400, detail="Não foi possível desativar a conta.")
     _revogar_tokens_de_instalacao(user_id)
 
+    # Liderancas saem junto (decisao de 01/10/2026): gestor que nao entra no
+    # portal nao libera nada, e um departamento com gestor inativo parece
+    # atendido sem estar. Sem lideranca, `rederivar` o devolve a Operador;
+    # reativar comeca do zero, como Operador — o administrador o nomeia de
+    # novo se quiser. Nunca derruba a desativacao: a conta ja caiu.
+    papel: Dict[str, Any] = {}
+    try:
+        sb.table("departamento_lider").delete().eq("user_id", user_id).execute()
+        mudancas = papeis.rederivar(sb, [user_id])
+        papel = mudancas[0] if mudancas else {}
+    except Exception:  # noqa: BLE001
+        logger.exception("Conta %s desativada, mas as liderancas nao foram removidas", user_id)
+        papel = {"erro": "As lideranças de departamento não puderam ser removidas."}
+
     # A carteira e removida DEPOIS de a conta cair, e nunca antes.
     #
     # Se a ordem fosse inversa e a inativacao falhasse, a pessoa continuaria
@@ -2160,16 +2176,22 @@ def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
         logger.error("Conta %s desativada, mas a carteira NAO foi limpa: %s", user_id, e)
         return {"ok": True, "carteira_removida": 0, "carteira_falhou": True}
 
+    # Se a pessoa deixou de ser gestor logo acima, `rederivar` já esvaziou a
+    # carteira; a resposta soma as duas passagens para a tela dizer o total.
+    atrib = esvaziado["atribuicoes"] + int(papel.get("atribuicoes") or 0)
+    exc = esvaziado["excecoes"] + int(papel.get("excecoes") or 0)
     return {
         "ok": True,
-        "carteira_removida": esvaziado["atribuicoes"] + esvaziado["excecoes"],
-        **esvaziado,
+        "carteira_removida": atrib + exc,
+        "atribuicoes": atrib,
+        "excecoes": exc,
+        "papel": papel,
     }
 
 
 @app.get(
     "/api/users/{user_id}/carteira/contagem",
-    dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))],
+    dependencies=[Depends(require_admin)],
 )
 def contar_carteira_do_usuario(user_id: str) -> dict:
     """Quantos clientes a pessoa tem, para a confirmacao dizer o numero.
@@ -2193,7 +2215,7 @@ def contar_carteira_do_usuario(user_id: str) -> dict:
         return {"total": None}
 
 
-@app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.post("/api/users/{user_id}/reactivate", dependencies=[Depends(require_admin)])
 def reactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
     """
     Reativa a conta, devolvendo o papel que ela sempre teve.
@@ -2219,18 +2241,9 @@ def reactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
         raise HTTPException(status_code=400, detail="Não foi possível reativar a conta.")
 
 
-@app.delete("/api/users/{user_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
-def delete_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
-    from app.settings_state import _banco
-    sb = _banco()
-    if not sb: raise HTTPException(status_code=503)
-    _exigir_alcance_sobre_conta(sb, ator, user_id)
-    _garantir_que_sobra_admin(sb, user_id, apagar=True)
-    # Antes de apagar a linha: a chave estrangeira de `install_token` aponta
-    # para ela, e o token pendente é o que ainda entregaria chave privada.
-    _revogar_tokens_de_instalacao(user_id)
-    sb.table("users").delete().eq("id", user_id).execute()
-    return {"ok": True}
+# Nao ha DELETE /api/users/{id} (decisao de 01/10/2026, revisao da pagina
+# Usuarios): a conta desativada e o historico — install_log e install_token
+# apontam para ela. Apagar perderia a trilha de quem instalou o que.
 
 
 def _revogar_tokens_de_instalacao(user_id: str) -> None:
@@ -2282,10 +2295,10 @@ def _nome_de_departamento(nome: str) -> str:
 # isto hoje e /usuarios, que ja e de admin. Quando o lider precisar ver os
 # proprios setores (etapa 4), a rota certa e outra, escopada a ele -- esta
 # devolve TODOS os departamentos, e alcance total nao e o do lider.
-@app.get("/api/departamentos", dependencies=[Depends(require_modulo("usuarios"))])
+@app.get("/api/departamentos", dependencies=[Depends(require_admin)])
 def listar_departamentos() -> List[dict]:
     """
-    Setores com os líderes e quantas pessoas têm.
+    Departamentos com os gestores, quantas pessoas ativas têm e quantas inativas.
 
     A contagem vem junto porque é o que responde "posso apagar este?" sem um
     segundo clique — e apagar um setor com gente dentro deixa essas pessoas
@@ -2305,10 +2318,17 @@ def listar_departamentos() -> List[dict]:
         raise HTTPException(status_code=503, detail="Não foi possível listar os departamentos.")
 
     por_id = {str(u["id"]): u for u in pessoas}
+    # `membros` conta so ATIVOS (decisao de 01/10/2026): a pergunta que a
+    # coluna responde e "quem fica sem gestor se eu apagar", e inativo nao fica
+    # sem nada. Os inativos vao a parte, para a tela mostrar se quiser.
     membros: Dict[str, int] = defaultdict(int)
+    inativos: Dict[str, int] = defaultdict(int)
     for u in pessoas:
         if u.get("departamento_id"):
-            membros[str(u["departamento_id"])] += 1
+            if conta_ativa(u):
+                membros[str(u["departamento_id"])] += 1
+            else:
+                inativos[str(u["departamento_id"])] += 1
 
     lideres: Dict[str, List[dict]] = defaultdict(list)
     for l in lids:
@@ -2330,11 +2350,12 @@ def listar_departamentos() -> List[dict]:
             "criado_em": d.get("criado_em"),
             "lideres": sorted(lideres.get(did, []), key=lambda x: x["nome"] or ""),
             "membros": membros.get(did, 0),
+            "inativos": inativos.get(did, 0),
         })
     return sorted(saida, key=lambda x: (x["nome"] or "").lower())
 
 
-@app.post("/api/departamentos", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.post("/api/departamentos", dependencies=[Depends(require_admin)])
 def criar_departamento(body: DepartamentoBody) -> dict:
     from app.settings_state import _banco
 
@@ -2355,7 +2376,7 @@ def criar_departamento(body: DepartamentoBody) -> dict:
     return {"ok": True, "id": str((r.data or [{}])[0].get("id", ""))}
 
 
-@app.put("/api/departamentos/{dep_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.put("/api/departamentos/{dep_id}", dependencies=[Depends(require_admin)])
 def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
     from app.settings_state import _banco
 
@@ -2373,7 +2394,7 @@ def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
     return {"ok": True}
 
 
-@app.delete("/api/departamentos/{dep_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.delete("/api/departamentos/{dep_id}", dependencies=[Depends(require_admin)])
 def apagar_departamento(dep_id: str) -> dict:
     """
     Apaga o departamento. As pessoas dele ficam SEM departamento, não são
@@ -2410,7 +2431,7 @@ def apagar_departamento(dep_id: str) -> dict:
     return {"ok": True, "papeis": papeis.rederivar(sb, lideres)}
 
 
-@app.put("/api/departamentos/{dep_id}/lideres", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
+@app.put("/api/departamentos/{dep_id}/lideres", dependencies=[Depends(require_admin)])
 def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
     """
     Substitui a lista de Gestores do departamento — e, com ela, o papel.
@@ -2445,12 +2466,12 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
         try:
             achados = sb.table("users").select("id, role, ativo").execute().data or []
         except Exception:  # noqa: BLE001
-            raise HTTPException(status_code=503, detail="Não foi possível validar os líderes agora.")
+            raise HTTPException(status_code=503, detail="Não foi possível validar os gestores agora.")
         por_id = {str(u["id"]): u for u in achados}
         for uid in ids:
             u = por_id.get(uid)
             if not u:
-                raise HTTPException(status_code=422, detail="Um dos líderes escolhidos não existe.")
+                raise HTTPException(status_code=422, detail="Um dos gestores escolhidos não existe.")
             if not conta_ativa(u):
                 # Líder desativado não entra no portal, então o setor ficaria
                 # com um responsável que não consegue liberar nada — a mesma
@@ -2512,6 +2533,9 @@ def get_permissoes() -> dict:
                     # Modulo ainda nao ligado a rota nenhuma: a tela precisa
                     # dizer isso, senao oferece um controle que nao governa.
                     "governado": m in permissoes.MODULOS_GOVERNADOS,
+                    # So o administrador: a celula aparece travada em "Nao
+                    # entra", com o motivo, em vez de "ainda nao governado".
+                    "so_admin": m in permissoes.MODULOS_SO_ADMIN,
                 }
                 for m in permissoes.MODULOS
             ],
@@ -5675,7 +5699,7 @@ def listar_operadores(
         raise HTTPException(status_code=503, detail="Banco não configurado")
     try:
         us = sb.table("users").select(
-            "id, email, full_name, role, ativo, gestor_id, departamento_id"
+            "id, email, full_name, role, ativo, departamento_id"
         ).execute().data or []
         cart = sb.table("carteira").select("user_id").execute().data or []
         exc = sb.table(cert_installer.TABELA_EXCECOES).select("user_id").execute().data or []
@@ -5749,7 +5773,6 @@ def listar_operadores(
                 "nome_exibicao": nomes.nome_pessoa(u.get("full_name")) or (u.get("email") or ""),
                 "role": u.get("role"),
                 "ativo": auth.conta_ativa(u),
-                "gestor_id": u.get("gestor_id"),
                 "departamento_id": u.get("departamento_id"),
                 "documentos": n,
                 "tipo_carteira": tipo,

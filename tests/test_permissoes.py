@@ -363,42 +363,45 @@ def test_require_modulo_recusa_nome_invalido_na_importacao() -> None:
         require_modulo("dashboard", "editarr")
 
 
-def test_usuarios_respeita_a_matriz(client) -> None:
-    """As 13 rotas de Usuários saíram de `require_admin` para a matriz."""
+def test_usuarios_e_so_do_administrador(client) -> None:
+    """Usuários voltou a `require_admin` em 01/10/2026 (revisão da página): é
+    nela que se nomeiam gestores e administradores, e quem concede papéis tem
+    de estar acima dos papéis. A matriz não governa este módulo."""
     for papel in ("user", "gestor"):
         h = _token(papel)
         assert client.get("/api/users", headers=h).status_code == 403
         assert client.get("/api/departamentos", headers=h).status_code == 403
         assert client.post("/api/users", json={}, headers=h).status_code == 403
-        assert client.delete("/api/users/qualquer", headers=h).status_code == 403
 
     assert client.get("/api/users", headers=_token("admin")).status_code != 403
+    # Não existe apagar usuário: a conta desativada é o histórico.
+    assert client.delete("/api/users/qualquer", headers=_token("admin")).status_code in (404, 405)
 
 
-def test_ler_deixa_ver_e_nao_deixa_mexer(client, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_linha_antiga_de_usuarios_na_matriz_nao_tem_efeito(client, monkeypatch: pytest.MonkeyPatch) -> None:
     """
-    O eixo que o cliente pediu: "editar ou só visualizar".
-
-    Este é o teste que prova que a promessa da tela é real. Um papel com `ler`
-    em Usuários enxerga a lista e é recusado em toda escrita — sem ele, a
-    separação leitura/escrita seria só nome de variável.
+    Até 30/09 a matriz governava Usuários, e o banco pode guardar uma linha
+    `gestor/usuarios = editar` daquela época. Ela não pode valer: a leitura
+    ignora o módulo, a tela trava a célula e a rota exige admin.
     """
     monkeypatch.setattr(
         permissoes, "_matriz",
-        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "usuarios": permissoes.NIVEL_LER}},
+        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "usuarios": permissoes.NIVEL_EDITAR}},
     )
+    assert permissoes.nivel_de("gestor", "usuarios") == permissoes.NIVEL_NENHUM
+    assert permissoes.matriz_para_papel("gestor")["usuarios"] == permissoes.NIVEL_NENHUM
+    assert permissoes.niveis_de_modulo("usuarios") == (permissoes.NIVEL_NENHUM,)
     h = _token("gestor")
-
-    # Vê.
-    assert client.get("/api/users", headers=h).status_code != 403
-    assert client.get("/api/departamentos", headers=h).status_code != 403
-
-    # Não mexe — nem criando, nem alterando, nem apagando.
+    assert client.get("/api/users", headers=h).status_code == 403
+    assert client.get("/api/departamentos", headers=h).status_code == 403
     assert client.post("/api/users", json={}, headers=h).status_code == 403
     assert client.put("/api/users/x", json={}, headers=h).status_code == 403
-    assert client.delete("/api/users/x", headers=h).status_code == 403
     assert client.post("/api/users/x/deactivate", headers=h).status_code == 403
     assert client.post("/api/departamentos", json={}, headers=h).status_code == 403
+    # E a matriz recusa gravar outra coisa que não `nenhum` ali.
+    with pytest.raises(ValueError):
+        permissoes.gravar({"gestor": {**permissoes.PADRAO["gestor"], "usuarios": permissoes.NIVEL_LER},
+                           "user": permissoes.PADRAO["user"]})
 
 
 def test_lgpd_da_propria_conta_nao_depende_do_modulo_usuarios(
@@ -497,7 +500,8 @@ def test_get_permissoes_entrega_o_que_a_tela_precisa(client) -> None:
     # para nao oferecer controle inerte.
     assert [m["id"] for m in d["modulos"]] == list(permissoes.MODULOS)
     por_id = {m["id"]: m for m in d["modulos"]}
-    assert por_id["usuarios"]["niveis"] == list(permissoes.NIVEIS)
+    assert por_id["usuarios"]["niveis"] == [permissoes.NIVEL_NENHUM] and por_id["usuarios"]["so_admin"] is True
+    assert por_id["configuracao"]["niveis"] == list(permissoes.NIVEIS)
     assert permissoes.NIVEL_EDITAR not in por_id["vencidos"]["niveis"]
     # Contra a DECLARACAO, e nao contra um modulo escolhido a dedo: a versao
     # anterior fixava `carteiras: governado is False`, o que era um retrato do
@@ -595,6 +599,9 @@ def test_modulos_com_escrita_bate_com_as_rotas() -> None:
 def test_niveis_de_modulo_nao_oferece_editar_sem_escrita() -> None:
     for modulo in permissoes.MODULOS:
         niveis = permissoes.niveis_de_modulo(modulo)
+        if modulo in permissoes.MODULOS_SO_ADMIN:
+            assert niveis == (permissoes.NIVEL_NENHUM,), modulo
+            continue
         assert permissoes.NIVEL_NENHUM in niveis and permissoes.NIVEL_LER in niveis
         tem_editar = permissoes.NIVEL_EDITAR in niveis
         assert tem_editar == (modulo in permissoes.MODULOS_COM_ESCRITA), modulo

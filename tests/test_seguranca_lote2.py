@@ -389,11 +389,6 @@ def test_desativar_usuario_queima_os_tokens_pendentes(client: TestClient, banco:
     assert r.status_code == 403, "token de conta desativada continuava trocável por chave privada"
 
 
-def test_excluir_usuario_queima_os_tokens_pendentes(client: TestClient, banco: _Fake, token_para_b: str) -> None:
-    assert client.delete("/api/users/u-ana", headers=_h(*ADMIN)).status_code == 200
-    assert _token_consumido(banco)
-
-
 def test_editar_para_inativo_queima_os_tokens_pendentes(client: TestClient, banco: _Fake, token_para_b: str) -> None:
     r = client.put("/api/users/u-ana", headers=_h(*ADMIN),
                    json={"email": "ana@x.com", "full_name": "Ana", "role": "user", "ativo": False})

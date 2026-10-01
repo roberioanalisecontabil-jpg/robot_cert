@@ -82,7 +82,6 @@ MODULOS_GOVERNADOS = (
     "vencidos",
     "duplicidades",
     "acompanhamento",
-    "usuarios",
     "configuracao",
     "carteiras",
     "instalador",
@@ -90,7 +89,14 @@ MODULOS_GOVERNADOS = (
 
 # Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
 # `ler`, e a tela nem oferece o terceiro.
-MODULOS_COM_ESCRITA = ("usuarios", "configuracao", "carteiras", "acompanhamento", "instalador")
+MODULOS_COM_ESCRITA = ("configuracao", "carteiras", "acompanhamento", "instalador")
+
+# Modulos que so o Administrador alcanca, fora da matriz de proposito (decisao
+# de 01/10/2026, revisao da pagina Usuarios). E em Usuarios que se nomeia
+# Gestor e se define quem administra o portal: quem concede papeis tem de
+# estar acima dos papeis. A rota usa `require_admin`; a matriz nao oferece a
+# celula e, se o banco tiver uma linha antiga, ela e ignorada na leitura.
+MODULOS_SO_ADMIN = ("usuarios",)
 
 
 def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:
@@ -102,6 +108,8 @@ def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:
     """
     if modulo not in MODULOS:
         raise ValueError(f"módulo desconhecido: {modulo!r}")
+    if modulo in MODULOS_SO_ADMIN:
+        return (NIVEL_NENHUM,)
     if modulo in MODULOS_COM_ESCRITA:
         return NIVEIS
     return (NIVEL_NENHUM, NIVEL_LER)
@@ -274,6 +282,8 @@ def nivel_de(papel: str, modulo: str) -> str:
         return NIVEL_EDITAR
     if modulo not in MODULOS:
         raise ValueError(f"módulo desconhecido: {modulo!r}")
+    if modulo in MODULOS_SO_ADMIN:
+        return NIVEL_NENHUM
     return _matriz().get(p, {}).get(modulo, NIVEL_NENHUM)
 
 
@@ -290,7 +300,7 @@ def matriz_para_papel(papel: str) -> Dict[str, str]:
     if p in PAPEIS_TOTAIS:
         return {m: NIVEL_EDITAR for m in MODULOS}
     linha = _matriz().get(p, {})
-    return {m: linha.get(m, NIVEL_NENHUM) for m in MODULOS}
+    return {m: (NIVEL_NENHUM if m in MODULOS_SO_ADMIN else linha.get(m, NIVEL_NENHUM)) for m in MODULOS}
 
 
 # ── Escrita ────────────────────────────────────────────────────────────────
@@ -399,6 +409,13 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
                 raise ValueError(f"módulo desconhecido: {modulo!r}")
             if n not in NIVEIS:
                 raise ValueError(f"nível desconhecido: {nivel!r}")
+            if m in MODULOS_SO_ADMIN:
+                # A tela ainda manda a celula (desabilitada, em `nenhum`); nao
+                # ha o que gravar — e `ler`/`editar` aqui seria pedir o que a
+                # rota nunca vai conceder.
+                if n != NIVEL_NENHUM:
+                    raise ValueError(f"módulo {m!r} é só do administrador")
+                continue
             # Recusar aqui, e nao so esconder na tela: aceitar `editar` num
             # modulo sem escrita gravaria um valor que o servidor ignora, e a
             # matriz passaria a dizer uma coisa que nao acontece.
@@ -410,7 +427,7 @@ def gravar(matriz: Dict[str, Dict[str, str]], alterado_por: str = "") -> Dict[st
 
     faltando = [
         f"{p}/{m}" for p in PAPEIS_CONFIGURAVEIS for m in MODULOS
-        if m not in limpa.get(p, {})
+        if m not in MODULOS_SO_ADMIN and m not in limpa.get(p, {})
     ]
     if faltando:
         raise ValueError("matriz incompleta: faltam " + ", ".join(faltando[:5]))

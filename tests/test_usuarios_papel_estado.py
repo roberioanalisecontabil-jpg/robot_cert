@@ -58,6 +58,10 @@ class _Query:
         self._op, self._payload = "update", row
         return self
 
+    def delete(self) -> "_Query":
+        self._op = "delete"
+        return self
+
     def eq(self, coluna: str, valor: Any) -> "_Query":
         self._filtros.append((coluna, valor))
         return self
@@ -83,6 +87,10 @@ class _Query:
                     r.update(self._payload)
                     tocados.append(dict(r))
             return _Resultado(tocados)
+        if self._op == "delete":
+            fora = [r for r in self._tabela if self._casa(r)]
+            self._tabela[:] = [r for r in self._tabela if not self._casa(r)]
+            return _Resultado(fora)
         raise AssertionError(self._op)
 
 
@@ -307,31 +315,6 @@ def test_criar_gestor_pelo_cadastro_e_recusado(client: TestClient, banco) -> Non
 # 5. Aresta gestor -> operador
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_gestor_de_si_mesmo_e_recusado(client: TestClient, banco) -> None:
-    """
-    O banco também recusa (CHECK), mas 422 com motivo é melhor que 400 genérico
-    do PostgREST — e "meus operadores" incluindo a própria pessoa é laço lógico.
-    """
-    r = client.put(
-        "/api/users/u-gestor",
-        json={"email": "gestor@empresa.com", "full_name": "Gestor",
-              "role": "gestor", "gestor_id": "u-gestor"},
-        headers=_admin_headers(),
-    )
-    assert r.status_code == 422, r.text
-
-
-def test_vincular_operador_a_um_gestor(client: TestClient, banco) -> None:
-    r = client.put(
-        "/api/users/u-admin",
-        json={"email": "chefe@empresa.com", "full_name": "Chefe",
-              "role": "user", "gestor_id": "u-gestor"},
-        headers=_admin_headers(),
-    )
-    assert r.status_code == 200, r.text
-    assert _linha(banco, "u-admin")["gestor_id"] == "u-gestor"
-
-
 # ──────────────────────────────────────────────────────────────────────────
 # 6. A tela acompanha
 # ──────────────────────────────────────────────────────────────────────────
@@ -393,14 +376,6 @@ def test_ultimo_admin_nao_pode_se_rebaixar(
     )
     assert r.status_code == 409, r.text
     assert _linha(unico_admin, "u-admin")["role"] == "admin"
-
-
-def test_ultimo_admin_nao_pode_ser_apagado(
-    client: TestClient, unico_admin: _FakeBanco
-) -> None:
-    r = client.delete("/api/users/u-admin", headers=_admin_headers())
-    assert r.status_code == 409, r.text
-    assert any(u["id"] == "u-admin" for u in unico_admin.tabelas["users"])
 
 
 def test_role_disabled_legado_tambem_esbarra_na_regra(
