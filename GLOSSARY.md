@@ -55,6 +55,10 @@ _Avoid_: inclusão, liberação, liberar
 Um Documento retirado da Carteira de um Gestor pelo Administrador. Só o Administrador registra Exceções; um Gestor não limita outro. Verbos nas telas: retirar (registra), devolver (remove).
 _Avoid_: restrição, bloqueio, acesso restrito
 
+**Estação** (`machine_id` da pessoa):
+A máquina em que a pessoa está com o Hardlyze Agent vivo, onde o Certificado é instalado. Cada pessoa tem uma Estação: a atual. Se trocar de máquina, a nova passa a ser a padrão. Não confundir com o servidor da varredura, dono do Inventário e do Cofre.
+_Avoid_: máquina, computador, dispositivo (quando se refere ao destino da instalação)
+
 **Alcance**:
 Os Certificados que um Usuário pode ver e instalar. Ver e instalar são um único direito: quem vê, instala.
 _Avoid_: permissão de certificado, acesso (ambíguo com o acesso às páginas)

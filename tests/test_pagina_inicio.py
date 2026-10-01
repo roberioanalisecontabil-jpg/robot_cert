@@ -1,75 +1,119 @@
-"""Invariantes da página Início (a antiga "Dashboard").
+"""
+Revisão da página Início (01/10/2026) — decisões I1 a I5 e defeitos.
 
-O rótulo mudou em 15/08/2026 para abrir espaço a um Dashboard de verdade — de
-análise, não de operação (`docs/PLANO_reorganizacao_portal.md`, etapa 4). Os dois
-testes daqui guardam as duas metades da renomeação:
+Registro em docs/revisao-paginas-2026-10.md. Em resumo:
 
-- **o rótulo mudou** onde o usuário lê;
-- **o nome interno NÃO mudou** onde mudá-lo custaria dado.
+  I1  Vencidos saem do Início (`ocultar_vencidos`), com a contagem "N vencidos
+      não listados" e link para a página Vencidos.
+  I2  Uma estação por pessoa: a atual, com agente vivo, é a padrão.
+  I3  A seção "Meus computadores" sai; estações são do Hardlyze.
+  I4  O sino mantém a seleção de Acompanhamento para expirando/vencidos.
+  I5  O sino não depende do módulo Acompanhamento: `require_auth`.
 
-A segunda metade é a que engana. Renomear `cg_per_page_dashboard` junto com o
-rótulo parece arrumação — e descarta, sem aviso e sem erro, a preferência de
-itens por página de todo mundo que já usou o portal. O `localStorage` é do
-navegador do usuário: não há migração, o valor antigo simplesmente deixa de ser
-encontrado e a tela volta ao padrão.
+Defeitos: a instalabilidade passa a receber a estação da pessoa (`estacao`)
+separada do servidor da varredura (`machine_id`); operador sem Atribuição vê
+"carteira vazia", não "o agente não enviou dados".
+
+Escritos antes da implementação; falhavam em f978947.
 """
 
-import re
+from __future__ import annotations
+
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
-TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
+import app.main as m
+from app import permissoes
+from tests.test_seguranca_lote1 import _Fake
+from tests.test_seguranca_lote4 import ADMIN, DOC_A, DOC_B, DOC_C, DOC_L, FISCAL_OP, GESTOR, SOLTO, _docs, _h  # noqa: F401
+from tests.test_seguranca_lote4 import banco as banco_base  # noqa: F401
+
+RAIZ = Path(__file__).resolve().parents[1]
+CERTS = "/api/certificados?fonte=remoto&todas_filtradas=true"
 
 
-def test_menu_diz_inicio_e_nao_dashboard(client: TestClient) -> None:
-    """O item de `/` no menu lateral é "Início"."""
-    r = client.get("/")
-    assert r.status_code == 200
-
-    nav = re.search(r'<nav class="sidebar-nav">.*?</nav>', r.text, re.DOTALL)
-    assert nav, "página sem navegação lateral"
-    itens = re.findall(r"<a [^>]*>(.*?)</a>", nav.group(0), re.DOTALL)
-    rotulos = [re.sub(r"<[^>]+>", "", i).strip() for i in itens]
-
-    assert "Início" in rotulos, f"rótulos: {rotulos}"
-    # "Dashboard" voltou ao menu na etapa 4 — legitimamente, agora que existe
-    # uma página de análise. O que este teste guarda mudou de "o nome não pode
-    # aparecer" para "os dois coexistem e `/` é o Início": a ambiguidade que se
-    # queria evitar era `/` chamar-se Dashboard, não o nome existir.
-    assert "Dashboard" in rotulos, "a página de análise da etapa 4 sumiu do menu"
-    assert rotulos.index("Início") < rotulos.index("Dashboard"), (
-        "Início vem antes: é operação, e é o que a maioria abre todo dia"
-    )
+@pytest.fixture
+def banco(banco_base: _Fake) -> _Fake:
+    banco_base.tabelas["carteira_excecao"] = []
+    return banco_base
 
 
-def test_inicio_e_dashboard_apontam_para_paginas_diferentes(client: TestClient) -> None:
-    """
-    Os dois nomes prometem "a visão geral", e a distinção está na rota e no
-    ícone — casa para operação, grade para análise. Apontar para o mesmo lugar
-    tornaria a renomeação da etapa 1 inútil.
-    """
-    r = client.get("/")
-    nav = re.search(r'<nav class="sidebar-nav">.*?</nav>', r.text, re.DOTALL).group(0)
-    hrefs = dict(
-        (re.sub(r"<[^>]+>", "", corpo).strip(), href)
-        for href, corpo in re.findall(r'<a [^>]*href="([^"]*)"[^>]*>(.*?)</a>', nav, re.DOTALL)
-    )
-    assert hrefs["Início"] == "/"
-    assert hrefs["Dashboard"] == "/dashboard"
+# ── I1: vencidos fora do Início ───────────────────────────────────────────
+
+def test_ocultar_vencidos_tira_da_lista_e_conta(client: TestClient, banco: _Fake) -> None:
+    """DOC_L está expirado no cenário do lote 4."""
+    r = client.get(CERTS + "&ocultar_vencidos=true", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert DOC_L not in _docs(d["itens"])
+    assert d["vencidos_ocultos"] == 1
+    assert d["resumo"]["vencidos"] == 0, "o resumo é da lista que a tela mostra"
+    # Sem o parâmetro, nada muda.
+    d2 = client.get(CERTS, headers=_h(*ADMIN)).json()
+    assert DOC_L in _docs(d2["itens"]) and d2["vencidos_ocultos"] == 0
 
 
-def test_chave_de_localstorage_preservada() -> None:
-    """
-    `cg_per_page_dashboard` não acompanha a renomeação.
+# ── Carteira vazia é diferente de "sem inventário" ────────────────────────
 
-    Mudá-la descartaria a preferência de itens por página de todo usuário que já
-    abriu o portal — silenciosamente, porque a leitura de uma chave inexistente
-    apenas devolve null e a tela cai no padrão. Nome interno e rótulo não
-    precisam concordar; aqui, concordar custa caro.
-    """
-    html = (TEMPLATES / "index.html").read_text(encoding="utf-8")
-    assert '"cg_per_page_dashboard"' in html, (
-        "a chave de localStorage foi renomeada — isso apaga a preferência "
-        "de itens por página dos usuários existentes"
-    )
+def test_operador_sem_atribuicao_recebe_alcance_vazio(client: TestClient, banco: _Fake) -> None:
+    banco.tabelas["carteira"] = [r for r in banco.tabelas["carteira"] if r["user_id"] != "u-fis"]
+    d = client.get(CERTS, headers=_h(*FISCAL_OP)).json()
+    assert d["itens"] == [] and d["alcance_vazio"] is True
+    assert client.get(CERTS, headers=_h(*SOLTO)).json()["alcance_vazio"] is False, "quem tem atribuição não está vazio"
+    assert client.get(CERTS, headers=_h(*ADMIN)).json()["alcance_vazio"] is False
+    assert client.get(CERTS, headers=_h(*GESTOR)).json()["alcance_vazio"] is False
+
+
+# ── Instalabilidade: servidor da varredura x estação da pessoa ────────────
+
+def test_instalabilidade_confere_o_vinculo_pela_estacao(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`machine_id` é o servidor que varreu (snapshot "srv"); `estacao` é a
+    máquina da pessoa. O vínculo é da estação. Até 30/09 era conferido contra
+    o servidor, e operador/gestor recebiam 403 sempre."""
+    monkeypatch.setattr(m, "_dispositivos_da_pessoa", lambda email: [{"machine_id": "pc-fis", "nome": "PC DA FIS"}])
+    r = client.get("/api/cert-installer/instalabilidade?machine_id=srv&estacao=pc-fis", headers=_h(*FISCAL_OP))
+    assert r.status_code == 200, r.text
+    assert r.json()["estacao"] == "pc-fis" and r.json()["machine_id"] == "srv"
+    assert "a" * 64 in r.json()["itens"], "o inventário é o do servidor da varredura"
+    # Estação de outra pessoa: 403.
+    r = client.get("/api/cert-installer/instalabilidade?machine_id=srv&estacao=pc-de-outro", headers=_h(*FISCAL_OP))
+    assert r.status_code == 403
+    # Sem `estacao`, o vínculo é conferido contra `machine_id`, como antes (achado #30).
+    assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP)).status_code == 403
+    # Administrador não tem vínculo a conferir.
+    assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*ADMIN)).status_code == 200
+
+
+# ── I5: sino sem depender do módulo Acompanhamento ────────────────────────
+
+def test_sino_funciona_mesmo_sem_o_modulo_acompanhamento(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    matriz = {p: {mod: permissoes.NIVEL_NENHUM for mod in permissoes.MODULOS} for p in ("gestor", "user")}
+    monkeypatch.setattr(permissoes, "_matriz", lambda: matriz)
+    assert client.get("/api/colaborador/notificacoes", headers=_h(*FISCAL_OP)).status_code == 200
+    assert client.post("/api/colaborador/notificacoes/lidas", headers=_h(*FISCAL_OP)).status_code == 200
+    # A PÁGINA Acompanhamento continua governada pela matriz.
+    assert client.get("/api/colaborador/certificados/painel", headers=_h(*FISCAL_OP)).status_code == 403
+
+
+# ── Tela ──────────────────────────────────────────────────────────────────
+
+def test_tela_do_inicio_revisada() -> None:
+    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    assert "Meus computadores" not in html and "carregarDispositivos" not in html, "I3"
+    assert "nesta máquina" not in html, "I2: a estação da pessoa tem nome"
+    assert "&estacao=" in html, "a instalabilidade vai com a estação da pessoa"
+    assert 'ocultar_vencidos: "true"' in html and "ver Vencidos" in html, "I1"
+    assert "Sua carteira está vazia" in html
+    assert "Planilha (CSV)" in html and "Planilha (Excel)" not in html
+    assert "Nao foi possivel" not in html and "instalacao\"" not in html
+    assert "MOTIVO_SEM_ESTACAO" in html and "nao_configurado" in html
+    assert '"desconhecido"' in html
+    assert "das suas empresas" not in html
+
+
+def test_vocabulario_dos_modulos_do_inicio() -> None:
+    for arq in ("app/cert_installer.py", "app/novos_certificados.py", "app/notification_service.py"):
+        texto = (RAIZ / arq).read_text(encoding="utf-8")
+        assert "líder" not in texto and "setores" not in texto.lower(), arq

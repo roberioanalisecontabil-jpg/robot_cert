@@ -937,6 +937,11 @@ def _e_ilegivel(row: dict) -> bool:
     return str(row.get("status") or "").lower() in STATUS_ILEGIVEIS
 
 
+def _e_vencido(row: dict) -> bool:
+    """Mesmo critério do filtro `vencidos` e do resumo: status ou data."""
+    return str(row.get("status") or "").lower() == "expirado" or bool(row.get("_isExpiredByDate"))
+
+
 def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
     if not str(q_raw or "").strip():
         return True
@@ -3371,9 +3376,12 @@ def cron_alerts(request: Request) -> dict:
 # `editar` ali tiraria de um operador o direito de escolher os proprios
 # certificados, que e a funcao inteira da tela.
 #
-# O nivel aqui governa SE a pessoa alcanca o modulo; o que esta dentro e dela.
-# Mesma carve-out de `/api/users/me/*`.
-@app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_modulo("acompanhamento"))])
+# O sino esta em TODA pagina, entao nao depende de modulo nenhum (decisao I5,
+# 01/10/2026): ate 30/09 era `require_modulo("acompanhamento")`, e um papel com
+# "Nao entra" naquele modulo via o sino quebrar em todas as telas. O conteudo
+# continua sendo o da pessoa (selecao de Acompanhamento e Alcance); so a
+# PAGINA Acompanhamento segue a matriz.
+@app.get("/api/colaborador/notificacoes", dependencies=[Depends(require_auth)])
 def get_user_notifications(
     token: auth.TokenData = Depends(require_auth),
     tipo: Optional[str] = Query(None, max_length=16, pattern=r"^(novo|expiring|expired)$"),
@@ -3772,6 +3780,10 @@ def listar_certificados(
         False,
         description="Exclui erro e fora_do_padrao da lista, da contagem e da exportação",
     ),
+    ocultar_vencidos: bool = Query(
+        False,
+        description="Exclui vencidos da lista e da contagem; devolve `vencidos_ocultos` (o Início usa: vencido não se instala, e tem página própria)",
+    ),
     ordenar: Optional[str] = Query(
         None,
         description="nome | status | emissao | vencimento | documento. Vazio = ordem alfabética por titular",
@@ -3798,7 +3810,12 @@ def listar_certificados(
             base["itens"] = [nome_publico.sem_pasta(it) for it in base["itens"]]
         # Recorte pela carteira ANTES de resumo, paginação e exportação (#5):
         # tudo o que sai desta rota nasce desta lista.
-        base["itens"] = _recortar_pela_carteira(base["itens"], _documentos_ao_alcance(token))
+        alcance = _documentos_ao_alcance(token)
+        base["itens"] = _recortar_pela_carteira(base["itens"], alcance)
+        # Operador sem Atribuição nenhuma vê a lista vazia. A tela precisa
+        # distinguir isso de "o agente ainda não enviou dados" (01/10/2026):
+        # o remédio é outro — pedir ao Gestor, não esperar o agente.
+        base["alcance_vazio"] = isinstance(alcance, set) and not alcance
         # Caixa alta vira título no servidor (app/nomes.py), num lugar só,
         # para toda tela que lista o inventário (Início, Custódia).
         for it in base["itens"]:
@@ -3831,6 +3848,15 @@ def listar_certificados(
             and _dashboard_busca_match(it, busca or "")
             and not (ocultar_ilegiveis and _e_ilegivel(it))
         ]
+        # Vencidos fora do Início (decisão I1, 01/10/2026): vencido não se
+        # instala e tem página própria. A contagem vai junto, para a tela dizer
+        # "N vencidos não listados" em vez de sumir com eles em silêncio.
+        vencidos_ocultos = 0
+        if ocultar_vencidos:
+            vencidos = [it for it in filtered if _e_vencido(it)]
+            vencidos_ocultos = len(vencidos)
+            filtered = [it for it in filtered if not _e_vencido(it)]
+        base["vencidos_ocultos"] = vencidos_ocultos
         # Antes do `resumo` e da paginacao, e pelo mesmo motivo que a ordem
         # alfabetica ja era feita aqui: ordenar no navegador ordenaria so os 25
         # itens da pagina visivel, e a lista PARECERIA certa enquanto
@@ -4396,7 +4422,7 @@ def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth
 
 @app.post(
     "/api/colaborador/notificacoes/lidas",
-    dependencies=[Depends(require_modulo("acompanhamento"))],
+    dependencies=[Depends(require_auth)],
 )
 def marcar_notificacoes_como_lidas(token: auth.TokenData = Depends(require_auth)) -> dict:
     """"Li todos": esconde os avisos que estão no sino AGORA.
@@ -4434,7 +4460,7 @@ class NotificacaoLidaBody(BaseModel):
 
 @app.post(
     "/api/colaborador/notificacoes/lida",
-    dependencies=[Depends(require_modulo("acompanhamento"))],
+    dependencies=[Depends(require_auth)],
 )
 def marcar_notificacao_como_lida(body: NotificacaoLidaBody, token: auth.TokenData = Depends(require_auth)) -> dict:
     """Marca UM aviso como lido (pedido de 30/09/2026: além do "Li todos").
@@ -6577,15 +6603,24 @@ def revalidar_cofre() -> dict:
 @app.get("/api/cert-installer/instalabilidade")
 def instalabilidade(
     machine_id: str = Query(..., min_length=1),
+    estacao: Optional[str] = Query(None, max_length=120),
     token: auth.TokenData = Depends(require_auth),
 ) -> dict:
     """
-    O que **este** usuário pode instalar nesta máquina, e o motivo de cada não.
+    O que **este** usuário pode instalar na estação dele, e o motivo de cada não.
 
     Alimenta a seleção do Início. Não é barreira — a barreira é
     `assegurar_carteira`, no momento de emitir o token. Isto existe para a tela
     não convidar o usuário a marcar o que o servidor vai recusar depois, com o
     erro chegando só na máquina dele.
+
+    Dois identificadores, de propósito (revisão de 01/10/2026): `machine_id` é
+    a máquina que VARREU os PFX (o snapshot e o cofre são dela — o servidor);
+    `estacao` é a máquina da pessoa, onde o certificado vai ser instalado. Até
+    30/09 a rota recebia um só, e para operador e gestor o vínculo
+    pessoa↔estação era conferido contra o servidor da varredura — dava 403
+    sempre que a ponte com o Hardlyze estava de pé. Sem `estacao`, o vínculo é
+    conferido contra `machine_id`, como antes.
     """
     user_id = _user_id_da_sessao(token)
     if not user_id:
@@ -6612,7 +6647,8 @@ def instalabilidade(
             )
         else:
             minhas = {str(d.get("machine_id") or "").strip().lower() for d in dispositivos}
-            if machine_id.strip().lower() not in minhas:
+            alvo = (estacao or machine_id).strip().lower()
+            if alvo not in minhas:
                 raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
 
     try:
@@ -6632,6 +6668,7 @@ def instalabilidade(
         }
     return {
         "machine_id": machine_id,
+        "estacao": estacao or machine_id,
         "alcance_total": alcance_total,
         "itens": itens,
     }
@@ -6661,14 +6698,15 @@ def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
     """
     Há um agente vivo desta pessoa agora? Em qual máquina?
 
-    O Início usa isto para decidir entre "Instalar nesta máquina" e o download
-    do .exe. Quem sabe a resposta é o portal de inventário: o vínculo
-    pessoa↔máquina nasce do login que ela mesma fez na estação.
+    O Início usa isto para mostrar (ou não) o botão "Instalar na estação" e
+    dizer o motivo quando não há estação. Quem sabe a resposta é o Hardlyze: o
+    vínculo pessoa↔estação nasce do login que ela mesma fez na máquina. Uma
+    pessoa tem UMA estação: a atual, a que está com o agente vivo (decisão I2,
+    01/10/2026); se trocar de máquina, a nova passa a ser a padrão.
 
     **Nunca levanta.** Uma indisponibilidade do outro portal não pode derrubar o
-    Início — ela apenas faz o botão não aparecer, e a pessoa cai no caminho do
-    .exe, que é o que ela já fazia antes de tudo isto existir. Degradar para o
-    caminho antigo é diferente de quebrar.
+    Início — ela apenas faz o botão não aparecer, com o motivo na linha de
+    status. Degradar é diferente de quebrar.
     """
     if not config.ponte_invent_configurada():
         return {"disponivel": False, "motivo": "nao_configurado", "dispositivos": []}
@@ -6693,7 +6731,7 @@ def _dispositivos_da_pessoa(email: str) -> Optional[List[dict]]:
 
     `None` quando não dá para saber (ponte não configurada ou indisponível) —
     diferente de lista vazia, que é "sei, e não há nenhuma". Quem chama decide
-    o que fazer com a dúvida: o Início degrada para o caminho do .exe, e a
+    o que fazer com a dúvida: o Início esconde o botão e diz o motivo, e a
     instalabilidade deixa de conferir o vínculo, avisando.
     """
     if not config.ponte_invent_configurada() or not (email or "").strip():

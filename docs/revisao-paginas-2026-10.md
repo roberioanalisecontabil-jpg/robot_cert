@@ -118,3 +118,49 @@ a rever em Login).
 ### Testes
 
 `tests/test_pagina_carteiras.py`.
+
+---
+
+## 3. Início (01/10/2026)
+
+**Para que existe**: ver os Certificados dos Clientes no Alcance e instalá-los
+na Estação da pessoa, em três toques (selecionar, marcar, instalar).
+
+**Quem vê**: todo papel (o módulo `inicio` fica fora da matriz, decisão N3). O
+recorte é do servidor: Administrador tudo, Gestor tudo menos Exceções,
+Operador as Atribuições. Item sem documento só aparece ao Administrador.
+
+### Decisões
+
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| I1 | Vencidos na lista sem filtro nem KPI; Total ≠ Ativo + Expirando. | **Vencidos saem do Início** (`ocultar_vencidos`), com "N vencidos não listados — ver Vencidos" na linha de status. | Vencido não se instala e tem página própria. |
+| I2 | Instalação ia para a primeira estação da pessoa, em silêncio; texto "nesta máquina". | **Uma Estação por pessoa: a atual** (agente vivo) é a padrão. Textos passam a nomear a estação. Glossário ganha Estação. | É assim que a operação funciona: cada pessoa num computador. |
+| I3 | Seção "Meus computadores" lia tabela dormente e nunca aparecia; duas fontes de "estação". | **Removida.** Estações são do Hardlyze. | Duas fontes de estação foi o que gerou o defeito da instalabilidade. |
+| I4 | Sino: expirando/vencidos pela seleção de Acompanhamento; novos pelo Alcance. | **Mantido.** O sino é preferência de aviso, não acesso. A seleção fica dentro do Alcance (a conferir em Acompanhamento). | Gestor com 400 clientes não quer 400 avisos. |
+| I5 | Sino dependia do módulo Acompanhamento na matriz. | **Sino sempre disponível** a quem está logado (`require_auth`); só a página Acompanhamento segue a matriz. | O sino está em toda página. |
+
+### Defeitos corrigidos
+
+- **Instalabilidade consultada com a máquina do snapshot** (o servidor da varredura), não com a Estação da pessoa. Para Operador e Gestor, o vínculo pessoa↔estação era conferido contra o servidor e dava 403, que a tela mostrava como "não foi possível verificar". A rota ganhou `estacao` (destino) separado de `machine_id` (origem do inventário e do cofre); sem `estacao`, confere como antes.
+- Operador sem Atribuição via "O agente ainda não enviou dados". Agora `alcance_vazio` e "Sua carteira está vazia… peça ao gestor do seu departamento".
+- "Abrir Configuração" oferecido a quem não é administrador.
+- Estação indisponível tinha um texto para três motivos (ponte não configurada, Hardlyze fora, sem agente vivo); agora um por motivo.
+- Desfecho "desconhecido" do acompanhamento sem texto; "Nao foi possivel"/"instalacao" sem acento; "Planilha (Excel)" que gera CSV; lead "das suas empresas".
+- Comentários sobre o download do .exe (que saiu em 23/08) em `main.py`, `config.py` e no template; "líder/setores" em `cert_installer.py`, `novos_certificados.py`, `notification_service.py`.
+
+### Fica como está
+
+- A tela não ramifica por papel; toda diferença é do servidor. Certo: a tela não é barreira.
+- Exportação com teto de 5000 e aviso antes de exportar.
+- "Selecionar todos" marca só a página atual, com teto de 50 por pedido.
+- `/api/cert-installer/available` não é usada pelo Início (é do Instalador).
+
+### Pendências para outras páginas
+
+- Acompanhamento: garantir que a seleção fique dentro do Alcance (I4).
+- Login: a rota HTML de toda página é sem guarda no servidor; a barreira é a API e o redirecionamento no JS.
+
+### Testes
+
+`tests/test_pagina_inicio.py`.

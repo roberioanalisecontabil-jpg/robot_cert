@@ -664,7 +664,7 @@ def bloquear_custodia(
 # ABRE por padrão (todo certificado válido entra no cofre, o admin desativa);
 # o acesso FECHA por padrão (operador sem atribuição não instala nada). Os
 # dois defaults são opostos de propósito: guardar a mais é desperdício,
-# liberar a mais é vazamento.
+# atribuir a mais é vazamento.
 # ──────────────────────────────────────────────────────────────────────────
 
 # Só `admin` tem alcance sem carteira. O Gestor saiu daqui em 18/08/2026 e
@@ -677,17 +677,17 @@ PAPEL_OPERADOR = "user"
 
 
 class AlcanceIndisponivel(RuntimeError):
-    """Não deu para saber quem o líder alcança."""
+    """Não deu para saber quem o Gestor alcança."""
 
 
 def departamentos_que_lidera(user_id: str) -> Set[str]:
     """
-    Setores em que esta pessoa é líder.
+    Departamentos de que esta pessoa é Gestor.
 
     **Levanta** `AlcanceIndisponivel` em vez de devolver conjunto vazio quando
     a leitura falha. É a mesma escolha de `listar_bloqueios`, e pela mesma
     razão: aqui "vazio" significa *não alcança ninguém*, e uma falha de leitura
-    viraria uma recusa que parece decisão — o líder veria "acesso restrito" e
+    viraria uma recusa que parece decisão — o Gestor veria a porta fechada e
     concluiria que perdeu a permissão, não que o banco não respondeu.
     """
     client = _banco()

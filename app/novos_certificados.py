@@ -8,8 +8,8 @@ lhe dizem respeito.
 
 Quem recebe o quê:
 - administradores / lista fixa: todos os novos da ingestão;
-- gestor: os novos cujo documento está no seu alcance (carteira + setores);
-- operador: os novos cujo documento está na sua carteira.
+- gestor: os novos, menos as Exceções (todo o inventário é o alcance dele);
+- operador: os novos cujo documento está atribuído à sua carteira.
 Conta desativada não recebe. É o mesmo recorte do sino (`documentos_ao_alcance`),
 de propósito: o e-mail e o sino falam da mesma lista.
 

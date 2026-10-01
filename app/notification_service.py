@@ -76,8 +76,10 @@ def get_active_alerts(
     Lista de alertas ativos (expirando ou vencidos) para o sino do portal,
     deduplicada por certificado e ordenada por urgência real.
 
-    - Admins: alertas de todos os certificados do sistema.
-    - Users: apenas dos certificados que selecionaram para acompanhar.
+    - Administrador: alertas de todos os certificados do sistema.
+    - Gestor e Operador: apenas dos certificados que selecionaram para
+      acompanhar (decisão I4, 01/10/2026: o sino é preferência de aviso, não
+      alcance; a seleção, por sua vez, fica dentro do Alcance).
 
     A assimetria é DELIBERADA, e foi reconfirmada em 20/08/2026 quando o
     "Li todos" foi implementado. A alternativa — o sino do admin seguir a

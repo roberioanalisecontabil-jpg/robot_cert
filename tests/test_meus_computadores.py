@@ -1,4 +1,8 @@
 """
+NOTA 01/10/2026: a secao "Meus computadores" saiu do Inicio (decisao I3 da
+revisao de paginas: estacoes sao do Hardlyze). Ficam aqui os testes das badges
+e da API /api/agent/dispositivos, que continua existindo.
+
 Painel "Meus computadores" no Início, e o defeito que ele quase trouxe junto.
 
 Ao escrever o painel eu usei `badge--ok`. O CSS define `badge-ok`. O resultado
@@ -88,49 +92,6 @@ def _inicio() -> str:
     return INICIO.read_text(encoding="utf-8")
 
 
-def test_o_painel_nasce_escondido() -> None:
-    """
-    Quem nunca instalou o agente não tem o que gerir aqui. Um painel vazio
-    dizendo "nenhum" seria ruído permanente para a maioria — e o JS só o revela
-    quando a lista vem com algo.
-    """
-    html = _inicio()
-    secao = html[html.index('id="secao-dispositivos"'):]
-    assert "hidden" in secao[: secao.index(">")]
-
-
-def test_revogar_pergunta_antes_e_nao_usa_o_confirm_do_navegador() -> None:
-    """
-    Revogar é decisão, não ajuste: tem de perguntar. E por `confirmarAcao`, que
-    o próprio `ui-common.js` documenta como substituto do `confirm()` — este
-    trava a aba inteira e pode ser silenciado pelo usuário, que perderia a
-    pergunta sem saber.
-    """
-    corpo = _inicio()
-    trecho = corpo[corpo.index("async function revogarDispositivo"):]
-    trecho = trecho[: trecho.index("\n      }")]
-
-    assert "confirmarAcao" in trecho
-    assert not re.search(r"(?<![\w.])confirm\s*\(", trecho)
-    assert "DELETE" in trecho
-
-
-def test_revogado_e_parado_nao_se_confundem() -> None:
-    """
-    "Parado" é um computador desligado, que volta sozinho. "Revogado" é uma
-    decisão que alguém tomou. Mostrá-los igual faria a pessoa revogar de novo o
-    que já revogou, ou esperar por um que nunca vai voltar.
-    """
-    corpo = _inicio()
-    trecho = corpo[corpo.index("function situacaoDoDispositivo"):]
-    trecho = trecho[: trecho.index("\n      }")]
-
-    assert "revogado_em" in trecho
-    assert "vivo" in trecho
-    # Três desfechos distintos, não dois.
-    assert len(re.findall(r"return\s*{", trecho)) == 3
-
-
 def test_o_painel_nao_e_gateado_por_permissao_de_modulo() -> None:
     """
     Um operador sem permissão nenhuma no menu precisa poder cortar o acesso de
@@ -146,37 +107,9 @@ def test_o_painel_nao_e_gateado_por_permissao_de_modulo() -> None:
     assert "require_admin" not in trecho
 
 
-def test_falha_ao_listar_esconde_o_painel_em_vez_de_alarmar() -> None:
-    """
-    A migration pode não ter rodado (503). Um toast de erro no Início por causa
-    de um painel opcional assustaria quem nem usa o agente.
-    """
-    corpo = _inicio()
-    trecho = corpo[corpo.index("async function carregarDispositivos"):]
-    trecho = trecho[: trecho.index("\n      }\n")]
-
-    captura = trecho[trecho.index("catch"):]
-    assert "secao.hidden = true" in captura
-    assert "showToast" not in captura
-
-
 # ──────────────────────────────────────────────────────────────────────────
 # 3. Versão do agente na estação
 # ──────────────────────────────────────────────────────────────────────────
-
-def test_versao_nao_reportada_nao_vira_desatualizado() -> None:
-    """
-    Um agente anterior a esta coluna não diz a versão. Pintá-lo de atrasado
-    mandaria alguém atualizar o que talvez já esteja em dia — e faria o painel
-    mentir justamente para quem o abriu para conferir se a correção chegou.
-    """
-    corpo = _inicio()
-    trecho = corpo[corpo.index("function versaoDoDispositivo"):]
-    trecho = trecho[: trecho.index("\n      }")]
-
-    assert "if (!d.versao)" in trecho
-    assert trecho.index("if (!d.versao)") < trecho.index("desatualizado")
-
 
 def test_o_servidor_tambem_exige_as_duas_coisas_para_dizer_atrasado() -> None:
     """

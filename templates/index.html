@@ -30,7 +30,7 @@
       foco), Exo nos títulos e números, Inter no corpo, JetBrains Mono nos
       documentos. Cor semântica só para estado.
       STORY: a pessoa vê o que expira, acha o cliente pela busca, e instala
-      nesta máquina em três toques (entrar no modo, marcar a linha, instalar);
+      na estação da pessoa em três toques (entrar no modo, marcar a linha, instalar);
       o admin lê a saúde do acervo nos três números.
       FIRST VIEWPORT: título e frase; três KPIs, o de "Expirando" lavado de
       aviso; abaixo, um card com a toolbar numa linha acima de 1024px (Status,
@@ -51,7 +51,7 @@
     <main class="main-content cg-painel" id="main-content">
       <header class="ag-page__head">
         <h1 class="ag-page__title">Painel de Certificados</h1>
-        <p class="ag-page__lead">Gerencie e instale seus certificados das suas empresas.</p>
+        <p class="ag-page__lead">Veja os certificados dos seus clientes e instale-os na sua estação.</p>
       </header>
 
       <!-- Resumo: três números, e só o terceiro pede ação — por isso só ele
@@ -133,7 +133,7 @@
           <div class="cg-toolbar__acoes">
             <!-- A coluna de checkbox não é de uso diário e roubava a largura
                  do nome. Ela nasce escondida e este botão a revela — é o
-                 único caminho para "instalar nesta máquina", então o rótulo
+                 único caminho para "instalar na estação", então o rótulo
                  diz para que serve, não "selecionar múltiplos". -->
             <!-- Dois controles, e não um: o alternador só entra e sai do modo
                  (rótulo "Selecionar"/"Cancelar", ícone de lista com check — o de
@@ -162,7 +162,7 @@
                 <svg class="menu-suspenso__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
               </summary>
               <div class="menu-suspenso__lista" role="menu">
-                <button type="button" role="menuitem" id="btn-export-excel">Planilha (Excel)</button>
+                <button type="button" role="menuitem" id="btn-export-excel">Planilha (CSV)</button>
                 <button type="button" role="menuitem" id="btn-export-pdf">Documento (PDF)</button>
               </div>
             </details>
@@ -182,11 +182,11 @@
         <!-- A antiga barra sticky virou a linha de status da seleção, aqui,
              logo abaixo da toolbar: a ação de instalar mora na toolbar, e o
              que sobra é informação — quantos estão marcados, o teto por
-             instalador e o que fazer quando não há agente nesta máquina. -->
+             instalador e o que fazer quando não há agente na estação. -->
         <div id="barraSelecao" class="cg-selecao-status" role="status" hidden>
           <span id="selContagem" class="cg-selecao-status__contagem"></span>
           <span id="selAviso" class="cg-selecao-status__aviso"></span>
-          <span id="semAgente" class="cg-selecao-status__aviso" hidden>Sem agente ativo nesta máquina — abra o Hardlyze Agent e entre com sua conta.</span>
+          <span id="semAgente" class="cg-selecao-status__aviso" hidden>Sem agente ativo na sua estação — abra o Hardlyze Agent e entre com sua conta.</span>
         </div>
 
         <div class="table-scroll-anchor">
@@ -275,41 +275,6 @@
            janela: fixa, ela taparia a paginação no celular, que é justamente o
            controle que o usuário precisa para continuar escolhendo. Só aparece
            quando há seleção. -->
-      <!-- Meus computadores.
-           Mora no Início, e não em Configuração, porque não é ajuste de sistema:
-           é a lista de máquinas que agem COM A CONTA de quem está olhando. Um
-           operador sem permissão nenhuma no menu precisa poder cortar o acesso
-           de um computador que não usa mais — e Configuração está fechada para
-           ele.
-           Fica escondido quando não há nenhum: quem nunca instalou o agente não
-           tem o que gerir aqui, e um painel vazio dizendo "nenhum" seria ruído
-           permanente para a maioria. -->
-      <section id="secao-dispositivos" class="ag-card cg-dispositivos" hidden>
-        <div class="ag-card-head">
-          <h2 class="ag-card__title">Meus computadores</h2>
-        </div>
-        <p class="cg-dispositivos__texto">
-          Computadores onde você entrou pelo agente. Eles agem com a sua conta —
-          se um deixou de ser seu, revogue o acesso.
-        </p>
-        <div class="ag-table-wrap">
-          <div class="ag-table-scroll" tabindex="0" role="region" aria-label="Meus computadores">
-            <table class="ag-table" role="table">
-              <thead role="rowgroup">
-                <tr role="row">
-                  <th scope="col">Computador</th>
-                  <th scope="col">Situação</th>
-                  <th scope="col">Último contato</th>
-                  <th scope="col">Versão</th>
-                  <th scope="col"><span class="cg-sr-only">Ações</span></th>
-                </tr>
-              </thead>
-              <tbody id="corpo-dispositivos" role="rowgroup"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
     </main>
 
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09j"></script>
@@ -498,7 +463,21 @@
 
       // `icon: ""` de propósito: o helper compartilhado desenha emoji, que o
       // DS não admite na interface; o CSS da tela esconde o espaço vazio.
+      // Operador sem Atribuição: a lista vem vazia porque ninguém lhe deu
+      // cliente nenhum, e não porque o agente não enviou dados. O remédio é
+      // outro, então o texto é outro.
+      let _alcanceVazio = false;
+
       function renderEstadoVazio() {
+        if (_alcanceVazio && !temFiltroAtivo()) {
+          renderEmptyRow("tbody", 6, {
+            icon: "",
+            title: "Sua carteira está vazia",
+            description:
+              "Nenhum cliente foi atribuído a você ainda, por isso não há certificados para ver ou instalar. Peça ao gestor do seu departamento.",
+          });
+          return;
+        }
         if (temFiltroAtivo()) {
           const termo = (document.getElementById("busca-cert")?.value || "").trim();
           renderEmptyRow("tbody", 6, {
@@ -647,11 +626,17 @@
       }
 
       async function carregarInstalabilidade(machineId) {
-        if (!machineId || machineId === _instalMachineId) return;
-        _instalMachineId = machineId;
+        // `machineId` é o servidor que varreu os PFX (dono do snapshot e do
+        // cofre); a estação é onde o certificado vai ser instalado. Os dois
+        // vão ao servidor, que confere o vínculo pessoa↔estação pela segunda.
+        const estacaoId = _estacao ? _estacao.machine_id : "";
+        const chave = machineId + "|" + estacaoId;
+        if (!machineId || chave === _instalMachineId) return;
+        _instalMachineId = chave;
         try {
           const r = await fetch(
-            `/api/cert-installer/instalabilidade?machine_id=${encodeURIComponent(machineId)}`,
+            `/api/cert-installer/instalabilidade?machine_id=${encodeURIComponent(machineId)}` +
+              (estacaoId ? `&estacao=${encodeURIComponent(estacaoId)}` : ""),
             { headers: getHeaders() }
           );
           if (!r.ok) throw new Error(await mensagemCorpoErro(r));
@@ -670,20 +655,31 @@
 
       // ─── Instalar pelo agente residente ──────────────────────────────────
 
+      // A estação da pessoa: UMA, a atual — a que está com o agente vivo
+      // (decisão I2, 01/10/2026). Se ela trocar de máquina, a nova é a padrão.
       let _estacao = null;   // { machine_id, nome } quando ha agente vivo
+      const MOTIVO_SEM_ESTACAO = {
+        nao_configurado: "A instalação pelo agente não está ligada neste portal. Fale com o administrador.",
+        indisponivel: "O Hardlyze não respondeu agora — tente de novo em instantes.",
+        sem_agente_vivo: "Sem agente ativo na sua estação — abra o Hardlyze Agent e entre com sua conta.",
+      };
 
       async function carregarMinhaEstacao() {
+        let motivo = "indisponivel";
         try {
           const r = await fetch("/api/cert-installer/minha-estacao", { headers: getHeaders() });
-          if (!r.ok) return;
-          const d = await r.json();
-          _estacao = d.disponivel && d.dispositivos.length ? d.dispositivos[0] : null;
+          if (r.ok) {
+            const d = await r.json();
+            _estacao = d.disponivel && d.dispositivos.length ? d.dispositivos[0] : null;
+            motivo = d.motivo || "sem_agente_vivo";
+          }
         } catch (e) {
-          // Silencio de proposito: sem agente, a pessoa usa o download, que e
-          // o que ela ja fazia. Um toast de erro aqui assustaria por causa de
-          // um caminho opcional que talvez ela nem use.
+          // Sem toast: a lista e o resto do Início não dependem disto. O motivo
+          // aparece na linha de status quando a pessoa marca algo para instalar.
           _estacao = null;
         }
+        const aviso = document.getElementById("semAgente");
+        if (aviso) aviso.textContent = MOTIVO_SEM_ESTACAO[motivo] || MOTIVO_SEM_ESTACAO.sem_agente_vivo;
         const btn = document.getElementById("btnInstalarAqui");
         if (!btn) return;
         if (_estacao) {
@@ -691,9 +687,8 @@
           // no celular, e "selecionados" ja diz o essencial.
           btn.title = `Instalar em ${_estacao.nome || _estacao.machine_id}`;
         }
-        // Sem agente a pessoa nao fica sem saida nem sem explicacao: antes ela
-        // caia no download, que nao existe mais. Quem mostra o botao ou o
-        // aviso e a linha de status, que depende tambem do que esta marcado.
+        // Quem mostra o botao ou o aviso e a linha de status, que depende
+        // tambem do que esta marcado.
         atualizarBarraSelecao();
       }
 
@@ -760,7 +755,13 @@
           prazoDoPedido(d.expira_em);
 
           if (d.desfecho === "concluido") {
-            showToast("Certificado instalado nesta máquina.", "success");
+            showToast(`Certificado instalado em ${(_estacao && (_estacao.nome || _estacao.machine_id)) || "sua estação"}.`, "success");
+            return;
+          }
+          if (d.desfecho === "desconhecido") {
+            // O portal nao reconhece mais o pedido (token apagado, reinicio).
+            // Esperar nao resolve; pedir de novo resolve.
+            showToast("O portal não reconhece mais este pedido. Peça a instalação de novo.", "warning");
             return;
           }
           if (d.desfecho === "expirado") {
@@ -806,7 +807,7 @@
             }),
           });
           const d = await r.json();
-          if (!r.ok) throw new Error(d.detail || "Falha ao pedir a instalacao");
+          if (!r.ok) throw new Error(d.detail || "Falha ao pedir a instalação");
 
           // "Pedido enviado" e nao "instalado": quem instala e o agente, em
           // segundos. Prometer o que ainda nao aconteceu faria a pessoa achar
@@ -819,7 +820,7 @@
           // padrao e so acertaria o alvo na primeira resposta do acompanhamento.
           acompanharInstalacao(d.token_id, d.expires_at);
         } catch (e) {
-          showToast("Nao foi possivel instalar: " + e.message, "error");
+          showToast("Não foi possível instalar: " + e.message, "error");
         } finally {
           btn.disabled = false;
           btn.textContent = rotulo;
@@ -932,6 +933,9 @@
             // COM eles — e a divergencia so apareceria depois, na mao de quem
             // recebesse o arquivo.
             ocultar_ilegiveis: "true",
+            // Vencido nao se instala e tem pagina propria (decisao I1,
+            // 01/10/2026): sai daqui, e a linha de status diz quantos sao.
+            ocultar_vencidos: "true",
           });
           const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
           if (r.status === 401) {
@@ -1080,6 +1084,9 @@
             // cards. Vai ao servidor porque a paginacao e a contagem sao de la:
             // filtrar no cliente daria pagina de 100 com 91 linhas.
             ocultar_ilegiveis: "true",
+            // Vencido nao se instala e tem pagina propria (decisao I1,
+            // 01/10/2026): sai daqui, e a linha de status diz quantos sao.
+            ocultar_vencidos: "true",
             // Vazio significa "ordem de fabrica" (alfabetica por titular), e nao
             // "sem ordem": o servidor ja entrega ordenado sem este parametro.
             ordenar: ordenacao.coluna || "",
@@ -1093,13 +1100,16 @@
           if (r.status === 404) {
             st.textContent = "Fonte “remoto”: ainda sem dados.";
             atualizarPaginacaoUI(null);
+            const admin = localStorage.getItem("user_role") === "admin";
             renderEmptyRow("tbody", 6, {
               icon: "",
               title: "A fonte remota ainda não tem dados",
-              description:
-                "Selecione a fonte “local” ou “auto” em Configuração, ou inicie o agente no servidor Windows.",
-              actionText: "Abrir Configuração",
-              onAction: () => (window.location.href = "/configuracao"),
+              description: admin
+                ? "Selecione a fonte “local” ou “auto” em Configuração, ou inicie o agente no servidor Windows."
+                : "O agente do servidor ainda não enviou o inventário. Avise o administrador.",
+              // Configuração é só do administrador; oferecer o botão a quem
+              // não entra lá o mandaria para um redirecionamento.
+              ...(admin ? { actionText: "Abrir Configuração", onAction: () => (window.location.href = "/configuracao") } : {}),
             });
             return;
           }
@@ -1132,6 +1142,12 @@
             return;
           }
           st.textContent = "Atualizado em " + new Date(d.atualizado_em).toLocaleString("pt-BR");
+          _alcanceVazio = !!d.alcance_vazio;
+          if (d.vencidos_ocultos) {
+            const nv = Number(d.vencidos_ocultos);
+            st.innerHTML += " · " + nv + (nv === 1 ? " vencido não listado" : " vencidos não listados") +
+              " — <a href=\"/vencidos\">ver Vencidos</a>";
+          }
           const items = d.itens || [];
           if (d.paginacao) {
             paginaAtual = d.paginacao.pagina;
@@ -1333,164 +1349,14 @@
           paginaAtual = 1;
           history.replaceState(null, "", location.pathname);
         }
+        // A estação ANTES da tabela: a instalabilidade é consultada com a
+        // estação da pessoa (revisão de 01/10/2026), não com o servidor da
+        // varredura — era por isso que operador e gestor viam "não foi possível
+        // verificar" sempre que a ponte com o Hardlyze estava de pé.
+        await carregarMinhaEstacao();
         await carregarTabela();
-        carregarDispositivos();
-        carregarMinhaEstacao();
       })();
 
-      // ─── Meus computadores ───────────────────────────────────────────────
-
-      function situacaoDoDispositivo(d) {
-        // Três estados, e a diferença entre os dois últimos importa: "parado" é
-        // um computador desligado, que volta sozinho; "revogado" é uma decisão
-        // que alguém tomou. Mostrá-los igual faria a pessoa revogar de novo o
-        // que já revogou, ou esperar por um que nunca vai voltar.
-        if (d.revogado_em) return { texto: "Acesso revogado", classe: "badge-bad", glifo: BADGE_GLIFOS.x };
-        if (d.vivo) return { texto: "Ativo agora", classe: "badge-ok", glifo: BADGE_GLIFOS.check };
-        return { texto: "Parado", classe: "badge-warning", glifo: BADGE_GLIFOS.alerta };
-      }
-
-      // `createElement` + `textContent`, nunca string HTML. É a forma sancionada
-      // por `test_status_de_certificado_nao_e_montado_a_mao_no_template`, e o
-      // motivo dela é concreto: montar a string do badge dentro do template foi
-      // como o mapeamento estado→badge acabou duplicado em duas telas e
-      // divergiu, sem nada acusando.
-      function badgeElemento(texto, classe, glifo) {
-        const span = document.createElement("span");
-        // `classesDeBadge` (ui-common.js) acrescenta a classe .ag-* que pinta
-        // pelo DS; o mapeamento legado→Águia mora lá, num lugar só.
-        span.className = classesDeBadge(classe);
-        const g = document.createElement("span");
-        g.className = "badge-glifo";
-        g.setAttribute("aria-hidden", "true");
-        // O glifo é um SVG fixo de BADGE_GLIFOS (ui-common.js), nunca dado do
-        // servidor — por isso innerHTML aqui não abre porta a injeção.
-        g.innerHTML = glifo;
-        span.appendChild(g);
-        span.appendChild(document.createTextNode(texto));
-        return span;
-      }
-
-      function versaoDoDispositivo(d) {
-        const td = document.createElement("td");
-        // Não reportada é DESCONHECIDA, não atrasada. Um agente anterior a esta
-        // coluna não diz a versão, e pintá-lo de atrasado mandaria alguém
-        // atualizar o que talvez já esteja em dia — e faria o painel mentir
-        // justamente para quem o abriu para conferir se a correção chegou.
-        if (!d.versao) {
-          const vazio = document.createElement("span");
-          vazio.className = "hint";
-          vazio.textContent = "—";
-          td.appendChild(vazio);
-          return td;
-        }
-        td.appendChild(document.createTextNode(d.versao));
-        if (d.desatualizado) {
-          td.appendChild(document.createTextNode(" "));
-          td.appendChild(badgeElemento("Desatualizado", "badge-warning", "!"));
-        }
-        return td;
-      }
-
-      function quandoFoi(iso) {
-        if (!iso) return "Nunca se conectou";
-        const q = new Date(iso);
-        if (isNaN(q)) return "—";
-        const min = Math.floor((Date.now() - q.getTime()) / 60000);
-        if (min < 1) return "Agora mesmo";
-        if (min < 60) return `Há ${min} min`;
-        if (min < 1440) return `Há ${Math.floor(min / 60)} h`;
-        return q.toLocaleDateString("pt-BR");
-      }
-
-      async function carregarDispositivos() {
-        const secao = document.getElementById("secao-dispositivos");
-        const corpo = document.getElementById("corpo-dispositivos");
-        if (!secao || !corpo) return;
-
-        let dados;
-        try {
-          const r = await fetch("/api/agent/dispositivos", { headers: getHeaders() });
-          if (!r.ok) throw new Error(String(r.status));
-          dados = await r.json();
-        } catch (e) {
-          // Silêncio de propósito: a migration pode não ter rodado (503), e um
-          // toast de erro no Início assustaria por causa de um painel opcional
-          // que a maioria nem usa. Quem depende dele percebe pela ausência.
-          secao.hidden = true;
-          return;
-        }
-
-        const lista = dados.dispositivos || [];
-        secao.hidden = lista.length === 0;
-        corpo.innerHTML = "";
-
-        lista.forEach((d) => {
-          const s = situacaoDoDispositivo(d);
-          const tr = document.createElement("tr");
-
-          const tdNome = document.createElement("td");
-          tdNome.appendChild(document.createTextNode(d.nome || d.machine_id));
-          tdNome.appendChild(document.createElement("br"));
-          const mid = document.createElement("small");
-          mid.className = "hint";
-          mid.textContent = d.machine_id;
-          tdNome.appendChild(mid);
-          tr.appendChild(tdNome);
-
-          const tdSituacao = document.createElement("td");
-          tdSituacao.appendChild(badgeElemento(s.texto, s.classe, s.glifo));
-          tr.appendChild(tdSituacao);
-
-          const tdQuando = document.createElement("td");
-          tdQuando.textContent = quandoFoi(d.visto_em);
-          tr.appendChild(tdQuando);
-
-          tr.appendChild(versaoDoDispositivo(d));
-
-          const tdAcoes = document.createElement("td");
-          tdAcoes.className = "ag-td--acoes";
-          if (!d.revogado_em) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "ag-btn ag-btn--outline ag-btn--sm";
-            btn.textContent = "Revogar acesso";
-            btn.addEventListener("click", () => revogarDispositivo(d));
-            tdAcoes.appendChild(btn);
-          }
-          tr.appendChild(tdAcoes);
-
-          corpo.appendChild(tr);
-        });
-      }
-
-      async function revogarDispositivo(d) {
-        const ok = await confirmarAcao({
-          titulo: "Revogar este computador?",
-          mensagem:
-            `“${d.nome || d.machine_id}” deixa de agir com a sua conta. ` +
-            "O agente lá vai pedir login de novo na próxima vez. " +
-            "Os certificados já instalados nele continuam onde estão.",
-          textoConfirmar: "Revogar acesso",
-          perigo: true,
-        });
-        if (!ok) return;
-
-        try {
-          const r = await fetch(`/api/agent/dispositivos/${encodeURIComponent(d.id)}`, {
-            method: "DELETE",
-            headers: getHeaders(),
-          });
-          if (!r.ok) {
-            const corpo = await r.json().catch(() => ({}));
-            throw new Error(corpo.detail || `Erro ${r.status}`);
-          }
-          showToast("Acesso revogado.", "success");
-          carregarDispositivos();
-        } catch (e) {
-          showToast("Não foi possível revogar: " + e.message, "error");
-        }
-      }
     </script>
   </body>
 </html>

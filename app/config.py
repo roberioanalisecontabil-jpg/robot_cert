@@ -221,8 +221,8 @@ VERSAO_AGENTE_ESPERADA = "1.4.1"
 # banco do outro — o muro que mantém o cofre fora do alcance do código de
 # inventário continua de pé, e essa foi a razão de não unificar os bancos.
 #
-# Vazio = o botão "instalar nesta máquina" não existe e o portal continua
-# entregando o .exe avulso, como sempre fez. Ligar é definir estas duas.
+# Vazio = o botão "Instalar na estação" não aparece e o Início diz que a
+# instalação pelo agente não está ligada. Ligar é definir estas duas.
 INVENT_API_URL = (os.getenv("INVENT_API_URL") or "").strip().rstrip("/")
 
 # O MESMO valor configurado como CERT_PORTAL_TOKEN do outro lado. Próprio, e não
