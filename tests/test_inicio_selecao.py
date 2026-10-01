@@ -226,16 +226,19 @@ def test_admin_e_gestor_nao_veem_fora_da_carteira(
     corpo = r.json()
     estados = {fp: v["estado"] for fp, v in corpo["itens"].items()}
 
-    # 30/09/2026 (segunda versão): só o admin tem alcance sem carteira. O
-    # gestor lê a carteira (que a regra de gestor enche ao promover); aqui
-    # ela está vazia, então o que está fora nem sai (auditoria #30).
+    # ADR 0001: só o admin tem alcance SEM carteira. O gestor tem carteira de
+    # Exceções — sem nenhuma, instala tudo que tem documento, mas isso não é
+    # "alcance total": a estação precisa ser dele e as Exceções recortam.
     if papel == "admin":
         assert corpo["alcance_total"] is True
         assert "fora_da_carteira" not in estados.values()
         assert estados[FP_ALHEIO] == "ok"
     else:
         assert corpo["alcance_total"] is False
-        assert FP_ALHEIO not in estados
+        assert estados[FP_ALHEIO] == "ok"
+        banco.tabelas["carteira_excecao"] = [{"user_id": "u-gestor", "documento": DOC_ALHEIO}]
+        r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQUINA}", headers=_h(papel))
+        assert FP_ALHEIO not in r.json()["itens"], "a exceção tira o certificado da tela (auditoria #30)"
 
 
 def test_operador_nao_tem_alcance_total(client: TestClient, banco: _Fake) -> None:

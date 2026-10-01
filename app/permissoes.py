@@ -14,7 +14,7 @@ e vale registrá-las porque cada uma poda uma classe inteira de engano:
    tirando o próprio acesso a Usuários e ficando sem como voltar. Não é uma
    validação que pode falhar — é uma linha que não existe.
 
-3. **Alcance NÃO mora aqui.** `require_admin_ou_lider` e `_exigir_alcance` já
+3. **Alcance NÃO mora aqui.** `require_admin_ou_gestor` e `_exigir_alcance` já
    resolvem *de quem* um gestor pode tratar, derivado da liderança de
    departamento. Esta matriz responde outra pergunta — *qual módulo, e em que
    profundidade* — e achatar as duas perderia a barreira que impede um líder do

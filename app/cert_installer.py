@@ -20,7 +20,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric.ec import (
@@ -667,16 +667,13 @@ def bloquear_custodia(
 # liberar a mais é vazamento.
 # ──────────────────────────────────────────────────────────────────────────
 
-# Só `admin`. O `gestor` saiu em 18/08/2026, quando o departamento passou a
-# recortar quem cada líder alcança.
-#
-# A decisão de 15/08 dizia o contrário, e a razão dela está registrada em
-# `assegurar_carteira`: "quem pode atribuir qualquer cliente a qualquer
-# operador pode atribuir a si mesmo, então limitá-lo seria teatro". O
-# raciocínio estava certo — e INVERTE com o recorte. Agora o gestor atribui
-# apenas dentro do setor que lidera; se continuasse instalando qualquer coisa,
-# o recorte é que seria teatro.
+# Só `admin` tem alcance sem carteira. O Gestor saiu daqui em 18/08/2026 e
+# não voltou: desde o ADR 0001 (01/10/2026) ele alcança "tudo menos as
+# Exceções", que é uma carteira — de sinal invertido, mas uma carteira, e o
+# Administrador a edita. Ver `documentos_ao_alcance`.
 PAPEIS_COM_ALCANCE_TOTAL = ("admin",)
+PAPEL_GESTOR = "gestor"
+PAPEL_OPERADOR = "user"
 
 
 class AlcanceIndisponivel(RuntimeError):
@@ -711,21 +708,28 @@ def departamentos_que_lidera(user_id: str) -> Set[str]:
 
 def pode_gerir(ator_id: str, ator_role: str, alvo_id: str) -> bool:
     """
-    O ator pode montar a carteira do alvo?
+    O ator pode montar a carteira do alvo? (ADR 0001)
 
-    - `admin`: qualquer pessoa.
-    - Líder: quem estiver num setor que ele lidera, **e ele mesmo**. Sem a
-      segunda parte, um líder que não pertence ao próprio setor não teria como
-      liberar nada para si — e não haveria ninguém abaixo dele que pudesse
-      fazê-lo, porque só líder libera.
-    - Os demais: ninguém.
+    - Administrador: a de qualquer pessoa — as Atribuições de um Operador e
+      as Exceções de um Gestor.
+    - Gestor: só Atribuições, e só de Operador que esteja num Departamento
+      que ele lidera. Gestor não limita outro Gestor, e não edita a própria
+      carteira: a dele é de Exceções, e Exceção só o Administrador registra.
+    - Operador: ninguém. Nem a própria.
+
+    Levanta `AlcanceIndisponivel` quando não consegue ler o que precisa, em
+    vez de devolver False: "não sei" não é "não pode".
     """
-    if (ator_role or "").strip().lower() in PAPEIS_COM_ALCANCE_TOTAL:
+    papel = (ator_role or "").strip().lower()
+    if papel in PAPEIS_COM_ALCANCE_TOTAL:
         return True
     if not ator_id or not alvo_id:
         return False
     if str(ator_id) == str(alvo_id):
-        return bool(departamentos_que_lidera(str(ator_id)))
+        return False
+    # Não se confere `papel == "gestor"` aqui de propósito: quem lidera É
+    # Gestor por derivação (`app/papeis.py`), e a matriz de permissões é quem
+    # diz se o papel alcança Carteiras. Esta função cuida só do eixo "de quem".
 
     meus = departamentos_que_lidera(str(ator_id))
     if not meus:
@@ -737,7 +741,7 @@ def pode_gerir(ator_id: str, ator_role: str, alvo_id: str) -> bool:
     try:
         r = (
             client.table("users")
-            .select("departamento_id")
+            .select("departamento_id, role")
             .eq("id", str(alvo_id))
             .limit(1)
             .execute()
@@ -749,10 +753,11 @@ def pode_gerir(ator_id: str, ator_role: str, alvo_id: str) -> bool:
     linhas = r.data or []
     if not linhas:
         return False
+    if (linhas[0].get("role") or "").strip().lower() != PAPEL_OPERADOR:
+        return False
     dep = linhas[0].get("departamento_id")
-    # Pessoa sem departamento não é alcançada por líder nenhum. É deliberado:
-    # o contrário — "sem setor, qualquer líder pode" — daria a todos os líderes
-    # alcance sobre quem acabou de ser cadastrado.
+    # Operador sem departamento não é alcançado por Gestor nenhum: só o
+    # Administrador atribui a ele até ser enquadrado (ADR 0001).
     return bool(dep) and str(dep) in meus
 
 
@@ -813,82 +818,168 @@ def listar_carteira(user_id: str) -> Set[str]:
         raise CarteiraIndisponivel(str(e)) from e
 
 
-# Regra de gestor (30/09/2026). Quem vira gestor recebe TODOS os clientes do
-# inventário na carteira, marcados com esta origem; o administrador tira um a
-# um se quiser. Quem deixa de ser gestor perde só o que a regra deu — o que
-# foi atribuído à mão fica. A carteira do gestor é lida como a de qualquer
-# pessoa (`documentos_ao_alcance`): a regra enche, não contorna.
-ORIGEM_REGRA_GESTOR = "regra:gestor"
+# ── Exceções: a carteira do Gestor (ADR 0001, 01/10/2026) ─────────────────
+#
+# A carteira do Operador é uma lista POSITIVA (Atribuições: começa vazia). A
+# do Gestor é uma lista NEGATIVA (Exceções: começa cheia e o Administrador
+# retira). Tabela própria em vez de uma coluna `tipo` em `carteira`: as duas
+# listas têm sinais opostos, e uma linha "documento X" significando "pode"
+# para um papel e "não pode" para outro é o tipo de ambiguidade que um
+# `WHERE` esquecido transforma em vazamento.
+#
+# Foi a terceira regra em dois dias; as duas anteriores (flag
+# `acesso_restrito` e carteira cheia na promoção, origem "regra:gestor") estão
+# em docs/adr/0001-carteira-por-papel.md, com o motivo de cada descarte.
+TABELA_EXCECOES = "carteira_excecao"
 
 
-def aplicar_regra_gestor(user_id: str) -> int:
-    """Põe na carteira de `user_id` todo documento do inventário que ainda
-    não esteja lá. Idempotente. Devolve quantos entraram."""
+def listar_excecoes(user_id: str) -> Set[str]:
+    """Documentos que este Gestor NÃO alcança. Levanta `CarteiraIndisponivel`
+    em vez de devolver vazio — vazio aqui seria alcance total."""
     client = _banco()
     if not client:
-        raise RuntimeError("Banco não configurado")
-    universo = {str(d.get("documento") or "") for d in universo_de_documentos()}
-    universo.discard("")
-    faltam = sorted(universo - set(listar_carteira(user_id)))
-    if not faltam:
-        return 0
-    return atribuir_carteira(user_id, faltam, None, ORIGEM_REGRA_GESTOR)
+        raise CarteiraIndisponivel("Banco não configurado")
+    try:
+        r = client.table(TABELA_EXCECOES).select("documento").eq("user_id", user_id).execute()
+        return {so_digitos(row.get("documento")) for row in (r.data or []) if row.get("documento")}
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao listar as exceções de %s", user_id)
+        raise CarteiraIndisponivel(str(e)) from e
 
 
-def remover_regra_gestor(user_id: str) -> int:
-    """Tira da carteira só o que a regra deu. Devolve quantos saíram."""
+def detalhar_excecoes(user_id: str) -> List[Dict[str, Any]]:
+    """As Exceções com a trilha: quem retirou o quê, e quando."""
     client = _banco()
     if not client:
-        raise RuntimeError("Banco não configurado")
-    r = (
-        client.table("carteira").select("documento")
-        .eq("user_id", user_id).eq("atribuido_por_email", ORIGEM_REGRA_GESTOR).execute()
-    )
-    n = len(r.data or [])
-    if n:
-        (
-            client.table("carteira").delete()
-            .eq("user_id", user_id).eq("atribuido_por_email", ORIGEM_REGRA_GESTOR).execute()
+        raise CarteiraIndisponivel("Banco não configurado")
+    try:
+        r = (
+            client.table(TABELA_EXCECOES)
+            .select("documento, registrado_por_email, registrado_em")
+            .eq("user_id", user_id)
+            .execute()
         )
-    return n
+        linhas = list(r.data or [])
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Falha ao detalhar as exceções de %s", user_id)
+        raise CarteiraIndisponivel(str(e)) from e
+    linhas.sort(key=lambda l: str(l.get("registrado_em") or ""), reverse=True)
+    return linhas
 
 
-def documentos_ao_alcance(user_id: str, role: str) -> Optional[Set[str]]:
-    """Os documentos que esta pessoa pode LER — o recorte do lote 4 (#5).
+def registrar_excecoes(
+    user_id: str,
+    documentos: List[str],
+    registrado_por: Optional[str],
+    registrado_por_email: str,
+) -> int:
+    """Retira documentos do alcance de um Gestor. Devolve quantos foram gravados."""
+    client = _banco()
+    if not client:
+        raise RuntimeError("Banco não configurado")
+    linhas = [
+        {
+            "user_id": user_id,
+            "documento": d,
+            "registrado_por": registrado_por,
+            "registrado_por_email": registrado_por_email,
+        }
+        for d in (so_digitos(x) for x in documentos) if d
+    ]
+    if not linhas:
+        return 0
+    client.table(TABELA_EXCECOES).upsert(linhas, on_conflict="user_id,documento").execute()
+    return len(linhas)
 
-    `None` = alcance total (admin): nenhum recorte. `user`: a própria carteira.
-    `gestor`: a própria carteira mais as carteiras de quem está nos setores
-    que ele lidera — é o mesmo alcance que `pode_gerir` lhe dá para atribuir;
-    ler menos do que atribui não faria sentido, ler mais seria o furo antigo.
 
-    Levanta `CarteiraIndisponivel`/`AlcanceIndisponivel` em vez de devolver
-    vazio: "não consegui ler a carteira" não é "não tem carteira".
+def remover_excecao(user_id: str, documento: str) -> None:
+    """Devolve um documento ao alcance do Gestor."""
+    client = _banco()
+    if not client:
+        raise RuntimeError("Banco não configurado")
+    (
+        client.table(TABELA_EXCECOES)
+        .delete()
+        .eq("user_id", user_id)
+        .eq("documento", so_digitos(documento))
+        .execute()
+    )
+
+
+def esvaziar_carteira(user_id: str) -> Dict[str, int]:
+    """
+    Apaga Atribuições e Exceções de uma pessoa. Devolve quantas de cada.
+
+    A carteira nunca guarda estado dormente (ADR 0001): mudar de Papel ou
+    Desativar a esvazia. Um Operador promovido perde as Atribuições (a
+    carteira nova é de Exceções, e começa sem nenhuma); um Gestor rebaixado
+    perde as Exceções e começa como Operador sem nada.
+    """
+    client = _banco()
+    if not client:
+        raise RuntimeError("Banco não configurado")
+    saida: Dict[str, int] = {}
+    for tabela, chave in (("carteira", "atribuicoes"), (TABELA_EXCECOES, "excecoes")):
+        r = client.table(tabela).select("documento").eq("user_id", user_id).execute()
+        n = len(r.data or [])
+        if n:
+            client.table(tabela).delete().eq("user_id", user_id).execute()
+        saida[chave] = n
+    return saida
+
+
+class TudoMenos:
+    """
+    O alcance do Gestor: todo documento, menos as Exceções.
+
+    Usa-se como container (`doc in alcance`), igual ao conjunto que o Operador
+    recebe. Não é enumerável de propósito: o Gestor alcança também o cliente
+    que ainda vai entrar no inventário (regra viva, ADR 0001). Materializar
+    "inventário menos exceções" congelaria a foto de agora e perderia o que
+    só existe no histórico.
+    """
+
+    __slots__ = ("excecoes",)
+
+    def __init__(self, excecoes: Iterable[str]) -> None:
+        self.excecoes = frozenset(d for d in (so_digitos(x) for x in excecoes) if d)
+
+    def __contains__(self, documento: object) -> bool:
+        d = so_digitos(str(documento or ""))
+        # Sem documento não é de ninguém: a mesma regra de `_recortar_pela_carteira`.
+        return bool(d) and d not in self.excecoes
+
+    def __bool__(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return f"TudoMenos({sorted(self.excecoes)})"
+
+
+# `None` = alcance total; conjunto = Atribuições do Operador; `TudoMenos` =
+# Gestor. Quem consome só precisa de `is None` e de `in`.
+Alcance = Optional[Union[Set[str], TudoMenos]]
+
+
+def documentos_ao_alcance(user_id: str, role: str) -> Alcance:
+    """O que esta pessoa pode LER e INSTALAR, em documentos (ADR 0001).
+
+    `None` = alcance total (Administrador). Operador: a própria carteira, as
+    Atribuições. Gestor: `TudoMenos` as Exceções que o Administrador registrou
+    — ele não depende da carteira de ninguém nem do setor que lidera; liderar
+    decide a quem ele ATRIBUI, não o que ele vê.
+
+    Levanta `CarteiraIndisponivel` em vez de devolver vazio: "não consegui ler
+    a carteira" não é "não tem carteira".
     """
     papel = (role or "").strip().lower()
     if papel in PAPEIS_COM_ALCANCE_TOTAL:
         return None
     if not user_id:
         return set()
-    docs = set(listar_carteira(user_id))
-    if papel != "gestor":
-        return docs
-
-    setores = departamentos_que_lidera(user_id)
-    if not setores:
-        return docs
-    client = _banco()
-    if not client:
-        raise CarteiraIndisponivel("Banco não configurado")
-    try:
-        r = client.table("users").select("id").in_("departamento_id", sorted(setores)).execute()
-        ids = [str(u["id"]) for u in (r.data or []) if u.get("id")]
-        if ids:
-            c = client.table("carteira").select("documento").in_("user_id", ids).execute()
-            docs |= {so_digitos(row.get("documento")) for row in (c.data or []) if row.get("documento")}
-    except Exception as e:  # noqa: BLE001
-        logger.exception("Falha ao ler as carteiras do setor de %s", user_id)
-        raise CarteiraIndisponivel(str(e)) from e
-    return docs
+    if papel == PAPEL_GESTOR:
+        return TudoMenos(listar_excecoes(user_id))
+    return set(listar_carteira(user_id))
 
 
 def documentos_dos_certificados(certificate_ids: List[str]) -> Dict[str, str]:
@@ -923,19 +1014,14 @@ def assegurar_carteira(user_id: str, role: str, certificate_ids: List[str]) -> N
     `tests/test_carteira.py` percorre o código para falhar se alguma rota nova
     esquecer. Esconder ou desabilitar na tela é conveniência; a barreira é aqui.
 
-    `admin` e `gestor` têm alcance total. Para o gestor isso é consequência da
-    decisão de 15/08: quem pode atribuir qualquer cliente a qualquer operador
-    pode atribuir a si mesmo, então limitá-lo seria teatro. Fica explícito em
-    vez de implícito.
+    Só `admin` tem alcance total. O Gestor instala tudo menos as Exceções e o
+    Operador só as Atribuições (ADR 0001) — o mesmo `documentos_ao_alcance`
+    das telas: ver e instalar são um direito só.
 
-    Certificado sem documento é negado ao operador: não há como saber de quem
-    ele é, logo não há como dizer que está na carteira de alguém.
+    Certificado sem documento é negado a quem não tem alcance total: não há
+    como saber de quem ele é, logo não há como dizer que está na carteira de
+    alguém.
     """
-    # Instala-se exatamente o que se pode LER (30/09/2026): o mesmo
-    # `documentos_ao_alcance` das telas. Antes o gestor lia a carteira do setor
-    # (lote 4) — ou tudo, desde a decisão de 30/09 — mas instalava só a
-    # PRÓPRIA carteira: no ANALISESRV um gestor via o acervo e não conseguia
-    # instalar nada dele.
     carteira = documentos_ao_alcance(user_id, role)
     if carteira is None:
         return
@@ -1005,10 +1091,10 @@ def estado_de_instalabilidade(
     bloqueados = listar_bloqueios(machine_id)
     no_cofre = {c.fingerprint: c.id for c in list_available_pfx(machine_id=machine_id)}
 
-    # Mesmo alcance da leitura e de `assegurar_carteira` (30/09/2026).
+    # Mesmo alcance da leitura e de `assegurar_carteira`.
     alcance = documentos_ao_alcance(user_id, role)
     alcance_total = alcance is None
-    carteira: Set[str] = alcance or set()
+    carteira: Any = alcance if alcance is not None else set()
 
     out: Dict[str, Dict[str, Any]] = {}
     for item in itens:
@@ -1047,10 +1133,9 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
     A carteira com a trilha: o que foi atribuído, por quem e quando.
 
     `listar_carteira` devolve só os documentos porque é o que a barreira
-    precisa — e barreira tem de ser rápida. Aqui é a tela: com o gestor podendo
-    atribuir **qualquer** cliente do acervo (decisão de 15/08), quem concedeu o
-    quê é a única forma de reconstruir o que houve se uma conta for
-    comprometida. Mostrar isso é o que torna a trilha útil em vez de decorativa.
+    precisa — e barreira tem de ser rápida. Aqui é a tela: quem concedeu o quê
+    é a única forma de reconstruir o que houve se uma conta for comprometida.
+    Mostrar isso é o que torna a trilha útil em vez de decorativa.
     """
     client = _banco()
     if not client:

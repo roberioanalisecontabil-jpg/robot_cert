@@ -129,14 +129,15 @@ from tests.test_seguranca_lote1 import _Fake, _usuario  # noqa: E402
 @pytest.fixture
 def banco_usuarios(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake = _Fake({"users": [_usuario("u-adm", "admin@x.com", "admin"), _usuario("u-ana", "ana@x.com", "user")],
-                  "user_activity": [], "rate_limit_tentativas": [], "carteira": [], "cert_snapshots": []})
+                  "user_activity": [], "rate_limit_tentativas": [], "carteira": [], "cert_snapshots": [],
+                  "departamento": [{"id": "dep-1", "nome": "Fiscal"}]})
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
 
 
 def test_nome_e_gravado_em_maiusculas_no_cadastro_e_na_edicao(client: TestClient, banco_usuarios: _Fake) -> None:
     r = client.post("/api/users", json={"email": "novo@x.com", "password": "senha-forte-123456",
-                                        "full_name": "  joão da silva ", "role": "user"}, headers=_admin())
+                                        "full_name": "  joão da silva ", "role": "user", "departamento_id": "dep-1"}, headers=_admin())
     assert r.status_code == 200, r.text
     novo = next(u for u in banco_usuarios.tabelas["users"] if u["email"] == "novo@x.com")
     assert novo["full_name"] == "JOÃO DA SILVA"

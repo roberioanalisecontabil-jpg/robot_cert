@@ -88,7 +88,14 @@ class _Query:
 
 class _FakeBanco:
     def __init__(self, users: List[Dict[str, Any]]) -> None:
-        self.tabelas = {"users": users}
+        self.tabelas = {
+            "users": users,
+            # ADR 0001: departamento é obrigatório no cadastro, e Gestor é quem
+            # lidera um. u-gestor lidera o Fiscal para continuar gestor ao ser
+            # editado.
+            "departamento": [{"id": "dep-1", "nome": "Fiscal"}],
+            "departamento_lider": [{"departamento_id": "dep-1", "user_id": "u-gestor"}],
+        }
 
     def table(self, nome: str) -> _Query:
         return _Query(self.tabelas.setdefault(nome, []))
@@ -274,16 +281,26 @@ def test_criar_usuario_recusa_papel_desconhecido(client: TestClient, banco) -> N
     assert not [u for u in banco.tabelas["users"] if u["email"] == "novo@empresa.com"]
 
 
-def test_criar_gestor_funciona(client: TestClient, banco) -> None:
+def test_criar_gestor_pelo_cadastro_e_recusado(client: TestClient, banco) -> None:
+    """ADR 0001: Gestor deriva da liderança de departamento. Nasce-se Operador
+    e se é designado em Departamentos; o literal no cadastro é 422."""
     r = client.post(
         "/api/users",
         json={"email": "novo@empresa.com", "password": SENHA,
-              "full_name": "Novo", "role": "gestor"},
+              "full_name": "Novo", "role": "gestor", "departamento_id": "dep-1"},
+        headers=_admin_headers(),
+    )
+    assert r.status_code == 422, r.text
+    assert "Departamentos" in r.json()["detail"]
+    r = client.post(
+        "/api/users",
+        json={"email": "novo@empresa.com", "password": SENHA,
+              "full_name": "Novo", "role": "user", "departamento_id": "dep-1"},
         headers=_admin_headers(),
     )
     assert r.status_code == 200, r.text
     novo = next(u for u in banco.tabelas["users"] if u["email"] == "novo@empresa.com")
-    assert novo["role"] == "gestor" and novo["ativo"] is True
+    assert novo["role"] == "user" and novo["ativo"] is True
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -472,7 +489,7 @@ def test_nao_cria_com_email_ja_usado(client: TestClient, banco: _FakeBanco) -> N
 def test_nao_edita_para_email_de_outro(client: TestClient, banco: _FakeBanco) -> None:
     r = client.put(
         "/api/users/u-gestor",
-        json={"email": "chefe@empresa.com", "full_name": "Gestor", "role": "gestor"},
+        json={"email": "chefe@empresa.com", "full_name": "Gestor", "role": "user"},
         headers=_admin_headers(),
     )
     assert r.status_code == 409, r.text
@@ -489,7 +506,7 @@ def test_manter_o_proprio_email_na_edicao_e_permitido(
     """
     r = client.put(
         "/api/users/u-gestor",
-        json={"email": "gestor@empresa.com", "full_name": "Gestor Editado", "role": "gestor"},
+        json={"email": "gestor@empresa.com", "full_name": "Gestor Editado", "role": "user"},
         headers=_admin_headers(),
     )
     assert r.status_code == 200, r.text
@@ -505,7 +522,7 @@ def test_email_e_normalizado_para_minusculas(client: TestClient, banco: _FakeBan
     r = client.post(
         "/api/users",
         json={"email": "  NOVO@Empresa.COM  ", "password": SENHA,
-              "full_name": "Novo", "role": "user"},
+              "full_name": "Novo", "role": "user", "departamento_id": "dep-1"},
         headers=_admin_headers(),
     )
     assert r.status_code == 200, r.text

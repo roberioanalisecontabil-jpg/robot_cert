@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, nome_publico, nomes, permissoes, senha_reset, taxa
+from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, nome_publico, nomes, papeis, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -428,6 +428,9 @@ async def require_auth(
 # Definidos em `auth` porque o login e o envio de alertas precisam da mesma
 # regra; duas cópias divergiriam, e a divergência permissiva não daria sintoma.
 PAPEIS_VALIDOS = auth.PAPEIS_VALIDOS
+# O que se escolhe à mão no cadastro e na planilha. Gestor deriva da
+# liderança de departamento (ADR 0001) e não entra aqui.
+PAPEIS_IMPORTAVEIS = tuple(p for p in PAPEIS_VALIDOS if p != "gestor")
 conta_ativa = auth.conta_ativa
 
 
@@ -505,7 +508,7 @@ def require_modulo(
                 return token
         except permissoes.PermissoesIndisponiveis:
             # 503, e nao 403: "nao consegui verificar" nao e "voce nao pode".
-            # Mesmo criterio de `require_admin_ou_lider` e `_exigir_alcance`.
+            # Mesmo criterio de `require_admin_ou_gestor` e `_exigir_alcance`.
             raise HTTPException(
                 status_code=503,
                 detail="Nao foi possivel verificar suas permissoes. Tente de novo.",
@@ -1653,6 +1656,7 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
     h_email = pick("email", "e-mail")
     h_senha = pick("senha", "password")
     h_role = pick("role", "nivel", "papel", "perfil")
+    h_dep = pick("departamento", "setor", "depto")
     if not h_nome or not h_email or not h_senha:
         raise HTTPException(
             status_code=422,
@@ -1662,6 +1666,14 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
         raise HTTPException(
             status_code=422,
             detail="Cabeçalho obrigatório também para nível: use 'nivel' ou 'role' com valores 'admin' ou 'user'.",
+        )
+    if not h_dep:
+        # Departamento é obrigatório no cadastro (ADR 0001): sem ele a pessoa
+        # não tem Gestor que lhe libere nada. A planilha segue a mesma regra do
+        # formulário, pelo nome do departamento — é o que a operação conhece.
+        raise HTTPException(
+            status_code=422,
+            detail="Cabeçalho obrigatório também para departamento: coluna 'departamento' com o nome do setor.",
         )
 
     criados = 0
@@ -1680,6 +1692,11 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
             str(u.get("email") or "").strip().lower()
             for u in (sb.table("users").select("email").execute().data or [])
         }
+        departamentos_por_nome = {
+            _nome_de_departamento(d.get("nome")).lower(): str(d.get("id"))
+            for d in (sb.table("departamento").select("id, nome").execute().data or [])
+            if d.get("nome")
+        }
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao ler os e-mails existentes para a importação")
         raise HTTPException(status_code=503, detail="Não foi possível ler as contas existentes. Tente de novo.")
@@ -1691,18 +1708,27 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
         email = str(row.get(h_email) or "").strip().lower()
         senha = str(row.get(h_senha) or "").strip()
         role = str(row.get(h_role) or "").strip().lower()
+        dep_nome = str(row.get(h_dep) or "").strip()
 
         if not nome or not email or not senha or not role:
             ignorados += 1
             continue
-        if role not in PAPEIS_VALIDOS:
+        if role == papeis.GESTOR:
+            erros.append({"linha": linha, "email": email, "erro": papeis.PAPEL_GESTOR_E_DERIVADO})
+            continue
+        if role not in PAPEIS_IMPORTAVEIS:
             erros.append(
                 {
                     "linha": linha,
                     "email": email,
-                    "erro": f"Nível inválido. Use exatamente: {', '.join(PAPEIS_VALIDOS)}.",
+                    "erro": f"Nível inválido. Use exatamente: {', '.join(PAPEIS_IMPORTAVEIS)}.",
                 }
             )
+            continue
+        departamento_id = departamentos_por_nome.get(dep_nome.lower())
+        if not departamento_id:
+            erros.append({"linha": linha, "email": email,
+                          "erro": f"Departamento {dep_nome or '(vazio)'} não existe. Cadastre-o em Departamentos antes."})
             continue
         motivo_senha = auth.validar_senha(senha, email)
         if motivo_senha:
@@ -1731,6 +1757,7 @@ async def import_users(request: Request, file: UploadFile = File(...), ator: aut
                     "password_hash": auth.get_password_hash(senha),
                     "full_name": str(nome or "").strip().upper(),
                     "role": role,
+                    "departamento_id": departamento_id,
                     # As mesmas duas colunas que `create_user` grava (achado
                     # #10). A senha do CSV esteve numa planilha que circulou
                     # por e-mail: serve para o primeiro acesso e nada mais.
@@ -1869,11 +1896,16 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
             status_code=422,
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
+    # Gestor deriva da liderança (ADR 0001): ninguém nasce Gestor pelo
+    # cadastro; nasce Operador e é designado em Departamentos.
+    if role == papeis.GESTOR:
+        raise HTTPException(status_code=422, detail=papeis.PAPEL_GESTOR_E_DERIVADO)
     _exigir_alcance_de_papel(ator, role)
 
     email = _validar_email(body.email)
     _exigir_senha_valida(body.password, email)
     _garantir_email_livre(sb, email)
+    departamento_id = _exigir_departamento(sb, body.departamento_id)
 
     hash_pw = auth.get_password_hash(body.password)
     try:
@@ -1882,7 +1914,7 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
             # acesso e nada mais — `require_auth` recusa o resto do portal até a
             # pessoa escolher uma própria.
             "deve_trocar_senha": True,
-            "departamento_id": (body.departamento_id or "").strip() or None,
+            "departamento_id": departamento_id,
             "email": email,
             "password_hash": hash_pw,
             # Máscara de nome (30/09/2026): gravado em maiúsculas, como a tela mostra.
@@ -1893,19 +1925,27 @@ def create_user(body: UserCreateBody, ator: auth.TokenData = Depends(require_aut
     except Exception:
         logger.exception("Falha ao criar usuário")
         raise HTTPException(status_code=400, detail="Não foi possível criar o usuário.")
-    saida: Dict[str, Any] = {"ok": True}
-    if role == "gestor":
-        # Nasceu gestor: a carteira já nasce cheia (regra de 30/09/2026).
-        novo_id = str(((r.data or [{}])[0] or {}).get("id") or "")
-        if not novo_id:
-            try:
-                achado = sb.table("users").select("id").eq("email", email).limit(1).execute().data or []
-                novo_id = str(achado[0]["id"]) if achado else ""
-            except Exception:  # noqa: BLE001
-                novo_id = ""
-        if novo_id:
-            saida["regra_gestor"] = _regra_gestor_na_troca(novo_id, None, "gestor")
-    return saida
+    return {"ok": True}
+
+
+def _exigir_departamento(sb: Any, departamento_id: Optional[str]) -> str:
+    """Departamento é obrigatório e tem de existir (ADR 0001).
+
+    Sem departamento a pessoa não tem Gestor que lhe libere nada — só o
+    Administrador. A FK já recusaria um id inexistente, mas como 400 genérico
+    do PostgREST; aqui vira 422 com o motivo.
+    """
+    did = (departamento_id or "").strip()
+    if not did:
+        raise HTTPException(status_code=422, detail=papeis.DEPARTAMENTO_OBRIGATORIO)
+    try:
+        achado = sb.table("departamento").select("id").eq("id", did).limit(1).execute().data or []
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao conferir o departamento %s", did)
+        raise HTTPException(status_code=503, detail="Não foi possível conferir o departamento. Tente de novo.")
+    if not achado:
+        raise HTTPException(status_code=422, detail="Esse departamento não existe mais. Recarregue a tela e escolha outro.")
+    return did
 
 
 def _garantir_que_sobra_admin(
@@ -1974,10 +2014,9 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     _exigir_alcance_sobre_conta(sb, ator, user_id)
     role = (body.role or "user").strip().lower()
     ativo = body.ativo
-    # O papel ANTES da gravação decide se a regra de gestor entra ou sai
-    # (30/09/2026): user→gestor enche a carteira; gestor→outro tira o que a
-    # regra deu. Editar um gestor sem trocar o papel não reaplica nada — senão
-    # renomear alguém devolveria o cliente que o administrador tirou.
+    # O papel ANTES da gravação diz se houve troca: toda troca esvazia a
+    # carteira e derruba as sessões (ADR 0001). Editar sem trocar o papel não
+    # mexe em nada — senão renomear alguém apagaria as Exceções dele.
     papel_anterior = _papel_da_conta(sb, user_id)
 
     # Cliente antigo mandando role="disabled" quer dizer "desative" — nunca
@@ -1992,6 +2031,12 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
             status_code=422,
             detail=f"Nível inválido. Use: {', '.join(PAPEIS_VALIDOS)}.",
         )
+    if role == papeis.GESTOR:
+        raise HTTPException(status_code=422, detail=papeis.PAPEL_GESTOR_E_DERIVADO)
+    if role is not None:
+        # "Operador" pedido para quem lidera um departamento grava Gestor: o
+        # papel deriva da liderança, e o que rebaixa é tirar a liderança.
+        role = papeis.papel_efetivo(sb, user_id, role)
     _exigir_alcance_de_papel(ator, role)
 
     email = _validar_email(body.email)
@@ -2008,8 +2053,9 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     if ativo is not None:
         campos["ativo"] = bool(ativo)
     if body.departamento_id is not None:
-        did = body.departamento_id.strip()
-        campos["departamento_id"] = did or None
+        # String vazia já não tira ninguém do setor: departamento é
+        # obrigatório (ADR 0001). Para mudar de setor, escolhe-se outro.
+        campos["departamento_id"] = _exigir_departamento(sb, body.departamento_id)
     if body.gestor_id is not None:
         gid = body.gestor_id.strip()
         if gid and gid == user_id:
@@ -2030,7 +2076,7 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         _revogar_tokens_de_instalacao(user_id)
     saida: Dict[str, Any] = {"ok": True}
     if role is not None and role != papel_anterior:
-        saida["regra_gestor"] = _regra_gestor_na_troca(user_id, papel_anterior, role)
+        saida["papel"] = papeis.apos_troca_de_papel(sb, user_id)
     return saida
 
 
@@ -2042,20 +2088,6 @@ def _papel_da_conta(sb, user_id: str) -> Optional[str]:
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao ler o papel atual de %s", user_id)
         return None
-
-
-def _regra_gestor_na_troca(user_id: str, de: Optional[str], para: str) -> Dict[str, Any]:
-    """Aplica ou desfaz a regra de gestor numa troca de papel. Nunca levanta:
-    a conta já foi gravada; falhar aqui vira aviso na resposta e no log."""
-    try:
-        if para == "gestor" and de != "gestor":
-            return {"acrescentados": cert_installer.aplicar_regra_gestor(user_id)}
-        if de == "gestor" and para != "gestor":
-            return {"removidos": cert_installer.remover_regra_gestor(user_id)}
-    except Exception as e:  # noqa: BLE001
-        logger.exception("Regra de gestor não aplicada a %s (%s -> %s)", user_id, de, para)
-        return {"erro": "A conta foi salva, mas a carteira não pôde ser ajustada. Use 'Aplicar regra de gestor' em Carteiras."}
-    return {}
 
 
 @app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
@@ -2122,20 +2154,17 @@ def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
     # 401, entao a carteira de quem foi inativado nao concede nada mesmo antes
     # disto. E higiene — e uma decisao IRREVERSIVEL, por isso a tela mostra a
     # contagem antes de perguntar.
-    removidos = 0
     try:
-        alvo = sb.table("carteira").select("user_id").eq("user_id", user_id).execute().data or []
-        removidos = len(alvo)
-        if removidos:
-            sb.table("carteira").delete().eq("user_id", user_id).execute()
+        esvaziado = cert_installer.esvaziar_carteira(user_id)
     except Exception as e:  # noqa: BLE001
-        logger.error(
-            "Conta %s desativada, mas a carteira NAO foi limpa (%d vinculo(s)): %s",
-            user_id, removidos, e,
-        )
+        logger.error("Conta %s desativada, mas a carteira NAO foi limpa: %s", user_id, e)
         return {"ok": True, "carteira_removida": 0, "carteira_falhou": True}
 
-    return {"ok": True, "carteira_removida": removidos}
+    return {
+        "ok": True,
+        "carteira_removida": esvaziado["atribuicoes"] + esvaziado["excecoes"],
+        **esvaziado,
+    }
 
 
 @app.get(
@@ -2157,7 +2186,8 @@ def contar_carteira_do_usuario(user_id: str) -> dict:
         return {"total": None}
     try:
         linhas = sb.table("carteira").select("user_id").eq("user_id", user_id).execute().data or []
-        return {"total": len(linhas)}
+        excecoes = sb.table(cert_installer.TABELA_EXCECOES).select("user_id").eq("user_id", user_id).execute().data or []
+        return {"total": len(linhas) + len(excecoes), "atribuicoes": len(linhas), "excecoes": len(excecoes)}
     except Exception:  # noqa: BLE001
         logger.warning("Nao foi possivel contar a carteira de %s", user_id)
         return {"total": None}
@@ -2248,7 +2278,7 @@ def _nome_de_departamento(nome: str) -> str:
     return limpo
 
 
-# `require_admin`, e nao `require_admin_ou_lider`: a unica tela que consome
+# `require_admin`, e nao `require_admin_ou_gestor`: a unica tela que consome
 # isto hoje e /usuarios, que ja e de admin. Quando o lider precisar ver os
 # proprios setores (etapa 4), a rota certa e outra, escopada a ele -- esta
 # devolve TODOS os departamentos, e alcance total nao e o do lider.
@@ -2346,12 +2376,13 @@ def renomear_departamento(dep_id: str, body: DepartamentoBody) -> dict:
 @app.delete("/api/departamentos/{dep_id}", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def apagar_departamento(dep_id: str) -> dict:
     """
-    Apaga o setor. As pessoas dele ficam SEM departamento, não são apagadas —
-    é o `ON DELETE SET NULL` da migration, e a escolha é deliberada: perder o
-    vínculo é corrigível na tela, perder as contas não.
+    Apaga o departamento. As pessoas dele ficam SEM departamento, não são
+    apagadas — é o `ON DELETE SET NULL` da migration, e a escolha é
+    deliberada: perder o vínculo é corrigível na tela, perder as contas não.
+    Até serem enquadradas, só o Administrador atribui a elas.
 
-    As lideranças caem junto (`ON DELETE CASCADE`): liderança de um setor que
-    não existe mais daria alcance sobre nada e confundiria a leitura.
+    As lideranças caem junto (`ON DELETE CASCADE`), e com elas o papel: quem
+    só liderava este departamento deixa de ser Gestor (ADR 0001).
     """
     from app.settings_state import _banco
 
@@ -2359,17 +2390,34 @@ def apagar_departamento(dep_id: str) -> dict:
     if not sb:
         raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
     try:
+        lideres = {
+            str(l.get("user_id"))
+            for l in (sb.table("departamento_lider").select("user_id").eq("departamento_id", dep_id).execute().data or [])
+            if l.get("user_id")
+        }
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao ler os gestores do departamento %s", dep_id)
+        raise HTTPException(status_code=503, detail="Não foi possível ler os gestores do departamento. Tente de novo.")
+    try:
+        # As lideranças saem explicitamente, e não só pelo CASCADE: é delas que
+        # `papeis.rederivar` lê quem ainda lidera algo, e a leitura não pode
+        # depender de o banco ter propagado a exclusão.
+        sb.table("departamento_lider").delete().eq("departamento_id", dep_id).execute()
         sb.table("departamento").delete().eq("id", dep_id).execute()
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao apagar departamento %s", dep_id)
         raise HTTPException(status_code=400, detail="Não foi possível apagar o departamento.")
-    return {"ok": True}
+    return {"ok": True, "papeis": papeis.rederivar(sb, lideres)}
 
 
 @app.put("/api/departamentos/{dep_id}/lideres", dependencies=[Depends(require_modulo("usuarios", permissoes.NIVEL_EDITAR))])
 def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
     """
-    Substitui a lista de líderes do setor.
+    Substitui a lista de Gestores do departamento — e, com ela, o papel.
+
+    Quem entra na lista vira Gestor; quem sai dela e não lidera mais nenhum
+    departamento volta a Operador (`papeis.rederivar`, ADR 0001). O
+    Administrador pode constar sem mudar de papel.
 
     Substitui em vez de somar porque a tela mostra a lista inteira: se o
     servidor só acrescentasse, tirar alguém exigiria uma rota a mais e a tela
@@ -2384,6 +2432,14 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
     ids = [str(x).strip() for x in (body.lideres or []) if str(x).strip()]
     if len(set(ids)) != len(ids):
         raise HTTPException(status_code=422, detail="A mesma pessoa aparece duas vezes na lista.")
+    try:
+        antes = {
+            str(l.get("user_id"))
+            for l in (sb.table("departamento_lider").select("user_id").eq("departamento_id", dep_id).execute().data or [])
+            if l.get("user_id")
+        }
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail="Não foi possível ler os gestores atuais. Tente de novo.")
 
     if ids:
         try:
@@ -2401,7 +2457,7 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
                 # situação de não ter líder, mas parecendo resolvida.
                 raise HTTPException(
                     status_code=422,
-                    detail="Não é possível designar uma conta desativada como líder.",
+                    detail="Não é possível designar uma conta desativada como gestor.",
                 )
 
     try:
@@ -2411,9 +2467,9 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
                 [{"departamento_id": dep_id, "user_id": uid} for uid in ids]
             ).execute()
     except Exception:  # noqa: BLE001
-        logger.exception("Falha ao definir líderes")
-        raise HTTPException(status_code=400, detail="Não foi possível gravar os líderes.")
-    return {"ok": True, "lideres": len(ids)}
+        logger.exception("Falha ao definir os gestores")
+        raise HTTPException(status_code=400, detail="Não foi possível gravar os gestores.")
+    return {"ok": True, "lideres": len(ids), "papeis": papeis.rederivar(sb, antes | set(ids))}
 
 
 class PermissoesBody(BaseModel):
@@ -5480,26 +5536,24 @@ def _validar_pedido_de_instalacao(
 
 
 ERRO_SEM_ALCANCE = (
-    "Você não lidera nenhum departamento, então não há para quem liberar "
-    "certificados. Peça a um administrador para incluí-lo como líder."
+    "Você não lidera nenhum departamento, então não é Gestor e não há para "
+    "quem liberar certificados. Peça a um administrador para designá-lo em "
+    "Usuários › Departamentos."
 )
 
 
-async def require_admin_ou_lider(
+async def require_admin_ou_gestor(
     token: auth.TokenData = Depends(require_auth),
 ) -> auth.TokenData:
     """
-    Quem pode montar carteira: admin, ou quem lidera ao menos um departamento.
+    Quem pode montar carteira: admin, ou quem lidera ao menos um departamento
+    — que, desde o ADR 0001, é a definição de Gestor.
 
-    Mudou em 18/08/2026. Antes bastava o papel `gestor`, e o alcance era total
-    — qualquer gestor liberava qualquer cliente para qualquer operador. Agora o
-    papel abre a porta e a LIDERANÇA define até onde se vai; cada rota confere
-    o alvo com `cert_installer.pode_gerir`.
-
-    Mudou de novo em 20/08/2026: o papel passou a ser decidido pela matriz de
-    permissões (`require_modulo("carteiras", ...)` nas rotas), e esta função
-    ficou só com a liderança. Quem chega aqui já provou que o papel dele alcança
-    Carteiras; falta provar que a pessoa-alvo está no alcance dele.
+    A matriz de permissões (`require_modulo("carteiras", ...)` nas rotas) diz
+    SE o papel alcança Carteiras; esta guarda cuida do outro eixo, a
+    LIDERANÇA, que diz DE QUEM. Cada rota ainda confere o alvo com
+    `cert_installer.pode_gerir`: Gestor só edita a carteira de Operador dos
+    departamentos que lidera.
 
     Quem lidera nada é recusado aqui mesmo, com uma mensagem que diz o que
     fazer. Deixá-lo entrar numa tela onde toda ação falha depois seria pior: o
@@ -5534,7 +5588,7 @@ async def require_admin_ou_lider(
 
 def _exigir_alcance(token: auth.TokenData, alvo_id: str) -> None:
     """
-    Barreira por PESSOA. `require_admin_ou_lider` só diz que o ator pode montar
+    Barreira por PESSOA. `require_admin_ou_gestor` só diz que o ator pode montar
     carteiras; esta diz de quem.
 
     Sem ela, um líder do Fiscal montaria a carteira de alguém do Contábil
@@ -5551,8 +5605,47 @@ def _exigir_alcance(token: auth.TokenData, alvo_id: str) -> None:
         )
     raise HTTPException(
         status_code=403,
-        detail="Esta pessoa não está em um departamento que você lidera.",
+        detail=(
+            "Esta pessoa não está em um departamento que você lidera — ou é "
+            "Gestor, e a carteira de um Gestor só o administrador edita."
+        ),
     )
+
+
+def _papel_do_alvo(user_id: str) -> str:
+    """O papel da pessoa cuja carteira se está editando. Falha fechada: sem
+    conseguir ler, 503 — decidir "é Operador" no escuro trataria as Exceções
+    de um Gestor como Atribuições."""
+    # O mesmo banco das demais funções de carteira (`cert_installer._banco`),
+    # para a tela e a barreira lerem a mesma fonte.
+    sb = cert_installer._banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    papel = _papel_da_conta(sb, user_id)
+    if papel is None:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada.")
+    return papel
+
+
+def _exigir_documentos_ao_alcance(token: auth.TokenData, documentos: List[str]) -> None:
+    """Gestor só atribui o que está no próprio Alcance (ADR 0001).
+
+    Uma Exceção registrada para o Gestor também o impede de dar aquele
+    Documento aos seus Operadores — senão ele atribuiria X a um Operador e
+    pediria para instalar na estação dele. Só o Administrador o faz.
+    """
+    alcance = _documentos_ao_alcance(token)
+    if alcance is None:
+        return
+    negados = sorted({
+        cert_installer.so_digitos(d) for d in documentos
+        if cert_installer.so_digitos(d) and cert_installer.so_digitos(d) not in alcance
+    })
+    if negados:
+        raise HTTPException(
+            status_code=403,
+            detail="Fora do seu alcance, só o administrador libera: " + ", ".join(negados),
+        )
 
 
 class CarteiraRequest(BaseModel):
@@ -5562,11 +5655,11 @@ class CarteiraRequest(BaseModel):
 
 # Modulo `carteiras` na matriz desde 20/08, com os DOIS eixos declarados: a
 # matriz diz se o papel alcanca (e se so ve ou tambem monta), e
-# `require_admin_ou_lider` diz de QUEM. Um lider do Fiscal com "Ver e editar"
+# `require_admin_ou_gestor` diz de QUEM. Um lider do Fiscal com "Ver e editar"
 # continua sem tocar na carteira de alguem do Contabil.
 @app.get("/api/carteira/operadores", dependencies=[Depends(require_modulo("carteiras"))])
 def listar_operadores(
-    token: auth.TokenData = Depends(require_admin_ou_lider),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     """
     Quem pode receber carteira, com quantos documentos cada um já tem.
@@ -5585,6 +5678,7 @@ def listar_operadores(
             "id, email, full_name, role, ativo, gestor_id, departamento_id"
         ).execute().data or []
         cart = sb.table("carteira").select("user_id").execute().data or []
+        exc = sb.table(cert_installer.TABELA_EXCECOES).select("user_id").execute().data or []
     except Exception:
         logger.exception("Falha ao listar operadores")
         raise HTTPException(status_code=503, detail="Não foi possível listar os operadores.")
@@ -5610,24 +5704,44 @@ def listar_operadores(
                 status_code=503,
                 detail="Não foi possível verificar seus departamentos. Tente de novo.",
             )
+        # Gestor edita só Atribuições: Operadores dos departamentos que
+        # lidera. Nem ele mesmo (a carteira dele é de Exceções, do
+        # administrador), nem outro Gestor.
         visiveis = [
             u for u in us
-            if str(u.get("id")) == eu
-            or (u.get("departamento_id") and str(u["departamento_id"]) in meus)
+            if (u.get("role") or "").strip().lower() == cert_installer.PAPEL_OPERADOR
+            and u.get("departamento_id") and str(u["departamento_id"]) in meus
         ]
 
     quantos = Counter(str(c.get("user_id")) for c in cart)
+    excecoes = Counter(str(c.get("user_id")) for c in exc)
+    # O tamanho do inventário só interessa se houver Gestor na lista: a
+    # carteira dele é "tudo menos N", e "tudo" é isto.
+    universo = len(cert_installer.universo_de_documentos()) if any(
+        (u.get("role") or "").strip().lower() == cert_installer.PAPEL_GESTOR for u in visiveis
+    ) else 0
     from app import texto as _texto
     operadores = []
     for u in visiveis:
-        n = quantos.get(str(u.get("id")), 0)
+        uid = str(u.get("id"))
         papel_u = (u.get("role") or "").strip().lower()
-        # Operador e gestor dependem da carteira (a do gestor a regra enche;
-        # 30/09/2026). Só o administrador tem alcance sem carteira.
-        depende_de_carteira = papel_u in ("user", "gestor")
+        n_atrib = quantos.get(uid, 0)
+        n_exc = excecoes.get(uid, 0)
+        # Operador depende de Atribuições; Gestor tem tudo menos Exceções; o
+        # administrador tem alcance sem carteira (ADR 0001).
+        if papel_u == cert_installer.PAPEL_GESTOR:
+            tipo, n = "excecoes", max(universo - n_exc, 0)
+            clientes = ("todos os clientes" if not n_exc else f"todos menos {_texto.plural(n_exc, 'exceção', 'exceções')}")
+        elif papel_u == cert_installer.PAPEL_OPERADOR:
+            tipo, n = "atribuicoes", n_atrib
+            clientes = _texto.plural(n, "cliente")
+        else:
+            tipo, n = "total", universo
+            clientes = "alcance total"
+        depende_de_carteira = tipo == "atribuicoes"
         operadores.append(
             {
-                "id": str(u.get("id")),
+                "id": uid,
                 "email": u.get("email"),
                 "full_name": u.get("full_name"),
                 # Só na exibição: "irla" → "Irla", caixa alta → título. O dado
@@ -5638,19 +5752,20 @@ def listar_operadores(
                 "gestor_id": u.get("gestor_id"),
                 "departamento_id": u.get("departamento_id"),
                 "documentos": n,
+                "tipo_carteira": tipo,
+                "excecoes": n_exc,
                 "depende_de_carteira": depende_de_carteira,
                 "sem_carteira": n == 0 and depende_de_carteira,
-                "textos": {"clientes": _texto.plural(n, "cliente")},
+                "textos": {"clientes": clientes},
             }
         )
     # Sem carteira primeiro (é o único estado que pede ação; o Dashboard
     # aponta para cá por isso), depois em ordem alfabética.
     operadores.sort(key=lambda o: (0 if o["sem_carteira"] else 1, (o["nome_exibicao"] or "").lower()))
 
-    # Resumo da lista, com a mesma regra da tela: quem depende de carteira
-    # (operadores e gestores limitados) ativos, mais inativos que ainda tenham
-    # carteira a limpar. Gestores sem limitação aparecem para o administrador
-    # mas não contam como "operador" no resumo.
+    # Resumo da lista, com a mesma regra da tela: Operadores ativos, mais
+    # inativos que ainda tenham carteira a limpar. Gestores aparecem para o
+    # administrador mas não contam como "operador" no resumo.
     na_lista = [o for o in operadores if o["depende_de_carteira"] and (o["ativo"] or o["documentos"] > 0)]
     sem = sum(1 for o in na_lista if o["sem_carteira"])
     total = len(na_lista)
@@ -5664,47 +5779,7 @@ def listar_operadores(
     }
 
 
-@app.post(
-    "/api/carteira/regra-gestor/aplicar",
-    dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR)), Depends(require_admin)],
-)
-def aplicar_regra_gestor_a_todos() -> dict:
-    """Enche a carteira de TODOS os gestores ativos com o inventário atual.
-
-    Dois usos: os gestores que já existiam quando a regra nasceu (30/09/2026),
-    e completar as carteiras quando entram clientes novos no inventário — a
-    regra só roda sozinha na troca de papel. Idempotente: quem já tem tudo
-    recebe zero. O que o administrador tirou à mão VOLTA, porque a regra não
-    guarda memória de retiradas; é o mesmo comportamento de virar gestor de novo.
-    """
-    from app.settings_state import _banco
-
-    sb = _banco()
-    if not sb:
-        raise HTTPException(status_code=503, detail="Banco não configurado")
-    try:
-        gestores = [
-            u for u in (sb.table("users").select("id, email, role, ativo").execute().data or [])
-            if (u.get("role") or "").strip().lower() == "gestor" and auth.conta_ativa(u)
-        ]
-    except Exception:  # noqa: BLE001
-        logger.exception("Falha ao listar gestores para a regra")
-        raise HTTPException(status_code=503, detail="Não foi possível listar os gestores.")
-    por_gestor = []
-    total = 0
-    for g in gestores:
-        try:
-            n = cert_installer.aplicar_regra_gestor(str(g["id"]))
-        except Exception as e:  # noqa: BLE001
-            logger.exception("Regra de gestor falhou para %s", g.get("email"))
-            por_gestor.append({"email": g.get("email"), "erro": str(e)})
-            continue
-        total += n
-        por_gestor.append({"email": g.get("email"), "acrescentados": n})
-    return {"gestores": len(gestores), "acrescentados": total, "por_gestor": por_gestor}
-
-
-@app.get("/api/carteira/documentos", dependencies=[Depends(require_modulo("carteiras")), Depends(require_admin_ou_lider)])
+@app.get("/api/carteira/documentos", dependencies=[Depends(require_modulo("carteiras")), Depends(require_admin_ou_gestor)])
 def listar_documentos_atribuiveis(
     q: Optional[str] = Query(None, max_length=120),
     limite: int = Query(500, ge=1, le=2000),
@@ -5736,7 +5811,7 @@ def listar_documentos_atribuiveis(
 @app.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])
 def obter_carteira(
     user_id: str,
-    token: auth.TokenData = Depends(require_admin_ou_lider),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     """
     Documentos que este operador pode instalar, com a trilha de atribuição.
@@ -5746,14 +5821,41 @@ def obter_carteira(
     quem liberou o quê — informação de dentro do setor.
     """
     _exigir_alcance(token, user_id)
+    nomes = {d["documento"]: d["nome"] for d in cert_installer.universo_de_documentos()}
+
+    if _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR:
+        # Carteira de Exceções (ADR 0001): "na carteira" é o inventário menos
+        # o que o administrador retirou; "disponíveis" são as Exceções. Os dois
+        # painéis da tela continuam os mesmos — só o sinal inverte.
+        try:
+            excecoes = cert_installer.detalhar_excecoes(user_id)
+        except cert_installer.CarteiraIndisponivel as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        fora = {l["documento"]: l for l in excecoes}
+        return {
+            "user_id": user_id,
+            "tipo": "excecoes",
+            "documentos": sorted(d for d in nomes if d not in fora),
+            "itens": [
+                {"documento": d, "nome": nomes[d], "no_inventario": True,
+                 "atribuido_por": None, "atribuido_em": None, "origem": "papel"}
+                for d in sorted(nomes) if d not in fora
+            ],
+            "excecoes": [
+                {"documento": l["documento"], "nome": nomes.get(l["documento"], ""),
+                 "registrado_por": l.get("registrado_por_email"), "registrado_em": l.get("registrado_em")}
+                for l in excecoes
+            ],
+        }
+
     try:
         linhas = cert_installer.detalhar_carteira(user_id)
     except cert_installer.CarteiraIndisponivel as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    nomes = {d["documento"]: d["nome"] for d in cert_installer.universo_de_documentos()}
     return {
         "user_id": user_id,
+        "tipo": "atribuicoes",
         "documentos": sorted(l["documento"] for l in linhas),
         "itens": [
             {
@@ -5774,17 +5876,29 @@ def obter_carteira(
 @app.post("/api/carteira", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
 def atribuir_carteira(
     body: CarteiraRequest,
-    token: auth.TokenData = Depends(require_admin_ou_lider),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     """
     Acrescenta documentos à carteira de um operador.
 
-    Quem atribui fica registrado — e-mail inclusive, não só o UUID. Com o
-    gestor podendo atribuir qualquer cliente do acervo, essa trilha é a única
-    forma de reconstruir o que houve se uma conta de gestor for comprometida;
-    guardar só o UUID a perderia no dia em que a conta fosse apagada.
+    Quem atribui fica registrado — e-mail inclusive, não só o UUID: essa
+    trilha é a única forma de reconstruir o que houve se uma conta de gestor
+    for comprometida; guardar só o UUID a perderia no dia em que a conta fosse
+    apagada.
+
+    Alvo Gestor (ADR 0001): "liberar" um documento é tirar a Exceção. Só o
+    administrador chega aqui com alvo Gestor — `pode_gerir` barra os demais.
     """
     _exigir_alcance(token, body.user_id)
+    if _papel_do_alvo(body.user_id) == cert_installer.PAPEL_GESTOR:
+        try:
+            for doc in body.documentos:
+                cert_installer.remover_excecao(body.user_id, doc)
+        except Exception:
+            logger.exception("Erro ao remover exceção")
+            raise HTTPException(status_code=500, detail="Erro interno ao devolver o cliente ao gestor")
+        return {"status": "ok", "gravados": len(body.documentos), "tipo": "excecoes"}
+    _exigir_documentos_ao_alcance(token, body.documentos)
     try:
         gravados = cert_installer.atribuir_carteira(
             user_id=body.user_id,
@@ -5792,7 +5906,7 @@ def atribuir_carteira(
             atribuido_por=_user_id_da_sessao(token),
             atribuido_por_email=token.email or "desconhecido",
         )
-        return {"status": "ok", "gravados": gravados}
+        return {"status": "ok", "gravados": gravados, "tipo": "atribuicoes"}
     except RuntimeError as e:
         # O texto vinha do cofre/banco e podia trazer nome de chave de
         # ambiente ou de tabela (achado #35). Fica no log, com a rota.
@@ -5868,7 +5982,7 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
 async def importar_carteiras(
     request: Request,
     file: UploadFile = File(...),
-    token: auth.TokenData = Depends(require_admin_ou_lider),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     """
     Atribui carteiras em massa a partir de uma planilha de e-mail + documento.
@@ -5929,13 +6043,16 @@ async def importar_carteiras(
     if not sb:
         raise HTTPException(status_code=503, detail="Banco não configurado.")
     try:
-        contas = sb.table("users").select("id, email").execute().data or []
+        contas = sb.table("users").select("id, email, role").execute().data or []
     except Exception:
         logger.exception("Falha ao ler usuários na importação de carteiras")
         raise HTTPException(status_code=503, detail="Não foi possível ler os usuários.")
     por_email = {str(u.get("email") or "").strip().lower(): str(u.get("id")) for u in contas}
+    papel_de = {str(u.get("id")): (u.get("role") or "").strip().lower() for u in contas}
 
     universo = {d["documento"] for d in cert_installer.universo_de_documentos()}
+    # Gestor só atribui o que alcança (ADR 0001); `None` é o administrador.
+    meu_alcance = _documentos_ao_alcance(token)
 
     erros: List[Dict[str, Any]] = []
     por_usuario: Dict[str, set] = {}
@@ -5966,12 +6083,20 @@ async def importar_carteiras(
                     status_code=503,
                     detail="Não foi possível verificar seu alcance. Tente de novo.",
                 )
+        if papel_de.get(user_id) != cert_installer.PAPEL_OPERADOR:
+            # Planilha é de Atribuições. A carteira de um Gestor é de Exceções
+            # e se edita na tela, pelo administrador.
+            erros.append({"linha": i, "motivo": f"{email} não é Operador; a planilha só atribui a Operadores."})
+            continue
         if not alcance[user_id]:
             erros.append({"linha": i, "motivo": f"{email} não está em um departamento que você lidera."})
             continue
 
         if doc not in universo:
             erros.append({"linha": i, "motivo": f"O documento {doc} não está no inventário."})
+            continue
+        if meu_alcance is not None and doc not in meu_alcance:
+            erros.append({"linha": i, "motivo": f"O documento {doc} está fora do seu alcance; só o administrador o libera."})
             continue
 
         por_usuario.setdefault(user_id, set()).add(doc)
@@ -6004,12 +6129,23 @@ async def importar_carteiras(
 def remover_carteira(
     user_id: str,
     documento: str,
-    token: auth.TokenData = Depends(require_admin_ou_lider),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     _exigir_alcance(token, user_id)
+    if _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR:
+        # Tirar um cliente da carteira de um Gestor é registrar uma Exceção
+        # (ADR 0001). Só o administrador chega aqui com alvo Gestor.
+        try:
+            cert_installer.registrar_excecoes(
+                user_id, [documento], _user_id_da_sessao(token), token.email or "desconhecido",
+            )
+            return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "excecoes"}
+        except Exception:
+            logger.exception("Erro ao registrar exceção")
+            raise HTTPException(status_code=500, detail="Erro interno ao registrar a exceção")
     try:
         cert_installer.remover_da_carteira(user_id, documento)
-        return {"status": "ok", "user_id": user_id, "documento": documento}
+        return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "atribuicoes"}
     except RuntimeError as e:
         # O texto vinha do cofre/banco e podia trazer nome de chave de
         # ambiente ou de tabela (achado #35). Fica no log, com a rota.
@@ -6357,8 +6493,8 @@ def instalabilidade(
     user_id = _user_id_da_sessao(token)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    # O mesmo alcance da leitura (30/09/2026): admin e gestor não limitado
-    # têm tudo; gestor limitado e operador, a carteira que `documentos_ao_alcance` diz.
+    # O mesmo alcance da leitura: admin tem tudo; Gestor, tudo menos as
+    # Exceções; Operador, as Atribuições (`documentos_ao_alcance`, ADR 0001).
     try:
         alcance_total = cert_installer.documentos_ao_alcance(user_id, token.role) is None
     except (cert_installer.CustodiaIndisponivel, cert_installer.CarteiraIndisponivel) as e:

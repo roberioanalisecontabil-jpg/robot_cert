@@ -109,7 +109,7 @@
     <section class="ag-card cg-usu-aba" id="painel-departamentos" role="tabpanel" aria-labelledby="aba-departamentos" {% if aba != 'departamentos' %}hidden{% endif %}>
       <div class="cg-usu-cab">
         <h2 class="ag-card__title">Departamentos</h2>
-        <p class="cg-usu-cab__lead">O departamento define o alcance de quem lidera: o líder libera certificados apenas para quem está no setor dele.</p>
+        <p class="cg-usu-cab__lead">Quem lidera um departamento é seu gestor: vê todos os certificados e libera clientes para os operadores do departamento. Designar alguém aqui o torna gestor; tirá-lo de todos os departamentos o devolve a operador.</p>
       </div>
       <div class="cg-usu-corpo">
         <p><button type="button" class="ag-btn ag-btn--outline" id="btn-novo-departamento"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Novo departamento</button></p>
@@ -118,7 +118,7 @@
             <thead role="rowgroup">
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico">Departamento</th>
-                <th role="columnheader" class="ag-th--estatico">Líderes</th>
+                <th role="columnheader" class="ag-th--estatico">Gestores</th>
                 <th role="columnheader" class="ag-th--estatico">Pessoas</th>
                 <th role="columnheader" class="ag-th--estatico"><span class="cg-sr-only">Ações</span></th>
               </tr>
@@ -198,20 +198,22 @@
           <label class="ag-label" for="ed-nivel">Nível</label>
           <select id="ed-nivel" class="ag-select">
             <option value="user">Operador</option>
-            <option value="gestor">Gestor</option>
+            <!-- Gestor deriva da liderança de departamento (ADR 0001): a
+                 opção existe só para MOSTRAR o papel de quem já lidera. -->
+            <option value="gestor" disabled>Gestor (pela liderança de departamento)</option>
             <option value="admin">Administrador</option>
           </select>
           <p class="ag-ajuda" id="ed-nivel-dica"></p>
         </div>
         <div class="ag-field">
           <label class="ag-label" for="ed-departamento">Departamento</label>
-          <select id="ed-departamento" class="ag-select"><option value="">Sem departamento</option></select>
-          <p class="ag-ajuda">Define quem pode liberar certificados para esta pessoa: os líderes do setor.</p>
+          <select id="ed-departamento" class="ag-select" required></select>
+          <p class="ag-ajuda">Obrigatório. Define quem pode liberar certificados para esta pessoa: os gestores do departamento.</p>
         </div>
         <div class="ag-field modal__campo">
           <label class="ag-label" for="ed-gestor">Gestor responsável <span class="cg-usu-tag">informativo</span></label>
           <select id="ed-gestor" class="ag-select"><option value="">Sem gestor</option></select>
-          <p class="ag-ajuda">Registra a quem a pessoa responde. <strong>Não concede acesso</strong>: quem libera certificados para ela são os líderes do departamento.</p>
+          <p class="ag-ajuda">Registra a quem a pessoa responde. <strong>Não concede acesso</strong>: quem libera certificados para ela são os gestores do departamento.</p>
         </div>
       </div>
       <div class="ag-modal__foot">
@@ -265,8 +267,8 @@
           <div class="ag-dropzone__texto"><p class="ag-dropzone__titulo">Arraste o arquivo ou clique para escolher</p><p class="ag-dropzone__sub">.csv</p></div>
           <p class="ag-dropzone__nome" aria-live="polite"></p>
         </div>
-        <p class="ag-ajuda"><a href="data:text/csv;charset=utf-8,nome%2Cemail%2Csenha%2Cnivel%0A" download="modelo-usuarios.csv">Baixar o modelo (.csv)</a></p>
-        <p class="ag-ajuda" id="dica-import">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code> e <code>nivel</code> (ou <code>role</code>). Em <code>nivel</code>, use exatamente <code>admin</code>, <code>gestor</code> ou <code>user</code> (operador).</p>
+        <p class="ag-ajuda"><a href="data:text/csv;charset=utf-8,nome%2Cemail%2Csenha%2Cnivel%2Cdepartamento%0A" download="modelo-usuarios.csv">Baixar o modelo (.csv)</a></p>
+        <p class="ag-ajuda" id="dica-import">Cabeçalhos obrigatórios: <code>nome</code>, <code>email</code>, <code>senha</code>, <code>nivel</code> (ou <code>role</code>) e <code>departamento</code> (o nome do setor, já cadastrado). Em <code>nivel</code>, use exatamente <code>admin</code> ou <code>user</code> (operador); gestor se designa em Departamentos.</p>
         <div class="ag-alert ag-alert--danger" id="msg-import" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
         <div id="erros-import" class="ag-alert ag-alert--warning" hidden>
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
@@ -293,9 +295,9 @@
           <input type="text" id="dep-nome" class="ag-input" required maxlength="80" placeholder="Ex.: Fiscal" autocomplete="off">
         </div>
         <div class="ag-field">
-          <label class="ag-label" for="dep-lideres">Líderes</label>
+          <label class="ag-label" for="dep-lideres">Gestores</label>
           <select id="dep-lideres" class="ag-select" multiple size="6"></select>
-          <p class="ag-ajuda">Segure Ctrl (ou Cmd) para escolher mais de um. Só contas ativas aparecem: líder que não entra no portal não libera nada.</p>
+          <p class="ag-ajuda">Segure Ctrl (ou Cmd) para escolher mais de um. Quem entra na lista <strong>vira gestor</strong> e passa a ver todos os certificados; quem sai dela e não lidera outro departamento volta a operador, com a carteira vazia. Só contas ativas aparecem.</p>
         </div>
       </div>
       <div class="ag-modal__foot">
@@ -717,11 +719,11 @@
                     ? d.lideres.map((l) => esc(l.nome)).join(', ')
                     // Setor sem líder não é detalhe: ninguém pode liberar nada
                     // para quem está nele, e isso precisa saltar aos olhos.
-                    : badgeAviso('sem líder');
+                    : badgeAviso('sem gestor');
                 return `
                 <tr role="row">
                   <td role="cell" data-label="Departamento"><strong>${esc(d.nome)}</strong></td>
-                  <td role="cell" data-label="Líderes">${lideres}</td>
+                  <td role="cell" data-label="Gestores">${lideres}</td>
                   <td role="cell" data-label="Pessoas">${d.membros}</td>
                   <td role="cell">
                     <div class="row-actions">
@@ -822,7 +824,7 @@
                     body: JSON.stringify({ lideres }),
                 });
                 if (!rl.ok) {
-                    erroDoDep('Departamento salvo, mas os líderes não: ' + (await mensagemCorpoErro(rl)));
+                    erroDoDep('Departamento salvo, mas os gestores não: ' + (await mensagemCorpoErro(rl)));
                     await loadDepartamentos();
                     return;
                 }
@@ -845,9 +847,10 @@
                 // Diz o que acontece com as pessoas: elas NÃO são apagadas, mas
                 // ficam sem setor — e sem setor ninguém pode liberar nada para
                 // elas. É a consequência que decide se vale apagar.
-                mensagem: d.membros
-                    ? `${d.nome} tem ${d.membros} pessoa(s). Elas não serão apagadas, mas ficam sem departamento — e sem ninguém que possa liberar certificados para elas até serem colocadas em outro setor.`
-                    : `${d.nome} não tem ninguém. Apagar remove o setor e as lideranças dele.`,
+                mensagem: (d.membros
+                    ? `${d.nome} tem ${d.membros} pessoa(s). Elas não serão apagadas, mas ficam sem departamento — só o administrador libera certificados para elas até serem colocadas em outro.`
+                    : `${d.nome} não tem ninguém.`) +
+                    ` Quem só era gestor deste departamento volta a operador, com a carteira vazia.`,
                 textoConfirmar: 'Apagar',
                 perigo: true,
             });
@@ -920,9 +923,13 @@
         function preencherDepartamentos(selecionado) {
             const sel = document.getElementById('ed-departamento');
             sel.textContent = '';
+            // Sem a opção vazia de antes: departamento é obrigatório (ADR
+            // 0001). O placeholder desabilitado força a escolha no cadastro e
+            // mostra a lacuna de quem ficou sem setor (departamento apagado).
             const vazio = document.createElement('option');
             vazio.value = '';
-            vazio.textContent = 'Sem departamento';
+            vazio.textContent = depsCache.length ? 'Escolha o departamento…' : 'Cadastre um departamento primeiro';
+            vazio.disabled = true;
             sel.appendChild(vazio);
             depsCache.forEach((d) => {
                 const op = document.createElement('option');
@@ -938,8 +945,8 @@
             const dica = document.getElementById('ed-nivel-dica');
             const campoGestor = document.getElementById('ed-gestor').closest('.modal__campo');
             const textos = {
-                user: 'Instala apenas os certificados da carteira dele.',
-                gestor: 'Recebe todos os clientes na carteira ao virar gestor; o administrador pode retirar clientes dela em Carteiras. Monta carteiras de operadores do seu setor.',
+                user: 'Instala apenas os clientes atribuídos à carteira dele pelo gestor do departamento ou pelo administrador.',
+                gestor: 'Papel de quem lidera um departamento: vê e instala todos os certificados, menos as exceções que o administrador registrar em Carteiras. Para mudar, edite o departamento.',
                 admin: 'Alcance total, incluindo gestão de usuários e configuração.',
             };
             dica.textContent = textos[nivel] || '';
@@ -1033,12 +1040,13 @@
             const corpo = {
                 full_name: document.getElementById('ed-nome').value.trim(),
                 email: document.getElementById('ed-email').value.trim().toLowerCase(),
-                role: nivel,
+                // "gestor" não se pede: o servidor deriva da liderança e
+                // recusaria o literal. Quem lidera continua gestor ao salvar.
+                role: nivel === 'gestor' ? 'user' : nivel,
                 // Só operador tem gestor. Enviar o campo para admin/gestor
                 // gravaria um vínculo que nenhuma tela mostra.
                 gestor_id: nivel === 'user' ? (document.getElementById('ed-gestor').value || '') : '',
-                // String vazia limpa o vínculo; omitir manteria o que está
-                // gravado, e não haveria como tirar alguém de um setor.
+                // Obrigatório: o servidor recusa vazio com 422.
                 departamento_id: document.getElementById('ed-departamento').value || '',
             };
 

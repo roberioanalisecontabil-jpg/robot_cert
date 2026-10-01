@@ -1,6 +1,12 @@
 # Plano — níveis de acesso por papel
 
 > **Status: levantamento. Nada implementado.**
+> **Nota de 2026-10-01:** o eixo da *liderança* descrito aqui mudou com o
+> [ADR 0001](adr/0001-carteira-por-papel.md): quem lidera um departamento **é**
+> Gestor (o papel deriva da liderança), a carteira do Gestor passou a ser de
+> Exceções, e `require_admin_ou_lider` chama-se `require_admin_ou_gestor`.
+> O eixo da *matriz de permissões* (módulo × nível) continua como descrito.
+> Vocabulário em `GLOSSARY.md`.
 > Elaborado em 2026-08-19. Todos os números vieram de `app/main.py` e
 > `static/ui-common.js` na data, contados por script, não estimados.
 

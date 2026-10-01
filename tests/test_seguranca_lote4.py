@@ -138,12 +138,15 @@ def test_operador_sem_setor_so_ve_a_propria_carteira(client: TestClient, banco: 
     assert _docs(r.json()["itens"]) == {DOC_B}
 
 
-def test_lider_ve_a_propria_carteira_e_as_do_seu_setor(client: TestClient, banco: _Fake) -> None:
-    """O gestor lê a própria carteira e as do setor que lidera. Desde
-    30/09/2026 a carteira dele nasce cheia (regra de gestor), mas a leitura
-    continua sendo pela carteira — é isto que este teste fixa."""
+def test_gestor_ve_tudo_menos_as_excecoes(client: TestClient, banco: _Fake) -> None:
+    """ADR 0001: o gestor não lê pela carteira própria nem pelas do setor — lê
+    tudo que tem documento, menos as Exceções que o administrador registrou.
+    O item sem documento continua fora: não é de ninguém."""
     r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*GESTOR))
-    assert _docs(r.json()["itens"]) == {DOC_A, DOC_L}
+    assert _docs(r.json()["itens"]) == {DOC_A, DOC_B, DOC_C, DOC_L}
+    banco.tabelas["carteira_excecao"] = [{"user_id": "u-lf", "documento": DOC_B, "registrado_por_email": "admin@x.com"}]
+    r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*GESTOR))
+    assert _docs(r.json()["itens"]) == {DOC_A, DOC_C, DOC_L}
 
 
 def test_admin_continua_vendo_tudo(client: TestClient, banco: _Fake) -> None:
@@ -180,7 +183,7 @@ def test_historico_recortado(client: TestClient, banco: _Fake, user_le_instalado
     assert _docs(j["itens"]) == {DOC_A}
     assert j["total"] == 1
     export = client.get("/api/certificados/historico?todas_filtradas=true", headers=_h(*GESTOR)).json()
-    assert _docs(export["itens"]) == {DOC_A, DOC_L}
+    assert _docs(export["itens"]) == {DOC_A, DOC_B, DOC_C, DOC_L}
 
 
 def test_vencidos_recortado(client: TestClient, banco: _Fake, user_le_instalador: None) -> None:

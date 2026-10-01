@@ -49,11 +49,21 @@ class _Query:
         self._f.append((c, v))
         return self
 
+    def in_(self, c: str, vs: List[Any]) -> "_Query":
+        self._f.append((c, ("in", list(vs))))
+        return self
+
     def limit(self, _n: int) -> "_Query":
         return self
 
     def _casa(self, r: Dict[str, Any]) -> bool:
-        return all(r.get(c) == v for c, v in self._f)
+        for c, v in self._f:
+            if isinstance(v, tuple) and v and v[0] == "in":
+                if r.get(c) not in v[1]:
+                    return False
+            elif r.get(c) != v:
+                return False
+        return True
 
     def execute(self) -> _Res:
         if self._n in self._b.quebrado:
@@ -281,17 +291,26 @@ def test_edicao_grava_o_departamento(client: TestClient, banco: _Fake) -> None:
     assert banco.tabelas["users"][2]["departamento_id"] == "dep-1"
 
 
-def test_string_vazia_tira_a_pessoa_do_setor(client: TestClient, banco: _Fake) -> None:
+def test_string_vazia_nao_tira_a_pessoa_do_setor(client: TestClient, banco: _Fake) -> None:
     """
-    Omitir mantém o que está gravado; string vazia limpa. Sem a distinção, não
-    haveria como tirar alguém de um setor sem inventar um valor.
+    Até 30/09 a string vazia limpava o vínculo. Desde o ADR 0001 departamento
+    é obrigatório: sem ele a pessoa não tem Gestor que lhe libere nada. Para
+    mudar de setor, escolhe-se outro.
     """
     r = client.put("/api/users/u-op", headers=_admin(), json={
         "email": "op@x.com", "full_name": "Operador", "role": "user",
         "departamento_id": "",
     })
-    assert r.status_code == 200, r.text
-    assert banco.tabelas["users"][2]["departamento_id"] is None
+    assert r.status_code == 422, r.text
+    assert banco.tabelas["users"][2]["departamento_id"] == "dep-1"
+
+
+def test_departamento_inexistente_e_recusado(client: TestClient, banco: _Fake) -> None:
+    r = client.put("/api/users/u-op", headers=_admin(), json={
+        "email": "op@x.com", "full_name": "Operador", "role": "user",
+        "departamento_id": "dep-que-nao-existe",
+    })
+    assert r.status_code == 422, r.text
 
 
 def test_omitir_mantem_o_setor(client: TestClient, banco: _Fake) -> None:

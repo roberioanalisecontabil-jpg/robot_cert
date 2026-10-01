@@ -109,6 +109,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         ],
         "user_activity": [],
         "colaborador_cert_selecoes": [],
+        "departamento": [{"id": "dep-1", "nome": "Fiscal"}],
     })
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
@@ -219,7 +220,7 @@ def test_cadastro_pelo_admin_marca_para_trocar(
         {"sub": "chefe@x.com", "role": "admin"})}
     r = client.post("/api/users", headers=h, json={
         "email": "recem@x.com", "password": "definida-pelo-chefe",
-        "full_name": "Recém", "role": "user",
+        "full_name": "Recém", "role": "user", "departamento_id": "dep-1",
     })
     assert r.status_code == 200, r.text
     novo = [u for u in banco.tabelas["users"] if u["email"] == "recem@x.com"][0]

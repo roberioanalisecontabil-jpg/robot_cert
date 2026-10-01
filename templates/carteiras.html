@@ -33,16 +33,9 @@
     <header class="ag-page__head ag-section-head">
       <div>
         <h1 class="ag-page__title">Carteiras</h1>
-        <p class="ag-page__lead">Defina quais clientes cada operador pode instalar. Operador sem carteira não consegue instalar nenhum certificado.</p>
+        <p class="ag-page__lead">Defina quais clientes cada operador pode instalar. Operador sem carteira não consegue instalar nenhum certificado. O gestor vê todos os clientes; o administrador pode registrar exceções.</p>
       </div>
       <div class="cg-cart-acoes-cab">
-        <!-- Só administrador (JS esconde para os demais; o servidor recusa
-             de qualquer forma). Enche a carteira de todos os gestores com o
-             inventário atual: para os que já existiam antes da regra e para
-             completar quando entram clientes novos. -->
-        <button type="button" id="btnRegraGestor" class="ag-btn ag-btn--ghost" hidden title="Põe na carteira de cada gestor todos os clientes do inventário que ainda faltem">
-          Aplicar regra de gestor
-        </button>
         <button type="button" id="btnAbrirImportar" class="ag-btn ag-btn--outline">
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
           Importar planilha
@@ -184,7 +177,7 @@
           <a href="data:text/csv;charset=utf-8,email%2Ccnpj%0A" download="modelo-carteiras.csv">Baixar o modelo (.csv)</a>
         </p>
         <p class="cg-cart-importar__formato" id="dicaImportar">
-          Duas colunas, <code>email</code> do operador e <code>cnpj</code> do cliente, uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code> e <code>cpf</code>. Só para quem está nos departamentos que você lidera.
+          Duas colunas, <code>email</code> do operador e <code>cnpj</code> do cliente, uma linha por par. Aceita também <code>e-mail</code>, <code>documento</code> e <code>cpf</code>. Só para operadores dos departamentos que você lidera; a carteira de um gestor é editada na tela, pelo administrador.
         </p>
         <!-- Linhas recusadas ficam aqui, com o motivo: um toast sumiria. -->
         <div id="importErros" class="ag-alert ag-alert--warning" hidden>
@@ -237,16 +230,14 @@
 
     // ─── Operadores ────────────────────────────────────────────────────
 
-    // Quem está olhando: o administrador monta a carteira de qualquer pessoa,
-    // inclusive de gestores (30/09/2026: gestor vê tudo por padrão e o admin
-    // pode limitá-lo — a carteira dele só vale limitado, mas pode ser montada
-    // antes). Um gestor vê os operadores do seu setor e a si mesmo.
+    // Quem está olhando (ADR 0001): o administrador edita a carteira de
+    // qualquer pessoa — as Atribuições de um operador e as Exceções de um
+    // gestor. O gestor edita só as Atribuições dos operadores dos
+    // departamentos que lidera; o servidor já recorta a lista a eles.
     const souAdmin = localStorage.getItem("user_role") === "admin";
-    const meuEmail = (localStorage.getItem("user_email") || "").toLowerCase();
 
-    // Gestor: etiqueta do papel e, como todo mundo, "Sem carteira" quando
-    // não tem nada — a regra de gestor enche a carteira ao promover; vazia
-    // significa que a regra ainda não foi aplicada (botão no cabeçalho).
+    // Gestor: etiqueta do papel. "Sem carteira" é coisa de operador — a
+    // carteira do gestor começa cheia e só encolhe por exceção.
     function badgeDe(o) {
       const papel = o.role === "gestor" ? `<span class="ag-badge ag-badge--neutral">Gestor</span> ` : "";
       return papel + (o.sem_carteira ? `<span class="ag-badge ag-badge--danger">Sem carteira</span>` : "");
@@ -256,15 +247,18 @@
       return _operadores.filter((o) => {
         // Administrador não entra na lista: tem alcance total sempre.
         if (o.role === "admin") return false;
-        // Gestor: para o administrador, todos; para um gestor, só ele mesmo
-        // (o servidor já recorta a lista ao setor que ele lidera).
-        if (o.role === "gestor" && !souAdmin && (o.email || "").toLowerCase() !== meuEmail) return false;
         // Conta inativa some, SALVO se ainda tiver carteira a limpar (a
         // limpeza automática pode falhar; esconder deixaria a carteira órfã).
-        if (!o.ativo && !(o.documentos > 0)) return false;
+        if (!o.ativo && !(o.documentos > 0 || o.excecoes > 0)) return false;
         return true;
       });
     }
+
+    // A carteira do selecionado é de Atribuições (operador) ou de Exceções
+    // (gestor)? Decide os textos dos dois painéis e das confirmações.
+    let _tipoCarteira = "atribuicoes";
+    let _excecoes = {};
+    const deExcecoes = () => _tipoCarteira === "excecoes";
 
     function renderOperadores() {
       const q = (document.getElementById("buscaOperador").value || "").trim().toLowerCase();
@@ -374,7 +368,24 @@
 
     function atualizarContagemOp() {
       const n = _carteiraAtual.size;
-      document.getElementById("opContagem").textContent = n + (n === 1 ? " cliente na carteira" : " clientes na carteira");
+      const el = document.getElementById("opContagem");
+      if (deExcecoes()) {
+        const e = Object.keys(_excecoes).length;
+        el.textContent = e ? `Todos os clientes, menos ${e} ${e === 1 ? "exceção" : "exceções"}` : "Todos os clientes, sem exceções";
+        return;
+      }
+      el.textContent = n + (n === 1 ? " cliente na carteira" : " clientes na carteira");
+    }
+
+    // Os títulos dos dois painéis trocam com o tipo de carteira: para o
+    // gestor, o lado esquerdo é o que foi RETIRADO dele.
+    function ajustarTitulosDosPaineis() {
+      document.getElementById("tit-disponiveis").firstChild.textContent = deExcecoes() ? "Exceções " : "Disponíveis ";
+      document.getElementById("tit-carteira").firstChild.textContent = deExcecoes() ? "No alcance " : "Na carteira ";
+      document.getElementById("listaDisponiveis").setAttribute("aria-label",
+        deExcecoes() ? "Clientes retirados do alcance deste gestor" : "Clientes disponíveis para liberar");
+      document.getElementById("listaCarteira").setAttribute("aria-label",
+        deExcecoes() ? "Clientes no alcance deste gestor" : "Clientes na carteira desta pessoa");
     }
 
     async function carregarCarteira() {
@@ -384,8 +395,11 @@
         const r = await fetch(`/api/carteira/${encodeURIComponent(_selecionado.id)}`, { headers: getHeaders() });
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
+        _tipoCarteira = d.tipo || "atribuicoes";
         _carteiraAtual = new Set(d.documentos || []);
         _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
+        _excecoes = Object.fromEntries((d.excecoes || []).map((i) => [i.documento, i]));
+        ajustarTitulosDosPaineis();
         atualizarContagemOp();
         renderTransfer();
       } catch (e) {
@@ -453,13 +467,21 @@
 
     function linhaTransfer(x, naCarteira) {
       const t = naCarteira ? _trilha[x.documento] : null;
-      const trilha = t && (t.atribuido_por || t.atribuido_em)
-        ? `<span class="cg-transfer__trilha">${esc(x.documento)}` +
-          (t.atribuido_por ? (t.atribuido_por === "regra:gestor" ? " · pela regra de gestor" : " · liberado por " + esc(t.atribuido_por)) : "") +
+      const ex = !naCarteira && deExcecoes() ? _excecoes[x.documento] : null;
+      let trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}</span>`;
+      if (ex && (ex.registrado_por || ex.registrado_em)) {
+        // Exceção: quem retirou o cliente do alcance do gestor, e quando.
+        trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}` +
+          (ex.registrado_por ? " · retirado por " + esc(ex.registrado_por) : "") +
+          (ex.registrado_em ? " em " + new Date(ex.registrado_em).toLocaleDateString("pt-BR") : "") +
+          `</span>`;
+      } else if (t && (t.atribuido_por || t.atribuido_em || t.origem === "papel")) {
+        trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}` +
+          (t.origem === "papel" ? " · pelo papel de gestor" : (t.atribuido_por ? " · liberado por " + esc(t.atribuido_por) : "")) +
           (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
           (t.no_inventario === false ? " · fora do inventário atual" : "") +
-          `</span>`
-        : `<span class="cg-transfer__trilha">${esc(x.documento)}</span>`;
+          `</span>`;
+      }
       // A LINHA é o alvo de seleção; a ação vive no rodapé do painel.
       return `<div class="cg-transfer__item" role="option" aria-selected="false" tabindex="0" data-doc="${esc(x.documento)}">
         <svg class="ag-icon cg-transfer__marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -523,14 +545,17 @@
       const elCart = document.getElementById("listaCarteira");
       elDisp.innerHTML = dispFiltrados.length
         ? dispFiltrados.map((x) => linhaTransfer(x, false)).join("")
-        : `<p class="cg-transfer__vazio">${disponiveis.length ? "Nenhum cliente com esse filtro." : "Todos os clientes já estão na carteira."}</p>`;
+        : `<p class="cg-transfer__vazio">${disponiveis.length ? "Nenhum cliente com esse filtro."
+            : (deExcecoes() ? "Nenhuma exceção: este gestor vê e instala todos os clientes." : "Todos os clientes já estão na carteira.")}</p>`;
       elCart.innerHTML = cartFiltrados.length
         ? cartFiltrados.map((x) => linhaTransfer(x, true)).join("")
         : naCarteira.length
           ? `<p class="cg-transfer__vazio">Nenhum cliente com esse filtro.</p>`
           // O vazio diz a CONSEQUÊNCIA: é o que trava a pessoa sem que
           // ninguém saiba por quê.
-          : `<p class="cg-transfer__vazio">Carteira vazia. Esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
+          : deExcecoes()
+            ? `<p class="cg-transfer__vazio">Todos os clientes foram retirados. Este gestor <strong>não consegue instalar nenhum certificado</strong>.</p>`
+            : `<p class="cg-transfer__vazio">Carteira vazia. Esta pessoa <strong>não consegue instalar nenhum certificado</strong>. Libere clientes ao lado.</p>`;
 
       atualizarLote(dispFiltrados, cartFiltrados);
       document.getElementById("dicaBusca").textContent = _universoTruncado
@@ -543,7 +568,9 @@
       // Liberar em lote confirma; liberar um não. A magnitude fica visível
       // no rótulo, e a confirmação protege o clique distraído.
       if (documentos.length > 1 && !confirm(
-        `Liberar ${documentos.length} clientes para esta pessoa?` +
+        (deExcecoes()
+          ? `Tirar ${documentos.length} exceções deste gestor?`
+          : `Liberar ${documentos.length} clientes para esta pessoa?`) +
         `\n\nEla passa a conseguir instalar os certificados deles.`
       )) return;
       try {
@@ -553,7 +580,9 @@
           body: JSON.stringify({ user_id: _selecionado.id, documentos }),
         });
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-        msg(documentos.length === 1 ? "Cliente liberado." : `${documentos.length} clientes liberados.`, "success");
+        msg(deExcecoes()
+          ? (documentos.length === 1 ? "Exceção removida." : `${documentos.length} exceções removidas.`)
+          : (documentos.length === 1 ? "Cliente liberado." : `${documentos.length} clientes liberados.`), "success");
         await Promise.all([carregarCarteira(), carregarOperadores()]);
         if (_selecionado) {
           _selecionado = _operadores.find((o) => o.id === _selecionado.id) || _selecionado;
@@ -617,8 +646,10 @@
       if (!documentos.length) return;
       const um = documentos.length === 1;
       if (!confirm(
-        (um ? `Remover este cliente da carteira?` : `Remover ${documentos.length} clientes da carteira?`) +
-        `\n\nA pessoa deixa de conseguir instalar os certificados ${um ? "dele" : "deles"}.`
+        (deExcecoes()
+          ? (um ? `Registrar exceção para este cliente?` : `Registrar ${documentos.length} exceções?`)
+          : (um ? `Remover este cliente da carteira?` : `Remover ${documentos.length} clientes da carteira?`)) +
+        `\n\nA pessoa deixa de conseguir ver e instalar os certificados ${um ? "dele" : "deles"}.`
       )) return;
       let falhas = 0;
       for (const doc of documentos) {
@@ -633,7 +664,9 @@
       msg(
         falhas
           ? `${documentos.length - falhas} removidos; ${falhas} falharam.`
-          : (um ? "Cliente removido da carteira." : `${documentos.length} clientes removidos da carteira.`),
+          : deExcecoes()
+            ? (um ? "Exceção registrada." : `${documentos.length} exceções registradas.`)
+            : (um ? "Cliente removido da carteira." : `${documentos.length} clientes removidos da carteira.`),
         falhas ? "error" : "success"
       );
       await Promise.all([carregarCarteira(), carregarOperadores()]);
@@ -681,27 +714,6 @@
       const modal = document.getElementById("modalImportar");
       document.getElementById("btnAbrirImportar").addEventListener("click", () => modal.showModal());
 
-      // "Aplicar regra de gestor" (30/09/2026): só administrador vê.
-      const btnRegra = document.getElementById("btnRegraGestor");
-      if (souAdmin) {
-        btnRegra.hidden = false;
-        btnRegra.addEventListener("click", async () => {
-          btnRegra.disabled = true;
-          try {
-            const r = await fetch("/api/carteira/regra-gestor/aplicar", { method: "POST", headers: getHeaders(true) });
-            const d = await r.json();
-            if (!r.ok) throw new Error(d.detail || ("Erro " + r.status));
-            const g = Number(d.gestores || 0), n = Number(d.acrescentados || 0);
-            showToast(g === 0 ? "Nenhum gestor ativo." : (n === 0 ? "Carteiras dos gestores já completas." : n + " cliente(s) acrescentado(s) em " + g + " gestor(es)."), "success");
-            await carregarOperadores();
-            if (_selecionado) await selecionar(_selecionado.id);
-          } catch (e) {
-            showToast("Não foi possível aplicar a regra: " + e.message, "error");
-          } finally {
-            btnRegra.disabled = false;
-          }
-        });
-      }
       modal.querySelectorAll("[data-ag-modal-close]").forEach((b) => b.addEventListener("click", () => modal.close()));
       document.getElementById("formImportar").addEventListener("submit", importarPlanilha);
 

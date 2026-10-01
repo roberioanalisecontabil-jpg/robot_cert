@@ -255,6 +255,8 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
         "user_activity": [],
         "password_reset_codigo": [],
         "rate_limit_tentativas": [],
+        # Departamento é obrigatório no cadastro (ADR 0001).
+        "departamento": [{"id": "dep-1", "nome": "Fiscal"}],
     })
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     return fake
@@ -500,7 +502,8 @@ def test_gestor_nao_mexe_em_conta_de_admin(
 
 def test_admin_continua_podendo_criar_admin(client: TestClient, banco: _Fake) -> None:
     r = client.post("/api/users", headers=_h(*ADMIN),
-                    json={"email": "novo@x.com", "password": "senha-123456", "full_name": "Novo", "role": "admin"})
+                    json={"email": "novo@x.com", "password": "senha-123456", "full_name": "Novo", "role": "admin",
+                          "departamento_id": "dep-1"})
     assert r.status_code == 200, r.text
 
 
@@ -521,7 +524,7 @@ def _csv(linhas: str) -> dict:
 
 def test_conta_importada_por_csv_nasce_com_senha_provisoria(client: TestClient, banco: _Fake) -> None:
     r = client.post("/api/users/import", headers=_h(*ADMIN),
-                    files=_csv("nome;email;senha;nivel\nBia;bia@x.com;senha-123456;user\n"))
+                    files=_csv("nome;email;senha;nivel;departamento\nBia;bia@x.com;senha-123456;user;Fiscal\n"))
     assert r.status_code == 200, r.text
     assert r.json()["criados"] == 1
     bia = next(u for u in banco.tabelas["users"] if u["email"] == "bia@x.com")
@@ -531,7 +534,7 @@ def test_conta_importada_por_csv_nasce_com_senha_provisoria(client: TestClient, 
 
 def test_senha_do_csv_nao_abre_o_portal(client: TestClient, banco: _Fake) -> None:
     client.post("/api/users/import", headers=_h(*ADMIN),
-                files=_csv("nome;email;senha;nivel\nBia;bia@x.com;senha-123456;user\n"))
+                files=_csv("nome;email;senha;nivel;departamento\nBia;bia@x.com;senha-123456;user;Fiscal\n"))
     token = _login(client, "bia@x.com", "senha-123456").json()["access_token"]
     r = client.get("/api/permissoes/minhas", headers={"Authorization": "Bearer " + token})
     assert r.status_code == 403
@@ -542,7 +545,7 @@ def test_gestor_nao_importa_admin_por_csv(
     client: TestClient, banco: _Fake, gestor_edita_usuarios: None
 ) -> None:
     r = client.post("/api/users/import", headers=_h(*GESTOR),
-                    files=_csv("nome;email;senha;nivel\nBia;bia@x.com;senha-123456;admin\n"))
+                    files=_csv("nome;email;senha;nivel;departamento\nBia;bia@x.com;senha-123456;admin;Fiscal\n"))
     assert r.status_code == 200, r.text
     assert r.json()["criados"] == 0
     assert not any(u["email"] == "bia@x.com" for u in banco.tabelas["users"])
@@ -804,7 +807,7 @@ def test_importacao_csv_nao_vaza_o_erro_do_banco(client: TestClient, banco: _Fak
 
     monkeypatch.setattr(auth, "get_password_hash", _explode)
     r = client.post("/api/users/import", headers=_h(*ADMIN),
-                    files=_csv("nome;email;senha;nivel\nBia;bia@x.com;senha-123456;user\n"))
+                    files=_csv("nome;email;senha;nivel;departamento\nBia;bia@x.com;senha-123456;user;Fiscal\n"))
     assert r.status_code == 200
     assert r.json()["erros"], "a linha tem de aparecer como erro"
     assert SEGREDO_NO_ERRO not in r.text

@@ -199,14 +199,13 @@ def test_admin_alcanca_todo_mundo(client: TestClient, banco: _Fake) -> None:
     assert _atribuir(client, ADMIN, "u-solto").status_code == 200
 
 
-def test_lider_alcanca_a_si_mesmo(client: TestClient, banco: _Fake) -> None:
+def test_gestor_nao_edita_a_propria_carteira(client: TestClient, banco: _Fake) -> None:
     """
-    Sem isto, um líder que não pertence ao próprio setor não teria como liberar
-    nada para si — e não haveria ninguém abaixo dele que pudesse fazê-lo,
-    porque só líder libera. Não amplia poder: dentro do setor ele já pode
-    atribuir qualquer cliente a qualquer pessoa.
+    Até 30/09 o líder podia se atribuir clientes. Desde o ADR 0001 a carteira
+    do Gestor é de Exceções — ele já alcança tudo — e Exceção só o
+    administrador registra. O Gestor não tem o que fazer na própria carteira.
     """
-    assert _atribuir(client, LIDER_FISCAL, "u-lf").status_code == 200
+    assert _atribuir(client, LIDER_FISCAL, "u-lf").status_code == 403
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -306,3 +305,7 @@ def test_gestor_perdeu_o_alcance_total_de_instalacao(banco: _Fake) -> None:
     qualquer coisa, o recorte é que vira teatro.
     """
     assert ci.PAPEIS_COM_ALCANCE_TOTAL == ("admin",)
+    # Desde o ADR 0001 o gestor instala tudo menos as Exceções — mas isso é
+    # uma carteira (`TudoMenos`), não alcance total: `documentos_ao_alcance`
+    # nunca devolve None para ele.
+    assert ci.documentos_ao_alcance("qualquer", "gestor") is not None

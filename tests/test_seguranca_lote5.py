@@ -41,6 +41,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     fake = _Fake({
         "users": [_usuario("u-adm", "admin@x.com", "admin"), _usuario("u-ana", "ana@x.com", "user")],
         "user_activity": [], "cert_snapshots": [], "cert_history": [], "carteira": [], "install_token": [],
+        "departamento": [{"id": "dep-1", "nome": "Fiscal"}],
     })
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     monkeypatch.setattr(ci, "_banco", lambda: fake)
@@ -111,7 +112,7 @@ async def test_upload_dentro_do_teto_e_lido_inteiro() -> None:
 
 
 def test_csv_com_mais_linhas_que_o_teto_e_413(client: TestClient, banco: _Fake) -> None:
-    linhas = "nome;email;senha;nivel\n" + "".join(f"P{i};p{i}@x.com;senha-123456;user\n" for i in range(m.MAX_LINHAS_IMPORT + 1))
+    linhas = "nome;email;senha;nivel;departamento\n" + "".join(f"P{i};p{i}@x.com;senha-123456;user;Fiscal\n" for i in range(m.MAX_LINHAS_IMPORT + 1))
     r = client.post("/api/users/import", headers=_h(*ADMIN), files=_csv(linhas))
     assert r.status_code == 413, r.text
     assert not any(u["email"].startswith("p") for u in banco.tabelas["users"]), "nada pode ter sido gravado"
@@ -120,7 +121,7 @@ def test_csv_com_mais_linhas_que_o_teto_e_413(client: TestClient, banco: _Fake) 
 def test_emails_existentes_numa_consulta_so(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     """Uma ida ao banco por linha (mais um bcrypt) era horas de CPU num CSV de 5 MB."""
     monkeypatch.setattr(auth, "get_password_hash", lambda s: "hash-fixo")
-    linhas = "nome;email;senha;nivel\n" + "".join(f"P{i};p{i}@x.com;senha-123456;user\n" for i in range(40))
+    linhas = "nome;email;senha;nivel;departamento\n" + "".join(f"P{i};p{i}@x.com;senha-123456;user;Fiscal\n" for i in range(40))
     banco.consultas.clear()
     r = client.post("/api/users/import", headers=_h(*ADMIN), files=_csv(linhas))
     assert r.status_code == 200, r.text

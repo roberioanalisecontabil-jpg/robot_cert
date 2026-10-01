@@ -681,7 +681,7 @@ def test_carteiras_mantem_os_dois_eixos(client, monkeypatch: pytest.MonkeyPatch)
     A matriz diz SE o papel alcança; a liderança diz DE QUEM.
 
     Ao ligar Carteiras à matriz troquei o literal `papel != "gestor"` de
-    `require_admin_ou_lider` — sem isso, marcar "Carteiras: Ver e editar" para
+    `require_admin_ou_gestor` — sem isso, marcar "Carteiras: Ver e editar" para
     outro papel não adiantaria nada, e a tela prometeria o que não entrega.
 
     O risco da troca é o oposto: a matriz atropelar o alcance e deixar um líder
@@ -717,17 +717,17 @@ def test_carteiras_mantem_os_dois_eixos(client, monkeypatch: pytest.MonkeyPatch)
 
     # ── Os positivos, na guarda isolada ─────────────────────────────────
     cenario({"gestor": {**G, "carteiras": permissoes.NIVEL_EDITAR}, "user": U}, ["dep-1"])
-    assert _roda_guarda(_main.require_admin_ou_lider, "gestor").role == "gestor"
+    assert _roda_guarda(_main.require_admin_ou_gestor, "gestor").role == "gestor"
 
     # E o caso que prova que quem decide o papel e a MATRIZ, e nao um literal:
     # com `papel != "gestor"` de volta, este `user` seria recusado.
     cenario({"gestor": G, "user": {**U, "carteiras": permissoes.NIVEL_EDITAR}}, ["dep-1"])
-    assert _roda_guarda(_main.require_admin_ou_lider, "user").role == "user"
+    assert _roda_guarda(_main.require_admin_ou_gestor, "user").role == "user"
 
     # ...e sem liderar, o mesmo `user` e recusado — o segundo eixo continua de pe.
     cenario({"gestor": G, "user": {**U, "carteiras": permissoes.NIVEL_EDITAR}}, [])
     with pytest.raises(HTTPException) as erro:
-        _roda_guarda(_main.require_admin_ou_lider, "user")
+        _roda_guarda(_main.require_admin_ou_gestor, "user")
     assert erro.value.status_code == 403
 
 
