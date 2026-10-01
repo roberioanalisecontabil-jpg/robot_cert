@@ -199,13 +199,6 @@ def test_opcoes_do_acompanhamento_recortadas(client: TestClient, banco: _Fake, u
     assert {ci.so_digitos(i.get("documento")) for i in r.json()["itens"]} == {DOC_A}
 
 
-def test_cofre_disponivel_recortado(client: TestClient, banco: _Fake, user_le_instalador: None) -> None:
-    r = client.get("/api/cert-installer/available", headers=_h(*FISCAL_OP))
-    assert r.status_code == 200, r.text
-    assert {c["documento"] for c in r.json()["certificates"]} == {DOC_A}
-    assert {c["documento"] for c in client.get("/api/cert-installer/available", headers=_h(*ADMIN)).json()["certificates"]} == {DOC_A, DOC_B}
-
-
 def test_recorte_exclui_item_sem_documento_para_quem_nao_tem_alcance_total() -> None:
     itens = [{"documento_numero": DOC_A}, {"documento_numero": None}, {"documento": "22.222.222/0001-92"}]
     assert m._recortar_pela_carteira(itens, {DOC_A}) == [{"documento_numero": DOC_A}]
@@ -216,23 +209,12 @@ def test_recorte_exclui_item_sem_documento_para_quem_nao_tem_alcance_total() -> 
 # #31 — trilha e logs escopados; client_ip só para admin
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_logs_so_os_proprios_e_sem_ip(client: TestClient, banco: _Fake, user_le_instalador: None) -> None:
-    r = client.get("/api/cert-installer/logs", headers=_h(*FISCAL_OP))
-    assert r.status_code == 200, r.text
-    logs = r.json()["logs"]
-    assert {l["user_email"] for l in logs} == {"fis@x.com"}
-    assert all("client_ip" not in l for l in logs)
-    adm = client.get("/api/cert-installer/logs", headers=_h(*ADMIN)).json()["logs"]
-    assert {l["user_email"] for l in adm} == {"fis@x.com", "solto@x.com"}
-    assert all(l.get("client_ip") for l in adm)
-
-
-def test_trilha_ignora_user_email_alheio_e_esconde_ip(client: TestClient, banco: _Fake, user_le_instalador: None) -> None:
-    r = client.get("/api/cert-installer/trilha?user_email=solto@x.com", headers=_h(*FISCAL_OP))
-    assert r.status_code == 200, r.text
-    cadeias = r.json()["cadeias"]
-    assert {c["user_email"] for c in cadeias} == {"fis@x.com"}
-    assert all("client_ip" not in c for c in cadeias)
+def test_trilha_do_instalador_e_so_do_administrador(client: TestClient, banco: _Fake, user_le_instalador: None) -> None:
+    """Desde 01/10/2026 (P1) a trilha do Instalador é só do administrador, com
+    IP. Quem não é admin vê as próprias instalações — e o gestor as dos seus
+    operadores — por `/api/carteira/{id}/instalacoes`, sem IP
+    (tests/test_pagina_carteiras.py)."""
+    assert client.get("/api/cert-installer/trilha?user_email=solto@x.com", headers=_h(*FISCAL_OP)).status_code == 403
     adm = client.get("/api/cert-installer/trilha?user_email=solto@x.com", headers=_h(*ADMIN)).json()["cadeias"]
     assert {c["user_email"] for c in adm} == {"solto@x.com"}
     assert all(c.get("client_ip") for c in adm)

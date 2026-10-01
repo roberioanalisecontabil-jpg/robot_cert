@@ -20,7 +20,6 @@
 .cg-inst-cab__texto { min-width: 0; flex: 1 1 20rem; }
 .cg-inst-cab .ag-card__title { font-size: var(--text-lg); margin: 0; display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .cg-inst-cab__lead { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--text-secondary); max-width: 62ch; }
-.cg-inst-cab__acoes { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .cg-inst-corpo { padding: 0 var(--space-6) var(--space-6); display: grid; gap: var(--space-4); }
 .cg-inst-corpo > .ag-alert { margin: 0; }
 

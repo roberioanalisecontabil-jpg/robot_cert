@@ -164,3 +164,42 @@ Operador as Atribuições. Item sem documento só aparece ao Administrador.
 ### Testes
 
 `tests/test_pagina_inicio.py`.
+
+---
+
+## 4. Instalador (01/10/2026)
+
+**Para que existe**: diagnóstico do Cofre e das chaves de cifragem, Custódia
+dos Certificados por servidor da varredura, trilha de instalações e a
+configuração do pedido de instalação. Não instala (o Início instala).
+
+**Quem vê**: só o Administrador (decisão P1). O módulo saiu da matriz, como
+Usuários. O agente continua lendo a lista de custódia pela chave de API.
+
+### Decisões
+
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| P1 | Matriz permitia dar Instalador a Gestor; menu aparecia; tela expulsava; escritas exigiam admin. | **Só Administrador** (`MODULOS_SO_ADMIN`). | Cofre, chaves e custódia são operação do portal. A trilha do Gestor mora em Carteiras (C3). |
+| P2 | `available`, `logs` e `cleanup` sem chamador. | **Removidas.** | Rota que ninguém chama é superfície sem dono. O agente usa `claim`/`report`. |
+| P3 | "Expurgar trilha" também expurgava atividade dos usuários e o cofre; a prévia contava só a trilha. | **O botão expurga só a trilha.** Atividade e cofre seguem no job diário (`cron_alerts`). | Surpresa num lugar onde surpresa custa caro. |
+
+### Defeitos corrigidos
+
+- Vencidos e ilegíveis apareciam na Custódia como "Desativada" com "Reativar" (que apagava um bloqueio inexistente). Agora "Fora da custódia · vencido/ilegível", sem botão.
+- Etapa em que a instalação parou nunca ganhava a marca de falha (as duas ramificações davam a mesma classe).
+- "link de instalação enviado por e-mail": não há link nem e-mail; o pedido vai ao agente. A validade devolvida pelo pedido passa a ser a configurada na tela, não o padrão do ambiente.
+- Trilha cortava em 1000 eventos sem avisar; agora `truncado` e o aviso no resumo.
+- "Retenção do log" → "Retenção da trilha"; "Ver últimos 90 dias" só quando o período é menor; cofre indisponível mostra o motivo, não "HTTP 503".
+- Vocabulário: "Máquina" → "Estação" (coluna da trilha) e "Servidor" (badge e rodapé da custódia); o 422 do `vault-optin` fala de servidor da varredura.
+- Docstrings sobre binário, assinatura, Vercel e "oitava tela"; CSS órfão.
+
+### Fica como está
+
+- Reativar custódia sem confirmação (reversível). Recifrar sem confirmação (linha que não decifra fica intocada).
+- Nomes de variáveis de ambiente nos problemas do diagnóstico: é tela de administrador e o nome é a ação.
+- Retenção sem máximo.
+
+### Testes
+
+`tests/test_pagina_instalador.py`.

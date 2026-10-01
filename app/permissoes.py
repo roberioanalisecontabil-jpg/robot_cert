@@ -84,19 +84,20 @@ MODULOS_GOVERNADOS = (
     "acompanhamento",
     "configuracao",
     "carteiras",
-    "instalador",
 )
 
 # Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
 # `ler`, e a tela nem oferece o terceiro.
-MODULOS_COM_ESCRITA = ("configuracao", "carteiras", "acompanhamento", "instalador")
+MODULOS_COM_ESCRITA = ("configuracao", "carteiras", "acompanhamento")
 
-# Modulos que so o Administrador alcanca, fora da matriz de proposito (decisao
-# de 01/10/2026, revisao da pagina Usuarios). E em Usuarios que se nomeia
-# Gestor e se define quem administra o portal: quem concede papeis tem de
-# estar acima dos papeis. A rota usa `require_admin`; a matriz nao oferece a
-# celula e, se o banco tiver uma linha antiga, ela e ignorada na leitura.
-MODULOS_SO_ADMIN = ("usuarios",)
+# Modulos que so o Administrador alcanca, fora da matriz de proposito (revisao
+# de paginas de 01/10/2026). Usuarios: e onde se nomeia Gestor e se define quem
+# administra o portal — quem concede papeis tem de estar acima dos papeis.
+# Instalador: cofre, chaves de cifragem e custodia sao operacao do portal, nao
+# do departamento (a trilha do Gestor mora em Carteiras). As rotas usam
+# `require_admin`; a matriz nao oferece a celula e, se o banco tiver uma linha
+# antiga, ela e ignorada na leitura.
+MODULOS_SO_ADMIN = ("usuarios", "instalador")
 
 
 def niveis_de_modulo(modulo: str) -> Tuple[str, ...]:

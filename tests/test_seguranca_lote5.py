@@ -200,7 +200,10 @@ def test_nomes_similares_nao_e_quadratico() -> None:
              "documento_numero": f"{i:014d}", "status": "ok", "fingerprint_sha256": None} for i in range(3000)]
     t0 = time.perf_counter()
     m._agrupar_duplicidades(rows)
-    assert time.perf_counter() - t0 < 5.0
+    # 15 s, e não 5: o que se prova é que não é n² (o laço antigo levava
+    # minutos). Sozinho roda em ~3 s; na suíte inteira, com a máquina
+    # carregada, chegou a passar de 5 s e barrava commits sem defeito nenhum.
+    assert time.perf_counter() - t0 < 15.0
 
 
 def test_nomes_similares_continuam_sendo_achados_dentro_do_bloco() -> None:

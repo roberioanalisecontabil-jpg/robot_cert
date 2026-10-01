@@ -336,4 +336,4 @@ def test_maquina_da_custodia_fica_no_cabecalho() -> None:
     """
     html = _html("/instalador")
     assert 'id="badgeMaquina"' in html
-    assert "Vale só para a máquina indicada" in html
+    assert "Vale só para o servidor indicado" in html

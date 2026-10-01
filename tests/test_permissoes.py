@@ -217,7 +217,7 @@ def test_matriz_do_banco_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None
     class _Resp:
         data = [
             {"papel": "gestor", "modulo": "carteiras", "nivel": "ler"},
-            {"papel": "user", "modulo": "instalador", "nivel": "editar"},
+            {"papel": "user", "modulo": "configuracao", "nivel": "editar"},
             # Lixo: módulo inexistente e nível inválido são descartados sem
             # derrubar a leitura inteira.
             {"papel": "user", "modulo": "modulo-fantasma", "nivel": "editar"},
@@ -239,7 +239,7 @@ def test_matriz_do_banco_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("app.settings_state._banco", lambda: _SB())
 
     assert permissoes.nivel_de("gestor", "carteiras") == permissoes.NIVEL_LER
-    assert permissoes.nivel_de("user", "instalador") == permissoes.NIVEL_EDITAR
+    assert permissoes.nivel_de("user", "configuracao") == permissoes.NIVEL_EDITAR
     # O que veio do banco substitui a linha inteira do papel: o que não foi
     # gravado é `nenhum`, e não o valor do padrão. Meia-configuração seria pior
     # que nenhuma — a tela mostraria uma coisa e o servidor faria outra.
@@ -800,32 +800,23 @@ def test_instalar_o_proprio_certificado_nao_depende_do_modulo_instalador(
     ).status_code != 403
 
 
-def test_tela_de_diagnostico_respeita_o_modulo(client, monkeypatch: pytest.MonkeyPatch) -> None:
-    """As rotas da tela de Instalador, essas sim, obedecem à matriz."""
+def test_tela_de_instalador_e_so_do_administrador(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Até 30/09 as rotas do Instalador obedeciam à matriz. Desde 01/10/2026
+    (revisão da página, P1) o módulo é só do administrador: cofre, chaves e
+    custódia são operação do portal, e a trilha do gestor mora em Carteiras.
+    Uma linha antiga da matriz não tem efeito."""
     monkeypatch.setattr(
         permissoes, "_matriz",
-        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "instalador": permissoes.NIVEL_LER},
+        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "instalador": permissoes.NIVEL_EDITAR},
                  "user": permissoes.PADRAO["user"]},
     )
     h = _token("gestor")
-    # `ler` abre o diagnostico...
-    assert client.get("/api/cert-installer/diagnostico", headers=h).status_code != 403
-    assert client.get("/api/cert-installer/trilha", headers=h).status_code != 403
-    # ...e nao abre a escrita.
-    assert client.post(
-        "/api/cert-installer/revalidar-cofre", json={}, headers=h
-    ).status_code == 403
-    assert client.post(
-        "/api/cert-installer/expurgar-log", json={}, headers=h
-    ).status_code == 403
-
-    # Sem o modulo, nem o diagnostico.
-    monkeypatch.setattr(
-        permissoes, "_matriz",
-        lambda: {"gestor": {**permissoes.PADRAO["gestor"], "instalador": permissoes.NIVEL_NENHUM},
-                 "user": permissoes.PADRAO["user"]},
-    )
+    assert permissoes.nivel_de("gestor", "instalador") == permissoes.NIVEL_NENHUM
     assert client.get("/api/cert-installer/diagnostico", headers=h).status_code == 403
+    assert client.get("/api/cert-installer/trilha", headers=h).status_code == 403
+    assert client.post("/api/cert-installer/revalidar-cofre", json={}, headers=h).status_code == 403
+    assert client.post("/api/cert-installer/expurgar-log", json={}, headers=h).status_code == 403
+    assert client.get("/api/cert-installer/diagnostico", headers=_token("admin")).status_code != 403
 
 
 def test_vault_optin_recusa_a_identidade_anonima(client) -> None:

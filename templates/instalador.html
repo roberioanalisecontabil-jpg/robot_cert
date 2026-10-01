@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Instalador — Analise Certificado</title>
   <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-  <!-- Oitava tela do portal no Águia DS. Mesma ordem de carregamento das
+  <!-- Tela de diagnóstico do portal no Águia DS. Mesma ordem de carregamento das
        outras: fontes servidas pelo portal, o style.css legado (shell), os
        tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
        da família de listas (shell comum) e o desta tela. -->
@@ -97,13 +97,13 @@
     <section class="ag-card cg-inst-aba" id="aba-custodia" role="tabpanel" aria-labelledby="tab-custodia" {% if aba != 'custodia' %}hidden{% endif %}>
       <div class="cg-inst-cab">
         <div class="cg-inst-cab__texto">
-          <h2 class="ag-card__title">Custódia dos certificados <span class="ag-badge ag-badge--neutral" id="badgeMaquina">Máquina: —</span></h2>
+          <h2 class="ag-card__title">Custódia dos certificados <span class="ag-badge ag-badge--neutral" id="badgeMaquina">Servidor: —</span></h2>
         </div>
       </div>
       <div class="cg-inst-corpo">
         <div class="ag-alert ag-alert--warning">
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <div class="ag-alert__corpo"><p><strong>Desativar apaga a cópia guardada.</strong> A chave privada deixa de ficar no cofre do portal e o agente passa a ignorar este certificado nas próximas varreduras. Vencidos e ilegíveis nunca entram na custódia. Vale só para a máquina indicada.</p></div>
+          <div class="ag-alert__corpo"><p><strong>Desativar apaga a cópia guardada.</strong> A chave privada deixa de ficar no cofre do portal e o agente passa a ignorar este certificado nas próximas varreduras. Vencidos e ilegíveis nunca entram na custódia. Vale só para o servidor indicado.</p></div>
         </div>
         <form class="cg-inst-filtros" method="get" action="/instalador" role="search">
           <input type="hidden" name="aba" value="custodia" />
@@ -187,7 +187,7 @@
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico">Quando</th>
                 <th role="columnheader" class="ag-th--estatico">Solicitante</th>
-                <th role="columnheader" class="ag-th--estatico">Máquina</th>
+                <th role="columnheader" class="ag-th--estatico">Estação</th>
                 <th role="columnheader" class="ag-th--estatico cg-col-n">Certificados</th>
                 <th role="columnheader" class="ag-th--estatico">Etapas</th>
                 <th role="columnheader" class="ag-th--estatico">Desfecho</th>
@@ -219,11 +219,11 @@
               <input type="number" id="cfgTtl" class="ag-input" min="1" max="1440" placeholder="Padrão: 5" />
               <span class="ag-input-afixo__sufixo" aria-hidden="true">minutos</span>
             </span>
-            <p class="ag-ajuda">Por quanto tempo o link de instalação enviado por e-mail continua válido.</p>
+            <p class="ag-ajuda">Por quanto tempo um pedido de instalação continua válido para o agente da estação.</p>
             <p class="ag-ajuda ag-ajuda--muted" id="cfgTtlEfetivo"></p>
           </div>
           <div class="ag-field">
-            <label class="ag-label" for="cfgRetencao">Retenção do log</label>
+            <label class="ag-label" for="cfgRetencao">Retenção da trilha</label>
             <span class="ag-input-afixo">
               <input type="number" id="cfgRetencao" class="ag-input" min="1" placeholder="Sem limite" />
               <span class="ag-input-afixo__sufixo" aria-hidden="true">dias</span>
@@ -261,7 +261,7 @@
       </div>
       <div class="ag-modal__body">
         <p><strong id="desNome"></strong><br><span class="ag-cell-sub ag-cell-sub--mono" id="desDoc"></span></p>
-        <p>A cópia guardada será apagada, e o certificado não volta ao cofre nas próximas varreduras. Vale só para a máquina <strong id="desMaquina"></strong>.</p>
+        <p>A cópia guardada será apagada, e o certificado não volta ao cofre nas próximas varreduras. Vale só para o servidor <strong id="desMaquina"></strong>.</p>
       </div>
       <div class="ag-modal__foot">
         <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button>
@@ -643,7 +643,7 @@
           `/api/cert-installer/vault-optin?machine_id=${encodeURIComponent(_optinMachineId)}`,
           { headers: getHeaders() }
         );
-        if (!rOptin.ok) throw new Error(`Autorizações: HTTP ${rOptin.status}`);
+        if (!rOptin.ok) throw new Error("Custódia: " + (await mensagemCorpoErro(rOptin)));
         const dOptin = await rOptin.json();
 
         // Só entram candidatos com fingerprint: é a chave de autorização.
@@ -681,7 +681,7 @@
           .filter(Boolean).join(" ").toLowerCase().includes(q);
       });
 
-      document.getElementById("badgeMaquina").textContent = "Máquina: " + _optinMachineId;
+      document.getElementById("badgeMaquina").textContent = "Servidor: " + _optinMachineId;
       document.getElementById("tab-custodia-contagem").textContent = "(" + _optinAutorizados.size + ")";
       // Três números diferentes, cada um com o seu rótulo: o que está sob
       // custódia (autorizações da máquina), o que é legível no inventário
@@ -689,7 +689,7 @@
       const foraDoInventario = [..._optinAutorizados].filter((fp) => !_optinCandidatos.some((c) => c.fingerprint_sha256 === fp)).length;
       document.getElementById("optinRodape").textContent =
         plural(_optinAutorizados.size, "certificado sob custódia", "certificados sob custódia") +
-        " · " + plural(_optinCandidatos.length, "legível no inventário desta máquina", "legíveis no inventário desta máquina") +
+        " · " + plural(_optinCandidatos.length, "legível no inventário deste servidor", "legíveis no inventário deste servidor") +
         " · " + plural(_optinTotalInventario, "arquivo no inventário", "arquivos no inventário") +
         (foraDoInventario ? " · " + plural(foraDoInventario, "sob custódia já não está no inventário", "sob custódia já não estão no inventário") : "");
       document.getElementById("optinResumo").textContent = q
@@ -700,7 +700,7 @@
         cgPageNavHide("pag-cust", "pag-ul-cust", "pag-meta-cust");
         tbody.innerHTML = q
           ? `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nada encontrado para “${esc(q)}”. <a href="#" id="linkCustTodos">Ver a lista inteira</a>.</td></tr>`
-          : `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nenhum certificado sob custódia nesta máquina.</td></tr>`;
+          : `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Nenhum certificado sob custódia neste servidor.</td></tr>`;
         const l = document.getElementById("linkCustTodos");
         if (l) l.addEventListener("click", (ev) => { ev.preventDefault(); document.getElementById("buscaOptin").value = ""; _custPagina = 1; renderOptinTable(); });
         return;
@@ -717,6 +717,13 @@
         const autorizado = _optinAutorizados.has(fp);
         const nome = c.nome_exibicao || c.nome || c.display_name || "Sem nome";
         const doc = c.documento_formatado || c.documento_numero || "—";
+        // Vencido e ilegível nunca entram na custódia (o servidor os exclui da
+        // lista do agente). Até 30/09 apareciam como "Desativada" com botão
+        // "Reativar", que apagava um bloqueio inexistente.
+        const status = String(c.status || "").toLowerCase();
+        const foraPorEstado = c._isExpiredByDate || ["expirado", "vencido"].includes(status)
+          ? "vencido"
+          : (["erro", "fora_do_padrao"].includes(status) ? "ilegível" : "");
 
         const tr = document.createElement("tr");
         tr.setAttribute("role", "row");
@@ -724,8 +731,11 @@
           `<td role="cell" class="cg-col-titular"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nome)}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(doc)}</span></span></td>` +
           `<td role="cell" class="cg-col-validade">${c.not_after ? tempo(c.not_after, fmtData(c.not_after)) : "—"}</td>` +
           `<td role="cell" class="cg-col-fp"><span title="${esc(fp)}">${esc(fpCurto(fp))}</span><button type="button" class="ag-btn ag-btn--ghost ag-btn--sm ag-copiar" data-copiar="${esc(fp)}" aria-live="polite"><span class="cg-btn__rotulo">Copiar</span></button></td>` +
-          `<td role="cell" class="cg-col-custodia">${autorizado ? '<span class="ag-badge ag-badge--success">Ativa</span>' : '<span class="ag-badge ag-badge--neutral">Desativada</span>'}</td>` +
+          `<td role="cell" class="cg-col-custodia">${foraPorEstado
+            ? '<span class="ag-badge ag-badge--neutral" title="Vencidos e ilegíveis nunca entram na custódia">Fora da custódia · ' + foraPorEstado + '</span>'
+            : (autorizado ? '<span class="ag-badge ag-badge--success">Ativa</span>' : '<span class="ag-badge ag-badge--neutral">Desativada</span>')}</td>` +
           `<td role="cell" class="cg-col-acao"></td>`;
+        if (foraPorEstado) { tbody.appendChild(tr); return; }
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = autorizado ? "ag-btn ag-btn--ghost-danger ag-btn--sm" : "ag-btn ag-btn--ghost ag-btn--sm";
@@ -750,9 +760,9 @@
     let _desativarPendente = null;
 
     function alternarOptin(cert, autorizado, btn) {
-      // A custódia é por instalação, não por certificado: a mesma máquina
-      // que desativa é a que reativa. Mandar o machine_id é o que impede a
-      // ação de alcançar as outras estações.
+      // A custódia é por (servidor da varredura, certificado): o mesmo
+      // servidor que desativa é o que reativa. Mandar o machine_id é o que
+      // impede a ação de alcançar outro servidor.
       const maquina = cert.machine_id || _optinMachineId;
       if (!autorizado) return executarOptin(cert, false, btn, maquina);
       // Desativar apaga a chave privada guardada: confirmação num modal com
@@ -812,7 +822,9 @@
       const itens = MARCOS.map(([m, rotulo]) => {
         const feita = nomes.has(m);
         const parouAqui = falhou && c.parou_em === m;
-        const cls = feita ? (parouAqui ? "is-feita" : "is-feita") : "";
+        // A etapa em que a cadeia parou leva a marca de falha; as duas
+        // ramificações davam a mesma classe e a falha nunca aparecia.
+        const cls = (feita ? "is-feita" : "") + (parouAqui ? " is-falha" : "");
         return `<li class="ag-etapas__item ${cls}">${feita ? CHECK : CIRCULO}${rotulo}</li>`;
       }).join("");
       const sr = MARCOS.map(([m, rotulo]) => rotulo + (nomes.has(m) ? " feito" : " pendente")).join(", ") + (falhou ? ", falhou" : "") + ".";
@@ -853,7 +865,7 @@
       if (soFalhas) return `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhuma falha no período.</td></tr>`;
       const de = desde ? fmtData(desde) : "—";
       const ate = fmtData(new Date().toISOString());
-      return `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhuma instalação entre ${esc(de)} e ${esc(ate)}. ${dias !== "90" ? '<a href="#" id="linkTrilha90">Ver últimos 90 dias</a>.' : ""}</td></tr>`;
+      return `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhuma instalação entre ${esc(de)} e ${esc(ate)}. ${Number(dias) < 90 ? '<a href="#" id="linkTrilha90">Ver últimos 90 dias</a>.' : ""}</td></tr>`;
     }
 
     async function loadInstallLogs() {
@@ -867,6 +879,14 @@
         const res = await fetch("/api/cert-installer/trilha?" + params.toString(), { headers: getHeaders() });
         if (!res.ok) throw new Error(await mensagemCorpoErro(res));
         const data = await res.json();
+        if (data.truncado) {
+          // O teto de eventos cortou a lista: dizer "mais recentes" evita que
+          // ela pareça completa.
+          data.resumo = data.resumo || {};
+          data.resumo.textos = Object.assign({}, data.resumo.textos, {
+            subtitulo: ((data.resumo.textos || {}).subtitulo || "") + " · lista cortada no limite de eventos; reduza o período",
+          });
+        }
         renderResumoTrilha(data.resumo || {});
         const cadeias = data.cadeias || [];
         if (!cadeias.length) {

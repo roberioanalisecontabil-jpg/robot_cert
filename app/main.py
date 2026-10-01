@@ -5417,7 +5417,8 @@ def upload_pfx(
 
 
 class VaultOptinRequest(BaseModel):
-    """Admin autoriza um certificado a ter o PFX guardado no cofre."""
+    """Custódia por (servidor da varredura, fingerprint): o administrador a
+    reativa (apaga o bloqueio) ou desativa (grava o bloqueio e apaga o PFX)."""
     fingerprint: str
     machine_id: str = "default"
     nome_titular: Optional[str] = None
@@ -5427,7 +5428,7 @@ class VaultOptinRequest(BaseModel):
 @app.get("/api/cert-installer/vault-optin")
 def listar_vault_optin(
     machine_id: Optional[str] = Query(None),
-    token: auth.TokenData = Depends(require_modulo("instalador", permitir_agente=True, recusar_anonimo=True)),
+    token: auth.TokenData = Depends(require_agent_or_admin),
 ):
     """
     Fingerprints que esta máquina pode enviar ao cofre.
@@ -5444,7 +5445,7 @@ def listar_vault_optin(
     if not machine_id:
         raise HTTPException(
             status_code=422,
-            detail="machine_id é obrigatório: a custódia é definida por estação.",
+            detail="machine_id é obrigatório: a custódia é por servidor da varredura.",
         )
     # Agente só pergunta pela própria estação (achado #30): a lista diz quais
     # certificados estão em custódia lá, e uma estação não tem por que saber
@@ -5465,7 +5466,7 @@ def listar_vault_optin(
         )
 
 
-@app.post("/api/cert-installer/vault-optin", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
+@app.post("/api/cert-installer/vault-optin", dependencies=[Depends(require_admin)])
 def reativar_vault_custodia(
     body: VaultOptinRequest,
     _token: auth.TokenData = Depends(require_admin),
@@ -5496,7 +5497,7 @@ def reativar_vault_custodia(
         raise HTTPException(status_code=500, detail="Erro interno ao reativar custódia")
 
 
-@app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
+@app.delete("/api/cert-installer/vault-optin/{fingerprint}", dependencies=[Depends(require_admin)])
 def bloquear_vault_custodia(
     fingerprint: str,
     machine_id: str = Query(..., min_length=1),
@@ -6286,17 +6287,18 @@ class ConfigInstaladorBody(BaseModel):
     trilha_retencao_dias: int = 0
 
 
-@app.put("/api/cert-installer/configuracao", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
+@app.put("/api/cert-installer/configuracao", dependencies=[Depends(require_admin)])
 def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     """
-    Grava **só** as três configurações do módulo instalador.
+    Grava **só** as duas configurações do módulo instalador (validade do
+    pedido e retenção da trilha).
 
     Rota própria em vez de reaproveitar `PUT /api/settings`: aquele monta um
     `PortalSettings` inteiro a partir do corpo, então uma tela que mandasse
-    apenas estes três campos apagaria host, usuário e senha do SMTP — sem erro
+    apenas estes campos apagaria host, usuário e senha do SMTP — sem erro
     nenhum, e ninguém notaria até o próximo alerta não sair.
 
-    Aqui a configuração atual é lida, três campos mudam, e o resto vai de volta
+    Aqui a configuração atual é lida, dois campos mudam, e o resto vai de volta
     como estava.
     """
     ttl = int(body.install_token_ttl_min or 0)
@@ -6336,7 +6338,7 @@ def salvar_config_instalador(body: ConfigInstaladorBody) -> dict:
     return _settings_dict(atual)
 
 
-@app.get("/api/cert-installer/expurgo-previa", dependencies=[Depends(require_modulo("instalador"))])
+@app.get("/api/cert-installer/expurgo-previa", dependencies=[Depends(require_admin)])
 def previa_do_expurgo() -> dict:
     """
     Quantos registros da trilha o expurgo apagaria agora, e até que data.
@@ -6373,20 +6375,21 @@ def previa_do_expurgo() -> dict:
     return {"executado": True, "retencao_dias": dias, "corte": corte, "registros": n}
 
 
-@app.post("/api/cert-installer/expurgar-log", dependencies=[Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))])
+@app.post("/api/cert-installer/expurgar-log", dependencies=[Depends(require_admin)])
 def expurgar_log_agora() -> dict:
     """
-    Roda o expurgo sob demanda, sem esperar o cron.
+    Roda o expurgo DA TRILHA sob demanda, sem esperar o cron.
 
     Quem acabou de configurar a retenção precisa ver o efeito para confiar
     nela — e uma rotina de LGPD que só roda amanhã de manhã não dá para
     verificar antes de responder por ela.
+
+    Só a trilha (decisão P3, 01/10/2026): a prévia conta a trilha, e o botão
+    chama-se "Expurgar trilha". Até 30/09 ele também expurgava a atividade dos
+    usuários e o cofre — uma surpresa num lugar onde surpresa custa caro. Os
+    dois continuam no job diário (`cron_alerts`).
     """
-    return {
-        "install_log": cert_installer.expurgar_install_log(),
-        "user_activity": atividade.expurgar(),
-        "cofre": cert_installer.expurgar_cofre(),
-    }
+    return {"install_log": cert_installer.expurgar_install_log()}
 
 
 @app.get("/api/dashboard", dependencies=[Depends(require_modulo("dashboard"))])
@@ -6465,17 +6468,13 @@ def pagina_dashboard(request: Request) -> HTMLResponse:
 #   3. `GET vault-optin` e de mao dupla e leva `recusar_anonimo`: ela diz quais
 #      certificados estao no cofre, e estava em `require_agent_or_admin`
 #      justamente porque aquela guarda recusa a identidade anonima.
-@app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_modulo("instalador"))])
+@app.get("/api/cert-installer/diagnostico", dependencies=[Depends(require_admin)])
 def diagnostico_do_instalador() -> dict:
     """
     Estado do módulo instalador, num lugar só.
 
     Cada bloco corresponde a algo que já falhou em produção sem aviso:
 
-    - **binário**: `is_file()` só era consultado no clique, e a falha virava um
-      503 com instrução de rebuild — inútil na Vercel, onde o FS é read-only.
-    - **assinatura**: adiada em 11/08 e "não verificada em máquina real". Fica
-      visível aqui em vez de dormir num changelog.
     - **cofre**: as seis falhas de instalação registradas têm causa única
       ("Senha ausente no cofre"), e descobrir isso exigiu ler o agent.log de
       uma máquina remota.
@@ -6550,7 +6549,7 @@ def diagnostico_do_instalador() -> dict:
 @app.post(
     "/api/cert-installer/recifrar-cofre",
     dependencies=[
-        Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR)),
+        Depends(require_admin),
         # Decifra e regrava o cofre: três por dez minutos por identidade (#60).
         Depends(_limitar("recifrar", 3, 600)),
     ],
@@ -6577,7 +6576,7 @@ def recifrar_cofre() -> dict:
 @app.post(
     "/api/cert-installer/revalidar-cofre",
     dependencies=[
-        Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR)),
+        Depends(require_admin),
         # Decifra o cofre inteiro: três por dez minutos por identidade (#60).
         Depends(_limitar("revalidar", 3, 600)),
     ],
@@ -6859,7 +6858,7 @@ def preparar_instalacao(
         # navegador — ver `/acompanhar`.
         "token_id": token_id,
         "expires_at": expires_at.isoformat() if expires_at else None,
-        "validade_min": config.CERT_INSTALL_TOKEN_TTL_MIN,
+        "validade_min": cert_installer.ttl_do_token(),
     }
 
 
@@ -7360,61 +7359,11 @@ def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
 
 # ── Endpoints auxiliares do instalador ────────────────────────────────────
 
-@app.get("/api/cert-installer/available")
-def list_available_certificates(
-    machine_id: Optional[str] = Query(None),
-    token: auth.TokenData = Depends(require_modulo("instalador")),
-):
-    """Lista certificados PFX disponíveis para instalação (sem dados cifrados).
+# `available`, `logs` e `cleanup` sairam em 01/10/2026 (revisao da pagina
+# Instalador): nenhuma tela, agente ou script os chamava. O agente continua
+# com `claim`/`report`; a trilha agrupada e `cadeias_de_instalacao`.
 
-    Recortado pela carteira de quem pergunta (#32): a lista inteira do cofre
-    — titular, documento, subject e id de cada certificado — saía para quem
-    tivesse `instalador: ler`, concedível pela tela a qualquer papel.
-    """
-    certs = cert_installer.list_available_pfx(machine_id=machine_id)
-    alcance = _documentos_ao_alcance(token)
-    if alcance is not None:
-        certs = [c for c in certs if cert_installer.so_digitos(c.documento) in alcance]
-    return {
-        "certificates": [
-            {
-                "id": c.id,
-                "fingerprint": c.fingerprint,
-                "machine_id": c.machine_id,
-                "nome_titular": c.nome_titular,
-                "documento": c.documento,
-                "documento_tipo": c.documento_tipo,
-                "subject": c.subject,
-                "not_before": c.not_before,
-                "not_after": c.not_after,
-                "friendly_name": c.friendly_name,
-                "uploaded_at": c.uploaded_at,
-            }
-            for c in certs
-        ]
-    }
-
-
-@app.get("/api/cert-installer/logs")
-def list_installer_logs(
-    limit: int = Query(100, ge=1, le=500),
-    token: auth.TokenData = Depends(require_modulo("instalador")),
-):
-    """Lista logs de auditoria de instalação.
-
-    Escopado (#31): quem não tem alcance total vê só os próprios eventos, e
-    sem `client_ip` — e-mail e IP dos colegas não são dado de operador.
-    """
-    if (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
-        return {"logs": cert_installer.list_install_logs(limit=limit)}
-    uid = _user_id_da_sessao(token)
-    if not uid:
-        return {"logs": []}
-    logs = cert_installer.list_install_logs(limit=limit, user_id=uid)
-    return {"logs": [{k: v for k, v in l.items() if k != "client_ip"} for l in logs]}
-
-
-@app.get("/api/cert-installer/trilha", dependencies=[Depends(require_modulo("instalador"))])
+@app.get("/api/cert-installer/trilha", dependencies=[Depends(require_admin)])
 def trilha_de_instalacao(
     dias: int = Query(30, ge=1, le=365),
     user_email: Optional[str] = Query(None),
@@ -7464,19 +7413,16 @@ def trilha_de_instalacao(
         "destaque": f"{concluidas} de {total}",
         "subtitulo": ("tentativa concluída" if total == 1 else "tentativas concluídas") + " no período",
     }
+    # O teto de eventos (`limite`) corta em silêncio; a tela precisa dizer
+    # "estas são as mais recentes" em vez de parecer completa.
+    eventos = sum(len(c.get("eventos") or []) for c in cadeias)
     return {
         "dias": dias,
         "desde": desde,
         "resumo": resumo,
         "cadeias": cadeias,
+        "truncado": eventos >= min(limite, 1000),
     }
-
-
-@app.post("/api/cert-installer/cleanup")
-def cleanup_tokens(token: auth.TokenData = Depends(require_modulo("instalador", permissoes.NIVEL_EDITAR))):
-    """Remove tokens de instalação expirados (manutenção)."""
-    count = cert_installer.cleanup_expired_tokens()
-    return {"status": "ok", "removed": count}
 
 
 def _resolve_user_id(email: str) -> Optional[str]:
