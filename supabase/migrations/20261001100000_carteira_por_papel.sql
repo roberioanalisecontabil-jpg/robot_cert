@@ -139,17 +139,43 @@ WHERE atribuido_por_email = 'regra:gestor';
 -- Administrador nao e tocado, lidere ou nao.
 -- ─────────────────────────────────────────────────────────────────────────
 
-UPDATE public.users
-SET role = 'gestor',
-    sessao_versao = COALESCE(sessao_versao, 0) + 1
-WHERE role = 'user'
-  AND id IN (SELECT user_id FROM public.departamento_lider);
+-- Bloco DO porque users.sessao_versao veio na migration 20260926110000 (lote
+-- 9): se ela nao tiver rodado, os papeis trocam assim mesmo e fica um aviso
+-- de que as sessoes nao foram derrubadas (as pessoas recebem o papel novo
+-- quando o token vencer ou ao sair e entrar).
+DO $$
+DECLARE
+    tem_sessao_versao boolean;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'sessao_versao'
+    ) INTO tem_sessao_versao;
 
-UPDATE public.users
-SET role = 'user',
-    sessao_versao = COALESCE(sessao_versao, 0) + 1
-WHERE role = 'gestor'
-  AND NOT EXISTS (SELECT 1 FROM public.departamento_lider l WHERE l.user_id = users.id);
+    IF tem_sessao_versao THEN
+        UPDATE public.users
+        SET role = 'gestor', sessao_versao = COALESCE(sessao_versao, 0) + 1
+        WHERE role = 'user'
+          AND id IN (SELECT user_id FROM public.departamento_lider);
+
+        UPDATE public.users
+        SET role = 'user', sessao_versao = COALESCE(sessao_versao, 0) + 1
+        WHERE role = 'gestor'
+          AND NOT EXISTS (SELECT 1 FROM public.departamento_lider l WHERE l.user_id = users.id);
+    ELSE
+        RAISE NOTICE 'users.sessao_versao nao existe (rode 20260926110000): papeis trocados SEM derrubar as sessoes';
+
+        UPDATE public.users
+        SET role = 'gestor'
+        WHERE role = 'user'
+          AND id IN (SELECT user_id FROM public.departamento_lider);
+
+        UPDATE public.users
+        SET role = 'user'
+        WHERE role = 'gestor'
+          AND NOT EXISTS (SELECT 1 FROM public.departamento_lider l WHERE l.user_id = users.id);
+    END IF;
+END $$;
 
 
 -- ─────────────────────────────────────────────────────────────────────────
