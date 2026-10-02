@@ -43,8 +43,8 @@
          aria-selected="{{ 'true' if aba == 'diagnostico' else 'false' }}" {% if aba != 'diagnostico' %}tabindex="-1"{% endif %}>Diagnóstico</a>
       <a class="ag-abas__aba" role="tab" id="tab-custodia" href="?aba=custodia" aria-controls="aba-custodia" data-aba="custodia"
          aria-selected="{{ 'true' if aba == 'custodia' else 'false' }}" {% if aba != 'custodia' %}tabindex="-1"{% endif %}>Custódia <span class="ag-abas__contagem" id="tab-custodia-contagem"></span></a>
-      <a class="ag-abas__aba" role="tab" id="tab-entrada" href="?aba=entrada" aria-controls="aba-entrada" data-aba="entrada"
-         aria-selected="{{ 'true' if aba == 'entrada' else 'false' }}" {% if aba != 'entrada' %}tabindex="-1"{% endif %}>Entrada <span class="ag-abas__contagem" id="tab-entrada-contagem"></span></a>
+      <a class="ag-abas__aba" role="tab" id="tab-movimentos" href="?aba=movimentos" aria-controls="aba-movimentos" data-aba="movimentos"
+         aria-selected="{{ 'true' if aba == 'movimentos' else 'false' }}" {% if aba != 'movimentos' %}tabindex="-1"{% endif %}>Movimentos <span class="ag-abas__contagem" id="tab-movimentos-contagem"></span></a>
       <a class="ag-abas__aba" role="tab" id="tab-trilha" href="?aba=trilha" aria-controls="aba-trilha" data-aba="trilha"
          aria-selected="{{ 'true' if aba == 'trilha' else 'false' }}" {% if aba != 'trilha' %}tabindex="-1"{% endif %}>Trilha</a>
       <a class="ag-abas__aba" role="tab" id="tab-configuracao" href="?aba=configuracao" aria-controls="aba-configuracao" data-aba="configuracao"
@@ -152,12 +152,12 @@
       </div>
     </section>
 
-    <!-- ── Entrada (02/10/2026) ─────────────────────────────────────── -->
-    <section class="ag-card cg-inst-aba" id="aba-entrada" role="tabpanel" aria-labelledby="tab-entrada" {% if aba != 'entrada' %}hidden{% endif %}>
+    <!-- ── Movimentos (02/10/2026) ──────────────────────────────────── -->
+    <section class="ag-card cg-inst-aba" id="aba-movimentos" role="tabpanel" aria-labelledby="tab-movimentos" {% if aba != 'movimentos' %}hidden{% endif %}>
       <div class="cg-inst-cab">
         <div class="cg-inst-cab__texto">
-          <h2 class="ag-card__title">Entrada de certificados</h2>
-          <p class="cg-inst-cab__lead">O que o agente fez com cada arquivo que chegou à pasta de entrada, e o que ficou lá por não abrir.</p>
+          <h2 class="ag-card__title">Movimentos de arquivos</h2>
+          <p class="cg-inst-cab__lead">O que o agente fez com cada arquivo: o que chegou à pasta de entrada e foi renomeado e movido, o vencido que saiu da pasta da letra, e o que ficou pendente.</p>
         </div>
       </div>
       <div class="cg-inst-corpo">
@@ -167,23 +167,24 @@
         </div>
         <div class="ag-alert ag-alert--warning" id="entradaPendentesAviso" hidden>
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-          <div class="ag-alert__corpo"><p><strong id="entradaPendentesTitulo">Arquivos pendentes na entrada</strong></p><p>Ficaram na pasta com o nome original. Corrija o nome (<code>«nome» senha «valor».pfx</code>) ou a senha; o agente tenta de novo na próxima varredura.</p></div>
+          <div class="ag-alert__corpo"><p><strong id="entradaPendentesTitulo">Pendências</strong></p><p>Na entrada: o arquivo não abriu e ficou com o nome original; corrija o nome (<code>«nome» senha «valor».pfx</code>) ou a senha. Na pasta da letra: o vencido não pôde ser movido; veja o motivo. O agente tenta de novo a cada varredura e a pendência fecha sozinha quando o arquivo sai da pasta.</p></div>
         </div>
-        <div class="ag-table-scroll" role="region" aria-label="Pendentes na entrada" id="entradaPendentesTabela" hidden>
+        <div class="ag-table-scroll" role="region" aria-label="Pendências" id="entradaPendentesTabela" hidden>
           <table class="ag-table" role="table">
             <thead role="rowgroup">
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico">Desde</th>
                 <th role="columnheader" class="ag-th--estatico">Arquivo</th>
+                <th role="columnheader" class="ag-th--estatico">Pasta</th>
+                <th role="columnheader" class="ag-th--estatico">Situação</th>
                 <th role="columnheader" class="ag-th--estatico">Motivo</th>
-                <th role="columnheader" class="ag-th--estatico">Servidor</th>
               </tr>
             </thead>
             <tbody role="rowgroup" id="tblEntradaPendentes"></tbody>
           </table>
         </div>
         <form class="cg-inst-form" id="formEntrada" method="get" action="/instalador">
-          <input type="hidden" name="aba" value="entrada" />
+          <input type="hidden" name="aba" value="movimentos" />
           <div class="ag-field ag-field--periodo">
             <label class="ag-label" for="entradaDias">Período</label>
             <select id="entradaDias" name="dias" class="ag-select">
@@ -199,14 +200,14 @@
           </button>
         </form>
         <div class="cg-inst-resumo" id="entradaResumo"></div>
-        <div class="ag-table-scroll" role="region" aria-label="Movimentos da entrada">
+        <div class="ag-table-scroll" role="region" aria-label="Movimentos">
           <table class="ag-table" role="table">
             <thead role="rowgroup">
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico">Quando</th>
-                <th role="columnheader" class="ag-th--estatico">Chegou como</th>
+                <th role="columnheader" class="ag-th--estatico">De</th>
                 <th role="columnheader" class="ag-th--estatico">Titular</th>
-                <th role="columnheader" class="ag-th--estatico">Ficou como</th>
+                <th role="columnheader" class="ag-th--estatico">Para</th>
                 <th role="columnheader" class="ag-th--estatico">Resultado</th>
               </tr>
             </thead>
@@ -359,7 +360,7 @@
     // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `renderSkeletonRows`,
     // `limparSkeleton`, `cgPageNavRefresh`, `cgPageNavHide` e `cgCopiarInit`
     // vêm de ui-common.js.
-    const ABAS = ["diagnostico", "custodia", "entrada", "trilha", "configuracao"];
+    const ABAS = ["diagnostico", "custodia", "movimentos", "trilha", "configuracao"];
     const AVISO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
     const CHECK = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
     const CIRCULO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
@@ -442,11 +443,11 @@
       }
     }
 
-    /* ── Entrada ──────────────────────────────────────────────────────── */
+    /* ── Movimentos ───────────────────────────────────────────────────── */
 
     const ENTRADA_BADGE = {
       movido: "success", substituiu: "success", vencido: "neutral",
-      copia_descartada: "info", duplicidade: "warning", pendente: "warning",
+      copia_descartada: "info", duplicidade: "warning", pendente: "warning", vencido_preso: "danger",
     };
 
     function docFormatado(ev) {
@@ -472,18 +473,19 @@
         document.getElementById("entradaSemPasta").hidden = !!pastaEntrada;
 
         const pend = data.pendentes || [];
-        const cont = document.getElementById("tab-entrada-contagem");
+        const cont = document.getElementById("tab-movimentos-contagem");
         cont.textContent = pend.length ? String(pend.length) : "";
         document.getElementById("entradaPendentesAviso").hidden = !pend.length;
         document.getElementById("entradaPendentesTabela").hidden = !pend.length;
         document.getElementById("entradaPendentesTitulo").textContent =
-          plural(pend.length, "arquivo pendente", "arquivos pendentes") + " na entrada";
+          plural(pend.length, "pendência", "pendências");
         tbodyP.innerHTML = pend.map((p) => `
           <tr role="row">
             <td role="cell" class="cg-col-quando">${p.quando ? tempo(p.quando, fmtQuando(p.quando)) : "—"}</td>
             <td role="cell"><span class="ag-cell-sub--mono">${esc(p.arquivo_original || "—")}</span></td>
+            <td role="cell"><span class="ag-cell-sub">${esc(p.pasta_origem || "")}</span></td>
+            <td role="cell"><span class="ag-badge ag-badge--${ENTRADA_BADGE[p.resultado] || "warning"}">${esc(p.resultado_rotulo || p.resultado)}</span></td>
             <td role="cell">${esc(p.motivo || "")}</td>
-            <td role="cell"><span class="ag-cell-sub ag-cell-sub--mono">${esc(p.machine_id || "—")}</span></td>
           </tr>`).join("");
 
         const evs = data.eventos || [];
@@ -492,7 +494,7 @@
           : (evs.length ? plural(evs.length, "movimento") + " no período." : "");
         if (!evs.length) {
           tbodyE.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">${
-            data.banco === false ? "Sem banco de dados: a entrada não é registrada." : "Nenhum certificado chegou no período."
+            data.banco === false ? "Sem banco de dados: os movimentos não são registrados." : "Nenhum movimento no período."
           }</td></tr>`;
           return;
         }
@@ -507,14 +509,14 @@
           return `
             <tr role="row">
               <td role="cell" class="cg-col-quando">${ev.quando ? tempo(ev.quando, fmtQuando(ev.quando)) : "—"}</td>
-              <td role="cell"><span class="ag-cell-sub--mono">${esc(ev.arquivo_original || "—")}</span></td>
+              <td role="cell"><span class="ag-cell-stack"><span class="ag-cell-main ag-cell-sub--mono">${esc(ev.arquivo_original || "—")}</span><span class="ag-cell-sub">${esc(ev.pasta_origem || "")}</span></span></td>
               <td role="cell">${titular}</td>
               <td role="cell">${ficou}</td>
               <td role="cell"><span class="ag-cell-stack"><span class="ag-badge ag-badge--${tom}">${esc(ev.resultado_rotulo || ev.resultado)}</span>${ev.motivo ? `<span class="ag-cell-sub">${esc(ev.motivo)}</span>` : ""}</span></td>
             </tr>`;
         }).join("");
       } catch (e) {
-        tbodyE.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Não foi possível carregar a entrada: ${esc(e.message)}</td></tr>`;
+        tbodyE.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Não foi possível carregar os movimentos: ${esc(e.message)}</td></tr>`;
       }
     }
 

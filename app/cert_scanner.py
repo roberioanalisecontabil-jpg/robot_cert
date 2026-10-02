@@ -262,6 +262,28 @@ def scan_folder(
     return results
 
 
+def destino_livre(pasta: Path, nome: str) -> Path:
+    """`X senha 1.pfx` ocupado → `X (2) senha 1.pfx`, `X (3) …`.
+
+    Um só formato de sufixo para todo movimento de arquivo (02/10/2026): até
+    aqui a varredura usava `_dup_<carimbo>`, que escondia o nome e quebrava a
+    leitura do número. O `(n)` antes de `senha` mantém o padrão do nome, então
+    o arquivo continua abrindo pela varredura.
+    """
+    pasta = Path(pasta)
+    dest = pasta / nome
+    if not dest.exists():
+        return dest
+    parsed = parse_pfx_filename(nome)
+    base, senha = parsed if parsed else (Path(nome).stem, "")
+    n = 2
+    while True:
+        cand = pasta / (f"{base} ({n}) senha {senha}.pfx" if senha else f"{base} ({n}){Path(nome).suffix}")
+        if not cand.exists():
+            return cand
+        n += 1
+
+
 def move_to_expired(
     cert: CertInfo,
     expired_dir: Path,
@@ -269,10 +291,7 @@ def move_to_expired(
     """Move o arquivo PFX para a pasta de vencidos. Retorna o novo caminho."""
     expired_dir = Path(expired_dir)
     expired_dir.mkdir(parents=True, exist_ok=True)
-    dest = expired_dir / cert.file_name
-    if dest.exists():
-        stem = cert.path.stem
-        dest = expired_dir / f"{stem}_dup_{int(_now_utc().timestamp())}.pfx"
+    dest = destino_livre(expired_dir, cert.file_name)
     shutil.move(str(cert.path), str(dest))
     return dest
 

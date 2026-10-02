@@ -34,8 +34,13 @@ logger = logging.getLogger(__name__)
 
 TABELA = "entrada_eventos"
 RESULTADO_PENDENTE = "pendente"
+RESULTADO_VENCIDO_PRESO = "vencido_preso"
+# As duas pendências: arquivo que ficou na entrada por não abrir, e vencido que
+# a varredura não conseguiu tirar da pasta da letra (02/10/2026). Ambas têm
+# `resolvido_em` nulo enquanto o arquivo estiver onde está.
+PENDENCIAS = (RESULTADO_PENDENTE, RESULTADO_VENCIDO_PRESO)
 RESULTADOS_VALIDOS = frozenset({
-    "movido", "vencido", "substituiu", "copia_descartada", "duplicidade", RESULTADO_PENDENTE,
+    "movido", "vencido", "substituiu", "copia_descartada", "duplicidade", *PENDENCIAS,
 })
 ROTULO_RESULTADO = {
     "movido": "Renomeado e movido",
@@ -44,12 +49,20 @@ ROTULO_RESULTADO = {
     "copia_descartada": "Cópia descartada",
     "duplicidade": "Duplicidade",
     RESULTADO_PENDENTE: "Pendente na entrada",
+    RESULTADO_VENCIDO_PRESO: "Vencido não movido",
 }
 
 _CAMPOS_TEXTO = (
-    "arquivo_original", "arquivo_novo", "pasta_destino", "motivo", "nome",
+    "arquivo_original", "arquivo_novo", "pasta_origem", "pasta_destino", "motivo", "nome",
     "documento_numero", "documento_tipo", "fingerprint_sha256",
 )
+
+
+def _chave_pendencia(ev: Dict[str, Any]) -> str:
+    """Um arquivo numa pasta. O nome sozinho não basta: o mesmo nome pode estar
+    preso na pasta `B` e pendente na entrada ao mesmo tempo."""
+    nome = str(ev.get("arquivo_original") or "")
+    return f"{str(ev.get('pasta_origem') or '')}|{nome}" if nome else ""
 
 
 def _agora() -> str:
@@ -57,10 +70,13 @@ def _agora() -> str:
 
 
 def _linha(machine_id: str, ev: Dict[str, Any], *, pendente: bool) -> Dict[str, Any]:
+    resultado = str(ev.get("resultado") or "")
+    if pendente and resultado not in PENDENCIAS:
+        resultado = RESULTADO_PENDENTE
     row: Dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "machine_id": machine_id,
-        "resultado": RESULTADO_PENDENTE if pendente else str(ev.get("resultado") or ""),
+        "resultado": resultado,
         "quando": str(ev.get("quando") or "").strip() or _agora(),
         "not_after": (str(ev.get("not_after") or "").strip() or None),
         "resolvido_em": None,
@@ -81,23 +97,23 @@ def registrar_relatorio(machine_id: str, eventos: List[Dict[str, Any]], pendente
     if not client:
         return out
 
-    eventos_ok = [ev for ev in eventos if str(ev.get("resultado") or "") in RESULTADOS_VALIDOS and str(ev.get("resultado")) != RESULTADO_PENDENTE]
+    eventos_ok = [ev for ev in eventos if str(ev.get("resultado") or "") in RESULTADOS_VALIDOS and str(ev.get("resultado")) not in PENDENCIAS]
     linhas = [_linha(machine_id, ev, pendente=False) for ev in eventos_ok]
 
     try:
         r = (
-            client.table(TABELA).select("id, arquivo_original")
-            .eq("machine_id", machine_id).eq("resultado", RESULTADO_PENDENTE).is_("resolvido_em", "null")
+            client.table(TABELA).select("id, arquivo_original, pasta_origem")
+            .eq("machine_id", machine_id).in_("resultado", list(PENDENCIAS)).is_("resolvido_em", "null")
             .execute()
         )
-        abertos = {str(x.get("arquivo_original") or ""): str(x.get("id")) for x in (r.data or [])}
+        abertos = {_chave_pendencia(x): str(x.get("id")) for x in (r.data or []) if _chave_pendencia(x)}
     except Exception as e:  # noqa: BLE001
         logger.warning("Entrada: pendentes anteriores ilegíveis (%s); todos os atuais contam como novos.", e)
         abertos = {}
 
-    atuais = {str(p.get("arquivo_original") or ""): p for p in pendentes if str(p.get("arquivo_original") or "")}
-    novos = [p for nome, p in atuais.items() if nome not in abertos]
-    resolvidos = [pid for nome, pid in abertos.items() if nome not in atuais]
+    atuais = {_chave_pendencia(p): p for p in pendentes if _chave_pendencia(p)}
+    novos = [p for chave, p in atuais.items() if chave not in abertos]
+    resolvidos = [pid for chave, pid in abertos.items() if chave not in atuais]
     linhas += [_linha(machine_id, p, pendente=True) for p in novos]
 
     try:
@@ -121,11 +137,11 @@ def listar(dias: int = 30, limite: int = 500) -> Dict[str, Any]:
     desde = (datetime.now(timezone.utc) - timedelta(days=max(1, dias))).isoformat()
     try:
         pend = (
-            client.table(TABELA).select("*").eq("resultado", RESULTADO_PENDENTE)
+            client.table(TABELA).select("*").in_("resultado", list(PENDENCIAS))
             .is_("resolvido_em", "null").order("quando", desc=True).limit(limite).execute()
         ).data or []
         evs = (
-            client.table(TABELA).select("*").neq("resultado", RESULTADO_PENDENTE)
+            client.table(TABELA).select("*").in_("resultado", [r for r in RESULTADOS_VALIDOS if r not in PENDENCIAS])
             .gte("quando", desde).order("quando", desc=True).limit(limite).execute()
         ).data or []
     except Exception as e:  # noqa: BLE001
@@ -160,31 +176,38 @@ def _emails_admins(settings) -> List[str]:
 
 def _montar_email(pendentes: List[Dict[str, Any]], pasta: str) -> tuple[str, str]:
     n = len(pendentes)
-    assunto = f"[Certificados] {n} arquivo{'s' if n != 1 else ''} pendente{'s' if n != 1 else ''} na pasta de entrada"
+    presos = sum(1 for p in pendentes if str(p.get("resultado") or "") == RESULTADO_VENCIDO_PRESO)
+    na_entrada = n - presos
+    assunto = f"[Certificados] {n} arquivo{'s' if n != 1 else ''} pendente{'s' if n != 1 else ''} nas pastas de certificados"
     linhas = "".join(
         f'<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;">{html.escape(str(p.get("arquivo_original") or "—"))}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;">{html.escape(str(p.get("pasta_origem") or pasta or "—"))}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;">{html.escape(ROTULO_RESULTADO.get(str(p.get("resultado") or ""), ""))}</td>'
         f'<td style="padding:6px 8px;border-bottom:1px solid #e5e5ea;">{html.escape(str(p.get("motivo") or ""))}</td></tr>'
         for p in pendentes
     )
-    onde = f" em <code>{html.escape(pasta)}</code>" if pasta else ""
+    partes = []
+    if na_entrada:
+        partes.append(f"{na_entrada} arquivo{'s' if na_entrada != 1 else ''} da pasta de entrada não {'abriram' if na_entrada != 1 else 'abriu'} e {'ficaram' if na_entrada != 1 else 'ficou'} lá, com o nome original, até alguém corrigir o nome ou a senha")
+    if presos:
+        partes.append(f"{presos} certificado{'s' if presos != 1 else ''} vencido{'s' if presos != 1 else ''} não {'puderam' if presos != 1 else 'pôde'} ser movido{'s' if presos != 1 else ''} para a pasta de vencidos e continua{'m' if presos != 1 else ''} na pasta da letra")
     corpo = f"""
     <html>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f5f5f7; padding:20px; color:#1d1d1f;">
         <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid #e5e5ea;">
-          <h2 style="margin-top:0;">Certificado{'s' if n != 1 else ''} que não abriu na entrada</h2>
-          <p style="color:#6e6e73;margin-top:0;">
-            O agente não conseguiu ler {n} arquivo{'s' if n != 1 else ''} da pasta de entrada{onde}.
-            {'Eles ficaram' if n != 1 else 'Ele ficou'} lá, com o nome original, até alguém corrigir o nome ou a senha.
-          </p>
+          <h2 style="margin-top:0;">Pendência{'s' if n != 1 else ''} nas pastas de certificados</h2>
+          <p style="color:#6e6e73;margin-top:0;">{html.escape("; ".join(partes))}.</p>
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <tr>
               <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Arquivo</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Pasta</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Situação</th>
               <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e5ea;">Motivo</th>
             </tr>
             {linhas}
           </table>
           <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
-            Você recebe este aviso porque é administrador do portal. A lista completa está em Instalador › Entrada.
+            Você recebe este aviso porque é administrador do portal. A lista completa está em Instalador › Movimentos.
           </p>
         </div>
       </body>

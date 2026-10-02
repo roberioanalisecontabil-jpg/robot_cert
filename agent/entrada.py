@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -46,7 +47,9 @@ from app.cert_scanner import (
     CertInfo,
     CertStatus,
     _load_pfx_info,
+    destino_livre as _destino_livre,
     extract_cn_rfc4514,
+    move_to_expired,
     parse_nome_cnpj_cpf_from_cn,
     parse_pfx_filename,
     scan_folder,
@@ -65,10 +68,12 @@ RESULTADO_SUBSTITUIU = "substituiu"      # o anterior, vencido, foi para vencido
 RESULTADO_COPIA = "copia_descartada"     # mesmo fingerprint já no acervo
 RESULTADO_DUPLICIDADE = "duplicidade"    # dois vigentes do mesmo documento
 RESULTADO_PENDENTE = "pendente"          # ficou na entrada
+RESULTADO_VENCIDO_PRESO = "vencido_preso" # vencido que a varredura não conseguiu tirar da pasta da letra
 RESULTADOS = (
     RESULTADO_MOVIDO, RESULTADO_VENCIDO, RESULTADO_SUBSTITUIU,
-    RESULTADO_COPIA, RESULTADO_DUPLICIDADE, RESULTADO_PENDENTE,
+    RESULTADO_COPIA, RESULTADO_DUPLICIDADE, RESULTADO_PENDENTE, RESULTADO_VENCIDO_PRESO,
 )
+PENDENCIAS = (RESULTADO_PENDENTE, RESULTADO_VENCIDO_PRESO)
 
 # Caracteres que o NTFS recusa num nome de arquivo, mais os de controle.
 _PROIBIDOS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -88,6 +93,7 @@ class Evento:
     resultado: str
     arquivo_original: str
     arquivo_novo: str = ""
+    pasta_origem: str = ""
     pasta_destino: str = ""
     motivo: str = ""
     nome: str = ""
@@ -102,6 +108,7 @@ class Evento:
             "resultado": self.resultado,
             "arquivo_original": self.arquivo_original,
             "arquivo_novo": self.arquivo_novo,
+            "pasta_origem": self.pasta_origem,
             "pasta_destino": self.pasta_destino,
             "motivo": self.motivo,
             "nome": self.nome,
@@ -186,27 +193,13 @@ def _mesmo_documento_em(pasta: Path, documento: str) -> List[CertInfo]:
     return out
 
 
-def _destino_livre(pasta: Path, nome: str) -> Path:
-    """`X senha 1.pfx` ocupado → `X (2) senha 1.pfx`, `X (3) …`."""
-    dest = pasta / nome
-    if not dest.exists():
-        return dest
-    parsed = parse_pfx_filename(nome)
-    base, senha = parsed if parsed else (Path(nome).stem, "")
-    n = 2
-    while True:
-        cand = pasta / (f"{base} ({n}) senha {senha}.pfx" if senha else f"{base} ({n}).pfx")
-        if not cand.exists():
-            return cand
-        n += 1
-
-
 def _mover(origem: Path, destino: Path) -> None:
     destino.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(origem), str(destino))
 
 
 def _evento(cert: CertInfo, resultado: str, **extra: Any) -> Evento:
+    extra.setdefault("pasta_origem", str(cert.path.parent))
     return Evento(
         resultado=resultado,
         arquivo_original=nome_publico_de_arquivo(cert.file_name),
@@ -312,6 +305,54 @@ def processar_entrada(cfg: ConfigEntrada) -> Dict[str, List[Dict[str, Any]]]:
     for ev in pendentes:
         LOGGER.warning("Entrada pendente: %s — %s", ev.arquivo_original, ev.motivo)
     return {"eventos": [e.como_dict() for e in eventos], "pendentes": [p.como_dict() for p in pendentes]}
+
+
+# ── Vencidos nas pastas do acervo ─────────────────────────────────────────
+
+def mover_vencidos_do_acervo(src: Path, exp: Path, exclude_dirs: List[Path]) -> Dict[str, List[Dict[str, Any]]]:
+    """Tira das pastas do acervo todo certificado vencido, e GARANTE o resultado.
+
+    Decisão de 02/10/2026: depois de mover, a varredura confere de novo; o
+    vencido que ainda estiver lá recebe uma segunda tentativa no mesmo ciclo
+    e, se ficar, vira pendência `vencido_preso` com o motivo — o portal a
+    mostra em Instalador › Movimentos e avisa os administradores. Cada
+    movimento bem-sucedido é um evento `vencido` com a pasta de origem.
+    """
+    eventos: List[Evento] = []
+    pendentes: List[Evento] = []
+    motivos: Dict[str, str] = {}
+    for tentativa in (1, 2):
+        restantes = [c for c in scan_folder(src, recursive=True, exclude_dirs=exclude_dirs) if c.status == CertStatus.EXPIRED]
+        if not restantes:
+            break
+        if tentativa == 2:
+            time.sleep(2)  # dá tempo de quem estava com o arquivo aberto soltá-lo
+        for c in restantes:
+            try:
+                dest = move_to_expired(c, exp)
+            except OSError as ex:
+                motivos[str(c.path)] = str(ex)
+                LOGGER.error("Falha ao mover %s (tentativa %d): %s", nome_publico_de_arquivo(c.file_name), tentativa, ex)
+                continue
+            motivos.pop(str(c.path), None)
+            eventos.append(_evento(c, RESULTADO_VENCIDO, arquivo_novo=nome_publico_de_arquivo(dest.name),
+                                   pasta_destino=str(dest.parent), motivo="Vencido; movido na varredura."))
+    presos = [c for c in scan_folder(src, recursive=True, exclude_dirs=exclude_dirs) if c.status == CertStatus.EXPIRED]
+    for c in presos:
+        ev = _evento(c, RESULTADO_VENCIDO_PRESO,
+                     motivo=f"Vencido e ainda na pasta: {motivos.get(str(c.path)) or 'o arquivo não pôde ser movido'}.")
+        pendentes.append(ev)
+        LOGGER.warning("Vencido preso: %s em %s — %s", ev.arquivo_original, ev.pasta_origem, ev.motivo)
+    return {"eventos": [e.como_dict() for e in eventos], "pendentes": [p.como_dict() for p in pendentes]}
+
+
+def juntar(*relatorios: Optional[Dict[str, List[Dict[str, Any]]]]) -> Dict[str, List[Dict[str, Any]]]:
+    out: Dict[str, List[Dict[str, Any]]] = {"eventos": [], "pendentes": []}
+    for r in relatorios:
+        if r:
+            out["eventos"] += list(r.get("eventos") or [])
+            out["pendentes"] += list(r.get("pendentes") or [])
+    return out
 
 
 def config_de(settings: dict, local_cfg: dict, pasta_vencidos: Path) -> Optional[ConfigEntrada]:

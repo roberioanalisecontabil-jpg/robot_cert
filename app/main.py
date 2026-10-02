@@ -7496,7 +7496,7 @@ def entrada_de_certificados(
     dias: int = Query(30, ge=1, le=365),
     limite: int = Query(500, ge=1, le=1000),
 ) -> dict:
-    """Instalador › Entrada: os pendentes abertos e os eventos do período."""
+    """Instalador › Movimentos: as pendências abertas e os movimentos do período."""
     return entrada_certificados.listar(dias=dias, limite=limite)
 
 
@@ -7589,7 +7589,9 @@ def page_instalador(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba
     # pedida; com JavaScript a troca é local e a URL acompanha.
     aba = request.query_params.get("aba") or "diagnostico"
-    if aba not in ("diagnostico", "custodia", "entrada", "trilha", "configuracao"):
+    if aba == "entrada":  # nome da aba até 02/10/2026; links antigos continuam valendo
+        aba = "movimentos"
+    if aba not in ("diagnostico", "custodia", "movimentos", "trilha", "configuracao"):
         aba = "diagnostico"
     return templates.TemplateResponse(
         request=request, name="instalador.html", context={"pagina_ativa": "instalador", "aba": aba}

@@ -28,6 +28,27 @@ hora cheia, num e-mail só com todos os novos da hora.
 | G3 | Chegou vencido | Renomeado e **direto para a pasta de vencidos**. |
 | G4 | Aviso de novo | Chave própria **"Avisar quando chegar certificado novo"** (ligada por padrão). O aviso só sai depois do renomear+mover: a entrada fica fora da varredura, então o certificado só entra no Inventário no lugar certo. Envio **a cada hora cheia** (padrão: os novos das 09:01–09:59 vão num e-mail às 10:00) ou **imediato**. |
 
+## Segunda rodada (02/10/2026, agente 1.6.0)
+
+Pergunta do usuário: "o agente ainda vai nas pastas das letras e verifica se
+tem certificado vencido?" Sim, e a rodada fechou o que faltava:
+
+| # | Pergunta | Decisão |
+|---|----------|---------|
+| Q1 | Cadência da varredura | Fica (mudança de arquivo, `rescan`, 24 h), mas com **garantia**: depois de mover, o agente confere as pastas das letras; vencido que ficou recebe nova tentativa no mesmo ciclo e, se continuar, vira pendência **"Vencido não movido"** (`vencido_preso`) com motivo, e-mail aos administradores uma vez por arquivo, aberta até o arquivo sair. |
+| Q2 | Pasta de vencidos | Continua **plana**. |
+| Q3 | Rastro | A aba Instalador › Entrada vira **Movimentos** e registra também o vencido que a varredura tira da pasta da letra (`vencido`), com a **pasta de origem**. `?aba=entrada` continua abrindo a aba. |
+| Q5 | Ilegíveis nas letras | Ficam como estão: visíveis no Início como erro/fora do padrão. |
+| Q6 | Colisão em Vencidos | Sufixo unificado `(2)`, `(3)`… (`cert_scanner.destino_livre`); o `_dup_<carimbo>` saiu. |
+| Q7 | Instalador | A atualização parava em `_internal\win32\servicemanager.pyd … DeleteFile failed; code 5`. Causa confirmada no ANALISESRV: `EventMessageFile` da origem `AnaliseCertiDigitalAgent` apontava para esse arquivo, e o Log de Eventos o mantém mapeado. Correção: antes da cópia, `LiberarArquivosPresos` apaga ou **renomeia** (`.old-<carimbo>`) cada arquivo de `_internal`; o que nem renomear puder é trocado no reinício (`restartreplace`), sem janela "Select action". E `RegistrarOrigemDeEventos` aponta o registro para uma cópia estável em `{app}\eventlog\`. |
+
+Agente: `agent/entrada.mover_vencidos_do_acervo(src, exp, exclude_dirs)`;
+`run_agent` junta o relatório da entrada com o dos vencidos e manda um
+`POST /api/agent/entrada` por ciclo (sempre que houver entrada ou
+`mover_vencidos`). Portal: `pasta_origem` em `entrada_eventos`
+(migration `20261002160000_movimentos_pasta_origem.sql`), pendências =
+`pendente` + `vencido_preso`, chave de reconciliação = pasta + arquivo.
+
 ## Como funciona
 
 **Agente** (`agent/entrada.py`, chamado de `run_agent.py`):
@@ -69,10 +90,16 @@ hora cheia, num e-mail só com todos os novos da hora.
 2. Migration `supabase/migrations/20261002120000_entrada_de_certificados.sql`
    (cópia em `Desktop\robot_cert-entrada-de-certificados.sql`), no psql do
    ANALISESRV. Ensaiada duas vezes numa cópia local em 02/10/2026.
-3. Agente **1.5.0** no servidor (`agent_setup.iss`). Nas estações não muda nada
+3. Agente **1.6.0** no servidor (`agent_setup.iss`). Nas estações não muda nada
    além da versão esperada pelo portal.
 4. Configuração › Pastas e agente: as três pastas, como o servidor as vê.
    Configuração › Alertas: a chave do aviso de novo e o modo.
+5. Segunda rodada: migration `20261002160000_movimentos_pasta_origem.sql`
+   (cópia em `Desktop\robot_cert-movimentos-pasta-origem.sql`), e o
+   instalador 1.6.0, que já não trava no `servicemanager.pyd`.
+
+O acervo de produção é `\\10.200.0.2\Share\07. CERTIFICADOS` (UNC). A tela
+só o aceita porque essa raiz está em `PASTAS_PERMITIDAS` no .env do servidor.
 
 ## Testes
 

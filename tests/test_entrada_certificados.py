@@ -18,6 +18,18 @@ Decisões com o usuário (F1–F6, G1–G4):
   G4  Chave "Avisar quando chegar certificado novo"; o aviso sai só depois do
       renomear+mover (a entrada fica fora da varredura); por hora cheia
       (padrão) ou imediato.
+
+Segunda rodada (02/10/2026, agente 1.6.0), Q1–Q8:
+  Q1  A varredura continua tirando vencidos das pastas das letras, e GARANTE:
+      confere, tenta de novo, e o que ficar vira pendência "vencido_preso"
+      com e-mail aos administradores.
+  Q2  Pasta de vencidos continua plana.
+  Q3  A aba vira "Movimentos" e registra também o vencido movido pela
+      varredura, com a pasta de origem.
+  Q5  Ilegíveis nas pastas das letras ficam como estão (visíveis no Início).
+  Q6  Sufixo de colisão unificado em `(2)`, `(3)`… (sai o `_dup_<carimbo>`).
+  Q7  Instalador: apagar → renomear → trocar no reinício; EventMessageFile
+      numa cópia estável fora de _internal (causa confirmada no servidor).
 """
 
 from __future__ import annotations
@@ -251,7 +263,7 @@ def test_agente_processa_a_entrada_antes_da_varredura_e_fora_dela() -> None:
     assert "/api/agent/entrada" in fonte and "observer_entrada" in fonte
     import agent
     from app import config
-    assert agent.__version__ == "1.5.0" == config.VERSAO_AGENTE_ESPERADA
+    assert agent.__version__ == "1.6.0" == config.VERSAO_AGENTE_ESPERADA
     exemplo = (RAIZ / "agent" / "agent_config.example.json").read_text(encoding="utf-8")
     assert "pasta_entrada" in exemplo
 
@@ -355,14 +367,19 @@ def test_lista_fixa_de_destinatarios_substitui_os_administradores(client: TestCl
     assert sorted(e["to_email"] for e in enviados) == ["chefe@x.com", "ti@x.com"]
 
 
-def test_tela_do_instalador_tem_a_aba_entrada() -> None:
+def test_tela_do_instalador_tem_a_aba_movimentos(client: TestClient, banco: _Fake) -> None:
     html = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
-    assert 'id="tab-entrada"' in html and 'id="aba-entrada"' in html
-    assert '"entrada"' in html[html.index("const ABAS"):html.index("const ABAS") + 120]
+    assert 'id="tab-movimentos"' in html and 'id="aba-movimentos"' in html
+    assert 'id="tab-entrada"' not in html, "Q3: a aba Entrada virou Movimentos"
+    assert '"movimentos"' in html[html.index("const ABAS"):html.index("const ABAS") + 120]
     assert "/api/cert-installer/entrada" in html and "loadEntrada()" in html
-    assert "entradaPendentesAviso" in html, "pendentes em destaque"
+    assert "entradaPendentesAviso" in html, "pendências em destaque"
+    assert "vencido_preso" in html and "pasta_origem" in html
     fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    assert '"custodia", "entrada", "trilha"' in fonte
+    assert '"custodia", "movimentos", "trilha"' in fonte
+    # O link antigo continua abrindo a aba.
+    r = client.get("/instalador?aba=entrada", headers=_h(*ADMIN))
+    assert r.status_code == 200 and 'id="tab-movimentos" href="?aba=movimentos" aria-controls="aba-movimentos" data-aba="movimentos"\n         aria-selected="true"' in r.text
 
 
 def test_tela_de_configuracao_tem_as_pastas_e_a_chave_do_aviso() -> None:
@@ -497,3 +514,132 @@ def test_ingest_usa_o_agendamento_e_o_lifespan_tem_o_laco_da_hora() -> None:
     assert "background_tasks.add_task(notificar_novos, novos)" not in fonte
     assert "segundos_ate_a_proxima_hora_cheia()" in fonte and "enviar_novos_pendentes" in fonte
     assert alertas_config.modo_novos_efetivo("") == "hora" and alertas_config.modo_novos_efetivo("IMEDIATO") == "imediato"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. Segunda rodada: vencidos do acervo, Movimentos, sufixo, instalador
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_sufixo_de_colisao_e_o_mesmo_em_todo_lugar(tmp_path: Path) -> None:
+    """Q6: `(2)`, `(3)`… no lugar de `_dup_<carimbo>`; o nome continua abrindo."""
+    from app import cert_scanner as cs
+    venc = tmp_path / "Vencidos"
+    venc.mkdir()
+    (venc / "ALFA 1 senha x.pfx").write_bytes(b"a")
+    (venc / "ALFA 1 (2) senha x.pfx").write_bytes(b"b")
+    (venc / "sem padrao.p12").write_bytes(b"c")
+    assert cs.destino_livre(venc, "ALFA 1 senha x.pfx").name == "ALFA 1 (3) senha x.pfx"
+    assert cs.destino_livre(venc, "NOVO senha y.pfx").name == "NOVO senha y.pfx"
+    assert cs.destino_livre(venc, "sem padrao.p12").name == "sem padrao (2).p12"
+    fonte = (RAIZ / "app" / "cert_scanner.py").read_text(encoding="utf-8")
+    assert "_dup_{" not in fonte, "o carimbo saiu do código; só a docstring o cita"
+
+    origem = tmp_path / "B"
+    origem.mkdir()
+    _pfx(origem, "ALFA 1 senha x.pfx", cnpj=CNPJ, senha="x", nome="ALFA", dias=-1)
+    (c,) = scan_folder(origem, recursive=False)
+    dest = cs.move_to_expired(c, venc)
+    assert dest.name == "ALFA 1 (3) senha x.pfx" and not (origem / "ALFA 1 senha x.pfx").exists()
+
+
+def test_varredura_tira_os_vencidos_das_letras_e_registra_a_origem(tmp_path: Path) -> None:
+    """Q1/Q3: o vencido na pasta da letra vai para Vencidos (plana, Q2) e vira
+    evento `vencido` com `pasta_origem`; o vigente fica."""
+    src = tmp_path / "CERTIFICADOS"
+    pj_b = src / "02.PESSOA JURIDICA" / "B"
+    pj_b.mkdir(parents=True)
+    venc = src / "VENCIDOS"
+    _pfx(pj_b, "BETA VENCIDO 1 senha a.pfx", cnpj=CNPJ, senha="a", nome="BETA", dias=-5)
+    _pfx(pj_b, "BETA VIGENTE 2 senha b.pfx", cnpj=CNPJ_2, senha="b", nome="BETA 2")
+    r = ag.mover_vencidos_do_acervo(src, venc, [venc])
+    assert _nomes(pj_b) == ["BETA VIGENTE 2 senha b.pfx"]
+    assert _nomes(venc) == ["BETA VENCIDO 1 senha a.pfx"], "Q2: plana, sem letra"
+    (ev,) = r["eventos"]
+    assert ev["resultado"] == "vencido" and ev["pasta_origem"] == str(pj_b) and ev["pasta_destino"] == str(venc)
+    assert ev["nome"] == "BETA" and ev["documento_numero"] == CNPJ
+    assert r["pendentes"] == []
+    # Nada vencido: nada a reportar, e a função não cria a pasta de vencidos à toa.
+    assert ag.mover_vencidos_do_acervo(src, venc, [venc]) == {"eventos": [], "pendentes": []}
+
+
+def test_vencido_que_nao_sai_vira_pendencia_depois_de_duas_tentativas(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Q1 (garantia) e Q4: nova tentativa no mesmo ciclo; se ficar, `vencido_preso` com motivo."""
+    src = tmp_path / "CERTIFICADOS"
+    pj_a = src / "02.PESSOA JURIDICA" / "A"
+    pj_a.mkdir(parents=True)
+    venc = src / "VENCIDOS"
+    _pfx(pj_a, "ALFA 1 senha a.pfx", cnpj=CNPJ, senha="a", nome="ALFA", dias=-5)
+    tentativas: List[str] = []
+
+    def preso(cert, exp):
+        tentativas.append(cert.file_name)
+        raise OSError(32, "O arquivo está sendo usado por outro processo")
+
+    monkeypatch.setattr(ag, "move_to_expired", preso)
+    monkeypatch.setattr(ag.time, "sleep", lambda s: None)
+    r = ag.mover_vencidos_do_acervo(src, venc, [venc])
+    assert tentativas == ["ALFA 1 senha a.pfx"] * 2, "duas tentativas no mesmo ciclo"
+    assert r["eventos"] == []
+    (p,) = r["pendentes"]
+    assert p["resultado"] == "vencido_preso" and p["pasta_origem"] == str(pj_a)
+    assert "sendo usado" in p["motivo"] and "senha" not in p["arquivo_original"].lower()
+    assert _nomes(pj_a) == ["ALFA 1 senha a.pfx"], "o arquivo fica onde está, nada se perde"
+
+
+def test_agente_junta_entrada_e_vencidos_num_relatorio_so() -> None:
+    fonte = (RAIZ / "agent" / "run_agent.py").read_text(encoding="utf-8")
+    assert "entrada_certificados.mover_vencidos_do_acervo(src, exp, exclude_dirs)" in fonte
+    assert "if cfg_entrada or mover:" in fonte, "o relatório vai sempre que houver o que reconciliar"
+    assert "_enviar_relatorio_de_movimentos(" in fonte
+    assert "move_to_expired(c, exp)" not in fonte, "o laço antigo saiu; o movimento passa pelo módulo que registra"
+    assert ag.juntar({"eventos": [1], "pendentes": []}, None, {"eventos": [2], "pendentes": [3]}) == {"eventos": [1, 2], "pendentes": [3]}
+
+
+def test_vencido_preso_e_pendencia_no_portal_com_email_e_fecha_quando_sai(client: TestClient, banco: _Fake, correio) -> None:
+    preso = _ev("vencido_preso", "ALFA 1", motivo="Vencido e ainda na pasta: em uso.", pasta_origem=r"D:/PJ/A")
+    r = client.post("/api/agent/entrada", headers=_h(*ADMIN), json={"machine_id": "srv", "eventos": [], "pendentes": [preso]})
+    assert r.status_code == 200 and r.json()["novos_pendentes"] == 1
+    assert len(correio) == 1
+    assert "Vencido não movido" in correio[0]["html_content"] and "D:/PJ/A" in correio[0]["html_content"]
+    assert "Movimentos" in correio[0]["html_content"]
+
+    # O mesmo nome, pendente também na entrada: é OUTRA pendência (pasta diferente).
+    na_entrada = _ev("pendente", "ALFA 1", motivo="Senha incorreta", pasta_origem=r"D:/Entrada")
+    r = client.post("/api/agent/entrada", headers=_h(*ADMIN), json={"machine_id": "srv", "eventos": [], "pendentes": [preso, na_entrada]})
+    assert r.json()["novos_pendentes"] == 1 and len(correio) == 2
+
+    lista = client.get("/api/cert-installer/entrada", headers=_h(*ADMIN)).json()
+    assert sorted(p["resultado"] for p in lista["pendentes"]) == ["pendente", "vencido_preso"]
+    assert {p["resultado_rotulo"] for p in lista["pendentes"]} == {"Pendente na entrada", "Vencido não movido"}
+
+    # Saiu da pasta da letra (movido na varredura seguinte): a pendência fecha e o movimento entra.
+    movido = _ev("vencido", "ALFA 1", novo="ALFA 1", pasta_origem=r"D:/PJ/A", motivo="Vencido; movido na varredura.")
+    r = client.post("/api/agent/entrada", headers=_h(*ADMIN), json={"machine_id": "srv", "eventos": [movido], "pendentes": [na_entrada]})
+    assert r.json()["resolvidos"] == 1 and r.json()["eventos"] == 1
+    lista = client.get("/api/cert-installer/entrada", headers=_h(*ADMIN)).json()
+    assert [p["resultado"] for p in lista["pendentes"]] == ["pendente"]
+    assert lista["eventos"][0]["resultado"] == "vencido" and lista["eventos"][0]["pasta_origem"] == r"D:/PJ/A"
+
+
+def test_migration_da_pasta_de_origem_existe() -> None:
+    sql = (RAIZ / "supabase" / "migrations" / "20261002160000_movimentos_pasta_origem.sql").read_text(encoding="utf-8")
+    assert "ADD COLUMN IF NOT EXISTS pasta_origem" in sql
+    assert "'vencido_preso'" in sql
+
+
+def test_instalador_solta_arquivos_presos_e_tira_o_event_log_de_internal() -> None:
+    """Q7: causa confirmada no ANALISESRV (EventMessageFile apontava para
+    _internal\\win32\\servicemanager.pyd). Apagar → renomear → reinício, e a
+    origem de eventos passa a uma cópia estável."""
+    iss = (RAIZ / "agent_setup.iss").read_text(encoding="utf-8", errors="replace")
+    assert "AppVersion=1.6.0" in iss
+    assert "procedure LiberarArquivosPresos" in iss and "RenameFile(Caminho, Caminho + '.old-'" in iss
+    assert "LiberarArquivosPresos(ExpandConstant('{app}\\_internal'))" in iss
+    assert iss.count("restartreplace") >= 2 and "uninsrestartdelete" in iss
+    assert "procedure RegistrarOrigemDeEventos" in iss and "'EventMessageFile', Dest" in iss
+    assert "{app}\\eventlog" in iss and "procedure RemoverOrigemDeEventos" in iss
+    i_prep = iss.index("LiberarArquivosPresos(ExpandConstant('{app}\\_internal'))")
+    i_fn = iss.index("function PrepararAmbienteParaInstalar")
+    assert i_fn < i_prep, "a liberação roda dentro do preparo, antes da cópia"
+    i_post = iss.index("if CurStep = ssPostInstall then")
+    assert iss.index("RegistrarOrigemDeEventos;", i_post) < iss.index("InstallOrUpdateService", i_post), "antes do serviço subir"

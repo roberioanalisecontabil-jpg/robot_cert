@@ -497,6 +497,20 @@ def _resolve_paths(s: dict, local_cfg: dict) -> tuple[Path, Path]:
     return Path(raw_src), Path(raw_exp)
 
 
+def _enviar_relatorio_de_movimentos(client: httpx.Client, base: str, headers: dict, mid: str, relatorio: dict) -> bool:
+    """POST /api/agent/entrada: o que o agente moveu e o que ficou pendente.
+    Nenhum nome aqui carrega senha — `agent.entrada` já os limpou."""
+    try:
+        pr = client.post(f"{base}/api/agent/entrada", headers=headers, json={"machine_id": mid, **relatorio})
+    except httpx.HTTPError as ex_post:
+        LOGGER.warning("Rede ao enviar o relatório de movimentos: %s", ex_post)
+        return False
+    if pr.status_code >= 400:
+        LOGGER.warning("/api/agent/entrada respondeu %s: %s", pr.status_code, pr.text[:200])
+        return False
+    return True
+
+
 def _merge_itens_com_pasta_vencidos(
     itens_origem: list[CertInfo], exp: Path, src: Path
 ) -> list[CertInfo]:
@@ -1237,16 +1251,13 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                         j = nr.json() or {}
                         cmd = j.get("command")
                         if cmd == "mover_vencidos" and j.get("id"):
-                            itens_mv = scan_folder(
-                                src, recursive=True, exclude_dirs=exclude_dirs
-                            )
-                            for c in itens_mv:
-                                if c.status != CertStatus.EXPIRED:
-                                    continue
-                                try:
-                                    move_to_expired(c, exp)
-                                except OSError as ex:
-                                    LOGGER.error("Comando mover_vencidos (%s): %s", nome_publico_de_arquivo(c.file_name), ex)
+                            try:
+                                rel_mv = entrada_certificados.mover_vencidos_do_acervo(src, exp, exclude_dirs)
+                            except Exception as ex_mv:  # noqa: BLE001
+                                LOGGER.exception("Comando mover_vencidos: %s", ex_mv)
+                                rel_mv = None
+                            if rel_mv is not None:
+                                _enviar_relatorio_de_movimentos(client, base, _headers(), mid, rel_mv)
                             LOGGER.info("Comando remoto mover_vencidos executado (id %s).", j.get("id"))
                         elif cmd == "rescan":
                             LOGGER.info("Comando remoto: rescan; máquina %s.", mid)
@@ -1284,36 +1295,31 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 last_full_scan_time = time.time()
                 _write_agent_status("scanning", machine_id=mid)
 
+                relatorio_entrada = None
                 if cfg_entrada:
                     try:
-                        relatorio = entrada_certificados.processar_entrada(cfg_entrada)
+                        relatorio_entrada = entrada_certificados.processar_entrada(cfg_entrada)
                     except Exception as ex_ent:  # noqa: BLE001 — a varredura não pode cair por isto
                         LOGGER.exception("Falha ao processar a pasta de entrada: %s", ex_ent)
-                        relatorio = None
-                    if relatorio is not None:
-                        # Sempre, mesmo vazio: é assim que o portal fecha os
-                        # pendentes que saíram da pasta.
-                        try:
-                            pr = client.post(
-                                f"{base}/api/agent/entrada",
-                                headers=_headers(),
-                                json={"machine_id": mid, **relatorio},
-                            )
-                            if pr.status_code >= 400:
-                                LOGGER.warning("/api/agent/entrada respondeu %s: %s", pr.status_code, pr.text[:200])
-                        except httpx.HTTPError as ex_post:
-                            LOGGER.warning("Rede ao enviar o relatório da entrada: %s", ex_post)
+
+                # Vencidos nas pastas do acervo: move, confere, tenta de novo e
+                # reporta o que ficou preso (decisão de 02/10/2026).
+                relatorio_vencidos = None
+                if mover:
+                    try:
+                        relatorio_vencidos = entrada_certificados.mover_vencidos_do_acervo(src, exp, exclude_dirs)
+                    except Exception as ex_mv:  # noqa: BLE001
+                        LOGGER.exception("Falha ao mover vencidos do acervo: %s", ex_mv)
+
+                if cfg_entrada or mover:
+                    # Sempre, mesmo vazio: é assim que o portal fecha as
+                    # pendências cujo arquivo saiu da pasta.
+                    _enviar_relatorio_de_movimentos(
+                        client, base, _headers(), mid,
+                        entrada_certificados.juntar(relatorio_entrada, relatorio_vencidos),
+                    )
 
                 itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
-                if mover:
-                    for c in itens:
-                        if c.status != CertStatus.EXPIRED:
-                            continue
-                        try:
-                            move_to_expired(c, exp)
-                        except OSError as ex:
-                            LOGGER.error("Falha ao mover %s: %s", nome_publico_de_arquivo(c.file_name), ex)
-                    itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
 
                 itens = _merge_itens_com_pasta_vencidos(itens, exp, src)
 

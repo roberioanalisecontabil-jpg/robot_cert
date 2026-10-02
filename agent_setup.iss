@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Analise CertiDigital Agent
-AppVersion=1.5.0
+AppVersion=1.6.0
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
 DefaultGroupName=Analise CertiDigital
@@ -24,8 +24,11 @@ Name: "autostart"; Description: "Ao iniciar sessao: iniciar icone na bandeja (Ta
 ; ExecutÃ¡vel da bandeja (one-file)
 Source: "dist\AnaliseCertiDigital_Agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; ExecutÃ¡vel do serviÃ§o (one-dir) + todas as DLLs em _internal
-Source: "dist\AnaliseCertiDigital_Agent_Service\AnaliseCertiDigital_Agent_Service.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\AnaliseCertiDigital_Agent_Service\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+; restartreplace e a ULTIMA rede (1.6.0): antes da copia, LiberarArquivosPresos
+; apaga ou renomeia o que estiver em uso em _internal. So o que nem renomear
+; puder e trocado no proximo reinicio, sem a janela "Select action".
+Source: "dist\AnaliseCertiDigital_Agent_Service\AnaliseCertiDigital_Agent_Service.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
+Source: "dist\AnaliseCertiDigital_Agent_Service\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace uninsrestartdelete
 ; Config: agent_config.json Ã© a config primÃ¡ria (NÃƒO copiamos .env.example para
 ; evitar sobrescrever URL do portal com localhost)
 Source: "agent\agent_config.example.json"; DestDir: "{app}"; DestName: "agent_config.json"; Flags: onlyifdoesntexist
@@ -399,6 +402,108 @@ begin
   end;
 end;
 
+{ ── Arquivos presos em _internal (1.6.0) ─────────────────────────────────
+  Em todas as versoes anteriores a atualizacao parava em
+  "_internal\win32\servicemanager.pyd ... DeleteFile failed; code 5". Quem
+  segura esse arquivo nao e o servico (ja parado): e o servico de Log de
+  Eventos do Windows, porque o pywin32 registra o .pyd como EventMessageFile da
+  origem "AnaliseCertiDigitalAgent" (confirmado no ANALISESRV em 02/10/2026).
+  Um arquivo mapeado nao pode ser APAGADO, mas pode ser RENOMEADO: e o que
+  se faz aqui, arquivo a arquivo, antes da copia. Os .old-* ficam para a
+  proxima instalacao ou desinstalacao apagar. }
+procedure LiberarArquivosPresos(const Pasta: string);
+var
+  Achado: TFindRec;
+  Caminho: string;
+  Carimbo: string;
+begin
+  if not DirExists(Pasta) then
+    exit;
+  Carimbo := GetDateTimeString('yyyymmdd-hhnnss', #0, #0);
+  if FindFirst(AddBackslash(Pasta) + '*', Achado) then
+  begin
+    try
+      repeat
+        if (Achado.Name = '.') or (Achado.Name = '..') then
+          continue;
+        Caminho := AddBackslash(Pasta) + Achado.Name;
+        if (Achado.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
+          LiberarArquivosPresos(Caminho);
+          continue;
+        end;
+        if Pos('.old-', Achado.Name) > 0 then
+        begin
+          { Resto de uma instalacao anterior: quem o segurava ja o soltou. }
+          if not DeleteFile(Caminho) then
+            Log('Ainda preso, fica para a proxima: ' + Caminho);
+          continue;
+        end;
+        if DeleteFile(Caminho) then
+          continue;
+        if RenameFile(Caminho, Caminho + '.old-' + Carimbo) then
+          Log('Em uso, renomeado para substituir: ' + Caminho)
+        else
+          Log('Em uso e sem renomear; sera trocado no reinicio (restartreplace): ' + Caminho);
+      until not FindNext(Achado);
+    finally
+      FindClose(Achado);
+    end;
+  end;
+end;
+
+{ A origem de eventos passa a apontar para uma copia ESTAVEL do .pyd, fora de
+  _internal: o Log de Eventos segura a copia, nunca mais os arquivos que a
+  atualizacao precisa trocar. }
+procedure RegistrarOrigemDeEventos;
+var
+  Origem, PastaDest, Dest: string;
+  Chave: string;
+begin
+  Origem := ExpandConstant('{app}\_internal\win32\servicemanager.pyd');
+  PastaDest := ExpandConstant('{app}\eventlog');
+  Dest := PastaDest + '\servicemanager.pyd';
+  Chave := 'SYSTEM\CurrentControlSet\Services\EventLog\Application\' + ServiceName;
+  if not FileExists(Origem) then
+  begin
+    Log('servicemanager.pyd nao encontrado em _internal; origem de eventos mantida como esta.');
+    exit;
+  end;
+  ForceDirectories(PastaDest);
+  if FileExists(Dest) and not DeleteFile(Dest) then
+  begin
+    if RenameFile(Dest, Dest + '.old-' + GetDateTimeString('yyyymmdd-hhnnss', #0, #0)) then
+      Log('Copia anterior do servicemanager.pyd em uso; renomeada.')
+    else
+      Log('Copia anterior do servicemanager.pyd em uso e sem renomear; mantida.');
+  end;
+  if not FileExists(Dest) then
+  begin
+    if not CopyFile(Origem, Dest, False) then
+    begin
+      Log('Nao foi possivel copiar servicemanager.pyd para ' + PastaDest + '; origem de eventos mantida.');
+      exit;
+    end;
+  end;
+  if RegWriteStringValue(HKLM, Chave, 'EventMessageFile', Dest) and
+     RegWriteDWordValue(HKLM, Chave, 'TypesSupported', 7) then
+    Log('EventMessageFile -> ' + Dest)
+  else
+    Log('Nao foi possivel gravar a origem de eventos no registro.');
+end;
+
+procedure RemoverOrigemDeEventos;
+var
+  Chave: string;
+begin
+  Chave := 'SYSTEM\CurrentControlSet\Services\EventLog\Application\' + ServiceName;
+  if RegKeyExists(HKLM, Chave) then
+    RegDeleteKeyIncludingSubkeys(HKLM, Chave);
+  { A copia pode estar em uso pelo Log de Eventos: o Windows a apaga no reinicio. }
+  if FileExists(ExpandConstant('{app}\eventlog\servicemanager.pyd')) then
+    DelayDeleteFile(ExpandConstant('{app}\eventlog\servicemanager.pyd'), 2);
+end;
+
 function PrepararAmbienteParaInstalar: Boolean;
 begin
   { Sequencia executada ANTES da copia de arquivos.
@@ -428,6 +533,9 @@ begin
   Sleep(1500);
 
   RemoveService;
+
+  { Agora que nada nosso roda, solta o que outro processo ainda segura. }
+  LiberarArquivosPresos(ExpandConstant('{app}\_internal'));
 
   LastOperationError := '';
   Result := True;
@@ -664,6 +772,7 @@ begin
 
   if CurStep = ssPostInstall then
   begin
+    RegistrarOrigemDeEventos;
     RestringirPastaDaCredencial;
     { Antes do servico subir: a primeira subida ja encontra a chave no cofre. }
     if not GuardarChaveDeApi then
@@ -735,6 +844,8 @@ begin
 
   if CurUninstallStep = usPostUninstall then
   begin
+    RemoverOrigemDeEventos;
+    LiberarArquivosPresos(ExpandConstant('{app}\_internal'));
     if not DeleteTrayAutostartTask then
     begin
       MsgBox(
