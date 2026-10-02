@@ -83,10 +83,12 @@ NUM_PROXIES_CONFIAVEIS = _env_int("NUM_PROXIES_CONFIAVEIS", default=1, lo=0, hi=
 
 # Raízes em que as pastas de certificados podem estar (separadas por `;` no
 # Windows e `:` no Linux — `os.pathsep`). Vazio = qualquer pasta local, como
-# sempre foi (janela do lote 6, com aviso em `verificar_ambiente`); UNC e
-# caminhos que resolvem para fora da raiz são recusados sempre que a lista
-# existe. É o que impede `source_folder=C:\` ou `\\atacante\share` vindos
-# da tela de Configuração (SECURITY_AUDIT #16).
+# sempre foi (janela do lote 6, com aviso em `verificar_ambiente`); caminhos
+# que resolvem para fora da raiz são recusados sempre que a lista existe, e
+# UNC só entra sob uma raiz UNC daqui (ex.: `\\10.200.0.2\Share\07. CERTIFICADOS`,
+# onde o acervo de produção mora desde a migração). É o que impede
+# `source_folder=C:\` ou `\\atacante\share` vindos da tela de Configuração
+# (SECURITY_AUDIT #16).
 PASTAS_PERMITIDAS = [
     Path(p.strip()).resolve()
     for p in (os.getenv("PASTAS_PERMITIDAS") or "").split(os.pathsep)
@@ -412,8 +414,9 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
     if producao and not PASTAS_PERMITIDAS:
         avisos.append(
             "PASTAS_PERMITIDAS não definida — a tela de Configuração aceita qualquer "
-            "pasta local do servidor como origem/destino dos certificados. Defina as "
-            "raízes (ex.: F:\\07. CERTIFICADOS)."
+            "pasta local do servidor como origem/destino dos certificados, e recusa "
+            "toda pasta de rede. Defina as raízes (ex.: F:\\07. CERTIFICADOS ou "
+            "\\\\servidor\\Share\\07. CERTIFICADOS)."
         )
 
     if producao and not HOSTS_PERMITIDOS:

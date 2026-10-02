@@ -78,7 +78,29 @@ class PortalSettings:
 
 
 class PastaRecusada(ValueError):
-    """Caminho que o portal não abre: UNC, ou fora das raízes permitidas."""
+    """Caminho que o portal não abre: UNC fora das raízes, ou fora das raízes permitidas."""
+
+
+def _e_unc(texto: str) -> bool:
+    return texto.startswith(("\\\\", "//"))
+
+
+def _sob_raiz_unc(p: str, raizes) -> bool:
+    """`p` (UNC, texto cru) está sob uma raiz UNC permitida? Comparação TEXTUAL,
+    sem `resolve()`: resolver um UNC abre SMB contra o host, e o host de um
+    caminho ainda não aceito é justamente o que não se pode tocar (#16).
+    `PureWindowsPath` compara sem distinguir maiúsculas, como o Windows."""
+    from pathlib import PureWindowsPath
+
+    alvo = PureWindowsPath(p.replace("/", "\\"))
+    for r in raizes:
+        rs = str(r)
+        if not _e_unc(rs):
+            continue
+        raiz = PureWindowsPath(rs)
+        if alvo == raiz or raiz in alvo.parents:
+            return True
+    return False
 
 
 def validar_pasta(bruto: Optional[str], rotulo: str) -> str:
@@ -89,20 +111,29 @@ def validar_pasta(bruto: Optional[str], rotulo: str) -> str:
     processo) ou para `\\\\atacante\\share` — no Windows, `is_dir()` num UNC já
     dispara autenticação SMB e entrega o hash NTLM da conta de serviço.
 
-    UNC é recusado sempre. Com `config.PASTAS_PERMITIDAS`, o caminho resolvido
-    tem de estar sob uma das raízes; sem a lista, qualquer pasta local vale
-    (janela de compatibilidade). Vazio é "usar o padrão".
+    UNC só é aceito sob uma raiz UNC listada em `config.PASTAS_PERMITIDAS`
+    (02/10/2026: o acervo de produção mora em `\\\\10.200.0.2\\Share\\…`, e a
+    recusa total deixava a tela de Configuração sem conseguir salvar nada).
+    A raiz é o operador quem escreve no .env do servidor — o host dela é
+    confiável por definição; qualquer outro host continua recusado antes de
+    o processo tocar a rede. Com a lista, o caminho resolvido tem de estar
+    sob uma das raízes; sem a lista, qualquer pasta local vale (janela de
+    compatibilidade). Vazio é "usar o padrão".
     """
     p = (bruto or "").strip()
     if not p:
         return ""
-    if p.startswith(("\\\\", "//")):
-        raise PastaRecusada(f"{rotulo}: caminho de rede (UNC) não é aceito.")
-    alvo = Path(p).resolve()
-    # Unidade mapeada para a rede resolve para UNC no Windows: mesma recusa.
-    if str(alvo).startswith(("\\\\", "//")):
-        raise PastaRecusada(f"{rotulo}: caminho de rede (UNC) não é aceito.")
     raizes = list(getattr(config, "PASTAS_PERMITIDAS", None) or [])
+    recusa_unc = (
+        f"{rotulo}: caminho de rede (UNC) só é aceito sob uma das pastas permitidas "
+        f"(PASTAS_PERMITIDAS no .env do servidor)."
+    )
+    if _e_unc(p) and not _sob_raiz_unc(p, raizes):
+        raise PastaRecusada(recusa_unc)
+    alvo = Path(p).resolve()
+    # Unidade mapeada para a rede resolve para UNC no Windows: mesma regra.
+    if _e_unc(str(alvo)) and not _sob_raiz_unc(str(alvo), raizes):
+        raise PastaRecusada(recusa_unc)
     if raizes and not any(alvo == r or r in alvo.parents for r in raizes):
         raise PastaRecusada(
             f"{rotulo}: precisa estar sob uma das pastas permitidas "

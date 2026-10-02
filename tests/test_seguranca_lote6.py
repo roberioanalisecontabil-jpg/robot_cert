@@ -46,6 +46,23 @@ def test_unc_e_recusado_sempre(caminho: str, monkeypatch: pytest.MonkeyPatch) ->
         ss.validar_pasta(caminho, "Pasta de origem")
 
 
+def test_unc_so_sob_uma_raiz_unc_permitida(monkeypatch: pytest.MonkeyPatch) -> None:
+    """02/10/2026: o acervo de produção é `\\\\10.200.0.2\\Share\\…`. UNC entra
+    quando o operador listou a raiz no .env; qualquer outro host continua
+    fora — e a recusa acontece antes de `resolve()` tocar a rede."""
+    from pathlib import PureWindowsPath
+    raiz = PureWindowsPath(r"\\10.200.0.2\Share\07. CERTIFICADOS")
+    monkeypatch.setattr(config, "PASTAS_PERMITIDAS", [raiz], raising=False)
+    dentro = r"\\10.200.0.2\Share\07. CERTIFICADOS\CERTIFICADOS DIGITAIS - 2024"
+    assert ss.validar_pasta(dentro, "x").lower().startswith(r"\\10.200.0.2\share\07. certificados")
+    assert ss.validar_pasta(r"\\10.200.0.2\share\07. certificados", "x"), "sem distinguir maiúsculas, como o Windows"
+    assert ss.validar_pasta("//10.200.0.2/Share/07. CERTIFICADOS/Entrada", "x")
+    for fora in (r"\\atacante\share\certs", r"\\10.200.0.2\Outro\x", r"\\10.200.0.2\Share\08. OUTRA", r"\\?\UNC\10.200.0.2\Share\07. CERTIFICADOS"):
+        with pytest.raises(ss.PastaRecusada) as e:
+            ss.validar_pasta(fora, "Pasta de origem")
+        assert "PASTAS_PERMITIDAS" in str(e.value)
+
+
 def test_sem_lista_qualquer_pasta_local_e_aceita_e_resolvida(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Janela de compatibilidade: sem PASTAS_PERMITIDAS nada muda para o que já está gravado."""
     monkeypatch.setattr(config, "PASTAS_PERMITIDAS", [], raising=False)
