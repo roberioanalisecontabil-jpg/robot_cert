@@ -81,13 +81,12 @@ MODULOS_GOVERNADOS = (
     "vencidos",
     "duplicidades",
     "acompanhamento",
-    "configuracao",
     "carteiras",
 )
 
 # Desses, quais tem rota exigindo `editar`. Nos demais o nivel maximo util e
 # `ler`, e a tela nem oferece o terceiro.
-MODULOS_COM_ESCRITA = ("configuracao", "carteiras", "acompanhamento")
+MODULOS_COM_ESCRITA = ("carteiras", "acompanhamento")
 
 # Modulos que so o Administrador alcanca, fora da matriz de proposito (revisao
 # de paginas de 01/10/2026). Usuarios: e onde se nomeia Gestor e se define quem
@@ -96,7 +95,7 @@ MODULOS_COM_ESCRITA = ("configuracao", "carteiras", "acompanhamento")
 # do departamento (a trilha do Gestor mora em Carteiras). As rotas usam
 # `require_admin`; a matriz nao oferece a celula e, se o banco tiver uma linha
 # antiga, ela e ignorada na leitura.
-MODULOS_SO_ADMIN = ("usuarios", "instalador", "dashboard")
+MODULOS_SO_ADMIN = ("usuarios", "instalador", "dashboard", "configuracao")
 
 # Como o módulo se chama numa frase ("Seu perfil não tem acesso ao Histórico").
 # A chave crua ("a historico") saía sem acento e sem artigo no 403.

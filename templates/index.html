@@ -1109,7 +1109,7 @@
                 : "O agente do servidor ainda não enviou o inventário. Avise o administrador.",
               // Configuração é só do administrador; oferecer o botão a quem
               // não entra lá o mandaria para um redirecionamento.
-              ...(admin ? { actionText: "Abrir Configuração", onAction: () => (window.location.href = "/configuracao") } : {}),
+              ...(admin ? { actionText: "Abrir Configuração", onAction: () => (window.location.href = "/configuracao?aba=pastas") } : {}),
             });
             return;
           }

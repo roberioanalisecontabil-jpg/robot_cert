@@ -63,7 +63,7 @@ class _Sb:
         return _Tabela(self, nome)
 
 
-def _matriz(gestor_configuracao: str = "ler", user_vencidos: str = "nenhum"):
+def _matriz(gestor_carteiras: str = "ler", user_vencidos: str = "nenhum"):
     """Matriz completa e válida, com duas células parametrizáveis."""
     base = {}
     for papel in permissoes.PAPEIS_CONFIGURAVEIS:
@@ -74,7 +74,7 @@ def _matriz(gestor_configuracao: str = "ler", user_vencidos: str = "nenhum"):
         # `nenhum`, e a célula que estes testes mexem passou a ser Configuração.
         for modulo in permissoes.MODULOS_SO_ADMIN:
             base[papel][modulo] = permissoes.NIVEL_NENHUM
-    base["gestor"]["configuracao"] = gestor_configuracao
+    base["gestor"]["carteiras"] = gestor_carteiras
     base["user"]["vencidos"] = user_vencidos
     return base
 
@@ -97,11 +97,11 @@ def gravacao(monkeypatch: pytest.MonkeyPatch):
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_registra_uma_linha_por_celula_alterada(gravacao) -> None:
-    antes = _matriz(gestor_configuracao="ler", user_vencidos="nenhum")
+    antes = _matriz(gestor_carteiras="ler", user_vencidos="nenhum")
     sb = gravacao(antes)
 
     permissoes.gravar(
-        _matriz(gestor_configuracao="editar", user_vencidos="ler"),
+        _matriz(gestor_carteiras="editar", user_vencidos="ler"),
         alterado_por="roberio@analisegroup.cnt.br",
     )
 
@@ -109,8 +109,8 @@ def test_registra_uma_linha_por_celula_alterada(gravacao) -> None:
     assert len(trilha) == 2, f"esperava 2 mudanças, vieram {len(trilha)}"
 
     por_celula = {(t["papel"], t["modulo"]): t for t in trilha}
-    assert por_celula[("gestor", "configuracao")]["de"] == "ler"
-    assert por_celula[("gestor", "configuracao")]["para"] == "editar"
+    assert por_celula[("gestor", "carteiras")]["de"] == "ler"
+    assert por_celula[("gestor", "carteiras")]["para"] == "editar"
     assert por_celula[("user", "vencidos")]["de"] == "nenhum"
     assert por_celula[("user", "vencidos")]["para"] == "ler"
     assert all(t["alterado_por"] == "roberio@analisegroup.cnt.br" for t in trilha)
@@ -146,8 +146,8 @@ def test_primeira_gravacao_registra_a_celula_que_passou_a_existir(gravacao) -> N
 
 def test_revogacao_e_registrada_como_concessao(gravacao) -> None:
     """Tirar acesso precisa deixar rastro tanto quanto dar."""
-    sb = gravacao(_matriz(gestor_configuracao="editar"))
-    permissoes.gravar(_matriz(gestor_configuracao="nenhum"), alterado_por="admin@x.com")
+    sb = gravacao(_matriz(gestor_carteiras="editar"))
+    permissoes.gravar(_matriz(gestor_carteiras="nenhum"), alterado_por="admin@x.com")
 
     trilha = sb.inseridos.get("permissoes_trilha") or []
     assert len(trilha) == 1
@@ -166,13 +166,13 @@ def test_trilha_indisponivel_nao_impede_a_concessao(gravacao, caplog) -> None:
     recuperação de acesso do portal, e travá-la por causa do registro cria um
     modo de falha pior do que o que o registro previne.
     """
-    sb = gravacao(_matriz(gestor_configuracao="ler"), falhar_trilha=True)
+    sb = gravacao(_matriz(gestor_carteiras="ler"), falhar_trilha=True)
 
     resultado = permissoes.gravar(
-        _matriz(gestor_configuracao="editar"), alterado_por="admin@x.com"
+        _matriz(gestor_carteiras="editar"), alterado_por="admin@x.com"
     )
 
-    assert resultado["gestor"]["configuracao"] == "editar", "a permissão precisa valer"
+    assert resultado["gestor"]["carteiras"] == "editar", "a permissão precisa valer"
     assert any(nome == "permissoes" for nome, _ in sb.upserts)
     # E a falha não pode ser silenciosa: alguém precisa poder descobrir que o
     # histórico tem um buraco.

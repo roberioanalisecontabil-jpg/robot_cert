@@ -286,3 +286,60 @@ recortados pelo Alcance — Duplicidades passou a ser.
 ### Testes
 
 `tests/test_pagina_consulta.py`.
+
+---
+
+## 7. Configuração e Login / sessão (02/10/2026)
+
+**Para que existem**: Configuração é a operação do portal (pastas e agente,
+SMTP e alertas, comandos remotos). Login é a porta: entrar, sair, trocar a
+senha provisória, recuperar a senha por código.
+
+**Quem vê**: Configuração só o Administrador (L1); o agente lê `/api/settings`
+pela chave de API. Login é público.
+
+### Decisões
+
+| # | Pergunta | Decisão | Motivo |
+|---|----------|---------|--------|
+| L1 | Matriz oferecia Configuração a Gestor; tela expulsava; comandos exigiam admin. | **Só Administrador** (`MODULOS_SO_ADMIN`). | Pastas, SMTP, chave e comandos são operação do portal. |
+| L2 | Toda página entregava o HTML inteiro e só expulsava no primeiro 401 da API. | **Checagem de token ao carregar** (`exigirSessao` em ui-common.js) com `/login?next=…` e volta à origem. O servidor segue sem guarda nas rotas HTML: o token vive no `localStorage` e não há dado sensível no HTML. Cookie `HttpOnly` fica como possível ADR futuro. | Ganho imediato com custo baixo; a migração de sessão é projeto à parte. |
+| L3 | "Fonte dos dados" (auto/remoto/local) e "URL do portal para o agente" só no navegador do administrador. | **Fonte sempre "auto"**; seletor removido. A URL fica só como entrada do `agent_config.json`, rotulada assim. | Configuração que vale para um navegador é surpresa. |
+| L4 | "Disparar agora" dizia "resumo" e mandava também os e-mails pessoais; toast contava só os pessoais. | **Dispara tudo, com texto e toast honestos** ("N e-mails pessoais, M resumos"; aviso quando os alertas estão desligados). | É o mesmo envio do horário. |
+
+### Defeitos corrigidos
+
+- Senha mínima: tela dizia 6 (login e modal de troca), servidor exige 12.
+- "Sair" com senha provisória não revogava a sessão (`/api/logout` caía no 403 da senha provisória). Entrou na lista de rotas permitidas.
+- Remetente SMTP sem validação de formato; agora 422.
+- Prévia do e-mail não usava o certificado vigente (A1); agora usa.
+- Configuração tratava 401 como "exige administrador" e não tratava 403; agora 403 tem texto próprio e 422/429 do teste de SMTP não ganham o prefixo "recusou".
+- Porta SMTP aceitava 1 a 65535 na tela e só 25/465/587/2525 no servidor; agora a tela diz e sugere as quatro.
+- "Banco de dados desconectado" quando a leitura de saúde falhava por outro motivo; agora "não verificado".
+- Gate de administrador desigual (Usuários e Configuração com aviso, Instalador sem, Dashboard sem) → `data-so-admin` no `<body>` e um gate só em ui-common.js.
+- Login: 422 aparecia como "[object Object]"; mensagem de sucesso da redefinição sumia ao voltar à tela de login; emojis; fonte remota do Google (as outras páginas usam fonte local); "Sessão encerrada. Entre novamente." nunca aparecia (agora chega ao login via sessionStorage); `next` após o login.
+- "O aviso no dia do vencimento é sempre enviado" → "de que venceu"; "colaborador" e "Máquina alvo" → vocabulário do glossário; "Abrir Configuração" do Início abre na aba Pastas.
+- Mensagens sem acento nas permissões; código morto do login por Supabase Auth (`_conta_local_do_email`); comentários Vercel/Render/Supabase em mensagens e docstrings; "três itens" (são cinco); "aguarda print".
+
+### Fica como está
+
+- Rotas HTML sem guarda no servidor (ver L2).
+- Login sem tema salvo (não carrega ui-common.js); CSP com nonce por script.
+- Intervalo de verificação de alertas oferecido em quatro valores (o servidor aceita 1 a 720 h).
+- Fusão de pastas do banco com SMTP do arquivo local em `load_settings` quando o banco tem pastas vazias (comportamento de transição documentado no código).
+
+### Testes
+
+`tests/test_pagina_config_login.py`.
+
+---
+
+## Encerramento (02/10/2026)
+
+As onze páginas foram revistas: Usuários (com Níveis de acesso), Carteiras,
+Início, Instalador, Acompanhamento, Dashboard, Histórico, Vencidos,
+Duplicidades, Configuração e Login. Todas as decisões estão nas tabelas acima;
+os defeitos corrigidos têm teste em `tests/test_pagina_*.py`. Pendências que
+saíram desta revisão como possíveis trabalhos futuros: sessão em cookie
+`HttpOnly` com guarda das rotas HTML no servidor (L2); permissão por usuário
+(N2, decidido não fazer).

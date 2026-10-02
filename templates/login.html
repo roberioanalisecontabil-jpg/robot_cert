@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Analise Certificado</title>
     <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Peso 800 removido: era baixado e nunca usado (nenhum font-weight:800 no projeto). -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <!-- Fontes servidas pelo portal, como nas outras páginas: a tela de login
+         é a única que todo mundo vê sem sessão, e não pode depender de rede
+         externa (nem vazar o acesso para um terceiro). -->
+    <link rel="stylesheet" href="/static/aguia-fontes.css">
     <link rel="stylesheet" href="/static/style.css?v=menu-lateral-2026-09d">
     <style>
         body {
@@ -227,8 +227,8 @@
                 <div class="form-group">
                     <label for="nova-senha">Nova senha</label>
                     <div class="campo-senha">
-                        <input type="password" id="nova-senha" required minlength="6"
-                               autocomplete="new-password" placeholder="mínimo 6 caracteres">
+                        <input type="password" id="nova-senha" required minlength="12"
+                               autocomplete="new-password" placeholder="mínimo 12 caracteres">
                         <button type="button" class="btn-olho" id="btn-olho-nova"
                                 aria-controls="nova-senha" aria-pressed="false"
                                 aria-label="Mostrar senha">👁</button>
@@ -243,7 +243,37 @@
     </main>
 
     <script nonce="{{ request.state.nonce }}">
-        const KEY_STORAGE = "cert_robot_api_key"; // Manter o mesmo nome por enquanto ou mudar para token
+        const KEY_STORAGE = "cert_robot_api_key"; // o nome ficou por compatibilidade; guarda o JWT
+
+        // Para onde ir depois de entrar: a página de origem (`?next=`), quando
+        // for um caminho deste portal; senão o Início. Nada de URL absoluta.
+        function destinoAposLogin() {
+            const next = new URLSearchParams(location.search).get("next") || "";
+            return /^\/(?!\/)[^\s]*$/.test(next) && !next.startsWith("/login") ? next : "/";
+        }
+
+        // Mensagem de um erro HTTP: `detail` pode ser texto (nossos erros) ou a
+        // lista do validador do servidor — que virava "[object Object]".
+        function textoDoErro(corpo, padrao) {
+            const d = corpo && corpo.detail;
+            if (typeof d === "string" && d) return d;
+            if (Array.isArray(d) && d.length) return d.map((x) => x.msg || JSON.stringify(x)).join(" ");
+            return padrao;
+        }
+
+        // Aviso deixado pela página anterior (ex.: "Sessão encerrada. Entre
+        // novamente."). O login não carrega o script compartilhado das outras
+        // páginas, então lê o mesmo sessionStorage aqui.
+        (function avisoPendente() {
+            try {
+                const raw = sessionStorage.getItem("cg_toast_pendente");
+                if (!raw) return;
+                sessionStorage.removeItem("cg_toast_pendente");
+                const { message } = JSON.parse(raw);
+                const el = document.getElementById("login-error");
+                if (message && el) { el.textContent = message; el.style.display = "block"; }
+            } catch (_e) { /* sem storage */ }
+        })();
 
         const $ = (id) => document.getElementById(id);
 
@@ -295,10 +325,10 @@
                     localStorage.setItem(KEY_STORAGE, data.access_token);
                     localStorage.setItem('user_role', data.role);
                     localStorage.setItem('user_email', email);
-                    window.location.href = '/';
+                    window.location.href = destinoAposLogin();
                 } else {
-                    const error = await response.json();
-                    errorDiv.textContent = error.detail || 'Falha ao autenticar.';
+                    const error = await response.json().catch(() => ({}));
+                    errorDiv.textContent = textoDoErro(error, 'Falha ao autenticar.');
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
@@ -313,7 +343,7 @@
         // ── Recuperar ──────────────────────────────────────────────────
         function mostrarMsg(texto, ok) {
             const el = $('rec-msg');
-            el.textContent = (ok ? '✅ ' : '⚠️ ') + texto;
+            el.textContent = texto;
             el.className = ok ? 'msg-ok' : 'msg-erro';
             el.style.display = 'block';
         }
@@ -434,10 +464,13 @@
                     localStorage.setItem(KEY_STORAGE, login.dados.access_token);
                     localStorage.setItem('user_role', login.dados.role);
                     localStorage.setItem('user_email', email);
-                    window.location.href = '/';
+                    window.location.href = destinoAposLogin();
                 } else {
-                    mostrarMsg('Senha alterada. Entre com a nova senha.', true);
+                    // A mensagem vai para a caixa da tela de login, que é a que
+                    // fica visível depois de `trocarView(false)`.
                     trocarView(false);
+                    const el = document.getElementById("login-error");
+                    if (el) { el.textContent = 'Senha alterada. Entre com a nova senha.'; el.style.display = 'block'; }
                 }
             } catch (err) {
                 mostrarMsg('Erro de conexão com o servidor.', false);

@@ -217,7 +217,7 @@ def test_matriz_do_banco_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None
     class _Resp:
         data = [
             {"papel": "gestor", "modulo": "carteiras", "nivel": "ler"},
-            {"papel": "user", "modulo": "configuracao", "nivel": "editar"},
+            {"papel": "user", "modulo": "acompanhamento", "nivel": "editar"},
             # Lixo: módulo inexistente e nível inválido são descartados sem
             # derrubar a leitura inteira.
             {"papel": "user", "modulo": "modulo-fantasma", "nivel": "editar"},
@@ -239,7 +239,7 @@ def test_matriz_do_banco_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("app.settings_state._banco", lambda: _SB())
 
     assert permissoes.nivel_de("gestor", "carteiras") == permissoes.NIVEL_LER
-    assert permissoes.nivel_de("user", "configuracao") == permissoes.NIVEL_EDITAR
+    assert permissoes.nivel_de("user", "acompanhamento") == permissoes.NIVEL_EDITAR
     # O que veio do banco substitui a linha inteira do papel: o que não foi
     # gravado é `nenhum`, e não o valor do padrão. Meia-configuração seria pior
     # que nenhuma — a tela mostraria uma coisa e o servidor faria outra.
@@ -499,7 +499,7 @@ def test_get_permissoes_entrega_o_que_a_tela_precisa(client) -> None:
     assert [m["id"] for m in d["modulos"]] == list(permissoes.MODULOS)
     por_id = {m["id"]: m for m in d["modulos"]}
     assert por_id["usuarios"]["niveis"] == [permissoes.NIVEL_NENHUM] and por_id["usuarios"]["so_admin"] is True
-    assert por_id["configuracao"]["niveis"] == list(permissoes.NIVEIS)
+    assert por_id["carteiras"]["niveis"] == list(permissoes.NIVEIS)
     assert permissoes.NIVEL_EDITAR not in por_id["vencidos"]["niveis"]
     # Contra a DECLARACAO, e nao contra um modulo escolhido a dedo: a versao
     # anterior fixava `carteiras: governado is False`, o que era um retrato do

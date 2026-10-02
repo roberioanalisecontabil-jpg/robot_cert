@@ -175,7 +175,7 @@ def _save_file(s: PortalSettings) -> None:
         payload = {**asdict(s), "updated_at": datetime.now(timezone.utc).isoformat()}
         DATA_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as e:
-        logger.warning(f"Falha ao salvar portal_settings.json localmente (ambiente read-only / Vercel): {e}")
+        logger.warning(f"Falha ao salvar portal_settings.json localmente (pasta sem permissão de escrita?): {e}")
 
 
 # Singleton: um pool de conexões por processo, criado no primeiro uso.

@@ -15,14 +15,29 @@ const FONT_STORAGE = "cert_robot_data_fonte";
 const MENU_CACHE_STORAGE = "cg_menu_modulos";
 const SIDEBAR_COLLAPSED_STORAGE = "analise_certidigital_sidebar_collapsed";
 
+// A fonte dos dados é sempre "auto" (decisão L3, 01/10/2026): o seletor da
+// Configuração valia só para o navegador do administrador, e "local" era o
+// modo de antes do agente. As funções ficam para quem ainda as chama.
 function getDataFonte() {
-  return localStorage.getItem(FONT_STORAGE) || "auto";
+  return "auto";
 }
 
-function setDataFonte(v) {
-  if (v) localStorage.setItem(FONT_STORAGE, v);
-  else localStorage.removeItem(FONT_STORAGE);
+function setDataFonte(_v) {
+  try { localStorage.removeItem(FONT_STORAGE); } catch (_e) { /* sem storage */ }
 }
+
+// Sem sessão, a página nem monta (decisão L2): até 30/09 o HTML inteiro era
+// entregue e a expulsão só vinha no primeiro 401 da API. O servidor não tem
+// como guardar a rota HTML — o token vive no localStorage —, então a cerca é
+// aqui, antes de qualquer fetch; `next` devolve a pessoa à página de origem.
+(function exigirSessao() {
+  try {
+    if (window.location.pathname.startsWith("/login")) return;
+    if (localStorage.getItem(KEY_STORAGE)) return;
+    const destino = window.location.pathname + window.location.search;
+    window.location.replace("/login?next=" + encodeURIComponent(destino));
+  } catch (_e) { /* sem storage: deixa a API decidir */ }
+})();
 
 function getToken() {
   return localStorage.getItem(KEY_STORAGE) || "";
@@ -38,7 +53,14 @@ function getHeaders(json = false) {
   return h;
 }
 
-function logout() {
+function logout(motivo) {
+  // `motivo === "sessao"`: a sessão caiu (401) e a pessoa volta para onde
+  // estava depois de entrar; a tela de login mostra o aviso guardado.
+  if (motivo === "sessao") {
+    try {
+      sessionStorage.setItem(TOAST_PENDENTE_STORAGE, JSON.stringify({ message: "Sessão encerrada. Entre novamente.", type: "warning" }));
+    } catch (_e) { /* sem storage */ }
+  }
   // Sair no SERVIDOR também (SECURITY_AUDIT #23): a rota incrementa a versão
   // da sessão e o token deixa de valer em qualquer lugar em que tenha sido
   // copiado. `keepalive` porque a página vai embora logo abaixo; a limpeza
@@ -55,7 +77,10 @@ function logout() {
   localStorage.removeItem('user_email');
   // O cache do menu descreve o que UMA pessoa alcanca. Sai junto com ela.
   localStorage.removeItem(MENU_CACHE_STORAGE);
-  window.location.href = '/login';
+  const next = motivo === "sessao" && !window.location.pathname.startsWith("/login")
+    ? "?next=" + encodeURIComponent(window.location.pathname + window.location.search)
+    : "";
+  window.location.href = '/login' + next;
 }
 
 document.addEventListener('click', function(e) {
@@ -110,7 +135,7 @@ function initSidebarPorPapel() {
   // `localStorage.getItem("user_role")` — sincrono, no mesmo quadro. Ao trocar
   // isso por `fetch`, cada clique no menu passou a mostrar metade dos itens,
   // esperar uma ida a rede e so entao completar. Para o admin, que alcanca os
-  // dez, o salto e maximo; num cold start da Vercel, longo.
+  // dez, o salto e maximo.
   //
   // Guardado POR PESSOA: a estacao e compartilhada neste escritorio, e um cache
   // solto faria o proximo a entrar ver por um instante o menu de quem saiu.
@@ -1001,8 +1026,8 @@ function abrirTrocaDeSenhaObrigatoria() {
         <div class="modal__campo">
           <label for="so-nova">Nova senha</label>
           <div class="campo-senha">
-            <input type="password" id="so-nova" required minlength="6"
-                   autocomplete="new-password" placeholder="mínimo 6 caracteres">
+            <input type="password" id="so-nova" required minlength="12"
+                   autocomplete="new-password" placeholder="mínimo 12 caracteres">
             <button type="button" class="btn-olho" id="so-olho"
                     aria-controls="so-nova" aria-pressed="false"
                     aria-label="Mostrar senha">&#128065;</button>
@@ -1010,7 +1035,7 @@ function abrirTrocaDeSenhaObrigatoria() {
         </div>
         <div class="modal__campo">
           <label for="so-conf">Repita a nova senha</label>
-          <input type="password" id="so-conf" required minlength="6" autocomplete="new-password">
+          <input type="password" id="so-conf" required minlength="12" autocomplete="new-password">
         </div>
       </div>
       <div class="modal__foot">
@@ -1091,7 +1116,7 @@ const originalFetch = window.fetch;
 window.fetch = async (...args) => {
     const response = await originalFetch(...args);
     if (response.status === 401 && !window.location.pathname.includes('/login')) {
-        logout();
+        logout("sessao");
     }
     // Cabeçalho, e não o texto da mensagem: casar por string quebraria assim
     // que alguém reescrevesse a frase, e o modal simplesmente pararia de
@@ -1915,3 +1940,17 @@ function abrirModal(id) {
   dlg.showModal();
   return dlg;
 }
+
+
+// Páginas só do administrador declaram `data-so-admin="1"` no <body>. Um
+// ponto só (revisão de 01/10/2026): Usuários e Configuração avisavam,
+// Instalador expulsava sem aviso e Dashboard não tinha cerca nenhuma.
+(function gateAdmin() {
+  try {
+    const body = document.body;
+    if (!body || body.dataset.soAdmin !== "1") return;
+    if (localStorage.getItem("user_role") === "admin") return;
+    showToastAfterRedirect("Acesso restrito a administradores.", "warning");
+    window.location.replace("/");
+  } catch (_e) { /* sem storage: a API recusa de qualquer forma */ }
+})();

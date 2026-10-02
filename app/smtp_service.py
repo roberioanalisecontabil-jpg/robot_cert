@@ -17,8 +17,8 @@ ERRO_SEM_CHAVE = (
     "Gere uma com:\n"
     '  python -c "from cryptography.fernet import Fernet; '
     'print(Fernet.generate_key().decode())"\n'
-    "e defina ENCRYPTION_KEY no .env (local) ou no painel de variáveis de "
-    "ambiente da plataforma (Vercel/Render) — o .env não sobe no deploy."
+    "e defina ENCRYPTION_KEY no .env do servidor (C:\\Apps\\robot_cert\\.env no "
+    "ANALISESRV; o serviço precisa ser reiniciado depois)."
 )
 
 

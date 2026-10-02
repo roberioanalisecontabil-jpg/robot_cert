@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
   <link rel="stylesheet" href="/static/aguia-instalador.css?v=aguia-2026-09" />
 </head>
-<body class="cg-aguia">
+<body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
@@ -919,10 +919,8 @@
     /* ── Início ───────────────────────────────────────────────────────── */
 
     (function init() {
-      // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
-      // o gate da página.
-      const role = localStorage.getItem("user_role");
-      if (role !== "admin") { window.location.href = "/"; return; }
+      // Sidebar por papel: ui-common.js (initSidebarPorPapel). O gate de
+      // administrador é o `data-so-admin` do <body>, também em ui-common.js.
 
       const q = new URLSearchParams(location.search);
       if (q.get("q")) document.getElementById("buscaOptin").value = q.get("q");

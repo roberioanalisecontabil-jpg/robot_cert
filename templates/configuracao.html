@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
   <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-09" />
 </head>
-<body class="cg-aguia">
+<body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
@@ -27,7 +27,7 @@
       <p class="ag-page__lead">Segurança, pastas, alertas por e-mail e comandos remotos do agente Windows.</p>
     </header>
 
-    <!-- Faixa de status: badges escritos. "Fonte dos dados" é configuração
+    <!-- Faixa de status: badges escritos. O seletor de fonte saiu em 01/10/2026 (L3): a fonte é sempre "auto", e a antiga nota dizia que era configuração
          (do navegador) e foi para a aba "Pastas e agente". -->
     <div class="cg-cfg-status" aria-label="Estado do servidor">
       <span class="ag-badge ag-badge--neutral" id="tag-banco">Banco de dados: verificando…</span>
@@ -46,7 +46,7 @@
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
-    <!-- ── Chave API (item 97: aguarda print) ───────────────────────── -->
+    <!-- ── Chave API ───────────────────────── -->
     <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
         <!-- A chave não passa mais pelo navegador (SECURITY_AUDIT #46, lote 7):
@@ -63,7 +63,7 @@
       </div>
     </section>
 
-    <!-- ── Pastas e agente (item 97: aguarda print) ─────────────────── -->
+    <!-- ── Pastas e agente ─────────────────── -->
     <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
         <p class="cg-cfg-lead">O <strong>agente</strong> lê estes caminhos para saber que pastas monitorar.</p>
@@ -71,7 +71,7 @@
           <div class="ag-field"><label class="ag-label" for="inp-source">Origem (.pfx)</label><input type="text" id="inp-source" class="ag-input" placeholder="C:\Certs" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-exp">Vencidos (destino)</label><input type="text" id="inp-exp" class="ag-input" placeholder="C:\Certs\Vencidos" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-machine">ID do servidor</label><input type="text" id="inp-machine" class="ag-input" placeholder="default ou nome do PC" /></div>
-          <div class="ag-field"><label class="ag-label" for="inp-agent-base-url">URL do portal para o agente</label><input type="text" id="inp-agent-base-url" class="ag-input" placeholder="https://certificado.exemplo" /></div>
+          <div class="ag-field"><label class="ag-label" for="inp-agent-base-url">URL do portal no agent_config.json</label><input type="text" id="inp-agent-base-url" class="ag-input" placeholder="https://certificado.exemplo" aria-describedby="agent-url-hint" /><p class="ag-ajuda" id="agent-url-hint">Só entra no arquivo baixado abaixo; o portal não a usa.</p></div>
         </div>
         <div class="cg-cfg-acoes">
           <button type="button" id="btn-save-cfg" class="ag-btn ag-btn--primary">Guardar e sincronizar</button>
@@ -86,21 +86,6 @@
           <div><span class="ag-label">Destino (vencidos)</span> <code id="disp-expired">—</code></div>
         </div>
 
-        <!-- Fonte dos dados: preferência do navegador, não do servidor. Tem
-             formulário próprio com "Aplicar" e confirmação escrita. -->
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Fonte dos dados</h3><p class="ag-form-subhead__nota">Vale para este navegador</p></div>
-        <form id="form-fonte" class="cg-cfg-teste">
-          <div class="ag-field">
-            <label class="ag-label" for="sel-fonte">Fonte</label>
-            <select id="sel-fonte" class="ag-select" aria-describedby="fonte-hint">
-              <option value="auto">Automático</option>
-              <option value="remoto">Só remoto (agente)</option>
-              <option value="local">Só local (servidor)</option>
-            </select>
-          </div>
-          <button type="submit" class="ag-btn ag-btn--outline">Aplicar</button>
-        </form>
-        <p class="ag-ajuda" id="fonte-hint">De onde o Início lê o inventário: do último envio do agente, da leitura local no servidor, ou o que houver.</p>
         <p class="ag-ajuda" id="path-sync-msg" role="status"></p>
 
         <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Agente no Windows</h3></div>
@@ -139,7 +124,7 @@
         <div class="ag-form-cols">
           <div class="cg-cfg-servidor">
             <div class="ag-field"><label class="ag-label" for="inp-smtp-host">Servidor</label><input type="text" id="inp-smtp-host" class="ag-input" placeholder="smtp.gmail.com" /></div>
-            <div class="ag-field"><label class="ag-label" for="inp-smtp-port">Porta</label><input type="number" id="inp-smtp-port" class="ag-input ag-input--porta" value="587" placeholder="587" min="1" max="65535" /></div>
+            <div class="ag-field"><label class="ag-label" for="inp-smtp-port">Porta <span class="ag-ajuda" id="porta-hint">(25, 465, 587 ou 2525)</span></label><input type="number" id="inp-smtp-port" class="ag-input ag-input--porta" value="587" placeholder="587" list="portas-smtp" min="25" max="2525" aria-describedby="porta-hint" /><datalist id="portas-smtp"><option value="25"></option><option value="465"></option><option value="587"></option><option value="2525"></option></datalist></div>
           </div>
           <div class="ag-field">
             <label class="ag-label" for="sel-smtp-seguranca">Segurança da conexão</label>
@@ -192,7 +177,7 @@
           <div class="ag-field">
             <label class="ag-label" for="inp-alertas-marcos">Prazos de aviso</label>
             <input type="text" id="inp-alertas-marcos" class="ag-input" inputmode="numeric" autocomplete="off" />
-            <p class="ag-ajuda">Dias antes do vencimento, separados por vírgula. O aviso no dia do vencimento é sempre enviado.</p>
+            <p class="ag-ajuda">Dias antes do vencimento, separados por vírgula. O aviso de que venceu é sempre enviado.</p>
             <p class="ag-ajuda ag-ajuda--muted" id="alertas-marcos-efetivo"></p>
           </div>
           <div class="ag-field">
@@ -231,11 +216,11 @@
       </div>
     </section>
 
-    <!-- ── Fila de comandos (item 97: aguarda print) ────────────────── -->
+    <!-- ── Fila de comandos ────────────────── -->
     <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">Envie comandos para o agente executar na máquina dele. <em>Forçar leitura</em> instrui o agente a reler a pasta ignorando o intervalo de 24 horas.</p>
-        <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Máquina alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
+        <p class="cg-cfg-lead">Envie comandos para o agente executar no servidor da varredura. <em>Forçar leitura</em> instrui o agente a reler a pasta ignorando o intervalo de 24 horas.</p>
+        <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Servidor alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
         <div class="cg-cfg-acoes">
           <button type="button" id="cmd-rescan" class="ag-btn ag-btn--outline">Forçar leitura</button>
           <button type="button" id="cmd-ping" class="ag-btn ag-btn--outline">Ping</button>
@@ -261,7 +246,7 @@
   <dialog id="modal-email" class="ag-modal ag-modal--lg" aria-labelledby="modal-email-titulo">
     <form id="form-email" method="dialog">
       <div class="ag-modal__head">
-        <div><h2 class="ag-modal__titulo" id="modal-email-titulo">Texto do e-mail de alerta</h2><p class="ag-ajuda">Vale para o resumo do administrador e o do colaborador.</p></div>
+        <div><h2 class="ag-modal__titulo" id="modal-email-titulo">Texto do e-mail de alerta</h2><p class="ag-ajuda">Vale para o resumo do administrador e para o e-mail pessoal de quem acompanha.</p></div>
         <button type="button" class="ag-modal__x" id="em-fechar" aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
       </div>
       <div class="ag-modal__body">
@@ -368,20 +353,6 @@
         _segAnterior = nova;
       });
 
-      // ── Fonte de dados ───────────────────────────────────────────────────────
-      function syncSelectFonteFromStorage() {
-        const sf = document.getElementById("sel-fonte");
-        if (!sf) return;
-        const v = getDataFonte();
-        if (["auto", "remoto", "local"].indexOf(v) >= 0) sf.value = v;
-      }
-
-      document.getElementById("form-fonte").addEventListener("submit", (ev) => {
-        ev.preventDefault();
-        setDataFonte(document.getElementById("sel-fonte").value);
-        document.getElementById("path-sync-msg").textContent = "Aplicado neste navegador. O Início passa a usar esta fonte na próxima atualização da tabela.";
-      });
-
       // ── API / caminhos ───────────────────────────────────────────────────────
       async function syncPathsFromApi() {
         const emptyHint = "(não definida — padrão do .env / servidor)";
@@ -395,8 +366,8 @@
           caixa.hidden = false;
           return;
         }
-        if (r.status === 401) {
-          warn.textContent = "Sessão sem acesso a esta configuração. Entre de novo no portal com um usuário administrador.";
+        if (r.status === 403) {
+          warn.textContent = "Esta configuração é só do administrador: " + (await mensagemCorpoErro(r));
           caixa.hidden = false;
           return;
         }
@@ -417,7 +388,7 @@
         try {
           const r = await fetch("/api/settings", { headers: getHeaders() });
           if (r.status === 401) {
-            st.textContent = "401: a sessão expirou ou não tem acesso. Entre de novo no portal.";
+            st.textContent = "A sessão expirou. Entre de novo no portal.";
             return;
           }
           if (!r.ok) {
@@ -561,7 +532,7 @@
             ...corpoAlertas(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
-          if (r.status === 401) { st.textContent = "401: a sessão expirou ou não tem acesso. Entre de novo no portal."; return; }
+          if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const j = await r.json();
           st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
@@ -641,7 +612,7 @@
             ...corpoModeloEmail(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
-          if (r.status === 401) { st.textContent = ""; erroCfg("Não autorizado: esta ação exige administrador."); return; }
+          if (r.status === 403) { st.textContent = ""; erroCfg("Só o administrador altera esta configuração."); return; }
           if (!r.ok) { st.textContent = ""; erroCfg(await mensagemCorpoErro(r)); return; }
           const s = await r.json();
           pintarSenhaGuardada(!!s.smtp_password_set);
@@ -668,7 +639,8 @@
         resultadoTeste("info", "Enviando o teste com a configuração salva…");
         try {
           const r = await fetch("/api/settings/smtp/test", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ target_email: dest }) });
-          if (r.status === 401) { resultadoTeste("danger", "Não autorizado: esta ação exige administrador."); return; }
+          if (r.status === 403) { resultadoTeste("danger", "Só o administrador testa o envio."); return; }
+          if (r.status === 422 || r.status === 429 || r.status === 400) { resultadoTeste("danger", await mensagemCorpoErro(r)); return; }
           if (!r.ok) { resultadoTeste("danger", "O servidor de e-mail recusou: " + (await mensagemCorpoErro(r))); return; }
           resultadoTeste("success", "E-mail de teste enviado para " + dest + ".");
         } catch (e) { resultadoTeste("danger", "Erro: " + e); }
@@ -681,7 +653,7 @@
       }
 
       document.getElementById("btn-trigger-alerts").addEventListener("click", () => {
-        document.getElementById("disparoTexto").textContent = "Enviar o resumo agora para " + destinatariosDoResumo() + "? O e-mail sai com a configuração salva.";
+        document.getElementById("disparoTexto").textContent = "Enviar agora o resumo para " + destinatariosDoResumo() + " e os e-mails pessoais de quem acompanha certificados? É o mesmo envio do horário, com a configuração salva.";
         document.getElementById("modalDisparo").showModal();
       });
 
@@ -692,10 +664,11 @@
         try {
           const r = await fetch("/api/settings/alerts/trigger", { method: "POST", headers: getHeaders(true) });
           modal.close();
-          if (r.status === 401) { erroCfg("Não autorizado: esta ação exige administrador."); return; }
+          if (r.status === 403) { erroCfg("Só o administrador dispara os alertas."); return; }
           if (!r.ok) { erroCfg("Não foi possível disparar: " + (await mensagemCorpoErro(r))); return; }
           const s = (await r.json()).stats || {};
-          showToast(plural(s.alerts_sent || 0, "alerta enviado", "alertas enviados") + (s.errors ? ", " + plural(s.errors, "erro") : "") + (s.skipped_already_sent ? ", " + s.skipped_already_sent + " já enviados hoje" : "") + ".", s.errors ? "warning" : "success");
+          if (s.alerts_disabled) { showToast("Os alertas estão desligados: nada foi enviado. Ligue o interruptor e salve.", "warning"); return; }
+          showToast(plural(s.alerts_sent || 0, "e-mail pessoal enviado", "e-mails pessoais enviados") + ", " + plural(s.admin_resumos_enviados || 0, "resumo enviado", "resumos enviados") + (s.errors ? ", " + plural(s.errors, "erro") : "") + (s.skipped_already_sent ? ", " + s.skipped_already_sent + " já enviados hoje" : "") + ".", s.errors ? "warning" : "success");
         } catch (e) { modal.close(); erroCfg("Erro: " + e); }
         finally { btn.disabled = false; }
       });
@@ -851,7 +824,7 @@
           const cmi = document.getElementById("cmd-machine-id");
           const mid = cmi && cmi.value.trim() ? cmi.value.trim() : "default";
           const r = await fetch("/api/agent/commands", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ machine_id: mid, command: cmd }) });
-          if (r.status === 401) { st.textContent = "401: a sessão expirou ou não tem acesso. Entre de novo no portal."; return; }
+          if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const j = await r.json();
           st.textContent = "Enfileirado: " + (j.command || cmd) + " (id " + (j.id || "—") + ").";
@@ -877,14 +850,8 @@
 
       // ── Init ─────────────────────────────────────────────────────────
       (async function init() {
-        // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
-        // o gate da página.
-        const role = localStorage.getItem('user_role');
-        if (role !== 'admin') {
-          showToastAfterRedirect('Acesso restrito a administradores.', 'warning');
-          window.location.href = '/';
-          return;
-        }
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel). O gate de
+        // administrador é o `data-so-admin` do <body>, também em ui-common.js.
         document.querySelectorAll("[data-ag-modal-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
         document.getElementById("em-fechar").addEventListener("click", () => document.getElementById("modal-email").close());
         document.getElementById("inp-alertas-dest").addEventListener("input", avisarEnderecoExterno);
@@ -894,11 +861,13 @@
           el.addEventListener("change", marcarSujo);
         });
 
-        syncSelectFonteFromStorage();
         const h = await health();
         const tagS = document.getElementById("tag-banco");
-        tagS.className = "ag-badge " + (h.banco ? "ag-badge--success" : "ag-badge--danger");
-        tagS.textContent = h.banco ? "Banco de dados conectado" : "Banco de dados desconectado";
+        // `health()` devolve {ok:false} em qualquer falha de leitura; isso não
+        // é "banco desconectado", é "não consegui verificar".
+        const semLeitura = h.ok === false && h.banco === undefined;
+        tagS.className = "ag-badge " + (semLeitura ? "ag-badge--neutral" : (h.banco ? "ag-badge--success" : "ag-badge--danger"));
+        tagS.textContent = semLeitura ? "Banco de dados: não verificado" : (h.banco ? "Banco de dados conectado" : "Banco de dados desconectado");
         const tagK = document.getElementById("tag-api-key");
         tagK.textContent = h.api_key_required ? "Chave API obrigatória" : "Chave API aberta";
         const ah = document.getElementById("auth-hint");

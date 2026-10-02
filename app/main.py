@@ -74,7 +74,9 @@ SESSAO_ENCERRADA = "Sessão encerrada. Entre novamente."
 # curta de propósito: tudo o mais é recusado. Fosse uma lista de bloqueio em
 # vez de liberação, cada rota nova nasceria acessível por omissão — e o
 # esquecimento não daria sintoma nenhum.
-ROTAS_COM_SENHA_PROVISORIA = frozenset({"/api/senha/trocar"})
+# `/api/logout` entra (revisão de 01/10/2026): o "Sair" do modal de troca
+# obrigatória caía neste 403 e a sessão provisória nunca era revogada.
+ROTAS_COM_SENHA_PROVISORIA = frozenset({"/api/senha/trocar", "/api/logout"})
 
 ERRO_SENHA_PROVISORIA = (
     "Sua senha foi definida por outra pessoa. Escolha uma senha própria para "
@@ -88,38 +90,6 @@ class ContaIndisponivel(RuntimeError):
 
 class ContaInvalida(RuntimeError):
     """A conta que o token nomeia não existe mais no diretório."""
-
-
-def _conta_local_do_email(email: str) -> Optional[dict]:
-    """
-    A linha em `users` deste e-mail, ou None. Não levanta.
-
-    Serve ao login por Supabase Auth: lá a identidade já foi provada, e o que
-    falta saber é se essa pessoa tem perfil NESTE portal. Entrar na lista comum
-    de pessoas não dá acesso aqui — é a diferença entre autenticação e
-    autorização, e é o que impede alguém cadastrado só para o inventário de
-    passar a listar certificados.
-
-    `_conta_da_sessao` não serve: ela levanta `ContaInvalida` quando não acha, o
-    que é certo para uma sessão em curso e errado para uma tentativa de login.
-    """
-    from app.settings_state import _banco
-
-    sb = _banco()
-    if not sb:
-        return None
-    try:
-        r = (
-            sb.table("users")
-            .select("id, email, role, ativo, deve_trocar_senha")
-            .eq("email", (email or "").strip().lower())
-            .limit(1)
-            .execute()
-        )
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Não foi possível ler a conta local de %s: %s", email, e)
-        return None
-    return r.data[0] if r.data else None
 
 
 def _conta_da_sessao(email: str) -> Optional[dict]:
@@ -602,6 +572,16 @@ async def require_agent_or_admin(token: auth.TokenData = Depends(require_auth)) 
     if token.role not in ("agent", "admin") or token.email == ANONYMOUS_IDENTITY_EMAIL:
         raise HTTPException(status_code=403, detail=ERRO_ACESSO_MAQUINA)
     return token
+
+
+async def require_admin_ou_agente_leitura(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+    """`GET /api/settings`: o agente lê as pastas que deve varrer (inclusive a
+    identidade anônima do modo sem API_KEY, para o robô continuar funcionando
+    em desenvolvimento); a escrita e o resto da Configuração são só do
+    administrador (decisão L1, 01/10/2026)."""
+    if (token.role or "").strip().lower() in ("agent", "admin"):
+        return token
+    raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
 
 # O que se mascara no log (achado #57, lote 9): VALORES, não frases. Até aqui
 # qualquer mensagem com "token", "senha" ou "password" virava
@@ -2556,7 +2536,7 @@ def get_permissoes() -> dict:
         }
     except permissoes.PermissoesIndisponiveis as e:
         logger.error("Permissoes indisponiveis: %s", e)
-        raise HTTPException(status_code=503, detail="Nao foi possivel ler as permissoes. Tente de novo.")
+        raise HTTPException(status_code=503, detail="Não foi possível ler as permissões. Tente de novo.")
 
 
 # `require_auth`, e nao `require_admin`: cada um le a PROPRIA linha, e e o que o
@@ -2572,7 +2552,7 @@ def get_minhas_permissoes(token: auth.TokenData = Depends(require_auth)) -> dict
         # parecer que a pessoa perdeu todos os acessos. O front trata o erro
         # mantendo o menu que ja estava.
         logger.error("Permissoes indisponiveis: %s", e)
-        raise HTTPException(status_code=503, detail="Nao foi possivel ler suas permissoes. Tente de novo.")
+        raise HTTPException(status_code=503, detail="Não foi possível ler suas permissões. Tente de novo.")
 
 
 @app.put("/api/permissoes", dependencies=[Depends(require_admin)])
@@ -2584,7 +2564,7 @@ def put_permissoes(body: PermissoesBody, token: auth.TokenData = Depends(require
         raise HTTPException(status_code=422, detail=str(e))
     except permissoes.PermissoesIndisponiveis as e:
         logger.error("Permissoes indisponiveis ao gravar: %s", e)
-        raise HTTPException(status_code=503, detail="Nao foi possivel gravar a matriz. Tente de novo.")
+        raise HTTPException(status_code=503, detail="Não foi possível gravar a matriz. Tente de novo.")
     return {"ok": True, "matriz": salva}
 
 
@@ -2706,13 +2686,13 @@ def _settings_dict(s: PortalSettings) -> dict:
 # Mao dupla: a tela de Configuracao le daqui, e o agente tambem — e o que diz
 # a ele quais pastas varrer. `permitir_agente` mantem o robo funcionando enquanto
 # o modulo passa a governar as pessoas.
-@app.get("/api/settings", dependencies=[Depends(require_modulo("configuracao", permitir_agente=True))])
+@app.get("/api/settings", dependencies=[Depends(require_admin_ou_agente_leitura)])
 def get_settings() -> dict:
     s = load_settings()
     return _settings_dict(s)
 
 
-@app.put("/api/settings", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
+@app.put("/api/settings", dependencies=[Depends(require_admin)])
 def put_settings(body: SettingsBody) -> dict:
     # Lido ANTES de validar: campo omitido é validado a partir do que já está
     # gravado, e não do default. Validar o default e gravar o valor antigo
@@ -2807,6 +2787,11 @@ def put_settings(body: SettingsBody) -> dict:
         except Exception as e:
             raise HTTPException(status_code=500, detail="Erro ao criptografar senha SMTP")
             
+    # Remetente vazio usa o usuário SMTP; preenchido, precisa parecer e-mail
+    # (revisão de 01/10/2026: só o destino do teste era conferido).
+    remetente = (body.smtp_from_email or "").strip()
+    if remetente and not _EMAIL_PLAUSIVEL.match(remetente):
+        raise HTTPException(status_code=422, detail=f"E-mail do remetente inválido: {remetente!r}")
     s = PortalSettings(
         source_folder=pasta_origem,
         expired_folder=pasta_vencidos,
@@ -2817,7 +2802,7 @@ def put_settings(body: SettingsBody) -> dict:
         smtp_password_encrypted=enc_password,
         smtp_use_tls=body.smtp_use_tls,
         smtp_use_ssl=body.smtp_use_ssl,
-        smtp_from_email=body.smtp_from_email.strip(),
+        smtp_from_email=remetente,
         smtp_alerts_enabled=body.smtp_alerts_enabled,
         install_token_ttl_min=ttl,
         trilha_retencao_dias=retencao,
@@ -3202,7 +3187,7 @@ class SmtpTestBody(BaseModel):
 @app.post(
     "/api/settings/smtp/test",
     dependencies=[
-        Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR)),
+        Depends(require_admin),
         # Cinco por hora por identidade (achado #28): era relay autenticado
         # sem teto, um e-mail do remetente corporativo por clique.
         Depends(_limitar("smtp-test", 5, 3600)),
@@ -3265,7 +3250,7 @@ class PreviaEmailBody(BaseModel):
     alerta_email_recado: Optional[str] = Field(default=None)
 
 
-@app.post("/api/settings/alerts/preview", dependencies=[Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR))])
+@app.post("/api/settings/alerts/preview", dependencies=[Depends(require_admin)])
 def preview_email_alerta(body: PreviaEmailBody) -> dict:
     """O e-mail que sairia agora com este texto, sem salvar nada.
 
@@ -3291,9 +3276,10 @@ def preview_email_alerta(body: PreviaEmailBody) -> dict:
 @app.post(
     "/api/settings/alerts/trigger",
     dependencies=[
-        Depends(require_modulo("configuracao", permissoes.NIVEL_EDITAR)),
-        # Varre o acervo inteiro e envia e-mail a todos os colaboradores, de
-        # forma síncrona: três por hora por identidade (achado #28).
+        Depends(require_admin),
+        # Varre o acervo inteiro e envia o resumo dos administradores e os
+        # e-mails pessoais de quem acompanha, de forma síncrona: três por hora
+        # por identidade (achado #28).
         Depends(_limitar("alerts-trigger", 3, 3600)),
     ],
 )
@@ -3309,7 +3295,8 @@ def trigger_alerts_manually() -> dict:
 @app.get("/api/cron/alerts")
 def cron_alerts(request: Request) -> dict:
     """
-    Disparo agendado dos alertas, chamado pelo Cron do Vercel.
+    Disparo agendado dos alertas, chamado pelo agendador do servidor (até
+    22/09/2026 era o Cron da Vercel; o portal hoje roda no ANALISESRV).
 
     Existe porque o laço do `lifespan` não roda em serverless: cada requisição
     instancia a função e a encerra, então o `asyncio.create_task` morre antes

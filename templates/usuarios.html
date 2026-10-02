@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
   <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-09a" />
 </head>
-<body class="cg-aguia">
+<body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
@@ -1347,19 +1347,13 @@
             if (['ativo', 'desativado', 'todos'].includes(q.get('status'))) document.getElementById('user-status-filter').value = q.get('status');
         })();
 
-        // Sidebar por papel: ui-common.js (initSidebarPorPapel). Aqui fica só
-        // o gate da página.
-        const role = localStorage.getItem('user_role');
-        if (role !== 'admin') {
-            showToastAfterRedirect('Acesso restrito a administradores.', 'warning');
-            window.location.href = '/';
-        } else {
-            // Os departamentos carregam junto: o modal de usuário precisa da
-            // lista para montar o select.
-            loadUsers().then(loadDepartamentos).then(() => {
-                if ('{{ aba }}' === 'permissoes') carregarPermissoes();
-            });
-        }
+        // Sidebar por papel: ui-common.js (initSidebarPorPapel). O gate de
+        // administrador é o `data-so-admin` do <body>, também em ui-common.js.
+        // Os departamentos carregam junto: o modal de usuário precisa da
+        // lista para montar o select.
+        loadUsers().then(loadDepartamentos).then(() => {
+            if ('{{ aba }}' === 'permissoes') carregarPermissoes();
+        });
   </script>
 </body>
 </html>

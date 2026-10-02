@@ -876,7 +876,9 @@ def previa_do_resumo(settings, modelo: Optional[Dict[str, str]] = None,
         from app.settings_state import get_latest_snapshot
         from app.main import _list_certificados_payload
         payload = _list_certificados_payload(settings, get_latest_snapshot(), "auto")
-        itens = list(payload.get("itens") or [])
+        # Mesma base do envio (A1): um certificado por Cliente, o vigente.
+        from app import vigencia
+        itens = vigencia.vigentes_por_documento(payload.get("itens") or [])
     except Exception:  # noqa: BLE001
         logger.exception("Prévia do e-mail: inventário indisponível; usando exemplo")
 
