@@ -40,6 +40,14 @@ _Avoid_: cliente, empresa (quando se refere à chave)
 O titular de um Documento, como as telas o nomeiam: nome e CNPJ/CPF. Quem opera pensa em cliente; a regra de negócio trabalha com o Documento.
 _Avoid_: empresa, titular (nas telas)
 
+**Entrada** (`pasta_entrada`):
+A pasta onde os Certificados chegam antes de entrar no acervo. O agente lê o titular dentro do arquivo, renomeia no padrão e move para a pasta da letra; só então o Certificado passa a existir no Inventário. O que não abre fica na Entrada como Pendente.
+_Avoid_: recebidos, caixa de entrada, inbox
+
+**Pendente** (`entrada_eventos.resultado = pendente`):
+Um arquivo que ficou na Entrada porque o agente não conseguiu lê-lo (nome fora do padrão, senha errada, arquivo corrompido, titular sem CNPJ/CPF). Deixa de ser Pendente quando sai da Entrada.
+_Avoid_: erro, ilegível (nas telas da Entrada)
+
 **Inventário** (`cert_snapshots`):
 A última foto dos Certificados encontrados na pasta do servidor. É o universo sobre o qual as Carteiras atuam.
 _Avoid_: snapshot, pasta

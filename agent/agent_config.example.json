@@ -5,5 +5,8 @@
   "expired_folder": "C:\\Certs\\Vencidos",
   "interval_sec": 86400,
   "mover_vencidos": true,
-  "poll_commands": true
+  "poll_commands": true,
+  "pasta_entrada": "",
+  "pasta_pj": "",
+  "pasta_pf": ""
 }

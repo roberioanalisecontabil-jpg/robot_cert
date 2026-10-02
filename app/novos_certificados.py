@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import html
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from app import alertas_config
@@ -274,3 +274,95 @@ def notificar_novos(novos: List[Dict[str, Any]]) -> Dict[str, Any]:
         out["certificados"], out["destinatarios"], out["enviados"], out["ignorados_ja_enviados"], out["erros"],
     )
     return out
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Por hora cheia (02/10/2026)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Em vez de um e-mail por ingestão, os novos de cada hora saem juntos na
+# virada da hora: o que entrou das 09:01 às 09:59 vai às 10:00. A fila mora na
+# tabela `novos_pendentes` (uma linha por certificado, com o item inteiro);
+# sem banco, numa lista em memória — o processo é um só no ANALISESRV.
+#
+# "Imediato" continua existindo como modo, e a chave geral
+# `alertas_novos_enabled` desliga os dois. O antispam por (certificado,
+# destinatário) em `sent_alerts` segue valendo no envio, então um reinício
+# entre a gravação e o envio no máximo atrasa, nunca duplica.
+
+TABELA_PENDENTES = "novos_pendentes"
+_pendentes_memoria: List[Dict[str, Any]] = []
+
+
+def segundos_ate_a_proxima_hora_cheia(agora: Optional[datetime] = None) -> float:
+    """Quanto dormir até a próxima hora cheia (mínimo 1 s, para não girar)."""
+    agora = agora or datetime.now(timezone.utc)
+    proxima = agora.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    return max(1.0, (proxima - agora).total_seconds())
+
+
+def guardar_pendentes(novos: List[Dict[str, Any]]) -> int:
+    """Põe os novos na fila da hora. Devolve quantos ficaram guardados."""
+    if not novos:
+        return 0
+    client = _banco()
+    if not client:
+        _pendentes_memoria.extend(dict(it) for it in novos)
+        return len(novos)
+    agora = datetime.now(timezone.utc).isoformat()
+    linhas = [
+        {"fingerprint_sha256": _identidade(it), "item": dict(it), "registrado_em": agora}
+        for it in novos
+    ]
+    try:
+        client.table(TABELA_PENDENTES).upsert(linhas, on_conflict="fingerprint_sha256").execute()
+    except Exception as e:  # noqa: BLE001
+        # Não perder o aviso: sem a tabela (migration por rodar), sai agora.
+        logger.error("Fila de certificados novos indisponível (%s); avisando de imediato.", e)
+        notificar_novos(novos)
+        return 0
+    return len(linhas)
+
+
+def enviar_novos_pendentes() -> Dict[str, Any]:
+    """Esvazia a fila e manda UM e-mail por destinatário. Para o laço da hora."""
+    client = _banco()
+    if not client:
+        itens = list(_pendentes_memoria)
+        _pendentes_memoria.clear()
+        return notificar_novos(itens) if itens else {"certificados": 0}
+    try:
+        r = client.table(TABELA_PENDENTES).select("fingerprint_sha256, item").execute()
+    except Exception as e:  # noqa: BLE001
+        logger.error("Fila de certificados novos ilegível: %s", e)
+        return {"certificados": 0, "erros": 1}
+    linhas = r.data or []
+    if not linhas:
+        return {"certificados": 0}
+    itens = [dict(x.get("item") or {}) for x in linhas if x.get("item")]
+    out = notificar_novos(itens)
+    try:
+        client.table(TABELA_PENDENTES).delete().in_(
+            "fingerprint_sha256", [str(x.get("fingerprint_sha256") or "") for x in linhas]
+        ).execute()
+    except Exception as e:  # noqa: BLE001
+        logger.error("Fila de certificados novos não esvaziou (%s); o antispam evita repetição.", e)
+    return out
+
+
+def agendar_ou_notificar(novos: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """O que o `/api/ingest` chama: desligado → nada; imediato → envia; hora → guarda."""
+    if not novos:
+        return {"certificados": 0}
+    try:
+        settings = load_settings()
+    except Exception as e:  # noqa: BLE001
+        logger.error("Sem configuração para o aviso de certificados novos: %s", e)
+        return {"certificados": len(novos), "erros": 1}
+    if not getattr(settings, "alertas_novos_enabled", True):
+        logger.info("Aviso de certificado novo desligado na Configuração; %d novo(s) sem e-mail.", len(novos))
+        return {"certificados": len(novos), "alerts_disabled": True}
+    if alertas_config.modo_novos_efetivo(getattr(settings, "alertas_novos_modo", "")) == alertas_config.MODO_NOVOS_IMEDIATO:
+        return notificar_novos(novos)
+    return {"certificados": len(novos), "guardados": guardar_pendentes(novos)}

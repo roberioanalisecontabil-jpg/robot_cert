@@ -47,6 +47,7 @@ from app.cert_scanner import (  # noqa: E402
     move_to_expired,
     scan_folder,
 )
+from agent import entrada as entrada_certificados  # noqa: E402
 
 # Porta padrão do monitor cert_robot (evita conflito com outro serviço em 8000)
 DEFAULT_ROBOT_API_PORT = 8020
@@ -1142,6 +1143,11 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                     observer.join()
                     observer = None
                     current_watch_path = None
+                if observer_entrada:
+                    observer_entrada.stop()
+                    observer_entrada.join()
+                    observer_entrada = None
+                    current_entrada_watch = None
                 if cfg.once:
                     raise SystemExit(1)
                 time.sleep(10)
@@ -1156,6 +1162,20 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
             exp.mkdir(parents=True, exist_ok=True)
             exclude_dirs = [exp] if str(exp.resolve()).startswith(str(src.resolve())) else []
 
+            # Entrada de certificados (02/10/2026): a pasta onde os PFX chegam.
+            # Fica FORA da varredura — o que está lá ainda não é acervo (ou é
+            # pendente, que o portal mostra à parte) — e é processada antes
+            # dela, para o certificado novo entrar no inventário já no lugar.
+            cfg_entrada = entrada_certificados.config_de(s, local_cfg, exp)
+            entrada_dentro_da_origem = False
+            if cfg_entrada:
+                try:
+                    entrada_dentro_da_origem = str(cfg_entrada.pasta_entrada.resolve()).startswith(str(src.resolve()))
+                except OSError:
+                    entrada_dentro_da_origem = False
+                if entrada_dentro_da_origem:
+                    exclude_dirs.append(cfg_entrada.pasta_entrada)
+
             if current_watch_path != str(src):
                 if observer:
                     observer.stop()
@@ -1167,6 +1187,21 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 observer.start()
                 current_watch_path = str(src)
                 trigger_event.set()
+
+            # Segundo observador só quando a entrada está fora da origem; dentro
+            # dela, o recursivo acima já acorda o ciclo.
+            alvo_entrada = str(cfg_entrada.pasta_entrada) if (cfg_entrada and not entrada_dentro_da_origem) else None
+            if current_entrada_watch != alvo_entrada:
+                if observer_entrada:
+                    observer_entrada.stop()
+                    observer_entrada.join()
+                    observer_entrada = None
+                if alvo_entrada and Path(alvo_entrada).is_dir():
+                    LOGGER.info("Monitorando a pasta de entrada %s.", alvo_entrada)
+                    observer_entrada = Observer()
+                    observer_entrada.schedule(CertEventHandler(trigger_event, None), alvo_entrada, recursive=False)
+                    observer_entrada.start()
+                current_entrada_watch = alvo_entrada
 
             # Comandos do tray são consumidos pela thread `_command_watcher`,
             # que sinaliza `trigger_event` independentemente deste loop.
@@ -1248,6 +1283,26 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
                 
                 last_full_scan_time = time.time()
                 _write_agent_status("scanning", machine_id=mid)
+
+                if cfg_entrada:
+                    try:
+                        relatorio = entrada_certificados.processar_entrada(cfg_entrada)
+                    except Exception as ex_ent:  # noqa: BLE001 — a varredura não pode cair por isto
+                        LOGGER.exception("Falha ao processar a pasta de entrada: %s", ex_ent)
+                        relatorio = None
+                    if relatorio is not None:
+                        # Sempre, mesmo vazio: é assim que o portal fecha os
+                        # pendentes que saíram da pasta.
+                        try:
+                            pr = client.post(
+                                f"{base}/api/agent/entrada",
+                                headers=_headers(),
+                                json={"machine_id": mid, **relatorio},
+                            )
+                            if pr.status_code >= 400:
+                                LOGGER.warning("/api/agent/entrada respondeu %s: %s", pr.status_code, pr.text[:200])
+                        except httpx.HTTPError as ex_post:
+                            LOGGER.warning("Rede ao enviar o relatório da entrada: %s", ex_post)
 
                 itens = scan_folder(src, recursive=True, exclude_dirs=exclude_dirs)
                 if mover:

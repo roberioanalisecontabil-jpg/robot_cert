@@ -38,7 +38,15 @@ from app import smtp_service
 from app.smtp_service import encrypt_password, validate_smtp_config
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente, previa_do_resumo
 from app.notification_service import build_notifications_payload, get_active_alerts
-from app.novos_certificados import filtrar_ineditos, fingerprints_do_snapshot, notificar_novos
+from app.novos_certificados import (
+    agendar_ou_notificar,
+    enviar_novos_pendentes,
+    filtrar_ineditos,
+    fingerprints_do_snapshot,
+    notificar_novos,  # noqa: F401 — testes e o modo "imediato" apontam para cá
+    segundos_ate_a_proxima_hora_cheia,
+)
+from app import entrada as entrada_certificados
 from app.settings_state import (
     GravacaoNaoPersistida,
     PastaRecusada,
@@ -722,10 +730,31 @@ async def lifespan(_app: FastAPI):
             # trabalho real acontece uma vez por dia mesmo com ciclo curto.
             await asyncio.sleep(3600)
 
+    # Aviso de certificados novos por hora cheia (02/10/2026): os novos que
+    # cada ingestão registrou ficam guardados e saem num e-mail só na virada
+    # da hora. Dorme até a próxima hora cheia, e não 3600 s a partir do boot —
+    # senão "10:00" viraria "10:07" depois de um reinício às 09:07.
+    async def novos_por_hora_loop():
+        logger.info("Iniciando loop do aviso de certificados novos por hora cheia")
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                await asyncio.sleep(segundos_ate_a_proxima_hora_cheia())
+                stats = await loop.run_in_executor(None, enviar_novos_pendentes)
+                if stats.get("certificados"):
+                    logger.info(f"Aviso de certificados novos da hora: {stats}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Erro no aviso de certificados novos por hora: {e}")
+                await asyncio.sleep(60)
+
     tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
+    tarefa_novos = asyncio.create_task(novos_por_hora_loop())
     try:
         yield
     finally:
+        tarefa_novos.cancel()
         # O `await` é limitado no tempo de propósito. Esperar a task sem prazo
         # significa que qualquer falha em encerrá-la (um cancel que não chega,
         # um run_in_executor preso num envio SMTP) trava o shutdown do processo
@@ -737,7 +766,7 @@ async def lifespan(_app: FastAPI):
         # pelo prazo cheio passava despercebida. `asyncio.wait` devolve a task
         # pendente sem levantar, e deixa passar um cancelamento externo.
         tarefa_alertas.cancel()
-        _, pendentes = await asyncio.wait({tarefa_alertas}, timeout=5)
+        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos}, timeout=5)
         if pendentes:
             logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
 
@@ -1172,6 +1201,20 @@ class SettingsBody(BaseModel):
     alerta_email_titulo: Optional[str] = Field(default=None)
     alerta_email_abertura: Optional[str] = Field(default=None)
     alerta_email_recado: Optional[str] = Field(default=None)
+    # Entrada de certificados e aviso de novos (02/10/2026). Mesma regra:
+    # `None` preserva; vazio em pasta é "sem entrada"; vazio no modo é o padrão.
+    pasta_entrada: Optional[str] = Field(default=None, max_length=1024)
+    pasta_pj: Optional[str] = Field(default=None, max_length=1024)
+    pasta_pf: Optional[str] = Field(default=None, max_length=1024)
+    alertas_novos_enabled: Optional[bool] = Field(default=None)
+    alertas_novos_modo: Optional[str] = Field(default=None, max_length=16)
+
+
+class EntradaRelatorioBody(BaseModel):
+    """O que o agente fez na pasta de entrada neste ciclo, e o que ficou lá."""
+    machine_id: str = Field(default="default", max_length=128)
+    eventos: List[dict] = Field(default_factory=list, max_length=5000)
+    pendentes: List[dict] = Field(default_factory=list, max_length=5000)
 
 
 class IngestBody(BaseModel):
@@ -2680,6 +2723,14 @@ def _settings_dict(s: PortalSettings) -> dict:
         "alerta_email_padrao": dict(email_modelo.PADROES),
         "alerta_email_marcadores": list(email_modelo.MARCADORES),
         "alerta_email_limites": dict(email_modelo.LIMITES),
+        # Entrada de certificados (02/10/2026): o agente lê daqui as três
+        # pastas; vazio em `pasta_entrada` desliga o passo.
+        "pasta_entrada": s.pasta_entrada,
+        "pasta_pj": s.pasta_pj,
+        "pasta_pf": s.pasta_pf,
+        "alertas_novos_enabled": s.alertas_novos_enabled,
+        "alertas_novos_modo": s.alertas_novos_modo,
+        "alertas_novos_modo_efetivo": alertas_config.modo_novos_efetivo(s.alertas_novos_modo),
     }
 
 
@@ -2715,8 +2766,29 @@ def put_settings(body: SettingsBody) -> dict:
     try:
         pasta_origem = validar_pasta(body.source_folder, "Pasta de origem")
         pasta_vencidos = validar_pasta(body.expired_folder, "Pasta de vencidos")
+        # Entrada: as três passam pela MESMA cerca (UNC recusado, raízes
+        # permitidas). `None` preserva o que está gravado.
+        pasta_entrada = validar_pasta(
+            old.pasta_entrada if body.pasta_entrada is None else body.pasta_entrada, "Pasta de entrada"
+        )
+        pasta_pj = validar_pasta(old.pasta_pj if body.pasta_pj is None else body.pasta_pj, "Pasta de pessoa jurídica")
+        pasta_pf = validar_pasta(old.pasta_pf if body.pasta_pf is None else body.pasta_pf, "Pasta de pessoa física")
     except PastaRecusada as e:
         raise HTTPException(status_code=422, detail=str(e))
+    if pasta_entrada and not (pasta_pj and pasta_pf):
+        raise HTTPException(
+            status_code=422,
+            detail="Pasta de entrada: informe também as pastas de pessoa jurídica e de pessoa física, senão o agente não sabe para onde mover.",
+        )
+    if pasta_entrada and pasta_entrada in (pasta_pj, pasta_pf, pasta_vencidos):
+        raise HTTPException(status_code=422, detail="Pasta de entrada: não pode ser a mesma pasta do acervo ou dos vencidos.")
+    try:
+        modo_novos = alertas_config.validar_modo_novos(
+            old.alertas_novos_modo if body.alertas_novos_modo is None else body.alertas_novos_modo
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    novos_ligado = old.alertas_novos_enabled if body.alertas_novos_enabled is None else bool(body.alertas_novos_enabled)
 
     ttl = int(
         (old.install_token_ttl_min if body.install_token_ttl_min is None
@@ -2809,6 +2881,11 @@ def put_settings(body: SettingsBody) -> dict:
         alertas_destinatarios=destinatarios,
         alertas_marcos=marcos,
         alertas_intervalo_horas=intervalo,
+        pasta_entrada=pasta_entrada,
+        pasta_pj=pasta_pj,
+        pasta_pf=pasta_pf,
+        alertas_novos_enabled=novos_ligado,
+        alertas_novos_modo=modo_novos,
         **{coluna: modelo[campo] for campo, coluna in email_modelo.CAMPO_COLUNA.items()},
     )
     # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`
@@ -3399,6 +3476,23 @@ def enqueue_agent_command(body: EnqueueCommandBody) -> dict:
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return {"ok": True, "id": cid, "command": body.command.strip()}
+
+
+@app.post("/api/agent/entrada")
+def agent_entrada(
+    body: EntradaRelatorioBody,
+    token: auth.TokenData = Depends(require_agent_or_admin),
+) -> dict:
+    """
+    O agente do servidor conta o que fez na pasta de entrada (02/10/2026):
+    cada PFX renomeado e movido é um evento; o que não abriu e ficou lá é
+    pendente. Pendente NOVO gera e-mail aos administradores; a lista inteira
+    fica em Instalador › Entrada. Nenhum nome de arquivo com senha chega aqui:
+    o agente já os limpou (`nome_publico_de_arquivo`).
+    """
+    machine_id = (body.machine_id or "default").strip()[:128] or "default"
+    r = entrada_certificados.receber_relatorio(machine_id, body.eventos, body.pendentes)
+    return {"ok": True, **r}
 
 
 @app.get("/api/agent/next")
@@ -5208,8 +5302,10 @@ def ingest(
     # Aviso de certificado novo (30/09/2026): quem tem o cliente na carteira
     # e os administradores recebem por e-mail; o antispam por (certificado,
     # destinatário) mora em `novos_certificados`, então não há debounce aqui.
+    # Desde 02/10/2026 o aviso pode esperar a hora cheia (um e-mail com todos
+    # os novos da hora) — `agendar_ou_notificar` decide pela configuração.
     if novos:
-        background_tasks.add_task(notificar_novos, novos)
+        background_tasks.add_task(agendar_ou_notificar, novos)
     # Dispara e-mails de alerta em segundo plano para não bloquear a resposta
     # do agente — no máximo uma vez a cada `_INGEST_ALERTA_DEBOUNCE_SEG`
     # (achado #28): cada ingestão varria o acervo e enviava e-mails; várias
@@ -7395,6 +7491,15 @@ def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
 # Instalador): nenhuma tela, agente ou script os chamava. O agente continua
 # com `claim`/`report`; a trilha agrupada e `cadeias_de_instalacao`.
 
+@app.get("/api/cert-installer/entrada", dependencies=[Depends(require_admin)])
+def entrada_de_certificados(
+    dias: int = Query(30, ge=1, le=365),
+    limite: int = Query(500, ge=1, le=1000),
+) -> dict:
+    """Instalador › Entrada: os pendentes abertos e os eventos do período."""
+    return entrada_certificados.listar(dias=dias, limite=limite)
+
+
 @app.get("/api/cert-installer/trilha", dependencies=[Depends(require_admin)])
 def trilha_de_instalacao(
     dias: int = Query(30, ge=1, le=365),
@@ -7484,7 +7589,7 @@ def page_instalador(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba
     # pedida; com JavaScript a troca é local e a URL acompanha.
     aba = request.query_params.get("aba") or "diagnostico"
-    if aba not in ("diagnostico", "custodia", "trilha", "configuracao"):
+    if aba not in ("diagnostico", "custodia", "entrada", "trilha", "configuracao"):
         aba = "diagnostico"
     return templates.TemplateResponse(
         request=request, name="instalador.html", context={"pagina_ativa": "instalador", "aba": aba}

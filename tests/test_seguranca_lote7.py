@@ -295,5 +295,5 @@ def test_instalador_guarda_a_chave_pelo_agente() -> None:
 
 def test_versao_do_agente_subiu() -> None:
     """Mudança no agente é versão nova: a frota é atualizada e o portal acusa a atrasada."""
-    assert agent.__version__ == "1.4.1"
-    assert config.VERSAO_AGENTE_ESPERADA == "1.4.1"
+    assert agent.__version__ == "1.5.0"
+    assert config.VERSAO_AGENTE_ESPERADA == "1.5.0"

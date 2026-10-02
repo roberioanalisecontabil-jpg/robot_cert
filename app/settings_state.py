@@ -54,6 +54,22 @@ class PortalSettings:
     alerta_email_abertura: str = ""
     alerta_email_recado: str = ""
 
+    # ── Entrada de certificados (02/10/2026) ───────────────────────────────
+    # A pasta onde os PFX chegam e as raízes do acervo (pessoa jurídica, com
+    # as subpastas A–Z e `0 a 9`; pessoa física, idem). Vazio = o agente não
+    # processa entrada nenhuma. Caminhos como o SERVIDOR os vê — é ele quem
+    # move os arquivos, não o navegador de quem configura.
+    pasta_entrada: str = ""
+    pasta_pj: str = ""
+    pasta_pf: str = ""
+
+    # ── Aviso de certificado novo (02/10/2026) ─────────────────────────────
+    # Ligado por padrão, como era antes de existir a chave. `alertas_novos_modo`
+    # vazio = "hora" (um e-mail por hora cheia com todos os novos do período);
+    # "imediato" = um e-mail a cada ingestão com novos, como até 02/10.
+    alertas_novos_enabled: bool = True
+    alertas_novos_modo: str = ""
+
     def effective_source(self) -> Path:
         return _pasta_efetiva(self.source_folder, "Pasta de origem", config.CERT_SOURCE_DIR)
 
@@ -135,6 +151,13 @@ def _from_row(row: dict) -> PortalSettings:
         alerta_email_recado=str(row.get("alerta_email_recado", "") or ""),
         install_token_ttl_min=int(row.get("install_token_ttl_min") or 0),
         trilha_retencao_dias=int(row.get("trilha_retencao_dias") or 0),
+        pasta_entrada=str(row.get("pasta_entrada", "") or ""),
+        pasta_pj=str(row.get("pasta_pj", "") or ""),
+        pasta_pf=str(row.get("pasta_pf", "") or ""),
+        alertas_novos_enabled=bool(
+            row.get("alertas_novos_enabled") if row.get("alertas_novos_enabled") is not None else True
+        ),
+        alertas_novos_modo=str(row.get("alertas_novos_modo", "") or ""),
     )
 
 
@@ -296,6 +319,11 @@ def save_settings(s: PortalSettings, *, exigir_banco: bool = False) -> bool:
         "alerta_email_titulo": s.alerta_email_titulo,
         "alerta_email_abertura": s.alerta_email_abertura,
         "alerta_email_recado": s.alerta_email_recado,
+        "pasta_entrada": s.pasta_entrada,
+        "pasta_pj": s.pasta_pj,
+        "pasta_pf": s.pasta_pf,
+        "alertas_novos_enabled": s.alertas_novos_enabled,
+        "alertas_novos_modo": s.alertas_novos_modo,
         "updated_at": now,
     }
     try:

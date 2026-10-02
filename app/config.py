@@ -209,7 +209,7 @@ CERT_INSTALL_TOKEN_TTL_MIN = _env_int(
 # o portal deixaria de acusar máquina atrasada sem ninguém perceber.
 #
 # `tests/test_versao_agente.py` guarda as três contra divergência.
-VERSAO_AGENTE_ESPERADA = "1.4.1"
+VERSAO_AGENTE_ESPERADA = "1.5.0"
 
 
 # ── Ponte com o portal de inventário (INVENT/Hardlyze) ────────────────────

@@ -43,6 +43,8 @@
          aria-selected="{{ 'true' if aba == 'diagnostico' else 'false' }}" {% if aba != 'diagnostico' %}tabindex="-1"{% endif %}>Diagnóstico</a>
       <a class="ag-abas__aba" role="tab" id="tab-custodia" href="?aba=custodia" aria-controls="aba-custodia" data-aba="custodia"
          aria-selected="{{ 'true' if aba == 'custodia' else 'false' }}" {% if aba != 'custodia' %}tabindex="-1"{% endif %}>Custódia <span class="ag-abas__contagem" id="tab-custodia-contagem"></span></a>
+      <a class="ag-abas__aba" role="tab" id="tab-entrada" href="?aba=entrada" aria-controls="aba-entrada" data-aba="entrada"
+         aria-selected="{{ 'true' if aba == 'entrada' else 'false' }}" {% if aba != 'entrada' %}tabindex="-1"{% endif %}>Entrada <span class="ag-abas__contagem" id="tab-entrada-contagem"></span></a>
       <a class="ag-abas__aba" role="tab" id="tab-trilha" href="?aba=trilha" aria-controls="aba-trilha" data-aba="trilha"
          aria-selected="{{ 'true' if aba == 'trilha' else 'false' }}" {% if aba != 'trilha' %}tabindex="-1"{% endif %}>Trilha</a>
       <a class="ag-abas__aba" role="tab" id="tab-configuracao" href="?aba=configuracao" aria-controls="aba-configuracao" data-aba="configuracao"
@@ -147,6 +149,70 @@
           </div>
         </nav>
         <p class="cg-inst-rodape" id="optinRodape"></p>
+      </div>
+    </section>
+
+    <!-- ── Entrada (02/10/2026) ─────────────────────────────────────── -->
+    <section class="ag-card cg-inst-aba" id="aba-entrada" role="tabpanel" aria-labelledby="tab-entrada" {% if aba != 'entrada' %}hidden{% endif %}>
+      <div class="cg-inst-cab">
+        <div class="cg-inst-cab__texto">
+          <h2 class="ag-card__title">Entrada de certificados</h2>
+          <p class="cg-inst-cab__lead">O que o agente fez com cada arquivo que chegou à pasta de entrada, e o que ficou lá por não abrir.</p>
+        </div>
+      </div>
+      <div class="cg-inst-corpo">
+        <div id="entradaSemPasta" class="ag-alert ag-alert--info" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div class="ag-alert__corpo">A pasta de entrada não está configurada. Defina-a em <a href="/configuracao?aba=pastas">Configuração › Pastas e agente</a>.</div>
+        </div>
+        <div class="ag-alert ag-alert--warning" id="entradaPendentesAviso" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo"><p><strong id="entradaPendentesTitulo">Arquivos pendentes na entrada</strong></p><p>Ficaram na pasta com o nome original. Corrija o nome (<code>«nome» senha «valor».pfx</code>) ou a senha; o agente tenta de novo na próxima varredura.</p></div>
+        </div>
+        <div class="ag-table-scroll" role="region" aria-label="Pendentes na entrada" id="entradaPendentesTabela" hidden>
+          <table class="ag-table" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Desde</th>
+                <th role="columnheader" class="ag-th--estatico">Arquivo</th>
+                <th role="columnheader" class="ag-th--estatico">Motivo</th>
+                <th role="columnheader" class="ag-th--estatico">Servidor</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="tblEntradaPendentes"></tbody>
+          </table>
+        </div>
+        <form class="cg-inst-form" id="formEntrada" method="get" action="/instalador">
+          <input type="hidden" name="aba" value="entrada" />
+          <div class="ag-field ag-field--periodo">
+            <label class="ag-label" for="entradaDias">Período</label>
+            <select id="entradaDias" name="dias" class="ag-select">
+              <option value="7">Últimos 7 dias</option>
+              <option value="30" selected>Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="365">Último ano</option>
+            </select>
+          </div>
+          <button type="submit" class="ag-btn ag-btn--outline">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Filtrar
+          </button>
+        </form>
+        <div class="cg-inst-resumo" id="entradaResumo"></div>
+        <div class="ag-table-scroll" role="region" aria-label="Movimentos da entrada">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Quando</th>
+                <th role="columnheader" class="ag-th--estatico">Chegou como</th>
+                <th role="columnheader" class="ag-th--estatico">Titular</th>
+                <th role="columnheader" class="ag-th--estatico">Ficou como</th>
+                <th role="columnheader" class="ag-th--estatico">Resultado</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="tblEntradaEventos"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -293,7 +359,7 @@
     // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `renderSkeletonRows`,
     // `limparSkeleton`, `cgPageNavRefresh`, `cgPageNavHide` e `cgCopiarInit`
     // vêm de ui-common.js.
-    const ABAS = ["diagnostico", "custodia", "trilha", "configuracao"];
+    const ABAS = ["diagnostico", "custodia", "entrada", "trilha", "configuracao"];
     const AVISO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
     const CHECK = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
     const CIRCULO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
@@ -370,11 +436,89 @@
     async function recarregarTudo() {
       setCarregando(true);
       try {
-        await Promise.all([loadDiagnostico(), loadOptinPanel(), loadInstallLogs(), loadConfigInstalador()]);
+        await Promise.all([loadDiagnostico(), loadOptinPanel(), loadEntrada(), loadInstallLogs(), loadConfigInstalador()]);
       } finally {
         setCarregando(false);
       }
     }
+
+    /* ── Entrada ──────────────────────────────────────────────────────── */
+
+    const ENTRADA_BADGE = {
+      movido: "success", substituiu: "success", vencido: "neutral",
+      copia_descartada: "info", duplicidade: "warning", pendente: "warning",
+    };
+
+    function docFormatado(ev) {
+      const d = String(ev.documento_numero || "");
+      if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+      if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+      return d;
+    }
+
+    async function loadEntrada() {
+      const tbodyP = document.getElementById("tblEntradaPendentes");
+      const tbodyE = document.getElementById("tblEntradaEventos");
+      const dias = document.getElementById("entradaDias").value;
+      try {
+        const [res, cfg] = await Promise.all([
+          fetch("/api/cert-installer/entrada?dias=" + encodeURIComponent(dias), { headers: getHeaders() }),
+          fetch("/api/settings", { headers: getHeaders() }),
+        ]);
+        if (!res.ok) throw new Error(await mensagemCorpoErro(res));
+        const data = await res.json();
+        let pastaEntrada = "";
+        if (cfg.ok) { pastaEntrada = ((await cfg.json()).pasta_entrada || "").trim(); }
+        document.getElementById("entradaSemPasta").hidden = !!pastaEntrada;
+
+        const pend = data.pendentes || [];
+        const cont = document.getElementById("tab-entrada-contagem");
+        cont.textContent = pend.length ? String(pend.length) : "";
+        document.getElementById("entradaPendentesAviso").hidden = !pend.length;
+        document.getElementById("entradaPendentesTabela").hidden = !pend.length;
+        document.getElementById("entradaPendentesTitulo").textContent =
+          plural(pend.length, "arquivo pendente", "arquivos pendentes") + " na entrada";
+        tbodyP.innerHTML = pend.map((p) => `
+          <tr role="row">
+            <td role="cell" class="cg-col-quando">${p.quando ? tempo(p.quando, fmtQuando(p.quando)) : "—"}</td>
+            <td role="cell"><span class="ag-cell-sub--mono">${esc(p.arquivo_original || "—")}</span></td>
+            <td role="cell">${esc(p.motivo || "")}</td>
+            <td role="cell"><span class="ag-cell-sub ag-cell-sub--mono">${esc(p.machine_id || "—")}</span></td>
+          </tr>`).join("");
+
+        const evs = data.eventos || [];
+        document.getElementById("entradaResumo").textContent = data.erro
+          ? data.erro
+          : (evs.length ? plural(evs.length, "movimento") + " no período." : "");
+        if (!evs.length) {
+          tbodyE.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">${
+            data.banco === false ? "Sem banco de dados: a entrada não é registrada." : "Nenhum certificado chegou no período."
+          }</td></tr>`;
+          return;
+        }
+        tbodyE.innerHTML = evs.map((ev) => {
+          const titular = ev.nome
+            ? `<span class="ag-cell-stack"><span class="ag-cell-main">${esc(ev.nome)}</span><span class="ag-cell-sub">${esc(docFormatado(ev))}</span></span>`
+            : "—";
+          const ficou = ev.arquivo_novo
+            ? `<span class="ag-cell-stack"><span class="ag-cell-main ag-cell-sub--mono">${esc(ev.arquivo_novo)}</span><span class="ag-cell-sub">${esc(ev.pasta_destino || "")}</span></span>`
+            : "—";
+          const tom = ENTRADA_BADGE[ev.resultado] || "neutral";
+          return `
+            <tr role="row">
+              <td role="cell" class="cg-col-quando">${ev.quando ? tempo(ev.quando, fmtQuando(ev.quando)) : "—"}</td>
+              <td role="cell"><span class="ag-cell-sub--mono">${esc(ev.arquivo_original || "—")}</span></td>
+              <td role="cell">${titular}</td>
+              <td role="cell">${ficou}</td>
+              <td role="cell"><span class="ag-cell-stack"><span class="ag-badge ag-badge--${tom}">${esc(ev.resultado_rotulo || ev.resultado)}</span>${ev.motivo ? `<span class="ag-cell-sub">${esc(ev.motivo)}</span>` : ""}</span></td>
+            </tr>`;
+        }).join("");
+      } catch (e) {
+        tbodyE.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Não foi possível carregar a entrada: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    document.getElementById("formEntrada").addEventListener("submit", (ev) => { ev.preventDefault(); loadEntrada(); });
 
     /* ── Configuração ─────────────────────────────────────────────────── */
 

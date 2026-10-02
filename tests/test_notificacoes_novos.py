@@ -504,7 +504,8 @@ def test_ingest_agenda_o_aviso_dos_novos(client: TestClient, monkeypatch: pytest
     monkeypatch.setattr(m, "trigger_all_alerts", lambda: None)
     monkeypatch.setattr(config, "ACEITAR_API_KEY_COMPARTILHADA", True, raising=False)
     recebidos: List[List[Dict[str, Any]]] = []
-    monkeypatch.setattr(m, "notificar_novos", lambda novos: recebidos.append(list(novos)))
+    # Desde 02/10/2026 o ingest chama `agendar_ou_notificar` (hora cheia ou imediato).
+    monkeypatch.setattr(m, "agendar_ou_notificar", lambda novos: recebidos.append(list(novos)))
 
     corpo = {"machine_id": "srv", "source_folder": "F:/C", "expired_folder": "F:/V",
              "items": [{"file_name": "ALFA_12345678000199.pfx", "nome": "ALFA", "fingerprint_sha256": "fp-a",

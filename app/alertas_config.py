@@ -198,3 +198,26 @@ def intervalo_efetivo_horas(horas: int) -> int:
     except ConfiguracaoInvalida:
         return INTERVALO_PADRAO_HORAS
     return n or INTERVALO_PADRAO_HORAS
+
+
+# ── Aviso de certificado novo (02/10/2026) ────────────────────────────────
+# "hora": os novos de cada hora cheia saem num e-mail só, na virada da hora
+# (os que entraram das 09:01 às 09:59 vão às 10:00). "imediato": um e-mail
+# por ingestão com novos. Vazio é o padrão, que é "hora".
+MODO_NOVOS_HORA = "hora"
+MODO_NOVOS_IMEDIATO = "imediato"
+MODOS_NOVOS = (MODO_NOVOS_HORA, MODO_NOVOS_IMEDIATO)
+
+
+def validar_modo_novos(valor: str) -> str:
+    v = (valor or "").strip().lower()
+    if v and v not in MODOS_NOVOS:
+        raise ValueError(
+            "Aviso de certificado novo: use 'hora' (um e-mail por hora cheia) ou 'imediato'."
+        )
+    return v
+
+
+def modo_novos_efetivo(valor: str) -> str:
+    v = (valor or "").strip().lower()
+    return v if v in MODOS_NOVOS else MODO_NOVOS_HORA

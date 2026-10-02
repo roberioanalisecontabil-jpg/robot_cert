@@ -73,6 +73,13 @@
           <div class="ag-field"><label class="ag-label" for="inp-machine">ID do servidor</label><input type="text" id="inp-machine" class="ag-input" placeholder="default ou nome do PC" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-agent-base-url">URL do portal no agent_config.json</label><input type="text" id="inp-agent-base-url" class="ag-input" placeholder="https://certificado.exemplo" aria-describedby="agent-url-hint" /><p class="ag-ajuda" id="agent-url-hint">Só entra no arquivo baixado abaixo; o portal não a usa.</p></div>
         </div>
+        <!-- ── Entrada de certificados (02/10/2026) ───────────────────── -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Entrada de certificados</h3><p class="ag-form-subhead__nota">Onde os certificados chegam. O agente lê o titular dentro do arquivo, renomeia para <code>TITULAR CNPJ senha VALOR.pfx</code> e move para a pasta da letra. O que não abrir fica na entrada e aparece em Instalador › Entrada.</p></div>
+        <div class="ag-form-cols">
+          <div class="ag-field"><label class="ag-label" for="inp-entrada">Pasta de entrada</label><input type="text" id="inp-entrada" class="ag-input" placeholder="D:\Certificados\Entrada" aria-describedby="entrada-hint" /><p class="ag-ajuda" id="entrada-hint">Vazio desliga o passo. Caminhos como o <strong>servidor</strong> os vê, não como aparecem na sua estação.</p></div>
+          <div class="ag-field"><label class="ag-label" for="inp-pasta-pj">Pessoa jurídica (CNPJ)</label><input type="text" id="inp-pasta-pj" class="ag-input" placeholder="D:\Certificados\02.PESSOA JURIDICA" aria-describedby="pj-hint" /><p class="ag-ajuda" id="pj-hint">A raiz das subpastas A–Z e <code>0 a 9</code>; o agente cria a letra que faltar.</p></div>
+          <div class="ag-field"><label class="ag-label" for="inp-pasta-pf">Pessoa física (CPF)</label><input type="text" id="inp-pasta-pf" class="ag-input" placeholder="D:\Certificados\01.PESSOA FISICA" /></div>
+        </div>
         <div class="cg-cfg-acoes">
           <button type="button" id="btn-save-cfg" class="ag-btn ag-btn--primary">Guardar e sincronizar</button>
           <button type="button" id="btn-download-agent-json" class="ag-btn ag-btn--outline">Baixar agent_config.json</button>
@@ -160,6 +167,26 @@
         </div>
         <p class="ag-ajuda">O teste usa os valores <strong>salvos</strong>: salve antes de testar.</p>
         <div class="cg-cfg-resultado" id="smtp-teste-resultado" aria-live="polite"></div>
+
+        <!-- ── Certificado novo (02/10/2026) ──────────────────────── -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Certificado novo</h3><p class="ag-form-subhead__nota">Avisa os administradores e quem tem o cliente na carteira quando um certificado entra no acervo — já renomeado e na pasta certa.</p></div>
+        <div class="ag-form-cols">
+          <div class="ag-field">
+            <label class="ag-switch">
+              <input type="checkbox" id="chk-alertas-novos" />
+              <span class="ag-switch__trilho" aria-hidden="true"></span>
+              <span class="ag-switch__rotulo">Avisar quando chegar certificado novo</span>
+            </label>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label" for="sel-alertas-novos-modo">Enviar</label>
+            <select id="sel-alertas-novos-modo" class="ag-select">
+              <option value="">A cada hora cheia (padrão)</option>
+              <option value="imediato">Imediatamente, a cada varredura com novos</option>
+            </select>
+            <p class="ag-ajuda">Por hora cheia, os novos das 09:01 às 09:59 vão num e-mail só, às 10:00.</p>
+          </div>
+        </div>
 
         <!-- ── Para quem, e quando ────────────────────────────────── -->
         <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Para quem, e quando</h3><p class="ag-form-subhead__nota">Vale para o resumo do portal. Os avisos de quem acompanha certificados não mudam.</p></div>
@@ -450,6 +477,17 @@
           alertas_marcos: document.getElementById("inp-alertas-marcos").value || "",
           alertas_intervalo_horas:
             parseInt(document.getElementById("sel-alertas-intervalo").value, 10) || 0,
+          alertas_novos_enabled: document.getElementById("chk-alertas-novos").checked,
+          alertas_novos_modo: document.getElementById("sel-alertas-novos-modo").value || "",
+        };
+      }
+
+      // Entrada de certificados: os três caminhos vão juntos com as pastas.
+      function corpoEntrada() {
+        return {
+          pasta_entrada: document.getElementById("inp-entrada").value || "",
+          pasta_pj: document.getElementById("inp-pasta-pj").value || "",
+          pasta_pf: document.getElementById("inp-pasta-pf").value || "",
         };
       }
 
@@ -492,6 +530,11 @@
       }
 
       function preencherAlertas(s) {
+        document.getElementById("chk-alertas-novos").checked = s.alertas_novos_enabled !== false;
+        document.getElementById("sel-alertas-novos-modo").value = s.alertas_novos_modo || "";
+        document.getElementById("inp-entrada").value = s.pasta_entrada || "";
+        document.getElementById("inp-pasta-pj").value = s.pasta_pj || "";
+        document.getElementById("inp-pasta-pf").value = s.pasta_pf || "";
         document.getElementById("inp-alertas-dest").value = s.alertas_destinatarios || "";
         document.getElementById("inp-alertas-marcos").value = s.alertas_marcos || "";
         document.getElementById("sel-alertas-intervalo").value =
@@ -530,6 +573,7 @@
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
             ...corpoAlertas(),
+            ...corpoEntrada(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
           if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
@@ -552,7 +596,7 @@
         localStorage.setItem("cert_robot_agent_base_url", baseUrl);
         // Sem a chave de API (SECURITY_AUDIT #46): o arquivo baixado vai por e-mail,
         // pendrive, pasta compartilhada — a chave entra na estação pelo instalador.
-        const payload = { cert_robot_base_url: baseUrl, machine_id: machineId, source_folder: source, expired_folder: expired, interval_sec: 86400, mover_vencidos: true, poll_commands: true };
+        const payload = { cert_robot_base_url: baseUrl, machine_id: machineId, source_folder: source, expired_folder: expired, interval_sec: 86400, mover_vencidos: true, poll_commands: true, ...corpoEntrada() };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
