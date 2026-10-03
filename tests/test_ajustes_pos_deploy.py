@@ -116,4 +116,4 @@ def test_instalador_le_a_conta_atual_e_exige_a_senha_para_mantê_la() -> None:
     assert "function NextButtonClick" in iss, "a pagina da conta precisa validar antes de avancar"
     assert "Deixe ambos em branco para usar LocalSystem (padrao)" not in iss
     assert "LocalSystem" in iss and "rede" in iss.lower()
-    assert "AppVersion=1.6.0" in iss
+    assert "AppVersion=1.6.1" in iss

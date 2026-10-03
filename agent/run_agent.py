@@ -776,6 +776,11 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     trigger_event = threading.Event()
     observer = None
     current_watch_path = None
+    # Observador da pasta de entrada (1.5.0). Inicializado AQUI, fora do laço:
+    # a 1.5.0 e a 1.6.0 só os atribuíam dentro do `while`, e o primeiro ciclo
+    # morria em UnboundLocalError antes de varrer qualquer coisa (03/10/2026).
+    observer_entrada = None
+    current_entrada_watch = None
     last_full_scan_time = 0.0
     connected = False
     tray_ref: dict[str, pystray.Icon | None] = {"icon": None}
@@ -1410,6 +1415,9 @@ def run_agent_application(quit_event: threading.Event, cfg: AgentRunConfig) -> N
     if observer:
         observer.stop()
         observer.join()
+    if observer_entrada:
+        observer_entrada.stop()
+        observer_entrada.join()
     if tray_ref.get("icon"):
         try:
             tray_ref["icon"].stop()

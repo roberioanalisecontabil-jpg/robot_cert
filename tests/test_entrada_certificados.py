@@ -19,7 +19,7 @@ Decisões com o usuário (F1–F6, G1–G4):
       renomear+mover (a entrada fica fora da varredura); por hora cheia
       (padrão) ou imediato.
 
-Segunda rodada (02/10/2026, agente 1.6.0), Q1–Q8:
+Segunda rodada (02/10/2026, agente 1.6.1), Q1–Q8:
   Q1  A varredura continua tirando vencidos das pastas das letras, e GARANTE:
       confere, tenta de novo, e o que ficar vira pendência "vencido_preso"
       com e-mail aos administradores.
@@ -263,7 +263,7 @@ def test_agente_processa_a_entrada_antes_da_varredura_e_fora_dela() -> None:
     assert "/api/agent/entrada" in fonte and "observer_entrada" in fonte
     import agent
     from app import config
-    assert agent.__version__ == "1.6.0" == config.VERSAO_AGENTE_ESPERADA
+    assert agent.__version__ == "1.6.1" == config.VERSAO_AGENTE_ESPERADA
     exemplo = (RAIZ / "agent" / "agent_config.example.json").read_text(encoding="utf-8")
     assert "pasta_entrada" in exemplo
 
@@ -632,7 +632,7 @@ def test_instalador_solta_arquivos_presos_e_tira_o_event_log_de_internal() -> No
     _internal\\win32\\servicemanager.pyd). Apagar → renomear → reinício, e a
     origem de eventos passa a uma cópia estável."""
     iss = (RAIZ / "agent_setup.iss").read_text(encoding="utf-8", errors="replace")
-    assert "AppVersion=1.6.0" in iss
+    assert "AppVersion=1.6.1" in iss
     assert "procedure LiberarArquivosPresos" in iss and "RenameFile(Caminho, Caminho + '.old-'" in iss
     assert "LiberarArquivosPresos(ExpandConstant('{app}\\_internal'))" in iss
     assert iss.count("restartreplace") >= 2 and "uninsrestartdelete" in iss
@@ -643,3 +643,47 @@ def test_instalador_solta_arquivos_presos_e_tira_o_event_log_de_internal() -> No
     assert i_fn < i_prep, "a liberação roda dentro do preparo, antes da cópia"
     i_post = iss.index("if CurStep = ssPostInstall then")
     assert iss.index("RegistrarOrigemDeEventos;", i_post) < iss.index("InstallOrUpdateService", i_post), "antes do serviço subir"
+
+
+def test_variaveis_do_laco_do_agente_nascem_antes_do_laco() -> None:
+    """Hotfix 1.6.1 (03/10/2026): `current_entrada_watch` e `observer_entrada`
+    só eram atribuídos DENTRO do `while` de `run_agent_application`; o primeiro
+    ciclo lia a variável antes de qualquer atribuição e o agente morria em
+    UnboundLocalError a cada reinício — em produção, nas versões 1.5.0 e 1.6.0.
+    Este teste olha a árvore sintática: toda variável local lida dentro do
+    laço principal precisa de uma atribuição no corpo da função, antes dele."""
+    import ast
+    arvore = ast.parse((RAIZ / "agent" / "run_agent.py").read_text(encoding="utf-8"))
+    fn = next(n for n in arvore.body if isinstance(n, ast.FunctionDef) and n.name == "run_agent_application")
+    # O laço PRINCIPAL: o `while` que não está dentro de nenhuma função
+    # aninhada (`_command_watcher` e a bandeja têm os seus).
+    aninhados = {id(x) for f in ast.walk(fn) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) and f is not fn for x in ast.walk(f)}
+    laco = next(n for n in ast.walk(fn) if isinstance(n, ast.While) and id(n) not in aninhados)
+    # "Antes do laço" = os comandos do corpo da função anteriores ao que CONTÉM
+    # o laço (seja ele um try, um if ou o próprio while). Caminhar dentro do
+    # comando que o contém poria as atribuições do laço em `antes` e o teste
+    # passaria na 1.6.0 — foi o que a primeira versão dele fez.
+    antes: set = set()
+    for n in fn.body:
+        if any(x is laco for x in ast.walk(n)):
+            break
+        for x in ast.walk(n):
+            if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Store):
+                antes.add(x.id)
+            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                antes.add(x.name)
+    atribuidas_no_laco = {x.id for x in ast.walk(laco) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Store)}
+    lidas_no_laco = {x.id for x in ast.walk(laco) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
+    params = {a.arg for a in fn.args.args}
+    suspeitas = sorted((atribuidas_no_laco & lidas_no_laco) - antes - params)
+    # Nomes que o laço atribui antes de ler no mesmo ciclo, sem depender do anterior.
+    locais_do_ciclo = {
+        "s", "fetch_err", "from_cache", "cached", "src", "exp", "exclude_dirs", "cfg_entrada",
+        "entrada_dentro_da_origem", "alvo_entrada", "event_handler", "mid", "poll_commands",
+        "nr", "j", "cmd", "token_inst", "rel_mv", "now", "itens", "relatorio_entrada", "relatorio_vencidos",
+        "payload", "transient_codes", "max_ingest", "ingest_base", "sent_ok", "ingest_try", "p", "wait",
+        "wait_loop", "c", "e", "ex", "ex_mv", "ex_ent", "ex_inst", "_inicio_poll", "_demora_poll", "body", "s_payload",
+    }
+    assert set(suspeitas) <= locais_do_ciclo, f"lidas no laço sem nascer antes dele: {suspeitas}"
+    for nome in ("observer_entrada", "current_entrada_watch", "observer", "current_watch_path"):
+        assert nome in antes, nome

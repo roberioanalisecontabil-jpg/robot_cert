@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Analise CertiDigital Agent
-AppVersion=1.6.0
+AppVersion=1.6.1
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
 DefaultGroupName=Analise CertiDigital
@@ -24,7 +24,7 @@ Name: "autostart"; Description: "Ao iniciar sessao: iniciar icone na bandeja (Ta
 ; ExecutÃ¡vel da bandeja (one-file)
 Source: "dist\AnaliseCertiDigital_Agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; ExecutÃ¡vel do serviÃ§o (one-dir) + todas as DLLs em _internal
-; restartreplace e a ULTIMA rede (1.6.0): antes da copia, LiberarArquivosPresos
+; restartreplace e a ULTIMA rede (1.6.1): antes da copia, LiberarArquivosPresos
 ; apaga ou renomeia o que estiver em uso em _internal. So o que nem renomear
 ; puder e trocado no proximo reinicio, sem a janela "Select action".
 Source: "dist\AnaliseCertiDigital_Agent_Service\AnaliseCertiDigital_Agent_Service.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
@@ -402,7 +402,7 @@ begin
   end;
 end;
 
-{ ── Arquivos presos em _internal (1.6.0) ─────────────────────────────────
+{ ── Arquivos presos em _internal (1.6.1) ─────────────────────────────────
   Em todas as versoes anteriores a atualizacao parava em
   "_internal\win32\servicemanager.pyd ... DeleteFile failed; code 5". Quem
   segura esse arquivo nao e o servico (ja parado): e o servico de Log de
