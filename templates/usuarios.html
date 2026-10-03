@@ -227,7 +227,7 @@
       </div>
       <div class="ag-modal__body">
         <div class="ag-alert ag-alert--danger" id="modal-senha-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
-        <p class="ag-ajuda">A nova senha vale a partir de agora e a pessoa terá de trocá-la no próximo acesso. A sessão aberta dela é encerrada: quem redefine a senha de alguém sabe a senha, e a sessão antiga não pode sobreviver a isso.</p>
+        <p class="ag-ajuda">A nova senha vale a partir de agora e a pessoa terá de trocá-la no próximo acesso. A sessão aberta dela é encerrada: quem redefine a senha de alguém sabe a senha, e a sessão antiga não pode sobreviver a isso. Se preferir não conhecer a senha, use "Enviar código de redefinição" no menu da pessoa.</p>
         <div class="ag-field">
           <label class="ag-label" for="sn-nova">Nova senha</label>
           <div class="cg-usu-senha">
@@ -405,6 +405,7 @@
                             <div class="ag-menu__lista" role="menu">
                                 <button type="button" class="ag-menu__item" role="menuitem" data-action="editar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg> Editar</button>
                                 <button type="button" class="ag-menu__item" role="menuitem" data-action="redefinir" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg> Redefinir senha</button>
+                                ${ativo ? `<button type="button" class="ag-menu__item" role="menuitem" data-action="codigo" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Enviar código de redefinição</button>` : ""}
                                 ${ativo
                                     ? `<button type="button" class="ag-menu__item ag-menu__item--perigo" role="menuitem" data-action="desativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Desativar</button>`
                                     : `<button type="button" class="ag-menu__item" role="menuitem" data-action="reativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg> Reativar</button>`}
@@ -430,6 +431,7 @@
                 const id = btn.getAttribute('data-id');
                 if (act === 'editar') editarUsuario(id);
                 else if (act === 'redefinir') redefinirSenha(id);
+                else if (act === 'codigo') enviarCodigo(id, btn);
                 else if (act === 'desativar') desativarUsuario(id);
                 else if (act === 'reativar') reativarUsuario(id);
             };
@@ -1080,6 +1082,27 @@
             const el = document.getElementById('modal-senha-erro');
             el.querySelector('.ag-alert__corpo').textContent = texto || '';
             el.hidden = !texto;
+        }
+
+        // Envia à pessoa o mesmo código de 6 dígitos do "esqueci minha senha"
+        // (03/10/2026): o administrador não precisa inventar uma senha nem
+        // ditá-la por telefone.
+        async function enviarCodigo(id, btn) {
+            if (btn) btn.disabled = true;
+            try {
+                const r = await fetch(`/api/users/${id}/enviar-codigo`, { method: 'POST', headers: getHeaders(true) });
+                if (!r.ok) {
+                    showToast(await mensagemCorpoErro(r), 'error');
+                    return;
+                }
+                const d = await r.json();
+                showToast(d.message || 'Código enviado.', 'success');
+            } catch (_e) {
+                showToast('Erro de conexão com o servidor.', 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+                document.querySelectorAll('details.ag-menu[open]').forEach((m) => m.removeAttribute('open'));
+            }
         }
 
         function redefinirSenha(id) {

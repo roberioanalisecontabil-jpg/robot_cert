@@ -39,6 +39,19 @@
               autocomplete="off"
             />
           </div>
+          <!-- Status da última verificação: o cartão Acervo ilegível do
+               Dashboard chega aqui com ?status=ilegivel (03/10/2026). -->
+          <div class="ag-field cg-campo-inline">
+            <label class="ag-label" for="filtro-status-hist">Status</label>
+            <select class="ag-select" id="filtro-status-hist">
+              <option value="">Todos</option>
+              <option value="ilegivel">Ilegíveis (erro ou fora do padrão)</option>
+              <option value="erro">Erro de leitura</option>
+              <option value="fora_do_padrao">Fora do padrão</option>
+              <option value="expirado">Expirados</option>
+              <option value="ok">Ativos</option>
+            </select>
+          </div>
         </div>
         <div class="cg-toolbar__acoes">
           <!-- Um gatilho de exportar, com o formato como detalhe — o mesmo
@@ -150,6 +163,29 @@
     }
 
     let paginaAtualHist = 1;
+
+    // O filtro vive na URL (?status=): o Dashboard aponta para cá e o link
+    // da pessoa continua valendo depois de recarregar.
+    function statusHistorico() {
+      return document.getElementById("filtro-status-hist")?.value || "";
+    }
+    function sincronizarStatusComUrl() {
+      const url = new URL(window.location.href);
+      const st = statusHistorico();
+      if (st) url.searchParams.set("status", st); else url.searchParams.delete("status");
+      history.replaceState(null, "", url.toString());
+    }
+    (function lerStatusDaUrl() {
+      const sel = document.getElementById("filtro-status-hist");
+      if (!sel) return;
+      const st = new URLSearchParams(window.location.search).get("status") || "";
+      if ([...sel.options].some((o) => o.value === st)) sel.value = st;
+      sel.addEventListener("change", () => {
+        paginaAtualHist = 1;
+        sincronizarStatusComUrl();
+        carregarHistorico();
+      });
+    })();
     let debounceHist = null;
     let itensVisiveis = [];
 
@@ -264,7 +300,23 @@
 
       if (!rows.length) {
         const busca = (document.getElementById("busca-historico")?.value || "").trim();
-        if (busca) {
+        const st = statusHistorico();
+        if (!busca && st) {
+          const sel = document.getElementById("filtro-status-hist");
+          const rotulo = sel.options[sel.selectedIndex].textContent.trim().toLowerCase();
+          renderEmptyRow(tb, 5, {
+            icon: "",
+            title: "Nenhum arquivo com status " + rotulo,
+            description: "Nada com esse status na última verificação.",
+            actionText: "Ver todos os status",
+            onAction: () => {
+              sel.value = "";
+              paginaAtualHist = 1;
+              sincronizarStatusComUrl();
+              carregarHistorico();
+            },
+          });
+        } else if (busca) {
           renderEmptyRow(tb, 5, {
             icon: "",
             title: "Nada encontrado para “" + busca + "”",
@@ -323,6 +375,7 @@
       try {
         const params = new URLSearchParams({
           busca: document.getElementById("busca-historico").value || "",
+          status: statusHistorico(),
           todas_filtradas: "true",
         });
         const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
@@ -450,6 +503,7 @@
           pagina: String(paginaAtualHist),
           por_pagina: String(porPaginaHist()),
           busca: document.getElementById("busca-historico").value || "",
+          status: statusHistorico(),
         });
         const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
         if (r.status === 401) {

@@ -724,6 +724,8 @@ async def lifespan(_app: FastAPI):
                     logger.info("Executando job de alertas por e-mail...")
                     stats = await loop.run_in_executor(None, trigger_all_alerts)
                     logger.info(f"Job de alertas concluído: {stats}")
+                    expurgo = await loop.run_in_executor(None, _expurgo_diario)
+                    logger.info(f"Expurgo diário concluído: {expurgo}")
             except Exception as e:
                 logger.error(f"Erro ao executar job de alertas: {e}")
             # Reavalia de hora em hora: com o marcador de última execução, o
@@ -1304,7 +1306,7 @@ def pagina_colaborador_certificados(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página recarrega já na
     # aba certa; com JavaScript a troca é local e a URL acompanha.
     aba = request.query_params.get("aba") or "acompanhados"
-    if aba not in ("acompanhados", "escolher"):
+    if aba not in ("acompanhados", "escolher", "enviados"):
         aba = "acompanhados"
     return templates.TemplateResponse(
         request=request,
@@ -2118,6 +2120,47 @@ def _papel_da_conta(sb, user_id: str) -> Optional[str]:
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao ler o papel atual de %s", user_id)
         return None
+
+
+@app.post(
+    "/api/users/{user_id}/enviar-codigo",
+    dependencies=[Depends(require_admin), Depends(_limitar("enviar-codigo", 20, 3600))],
+)
+def enviar_codigo_de_redefinicao(
+    user_id: str, request: Request, background: BackgroundTasks, ator: auth.TokenData = Depends(require_auth)
+) -> dict:
+    """O administrador dispara, para a conta, o mesmo código de 6 dígitos do
+    "esqueci minha senha" (03/10/2026). Sem link novo: dá o mesmo resultado
+    para quem recebe e não cria uma segunda forma de redefinir senha.
+
+    Diferente da rota pública, aqui a resposta é concreta: quem chama é
+    administrador autenticado, e saber que a conta existe é o trabalho dele."""
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
+    try:
+        r = sb.table("users").select("id, email, full_name, role, ativo").eq("id", user_id).limit(1).execute()
+    except Exception:
+        logger.exception("Falha ao ler a conta %s", user_id)
+        raise HTTPException(status_code=500, detail=ERRO_INTERNO_VEJA_LOG)
+    conta = (r.data or [None])[0]
+    if not conta:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    if conta.get("ativo") is False:
+        raise HTTPException(status_code=400, detail="A conta está desativada; reative antes de enviar o código.")
+    try:
+        codigo = senha_reset.criar_codigo(str(conta["id"]), client_ip=_ip_do_cliente(request))
+    except senha_reset.LimiteDePedidos:
+        raise HTTPException(status_code=429, detail=f"Essa conta já recebeu {senha_reset.MAX_PEDIDOS_HORA} códigos na última hora. Aguarde.")
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao criar código de redefinição por pedido do administrador")
+        raise HTTPException(status_code=503, detail="Não foi possível gerar o código agora. Tente de novo em instantes.")
+    background.add_task(_enviar_codigo_em_segundo_plano, conta, codigo)
+    logger.info("Código de redefinição enviado a pedido do administrador %s para a conta %s", ator.email, user_id)
+    return {"ok": True, "message": f"Código enviado para {conta.get('email')}. Vale 15 minutos."}
 
 
 @app.post("/api/users/{user_id}/reset-password", dependencies=[Depends(require_admin)])
@@ -3418,20 +3461,42 @@ def cron_alerts(request: Request) -> dict:
     # Try/except próprio de propósito: apagar log é acessório, e não pode
     # derrubar o envio de alertas, que é o motivo de a rota existir. Se falhar,
     # aparece na resposta em vez de sumir.
-    try:
-        expurgo = {
-            "install_log": cert_installer.expurgar_install_log(),
-            "user_activity": atividade.expurgar(),
-            # O cofre entra no mesmo ciclo: chave privada de certificado
-            # vencido ou removido da pasta é passivo puro, e o acervo só
-            # crescia porque nada a tirava.
-            "cofre": cert_installer.expurgar_cofre(),
-        }
-    except Exception as e:  # noqa: BLE001
-        logger.exception("Falha no expurgo da trilha")
-        expurgo = {"executado": False, "motivo": str(e)}
+    expurgo = _expurgo_diario()
 
     return {"ok": True, "stats": stats, "expurgo": expurgo}
+
+
+def _expurgo_diario() -> Dict[str, Any]:
+    """Os expurgos que acompanham o ciclo diário de alertas.
+
+    Até 03/10/2026 só a rota `/api/cron/alerts` os chamava — e, fora da
+    Vercel, nada chama essa rota: no ANALISESRV o laço do `lifespan` disparava
+    os alertas e os expurgos simplesmente não rodavam. Agora o laço chama
+    isto também.
+
+    Try/except por item: apagar é acessório e um não pode derrubar o outro
+    nem o envio de alertas, que é o motivo de o ciclo existir.
+    """
+    from app import snapshots
+
+    etapas = (
+        ("install_log", cert_installer.expurgar_install_log),
+        ("user_activity", atividade.expurgar),
+        # O cofre entra no mesmo ciclo: chave privada de certificado vencido
+        # ou removido da pasta é passivo puro, e o acervo só crescia porque
+        # nada a tirava.
+        ("cofre", cert_installer.expurgar_cofre),
+        # Snapshots: 180 dias, preservando a última varredura de cada máquina.
+        ("cert_snapshots", snapshots.expurgar),
+    )
+    out: Dict[str, Any] = {}
+    for nome, fn in etapas:
+        try:
+            out[nome] = fn()
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Falha no expurgo de %s", nome)
+            out[nome] = {"executado": False, "motivo": str(e)}
+    return out
 
 
 # Modulo `acompanhamento` na matriz desde 20/08: os GET pedem `ler`, os dois
@@ -3459,6 +3524,75 @@ def get_user_notifications(
     except Exception:
         logger.exception("Falha ao montar as notificações")
         raise HTTPException(status_code=500, detail="Não foi possível carregar as notificações.")
+
+
+@app.get("/api/colaborador/alertas/enviados", dependencies=[Depends(require_auth)])
+def alertas_enviados(
+    dias: int = Query(30, ge=1, le=365),
+    token: auth.TokenData = Depends(require_auth),
+) -> dict:
+    """Os avisos que o portal já mandou (aba Enviados do Acompanhamento,
+    03/10/2026). Administrador vê tudo; Gestor e Operador só o que foi para
+    o próprio e-mail — a mesma regra do sino e do e-mail."""
+    from app import texto as _texto
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado.")
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    so_admin = (token.role or "").lower() == "admin"
+    try:
+        q = (
+            sb.table("sent_alerts")
+            .select("fingerprint_sha256, tipo_alerta, destinatario, data_validade, sent_at")
+            .gte("sent_at", desde)
+        )
+        if not so_admin:
+            q = q.eq("destinatario", (token.email or "").strip().lower())
+        linhas = list(q.order("sent_at", desc=True).limit(LISTAGEM_EXPORT_MAX).execute().data or [])
+    except Exception:
+        logger.exception("Falha ao listar os avisos enviados")
+        raise HTTPException(status_code=500, detail="Não foi possível carregar os avisos enviados.")
+
+    # Nome e documento pelo fingerprint, numa consulta só. O resumo diário dos
+    # administradores não tem certificado (fingerprint "__resumo_admin__").
+    fps = sorted({str(l.get("fingerprint_sha256") or "") for l in linhas if len(str(l.get("fingerprint_sha256") or "")) == 64})
+    nomes: Dict[str, dict] = {}
+    for i in range(0, len(fps), 200):
+        try:
+            r = sb.table("cert_pfx_store").select("fingerprint, nome_titular, documento").in_("fingerprint", fps[i : i + 200]).execute()
+        except Exception:  # noqa: BLE001
+            logger.warning("Avisos enviados sem os nomes dos certificados (cert_pfx_store indisponível)")
+            break
+        for c in r.data or []:
+            nomes[str(c.get("fingerprint") or "")] = {"nome": c.get("nome_titular"), "documento": c.get("documento")}
+    # O que não está no cofre (custódia desligada, arquivo vencido e expurgado)
+    # ainda pode estar no inventário atual: um snapshot, lido uma vez.
+    faltam = {fp for fp in fps if fp not in nomes}
+    if faltam:
+        try:
+            for it in list((get_latest_snapshot() or {}).get("items") or []):
+                fp = str(it.get("fingerprint_sha256") or "").strip().lower()
+                if fp in faltam:
+                    nomes[fp] = {"nome": it.get("nome"), "documento": it.get("documento") or it.get("documento_numero")}
+        except Exception:  # noqa: BLE001
+            logger.warning("Avisos enviados: inventário atual indisponível para completar nomes")
+
+    itens = []
+    for l in linhas:
+        fp = str(l.get("fingerprint_sha256") or "")
+        cert = nomes.get(fp) or {}
+        itens.append({
+            "enviado_em": l.get("sent_at"),
+            "tipo": l.get("tipo_alerta"),
+            "rotulo": _texto.rotulo_alerta(_texto.chave_alerta(l.get("tipo_alerta"))),
+            "destinatario": l.get("destinatario"),
+            "nome": cert.get("nome"),
+            "documento": cert.get("documento"),
+            "data_validade": l.get("data_validade") if fp != "__resumo_admin__" else None,
+        })
+    return {"dias": dias, "total": len(itens), "itens": itens, "ve_tudo": so_admin}
 
 
 # Enfileirar comando para o agente e acao de operacao, e a unica chamadora e
@@ -4823,6 +4957,33 @@ def _historico_itens_visualizacao(agregados: Dict[str, dict]) -> List[dict]:
     return [{k: v for k, v in row.items() if k != "_dt"} for row in linhas]
 
 
+# Filtro por status do Histórico (03/10/2026): o cartão Acervo ilegível do
+# Dashboard aponta para cá. "ilegivel" é o par (erro, fora_do_padrao) que o
+# Dashboard soma; os demais são o `status_ultimo` tal qual.
+STATUS_HISTORICO = {
+    "ilegivel": ("erro", "fora_do_padrao"),
+    "erro": ("erro",),
+    "fora_do_padrao": ("fora_do_padrao",),
+    "ok": ("ok",),
+    "expirado": ("expirado",),
+}
+
+
+def _historico_status_aceitos(status_raw: Optional[str]) -> Optional[tuple]:
+    chave = str(status_raw or "").strip().lower()
+    if not chave:
+        return None
+    if chave not in STATUS_HISTORICO:
+        raise HTTPException(status_code=422, detail="Status desconhecido. Use: " + ", ".join(STATUS_HISTORICO))
+    return STATUS_HISTORICO[chave]
+
+
+def _historico_filtrar_status(itens: List[dict], aceitos: Optional[tuple]) -> List[dict]:
+    if not aceitos:
+        return itens
+    return [it for it in itens if str(it.get("status_ultimo") or "").lower() in aceitos]
+
+
 def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
     q = str(busca_raw or "").strip().lower()
     if not q:
@@ -4918,6 +5079,7 @@ def historico_certificados(
     offset: Optional[int] = None,
     limit: Optional[int] = None,
     busca: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> dict:
     """
     Lista certificados já mapeados em algum momento, com a última data registrada.
@@ -4931,6 +5093,7 @@ def historico_certificados(
     offset = max(0, int(offset or 0))
     page_limit = int(limit) if pagination else None
     busca_txt = str(busca).strip() if busca else ""
+    status_aceitos = _historico_status_aceitos(status)
 
     def _normalize_rows(rows_raw: List[dict[str, Any]]) -> List[dict[str, Any]]:
         return [
@@ -4946,6 +5109,8 @@ def historico_certificados(
         ]
 
     def _apply_cert_history_or_busca(qb: Any) -> Any:
+        if status_aceitos:
+            qb = qb.in_("status_ultimo", list(status_aceitos))
         if not busca_txt:
             return qb
         return qb.or_(_filtro_or_da_busca(busca_txt))
@@ -4962,7 +5127,7 @@ def historico_certificados(
                 c_r = qc.execute()
                 total_count = c_r.count if c_r.count is not None else 0
 
-                if total_count > 0 or busca_txt:
+                if total_count > 0 or busca_txt or status_aceitos:
                     qp = _apply_cert_history_or_busca(
                         sb.table("cert_history")
                         .select(
@@ -5001,7 +5166,7 @@ def historico_certificados(
         if _use_history_table and rows_non_paginated and not pagination:
             # A busca vale também aqui (achado #54): este é o caminho da
             # exportação, e ele lia a tabela inteira ignorando o filtro.
-            itens = _historico_filtrar_busca(_normalize_rows(rows_non_paginated), busca_txt)
+            itens = _historico_filtrar_status(_historico_filtrar_busca(_normalize_rows(rows_non_paginated), busca_txt), status_aceitos)
             return {
                 "itens": itens,
                 "total": len(itens),
@@ -5013,7 +5178,7 @@ def historico_certificados(
 
     agregados, snapshots_lidos = _historico_carregar_agregados(limite_snapshots)
     itens = _historico_itens_visualizacao(agregados)
-    itens = _historico_filtrar_busca(itens, busca_txt)
+    itens = _historico_filtrar_status(_historico_filtrar_busca(itens, busca_txt), status_aceitos)
 
     if pagination and page_limit is not None:
         total_f = len(itens)
@@ -5056,9 +5221,16 @@ def historico_certificados_http(
         max_length=200,
         description="Filtro parcial em nome, arquivo ou documento",
     ),
+    status: Optional[str] = Query(
+        None,
+        max_length=20,
+        description="Status da última verificação: ilegivel, erro, fora_do_padrao, ok ou expirado",
+    ),
     token: auth.TokenData = Depends(require_auth),
 ) -> dict:
     b = busca.strip() if busca else None
+    st = status.strip().lower() if status else None
+    _historico_status_aceitos(st)  # 422 antes de tocar o banco
     alcance = _documentos_ao_alcance(token)
     # A tela mostra "Atualizado em" e distingue carteira vazia de histórico
     # vazio; os dois campos faltavam na resposta (revisão de 01/10/2026).
@@ -5067,7 +5239,7 @@ def historico_certificados_http(
         "atualizado_em": (get_latest_snapshot() or {}).get("scanned_at") or datetime.now(timezone.utc).isoformat(),
     }
     if todas_filtradas:
-        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b)
+        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b, status=st)
         itens = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
         lista_truncada = len(itens) > LISTAGEM_EXPORT_MAX
         return {
@@ -5084,7 +5256,7 @@ def historico_certificados_http(
         # Com recorte, a página é cortada DEPOIS do recorte, aqui: paginar no
         # banco e recortar depois daria páginas com buracos e um total que
         # conta o que a pessoa não pode ver (#5).
-        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b)
+        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b, status=st)
         recortados = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
         raw = {**raw, "itens": recortados[off: off + por_pagina], "total": len(recortados),
                "offset": off, "limit": por_pagina}
@@ -5094,6 +5266,7 @@ def historico_certificados_http(
             offset=off,
             limit=por_pagina,
             busca=b,
+            status=st,
         )
     total = int(raw.get("total") or 0)
     total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1

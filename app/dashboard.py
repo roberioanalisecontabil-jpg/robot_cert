@@ -252,6 +252,63 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
     }
 
 
+# Limiares dos cartões Vencimentos e Acervo ilegível, decididos em 03/10/2026.
+# Vencimentos é por PRAZO, não por quantidade: um único certificado vencendo
+# em 7 dias já é trabalho para alguém. Ilegível é por fatia do acervo, mas um
+# ilegível NOVO vale Atenção sozinho — ilegível antigo é dívida conhecida;
+# novo é alguém alimentando a pasta errado agora.
+ILEGIVEIS_ACOMPANHAR_PCT = 2.0
+JANELA_ULTIMA_VARREDURA = timedelta(hours=24)
+STATUS_ILEGIVEL = ("erro", "fora_do_padrao")
+
+
+def _estado_vencimento(faixas: Dict[str, int], total_clientes: int) -> Optional[str]:
+    if not total_clientes:
+        return None
+    if faixas.get("vencido", 0) or faixas.get("ate_7_dias", 0):
+        return "atencao"
+    if faixas.get("ate_30_dias", 0):
+        return "acompanhar"
+    return "ok"
+
+
+def _estado_ilegiveis(ilegiveis: int, novos: int, total_arquivos: int) -> Optional[str]:
+    if not total_arquivos:
+        return None
+    if ilegiveis == 0:
+        return "ok"
+    if novos > 0:
+        return "atencao"
+    pct = ilegiveis * 100.0 / total_arquivos
+    return "acompanhar" if pct <= ILEGIVEIS_ACOMPANHAR_PCT else "atencao"
+
+
+def _ilegiveis_da_ultima_varredura(linhas: List[dict]) -> int:
+    """Ilegíveis que apareceram na janela da última varredura.
+
+    "Última varredura" é o maior `ultima_data_registrada` do histórico; "novo"
+    é o arquivo cujo `primeira_data_registrada` cai nas 24 h anteriores a ela.
+    Linhas sem `primeira_data_registrada` (anteriores à migration de 30/09)
+    nunca contam como novas: não se sabe quando apareceram.
+    """
+    ultima: Optional[datetime] = None
+    for l in linhas:
+        d = _dt(l.get("ultima_data_registrada"))
+        if d and (ultima is None or d > ultima):
+            ultima = d
+    if ultima is None:
+        return 0
+    corte = ultima - JANELA_ULTIMA_VARREDURA
+    novos = 0
+    for l in linhas:
+        if str(l.get("status_ultimo") or "") not in STATUS_ILEGIVEL:
+            continue
+        p = _dt(l.get("primeira_data_registrada"))
+        if p and p >= corte:
+            novos += 1
+    return novos
+
+
 def painel_acervo() -> Dict[str, Any]:
     """
     Vencimento por Cliente vigente, e legibilidade de `cert_history`.
@@ -272,11 +329,22 @@ def painel_acervo() -> Dict[str, Any]:
         return {"erro": "Banco não configurado"}
 
     try:
-        linhas = _todas_as_linhas(
-            lambda i, f: client.table("cert_history")
-            .select("vencimento_certificado, status_ultimo")
-            .range(i, f)
-        )
+        try:
+            linhas = _todas_as_linhas(
+                lambda i, f: client.table("cert_history")
+                .select("vencimento_certificado, status_ultimo, primeira_data_registrada, ultima_data_registrada")
+                .range(i, f)
+            )
+        except Exception as e:  # noqa: BLE001
+            # Banco anterior à migration 20260930140000: sem a coluna o painel
+            # segue, só sem a noção de "ilegível novo" (a mesma tolerância do
+            # sino em settings_state.chaves_registradas_recentemente).
+            logger.warning("Acervo sem primeira_data_registrada (migration de 30/09 ausente?): %s", e)
+            linhas = _todas_as_linhas(
+                lambda i, f: client.table("cert_history")
+                .select("vencimento_certificado, status_ultimo, ultima_data_registrada")
+                .range(i, f)
+            )
         from app.main import _lista_base_docs_historico
         clientes = _lista_base_docs_historico()
     except Exception as e:  # noqa: BLE001
@@ -302,6 +370,9 @@ def painel_acervo() -> Dict[str, Any]:
 
     status = Counter(str(l.get("status_ultimo") or "?") for l in linhas)
     ilegiveis = status.get("erro", 0) + status.get("fora_do_padrao", 0)
+    ilegiveis_novos = _ilegiveis_da_ultima_varredura(linhas)
+    estado_vencimento = _estado_vencimento(faixas, len(clientes))
+    estado_ilegiveis = _estado_ilegiveis(ilegiveis, ilegiveis_novos, len(linhas))
 
     # Chave interna vira rótulo aqui, num dicionário só (app/texto.py), e a
     # ordem é fixa para a lista não pular de posição entre cargas.
@@ -323,13 +394,18 @@ def painel_acervo() -> Dict[str, Any]:
         # Somado de propósito: separados, "41 erro" e "36 fora do padrão"
         # parecem ruído; juntos, são 77 arquivos que ninguém consegue instalar.
         "ilegiveis": ilegiveis,
-        # Sem critério de negócio definido para "quantos vencendo é atenção"
-        # nem para "quantos ilegíveis é atenção": sem badge até alguém decidir.
-        "estado_vencimento": None,
-        "estado_ilegiveis": None,
+        "ilegiveis_novos": ilegiveis_novos,
+        # Critério decidido em 03/10/2026 (ver _estado_vencimento e
+        # _estado_ilegiveis): até então os dois cartões saíam sem badge.
+        "estado_vencimento": estado_vencimento,
+        "estado_ilegiveis": estado_ilegiveis,
         "textos": {
             "proximos_30": ("vence" if proximos_30 == 1 else "vencem") + " nos próximos 30 dias",
             "sem_data": texto.plural(sem_data, "sem data de vencimento registrada", "sem data de vencimento registrada"),
+            "novos": (
+                texto.plural(ilegiveis_novos, "ilegível novo na última varredura", "ilegíveis novos na última varredura")
+                if ilegiveis_novos else ""
+            ),
             "ilegiveis": (
                 "arquivo que não pôde ser lido e por isso não pode ser instalado" if ilegiveis == 1
                 else "arquivos que não puderam ser lidos e por isso não podem ser instalados"

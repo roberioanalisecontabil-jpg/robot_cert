@@ -84,4 +84,6 @@ def rotulo_alerta(tipo: object) -> str:
         return "Aviso de vencimento em " + plural(d, "dia")
     if t == "expired":
         return "Aviso de vencido"
+    if t == "novo":
+        return "Certificado novo"
     return t or "Sem tipo"

@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-acompanhamento.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-acompanhamento.css?v=aguia-2026-10a" />
 </head>
 <body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -38,6 +38,10 @@
       <a class="ag-abas__aba" role="tab" id="tab-selecao" href="?aba=escolher" aria-controls="sec-selecao"
          aria-selected="{{ 'true' if aba == 'escolher' else 'false' }}" {% if aba != 'escolher' %}tabindex="-1"{% endif %}>
         Escolher certificados
+      </a>
+      <a class="ag-abas__aba" role="tab" id="tab-enviados" href="?aba=enviados" aria-controls="sec-enviados"
+         aria-selected="{{ 'true' if aba == 'enviados' else 'false' }}" {% if aba != 'enviados' %}tabindex="-1"{% endif %}>
+        Avisos enviados
       </a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
@@ -230,6 +234,33 @@
         <button type="button" id="btn-salvar-selecao" class="ag-btn ag-btn--primary">Salvar seleção (0)</button>
       </div>
     </section>
+
+    <!-- Avisos enviados (03/10/2026): responde "me avisaram?" sem abrir
+         chamado. Administrador vê tudo, com a coluna Para; os demais veem
+         só o que foi para o próprio e-mail. -->
+    <section id="sec-enviados" role="tabpanel" aria-labelledby="tab-enviados" {% if aba != 'enviados' %}hidden{% endif %}>
+      <div class="cg-toolbar cg-toolbar--compacta">
+        <div class="cg-toolbar__filtros">
+          <div class="ag-field cg-campo-inline">
+            <label class="ag-label" for="enviados-dias">Período</label>
+            <select class="ag-select" id="enviados-dias">
+              <option value="7">Últimos 7 dias</option>
+              <option value="30" selected>Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+            </select>
+          </div>
+        </div>
+        <p class="cg-status__linha" id="enviados-resumo" aria-live="polite"></p>
+      </div>
+      <div class="ag-table-wrap cg-tabela-wrap">
+        <div class="ag-table-scroll" role="region" aria-label="Avisos enviados">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row"><th role="columnheader" class="ag-th--estatico">Quando</th><th role="columnheader" class="ag-th--estatico">Aviso</th><th role="columnheader" class="ag-th--estatico">Cliente</th><th role="columnheader" class="ag-th--estatico cg-enviados-para">Para</th></tr></thead>
+            <tbody role="rowgroup" id="tbody-enviados"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09j"></script>
@@ -314,39 +345,92 @@
 
     /* ── Abas ─────────────────────────────────────────────────────────── */
 
+    // Três abas (03/10/2026). A ordem do array é a ordem das setas.
+    const ABAS = [
+      { nome: "acompanhados", tab: "tab-painel", sec: "sec-painel", anuncio: "Aba Acompanhados aberta." },
+      { nome: "escolher", tab: "tab-selecao", sec: "sec-selecao", anuncio: "Aba Escolher certificados aberta." },
+      { nome: "enviados", tab: "tab-enviados", sec: "sec-enviados", anuncio: "Aba Avisos enviados aberta." },
+    ];
+    let _enviadosCarregados = false;
+
     function showTab(tab, anunciar) {
-      const painel = tab === "acompanhados";
-      document.getElementById("sec-painel").hidden = !painel;
-      document.getElementById("sec-selecao").hidden = painel;
-      const btP = document.getElementById("tab-painel");
-      const btS = document.getElementById("tab-selecao");
-      btP.setAttribute("aria-selected", painel ? "true" : "false");
-      btS.setAttribute("aria-selected", painel ? "false" : "true");
-      btP.tabIndex = painel ? 0 : -1;
-      btS.tabIndex = painel ? -1 : 0;
+      const alvo = ABAS.find((a) => a.nome === tab) || ABAS[0];
+      ABAS.forEach((a) => {
+        const ativa = a === alvo;
+        document.getElementById(a.sec).hidden = !ativa;
+        const bt = document.getElementById(a.tab);
+        bt.setAttribute("aria-selected", ativa ? "true" : "false");
+        bt.tabIndex = ativa ? 0 : -1;
+      });
       const url = new URL(location.href);
-      if (painel) url.searchParams.delete("aba"); else url.searchParams.set("aba", "escolher");
+      if (alvo === ABAS[0]) url.searchParams.delete("aba"); else url.searchParams.set("aba", alvo.nome);
       history.replaceState(null, "", url.pathname + (url.search || ""));
-      if (anunciar) {
-        document.getElementById("abas-anuncio").textContent = painel ? "Aba Acompanhados aberta." : "Aba Escolher certificados aberta.";
-      }
+      if (anunciar) document.getElementById("abas-anuncio").textContent = alvo.anuncio;
+      if (alvo.nome === "enviados" && !_enviadosCarregados) void carregarEnviados();
     }
 
     document.querySelectorAll(".ag-abas__aba").forEach((aba) => {
+      const idx = ABAS.findIndex((a) => a.tab === aba.id);
       aba.addEventListener("click", (ev) => {
         ev.preventDefault();
-        showTab(aba.id === "tab-painel" ? "acompanhados" : "escolher", true);
+        showTab(ABAS[idx].nome, true);
         aba.focus();
       });
       // Setas trocam a aba e o foco, como manda o padrão de tablist.
       aba.addEventListener("keydown", (ev) => {
         if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
         ev.preventDefault();
-        const outra = aba.id === "tab-painel" ? "escolher" : "acompanhados";
-        showTab(outra, true);
-        document.getElementById(outra === "acompanhados" ? "tab-painel" : "tab-selecao").focus();
+        const prox = ABAS[(idx + (ev.key === "ArrowRight" ? 1 : ABAS.length - 1)) % ABAS.length];
+        showTab(prox.nome, true);
+        document.getElementById(prox.tab).focus();
       });
     });
+
+    /* ── Avisos enviados ──────────────────────────────────────────────── */
+
+    async function carregarEnviados() {
+      const tb = document.getElementById("tbody-enviados");
+      const resumo = document.getElementById("enviados-resumo");
+      const dias = document.getElementById("enviados-dias").value || "30";
+      resumo.textContent = "Carregando…";
+      renderSkeletonRows("tbody-enviados", 5, 4);
+      try {
+        const r = await fetch(`/api/colaborador/alertas/enviados?dias=${encodeURIComponent(dias)}`, { headers: getHeaders() });
+        if (r.status === 401) { logout(); return; }
+        if (!r.ok) {
+          limparSkeleton(tb);
+          resumo.textContent = "";
+          renderEmptyRow(tb, 4, { icon: "", title: "Não foi possível carregar os avisos", description: await mensagemCorpoErro(r) });
+          return;
+        }
+        const d = await r.json();
+        _enviadosCarregados = true;
+        document.querySelectorAll(".cg-enviados-para").forEach((el) => { el.hidden = !d.ve_tudo; });
+        limparSkeleton(tb);
+        if (!d.itens.length) {
+          resumo.textContent = "";
+          renderEmptyRow(tb, d.ve_tudo ? 4 : 3, {
+            icon: "",
+            title: "Nenhum aviso enviado no período",
+            description: d.ve_tudo ? "O portal não mandou e-mail nesse período." : "Nada foi enviado para o seu e-mail nesse período.",
+          });
+          return;
+        }
+        resumo.textContent = d.total === 1 ? "1 aviso" : `${d.total} avisos`;
+        tb.innerHTML = d.itens.map((it) => `
+        <tr role="row">
+          <td role="cell"><time datetime="${esc(it.enviado_em || "")}">${esc(fmtDataHora(it.enviado_em))}</time></td>
+          <td role="cell"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(it.rotulo || it.tipo || "—")}</span>${it.data_validade ? `<span class="ag-cell-sub">vence em ${esc(fmtSoData(it.data_validade))}</span>` : ""}</span></td>
+          <td role="cell">${it.nome || it.documento ? `<span class="ag-cell-stack"><span class="ag-cell-main">${esc(it.nome || "—")}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(it.documento || "")}</span></span>` : `<span class="ag-cell-sub">${it.data_validade ? "Certificado fora do cofre e do inventário atual" : "Resumo, sem certificado"}</span>`}</td>
+          <td role="cell" class="cg-enviados-para" ${d.ve_tudo ? "" : "hidden"}><span class="ag-cell-sub">${esc(it.destinatario || "—")}</span></td>
+        </tr>`).join("");
+      } catch (_e) {
+        limparSkeleton(tb);
+        resumo.textContent = "";
+        renderEmptyRow(tb, 4, { icon: "", title: "Não foi possível carregar os avisos", description: "Erro de conexão com o servidor." });
+      }
+    }
+    document.getElementById("enviados-dias").addEventListener("change", () => { void carregarEnviados(); });
     document.getElementById("btn-vazio-escolher").addEventListener("click", (ev) => {
       ev.preventDefault();
       showTab("escolher", true);
@@ -765,6 +849,7 @@
       // Depois da tabela, sem `await` no caminho crítico: a preferência é
       // acessória e uma demora nela não deve segurar o que a pessoa veio ver.
       void carregarPreferencia();
+      if (new URLSearchParams(location.search).get("aba") === "enviados") void carregarEnviados();
     })();
   </script>
 </body>

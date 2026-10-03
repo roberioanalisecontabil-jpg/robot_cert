@@ -76,9 +76,7 @@
         <div class="cg-dash-card__corpo" id="pAcervo"><p class="cg-dash-card__vazio">Carregando…</p></div>
         <div class="cg-dash-card__pe">
           <p class="cg-dash-card__nota" id="nAcervo"></p>
-          <!-- O Histórico não tem filtro por status: aponta para a tela
-               inteira (declarado na entrega). -->
-
+          <a class="ag-link-seta" href="/historico?status=ilegivel">Ver arquivos ilegíveis <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </section>
 
@@ -151,8 +149,7 @@
         <div class="cg-dash-card__corpo" id="pAlertas"><p class="cg-dash-card__vazio">Carregando…</p></div>
         <div class="cg-dash-card__pe">
           <p class="cg-dash-card__nota" id="nAlertas"></p>
-          <!-- Sem link: o portal não tem tela de alertas enviados. Botão que
-               não leva a lugar nenhum é pior que botão ausente (§36). -->
+          <a class="ag-link-seta" href="/acompanhamento?aba=enviados">Ver avisos enviados <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </section>
 
@@ -306,7 +303,8 @@
         rotulo: s.rotulo, valor: s.quantidade, aviso: s.chave === "erro" || s.chave === "fora_do_padrao",
       }));
       corpo("pAcervo", numerao(num(d.ilegiveis), t.ilegiveis || "arquivos que não puderam ser lidos e por isso não podem ser instalados") + lista(linhas));
-      nota("nAcervo", (t.total || (num(d.total) + " arquivos já vistos desde o início")) + ".");
+      const novos = d.ilegiveis_novos ? ((t.novos || (num(d.ilegiveis_novos) + " novos na última varredura")) + ". ") : "";
+      nota("nAcervo", novos + (t.total || (num(d.total) + " arquivos já vistos desde o início")) + ".");
     }
 
     function renderAcesso(d) {

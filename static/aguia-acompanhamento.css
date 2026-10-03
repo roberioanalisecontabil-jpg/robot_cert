@@ -120,3 +120,8 @@
     .cg-tabela-acomp .cg-col-status { grid-area: status; justify-self: start; width: auto; }
     .cg-acomp-busca { max-width: none; }
 }
+
+/* Avisos enviados (03/10/2026): data e hora numa linha só; a coluna Para
+   some para quem não vê tudo (o JS põe hidden). */
+#tbody-enviados td:first-child { white-space: nowrap; }
+.cg-enviados-para[hidden] { display: none; }

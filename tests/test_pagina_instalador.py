@@ -71,11 +71,13 @@ def test_expurgar_trilha_so_expurga_a_trilha(client: TestClient, banco: _Fake, m
     assert r.status_code == 200, r.text
     assert chamadas == ["trilha"]
     assert set(r.json()) == {"install_log"}
-    # O job diário continua cuidando dos outros dois.
+    # O job diário continua cuidando dos outros (em `_expurgo_diario`, que o
+    # laço do lifespan e o cron chamam — 03/10/2026).
     fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    i = fonte.index("def cron_alerts")
+    i = fonte.index("def _expurgo_diario")
     trecho = fonte[i:fonte.index("\n@app.", i)]
-    assert "atividade.expurgar()" in trecho and "expurgar_cofre()" in trecho
+    assert "atividade.expurgar" in trecho and "expurgar_cofre" in trecho and "snapshots.expurgar" in trecho
+    assert "_expurgo_diario" in fonte[fonte.index("async def daily_alerts_job_loop"):fonte.index("async def novos_por_hora_loop")]
 
 
 # ── Trilha avisa quando cortou ────────────────────────────────────────────

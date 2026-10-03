@@ -306,7 +306,10 @@ def test_cron_reporta_o_expurgo_e_sobrevive_a_falha_dele(
     r = client.get("/api/cron/alerts", headers={"Authorization": "Bearer segredo-de-teste"})
     assert r.status_code == 200, r.text
     assert r.json()["stats"] == {"enviados": 3}, "os alertas não podem ser afetados"
-    assert r.json()["expurgo"]["executado"] is False
+    # Desde 03/10/2026 cada expurgo responde por si: a trilha falhou, os
+    # outros seguem (e dizem o que fizeram).
+    assert r.json()["expurgo"]["install_log"]["executado"] is False
+    assert "cofre" in r.json()["expurgo"] and "cert_snapshots" in r.json()["expurgo"]
 
 
 def test_gravacao_que_nao_chegou_ao_banco_nao_responde_salvo(

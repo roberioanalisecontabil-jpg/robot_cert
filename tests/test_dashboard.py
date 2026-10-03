@@ -378,3 +378,106 @@ def test_pagina_do_dashboard_responde(client: TestClient) -> None:
     # O painel caro (renovações) tem cartão próprio, que carrega em separado.
     assert "card-renovacoes" in r.text
     assert "/api/dashboard/renovacoes" in r.text
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 5. Estado dos cartões Vencimentos e Acervo ilegível (critério de 03/10/2026)
+# ──────────────────────────────────────────────────────────────────────────
+#
+# Vencimentos é por PRAZO: um certificado vencido ou vencendo em 7 dias já é
+# Atenção, não importa quantos. Acompanhar é "nada em 7, algo em 30". Ilegível
+# é por fatia do acervo (2%), mas um ilegível NOVO na última varredura vale
+# Atenção sozinho: alguém está alimentando a pasta errado agora.
+
+def _fake_acervo(monkeypatch: pytest.MonkeyPatch, hist: List[dict]) -> _Fake:
+    fake = _Fake({"cert_history": hist})
+    monkeypatch.setattr(dash, "_banco", lambda: fake)
+    import app.main as _m
+    monkeypatch.setattr(_m, "_lista_base_docs_historico", lambda: _clientes_do_historico(fake))
+    return fake
+
+
+def _linha(dias: Optional[int], status: str = "ok", primeira_ha_horas: Optional[float] = None,
+           ultima_ha_horas: float = 1) -> dict:
+    r = _cert(dias, status)
+    r["ultima_data_registrada"] = (AGORA - timedelta(hours=ultima_ha_horas)).isoformat()
+    r["primeira_data_registrada"] = (
+        (AGORA - timedelta(hours=primeira_ha_horas)).isoformat() if primeira_ha_horas is not None else None
+    )
+    return r
+
+
+def test_vencimentos_atencao_com_vencido(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [_linha(-1), _linha(200)])
+    assert dash.painel_acervo()["estado_vencimento"] == "atencao"
+
+
+def test_vencimentos_atencao_com_um_so_em_7_dias(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [_linha(6)] + [_linha(200) for _ in range(50)])
+    assert dash.painel_acervo()["estado_vencimento"] == "atencao"
+
+
+def test_vencimentos_acompanhar_so_com_30_dias(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [_linha(20), _linha(200)])
+    assert dash.painel_acervo()["estado_vencimento"] == "acompanhar"
+
+
+def test_vencimentos_em_dia_sem_nada_em_30(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [_linha(45), _linha(200)])
+    assert dash.painel_acervo()["estado_vencimento"] == "ok"
+
+
+def test_vencimentos_sem_clientes_fica_sem_badge(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [])
+    assert dash.painel_acervo()["estado_vencimento"] is None
+    assert dash.painel_acervo()["estado_ilegiveis"] is None
+
+
+def test_ilegiveis_zero_e_em_dia(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [_linha(200), _linha(300)])
+    a = dash.painel_acervo()
+    assert a["estado_ilegiveis"] == "ok"
+    assert a["ilegiveis_novos"] == 0
+
+
+def test_ilegiveis_ate_dois_por_cento_e_acompanhar(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1 em 100 = 1%: antigo (sem primeira_data) → Acompanhar.
+    _fake_acervo(monkeypatch, [_linha(200, "erro")] + [_linha(200) for _ in range(99)])
+    assert dash.painel_acervo()["estado_ilegiveis"] == "acompanhar"
+
+
+def test_ilegiveis_acima_de_dois_por_cento_e_atencao(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 3 em 100 = 3%.
+    _fake_acervo(monkeypatch, [_linha(200, "erro"), _linha(200, "fora_do_padrao"), _linha(200, "erro")]
+                 + [_linha(200) for _ in range(97)])
+    assert dash.painel_acervo()["estado_ilegiveis"] == "atencao"
+
+
+def test_ilegivel_novo_na_ultima_varredura_e_atencao_mesmo_abaixo_do_corte(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1 em 100, mas apareceu na janela da última varredura (1 h atrás).
+    _fake_acervo(monkeypatch, [_linha(200, "erro", primeira_ha_horas=1)] + [_linha(200) for _ in range(99)])
+    a = dash.painel_acervo()
+    assert a["ilegiveis_novos"] == 1
+    assert a["estado_ilegiveis"] == "atencao"
+    assert "novo" in a["textos"]["novos"]
+
+
+def test_ilegivel_antigo_nao_conta_como_novo(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Apareceu há 10 dias; a última varredura foi há 1 h. Janela de 24 h.
+    _fake_acervo(monkeypatch, [_linha(200, "erro", primeira_ha_horas=240)] + [_linha(200) for _ in range(99)])
+    a = dash.painel_acervo()
+    assert a["ilegiveis_novos"] == 0
+    assert a["estado_ilegiveis"] == "acompanhar"
+
+
+def test_legivel_novo_nao_e_ilegivel_novo(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_acervo(monkeypatch, [_linha(200, "ok", primeira_ha_horas=1), _linha(200, "erro", primeira_ha_horas=240)]
+                 + [_linha(200) for _ in range(98)])
+    assert dash.painel_acervo()["ilegiveis_novos"] == 0
+
+
+def test_dashboard_aponta_para_historico_filtrado_e_para_avisos_enviados() -> None:
+    from pathlib import Path
+    html = (Path(__file__).resolve().parents[1] / "templates" / "dashboard.html").read_text(encoding="utf-8")
+    assert 'href="/historico?status=ilegivel"' in html
+    assert 'href="/acompanhamento?aba=enviados"' in html
