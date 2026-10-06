@@ -34,7 +34,8 @@ from app.alert_state import _is_alert_already_sent, _record_sent_alert
 from app.auth import conta_ativa
 from app.cert_installer import documentos_ao_alcance
 from app.settings_state import _banco, load_preferencia_alerta, load_settings
-from app.smtp_service import send_smtp_email
+from app.correio import send_smtp_email
+from app import correio
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ def notificar_novos(novos: List[Dict[str, Any]]) -> Dict[str, Any]:
         logger.error("Sem configuração para avisar de certificados novos: %s", e)
         out["erros"] = 1
         return out
-    if not getattr(settings, "smtp_alerts_enabled", False) or not getattr(settings, "smtp_host", ""):
+    if not getattr(settings, "smtp_alerts_enabled", False) or not correio.configurado(settings):
         out["alerts_disabled"] = True
         logger.info("Aviso de certificado novo não enviado (alertas desligados ou SMTP não configurado).")
         return out
@@ -260,6 +261,7 @@ def notificar_novos(novos: List[Dict[str, Any]]) -> Dict[str, Any]:
                 to_email=email,
                 subject=assunto,
                 html_content=corpo,
+                settings=settings,
             )
         except Exception as e:  # noqa: BLE001
             out["erros"] += 1

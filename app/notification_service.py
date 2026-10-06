@@ -121,6 +121,12 @@ def get_active_alerts(
 
     alerts: List[Dict[str, Any]] = []
 
+    # ── Portal: segredo do aplicativo Microsoft 365 vencendo (03/10/2026) ──
+    # Só para o administrador, que é quem renova. 30 dias antes, igual ao
+    # primeiro marco dos certificados; vencido continua avisando.
+    if is_admin:
+        alerts.extend(avisos_do_portal(settings, now))
+
     # ── Novos na pasta ─────────────────────────────────────────────────────
     recentes = chaves_registradas_recentemente(JANELA_NOVOS_DIAS)
     if recentes:
@@ -262,6 +268,8 @@ def get_active_alerts(
     # fácil de perder de vista; do que chegou por último ao mais antigo.
     def _ordem(x: Dict[str, Any]):
         tipo = x.get("tipo")
+        if tipo == "sistema":
+            return (-1, x.get("dias_restantes") or 0, "")
         if tipo == "novo":
             return (0, x.get("dias_na_pasta") or 0, "")
         if tipo == "expiring":
@@ -274,6 +282,41 @@ def get_active_alerts(
 
 
 TIPOS_DE_AVISO = ("novo", "expiring", "expired")
+
+AVISO_SEGREDO_DIAS = 30
+
+
+def avisos_do_portal(settings: Any, now: datetime) -> List[Dict[str, Any]]:
+    """Avisos sobre o PRÓPRIO portal, para o administrador. Hoje, um: o
+    segredo do aplicativo Microsoft 365 vence (ou venceu)."""
+    from app import correio, graph_mail
+
+    if correio.transporte(settings) != correio.TRANSPORTE_GRAPH:
+        return []
+    validade = str(getattr(settings, "graph_secret_validade", "") or "")
+    dias = graph_mail.dias_para_vencer_segredo(validade, hoje=now.date())
+    if dias is None or dias > AVISO_SEGREDO_DIAS:
+        return []
+    if dias < 0:
+        mensagem = f"O segredo do aplicativo Microsoft 365 venceu há {-dias} dia(s): os e-mails do portal não saem até um segredo novo ser cadastrado."
+    elif dias == 0:
+        mensagem = "O segredo do aplicativo Microsoft 365 vence hoje."
+    else:
+        mensagem = f"O segredo do aplicativo Microsoft 365 vence em {dias} dia(s). Gere um novo no Entra e cole em Configuração › Alertas por e-mail."
+    return [{
+        "chave": f"sistema|graph-secret|{validade[:10]}",
+        "fingerprint_sha256": None,
+        "nome": "Segredo do aplicativo Microsoft 365",
+        "documento": "Configuração › Alertas por e-mail",
+        "tipo": "sistema",
+        # Meio-dia: só a data, o navegador lê como meia-noite UTC e mostra o
+        # dia anterior no fuso -03:00.
+        "vencimento": validade[:10] + "T12:00:00",
+        "dias_restantes": dias,
+        "mensagem": mensagem,
+        "acionavel": True,
+        "href": "/configuracao?aba=alertas",
+    }]
 
 
 def build_notifications_payload(

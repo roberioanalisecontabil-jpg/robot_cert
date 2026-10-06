@@ -29,6 +29,17 @@ class PortalSettings:
     smtp_from_email: str = ""
     smtp_alerts_enabled: bool = False
 
+    # ── Envio pelo Microsoft 365 / Graph (03/10/2026) ──────────────────────
+    # `email_transporte` vazio ou "smtp" = como sempre foi. "graph" usa os
+    # campos abaixo; o segredo fica cifrado com a mesma chave do SMTP.
+    email_transporte: str = ""
+    graph_tenant_id: str = ""
+    graph_client_id: str = ""
+    graph_client_secret_encrypted: str = ""
+    graph_remetente: str = ""
+    graph_reply_to: str = ""
+    graph_secret_validade: str = ""
+
     # ── Módulo instalador (leva 3b, 15/08/2026) ────────────────────────────
     # Vazio/zero significa "usar o padrão do código", e não "desligado". A
     # distinção importa: uma configuração nunca tocada tem de se comportar
@@ -170,6 +181,13 @@ def _from_row(row: dict) -> PortalSettings:
         smtp_use_ssl=bool(row.get("smtp_use_ssl") if row.get("smtp_use_ssl") is not None else False),
         smtp_from_email=str(row.get("smtp_from_email", "") or ""),
         smtp_alerts_enabled=bool(row.get("smtp_alerts_enabled") if row.get("smtp_alerts_enabled") is not None else False),
+        email_transporte=str(row.get("email_transporte", "") or ""),
+        graph_tenant_id=str(row.get("graph_tenant_id", "") or ""),
+        graph_client_id=str(row.get("graph_client_id", "") or ""),
+        graph_client_secret_encrypted=str(row.get("graph_client_secret_encrypted", "") or ""),
+        graph_remetente=str(row.get("graph_remetente", "") or ""),
+        graph_reply_to=str(row.get("graph_reply_to", "") or ""),
+        graph_secret_validade=str(row.get("graph_secret_validade", "") or ""),
         # `row.get` com default: se a migration ainda não rodou, a coluna não
         # vem no PostgREST e o padrão do código continua valendo. É o que torna
         # a migration ordem-independente.
@@ -209,6 +227,13 @@ def _load_file() -> Optional[PortalSettings]:
             smtp_use_ssl=bool(raw.get("smtp_use_ssl", False)),
             smtp_from_email=str(raw.get("smtp_from_email", "")),
             smtp_alerts_enabled=bool(raw.get("smtp_alerts_enabled", False)),
+            email_transporte=str(raw.get("email_transporte", "") or ""),
+            graph_tenant_id=str(raw.get("graph_tenant_id", "") or ""),
+            graph_client_id=str(raw.get("graph_client_id", "") or ""),
+            graph_client_secret_encrypted=str(raw.get("graph_client_secret_encrypted", "") or ""),
+            graph_remetente=str(raw.get("graph_remetente", "") or ""),
+            graph_reply_to=str(raw.get("graph_reply_to", "") or ""),
+            graph_secret_validade=str(raw.get("graph_secret_validade", "") or ""),
             alertas_destinatarios=str(raw.get("alertas_destinatarios", "") or ""),
             alertas_marcos=str(raw.get("alertas_marcos", "") or ""),
             alertas_intervalo_horas=int(raw.get("alertas_intervalo_horas") or 0),
@@ -341,6 +366,13 @@ def save_settings(s: PortalSettings, *, exigir_banco: bool = False) -> bool:
         "smtp_use_ssl": s.smtp_use_ssl,
         "smtp_from_email": s.smtp_from_email,
         "smtp_alerts_enabled": s.smtp_alerts_enabled,
+        "email_transporte": s.email_transporte,
+        "graph_tenant_id": s.graph_tenant_id,
+        "graph_client_id": s.graph_client_id,
+        "graph_client_secret_encrypted": s.graph_client_secret_encrypted,
+        "graph_remetente": s.graph_remetente,
+        "graph_reply_to": s.graph_reply_to,
+        "graph_secret_validade": s.graph_secret_validade,
         "install_token_ttl_min": s.install_token_ttl_min,
         "trilha_retencao_dias": s.trilha_retencao_dias,
         "alertas_destinatarios": s.alertas_destinatarios,

@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-10a" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -126,7 +126,40 @@
           <div class="ag-alert__corpo">Os alertas estão desligados. As configurações abaixo ficam guardadas.</div>
         </div>
 
+        <!-- ── Forma de envio (03/10/2026) ──────────────────────────── -->
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Forma de envio</h3></div>
+        <div class="ag-field">
+          <label class="ag-label" for="sel-email-transporte">Enviar por</label>
+          <select id="sel-email-transporte" class="ag-select">
+            <option value="smtp">SMTP (servidor de e-mail com usuário e senha)</option>
+            <option value="graph">Microsoft 365 (aplicativo, pelo Graph)</option>
+          </select>
+          <p class="ag-ajuda" id="transporte-ajuda"></p>
+        </div>
+
+        <!-- ── Microsoft 365 ────────────────────────────────────────── -->
+        <div id="bloco-graph" hidden>
+          <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Aplicativo no Microsoft 365</h3></div>
+          <p class="ag-ajuda">Registro do aplicativo no Entra com a permissão <code>Mail.Send</code> consentida e restrito à caixa de envio. Passo a passo em <code>docs/envio-microsoft-365.md</code>.</p>
+          <div class="ag-form-cols">
+            <div class="ag-field"><label class="ag-label" for="inp-graph-tenant">ID do tenant (diretório)</label><input type="text" id="inp-graph-tenant" class="ag-input" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" /></div>
+            <div class="ag-field"><label class="ag-label" for="inp-graph-client">ID do aplicativo (cliente)</label><input type="text" id="inp-graph-client" class="ag-input" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" /></div>
+            <div class="ag-field">
+              <span class="cg-cfg-rotulo"><label class="ag-label" for="inp-graph-secret">Segredo do aplicativo</label><span id="graph-secret-status"></span></span>
+              <input type="password" id="inp-graph-secret" class="ag-input" placeholder="Deixe vazio para manter o atual" autocomplete="new-password" />
+            </div>
+            <div class="ag-field">
+              <label class="ag-label" for="inp-graph-validade">Segredo vence em</label>
+              <input type="date" id="inp-graph-validade" class="ag-input" />
+              <p class="ag-ajuda ag-ajuda--muted" id="graph-validade-efetivo"></p>
+            </div>
+            <div class="ag-field"><label class="ag-label" for="inp-graph-remetente">Caixa de envio (remetente)</label><input type="text" id="inp-graph-remetente" class="ag-input" placeholder="noreply@empresa.com.br" autocomplete="off" /></div>
+            <div class="ag-field"><label class="ag-label" for="inp-graph-reply-to">Responder para</label><input type="text" id="inp-graph-reply-to" class="ag-input" placeholder="certificados@empresa.com.br" autocomplete="off" /><p class="ag-ajuda">Quem responder ao aviso cai neste endereço. Vazio = a própria caixa de envio.</p></div>
+          </div>
+        </div>
+
         <!-- ── Servidor de e-mail ─────────────────────────────────── -->
+        <div id="bloco-smtp">
         <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Servidor de e-mail</h3></div>
         <div class="ag-form-cols">
           <div class="cg-cfg-servidor">
@@ -154,6 +187,7 @@
             <input type="text" id="inp-smtp-from" class="ag-input" placeholder="alertas@empresa.com" autocomplete="off" />
             <p class="ag-ajuda ag-ajuda--muted" id="smtp-from-efetivo"></p>
           </div>
+        </div>
         </div>
         <div class="cg-cfg-teste">
           <div class="ag-field">
@@ -306,7 +340,7 @@
     </form>
   </dialog>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-09j"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-10a"></script>
   <script nonce="{{ request.state.nonce }}">
       // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `health`,
       // `getDataFonte`, `setDataFonte`, `KEY_STORAGE` e `showToastAfterRedirect`
@@ -353,6 +387,60 @@
         el.querySelector(".ag-alert__corpo").textContent = texto || "";
         el.hidden = !texto;
       }
+      // ── Microsoft 365 / Graph (03/10/2026) ──────────────────────────
+      const AJUDA_TRANSPORTE = {
+        smtp: "Usuário e senha num servidor SMTP. No Microsoft 365 esse caminho é desligado por padrão a partir de dezembro de 2026.",
+        graph: "O portal envia pela caixa compartilhada como aplicativo do Entra: sem senha de caixa no servidor, e sem depender do SMTP básico.",
+      };
+      function transporteEscolhido() { return document.getElementById("sel-email-transporte").value || "smtp"; }
+      function pintarTransporte() {
+        const t = transporteEscolhido();
+        document.getElementById("bloco-graph").hidden = t !== "graph";
+        document.getElementById("bloco-smtp").hidden = t === "graph";
+        document.getElementById("transporte-ajuda").textContent = AJUDA_TRANSPORTE[t] || "";
+        pintarEstadoAlertas();
+      }
+      function pintarSegredoGuardado(guardado) {
+        document.getElementById("graph-secret-status").innerHTML = guardado
+          ? '<span class="ag-badge ag-badge--success">' + CHECK + ' Segredo guardado</span>'
+          : '<span class="ag-badge ag-badge--neutral">Sem segredo guardado</span>';
+      }
+      function pintarValidadeSegredo(s) {
+        const el = document.getElementById("graph-validade-efetivo");
+        const d = s.graph_secret_dias_restantes;
+        if (d === null || d === undefined) { el.textContent = "Sem data: o portal não avisa quando o segredo vencer."; el.className = "ag-ajuda ag-ajuda--muted"; return; }
+        if (d < 0) { el.textContent = "Venceu há " + plural(-d, "dia") + ". Gere um segredo novo no Entra."; el.className = "ag-ajuda"; return; }
+        el.textContent = d === 0 ? "Vence hoje." : "Vence em " + plural(d, "dia") + (d <= 30 ? ". O sino do administrador já avisa." : ".");
+        el.className = "ag-ajuda ag-ajuda--muted";
+      }
+      function preencherGraph(s) {
+        document.getElementById("sel-email-transporte").value = s.email_transporte === "graph" ? "graph" : "smtp";
+        document.getElementById("inp-graph-tenant").value = s.graph_tenant_id || "";
+        document.getElementById("inp-graph-client").value = s.graph_client_id || "";
+        document.getElementById("inp-graph-secret").value = "";
+        pintarSegredoGuardado(!!s.graph_client_secret_set);
+        document.getElementById("inp-graph-validade").value = s.graph_secret_validade || "";
+        pintarValidadeSegredo(s);
+        document.getElementById("inp-graph-remetente").value = s.graph_remetente || "";
+        document.getElementById("inp-graph-reply-to").value = s.graph_reply_to || "";
+        pintarTransporte();
+      }
+      function corpoGraph() {
+        return {
+          email_transporte: transporteEscolhido(),
+          graph_tenant_id: document.getElementById("inp-graph-tenant").value || "",
+          graph_client_id: document.getElementById("inp-graph-client").value || "",
+          graph_client_secret: document.getElementById("inp-graph-secret").value || null,
+          graph_remetente: document.getElementById("inp-graph-remetente").value || "",
+          graph_reply_to: document.getElementById("inp-graph-reply-to").value || "",
+          graph_secret_validade: document.getElementById("inp-graph-validade").value || "",
+        };
+      }
+      document.getElementById("sel-email-transporte").addEventListener("change", () => { pintarTransporte(); marcarSujo(); });
+      ["inp-graph-tenant", "inp-graph-client", "inp-graph-secret", "inp-graph-validade", "inp-graph-remetente", "inp-graph-reply-to"].forEach((id) => {
+        document.getElementById(id).addEventListener("input", marcarSujo);
+      });
+
       function pintarSenhaGuardada(guardada) {
         document.getElementById("smtp-pass-status").innerHTML = guardada
           ? '<span class="ag-badge ag-badge--success">' + CHECK + ' Senha guardada</span>'
@@ -434,6 +522,7 @@
           document.getElementById("inp-smtp-pass").value = "";
           pintarSenhaGuardada(!!s.smtp_password_set);
           document.getElementById("inp-smtp-from").value = s.smtp_from_email || "";
+          preencherGraph(s);
           // Diz o valor QUE VALE, em vez de explicar o conceito. O campo existe
           // so pelo nome de exibicao: `send_smtp_email` faz `from_email or user`,
           // entao vazio nao e um estado quebrado — e o padrao.
@@ -572,6 +661,7 @@
             ...seguranca(),
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoGraph(),
             ...corpoAlertas(),
             ...corpoEntrada(),
           };
@@ -622,7 +712,9 @@
       // ninguem entende por que nao chega e-mail.
       function pintarEstadoAlertas() {
         const ligado = document.getElementById("chk-smtp-alerts-enabled").checked;
-        const host = (document.getElementById("inp-smtp-host").value || "").trim();
+        const host = transporteEscolhido() === "graph"
+          ? ((document.getElementById("inp-graph-remetente").value || "").trim() && (document.getElementById("inp-graph-client").value || "").trim())
+          : (document.getElementById("inp-smtp-host").value || "").trim();
         document.getElementById("smtp-estado-badge").innerHTML = ligado
           ? '<span class="ag-badge ag-badge--success">Ligado</span>'
           : '<span class="ag-badge ag-badge--neutral">Desligado</span>';
@@ -630,12 +722,14 @@
           ? "Nenhum alerta sai, mesmo com o servidor configurado."
           : host
             ? "O portal verifica os vencimentos e envia o resumo."
-            : "Sem servidor configurado: nada será enviado até preencher o bloco abaixo.";
+            : "Sem envio configurado: nada será enviado até preencher o bloco abaixo.";
         document.getElementById("alertas-desligados").hidden = ligado;
       }
 
       document.getElementById("chk-smtp-alerts-enabled").addEventListener("change", pintarEstadoAlertas);
       document.getElementById("inp-smtp-host").addEventListener("input", pintarEstadoAlertas);
+      document.getElementById("inp-graph-remetente").addEventListener("input", pintarEstadoAlertas);
+      document.getElementById("inp-graph-client").addEventListener("input", pintarEstadoAlertas);
 
       document.getElementById("btn-save-smtp").addEventListener("click", async () => {
         const st = document.getElementById("smtp-msg");
@@ -652,6 +746,7 @@
             ...seguranca(),
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoGraph(),
             ...corpoAlertas(),
             ...corpoModeloEmail(),
           };
@@ -661,6 +756,7 @@
           const s = await r.json();
           pintarSenhaGuardada(!!s.smtp_password_set);
           document.getElementById("inp-smtp-pass").value = "";
+          preencherGraph(s);
           marcarLimpo();
           st.textContent = "Salvo.";
           showToast("Alterações salvas.", "success");
@@ -685,7 +781,7 @@
           const r = await fetch("/api/settings/smtp/test", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ target_email: dest }) });
           if (r.status === 403) { resultadoTeste("danger", "Só o administrador testa o envio."); return; }
           if (r.status === 422 || r.status === 429 || r.status === 400) { resultadoTeste("danger", await mensagemCorpoErro(r)); return; }
-          if (!r.ok) { resultadoTeste("danger", "O servidor de e-mail recusou: " + (await mensagemCorpoErro(r))); return; }
+          if (!r.ok) { resultadoTeste("danger", "O envio foi recusado: " + (await mensagemCorpoErro(r))); return; }
           resultadoTeste("success", "E-mail de teste enviado para " + dest + ".");
         } catch (e) { resultadoTeste("danger", "Erro: " + e); }
         finally { btn.disabled = false; }
@@ -835,6 +931,7 @@
             ...seguranca(),
             smtp_from_email: document.getElementById("inp-smtp-from").value || "",
             smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoGraph(),
             ...corpoAlertas(),
             ...corpoModeloEmail(),
           };

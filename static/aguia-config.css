@@ -66,3 +66,8 @@
     .cg-cfg-email { grid-template-columns: minmax(0, 1fr); }
     .ag-sticky-acoes { padding-inline: var(--space-4); }
 }
+
+/* Microsoft 365 (03/10/2026): o bloco do aplicativo abre depois da ajuda da
+   forma de envio; sem respiro parecia continuacao do texto. */
+#bloco-graph { margin-top: var(--space-5, 20px); }
+#bloco-graph .ag-form-subhead { margin-top: 0; }

@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, config, db_pg, machine_credentials, nome_publico, nomes, papeis, permissoes, senha_reset, taxa
+from app import agent_devices, atividade, auth, config, correio, db_pg, graph_mail, machine_credentials, nome_publico, nomes, papeis, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -1176,6 +1176,15 @@ class SettingsBody(BaseModel):
     smtp_use_ssl: bool = Field(default=False)
     smtp_from_email: str = Field(default="", max_length=320)
     smtp_alerts_enabled: bool = Field(default=False)
+    # Envio pelo Microsoft 365 / Graph (03/10/2026). `None` = não mexe; o
+    # segredo segue a regra da senha SMTP: só grava quando vier preenchido.
+    email_transporte: Optional[str] = Field(default=None, max_length=8)
+    graph_tenant_id: Optional[str] = Field(default=None, max_length=253)
+    graph_client_id: Optional[str] = Field(default=None, max_length=64)
+    graph_client_secret: Optional[str] = Field(default=None, max_length=1024)
+    graph_remetente: Optional[str] = Field(default=None, max_length=320)
+    graph_reply_to: Optional[str] = Field(default=None, max_length=320)
+    graph_secret_validade: Optional[str] = Field(default=None, max_length=10)
     # ── Campos que este PUT não "possui" ───────────────────────────────────
     #
     # `None` = NÃO MEXE; qualquer outro valor grava — inclusive vazio, que aqui
@@ -2736,6 +2745,17 @@ def _settings_dict(s: PortalSettings) -> dict:
         "trilha_retencao_dias": s.trilha_retencao_dias,
         "smtp_from_email": s.smtp_from_email,
         "smtp_alerts_enabled": s.smtp_alerts_enabled,
+        # Microsoft 365 / Graph: o segredo nunca volta, só "está guardado".
+        "email_transporte": correio.transporte(s),
+        "graph_tenant_id": s.graph_tenant_id,
+        "graph_client_id": s.graph_client_id,
+        "graph_client_secret_set": bool(s.graph_client_secret_encrypted),
+        "graph_remetente": s.graph_remetente,
+        "graph_reply_to": s.graph_reply_to,
+        "graph_secret_validade": s.graph_secret_validade,
+        "graph_secret_dias_restantes": graph_mail.dias_para_vencer_segredo(s.graph_secret_validade),
+        "envio_configurado": correio.configurado(s),
+        "remetente_efetivo": correio.remetente_efetivo(s),
         # Alertas. O par `campo` + `campo_efetivo` segue o que o instalador já
         # fazia acima: a tela mostra o campo em branco E o que vale de fato,
         # senão "vazio" pareceria "desligado".
@@ -2907,6 +2927,34 @@ def put_settings(body: SettingsBody) -> dict:
     remetente = (body.smtp_from_email or "").strip()
     if remetente and not _EMAIL_PLAUSIVEL.match(remetente):
         raise HTTPException(status_code=422, detail=f"E-mail do remetente inválido: {remetente!r}")
+
+    # Microsoft 365 / Graph (03/10/2026): `None` preserva; o segredo só grava
+    # quando vier preenchido, como a senha SMTP. Com a forma "graph" os
+    # quatro campos obrigatórios são validados aqui — recusar é a única
+    # defesa, porque o job de alertas só descobriria na hora de enviar.
+    transporte_novo = (old.email_transporte if body.email_transporte is None else body.email_transporte or "").strip().lower()
+    if transporte_novo and transporte_novo not in correio.TRANSPORTES:
+        raise HTTPException(status_code=422, detail="Forma de envio desconhecida. Use 'smtp' ou 'graph'.")
+    g_tenant = (old.graph_tenant_id if body.graph_tenant_id is None else body.graph_tenant_id).strip()
+    g_client = (old.graph_client_id if body.graph_client_id is None else body.graph_client_id).strip()
+    g_remetente = (old.graph_remetente if body.graph_remetente is None else body.graph_remetente).strip()
+    g_reply_to = (old.graph_reply_to if body.graph_reply_to is None else body.graph_reply_to).strip()
+    g_validade = (old.graph_secret_validade if body.graph_secret_validade is None else body.graph_secret_validade).strip()
+    if g_validade and graph_mail.dias_para_vencer_segredo(g_validade) is None:
+        raise HTTPException(status_code=422, detail="Validade do segredo: use a data no formato AAAA-MM-DD, ou deixe vazio.")
+    g_secret_enc = old.graph_client_secret_encrypted
+    if body.graph_client_secret is not None and body.graph_client_secret.strip() != "":
+        try:
+            g_secret_enc = encrypt_password(body.graph_client_secret.strip())
+        except Exception:
+            raise HTTPException(status_code=500, detail="Erro ao criptografar o segredo do aplicativo")
+    if transporte_novo == correio.TRANSPORTE_GRAPH:
+        try:
+            graph_mail.validar_config(g_tenant, g_client, g_remetente, g_reply_to)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        if not g_secret_enc:
+            raise HTTPException(status_code=422, detail="Informe o segredo do aplicativo para usar o Microsoft 365.")
     s = PortalSettings(
         source_folder=pasta_origem,
         expired_folder=pasta_vencidos,
@@ -2919,6 +2967,13 @@ def put_settings(body: SettingsBody) -> dict:
         smtp_use_ssl=body.smtp_use_ssl,
         smtp_from_email=remetente,
         smtp_alerts_enabled=body.smtp_alerts_enabled,
+        email_transporte=transporte_novo,
+        graph_tenant_id=g_tenant,
+        graph_client_id=g_client,
+        graph_client_secret_encrypted=g_secret_enc,
+        graph_remetente=g_remetente,
+        graph_reply_to=g_reply_to,
+        graph_secret_validade=g_validade,
         install_token_ttl_min=ttl,
         trilha_retencao_dias=retencao,
         alertas_destinatarios=destinatarios,
@@ -3013,8 +3068,8 @@ def _conta_para_reset(sb, email: str) -> Optional[dict]:
 def _enviar_codigo_por_email(conta: dict, codigo: str) -> None:
     """Manda o código. Levanta se o SMTP falhar — o chamador decide o que fazer."""
     s = load_settings()
-    if not s.smtp_host:
-        raise RuntimeError("SMTP não configurado")
+    if not correio.configurado(s):
+        raise RuntimeError("Envio de e-mail não configurado")
 
     base = (os.getenv("PORTAL_BASE_URL") or "").strip().rstrip("/")
     # Link só de conveniência, e só se o endereço vier de configuração. Nunca
@@ -3026,7 +3081,7 @@ def _enviar_codigo_por_email(conta: dict, codigo: str) -> None:
     )
     nome = html.escape(str(conta.get("full_name") or "").strip() or "Olá")
 
-    smtp_service.send_smtp_email(
+    correio.send_smtp_email(
         host=s.smtp_host,
         port=s.smtp_port,
         user=s.smtp_user,
@@ -3035,6 +3090,7 @@ def _enviar_codigo_por_email(conta: dict, codigo: str) -> None:
         use_ssl=s.smtp_use_ssl,
         from_email=s.smtp_from_email,
         to_email=str(conta["email"]),
+        settings=s,
         subject="Código para redefinir sua senha",
         html_content=(
             f"<p>{nome},</p>"
@@ -3317,13 +3373,17 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
     # Endereço plausível e sem CR/LF: o valor ia direto para `msg["To"]`.
     destino = _validar_email(body.target_email)
     s = load_settings()
-    if not s.smtp_host:
-        raise HTTPException(status_code=400, detail="Servidor SMTP não configurado.")
+    if not correio.configurado(s):
+        raise HTTPException(status_code=400, detail=(
+            "Servidor SMTP não configurado." if correio.transporte(s) == correio.TRANSPORTE_SMTP
+            else "Microsoft 365 não configurado: faltam tenant, aplicativo, segredo ou caixa de envio."))
+    forma = correio.ROTULOS[correio.transporte(s)]
     try:
-        # Qualificado pelo módulo: `send_smtp_email` nunca esteve na lista de
-        # imports deste arquivo, então a rota levantava NameError em vez de
-        # enviar. Só não aparecia porque ninguém clicava em "Enviar Teste".
-        smtp_service.send_smtp_email(
+        # Pelo despachante (03/10/2026): SMTP ou Microsoft 365, conforme a
+        # configuração salva. Qualificado pelo módulo: `send_smtp_email` nunca
+        # esteve na lista de imports deste arquivo, e a rota levantava
+        # NameError em vez de enviar.
+        correio.send_smtp_email(
             host=s.smtp_host,
             port=s.smtp_port,
             user=s.smtp_user,
@@ -3332,8 +3392,9 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
             use_ssl=s.smtp_use_ssl,
             from_email=s.smtp_from_email,
             to_email=destino,
+            settings=s,
             subject="Monitor de Certificados - E-mail de Teste",
-            html_content="<p>Olá! Este é um e-mail de teste enviado a partir do seu <strong>Monitor de Certificados</strong> para validar as configurações de SMTP.</p>"
+            html_content=f"<p>Olá! Este é um e-mail de teste enviado a partir do seu <strong>Monitor de Certificados</strong> para validar o envio por {forma}.</p>"
         )
     # Uma mensagem fixa por CLASSE de falha (achado #35; item 91 da spec de
     # telas). O texto do servidor SMTP trazia o usuário, às vezes o endereço
@@ -3351,6 +3412,16 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
     except smtp_service.ErroConexaoSmtp:
         raise HTTPException(status_code=400, detail=(
             "Não foi possível conectar ao servidor SMTP. Confira o endereço e a porta."))
+    except graph_mail.ErroAutenticacaoGraph:
+        raise HTTPException(status_code=400, detail=(
+            "A Microsoft recusou as credenciais do aplicativo. Confira o ID do tenant, o ID do aplicativo e o segredo (e se ele não venceu)."))
+    except graph_mail.ErroPermissaoGraph:
+        raise HTTPException(status_code=400, detail=(
+            "O aplicativo não tem permissão para enviar por essa caixa: confira o consentimento de Mail.Send e a política de acesso."))
+    except graph_mail.ErroConexaoGraph:
+        raise HTTPException(status_code=400, detail="Não foi possível falar com a Microsoft. Confira a saída do servidor para a internet.")
+    except graph_mail.ErroEnvioGraph:
+        raise HTTPException(status_code=400, detail="A Microsoft recusou a mensagem. Confira a caixa de envio e o destinatário.")
     except Exception:
         logger.exception("Falha no e-mail de teste")
         raise HTTPException(status_code=400, detail="Falha ao enviar o e-mail de teste. Veja o log do servidor.")
@@ -4757,7 +4828,7 @@ def obter_preferencia_alerta(token: auth.TokenData = Depends(require_auth)) -> d
         "texto": frase,
         # Sem SMTP configurado, nenhuma preferência muda nada — e a tela
         # precisa dizer isso em vez de prometer e-mails que não saem.
-        "envio_ativo": bool(s.smtp_alerts_enabled and s.smtp_host),
+        "envio_ativo": bool(s.smtp_alerts_enabled and correio.configurado(s)),
     }
 
 

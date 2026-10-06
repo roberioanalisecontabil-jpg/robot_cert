@@ -12,7 +12,8 @@ from app import alertas_config
 from app import email_modelo
 from app.settings_state import load_settings, _banco, _load_colaborador_file_dict
 from app.cert_scanner import scan_folder, cert_to_public_dict
-from app.smtp_service import send_smtp_email
+from app.correio import send_smtp_email
+from app import correio
 
 logger = logging.getLogger(__name__)
 
@@ -657,6 +658,7 @@ def _enviar_resumo_admins(settings, itens: List[Dict[str, Any]], now: datetime) 
                 to_email=admin_email,
                 subject=subject,
                 html_content=html_content,
+                settings=settings,
             )
             out["admin_resumos_enviados"] += 1
             _record_sent_alert("__resumo_admin__", f"digest:{hoje}", admin_email, hoje)
@@ -681,12 +683,12 @@ def trigger_all_alerts() -> Dict[str, Any]:
         "skipped_marco_dispensado": 0,
         "errors": 0,
         "alerts_disabled": not settings.smtp_alerts_enabled,
-        "smtp_configured": bool(settings.smtp_host and settings.smtp_user)
+        "smtp_configured": correio.configurado(settings)
     }
     
     # 1. Se alertas estão desligados ou SMTP não está configurado, interrompe
-    if not settings.smtp_alerts_enabled or not settings.smtp_host:
-        logger.info("Envio de alertas ignorado (alertas desligados ou SMTP não configurado).")
+    if not settings.smtp_alerts_enabled or not correio.configurado(settings):
+        logger.info("Envio de alertas ignorado (alertas desligados ou envio de e-mail não configurado).")
         return stats
 
     # 2. Carrega todos os certificados do sistema
@@ -811,6 +813,7 @@ def trigger_all_alerts() -> Dict[str, Any]:
                 to_email=email_dest,
                 subject=subject,
                 html_content=html_content,
+                settings=settings,
             )
             stats["alerts_sent"] += 1
             # Só depois do envio bem-sucedido: marcar antes faria uma falha de

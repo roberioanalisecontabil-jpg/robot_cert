@@ -28,7 +28,8 @@ from typing import Any, Dict, List, Optional
 from app import alertas_config
 from app.auth import conta_ativa
 from app.settings_state import _banco, load_settings
-from app.smtp_service import send_smtp_email
+from app.correio import send_smtp_email
+from app import correio
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +228,7 @@ def notificar_pendentes(novos_pendentes: List[Dict[str, Any]]) -> Dict[str, Any]
         logger.error("Entrada: sem configuração para avisar dos pendentes: %s", e)
         out["erros"] = 1
         return out
-    if not getattr(settings, "smtp_alerts_enabled", False) or not getattr(settings, "smtp_host", ""):
+    if not getattr(settings, "smtp_alerts_enabled", False) or not correio.configurado(settings):
         out["alerts_disabled"] = True
         return out
     destinatarios = _emails_admins(settings)
@@ -239,7 +240,7 @@ def notificar_pendentes(novos_pendentes: List[Dict[str, Any]]) -> Dict[str, Any]
                 host=settings.smtp_host, port=settings.smtp_port, user=settings.smtp_user,
                 password_enc=settings.smtp_password_encrypted, use_tls=settings.smtp_use_tls,
                 use_ssl=settings.smtp_use_ssl, from_email=settings.smtp_from_email,
-                to_email=email, subject=assunto, html_content=corpo,
+                to_email=email, subject=assunto, html_content=corpo, settings=settings,
             )
             out["enviados"] += 1
         except Exception as e:  # noqa: BLE001

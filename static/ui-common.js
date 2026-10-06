@@ -1237,6 +1237,8 @@ let _seqNotif = 0;
  *  expirando estão no Início, que é onde se instala. A busca é o documento
  *  (só dígitos, que as duas telas casam), ou o nome quando não houver. */
 function _destinoDaNotificacao(it) {
+  // Aviso do próprio portal (03/10/2026) já diz para onde vai.
+  if (it.href) return String(it.href);
   const doc = String(it.documento || "").replace(/\D/g, "");
   const termo = doc || String(it.nome || "").trim();
   if (!termo) return null;
@@ -1282,7 +1284,7 @@ function _aplicarBadgeNotificacoes(dados) {
 /** Um item da lista, montado no DOM (nunca innerHTML: `nome` vem do CN do certificado). */
 function _criarItemNotificacao(it) {
   const div = document.createElement("div");
-  const classePorTipo = { expired: "notif-expired", expiring: "notif-expiring", novo: "notif-novo" };
+  const classePorTipo = { expired: "notif-expired", expiring: "notif-expiring", novo: "notif-novo", sistema: "notif-expiring" };
   div.className = "notification-item " + (classePorTipo[it.tipo] || "notif-expiring");
 
   // O cartão inteiro leva à tela certa, já filtrada por este certificado
@@ -1293,7 +1295,7 @@ function _criarItemNotificacao(it) {
     div.setAttribute("role", "link");
     div.tabIndex = 0;
     div.dataset.href = destino;
-    div.title = it.tipo === "expired" ? "Abrir em Vencidos" : "Abrir no Início";
+    div.title = it.tipo === "sistema" ? "Abrir a Configuração" : it.tipo === "expired" ? "Abrir em Vencidos" : "Abrir no Início";
     const ir = () => { window.location.href = destino; };
     div.addEventListener("click", (e) => {
       if (e.target.closest("button, a")) return;
@@ -1357,7 +1359,7 @@ function _criarItemNotificacao(it) {
 
   const doc = document.createElement("div");
   doc.className = "notif-doc";
-  doc.textContent = "Doc: " + (it.documento || "—");
+  doc.textContent = it.tipo === "sistema" ? (it.mensagem || it.documento || "") : "Doc: " + (it.documento || "—");
 
   div.append(header, nome, doc);
 
@@ -1493,10 +1495,15 @@ function _renderizarNotificacoes(data) {
 
   // Três seções: o que acabou de chegar, o que ainda dá para evitar, o passivo.
   const mostra = (t) => _filtroNotif === "todos" || _filtroNotif === t;
+  const portal = items.filter((x) => x.tipo === "sistema");
   const novos = items.filter((x) => x.tipo === "novo");
   const expirando = items.filter((x) => x.tipo === "expiring");
   const vencidos = items.filter((x) => x.tipo === "expired");
 
+  // Avisos do próprio portal (só o administrador recebe): antes de tudo.
+  if (_filtroNotif === "todos" && portal.length) {
+    body.appendChild(_criarSecaoNotificacoes("Portal", portal.length, portal));
+  }
   if (mostra("novo") && novos.length) {
     body.appendChild(_criarSecaoNotificacoes("Novos", contagens.novo || novos.length, novos));
   }
