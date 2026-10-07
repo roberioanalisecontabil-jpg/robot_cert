@@ -7,8 +7,9 @@
    detalhe, com "Voltar para operadores" no topo. É CSS sobre uma classe
    que o servidor põe no <body>, então funciona sem JavaScript.
 
-   O painel do operador selecionado ainda não foi especificado (item 64):
-   fica com os componentes do DS, sem redesenho.
+   Painel do operador (Leva C, 06/10/2026): cada linha dos dois painéis usa
+   as células do DS (.ag-cell-main/.ag-cell-sub), documento com máscara em
+   mono e a trilha de atribuição em texto corrido numa linha própria.
    ══════════════════════════════════════════════════════════════════════════ */
 
 .cg-cart-layout {
@@ -161,7 +162,8 @@
 .cg-transfer__marca { flex: none; width: 18px; height: 18px; color: var(--text-brand); visibility: hidden; }
 .cg-transfer__item[aria-selected="true"] .cg-transfer__marca { visibility: visible; }
 .cg-transfer__nome { min-width: 0; overflow-wrap: anywhere; }
-.cg-transfer__trilha { display: block; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.cg-transfer__nome .ag-cell-main { overflow-wrap: break-word; }
+.cg-transfer__trilha { display: block; color: var(--text-muted); overflow-wrap: break-word; }
 .cg-transfer__vazio { margin: 0; padding: var(--space-4); font-size: var(--text-sm); color: var(--text-muted); }
 .cg-transfer__rodape {
     display: flex;

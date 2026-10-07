@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-09d" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=aguia-2026-10c" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
        declara display, e display explícito vence o display:none que o
@@ -98,8 +98,9 @@
             </div>
           </div>
 
-          <!-- Painel do operador (item 64, ainda sem spec): os dois painéis
-               lado a lado continuam, com os componentes do DS. -->
+          <!-- Painel do operador (Leva C, 06/10/2026): os dois painéis lado a
+               lado, cada linha com o cliente em cima, o documento com máscara
+               embaixo e, na carteira, quem atribuiu e quando numa linha própria. -->
           <div class="cg-cart-corpo">
             <div class="ag-field">
               <label for="buscaDoc" class="cg-sr-only">Filtrar clientes por nome ou CNPJ/CPF</label>
@@ -480,28 +481,41 @@
       );
     }
 
+    // Quem atribuiu vem como e-mail; quem está na lista de pessoas aparece
+    // pelo nome, e o e-mail fica no title.
+    function nomeDeQuem(email) {
+      const o = _operadores.find((x) => (x.email || "").toLowerCase() === String(email || "").toLowerCase());
+      return o ? nomeDe(o) : String(email || "");
+    }
+
+    function docDe(x) {
+      const u = _universo.find((d) => d.documento === x.documento);
+      return x.documento_formatado || (u && u.documento_formatado) || x.documento;
+    }
+
     function linhaTransfer(x, naCarteira) {
       const t = naCarteira ? _trilha[x.documento] : null;
       const ex = !naCarteira && deExcecoes() ? _excecoes[x.documento] : null;
-      let trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}</span>`;
+      const data = (iso) => (iso ? " em " + new Date(iso).toLocaleDateString("pt-BR") : "");
+      const quem = (email, frase) => email
+        ? ` ${frase} <span title="${esc(email)}">${esc(nomeDeQuem(email))}</span>`
+        : "";
+      let trilha = "";
       if (ex && (ex.registrado_por || ex.registrado_em)) {
         // Exceção: quem retirou o cliente do alcance do gestor, e quando.
-        trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}` +
-          (ex.registrado_por ? " · retirado por " + esc(ex.registrado_por) : "") +
-          (ex.registrado_em ? " em " + new Date(ex.registrado_em).toLocaleDateString("pt-BR") : "") +
-          (x.fora_do_inventario ? " · fora do inventário atual" : "") +
-          `</span>`;
+        trilha = (quem(ex.registrado_por, "Retirado por") || "Retirado") + data(ex.registrado_em) +
+          (x.fora_do_inventario ? " · fora do inventário atual" : "");
       } else if (t && (t.atribuido_por || t.atribuido_em || t.origem === "papel")) {
-        trilha = `<span class="cg-transfer__trilha">${esc(x.documento)}` +
-          (t.origem === "papel" ? " · pelo papel de gestor" : (t.atribuido_por ? " · atribuído por " + esc(t.atribuido_por) : "")) +
-          (t.atribuido_em ? " em " + new Date(t.atribuido_em).toLocaleDateString("pt-BR") : "") +
-          (t.no_inventario === false ? " · fora do inventário atual" : "") +
-          `</span>`;
+        trilha = (t.origem === "papel" ? "Atribuído pelo papel de gestor" : (quem(t.atribuido_por, "Atribuído por") || "Atribuído")) +
+          data(t.atribuido_em) +
+          (t.no_inventario === false ? " · fora do inventário atual" : "");
+      } else if (x.fora_do_inventario) {
+        trilha = "Fora do inventário atual";
       }
       // A LINHA é o alvo de seleção; a ação vive no rodapé do painel.
       return `<div class="cg-transfer__item" role="option" aria-selected="false" tabindex="0" data-doc="${esc(x.documento)}">
         <svg class="ag-icon cg-transfer__marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-        <span class="cg-transfer__nome"><span>${esc(x.nome || "(sem nome)")}</span>${trilha}</span>
+        <span class="cg-transfer__nome ag-cell-stack"><span class="ag-cell-main">${esc(x.nome || "(sem nome)")}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(docDe(x))}</span>${trilha ? `<span class="ag-cell-sub cg-transfer__trilha">${trilha.replace(/^ /, "")}</span>` : ""}</span>
       </div>`;
     }
 

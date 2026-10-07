@@ -268,4 +268,5 @@ def test_universo_de_documentos_so_nome_e_documento_e_so_para_lider(client: Test
     r = client.get("/api/carteira/documentos", headers=_h(*GESTOR))
     assert r.status_code == 200, r.text
     for d in r.json()["documentos"]:
-        assert set(d.keys()) <= {"nome", "documento", "documento_tipo"}, d
+        # documento_formatado (Leva C) é o mesmo documento com máscara: nada novo sai.
+        assert set(d.keys()) <= {"nome", "documento", "documento_tipo", "documento_formatado"}, d

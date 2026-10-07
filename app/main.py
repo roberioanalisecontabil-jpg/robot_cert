@@ -29,7 +29,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import agent_devices, atividade, auth, config, correio, db_pg, graph_mail, machine_credentials, nome_publico, nomes, papeis, permissoes, senha_reset, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
-from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, move_to_expired, scan_folder
+from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, formatar_cnpj_cpf, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
 from app import alertas_config
@@ -4623,6 +4623,12 @@ def _painel_docs_selecionados(doc_ids: List[str]) -> List[dict]:
     return out
 
 
+def _documento_formatado(digitos: str) -> str:
+    """CNPJ (14) ou CPF (11) com máscara; qualquer outro tamanho volta como veio."""
+    tipo = "cnpj" if len(digitos or "") == 14 else "cpf" if len(digitos or "") == 11 else None
+    return formatar_cnpj_cpf(digitos, tipo) or (digitos or "")
+
+
 def _dias_texto(d: Optional[int]) -> str:
     """"em 114 dias" / "vence hoje" / "há 3 dias": a coluna de número solto sai."""
     from app import texto as _texto
@@ -6269,7 +6275,9 @@ def listar_documentos_atribuiveis(
             if termo in (d["nome"] or "").lower()
             or (digitos and digitos in d["documento"])
         ]
-    return {"total": len(todos), "documentos": todos[:limite]}
+    # Máscara no servidor, como nas outras telas: a regra mora num lugar só.
+    saida = [{**d, "documento_formatado": _documento_formatado(d["documento"])} for d in todos[:limite]]
+    return {"total": len(todos), "documentos": saida}
 
 
 @app.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])

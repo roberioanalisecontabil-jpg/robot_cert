@@ -151,7 +151,7 @@ def test_tela_de_carteiras_revisada() -> None:
     baixo = html.lower()
     assert "liberar" not in baixo and "liberado" not in baixo and "libere" not in baixo, "C1: atribuir, não liberar"
     assert ">Atribuir<" in html and ">Retirar<" in html and '"Devolver"' in html
-    assert "atribuído por" in html
+    assert "atribuído por" in baixo
     assert "Disponível para administradores" not in html, "C3: o gestor vê as instalações dos seus operadores"
     assert "/instalacoes" in html
     assert "souAdmin" not in html
@@ -165,3 +165,24 @@ def test_mensagens_do_servidor_dizem_atribuir() -> None:
     from app import papeis
     assert "liberar" not in m.ERRO_SEM_ALCANCE and "atribuir" in m.ERRO_SEM_ALCANCE
     assert "liberar" not in papeis.DEPARTAMENTO_OBRIGATORIO
+
+
+# ── Leva C (06/10/2026): painel do operador no Águia ──────────────────────
+
+def test_universo_traz_documento_formatado(client: TestClient, banco: _Fake) -> None:
+    r = client.get("/api/carteira/documentos?limite=2000", headers=_h(*ADMIN))
+    for d in r.json()["documentos"]:
+        digitos = d["documento"]
+        if len(digitos) == 14:
+            assert d["documento_formatado"] == f"{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:]}"
+        elif len(digitos) == 11:
+            assert d["documento_formatado"] == f"{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}"
+        else:
+            assert d["documento_formatado"] == digitos
+
+
+def test_painel_do_operador_usa_as_celulas_do_ds() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert "ainda sem spec" not in html
+    assert "documento_formatado" in html and "nomeDeQuem(" in html
+    assert 'class="ag-cell-main"' in html and "ag-cell-sub--mono" in html
