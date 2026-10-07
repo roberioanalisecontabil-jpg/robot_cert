@@ -6,8 +6,8 @@
    vira lista). O que é reaproveitável (abas, estado vazio, acordeão) vive
    em aguia-components.css.
 
-   A aba "Escolher certificados" ainda não foi especificada (item 56): fica
-   funcional com o CSS de tabela do DS, sem redesenho.
+   A aba "Escolher certificados" (Leva C, 06/10/2026) usa a mesma tabela dos
+   Acompanhados com uma coluna de caixa à esquerda (.cg-tabela-escolher).
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Os três indicadores: zero é neutro (ícone apagado, "Nenhum"); o
@@ -82,7 +82,17 @@
 .cg-tabela-acomp .cg-col-status { width: 1%; white-space: nowrap; }
 .cg-tabela-acomp .ag-table__vazio a { color: var(--text-brand); }
 
-/* Aba "Escolher certificados": a barra de salvar continua no fluxo. */
+/* Aba "Escolher certificados". A caixa ocupa 44px justos; o nome é o
+   rótulo dela (clicar no nome marca). Linha marcada ganha um filete de
+   marca à esquerda — funciona nos dois temas sem cor de fundo nova. */
+.cg-tabela-escolher .cg-col-check { width: 1%; padding-left: var(--space-3); padding-right: 0; }
+.cg-tabela-escolher .cg-col-check .ag-check { min-width: 44px; }
+.cg-tabela-escolher .cg-col-nome label { cursor: pointer; }
+.cg-tabela-escolher tbody tr.is-marcado td:first-child { box-shadow: inset 3px 0 0 var(--text-brand); }
+
+/* Barra de salvar: no fluxo enquanto nada mudou; com alteração pendente,
+   presa ao pé da tela, porque a escolha atravessa páginas e salvar não
+   pode depender de rolar até o fim. */
 .cg-acomp-barra {
     display: flex;
     justify-content: space-between;
@@ -93,8 +103,20 @@
     border-top: var(--bw-1) solid var(--border-subtle);
     margin-top: var(--space-4);
 }
+.cg-acomp-barra.is-suja {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-sticky);
+    padding: var(--space-3) var(--space-4);
+    margin-inline: calc(var(--space-4) * -1);
+    background: var(--bg-surface);
+    border-top-color: var(--border-default);
+    box-shadow: var(--shadow-md);
+}
 .cg-acomp-barra__texto { font-size: var(--text-sm); color: var(--text-secondary); }
 .cg-acomp-barra__texto strong { color: var(--text-primary); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cg-acomp-barra__pendente { color: var(--text-primary); font-weight: 500; }
+.cg-acomp-barra__acoes { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
 @media (max-width: 640px) {
     /* Três colunas compactas numa linha: rótulo e número, sem ícone e sem
@@ -119,6 +141,25 @@
     .cg-tabela-acomp .cg-col-vencimento .ag-cell-sub { text-align: right; white-space: nowrap; }
     .cg-tabela-acomp .cg-col-status { grid-area: status; justify-self: start; width: auto; }
     .cg-acomp-busca { max-width: none; }
+
+    /* Escolher: a caixa à esquerda, de cima a baixo do cartão. */
+    .cg-tabela-escolher tbody tr:not(.cg-state-row) {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-areas:
+            "check nome vencimento"
+            "check status status";
+        padding-left: var(--space-1);
+    }
+    .cg-tabela-escolher .cg-col-check { grid-area: check; align-self: center; padding: 0; width: 44px; }
+    .cg-tabela-escolher .cg-col-check .ag-check { width: 44px; }
+    .cg-tabela-escolher tbody tr.is-marcado { box-shadow: inset 3px 0 0 var(--text-brand); }
+    .cg-tabela-escolher tbody tr.is-marcado td:first-child { box-shadow: none; }
+
+    /* Desfazer e Salvar lado a lado: a barra presa não pode comer meia tela. */
+    .cg-acomp-barra { gap: var(--space-2); }
+    .cg-acomp-barra__acoes { width: 100%; flex-wrap: nowrap; }
+    .cg-acomp-barra__acoes .ag-btn { flex: 1 1 0; min-width: 0; }
+    .cg-acomp-barra__acoes #btn-salvar-selecao { flex-grow: 2; }
 }
 
 /* Avisos enviados (03/10/2026): data e hora numa linha só; a coluna Para

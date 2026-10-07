@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-acompanhamento.css?v=aguia-2026-10a" />
+  <link rel="stylesheet" href="/static/aguia-acompanhamento.css?v=aguia-2026-10b" />
 </head>
 <body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -185,22 +185,37 @@
       </nav>
     </section>
 
-    <!-- Aba "Escolher certificados": as opções vêm recortadas pelo Alcance;
-         a seleção gravada também é recortada ao ler e ao salvar (I4). -->
+    <!-- Aba "Escolher certificados" (Leva C, 06/10/2026): a mesma tabela dos
+         Acompanhados com uma caixa à esquerda. As opções vêm recortadas pelo
+         Alcance; a seleção gravada também é recortada ao ler e ao salvar (I4).
+         Marcados sobem para o topo ao buscar, paginar ou recarregar — nunca
+         no clique, para a linha não fugir do cursor. -->
     <section id="sec-selecao" role="tabpanel" aria-labelledby="tab-selecao" {% if aba != 'escolher' %}hidden{% endif %}>
       <div class="cg-toolbar cg-toolbar--compacta">
         <div class="cg-toolbar__filtros">
           <div class="cg-acomp-busca">
-            <label for="busca-selecao" class="cg-sr-only">Buscar certificados para escolher</label>
+            <label for="busca-selecao" class="cg-sr-only">Buscar clientes por nome ou CNPJ/CPF</label>
             <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input class="ag-input" type="search" id="busca-selecao" placeholder="Nome ou CNPJ/CPF" autocomplete="off" />
           </div>
         </div>
       </div>
+
+      <div class="cg-status" aria-live="polite">
+        <p id="selecao-hint" class="cg-status__linha"></p>
+      </div>
+
       <div class="ag-table-wrap cg-tabela-wrap">
         <div class="ag-table-scroll" role="region" aria-label="Escolher certificados">
-          <table class="ag-table" role="table">
-            <thead role="rowgroup"><tr role="row"><th role="columnheader" class="ag-th--estatico">Acompanhar</th><th role="columnheader" class="ag-th--estatico">Cliente</th><th role="columnheader" class="ag-th--estatico">CNPJ/CPF</th><th role="columnheader" class="ag-th--estatico">Status</th><th role="columnheader" class="ag-th--estatico">Vencimento</th></tr></thead>
+          <table class="ag-table cg-tabela cg-tabela-acomp cg-tabela-escolher" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico cg-col-check"><span class="cg-sr-only">Acompanhar</span></th>
+                <th role="columnheader" class="ag-th--estatico">Cliente</th>
+                <th role="columnheader" class="ag-th--estatico">Vencimento</th>
+                <th role="columnheader" class="ag-th--estatico">Status</th>
+              </tr>
+            </thead>
             <tbody role="rowgroup" id="tbody-selecao"></tbody>
           </table>
         </div>
@@ -227,11 +242,16 @@
           </div>
         </div>
       </nav>
-      <!-- Sempre visível: salvar com zero marcados é uma ação válida aqui —
-           limpa o acompanhamento. O rótulo diz o resultado (item 5). -->
-      <div class="cg-acomp-barra" role="region" aria-label="Escolha para acompanhamento">
-        <p class="cg-acomp-barra__texto" id="selColabContagem">0 certificados marcados</p>
-        <button type="button" id="btn-salvar-selecao" class="ag-btn ag-btn--primary">Salvar seleção (0)</button>
+      <!-- Presa ao pé da tela enquanto houver alteração: com várias páginas,
+           salvar não pode depender de rolar até o fim. Salvar com zero
+           marcados é válido (limpa o acompanhamento); o botão só acende
+           quando a escolha difere da gravada. -->
+      <div class="cg-acomp-barra" id="barra-selecao" role="region" aria-label="Escolha para acompanhamento">
+        <p class="cg-acomp-barra__texto" id="selColabContagem" aria-live="polite">0 certificados marcados</p>
+        <div class="cg-acomp-barra__acoes">
+          <button type="button" id="btn-desfazer-selecao" class="ag-btn ag-btn--ghost" hidden>Desfazer</button>
+          <button type="button" id="btn-salvar-selecao" class="ag-btn ag-btn--primary" disabled>Salvar seleção (0)</button>
+        </div>
       </div>
     </section>
 
@@ -274,6 +294,8 @@
 
     let opcoes = [];
     let selecionados = new Set();
+    let selecaoSalva = new Set();   // o que está gravado: base do "sujo"
+    let opcoesTextos = {};
     let painelItens = [];
     let painelTextos = {};
     let painelMostrarBusca = false;
@@ -437,12 +459,18 @@
       document.getElementById("tab-selecao").focus();
     });
 
-    /* ── Aba Escolher certificados (sem redesenho ainda, item 56) ─────── */
+    /* ── Aba Escolher certificados (Leva C, 06/10/2026) ─────────────── */
 
-    function renderSelecao() {
+    // Busca por nome (como está no arquivo ou como é exibido) e por
+    // documento, com ou sem pontuação.
+    function linhasSelecao() {
       const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
-      const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
-
+      const qDig = q.replace(/\D/g, "");
+      const rows = opcoes.filter((it) => {
+        if (!q) return true;
+        const texto = [it.nome || "", it.nome_exibicao || "", it.documento || ""].join(" ").toLowerCase();
+        return texto.includes(q) || (qDig.length >= 3 && String(it.documento_digitos || "").includes(qDig));
+      });
       // Marcados no TOPO, e por ordem alfabética dentro de cada grupo: com
       // centenas de clientes em várias páginas, é o único jeito de ver de uma
       // vez o que já se acompanha. Só reordena em busca, troca de página ou
@@ -451,11 +479,31 @@
         const ma = selecionados.has(String(a.documento_digitos)) ? 0 : 1;
         const mb = selecionados.has(String(b.documento_digitos)) ? 0 : 1;
         if (ma !== mb) return ma - mb;
-        return (a.nome || a.documento || "").localeCompare(
-          b.nome || b.documento || "", "pt-BR", { sensitivity: "base" }
-        );
+        return nomeDe(a).localeCompare(nomeDe(b), "pt-BR", { sensitivity: "base" });
       });
+      return { q, rows };
+    }
 
+    function trSelecao(it) {
+      const doc = String(it.documento_digitos || "");
+      const id = "sel-" + doc;
+      const marcado = selecionados.has(doc);
+      const venc = it.vencimento_certificado
+        ? `<time datetime="${esc(it.vencimento_certificado)}">${esc(fmtSoData(it.vencimento_certificado))}</time>`
+        : "—";
+      // O nome é o rótulo da caixa: clicar nele também marca, e o leitor de
+      // tela anuncia "Acompanhar <nome>" sem aria-label separado.
+      return `
+        <tr role="row"${marcado ? ' class="is-marcado"' : ""}>
+          <td role="cell" class="cg-col-check"><label class="ag-check"><input type="checkbox" id="${esc(id)}" data-doc="${esc(doc)}" ${marcado ? "checked" : ""} /></label></td>
+          <td role="cell" class="cg-col-nome"><label for="${esc(id)}" class="ag-cell-stack"><span class="ag-cell-main"><span class="cg-sr-only">Acompanhar </span>${esc(nomeDe(it))}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(it.documento || "—")}</span></label></td>
+          <td role="cell" class="cg-col-data cg-col-vencimento">${venc}${it.dias_texto ? `<span class="ag-cell-sub">${esc(it.dias_texto)}</span>` : ""}</td>
+          <td role="cell" class="cg-col-status">${badgeDoColaborador(it.status)}</td>
+        </tr>`;
+    }
+
+    function renderSelecao() {
+      const { q, rows } = linhasSelecao();
       const psz = porPagColabSelecao();
       const total = rows.length;
       const totalPag = Math.max(1, Math.ceil(total / psz));
@@ -463,9 +511,16 @@
       const start = (selecaoPagina - 1) * psz;
       const pageRows = rows.slice(start, start + psz);
 
+      document.getElementById("selecao-hint").textContent = _opcoesErro || !opcoes.length
+        ? ""
+        : q
+          ? total + (total === 1 ? " cliente" : " clientes") + " para “" + q + "”"
+          : (opcoesTextos.total || "");
+
       if (!pageRows.length) {
-        renderEmptyRow("tbody-selecao", 5, q ? {
-          title: "Nenhum certificado para “" + q + "”",
+        renderEmptyRow("tbody-selecao", 4, q ? {
+          icon: "",
+          title: "Nenhum cliente para “" + q + "”",
           description: "Tente outro nome ou documento.",
           actionText: "Limpar busca",
           onAction: () => {
@@ -474,26 +529,22 @@
             renderSelecao();
           },
         } : _opcoesErro ? {
+          icon: "",
           title: "Não foi possível carregar os clientes",
           description: _opcoesErro,
           actionText: "Tentar de novo",
           onAction: () => carregarSelecao(),
         } : _alcanceVazio ? {
+          icon: "",
           title: "Nenhum cliente atribuído a você",
           description: "Peça ao gestor do seu departamento para atribuir clientes à sua carteira; depois escolha aqui quais acompanhar.",
         } : {
+          icon: "",
           title: "Nenhum certificado disponível",
           description: "Não há certificados mapeados para escolher no momento.",
         });
       } else {
-        document.getElementById("tbody-selecao").innerHTML = pageRows.map((it) => `
-        <tr role="row">
-          <td role="cell"><label class="ag-check"><input type="checkbox" aria-label="Acompanhar ${esc(it.nome || it.documento || "certificado")}" data-doc="${esc(it.documento_digitos)}" ${selecionados.has(String(it.documento_digitos)) ? "checked" : ""} /></label></td>
-          <td role="cell"><span class="ag-cell-main">${esc(it.nome || "—")}</span></td>
-          <td role="cell"><span class="ag-cell-sub ag-cell-sub--mono">${esc(it.documento || "—")}</span></td>
-          <td role="cell">${badgeDoColaborador(it.status)}</td>
-          <td role="cell">${esc(fmtSoData(it.vencimento_certificado))}</td>
-        </tr>`).join("");
+        document.getElementById("tbody-selecao").innerHTML = pageRows.map(trSelecao).join("");
       }
       cgPageNavRefresh({
         bar: "paginacao-toolbar-colab-sel",
@@ -503,11 +554,17 @@
         prev: "btn-colab-sel-prev",
         next: "btn-colab-sel-next",
         pg: { pagina: selecaoPagina, total_paginas: totalPag, total_itens: total },
-        metaFormatter: (pg) => "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + (pg.total_itens === 1 ? " opção" : " opções"),
+        metaFormatter: (pg) => "Página " + pg.pagina + " de " + pg.total_paginas + " · " + pg.total_itens + (pg.total_itens === 1 ? " cliente" : " clientes"),
         hideWhenSingle: true,
         goToPage: (pn) => { selecaoPagina = pn; renderSelecao(); },
         maxButtons: 5,
       });
+    }
+
+    function selecaoSuja() {
+      if (selecionados.size !== selecaoSalva.size) return true;
+      for (const d of selecionados) if (!selecaoSalva.has(d)) return true;
+      return false;
     }
 
     /* ── Indicadores ──────────────────────────────────────────────────── */
@@ -754,18 +811,26 @@
       const jo = await ro.json();
       const js = await rs.json();
       opcoes = jo.itens || [];
+      opcoesTextos = jo.textos || {};
       _opcoesErro = "";
       _alcanceVazio = !!jo.alcance_vazio;
       selecionados = new Set((js.documentos || []).map(String));
+      selecaoSalva = new Set(selecionados);
       atualizarBarraColab();
       renderSelecao();
     }
 
     function atualizarBarraColab() {
       const n = selecionados.size;
+      const suja = selecaoSuja();
       document.getElementById("selColabContagem").innerHTML =
-        "<strong>" + n + "</strong>" + (n === 1 ? " certificado marcado" : " certificados marcados");
-      document.getElementById("btn-salvar-selecao").textContent = "Salvar seleção (" + n + ")";
+        "<strong>" + n + "</strong>" + (n === 1 ? " certificado marcado" : " certificados marcados") +
+        (suja ? ' <span class="cg-acomp-barra__pendente">· alterações não salvas</span>' : "");
+      const btn = document.getElementById("btn-salvar-selecao");
+      btn.textContent = "Salvar seleção (" + n + ")";
+      if (btn.dataset.soVer !== "1") btn.disabled = !suja;
+      document.getElementById("btn-desfazer-selecao").hidden = !suja;
+      document.getElementById("barra-selecao").classList.toggle("is-suja", suja);
     }
 
     async function salvarSelecao() {
@@ -781,14 +846,19 @@
         showToast("Não foi possível salvar a seleção: " + (await mensagemCorpoErro(r)), "error");
         return;
       }
-      selecionados = new Set(docs);
+      // O servidor devolve o que GRAVOU (recortado pelo Alcance).
+      const gravado = await r.json().catch(() => ({ documentos: docs }));
+      selecionados = new Set((gravado.documentos || docs).map(String));
+      selecaoSalva = new Set(selecionados);
       atualizarBarraColab();
+      renderSelecao();
       painelPagina = 1;
       await carregarPainel(true);
+      const n = selecionados.size;
       showToast(
-        docs.length === 1
-          ? "1 certificado selecionado para acompanhamento."
-          : docs.length + " certificados selecionados para acompanhamento.",
+        n === 0 ? "Nenhum certificado em acompanhamento."
+          : n === 1 ? "1 certificado selecionado para acompanhamento."
+          : n + " certificados selecionados para acompanhamento.",
         "success"
       );
     }
@@ -807,9 +877,7 @@
       if (selecaoPagina > 1) { selecaoPagina--; renderSelecao(); }
     });
     document.getElementById("btn-colab-sel-next").addEventListener("click", () => {
-      const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
-      const rows = opcoes.filter((it) => !q || [it.nome || "", it.documento || ""].join(" ").toLowerCase().includes(q));
-      const totalPag = Math.max(1, Math.ceil(rows.length / porPagColabSelecao()));
+      const totalPag = Math.max(1, Math.ceil(linhasSelecao().rows.length / porPagColabSelecao()));
       if (selecaoPagina < totalPag) { selecaoPagina++; renderSelecao(); }
     });
     document.getElementById("tbody-selecao").addEventListener("change", (e) => {
@@ -818,7 +886,15 @@
       const doc = el.getAttribute("data-doc");
       if (!doc) return;
       if (el.checked) selecionados.add(doc); else selecionados.delete(doc);
+      const tr = el.closest("tr");
+      if (tr) tr.classList.toggle("is-marcado", el.checked);
       atualizarBarraColab();
+    });
+    document.getElementById("btn-desfazer-selecao").addEventListener("click", () => {
+      selecionados = new Set(selecaoSalva);
+      atualizarBarraColab();
+      renderSelecao();
+      document.getElementById("btn-salvar-selecao").focus();
     });
 
     // Com "Só ver" em Acompanhamento a pessoa acompanha, mas não escolhe; os

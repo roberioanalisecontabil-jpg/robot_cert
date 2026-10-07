@@ -4623,6 +4623,18 @@ def _painel_docs_selecionados(doc_ids: List[str]) -> List[dict]:
     return out
 
 
+def _dias_texto(d: Optional[int]) -> str:
+    """"em 114 dias" / "vence hoje" / "há 3 dias": a coluna de número solto sai."""
+    from app import texto as _texto
+    if d is None:
+        return ""
+    if d == 0:
+        return "vence hoje"
+    if d < 0:
+        return "há " + _texto.plural(-d, "dia")
+    return "em " + _texto.plural(d, "dia")
+
+
 class ColaboradorSelecaoBody(BaseModel):
     documentos: List[str] = Field(default_factory=list)
 
@@ -4668,11 +4680,20 @@ def colaborador_opcoes_certificados(token: auth.TokenData = Depends(require_auth
             
         out.append({
             **it,
-            "status": status
+            "status": status,
+            "nome_exibicao": nomes.nome_exibicao(it.get("nome")),
+            "dias_restantes": dias,
+            "dias_texto": _dias_texto(dias),
         })
     # Operador sem Atribuição: a lista vem vazia porque ninguém lhe deu
     # cliente, não porque o inventário está vazio. A tela diz coisas diferentes.
-    return {"itens": out, "total": len(out), "alcance_vazio": isinstance(alcance, set) and not alcance}
+    from app import texto as _texto
+    return {
+        "itens": out,
+        "total": len(out),
+        "alcance_vazio": isinstance(alcance, set) and not alcance,
+        "textos": {"total": _texto.plural(len(out), "cliente ao seu alcance", "clientes ao seu alcance")},
+    }
 
 
 @app.get("/api/colaborador/certificados/selecionados", dependencies=[Depends(require_modulo("acompanhamento"))])
@@ -4701,16 +4722,7 @@ def colaborador_painel_certificados(token: auth.TokenData = Depends(require_auth
     from app import texto as _texto
     for it in itens:
         it["nome_exibicao"] = nomes.nome_exibicao(it.get("nome"))
-        d = it.get("dias_restantes")
-        # "em 114 dias" / "hoje" / "há 3 dias": a coluna de número solto sai.
-        if d is None:
-            it["dias_texto"] = ""
-        elif d == 0:
-            it["dias_texto"] = "vence hoje"
-        elif d < 0:
-            it["dias_texto"] = "há " + _texto.plural(-d, "dia")
-        else:
-            it["dias_texto"] = "em " + _texto.plural(d, "dia")
+        it["dias_texto"] = _dias_texto(it.get("dias_restantes"))
     total = len(itens)
     return {
         "itens": itens,

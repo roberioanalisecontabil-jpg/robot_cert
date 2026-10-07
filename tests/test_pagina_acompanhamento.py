@@ -150,3 +150,23 @@ def test_tela_de_acompanhamento_revisada() -> None:
     assert "no dia do vencimento" not in html and "quando vencer" in html
     dash = (RAIZ / "templates" / "dashboard.html").read_text(encoding="utf-8")
     assert 'href="/instalador?aba=trilha">Ver instalações' in dash
+
+
+# ── Leva C (06/10/2026): aba Escolher certificados no Águia ───────────────
+
+def test_opcoes_trazem_nome_de_exibicao_e_prazo_por_extenso(client: TestClient, banco: _Fake) -> None:
+    d = client.get("/api/colaborador/certificados/opcoes", headers=_h(*GESTOR)).json()
+    assert d["itens"], "o gestor vê clientes"
+    for it in d["itens"]:
+        assert "nome_exibicao" in it and "dias_texto" in it and "dias_restantes" in it
+        if it["dias_restantes"] is not None and it["dias_restantes"] > 0:
+            assert it["dias_texto"].startswith("em ")
+    assert d["textos"]["total"].endswith("ao seu alcance")
+
+
+def test_aba_escolher_segue_a_tela_de_acompanhados() -> None:
+    html = (RAIZ / "templates" / "colaborador_certificados.html").read_text(encoding="utf-8")
+    assert "sem redesenho ainda" not in html
+    assert 'class="ag-table cg-tabela cg-tabela-acomp cg-tabela-escolher"' in html
+    # Salvar só acende com alteração; zero marcados continua sendo salvável.
+    assert "selecaoSuja()" in html and "selecaoSalva" in html
