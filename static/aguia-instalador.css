@@ -127,3 +127,37 @@
     .cg-tabela-trilha .cg-col-n { display: none; }
     .cg-tabela-trilha .cg-col-etapas { grid-area: etapas; }
 }
+
+/* ── Trilha: certificado; aba SIEG (07/10/2026) ──────────────────────── */
+.cg-tabela-trilha .cg-col-cert, .cg-tabela-sieg .cg-col-cert { min-width: 12rem; }
+.cg-tabela-sieg .ag-badge + .ag-cell-sub { display: block; margin-top: 2px; }
+.cg-col-sieg-msg { min-width: 14rem; }
+.cg-sieg-det > .ag-accordion__topo { padding: 0; font-size: var(--text-sm); color: var(--text-secondary); gap: var(--space-2); }
+.cg-sieg-trilha { padding: var(--space-2) 0 0; font-size: var(--text-sm); }
+.cg-sieg-trilha__lista { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-2); }
+.cg-sieg-trilha__lista li { display: grid; gap: 2px; padding-left: var(--space-3); border-left: 2px solid var(--border-subtle); }
+.cg-sieg-trilha__quando { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.cg-sieg-trilha__msg { color: var(--text-primary); overflow-wrap: anywhere; }
+.cg-sieg-filtro { display: flex; gap: var(--space-3); align-items: end; flex-wrap: wrap; }
+.cg-sieg-filtro .ag-field { margin: 0; min-width: 0; }
+@media (max-width: 640px) {
+    /* Aba SIEG no celular: cartão (certificado e estado em cima, quem e
+       quando embaixo, a resposta do SIEG por último), como a Trilha. */
+    .cg-tabela-sieg, .cg-tabela-sieg tbody, .cg-tabela-sieg tr, .cg-tabela-sieg td { display: block; width: auto; }
+    .cg-tabela-sieg thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .cg-tabela-sieg tbody tr:not(.cg-state-row) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "cert estado" "quem quando" "msg msg";
+        gap: var(--space-1) var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: var(--bw-1) solid var(--border-subtle);
+    }
+    .cg-tabela-sieg tbody tr td { padding: 0; border: 0; min-width: 0; }
+    .cg-tabela-sieg td:nth-child(1) { grid-area: cert; }
+    .cg-tabela-sieg td:nth-child(2) { grid-area: estado; justify-self: end; text-align: right; }
+    .cg-tabela-sieg td:nth-child(3) { grid-area: quem; font-size: var(--text-xs); color: var(--text-secondary); overflow-wrap: anywhere; }
+    .cg-tabela-sieg td:nth-child(4) { grid-area: quando; font-size: var(--text-xs); justify-self: end; }
+    .cg-tabela-sieg td:nth-child(5) { grid-area: msg; }
+    .cg-tabela-sieg .cg-col-cert, .cg-col-sieg-msg { min-width: 0; }
+}

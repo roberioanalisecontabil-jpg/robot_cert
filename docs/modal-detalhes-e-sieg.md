@@ -33,27 +33,44 @@ entregas; a segunda espera o processo de inclusão via API do SIEG.
   cadeia já saem do texto do emissor/sujeito), depois o instalador 1.7.0 no
   ANALISESRV.
 
-## Entrega 2 — "Incluir no SIEG" (aguarda o processo)
+## Entrega 2 — "Incluir no SIEG" (07/10/2026)
 
-- Interruptor **por certificado** (fingerprint): a renovação nasce desligada.
-- Quem liga: a regra da instalação (carteira / alcance), conferida no
-  servidor; quem só tem "Só ver" vê o estado e não liga.
-- Desabilitado para vencido e ilegível, com o motivo escrito.
-- Confirmação em modal do DS: "Esta ação não pode ser desfeita".
-- Até o processo chegar grava **Solicitado** (quem, quando). Com o processo,
-  a inclusão é uma chamada à API do SIEG na hora: o estado vira **No SIEG** ou
-  mostra o erro; ninguém precisa ser avisado depois.
-- Ninguém desliga. O administrador tem a **reconciliação**: consulta o SIEG;
-  existe e está ativo → mantém; não existe → desliga e pode ser religado. Tudo
-  em trilha.
-- Lista: selo só para Solicitado e No SIEG; filtro "SIEG: Todos · Solicitado ·
-  No SIEG · Fora do SIEG", com o estado na URL.
-- Banco: tabela nova (estado + trilha). A mesma migration apaga as duas
-  tabelas `sieg_*` mortas desde junho (depois de conferir que ninguém as lê) e
-  tira da fila os comandos `sieg_*` pendentes.
+Processo: o script que o usuário validou contra a API em 06/10/2026, portado
+para `app/sieg_api.py` (httpx). `POST /api/v1/create-jwt` (X-Client-Id,
+X-Secret-Key) → Bearer + `X-Api-Key` (chave da conta) em toda chamada;
+`/registrar` e depois **conferência em `/listar`** (a API já respondeu
+"sucesso" sem cadastrar); CNPJ existente → `/editar` (só o arquivo) e
+`/habilitar` se inativo; `Deletado=true` → `/habilitar`; opção de consulta
+recusada → desliga a opção e repete.
 
-Contexto: o SIEG já existiu aqui (automação Playwright em app.sieg.com,
-`agent/sieg_worker.py`) e foi removido; não sobrou fonte.
+- **Onde roda:** no portal, com o PFX e a senha do **cofre** (o agente envia a
+  pasta do ANALISESRV para o cofre), em segundo plano: o interruptor mostra
+  "Incluindo…" e a tela atualiza para "No SIEG" ou para o erro.
+- **Estado por certificado** (`sieg_inclusao`): incluindo, no_sieg, erro,
+  substituido, removido. Ninguém desliga; erro oferece "Tentar de novo".
+- **Quem liga:** o alcance da carteira (a regra da instalação), no servidor.
+  Desabilitado para vencido, ilegível, fora do cofre e SIEG não configurado,
+  com o motivo escrito. Confirmação "Esta ação não pode ser desfeita".
+- **Renovação:** o novo do mesmo CNPJ atualiza o cadastro no SIEG; o anterior
+  vira "Substituído" apontando para o novo.
+- **Reconciliação (administrador):** "Conferir no SIEG" no modal — ativo lá →
+  mantém; inativo ou ausente → "Fora do SIEG", que pode ser ligado de novo.
+- **Sincronizar (administrador, Configuração › SIEG):** marca "No SIEG" o
+  certificado vigente de cada cliente que já está na conta. Não envia nada.
+- **Trilha** (`sieg_trilha`) e log do servidor: operação, HTTP, mensagem da
+  API, opções desligadas e avisos. Nunca senha, PFX, credencial ou token
+  (`tests/test_sieg_portal.py` confere).
+- **Telas:** seção SIEG no modal do Início; selo na linha (No SIEG,
+  incluindo, erro) e filtro "SIEG" com estado na URL (`?sieg=`); aba **SIEG**
+  no Instalador (administrador), com as tentativas abrindo na linha; a
+  **Trilha** passa a mostrar qual certificado foi instalado; Configuração ›
+  **SIEG** com Client ID, Secret Key e API Key cifradas (campo vazio mantém),
+  padrões de UF e consultas (os do config.json validado), Testar conexão e
+  Sincronizar.
+- **Sem lote** por decisão.
+- **Migration** `20261007120000_inclusao_no_sieg.sql`: colunas `sieg_*` em
+  `portal_settings`, as duas tabelas, `DROP` das tabelas `sieg_*` de junho e
+  remoção dos comandos `sieg_*` pendentes da fila.
 
-**Em aberto até o processo:** a chamada de inclusão, a consulta da
-reconciliação e se é preciso estar no cofre.
+Contexto: o SIEG já existiu aqui em junho (automação Playwright em
+app.sieg.com, `agent/sieg_worker.py`) e foi removido.

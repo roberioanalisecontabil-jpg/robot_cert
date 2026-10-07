@@ -108,3 +108,9 @@
    forma de envio; sem respiro parecia continuacao do texto. */
 #bloco-graph { margin-top: var(--space-5, 20px); }
 #bloco-graph .ag-form-subhead { margin-top: 0; }
+
+/* SIEG (07/10/2026). */
+.cg-cfg-curto { max-width: 8rem; }
+.cg-cfg-consultas { border: 0; margin: 0 0 var(--space-4); padding: 0; }
+.cg-cfg-consultas__grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0 var(--space-4); }
+.cg-cfg-consultas__grade .ag-check { justify-content: flex-start; font-size: var(--text-sm); }

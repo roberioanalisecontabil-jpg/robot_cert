@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
     <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
     <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-    <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10a" />
+    <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10c" />
   </head>
   <body class="cg-aguia">
     <!--
@@ -118,6 +118,15 @@
                 <option value="todos">Todos</option>
                 <option value="validos">Ativo</option>
                 <option value="prestes_vencer">Expirando</option>
+              </select>
+            </div>
+            <div class="ag-field cg-campo-inline">
+              <label class="ag-label" for="filtro-sieg">SIEG</label>
+              <select id="filtro-sieg" class="ag-select" title="Filtrar pela inclusão no SIEG">
+                <option value="todos">Todos</option>
+                <option value="no_sieg">No SIEG</option>
+                <option value="incluindo">Incluindo ou com erro</option>
+                <option value="fora">Fora do SIEG</option>
               </select>
             </div>
             <div class="ag-field cg-campo-inline cg-campo-busca">
@@ -305,9 +314,47 @@
           <h3 class="cg-det__secao" id="det-sec-portal">No portal</h3>
           <dl class="cg-det__lista" id="det-portal"></dl>
         </section>
+        <!-- SIEG (07/10/2026): ligar não tem volta; o estado vai escrito, a
+             alavanca sozinha não conta. -->
+        <section aria-labelledby="det-sec-sieg" class="cg-det-sieg" id="det-sieg">
+          <h3 class="cg-det__secao" id="det-sec-sieg">SIEG</h3>
+          <div class="cg-det-sieg__linha">
+            <label class="ag-switch">
+              <input type="checkbox" role="switch" id="det-sieg-chk" aria-describedby="det-sieg-texto" />
+              <span class="ag-switch__trilho" aria-hidden="true"></span>
+              <span class="ag-switch__rotulo">Incluir no SIEG</span>
+            </label>
+            <span id="det-sieg-estado" aria-live="polite"></span>
+          </div>
+          <p class="cg-det__nota" id="det-sieg-texto"></p>
+          <div class="cg-det-sieg__acoes">
+            <button type="button" class="ag-btn ag-btn--outline ag-btn--sm" id="det-sieg-tentar" hidden>Tentar de novo</button>
+            <button type="button" class="ag-btn ag-btn--ghost ag-btn--sm" id="det-sieg-conferir" hidden>Conferir no SIEG</button>
+          </div>
+        </section>
       </div>
       <div class="ag-modal__foot">
         <button type="button" class="ag-btn ag-btn--outline" data-det-fechar>Fechar</button>
+      </div>
+    </dialog>
+
+    <dialog class="ag-modal" id="modalSiegConfirmar" aria-labelledby="sieg-conf-titulo">
+      <div class="ag-modal__head">
+        <h2 class="ag-modal__titulo" id="sieg-conf-titulo">Incluir no SIEG</h2>
+        <button type="button" class="ag-modal__x" data-sieg-cancelar aria-label="Fechar">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="ag-modal__body">
+        <p id="sieg-conf-texto"></p>
+        <div class="ag-alert ag-alert--warning">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo"><strong>Esta ação não pode ser desfeita.</strong> Depois de ligado, o interruptor não volta pela tela; tirar do SIEG é pelo painel do SIEG.</div>
+        </div>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-sieg-cancelar>Cancelar</button>
+        <button type="button" class="ag-btn ag-btn--primary" id="sieg-conf-ok">Incluir no SIEG</button>
       </div>
     </dialog>
 
@@ -419,6 +466,15 @@
       //
       // Antes, o mapeamento estado→aparência estava escrito aqui e de novo em
       // `colaborador_certificados.html`. Duas cópias da mesma regra divergem.
+      // Selo do SIEG só para o que está lá ou a caminho (decisão de 06/10):
+      // "fora" não ganha selo, para não poluir a lista inteira.
+      function seloSieg(estado) {
+        if (estado === "no_sieg") return " <span class='ag-badge ag-badge--success cg-selo-sieg' title='Incluído no SIEG'>SIEG</span>";
+        if (estado === "incluindo") return " <span class='ag-badge ag-badge--info cg-selo-sieg' title='Incluindo no SIEG'>SIEG…</span>";
+        if (estado === "erro") return " <span class='ag-badge ag-badge--danger cg-selo-sieg' title='A inclusão no SIEG falhou'>SIEG: erro</span>";
+        return "";
+      }
+
       const badge = (it) => {
         const s = it.status;
         if (s === "expirado" || it._isExpiredByDate) return badgeStatus("vencido");
@@ -491,8 +547,9 @@
       /** Há filtro ativo? Muda o texto do estado vazio: "sem resultado" ≠ "sem dado". */
       function temFiltroAtivo() {
         const st = document.getElementById("filtro-status")?.value || "todos";
+        const sg = document.getElementById("filtro-sieg")?.value || "todos";
         const bu = (document.getElementById("busca-cert")?.value || "").trim();
-        return st !== "todos" || bu !== "";
+        return st !== "todos" || sg !== "todos" || bu !== "";
       }
 
       // `icon: ""` de propósito: o helper compartilhado desenha emoji, que o
@@ -525,6 +582,8 @@
               const bu = document.getElementById("busca-cert");
               if (sel) sel.value = "todos";
               if (bu) bu.value = "";
+              const sg = document.getElementById("filtro-sieg");
+              if (sg) { sg.value = "todos"; sincronizarSiegNaUrl(); }
               paginaAtual = 1;
               carregarTabela();
             },
@@ -932,11 +991,114 @@
         document.getElementById("det-portal").innerHTML = linhasDet(portal);
       }
 
+      // ── SIEG no modal ──────────────────────────────────────────────────
+      let _siegItem = null;
+      let _siegTimer = null;
+      const _souAdmin = (localStorage.getItem("user_role") || "") === "admin";
+
+      function fmtQuando(iso) {
+        const d = new Date(iso || "");
+        return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+      }
+
+      function renderSieg(d) {
+        const chk = document.getElementById("det-sieg-chk");
+        const est = document.getElementById("det-sieg-estado");
+        const txt = document.getElementById("det-sieg-texto");
+        const tentar = document.getElementById("det-sieg-tentar");
+        const conferir = document.getElementById("det-sieg-conferir");
+        const e = d && d.estado;
+        chk.checked = !!(e && e.ligado);
+        // Ligado não desliga; sem condição não liga.
+        chk.disabled = !!(e && e.ligado) || !!(d && d.motivo) || !d;
+        const tipo = { no_sieg: "success", incluindo: "info", erro: "danger", substituido: "neutral", removido: "neutral" };
+        est.innerHTML = e ? "<span class='ag-badge ag-badge--" + (tipo[e.estado] || "neutral") + "'>" + esc(e.rotulo) + "</span>" : "";
+        let texto = "";
+        if (!d) texto = "Não foi possível consultar o SIEG agora.";
+        else if (d.motivo) texto = d.motivo_texto;
+        else if (!e) texto = "Inclui este certificado na conta do SIEG. Pede confirmação.";
+        else {
+          const quem = e.solicitado_por ? "Ligado por " + e.solicitado_por + " em " + fmtQuando(e.solicitado_em) + ". " : "";
+          if (e.estado === "incluindo") texto = quem + "Enviando ao SIEG…";
+          else if (e.estado === "erro") texto = quem + "A inclusão falhou: " + (e.mensagem || "sem detalhe");
+          else if (e.estado === "no_sieg") texto = quem + (e.sieg_id ? "Cadastro no SIEG: " + e.sieg_id + "." : "");
+          else texto = quem + (e.mensagem || "");
+        }
+        txt.textContent = texto;
+        tentar.hidden = !(e && e.estado === "erro");
+        conferir.hidden = !(_souAdmin && e);
+        clearTimeout(_siegTimer);
+        if (e && e.estado === "incluindo") _siegTimer = setTimeout(() => void carregarSieg(_siegItem, true), 2500);
+      }
+
+      async function carregarSieg(it, atualizandoLinha) {
+        if (!it || !it.fingerprint_sha256) { renderSieg(null); return; }
+        try {
+          const r = await fetch("/api/sieg/certificado/" + encodeURIComponent(it.fingerprint_sha256), { headers: getHeaders() });
+          if (it !== _siegItem) return;
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          renderSieg(d);
+          if (atualizandoLinha) atualizarSeloDaLinha(it, d.estado ? d.estado.estado : null);
+        } catch (_e) {
+          if (it === _siegItem) renderSieg(null);
+        }
+      }
+
+      function atualizarSeloDaLinha(it, estado) {
+        it.sieg_estado = estado;
+        const idx = _itensTabela.indexOf(it);
+        const cel = document.querySelector("#tbody tr[data-idx='" + idx + "'] .cg-col-status");
+        if (cel) cel.innerHTML = badge(it) + seloSieg(estado);
+      }
+
+      async function pedirInclusao() {
+        const it = _siegItem;
+        document.getElementById("det-sieg-texto").textContent = "Enviando o pedido…";
+        try {
+          const r = await fetch("/api/sieg/certificado/" + encodeURIComponent(it.fingerprint_sha256) + "/incluir", {
+            method: "POST", headers: getHeaders(true),
+          });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          renderSieg(d);
+          atualizarSeloDaLinha(it, d.estado ? d.estado.estado : null);
+        } catch (e) {
+          showToast("Não foi possível incluir no SIEG: " + e.message, "error");
+          void carregarSieg(it);
+        }
+      }
+
+      async function conferirNoSieg() {
+        const it = _siegItem;
+        const btn = document.getElementById("det-sieg-conferir");
+        btn.disabled = true;
+        try {
+          const r = await fetch("/api/sieg/certificado/" + encodeURIComponent(it.fingerprint_sha256) + "/reconciliar", {
+            method: "POST", headers: getHeaders(true),
+          });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          const d = await r.json();
+          renderSieg(d);
+          atualizarSeloDaLinha(it, d.estado ? d.estado.estado : null);
+          showToast("Conferido no SIEG: " + (d.estado ? d.estado.rotulo : "—") + ".", "success");
+        } catch (e) {
+          showToast(e.message, "error");
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
       async function abrirDetalhes(it, origem) {
         const modal = document.getElementById("modalDetalhes");
         const pedido = ++_detPedido;
         _detOrigem = origem || null;
         preencherDetalhes(it, false);
+        _siegItem = it;
+        renderSieg({ estado: null, motivo: null });
+        document.getElementById("det-sieg-chk").disabled = true;
+        document.getElementById("det-sieg-texto").textContent = "Consultando…";
+        void carregarSieg(it);
         if (!modal.open) modal.showModal();
         if (!it.fingerprint_sha256) { preencherDetalhes(it, true); return; }
         try {
@@ -996,7 +1158,7 @@
               "<tr role='row' data-idx='" + idx + "'>" +
               celulaSelecao(it) +
               "<td role='cell' class='cg-col-status'>" +
-              badge(it) +
+              badge(it) + seloSieg(it.sieg_estado) +
               "</td><td role='cell' class='cg-col-nome'>" +
               "<div class='ag-cell-stack'>" +
               // O nome é o botão do modal: teclado e leitor de tela chegam
@@ -1056,6 +1218,7 @@
           const params = new URLSearchParams({
             fonte: fonte(),
             filtro_status: document.getElementById("filtro-status")?.value || "todos",
+            filtro_sieg: document.getElementById("filtro-sieg")?.value || "todos",
             busca: document.getElementById("busca-cert")?.value || "",
             todas_filtradas: "true",
             ordenar: ordenacao.coluna || "",
@@ -1211,6 +1374,7 @@
             pagina: String(paginaAtual),
             por_pagina: String(porPaginaDashboard()),
             filtro_status: document.getElementById("filtro-status")?.value || "todos",
+            filtro_sieg: document.getElementById("filtro-sieg")?.value || "todos",
             busca: document.getElementById("busca-cert")?.value || "",
             // O Inicio nao lista certificado ilegivel — ver o comentario nos
             // cards. Vai ao servidor porque a paginacao e a contagem sao de la:
@@ -1397,6 +1561,18 @@
         paginaAtual = 1;
         carregarTabela();
       });
+      // O filtro do SIEG fica na URL (?sieg=): sobrevive ao F5 e vai no link.
+      function sincronizarSiegNaUrl() {
+        const v = document.getElementById("filtro-sieg").value;
+        const url = new URL(location.href);
+        if (v === "todos") url.searchParams.delete("sieg"); else url.searchParams.set("sieg", v);
+        history.replaceState(null, "", url.pathname + (url.search || ""));
+      }
+      document.getElementById("filtro-sieg").addEventListener("change", () => {
+        sincronizarSiegNaUrl();
+        paginaAtual = 1;
+        carregarTabela();
+      });
       document.getElementById("busca-cert").addEventListener("input", () => {
         paginaAtual = 1;
         clearTimeout(timerDebounceBusca);
@@ -1463,6 +1639,24 @@
         });
         const modalDet = document.getElementById("modalDetalhes");
         modalDet.querySelectorAll("[data-det-fechar]").forEach((b) => b.addEventListener("click", () => modalDet.close()));
+        // SIEG: ligar pede confirmação; a alavanca só fica ligada depois do OK.
+        const confSieg = document.getElementById("modalSiegConfirmar");
+        document.getElementById("det-sieg-chk").addEventListener("change", (ev) => {
+          if (!ev.target.checked) return;
+          ev.target.checked = false;
+          const nome = _siegItem ? (nomeExibicao(_siegItem.nome || _siegItem.display_name || "") + " (" + (_siegItem.documento_formatado || "") + ")") : "";
+          document.getElementById("sieg-conf-texto").textContent = "Incluir o certificado de " + nome + " na conta do SIEG?";
+          confSieg.showModal();
+        });
+        confSieg.querySelectorAll("[data-sieg-cancelar]").forEach((b) => b.addEventListener("click", () => confSieg.close()));
+        document.getElementById("sieg-conf-ok").addEventListener("click", () => {
+          confSieg.close();
+          void pedirInclusao();
+        });
+        document.getElementById("det-sieg-tentar").addEventListener("click", () => void pedirInclusao());
+        document.getElementById("det-sieg-conferir").addEventListener("click", () => void conferirNoSieg());
+        modalDet.addEventListener("close", () => { clearTimeout(_siegTimer); _siegItem = null; });
+
         // Foco volta para o nome de onde o modal saiu.
         modalDet.addEventListener("close", () => { if (_detOrigem && document.contains(_detOrigem)) _detOrigem.focus(); });
 
@@ -1494,12 +1688,16 @@
           const sel = document.getElementById("filtro-status");
           if (sel) sel.value = statusDaUrl;
         }
+        const siegDaUrl = (new URLSearchParams(location.search).get("sieg") || "").trim();
+        if (["no_sieg", "incluindo", "fora"].includes(siegDaUrl)) {
+          document.getElementById("filtro-sieg").value = siegDaUrl;
+        }
         const buscaDaUrl = (new URLSearchParams(location.search).get("busca") || "").trim();
         if (buscaDaUrl) {
           const campoBusca = document.getElementById("busca-cert");
           if (campoBusca) campoBusca.value = buscaDaUrl;
           paginaAtual = 1;
-          history.replaceState(null, "", location.pathname);
+          history.replaceState(null, "", location.pathname + (siegDaUrl && document.getElementById("filtro-sieg").value !== "todos" ? "?sieg=" + encodeURIComponent(siegDaUrl) : ""));
         }
         // A estação ANTES da tabela: a instalabilidade é consultada com a
         // estação da pessoa (revisão de 01/10/2026), não com o servidor da

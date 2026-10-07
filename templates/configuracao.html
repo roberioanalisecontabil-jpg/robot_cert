@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-10c" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-10d" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -43,6 +43,7 @@
       <a class="ag-abas__aba" role="tab" id="tab-pastas" href="?aba=pastas" aria-controls="sec-pastas" data-aba="pastas" aria-selected="{{ 'true' if aba == 'pastas' else 'false' }}" {% if aba != 'pastas' %}tabindex="-1"{% endif %}>Pastas e agente</a>
       <a class="ag-abas__aba" role="tab" id="tab-smtp" href="?aba=alertas" aria-controls="sec-smtp" data-aba="alertas" aria-selected="{{ 'true' if aba == 'alertas' else 'false' }}" {% if aba != 'alertas' %}tabindex="-1"{% endif %}>Alertas por e-mail</a>
       <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
+      <a class="ag-abas__aba" role="tab" id="tab-sieg" href="?aba=sieg" aria-controls="sec-sieg" data-aba="sieg" aria-selected="{{ 'true' if aba == 'sieg' else 'false' }}" {% if aba != 'sieg' %}tabindex="-1"{% endif %}>SIEG</a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
@@ -311,6 +312,62 @@
         <p class="ag-ajuda" id="cmd-nota" hidden>Comando pendente há mais de um dia costuma ser servidor alvo sem agente com esse nome, ou agente parado.</p>
       </div>
     </section>
+
+    <!-- ── SIEG (07/10/2026) ───────────────────────────────────────────
+         Credenciais da API do SIEG (cifradas, como o segredo do Microsoft
+         365) e o que vai no cadastro de cada certificado. Rota própria
+         (PUT /api/sieg/configuracao): salvar aqui não mexe nas outras abas. -->
+    <section class="ag-card cg-cfg-aba" id="sec-sieg" role="tabpanel" aria-labelledby="tab-sieg" {% if aba != 'sieg' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">O portal inclui no SIEG o certificado que alguém liga nos detalhes, no Início, com o arquivo e a senha do cofre. As tentativas ficam em Instalador › SIEG.</p>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Credenciais da API</h3><p class="ag-form-subhead__nota">Em Minha conta › Integração API SIEG. A API Key é diferente do Secret Key.</p></div>
+        <div class="ag-form-cols">
+          <div class="ag-field"><label class="ag-label" for="inp-sieg-client">Client ID</label><input type="text" id="inp-sieg-client" class="ag-input" autocomplete="off" spellcheck="false" /></div>
+          <div class="ag-field">
+            <label class="ag-label cg-cfg-rotulo" for="inp-sieg-secret">Secret Key <span id="sieg-secret-status"></span></label>
+            <input type="password" id="inp-sieg-secret" class="ag-input" placeholder="Deixe vazio para manter a atual" autocomplete="new-password" />
+          </div>
+          <div class="ag-field">
+            <label class="ag-label cg-cfg-rotulo" for="inp-sieg-apikey">API Key <span id="sieg-apikey-status"></span></label>
+            <input type="password" id="inp-sieg-apikey" class="ag-input" placeholder="Deixe vazio para manter a atual" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Cadastro no SIEG</h3><p class="ag-form-subhead__nota">Vale para todo certificado. Opção que a conta não permite é desligada na hora e anotada na tentativa.</p></div>
+        <div class="ag-form-cols">
+          <div class="ag-field"><label class="ag-label" for="inp-sieg-uf">UF do certificado (código IBGE)</label><input type="text" id="inp-sieg-uf" class="ag-input cg-cfg-curto" inputmode="numeric" maxlength="2" placeholder="27" /><p class="ag-ajuda">27 = Alagoas.</p></div>
+          <div class="ag-field"><label class="ag-label" for="inp-sieg-dias">Dias retroativos</label><input type="number" id="inp-sieg-dias" class="ag-input cg-cfg-curto" min="0" max="365" /></div>
+          <div class="ag-field"><label class="ag-label" for="inp-sieg-nfse">Consulta de NFS-e</label><input type="text" id="inp-sieg-nfse" class="ag-input" placeholder="Nacional" /></div>
+        </div>
+        <fieldset class="cg-cfg-consultas">
+          <legend class="ag-label">Consultas</legend>
+          <div class="cg-cfg-consultas__grade">
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaNfe" /> NF-e</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaCte" /> CT-e</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaNfse" /> NFS-e</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaNfce" /> NFC-e</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaSat" /> SAT</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ServicoPrestador" /> NFS-e como prestador</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ServicoTomador" /> NFS-e como tomador</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="BaixarCancelados" /> Baixar cancelados</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaNoturna" /> Consulta noturna</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ConsultaRegiaoHorario" /> Consulta por região e horário</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="IntegracaoEstadual" /> Integração estadual</label>
+            <label class="ag-check"><input type="checkbox" data-sieg-consulta="ExcluirTransferenciaFiliais" /> Excluir transferência entre filiais</label>
+          </div>
+        </fieldset>
+
+        <div class="cg-cfg-acoes">
+          <button type="button" id="btn-sieg-salvar" class="ag-btn ag-btn--primary">Salvar</button>
+          <button type="button" id="btn-sieg-testar" class="ag-btn ag-btn--outline">Testar conexão</button>
+          <button type="button" id="btn-sieg-sincronizar" class="ag-btn ag-btn--outline">Sincronizar com o SIEG</button>
+          <span class="ag-ajuda" id="sieg-msg" role="status"></span>
+        </div>
+        <p class="ag-ajuda">Sincronizar marca como “No SIEG” o certificado vigente de cada cliente que já está na conta, para os interruptores mostrarem a verdade. Não envia nada.</p>
+        <div id="sieg-resultado" aria-live="polite"></div>
+      </div>
+    </section>
   </main>
 
   <!-- Confirmação do disparo. -->
@@ -371,8 +428,8 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos" };
-      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos" };
+      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg" };
+      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
@@ -388,6 +445,7 @@
         history.replaceState(null, "", url.pathname + (url.search || ""));
         if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
         if (aba === "comandos") void refreshCommandQueue();
+        if (aba === "sieg") void carregarSieg();
       }
       ORDEM.forEach((a) => {
         const t = document.getElementById(TAB_IDS[a]);
@@ -1056,6 +1114,98 @@
       document.getElementById("cmd-ping").addEventListener("click", () => enqueueRemoteCommand("ping"));
       document.getElementById("cmd-refresh-q").addEventListener("click", refreshCommandQueue);
 
+
+      // ── SIEG ─────────────────────────────────────────────────────────────
+      function seloGuardado(id, guardado) {
+        document.getElementById(id).innerHTML = guardado
+          ? '<span class="ag-badge ag-badge--success">Guardada</span>'
+          : '<span class="ag-badge ag-badge--neutral">Não informada</span>';
+      }
+
+      function resultadoSieg(tipo, texto) {
+        document.getElementById("sieg-resultado").innerHTML = texto
+          ? '<div class="ag-alert ag-alert--' + tipo + '"><div class="ag-alert__corpo">' + esc(texto) + "</div></div>"
+          : "";
+      }
+
+      function preencherSieg(d) {
+        document.getElementById("inp-sieg-client").value = d.client_id || "";
+        document.getElementById("inp-sieg-secret").value = "";
+        document.getElementById("inp-sieg-apikey").value = "";
+        seloGuardado("sieg-secret-status", d.secret_key_set);
+        seloGuardado("sieg-apikey-status", d.api_key_set);
+        const p = d.padroes || {};
+        document.getElementById("inp-sieg-uf").value = p.UfCertificado || "";
+        document.getElementById("inp-sieg-dias").value = p.DiasRetroativos ?? 0;
+        document.getElementById("inp-sieg-nfse").value = p.TipoConsultaNfse || "";
+        document.querySelectorAll("[data-sieg-consulta]").forEach((c) => { c.checked = !!p[c.dataset.siegConsulta]; });
+        const configurado = !!d.configurado;
+        document.getElementById("btn-sieg-testar").disabled = !configurado;
+        document.getElementById("btn-sieg-sincronizar").disabled = !configurado;
+      }
+
+      async function carregarSieg() {
+        try {
+          const r = await fetch("/api/sieg/configuracao", { headers: getHeaders() });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          preencherSieg(await r.json());
+        } catch (e) {
+          resultadoSieg("danger", "Não foi possível ler a configuração do SIEG: " + e.message);
+        }
+      }
+
+      async function salvarSieg() {
+        const btn = document.getElementById("btn-sieg-salvar");
+        const padroes = {
+          UfCertificado: document.getElementById("inp-sieg-uf").value.trim(),
+          DiasRetroativos: Number(document.getElementById("inp-sieg-dias").value || 0),
+          TipoConsultaNfse: document.getElementById("inp-sieg-nfse").value.trim() || "Nacional",
+        };
+        document.querySelectorAll("[data-sieg-consulta]").forEach((c) => { padroes[c.dataset.siegConsulta] = c.checked; });
+        btn.disabled = true;
+        resultadoSieg("", "");
+        try {
+          const r = await fetch("/api/sieg/configuracao", {
+            method: "PUT", headers: getHeaders(true),
+            body: JSON.stringify({
+              client_id: document.getElementById("inp-sieg-client").value.trim(),
+              secret_key: document.getElementById("inp-sieg-secret").value || null,
+              api_key: document.getElementById("inp-sieg-apikey").value || null,
+              padroes,
+            }),
+          });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          preencherSieg(await r.json());
+          showToast("Configuração do SIEG salva.", "success");
+        } catch (e) {
+          resultadoSieg("danger", e.message);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      async function acaoSieg(botaoId, url, emAndamento) {
+        const btn = document.getElementById(botaoId);
+        const rotulo = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = emAndamento;
+        resultadoSieg("", "");
+        try {
+          const r = await fetch(url, { method: "POST", headers: getHeaders(true) });
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          resultadoSieg("success", (await r.json()).message || "Feito.");
+        } catch (e) {
+          resultadoSieg("danger", e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = rotulo;
+        }
+      }
+
+      document.getElementById("btn-sieg-salvar").addEventListener("click", salvarSieg);
+      document.getElementById("btn-sieg-testar").addEventListener("click", () => acaoSieg("btn-sieg-testar", "/api/sieg/testar", "Testando…"));
+      document.getElementById("btn-sieg-sincronizar").addEventListener("click", () => acaoSieg("btn-sieg-sincronizar", "/api/sieg/sincronizar", "Sincronizando…"));
+
       // ── Init ─────────────────────────────────────────────────────────
       (async function init() {
         // Sidebar por papel: ui-common.js (initSidebarPorPapel). O gate de
@@ -1085,6 +1235,7 @@
         _segAnterior = document.getElementById("sel-smtp-seguranca").value;
         await syncPathsFromApi();
         await refreshCommandQueue();
+        if (new URLSearchParams(location.search).get("aba") === "sieg") void carregarSieg();
       })();
   </script>
 </body>

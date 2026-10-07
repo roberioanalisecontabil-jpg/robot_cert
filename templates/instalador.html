@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-instalador.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-instalador.css?v=aguia-2026-10d" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -47,6 +47,8 @@
          aria-selected="{{ 'true' if aba == 'movimentos' else 'false' }}" {% if aba != 'movimentos' %}tabindex="-1"{% endif %}>Movimentos <span class="ag-abas__contagem" id="tab-movimentos-contagem"></span></a>
       <a class="ag-abas__aba" role="tab" id="tab-trilha" href="?aba=trilha" aria-controls="aba-trilha" data-aba="trilha"
          aria-selected="{{ 'true' if aba == 'trilha' else 'false' }}" {% if aba != 'trilha' %}tabindex="-1"{% endif %}>Trilha</a>
+      <a class="ag-abas__aba" role="tab" id="tab-sieg" href="?aba=sieg" aria-controls="aba-sieg" data-aba="sieg"
+         aria-selected="{{ 'true' if aba == 'sieg' else 'false' }}" {% if aba != 'sieg' %}tabindex="-1"{% endif %}>SIEG <span class="ag-abas__contagem" id="tab-sieg-contagem"></span></a>
       <a class="ag-abas__aba" role="tab" id="tab-configuracao" href="?aba=configuracao" aria-controls="aba-configuracao" data-aba="configuracao"
          aria-selected="{{ 'true' if aba == 'configuracao' else 'false' }}" {% if aba != 'configuracao' %}tabindex="-1"{% endif %}>Configuração</a>
     </div>
@@ -255,12 +257,59 @@
                 <th role="columnheader" class="ag-th--estatico">Quando</th>
                 <th role="columnheader" class="ag-th--estatico">Solicitante</th>
                 <th role="columnheader" class="ag-th--estatico">Estação</th>
-                <th role="columnheader" class="ag-th--estatico cg-col-n">Certificados</th>
+                <th role="columnheader" class="ag-th--estatico">Certificado</th>
                 <th role="columnheader" class="ag-th--estatico">Etapas</th>
                 <th role="columnheader" class="ag-th--estatico">Desfecho</th>
               </tr>
             </thead>
             <tbody role="rowgroup" id="tblInstallLogs"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SIEG (07/10/2026) ───────────────────────────────────────────
+         Um certificado por linha: quem ligou, quando, o estado e a última
+         mensagem do SIEG. A tentativa completa (HTTP, opções desligadas,
+         avisos) abre na linha. -->
+    <section class="ag-card cg-inst-aba" id="aba-sieg" role="tabpanel" aria-labelledby="tab-sieg" {% if aba != 'sieg' %}hidden{% endif %}>
+      <div class="cg-inst-cab">
+        <div class="cg-inst-cab__texto">
+          <h2 class="ag-card__title">Certificados no SIEG</h2>
+          <p class="cg-inst-cab__lead">Quem ligou cada certificado, quando, e o que o SIEG respondeu.</p>
+        </div>
+      </div>
+      <div class="cg-inst-corpo">
+        <div class="cg-sieg-filtro">
+          <div class="ag-field">
+            <label class="ag-label" for="siegEstado">Estado</label>
+            <select id="siegEstado" class="ag-select">
+              <option value="">Todos</option>
+              <option value="no_sieg">No SIEG</option>
+              <option value="incluindo">Incluindo</option>
+              <option value="erro">Erro</option>
+              <option value="substituido">Substituído</option>
+              <option value="removido">Fora do SIEG</option>
+            </select>
+          </div>
+        </div>
+        <p class="cg-inst-resumo" id="siegResumo" aria-live="polite"></p>
+        <div class="ag-alert ag-alert--info" id="siegSemConfig" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div class="ag-alert__corpo">O SIEG ainda não foi configurado. Informe as credenciais em <a href="/configuracao?aba=sieg">Configuração › SIEG</a>.</div>
+        </div>
+        <div class="ag-table-scroll" role="region" aria-label="Certificados no SIEG">
+          <table class="ag-table cg-tabela-sieg" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Certificado</th>
+                <th role="columnheader" class="ag-th--estatico">Estado</th>
+                <th role="columnheader" class="ag-th--estatico">Ligado por</th>
+                <th role="columnheader" class="ag-th--estatico">Quando</th>
+                <th role="columnheader" class="ag-th--estatico">Última resposta</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="tblSieg"></tbody>
           </table>
         </div>
       </div>
@@ -360,7 +409,7 @@
     // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `renderSkeletonRows`,
     // `limparSkeleton`, `cgPageNavRefresh`, `cgPageNavHide` e `cgCopiarInit`
     // vêm de ui-common.js.
-    const ABAS = ["diagnostico", "custodia", "movimentos", "trilha", "configuracao"];
+    const ABAS = ["diagnostico", "custodia", "movimentos", "trilha", "sieg", "configuracao"];
     const AVISO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
     const CHECK = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
     const CIRCULO = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
@@ -437,10 +486,92 @@
     async function recarregarTudo() {
       setCarregando(true);
       try {
-        await Promise.all([loadDiagnostico(), loadOptinPanel(), loadEntrada(), loadInstallLogs(), loadConfigInstalador()]);
+        await Promise.all([loadDiagnostico(), loadOptinPanel(), loadEntrada(), loadInstallLogs(), loadSieg(), loadConfigInstalador()]);
       } finally {
         setCarregando(false);
       }
+    }
+
+    /* ── SIEG ─────────────────────────────────────────────────────────── */
+
+    const SIEG_BADGE = { no_sieg: "success", incluindo: "info", erro: "danger", substituido: "neutral", removido: "neutral" };
+    const SIEG_EVENTO = {
+      solicitado: "Ligado", religado: "Ligado de novo", incluido: "Incluído", erro: "Erro",
+      substituido: "Substituído", reconciliado_mantido: "Conferido: ativo",
+      reconciliado_desligado: "Conferido: fora do SIEG", sincronizado: "Já estava no SIEG",
+    };
+    let _siegTimer = null;
+
+    async function abrirTentativas(fp, alvo) {
+      if (alvo.dataset.carregado) return;
+      alvo.dataset.carregado = "1";
+      const corpo = alvo.querySelector(".cg-sieg-trilha");
+      try {
+        const r = await fetch("/api/sieg/trilha?fingerprint=" + encodeURIComponent(fp), { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const itens = (await r.json()).itens || [];
+        corpo.innerHTML = itens.length ? "<ol class='cg-sieg-trilha__lista'>" + itens.map((t) => `
+          <li>
+            <span class="cg-sieg-trilha__quando">${tempo(t.em, fmtQuando(t.em))}</span>
+            <strong>${esc(SIEG_EVENTO[t.evento] || t.evento)}</strong>
+            ${t.operacao ? `<span class="ag-cell-sub">${esc(t.operacao)}${t.http_status ? " · HTTP " + esc(t.http_status) : ""}</span>` : ""}
+            ${t.por ? `<span class="ag-cell-sub">por ${esc(t.por)}</span>` : ""}
+            ${t.mensagem ? `<span class="cg-sieg-trilha__msg">${esc(t.mensagem)}</span>` : ""}
+            ${t.opcoes_desabilitadas ? `<span class="ag-cell-sub">Opções desligadas: ${esc(t.opcoes_desabilitadas)}</span>` : ""}
+            ${t.avisos ? `<span class="ag-cell-sub">Avisos: ${esc(t.avisos)}</span>` : ""}
+          </li>`).join("") + "</ol>" : "<p class='ag-cell-sub'>Sem tentativas registradas.</p>";
+      } catch (e) {
+        corpo.textContent = "Não foi possível carregar as tentativas: " + e.message;
+      }
+    }
+
+    async function loadSieg() {
+      const tbody = document.getElementById("tblSieg");
+      const estado = document.getElementById("siegEstado").value;
+      clearTimeout(_siegTimer);
+      try {
+        const r = await fetch("/api/sieg/inclusoes" + (estado ? "?estado=" + encodeURIComponent(estado) : ""), { headers: getHeaders() });
+        if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+        const d = await r.json();
+        document.getElementById("siegSemConfig").hidden = !!d.configurado;
+        const res = d.resumo || {};
+        const total = Object.values(res).reduce((a, b) => a + b, 0);
+        document.getElementById("tab-sieg-contagem").textContent = res.no_sieg ? "(" + res.no_sieg + ")" : "";
+        document.getElementById("siegResumo").textContent = total
+          ? [["no_sieg", "no SIEG"], ["incluindo", "incluindo"], ["erro", "com erro"], ["substituido", "substituídos"], ["removido", "fora do SIEG"]]
+              .filter(([k]) => res[k]).map(([k, t]) => res[k] + " " + t).join(" · ")
+          : "";
+        const itens = d.itens || [];
+        if (!itens.length) {
+          tbody.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">${estado ? "Nenhum certificado nesse estado." : "Nenhum certificado foi ligado ao SIEG ainda. O interruptor fica nos detalhes de cada certificado, no Início."}</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = itens.map((l) => `
+          <tr role="row">
+            <td role="cell" class="cg-col-cert"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(l.nome || "—")}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(fmtDocumento(l.documento))}</span></span></td>
+            <td role="cell"><span class="ag-badge ag-badge--${SIEG_BADGE[l.estado] || "neutral"}">${esc(l.rotulo || l.estado)}</span>${l.sieg_id ? `<span class="ag-cell-sub ag-cell-sub--mono">${esc(l.sieg_id)}</span>` : ""}</td>
+            <td role="cell">${esc(l.solicitado_por || "—")}</td>
+            <td role="cell" class="cg-col-quando">${l.solicitado_em ? tempo(l.solicitado_em, fmtQuando(l.solicitado_em)) : "—"}</td>
+            <td role="cell" class="cg-col-sieg-msg">
+              <details class="ag-accordion cg-sieg-det" data-fp="${esc(l.fingerprint)}">
+                <summary class="ag-accordion__topo"><span>${esc(l.mensagem || "Ver tentativas")}</span><span class="ag-accordion__seta" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></summary>
+                <div class="cg-sieg-trilha">Carregando…</div>
+              </details>
+            </td>
+          </tr>`).join("");
+        tbody.querySelectorAll(".cg-sieg-det").forEach((det) => det.addEventListener("toggle", () => { if (det.open) void abrirTentativas(det.dataset.fp, det); }));
+        // Enquanto houver inclusão em andamento, a aba se atualiza sozinha.
+        if (res.incluindo) _siegTimer = setTimeout(() => { if (!document.getElementById("aba-sieg").hidden) void loadSieg(); }, 4000);
+      } catch (e) {
+        tbody.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Falha ao carregar: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function fmtDocumento(d) {
+      const s = String(d || "").replace(/\D/g, "");
+      if (s.length === 14) return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+      if (s.length === 11) return s.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+      return d || "";
     }
 
     /* ── Movimentos ───────────────────────────────────────────────────── */
@@ -1014,6 +1145,16 @@
       return `<tr class="cg-state-row" role="row"><td role="cell" colspan="6" class="ag-table__vazio">Nenhuma instalação entre ${esc(de)} e ${esc(ate)}. ${Number(dias) < 90 ? '<a href="#" id="linkTrilha90">Ver últimos 90 dias</a>.' : ""}</td></tr>`;
     }
 
+    // Qual certificado (07/10/2026): nome e documento vêm do cofre. Mais de
+    // um na mesma tentativa: o primeiro e "+ N".
+    function celulaCertificados(c) {
+      const lista = c.certificados_info || [];
+      if (!lista.length) return `<span class="ag-cell-sub">${c.certificados ? esc(num(c.certificados)) + " (fora do cofre)" : "—"}</span>`;
+      const p = lista[0];
+      const mais = lista.length > 1 ? `<span class="ag-cell-sub">+ ${lista.length - 1} ${lista.length === 2 ? "outro" : "outros"}</span>` : "";
+      return `<span class="ag-cell-stack" title="${esc(lista.map((x) => x.nome + " " + x.documento).join("\n"))}"><span class="ag-cell-main">${esc(p.nome || "—")}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(p.documento || "")}</span>${mais}</span>`;
+    }
+
     async function loadInstallLogs() {
       const tbody = document.getElementById("tblInstallLogs");
       const dias = document.getElementById("trilhaDias").value;
@@ -1051,7 +1192,7 @@
               <td role="cell" class="cg-col-quando">${c.inicio ? tempo(c.inicio, fmtQuando(c.inicio)) : "—"}</td>
               <td role="cell" class="cg-col-quem">${esc(c.user_email || "—")}</td>
               <td role="cell" class="cg-col-maquina">${maq}</td>
-              <td role="cell" class="num cg-col-n">${num(c.certificados)}</td>
+              <td role="cell" class="cg-col-cert">${celulaCertificados(c)}</td>
               <td role="cell" class="cg-col-etapas">${desenharEtapas(c)}</td>
               <td role="cell" class="cg-col-desfecho">${badgeDesfecho(c.desfecho)}${motivo ? `<span class="cg-inst-motivo">${esc(motivo)}</span>` : ""}</td>
             </tr>`;
@@ -1087,6 +1228,7 @@
       document.getElementById("buscaOptin").addEventListener("input", () => { clearTimeout(debounceOptin); debounceOptin = setTimeout(() => { _custPagina = 1; renderOptinTable(); }, 250); });
       document.querySelector(".cg-inst-filtros").addEventListener("submit", (ev) => { ev.preventDefault(); _custPagina = 1; renderOptinTable(); });
       document.getElementById("formTrilha").addEventListener("submit", (ev) => { ev.preventDefault(); loadInstallLogs(); });
+      document.getElementById("siegEstado").addEventListener("change", () => void loadSieg());
       document.getElementById("btnDiagTentar").addEventListener("click", loadDiagnostico);
       document.getElementById("btnRevalidarCofre").addEventListener("click", revalidarCofre);
       document.getElementById("btnRecifrarCofre").addEventListener("click", recifrarCofre);

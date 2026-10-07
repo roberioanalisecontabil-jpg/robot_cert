@@ -1281,7 +1281,7 @@ def painel(request: Request) -> HTMLResponse:
 def pagina_configuracao(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
     aba = request.query_params.get("aba") or "chave"
-    if aba not in ("chave", "pastas", "alertas", "comandos"):
+    if aba not in ("chave", "pastas", "alertas", "comandos", "sieg"):
         aba = "chave"
     return templates.TemplateResponse(
         request=request, name="configuracao.html", context={"pagina_ativa": "configuracao", "aba": aba}
@@ -8137,7 +8137,7 @@ def page_instalador(request: Request) -> HTMLResponse:
     aba = request.query_params.get("aba") or "diagnostico"
     if aba == "entrada":  # nome da aba até 02/10/2026; links antigos continuam valendo
         aba = "movimentos"
-    if aba not in ("diagnostico", "custodia", "movimentos", "trilha", "configuracao"):
+    if aba not in ("diagnostico", "custodia", "movimentos", "trilha", "sieg", "configuracao"):
         aba = "diagnostico"
     return templates.TemplateResponse(
         request=request, name="instalador.html", context={"pagina_ativa": "instalador", "aba": aba}

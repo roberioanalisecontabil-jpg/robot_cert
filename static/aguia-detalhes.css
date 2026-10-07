@@ -56,3 +56,20 @@
     .cg-det__item { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .cg-det__item dt { font-size: var(--text-xs); }
 }
+
+/* ── SIEG (07/10/2026) ───────────────────────────────────────────────── */
+.cg-det-sieg { border-top: var(--bw-1) solid var(--border-subtle); padding-top: var(--space-4); }
+.cg-det-sieg__linha { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.cg-det-sieg__acoes { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.cg-det-sieg__acoes:has(> :not([hidden])) { margin-top: var(--space-2); }
+/* Ligado e travado fica em ouro cheio (é estado, não indisponibilidade);
+   só o desligado que não pode ligar desbota. */
+.ag-switch input:disabled:not(:checked) + .ag-switch__trilho { opacity: .55; cursor: not-allowed; }
+.ag-switch:has(input:disabled) { cursor: not-allowed; }
+.cg-selo-sieg { margin-left: var(--space-1); }
+
+/* Três campos na toolbar do Início (Status, SIEG, Buscar). */
+#table-container-dash .cg-toolbar__filtros { grid-template-columns: auto auto minmax(0, 1fr); }
+@media (max-width: 640px) {
+    #table-container-dash .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
+}
