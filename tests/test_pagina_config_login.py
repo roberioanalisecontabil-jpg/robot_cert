@@ -112,3 +112,15 @@ def test_previa_do_email_usa_o_certificado_vigente() -> None:
     fonte = (RAIZ / "app" / "alert_state.py").read_text(encoding="utf-8")
     i = fonte.index("Prévia do e-mail")
     assert "vigentes_por_documento" in fonte[i - 600:i]
+
+
+# ── Leva C (06/10/2026): as três abas que faltavam da Configuração ────────
+
+def test_configuracao_sem_abas_legadas() -> None:
+    html = (Path(__file__).resolve().parents[1] / "templates" / "configuracao.html").read_text(encoding="utf-8")
+    assert "cg-cfg-legado" not in html
+    # A fila é tabela, não o JSON da API num <pre>.
+    assert "JSON.stringify(p, null, 2)" not in html and 'class="ag-table cg-tabela-fila"' in html
+    # O agente é serviço instalado por instalador, não "python run_agent.py".
+    assert "python agent\run_agent.py" not in html
+    assert "AnaliseCertiDigitalAgent" in html and "Instalador_AnaliseCertiDigital_Agente.exe" in html

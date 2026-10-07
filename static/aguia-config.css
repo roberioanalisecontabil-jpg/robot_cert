@@ -42,12 +42,49 @@
 .cg-cfg-modelo { margin: 0; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
 .cg-cfg-exemplo { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--text-primary); }
 
-/* Abas pendentes: campos legados com a moldura do DS. */
-.cg-cfg-legado .ag-field { margin-bottom: var(--space-4); }
-.cg-cfg-legado pre { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--bg-surface-alt); padding: var(--space-3); border-radius: var(--radius-md); overflow: auto; }
-.cg-cfg-legado code { font-family: var(--font-mono); }
-.cg-cfg-legado .cg-cfg-leitura { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
-.cg-cfg-legado .cg-cfg-leitura code { color: var(--text-secondary); overflow-wrap: anywhere; }
+/* Chave API, Pastas e agente, Fila de comandos (Leva C, 06/10/2026). */
+.cg-cfg-aba code { font-family: var(--font-mono); font-size: .92em; }
+.cg-cfg-comando { margin: 0; font-family: var(--font-mono); font-size: var(--text-xs); background: var(--bg-surface-alt); padding: var(--space-3); border-radius: var(--radius-md); overflow-x: auto; white-space: pre; }
+.cg-cfg-lista { margin: 0; padding-left: var(--space-5); display: grid; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-secondary); }
+.cg-cfg-lista strong { color: var(--text-primary); }
+/* Caminhos são longos: o valor quebra em vez de vazar (o ag-dados nasceu
+   para números, com nowrap). */
+.cg-cfg-caminhos .ag-dados__valor { white-space: normal; overflow-wrap: anywhere; text-align: right; flex: 0 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary); }
+.cg-cfg-caminhos .ag-dados__rotulo { flex: none; }
+
+.cg-cfg-cmd { display: flex; align-items: end; gap: var(--space-3); flex-wrap: wrap; }
+.cg-cfg-cmd .ag-field { margin: 0; flex: 1 1 14rem; max-width: 22rem; }
+.cg-cfg-fila-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-5); }
+.cg-cfg-fila-cab .ag-form-subhead__titulo { margin: 0; }
+.cg-tabela-fila .cg-cfg-maquina { color: var(--text-secondary); }
+.cg-tabela-fila .cg-cfg-quando { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-xs); }
+.cg-tabela-fila .ag-cell-sub { display: block; }
+@media (max-width: 640px) {
+    .cg-cfg-cmd .ag-field { flex-basis: 100%; max-width: none; }
+    .cg-cfg-cmd .ag-btn { flex: 1 1 0; }
+    .cg-cfg-caminhos .ag-dados__item { flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+    .cg-cfg-caminhos .ag-dados__valor { text-align: left; }
+
+    /* Fila: cartão com o comando à esquerda e o servidor à direita, o
+       pedido embaixo. */
+    #sec-comandos .ag-table-scroll { overflow: visible; }
+    .cg-tabela-fila, .cg-tabela-fila tbody, .cg-tabela-fila tr, .cg-tabela-fila td { display: block; width: auto; }
+    .cg-tabela-fila thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .cg-tabela-fila tbody tr:not(.cg-state-row) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "cmd maq" "quando quando";
+        gap: var(--space-1) var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: var(--bw-1) solid var(--border-subtle);
+    }
+    .cg-tabela-fila tbody tr:hover { background: transparent; }
+    .cg-tabela-fila tbody tr td { padding: 0; border: 0; white-space: normal; }
+    .cg-tabela-fila td:nth-child(1) { grid-area: cmd; }
+    .cg-tabela-fila td:nth-child(2) { grid-area: maq; }
+    .cg-tabela-fila td:nth-child(3) { grid-area: quando; }
+    .cg-tabela-fila td:nth-child(3) .ag-cell-stack { flex-direction: row; gap: var(--space-2); }
+}
 
 /* Modal do texto do e-mail: campos à esquerda, prévia à direita. */
 .cg-cfg-email { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); }

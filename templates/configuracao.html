@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-10a" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-10c" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -47,15 +47,16 @@
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
     <!-- ── Chave API ───────────────────────── -->
-    <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
+    <section class="ag-card cg-cfg-aba" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
         <!-- A chave não passa mais pelo navegador (SECURITY_AUDIT #46, lote 7):
              o portal autentica esta tela pelo login (JWT), e a X-API-Key é
              credencial de ESTAÇÃO — entra no cofre local do agente pelo
              instalador, nunca por localStorage nem pelo agent_config.json. -->
         <p class="cg-cfg-lead">Esta tela usa o seu login. A <code>API_KEY</code> do servidor é credencial das <strong>estações</strong>: fica cifrada em cada uma (DPAPI), nunca no navegador nem no <code>agent_config.json</code>.</p>
-        <p class="ag-ajuda">Como a chave entra numa estação: o instalador do agente (1.4.0 ou mais novo) pede a chave numa página do assistente e a guarda no cofre local. Para trocar depois, grave a chave num arquivo e rode, como administrador:</p>
-        <pre>AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre>
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Como a chave entra numa estação</h3><p class="ag-form-subhead__nota">O instalador do agente (1.4.0 ou mais novo) pede a chave numa página do assistente e a guarda no cofre local.</p></div>
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Trocar a chave depois</h3><p class="ag-form-subhead__nota">Grave a chave num arquivo e rode, como administrador:</p></div>
+        <pre class="cg-cfg-comando">AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre>
         <p class="ag-ajuda">O agente cifra a chave, restringe o acesso a SYSTEM e Administradores e apaga o arquivo. Um <code>agent_config.json</code> antigo que ainda traga a chave em claro é migrado para o cofre na primeira subida do agente 1.4.0.</p>
         <div class="cg-cfg-acoes">
           <span class="ag-ajuda" id="auth-hint" role="status"></span>
@@ -64,7 +65,7 @@
     </section>
 
     <!-- ── Pastas e agente ─────────────────── -->
-    <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
+    <section class="ag-card cg-cfg-aba" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
         <p class="cg-cfg-lead">O <strong>agente</strong> lê estes caminhos para saber que pastas monitorar.</p>
         <div class="ag-form-cols">
@@ -88,18 +89,21 @@
         <p class="ag-ajuda">Baixe o <code>agent_config.json</code> e copie para a pasta onde o <code>AnaliseCertiDigital_Agent.exe</code> foi instalado. O arquivo não leva a chave de API: ela entra pelo instalador (aba Chave API).</p>
 
         <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Leitura local efetiva</h3></div>
-        <div class="cg-cfg-leitura">
-          <div><span class="ag-label">Origem</span> <code id="disp-source">—</code></div>
-          <div><span class="ag-label">Destino (vencidos)</span> <code id="disp-expired">—</code></div>
-        </div>
+        <ul class="ag-dados cg-cfg-caminhos">
+          <li class="ag-dados__item"><span class="ag-dados__rotulo">Origem</span><code class="ag-dados__valor" id="disp-source">—</code></li>
+          <li class="ag-dados__item"><span class="ag-dados__rotulo">Destino (vencidos)</span><code class="ag-dados__valor" id="disp-expired">—</code></li>
+        </ul>
 
         <p class="ag-ajuda" id="path-sync-msg" role="status"></p>
 
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Agente no Windows</h3></div>
-        <p class="ag-ajuda">Instale o Python no PC onde estão os <code>.pfx</code> e defina <code>CERT_ROBOT_BASE_URL</code>. A chave de API entra pelo cofre local (<code>--guardar-chave</code>) ou pela variável <code>CERT_ROBOT_API_KEY</code> do serviço.</p>
-        <pre>python agent\run_agent.py</pre>
-        <p class="ag-ajuda">O sistema interpreta os arquivos usando a palavra-chave "senha":</p>
-        <pre>MeuNome certificado senha aMinhaSenha.pfx</pre>
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Agente no Windows</h3><p class="ag-form-subhead__nota">Roda como o serviço <code>AnaliseCertiDigitalAgent</code> na máquina das pastas, instalado pelo <code>Instalador_AnaliseCertiDigital_Agente.exe</code>. Para atualizar, rode o instalador novo: ele recria o serviço.</p></div>
+        <ul class="cg-cfg-lista">
+          <li>O instalador pergunta a <strong>conta do serviço</strong>. Em branco, roda como LocalSystem, que não alcança pasta de rede (<code>\\servidor\pasta</code>); a conta informada precisa do direito “Fazer logon como serviço”.</li>
+          <li>Pede também a <strong>chave das estações</strong> (aba Chave API).</li>
+          <li>O <code>agent_config.json</code> baixado acima vai para a pasta de instalação.</li>
+        </ul>
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Nome dos arquivos</h3><p class="ag-form-subhead__nota">A senha do certificado vem do nome do arquivo, depois da palavra <code>senha</code>:</p></div>
+        <pre class="cg-cfg-comando">MeuNome certificado senha aMinhaSenha.pfx</pre>
       </div>
     </section>
 
@@ -278,17 +282,33 @@
     </section>
 
     <!-- ── Fila de comandos ────────────────── -->
-    <section class="ag-card cg-cfg-aba cg-cfg-legado" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
+    <section class="ag-card cg-cfg-aba" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
         <p class="cg-cfg-lead">Envie comandos para o agente executar no servidor da varredura. <em>Forçar leitura</em> instrui o agente a reler a pasta ignorando o intervalo de 24 horas.</p>
-        <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Servidor alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
-        <div class="cg-cfg-acoes">
+        <div class="cg-cfg-cmd">
+          <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Servidor alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
           <button type="button" id="cmd-rescan" class="ag-btn ag-btn--outline">Forçar leitura</button>
           <button type="button" id="cmd-ping" class="ag-btn ag-btn--outline">Ping</button>
-          <button type="button" id="cmd-refresh-q" class="ag-btn ag-btn--ghost">Ver fila</button>
         </div>
         <p class="ag-ajuda" id="cmd-msg" role="status"></p>
-        <pre id="cmd-queue" hidden></pre>
+
+        <!-- A fila vira tabela (Leva C, 06/10/2026): antes "Ver fila" despejava
+             o JSON da API num <pre>. Carrega ao abrir a aba. -->
+        <div class="cg-cfg-fila-cab">
+          <h3 class="ag-form-subhead__titulo">Pendentes <span class="ag-abas__contagem" id="cmd-contagem"></span></h3>
+          <button type="button" id="cmd-refresh-q" class="ag-btn ag-btn--ghost ag-btn--sm">Atualizar</button>
+        </div>
+        <div class="ag-table-scroll" role="region" aria-label="Comandos pendentes">
+          <table class="ag-table cg-tabela-fila" role="table">
+            <thead role="rowgroup"><tr role="row">
+              <th role="columnheader" class="ag-th--estatico">Comando</th>
+              <th role="columnheader" class="ag-th--estatico">Servidor</th>
+              <th role="columnheader" class="ag-th--estatico">Pedido em</th>
+            </tr></thead>
+            <tbody role="rowgroup" id="cmd-queue"><tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <p class="ag-ajuda" id="cmd-nota" hidden>Comando pendente há mais de um dia costuma ser servidor alvo sem agente com esse nome, ou agente parado.</p>
       </div>
     </section>
   </main>
@@ -367,6 +387,7 @@
         if (aba === "chave") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
         history.replaceState(null, "", url.pathname + (url.search || ""));
         if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
+        if (aba === "comandos") void refreshCommandQueue();
       }
       ORDEM.forEach((a) => {
         const t = document.getElementById(TAB_IDS[a]);
@@ -968,21 +989,67 @@
           if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const j = await r.json();
-          st.textContent = "Enfileirado: " + (j.command || cmd) + " (id " + (j.id || "—") + ").";
+          const nomeCmd = CMD_ROTULO[j.command || cmd] || (j.command || cmd);
+          st.textContent = nomeCmd + " enfileirado para " + mid + ". O agente busca no próximo ciclo.";
           await refreshCommandQueue();
         } catch (e) { st.textContent = "Erro: " + e; }
       }
 
+      // Rótulo do que a pessoa clicou; comando fora da lista aparece pelo
+      // nome técnico, marcado como desconhecido (sobra de teste, por exemplo).
+      const CMD_ROTULO = {
+        rescan: "Forçar leitura",
+        ping: "Ping",
+        mover_vencidos: "Mover vencidos",
+        instalar_certificados: "Instalar certificados",
+      };
+
+      function haQuanto(iso) {
+        const t = Date.parse(iso || "");
+        if (Number.isNaN(t)) return "";
+        const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+        if (min < 1) return "agora";
+        if (min < 60) return "há " + min + " min";
+        const h = Math.round(min / 60);
+        if (h < 24) return "há " + h + " h";
+        const d = Math.round(h / 24);
+        return "há " + d + (d === 1 ? " dia" : " dias");
+      }
+
       async function refreshCommandQueue() {
-        const pre = document.getElementById("cmd-queue");
+        const tb = document.getElementById("cmd-queue");
+        const conta = document.getElementById("cmd-contagem");
         try {
           const r = await fetch("/api/agent/queue", { headers: getHeaders() });
-          if (r.status === 401 || !r.ok) return;
-          const j = await r.json();
-          const p = j.pendentes || [];
-          if (p.length) { pre.hidden = false; pre.textContent = JSON.stringify(p, null, 2); }
-          else { pre.hidden = true; pre.textContent = ""; }
-        } catch (_e) {}
+          if (r.status === 401) return;
+          if (!r.ok) {
+            conta.textContent = "";
+            tb.innerHTML = '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Não foi possível ler a fila: ' + esc(await mensagemCorpoErro(r)) + "</td></tr>";
+            return;
+          }
+          const p = (await r.json()).pendentes || [];
+          conta.textContent = p.length ? "(" + p.length + ")" : "";
+          if (!p.length) {
+            tb.innerHTML = '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Nenhum comando pendente: o agente já buscou tudo o que foi pedido.</td></tr>';
+            document.getElementById("cmd-nota").hidden = true;
+            return;
+          }
+          let velhos = 0;
+          tb.innerHTML = p.map((c) => {
+            const rot = CMD_ROTULO[c.command];
+            const idade = Date.now() - Date.parse(c.created_at || "");
+            if (idade > 86400000) velhos++;
+            const quando = c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "—";
+            return `<tr role="row">
+              <td role="cell"><span class="ag-cell-stack"><span class="ag-cell-main">${rot ? esc(rot) : `<code>${esc(c.command)}</code>`}</span>${rot ? "" : '<span class="ag-cell-sub">comando desconhecido</span>'}</span></td>
+              <td role="cell"><code class="cg-cfg-maquina">${esc(c.machine_id || "—")}</code></td>
+              <td role="cell"><span class="ag-cell-stack"><time class="cg-cfg-quando" datetime="${esc(c.created_at || "")}">${esc(quando)}</time><span class="ag-cell-sub">${esc(haQuanto(c.created_at))}</span></span></td>
+            </tr>`;
+          }).join("");
+          document.getElementById("cmd-nota").hidden = velhos === 0;
+        } catch (_e) {
+          tb.innerHTML = '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Não foi possível ler a fila: erro de conexão com o servidor.</td></tr>';
+        }
       }
 
       document.getElementById("cmd-rescan").addEventListener("click", () => enqueueRemoteCommand("rescan"));
