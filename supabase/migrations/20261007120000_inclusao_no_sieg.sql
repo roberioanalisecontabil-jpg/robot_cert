@@ -90,6 +90,33 @@ DELETE FROM public.agent_command_queue
  WHERE command LIKE 'sieg\_%' ESCAPE '\'
    AND status = 'pending';
 
+-- 5. Dono e permissoes (07/10/2026) ----------------------------------------
+-- O portal conecta com um usuario diferente do que roda as migrations, e as
+-- permissoes dele nas tabelas novas vem de ALTER DEFAULT PRIVILEGES — que so
+-- valem para tabela criada pelo usuario das migrations. Rodada a mao como
+-- postgres, as tabelas nasciam sem dono certo e sem permissao para o portal
+-- ("permissao negada para tabela sieg_inclusao" em producao). Aqui: o dono
+-- passa a ser o de portal_settings e quem grava em portal_settings ganha o
+-- mesmo nas tabelas novas. Idempotente.
+DO $$
+DECLARE
+  dono text;
+  r record;
+BEGIN
+  SELECT tableowner INTO dono FROM pg_tables WHERE schemaname = 'public' AND tablename = 'portal_settings';
+  IF dono IS NOT NULL AND current_user IN (dono, 'postgres') THEN
+    EXECUTE format('ALTER TABLE public.sieg_inclusao OWNER TO %I', dono);
+    EXECUTE format('ALTER TABLE public.sieg_trilha OWNER TO %I', dono);
+  END IF;
+  FOR r IN SELECT rolname FROM pg_roles
+            WHERE rolcanlogin AND NOT rolsuper
+              AND has_table_privilege(rolname, 'public.portal_settings', 'UPDATE')
+  LOOP
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.sieg_inclusao, public.sieg_trilha TO %I', r.rolname);
+    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE public.sieg_trilha_id_seq TO %I', r.rolname);
+  END LOOP;
+END $$;
+
 -- Conferencia -----------------------------------------------------------------
 SELECT column_name
   FROM information_schema.columns
@@ -100,6 +127,10 @@ SELECT table_name
   FROM information_schema.tables
  WHERE table_schema = 'public' AND table_name LIKE 'sieg%'
  ORDER BY table_name;
+SELECT grantee, table_name, string_agg(privilege_type, ',') AS privilegios
+  FROM information_schema.role_table_grants
+ WHERE table_name IN ('sieg_inclusao', 'sieg_trilha')
+ GROUP BY 1, 2 ORDER BY 1, 2;
 SELECT count(*) AS comandos_sieg_pendentes
   FROM public.agent_command_queue
  WHERE command LIKE 'sieg\_%' ESCAPE '\';
