@@ -39,6 +39,13 @@ class PortalSettings:
     graph_remetente: str = ""
     graph_reply_to: str = ""
     graph_secret_validade: str = ""
+    # SIEG (07/10/2026): Client ID em claro; Secret Key e API Key cifradas
+    # com a chave do SMTP. `sieg_padroes` é JSON com UF e opções de consulta;
+    # vazio = os padrões de app/sieg_api.PADROES.
+    sieg_client_id: str = ""
+    sieg_secret_key_encrypted: str = ""
+    sieg_api_key_encrypted: str = ""
+    sieg_padroes: str = ""
 
     # ── Módulo instalador (leva 3b, 15/08/2026) ────────────────────────────
     # Vazio/zero significa "usar o padrão do código", e não "desligado". A
@@ -188,6 +195,10 @@ def _from_row(row: dict) -> PortalSettings:
         graph_remetente=str(row.get("graph_remetente", "") or ""),
         graph_reply_to=str(row.get("graph_reply_to", "") or ""),
         graph_secret_validade=str(row.get("graph_secret_validade", "") or ""),
+        sieg_client_id=str(row.get("sieg_client_id", "") or ""),
+        sieg_secret_key_encrypted=str(row.get("sieg_secret_key_encrypted", "") or ""),
+        sieg_api_key_encrypted=str(row.get("sieg_api_key_encrypted", "") or ""),
+        sieg_padroes=str(row.get("sieg_padroes", "") or ""),
         # `row.get` com default: se a migration ainda não rodou, a coluna não
         # vem no PostgREST e o padrão do código continua valendo. É o que torna
         # a migration ordem-independente.
@@ -234,6 +245,10 @@ def _load_file() -> Optional[PortalSettings]:
             graph_remetente=str(raw.get("graph_remetente", "") or ""),
             graph_reply_to=str(raw.get("graph_reply_to", "") or ""),
             graph_secret_validade=str(raw.get("graph_secret_validade", "") or ""),
+            sieg_client_id=str(raw.get("sieg_client_id", "") or ""),
+            sieg_secret_key_encrypted=str(raw.get("sieg_secret_key_encrypted", "") or ""),
+            sieg_api_key_encrypted=str(raw.get("sieg_api_key_encrypted", "") or ""),
+            sieg_padroes=str(raw.get("sieg_padroes", "") or ""),
             alertas_destinatarios=str(raw.get("alertas_destinatarios", "") or ""),
             alertas_marcos=str(raw.get("alertas_marcos", "") or ""),
             alertas_intervalo_horas=int(raw.get("alertas_intervalo_horas") or 0),
@@ -373,6 +388,10 @@ def save_settings(s: PortalSettings, *, exigir_banco: bool = False) -> bool:
         "graph_remetente": s.graph_remetente,
         "graph_reply_to": s.graph_reply_to,
         "graph_secret_validade": s.graph_secret_validade,
+        "sieg_client_id": s.sieg_client_id,
+        "sieg_secret_key_encrypted": s.sieg_secret_key_encrypted,
+        "sieg_api_key_encrypted": s.sieg_api_key_encrypted,
+        "sieg_padroes": s.sieg_padroes,
         "install_token_ttl_min": s.install_token_ttl_min,
         "trilha_retencao_dias": s.trilha_retencao_dias,
         "alertas_destinatarios": s.alertas_destinatarios,

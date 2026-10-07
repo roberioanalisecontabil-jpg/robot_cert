@@ -453,6 +453,29 @@ def list_available_pfx(machine_id: Optional[str] = None) -> List[StoredPfx]:
         return []
 
 
+def titulares_do_cofre(cert_ids: List[str]) -> Dict[str, Dict[str, str]]:
+    """id do cofre → {nome, documento} (Trilha do Instalador). Só metadados."""
+    client = _banco()
+    if not client or not cert_ids:
+        return {}
+    try:
+        r = client.table("cert_pfx_store").select("id, nome_titular, documento").in_("id", list(cert_ids)).execute()
+    except Exception:  # noqa: BLE001 — sem nomes a trilha continua servindo
+        logger.exception("Falha ao ler titulares do cofre para a trilha")
+        return {}
+    from app.cert_scanner import formatar_cnpj_cpf
+
+    out: Dict[str, Dict[str, str]] = {}
+    for row in r.data or []:
+        doc = so_digitos(row.get("documento"))
+        tipo = "cnpj" if len(doc) == 14 else "cpf" if len(doc) == 11 else None
+        out[str(row["id"])] = {
+            "nome": str(row.get("nome_titular") or ""),
+            "documento": formatar_cnpj_cpf(doc, tipo) or doc,
+        }
+    return out
+
+
 def get_pfx_by_ids(cert_ids: List[str]) -> List[Dict[str, Any]]:
     """Busca PFX cifrados por lista de IDs (para montagem do bundle)."""
     client = _banco()
