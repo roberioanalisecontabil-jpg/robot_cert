@@ -155,7 +155,8 @@ def test_registra_e_troca_o_segredo_por_token(client: TestClient, banco: _Fake) 
     t = _token(client, segredo)
     assert t.status_code == 200, t.text
     corpo = t.json()
-    assert corpo["machine_id"] == MAQUINA
+    # ADR 0002: a máquina é guardada em minúsculas (vínculo e fila comparam por igualdade).
+    assert corpo["machine_id"] == MAQUINA.lower()
     # O papel REAL da pessoa, não `agent`: é o que permite às rotas perguntarem
     # "este certificado é seu" em vez de "que papel você tem".
     assert corpo["role"] == "user"

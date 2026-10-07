@@ -34,7 +34,7 @@ from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, formatar
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.config import ROOT
 from app import alertas_config
-from app import sieg, texto
+from app import computadores, sieg, texto
 from app.sieg_api import SiegErro, so_digitos
 from app import email_modelo
 from app import smtp_service
@@ -2213,6 +2213,7 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody, ator: auth.To
                 "senha_alterada_em": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", user_id).execute()
+        computadores.sair_de_tudo(user_id, "senha redefinida pelo administrador")
         return {"ok": True}
     except Exception:
         logger.exception("Falha ao redefinir a senha de %s", user_id)
@@ -2351,6 +2352,8 @@ def _revogar_tokens_de_instalacao(user_id: str) -> None:
     até o TTL. Nunca levanta: a conta já foi desativada; falhar aqui não pode
     desfazer isso, só avisar.
     """
+    # ADR 0002: a bandeja da estação também deixa de valer.
+    computadores.sair_de_tudo(user_id, "conta desativada")
     try:
         n = cert_installer.revogar_tokens_pendentes(user_id)
     except Exception:  # noqa: BLE001
@@ -3288,6 +3291,7 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
         logger.exception("Falha ao gravar a senha nova")
         raise HTTPException(status_code=400, detail=SENHA_NAO_GRAVADA)
 
+    computadores.sair_de_tudo(str(conta["id"]), "senha redefinida por código")
     atividade.registrar(
         atividade.EVENTO_SENHA_REDEFINIDA,
         user_id=str(conta["id"]),
@@ -3821,7 +3825,7 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
             headers={"X-Senha-Provisoria": "1"},
         )
 
-    machine_id = (body.machine_id or "").strip()
+    machine_id = computadores.mac(body.machine_id)
     if not machine_id:
         raise HTTPException(status_code=400, detail="Informe a máquina do agente.")
 
@@ -3831,7 +3835,9 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
             machine_id=machine_id,
             nome=body.nome or machine_id,
         )
-    except agent_devices.SemBanco as e:
+        # ADR 0002: um acesso por vez e vínculo autorizado pelo administrador.
+        situacao = computadores.ao_entrar(str(user["id"]), machine_id, body.nome or machine_id)
+    except (agent_devices.SemBanco, computadores.SemBanco) as e:
         raise _erro_sem_banco(e)
     except Exception:
         logger.exception("Falha ao registrar dispositivo do agente")
@@ -3845,6 +3851,7 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
         # O agente usa isto para renovar antes de expirar, em vez de descobrir
         # pelo 401 — que chegaria no meio de uma instalação.
         "validade_token_min": agent_devices.VALIDADE_TOKEN_MIN,
+        **_texto_da_situacao(situacao),
     }
 
 
@@ -7294,7 +7301,11 @@ def instalabilidade(
         logger.warning("Instalabilidade sem conseguir ler o alcance (%s): %s", machine_id, e)
         raise HTTPException(status_code=503, detail="Não foi possível verificar sua carteira. Tente de novo.")
 
-    if not alcance_total:
+    meu = _computador_autorizado_da_pessoa(user_id) if not alcance_total else None
+    if meu and meu["autorizacao"] == computadores.AUTORIZADO:
+        if computadores.mac(estacao or machine_id) != computadores.mac(meu["machine_id"]):
+            raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
+    elif not alcance_total:
         # A estação tem de ser uma das desta pessoa (achado #30): a rota era
         # `require_auth` puro com `machine_id` livre, e devolvia o inventário
         # de qualquer estação a qualquer operador. Quem sabe o vínculo é o
@@ -7354,6 +7365,169 @@ def instalabilidade(
 # ganha acesso ao banco do outro.
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Computadores (ADR 0002, 07/10/2026) — docs/adr/0002-vinculo-pessoa-computador.md
+#
+# A bandeja da estação entra com a conta deste portal (agent_devices) e se
+# apresenta nas chamadas abaixo pelo cabeçalho `X-Device-Secret`. O vínculo
+# (principal/empréstimo, pendente até o administrador autorizar) mora em
+# app/computadores.py.
+# ──────────────────────────────────────────────────────────────────────────
+
+_TEXTO_AUTORIZACAO = {
+    computadores.AUTORIZADO: "Computador autorizado.",
+    computadores.PENDENTE: "Aguardando o administrador autorizar este computador.",
+    "sem_pedido": "Este computador não está vinculado a você.",
+}
+
+
+def _texto_da_situacao(s: dict) -> dict:
+    return {"autorizacao": s.get("autorizacao"), "tipo": s.get("tipo"), "expira_em": s.get("expira_em"),
+            "mensagem": _TEXTO_AUTORIZACAO.get(s.get("autorizacao"), "")}
+
+
+def _dispositivo_da_requisicao(request: Request) -> dict:
+    segredo = (request.headers.get("x-device-secret") or "").strip()
+    if not segredo:
+        raise HTTPException(status_code=401, detail="Bandeja sem credencial deste portal. Entre de novo.")
+    try:
+        disp = agent_devices.autenticar(segredo, versao=request.headers.get("x-agent-version"))
+    except agent_devices.SemBanco as e:
+        raise _erro_sem_banco(e)
+    if not disp:
+        raise HTTPException(status_code=401, detail="Sessão da bandeja encerrada. Entre de novo.")
+    return disp
+
+
+@app.get("/api/estacao/situacao")
+def estacao_situacao(request: Request) -> dict:
+    """A bandeja pergunta: posso receber instalação aqui?"""
+    disp = _dispositivo_da_requisicao(request)
+    try:
+        s = computadores.situacao(str(disp["user_id"]), disp["machine_id"])
+    except computadores.SemBanco as e:
+        raise _erro_sem_banco(e)
+    return {"machine_id": disp["machine_id"], **_texto_da_situacao(s)}
+
+
+@app.get("/api/estacao/instalacoes")
+def estacao_instalacoes(request: Request) -> dict:
+    """Tokens de instalação desta máquina (uma vez cada). Só com vínculo autorizado."""
+    disp = _dispositivo_da_requisicao(request)
+    try:
+        s = computadores.situacao(str(disp["user_id"]), disp["machine_id"])
+        if s["autorizacao"] != computadores.AUTORIZADO:
+            return {"tokens": [], **_texto_da_situacao(s)}
+        return {"tokens": computadores.entregar(disp["machine_id"]), **_texto_da_situacao(s)}
+    except computadores.SemBanco as e:
+        raise _erro_sem_banco(e)
+
+
+@app.post("/api/estacao/sair")
+def estacao_sair(request: Request) -> dict:
+    """A pessoa saiu da bandeja: a credencial desta máquina deixa de valer."""
+    disp = _dispositivo_da_requisicao(request)
+    agent_devices.revogar(str(disp["id"]))
+    return {"ok": True}
+
+
+def _nomes_das_pessoas() -> Dict[str, dict]:
+    sb = _sb_do_login()
+    linhas = sb.table("users").select("id, email, full_name, role").execute().data or []
+    return {str(l["id"]): l for l in linhas}
+
+
+@app.get("/api/computadores", dependencies=[Depends(require_admin)])
+def listar_computadores() -> dict:
+    """Usuários › Computadores: pendentes no topo, ativos, histórico."""
+    try:
+        vinculos = computadores.listar()
+        dispositivos = agent_devices.listar()
+    except (computadores.SemBanco, agent_devices.SemBanco) as e:
+        raise _erro_sem_banco(e)
+    pessoas = _nomes_das_pessoas()
+    ativos_por_par = {(str(d["user_id"]), computadores.mac(d["machine_id"])): d
+                      for d in dispositivos if not d.get("revogado_em")}
+    for v in vinculos:
+        p = pessoas.get(str(v["user_id"]), {})
+        v["email"] = p.get("email", "")
+        v["pessoa"] = nomes.nome_pessoa(p.get("full_name") or p.get("email"))
+        d = ativos_por_par.get((str(v["user_id"]), computadores.mac(v["machine_id"])))
+        v["na_bandeja"] = bool(d)
+        v["vivo"] = bool(d and d.get("vivo"))
+        v["versao"] = (d or {}).get("versao") or ""
+    resumo = {"pendentes": sum(1 for v in vinculos if v["estado"] == computadores.PENDENTE)}
+    return {"itens": vinculos, "resumo": resumo}
+
+
+class DecisaoComputadorBody(BaseModel):
+    tipo: str = Field(pattern=r"^(principal|emprestimo)$")
+    prazo: Optional[str] = Field(default=None, pattern=r"^(fim_do_dia|3_dias|7_dias)$")
+
+
+def _id_do_vinculo(vinculo_id: str) -> Any:
+    v = (vinculo_id or "").strip()
+    if not v or len(v) > 64:
+        raise HTTPException(status_code=404, detail="Vínculo não encontrado.")
+    return int(v) if v.isdigit() else v
+
+
+def _decidir(fn, *args) -> dict:
+    try:
+        return fn(*args)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except computadores.VinculoInvalido as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except computadores.SemBanco as e:
+        raise _erro_sem_banco(e)
+
+
+@app.post("/api/computadores/{vinculo_id}/autorizar", dependencies=[Depends(require_admin)])
+def autorizar_computador(vinculo_id: str, body: DecisaoComputadorBody,
+                         token: auth.TokenData = Depends(require_auth)) -> dict:
+    return _decidir(computadores.autorizar, _id_do_vinculo(vinculo_id), body.tipo, (token.email or "").lower(), body.prazo)
+
+
+@app.post("/api/computadores/{vinculo_id}/recusar", dependencies=[Depends(require_admin)])
+def recusar_computador(vinculo_id: str, token: auth.TokenData = Depends(require_auth)) -> dict:
+    return _decidir(computadores.recusar, _id_do_vinculo(vinculo_id), (token.email or "").lower())
+
+
+@app.post("/api/computadores/{vinculo_id}/desvincular", dependencies=[Depends(require_admin)])
+def desvincular_computador(vinculo_id: str, token: auth.TokenData = Depends(require_auth)) -> dict:
+    return _decidir(computadores.desvincular, _id_do_vinculo(vinculo_id), (token.email or "").lower())
+
+
+@app.get("/api/computadores/principais")
+def computadores_principais(request: Request) -> dict:
+    """Para o Hardlyze (ponte servidor a servidor): máquina → dono principal."""
+    esperado = (config.CERT_PORTAL_TOKEN or "").strip()
+    recebido = (request.headers.get("authorization") or "").removeprefix("Bearer ").strip()
+    if not esperado or not hmac.compare_digest(recebido.encode("utf-8"), esperado.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Não autorizado.")
+    try:
+        pessoas = _nomes_das_pessoas()
+        saida = []
+        for pr in computadores.principais():
+            p = pessoas.get(pr["user_id"], {})
+            saida.append({"machine_id": pr["machine_id"], "email": p.get("email", ""),
+                          "nome": nomes.nome_pessoa(p.get("full_name") or p.get("email")), "desde": pr.get("desde")})
+    except computadores.SemBanco as e:
+        raise _erro_sem_banco(e)
+    return {"principais": saida}
+
+
+def _computador_autorizado_da_pessoa(user_id: str) -> Optional[dict]:
+    """A máquina ativa e autorizada da pessoa neste portal (None se não há ou sem tabela)."""
+    try:
+        c = computadores.computador_da_pessoa(user_id)
+    except Exception:  # noqa: BLE001 — migration pendente: cai no caminho do Hardlyze
+        logger.warning("Vínculos de computador indisponíveis; usando o Hardlyze", exc_info=True)
+        return None
+    return c
+
+
 @app.get("/api/cert-installer/minha-estacao")
 def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
     """
@@ -7369,8 +7543,20 @@ def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
     Início — ela apenas faz o botão não aparecer, com o motivo na linha de
     status. Degradar é diferente de quebrar.
     """
+    uid = _user_id_da_sessao(token)
+    c = _computador_autorizado_da_pessoa(uid) if uid else None
+    if c:
+        if c["autorizacao"] != computadores.AUTORIZADO:
+            return {"disponivel": False, "motivo": "aguardando_autorizacao" if c["autorizacao"] == computadores.PENDENTE
+                    else "nao_vinculado", "dispositivos": [], "computador": c}
+        if not c.get("vivo"):
+            return {"disponivel": False, "motivo": "bandeja_parada", "dispositivos": [], "computador": c}
+        return {"disponivel": True, "motivo": "", "canal": "portal", "computador": c,
+                "dispositivos": [{"machine_id": c["machine_id"], "nome": c["nome"], "canal": "portal"}]}
+
+    # Transição (ADR 0002): quem ainda não tem a bandeja nova segue pelo Hardlyze.
     if not config.ponte_invent_configurada():
-        return {"disponivel": False, "motivo": "nao_configurado", "dispositivos": []}
+        return {"disponivel": False, "motivo": "sem_computador", "dispositivos": []}
 
     email = (token.email or "").strip().lower()
     if not email:
@@ -7445,20 +7631,38 @@ def preparar_instalacao(
     if not machine_id:
         raise HTTPException(status_code=400, detail="Máquina de destino não informada.")
 
-    if not config.ponte_invent_configurada():
-        # 503 e não 404: a rota existe, o que falta é a ligação entre os dois
-        # portais. Quem estiver implantando precisa saber a diferença.
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Instalação pelo agente não está ligada neste portal "
-                "(INVENT_API_URL / CERT_PORTAL_TOKEN)."
-            ),
-        )
-
     user_id = _user_id_da_sessao(token)
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # ADR 0002: a máquina tem a bandeja nova, com vínculo autorizado? Então a
+    # entrega é pela fila deste portal, e o servidor confere de quem é.
+    canal = "hardlyze"
+    try:
+        disp_alvo = computadores.dispositivo_da_maquina(machine_id)
+        if disp_alvo and computadores.situacao(str(disp_alvo["user_id"]), machine_id)["autorizacao"] == computadores.AUTORIZADO:
+            canal = "portal"
+            if (token.role or "").strip().lower() != "admin" and str(disp_alvo["user_id"]) != str(user_id):
+                raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
+    except computadores.SemBanco:
+        pass
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001 — migration pendente: segue pelo Hardlyze
+        logger.warning("Vínculos de computador indisponíveis no prepare", exc_info=True)
+
+    if canal == "hardlyze":
+        if not config.ponte_invent_configurada():
+            raise HTTPException(
+                status_code=409,
+                detail="Este computador não está vinculado. Entre na bandeja com sua conta deste portal e aguarde a autorização.",
+            )
+        # Transição: o Hardlyze diz se a máquina é da pessoa (antes não conferia).
+        if (token.role or "").strip().lower() != "admin":
+            dispositivos = _dispositivos_da_pessoa((token.email or "").strip().lower())
+            if dispositivos is not None and computadores.mac(machine_id) not in {
+                    computadores.mac(d.get("machine_id")) for d in dispositivos}:
+                raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
 
     _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
 
@@ -7485,7 +7689,10 @@ def preparar_instalacao(
     # antes deixaria a trilha afirmando um pedido que talvez nunca tenha saído
     # daqui — e a trilha existe justamente para ser confiável.
     try:
-        _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname, expires_at)
+        if canal == "portal":
+            computadores.enfileirar(machine_id, token_raw, token_id, expires_at)
+        else:
+            _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname, expires_at)
     except PonteRecusou as e:
         # Motivo curado pelo outro portal: "Erro interno" mandaria alguém ao
         # log por algo que se resolve na tela (token da ponte, máquina).
@@ -7514,6 +7721,7 @@ def preparar_instalacao(
 
     return {
         "status": "ok",
+        "canal": canal,
         "machine_id": machine_id,
         # O ID do REGISTRO, nunca o token em si: e por ele que a tela acompanha
         # o desfecho. O token e a entrega da chave privada e nao volta para o
@@ -7870,7 +8078,21 @@ def claim_install(body: RedeemRequest, request: Request):
     alvo = cert_installer.alvo_do_token(body.token)
     if not alvo:
         raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
-    _exigir_maquina_alvo_no_claim(request, alvo.get("target_machine"))
+    if (request.headers.get("x-device-secret") or "").strip():
+        # Bandeja nova (ADR 0002): o dispositivo tem de ser DA máquina-alvo e
+        # estar autorizado. Resposta única para não virar oráculo.
+        disp = _dispositivo_da_requisicao(request)
+        mesma = computadores.mac(disp["machine_id"]) == computadores.mac(alvo.get("target_machine"))
+        try:
+            autorizado = computadores.situacao(str(disp["user_id"]), disp["machine_id"])["autorizacao"] == computadores.AUTORIZADO
+        except computadores.SemBanco:
+            autorizado = False
+        if not (mesma and autorizado):
+            logger.warning("Resgate recusado: dispositivo de %r sem vínculo autorizado com o alvo %r.",
+                           disp.get("machine_id"), alvo.get("target_machine"))
+            raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
+    else:
+        _exigir_maquina_alvo_no_claim(request, alvo.get("target_machine"))
 
     token_data = cert_installer.validate_and_consume_token(body.token)
     if not token_data:

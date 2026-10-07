@@ -64,7 +64,7 @@ Um Documento retirado da Carteira de um Gestor pelo Administrador. Só o Adminis
 _Avoid_: restrição, bloqueio, acesso restrito
 
 **Estação** (`machine_id` da pessoa):
-A máquina em que a pessoa está com o Hardlyze Agent vivo, onde o Certificado é instalado. Cada pessoa tem uma Estação: a atual. Se trocar de máquina, a nova passa a ser a padrão. Não confundir com o servidor da varredura, dono do Inventário e do Cofre.
+A máquina em que a pessoa entrou na bandeja do agente **com a conta deste portal**, onde o Certificado é instalado (ADR 0002). Só instala se o Vínculo estiver autorizado pelo Administrador: **Principal** (a máquina de trabalho, uma por pessoa; é o que o Hardlyze mostra como responsável) ou **Empréstimo** (outra máquina, com prazo). Um acesso por vez: entrar noutra máquina tira a anterior. Não confundir com o servidor da varredura, dono do Inventário e do Cofre.
 _Avoid_: máquina, computador, dispositivo (quando se refere ao destino da instalação)
 
 **Alcance**:

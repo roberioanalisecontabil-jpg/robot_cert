@@ -147,15 +147,16 @@ def test_falha_de_rede_na_ponte_nao_vaza_o_texto(client: TestClient, cenario) ->
 
 # ── 3. Configuração e entrada ────────────────────────────────────────────
 
-def test_ponte_desligada_e_503(client: TestClient, cenario) -> None:
+def test_ponte_desligada_sem_vinculo_e_409(client: TestClient, cenario) -> None:
     """
-    503 e não 404: a rota existe, o que falta é a ligação entre os portais.
-    É também o estado em que este commit entra em produção.
+    ADR 0002 (07/10/2026): sem a ponte com o Hardlyze, o caminho é a bandeja
+    deste portal. Máquina sem vínculo autorizado não é falta de configuração
+    (o 503 de antes), é "este computador não está vinculado" — com o que fazer.
     """
     cenario["monkeypatch"].setattr("app.config.INVENT_API_URL", "", raising=False)
     r = _pedir(client)
-    assert r.status_code == 503
-    assert "INVENT_API_URL" in r.json()["detail"]
+    assert r.status_code == 409
+    assert "não está vinculado" in r.json()["detail"]
 
 
 def test_sem_maquina_e_400(client: TestClient, cenario) -> None:
@@ -181,7 +182,8 @@ def test_a_configuracao_e_conferida_antes_de_emitir_token(
     )
     cenario["monkeypatch"].setattr("app.config.CERT_PORTAL_TOKEN", "", raising=False)
 
-    assert _pedir(client).status_code == 503
+    # ADR 0002: sem ponte e sem vínculo deste portal, 409 "não está vinculado".
+    assert _pedir(client).status_code == 409
     assert emitidos == [], "emitiu token mesmo sem ter para quem mandar"
 
 
@@ -192,11 +194,11 @@ def _minha_estacao(client: TestClient):
 
 
 def test_sem_ponte_configurada_o_botao_nao_aparece(client: TestClient) -> None:
-    """Estado em que este commit entra em produção: nada muda no Início."""
+    """Sem ponte e sem bandeja deste portal (ADR 0002): a pessoa não tem computador."""
     r = _minha_estacao(client)
     assert r.status_code == 200
     assert r.json()["disponivel"] is False
-    assert r.json()["motivo"] == "nao_configurado"
+    assert r.json()["motivo"] == "sem_computador"
 
 
 def test_portal_de_inventario_fora_do_ar_nao_derruba_o_inicio(
