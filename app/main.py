@@ -2418,6 +2418,7 @@ def listar_departamentos() -> List[dict]:
         lideres[str(l.get("departamento_id"))].append({
             "id": str(u["id"]),
             "nome": u.get("full_name") or u.get("email"),
+            "nome_exibicao": nomes.nome_pessoa(u.get("full_name") or u.get("email")),
             "ativo": bool(conta_ativa(u)),
         })
 

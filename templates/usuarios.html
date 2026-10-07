@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-09a" />
+  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-10c" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -104,22 +104,26 @@
       </div>
     </section>
 
-    <!-- ── Departamentos (item 87: aguarda print) ───────────────────── -->
+    <!-- ── Departamentos (Leva C, 06/10/2026) ─────────────────────────
+         Tabela da família de listas; no celular cada departamento vira um
+         cartão com as ações à direita do nome. -->
     <section class="ag-card cg-usu-aba" id="painel-departamentos" role="tabpanel" aria-labelledby="aba-departamentos" {% if aba != 'departamentos' %}hidden{% endif %}>
       <div class="cg-usu-cab">
         <h2 class="ag-card__title">Departamentos</h2>
         <p class="cg-usu-cab__lead">Quem lidera um departamento é seu gestor: vê todos os certificados e libera clientes para os operadores do departamento. Designar alguém aqui o torna gestor; tirá-lo de todos os departamentos o devolve a operador.</p>
       </div>
       <div class="cg-usu-corpo">
-        <p><button type="button" class="ag-btn ag-btn--outline" id="btn-novo-departamento"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Novo departamento</button></p>
+        <div class="cg-usu-cabecalho-menu">
+          <button type="button" class="ag-btn ag-btn--outline" id="btn-novo-departamento"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Novo departamento</button>
+        </div>
         <div class="ag-table-scroll" role="region" aria-label="Departamentos" id="table-container-deps">
-          <table class="ag-table" role="table">
+          <table class="ag-table cg-tabela-dep" role="table">
             <thead role="rowgroup">
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico">Departamento</th>
                 <th role="columnheader" class="ag-th--estatico">Gestores</th>
-                <th role="columnheader" class="ag-th--estatico">Pessoas</th>
-                <th role="columnheader" class="ag-th--estatico"><span class="cg-sr-only">Ações</span></th>
+                <th role="columnheader" class="ag-th--estatico cg-col-num">Pessoas</th>
+                <th role="columnheader" class="ag-th--estatico cg-col-acoes"><span class="cg-sr-only">Ações</span></th>
               </tr>
             </thead>
             <tbody role="rowgroup" id="dep-list-body"></tbody>
@@ -128,7 +132,10 @@
       </div>
     </section>
 
-    <!-- ── Níveis de acesso (item 87: aguarda print) ────────────────── -->
+    <!-- ── Níveis de acesso (Leva C, 06/10/2026) ──────────────────────
+         Cada módulo com o nome, o que ele cobre e, quando há, por que o
+         nível está travado. No celular a linha vira cartão com os dois
+         seletores lado a lado. -->
     <section class="ag-card cg-usu-aba" id="painel-permissoes" role="tabpanel" aria-labelledby="aba-permissoes" {% if aba != 'permissoes' %}hidden{% endif %}>
       <div class="cg-usu-cab">
         <h2 class="ag-card__title">Níveis de acesso</h2>
@@ -141,7 +148,7 @@
         </div>
         <div id="permMsg"></div>
         <div class="ag-table-scroll" role="region" aria-label="Matriz de níveis de acesso" id="table-container-permissoes">
-          <table class="ag-table perm-tabela" role="table">
+          <table class="ag-table perm-tabela cg-tabela-perm" role="table">
             <thead role="rowgroup">
               <tr role="row">
                 <th role="columnheader" class="ag-th--estatico">Módulo</th>
@@ -527,7 +534,7 @@
             } catch (e) {
                 permMsg('Não foi possível carregar os níveis de acesso: ' + e.message, 'error');
                 document.getElementById('perm-corpo').innerHTML =
-                    '<tr><td colspan="3" class="text-muted" style="font-size: var(--fs-ui-sm)">—</td></tr>';
+                    '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">—</td></tr>';
             }
         }
 
@@ -546,7 +553,7 @@
                         return '<option value="' + n + '"' + (n === atual ? ' selected' : '') +
                                '>' + (PERM_NIVEIS[n] || n) + '</option>';
                     }).join('');
-                    return '<td><select class="form-control" data-papel="' + papel +
+                    return '<td role="cell" class="cg-col-nivel" data-papel-rotulo="' + (papel === 'user' ? 'Operador' : 'Gestor') + '"><select class="ag-select" data-papel="' + papel +
                            '" data-modulo="' + mod + '"' +
                            ((info.governado && !info.so_admin) ? '' : ' disabled') +
                            ' aria-label="' + esc(par[0]) + ' para ' + papel + '">' +
@@ -555,18 +562,20 @@
                 // Modulo ainda nao ligado: o controle fica desabilitado e diz
                 // por que. Deixa-lo ativo seria oferecer um botao que nao faz
                 // nada — o defeito que esta tela existe para nao repetir.
+                const trava = '<svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
                 const aviso = info.so_admin
-                    ? '<small class="perm-nota">só o administrador: aqui se nomeiam gestores e administradores</small>'
+                    ? '<span class="cg-perm-nota">' + trava + 'Só o administrador: aqui se nomeiam gestores e administradores.</span>'
                     : (info.governado ? '' :
                         // Só o Início está aqui: é a tela de instalação, e
                         // todo papel entra nela (decisão N3, 01/10/2026).
-                        '<small class="perm-pendente">todos os papéis entram: é a tela de instalação</small>');
+                        '<span class="cg-perm-nota">' + trava + 'Todos os papéis entram: é a tela de instalação.</span>');
                 const soLeitura = (info.governado && info.niveis.length < 3) ?
-                    '<small class="perm-nota">' +
-                    esc(par[2] || 'só consulta — não há o que editar') + '</small>' : '';
-                return '<tr role="row"><td class="perm-modulo">' + esc(par[0]) +
-                       '<small>' + esc(par[1]) + '</small>' + soLeitura + aviso +
-                       '</td>' + celulas + '</tr>';
+                    '<span class="cg-perm-nota">' +
+                    esc(par[2] || 'Só consulta: não há o que editar.') + '</span>' : '';
+                return '<tr role="row"><td role="cell" class="cg-col-modulo"><span class="ag-cell-stack">' +
+                       '<span class="ag-cell-main">' + esc(par[0]) + '</span>' +
+                       '<span class="ag-cell-sub">' + esc(par[1]) + '</span>' + soLeitura + aviso +
+                       '</span></td>' + celulas + '</tr>';
             }).join('');
 
             corpo.querySelectorAll('select').forEach(function (sel) {
@@ -590,7 +599,7 @@
             });
             document.getElementById('perm-salvar').disabled = sujas === 0;
             document.getElementById('perm-desfazer').disabled = sujas === 0;
-            permMsg(sujas ? (sujas + ' alteração(ões) ainda não salva(s).') : '');
+            permMsg(sujas ? (sujas === 1 ? '1 alteração ainda não salva.' : sujas + ' alterações ainda não salvas.') : '');
             return sujas;
         }
 
@@ -695,7 +704,7 @@
             body.innerHTML = '';
             if (!depsCache.length) {
                 renderEmptyRow(body, 4, {
-                    icon: '🏢',
+                    icon: '',
                     title: 'Nenhum departamento cadastrado',
                     description: 'Crie o primeiro departamento para definir quem libera certificados para quem.',
                 });
@@ -703,19 +712,20 @@
             }
             body.innerHTML = depsCache.map((d) => {
                 const lideres = (d.lideres || []).length
-                    ? d.lideres.map((l) => esc(l.nome)).join(', ')
+                    ? d.lideres.map((l) => esc(l.nome_exibicao || l.nome)).join(', ')
                     // Departamento sem gestor não é detalhe: ninguém pode liberar nada
                     // para quem está nele, e isso precisa saltar aos olhos.
                     : badgeAviso('sem gestor');
+                const pessoas = d.membros === 1 ? '1 pessoa' : `${d.membros} pessoas`;
                 return `
                 <tr role="row">
-                  <td role="cell" data-label="Departamento"><strong>${esc(d.nome)}</strong></td>
-                  <td role="cell" data-label="Gestores">${lideres}</td>
-                  <td role="cell" data-label="Pessoas">${d.membros}${d.inativos ? ` <small class="text-muted">+ ${d.inativos} inativa${d.inativos === 1 ? '' : 's'}</small>` : ''}</td>
-                  <td role="cell">
-                    <div class="row-actions">
-                      <button class="btn-action" data-dep-acao="editar" data-id="${d.id}">Editar</button>
-                      <button class="btn-action btn-danger" data-dep-acao="apagar" data-id="${d.id}">Apagar</button>
+                  <td role="cell" class="cg-col-nome"><span class="ag-cell-main">${esc(d.nome)}</span></td>
+                  <td role="cell" class="cg-col-gestores"><span class="cg-dep-rotulo">Gestores: </span>${lideres}</td>
+                  <td role="cell" class="cg-col-num"><span class="cg-dep-num">${d.membros}</span><span class="cg-dep-pessoas">${pessoas}</span>${d.inativos ? `<span class="ag-cell-sub">+ ${d.inativos} inativa${d.inativos === 1 ? '' : 's'}</span>` : ''}</td>
+                  <td role="cell" class="cg-col-acoes">
+                    <div class="cg-dep-acoes">
+                      <button type="button" class="ag-btn ag-btn--outline ag-btn--sm" data-dep-acao="editar" data-id="${d.id}" aria-label="Editar ${esc(d.nome)}">Editar</button>
+                      <button type="button" class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-dep-acao="apagar" data-id="${d.id}" aria-label="Apagar ${esc(d.nome)}">Apagar</button>
                     </div>
                   </td>
                 </tr>`;

@@ -135,3 +135,21 @@ def test_tela_de_usuarios_revisada() -> None:
     assert "avisarPapeis(" in html, "quem mudou de papel é anunciado"
     assert "só o administrador" in html, "Níveis de acesso explica por que Usuários está travado"
     assert "ignoradas" in html, "linhas ignoradas entram na lista"
+
+
+# ── Leva C (06/10/2026): Departamentos e Níveis de acesso no Águia ─────────
+
+def test_gestores_do_departamento_vem_com_nome_de_exibicao(client: TestClient, banco: _Fake) -> None:
+    deps = client.get("/api/departamentos", headers=_h(*ADMIN)).json()
+    lideres = [l for d in deps for l in d["lideres"]]
+    assert lideres, "a base de teste tem departamento com gestor"
+    for l in lideres:
+        assert l["nome_exibicao"] == (l["nome"] or "").strip().upper()
+
+
+def test_abas_departamentos_e_niveis_sem_classes_legadas() -> None:
+    html = (RAIZ / "templates" / "usuarios.html").read_text(encoding="utf-8")
+    assert "item 87" not in html
+    assert "btn-action" not in html and "row-actions" not in html and "form-control" not in html
+    assert "cg-tabela-dep" in html and "cg-tabela-perm" in html and "cg-perm-nota" in html
+    assert "'🏢'" not in html

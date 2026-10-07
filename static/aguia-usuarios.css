@@ -1,8 +1,8 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Usuários no Águia DS (24/09/2026) — só desta tela (prefixo .cg-usu-)
 
-   Cobre a aba Usuários; Departamentos e Níveis de acesso continuam com os
-   componentes do DS sem redesenho (item 87, aguardam print).
+   Cobre as três abas: Usuários, Departamentos e Níveis de acesso (estas
+   duas na Leva C, 06/10/2026).
    ══════════════════════════════════════════════════════════════════════════ */
 
 .cg-usu-aba[hidden] { display: none; }
@@ -85,3 +85,124 @@
 /* Máscara visual do nome (30/09/2026): o servidor grava em maiúsculas; o
    campo já mostra assim enquanto a pessoa digita, para não haver surpresa. */
 .cg-usu-maiusculas { text-transform: uppercase; }
+
+/* ── Departamentos (Leva C, 06/10/2026) ──────────────────────────────── */
+.cg-tabela-dep .ag-table-scroll { overflow: visible; }
+.cg-tabela-dep .cg-col-nome .ag-cell-main { font-weight: 600; }
+.cg-tabela-dep .cg-col-gestores { color: var(--text-secondary); }
+.cg-tabela-dep .cg-col-num { width: 1%; white-space: nowrap; }
+.cg-tabela-dep .cg-col-num .ag-cell-sub { display: block; }
+.cg-dep-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cg-dep-rotulo, .cg-dep-pessoas { display: none; }
+.cg-tabela-dep .cg-col-acoes { width: 1%; white-space: nowrap; text-align: right; }
+.cg-dep-acoes { display: inline-flex; gap: var(--space-2); }
+
+/* ── Níveis de acesso (Leva C, 06/10/2026) ───────────────────────────── */
+.cg-tabela-perm .cg-col-modulo { min-width: 0; }
+.cg-tabela-perm .cg-col-modulo .ag-cell-sub { display: block; }
+.cg-perm-nota {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+.cg-perm-nota .ag-icon { flex: none; width: 12px; height: 12px; margin-top: 2px; }
+.cg-tabela-perm .cg-col-nivel { width: 1%; white-space: nowrap; }
+.cg-tabela-perm .ag-select { min-width: 9.5rem; }
+/* Alteração ainda não salva: contorno e fundo de marca no seletor. */
+.cg-tabela-perm .ag-select[data-sujo] { border-color: var(--text-brand); box-shadow: inset 3px 0 0 var(--text-brand); font-weight: 600; }
+#permMsg:empty { display: none; }
+
+/* Histórico de alterações dos níveis. */
+.perm-trilha { border-top: var(--bw-1) solid var(--border-subtle); border-bottom: var(--bw-1) solid var(--border-subtle); }
+.perm-trilha > .ag-accordion__topo { padding: var(--space-3) 0; font-weight: 600; font-size: var(--text-sm); }
+.perm-trilha__corpo { padding: 0 0 var(--space-4); }
+.perm-trilha__corpo .hint { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.perm-trilha__lista { list-style: none; margin: 0; padding: 0; }
+.perm-trilha__lista li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: var(--bw-1) solid var(--border-subtle);
+    font-size: var(--text-sm);
+}
+.perm-trilha__lista li:last-child { border-bottom: 0; }
+.perm-trilha__quando { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-xs); color: var(--text-muted); min-width: 9.5rem; }
+.perm-trilha__de { color: var(--text-muted); text-decoration: line-through; }
+.perm-trilha__para { font-weight: 600; }
+.perm-trilha__para--sobe { color: var(--text-brand); }
+.perm-trilha__quem { flex-basis: 100%; font-size: var(--text-xs); color: var(--text-muted); padding-left: calc(9.5rem + var(--space-2)); }
+
+@media (max-width: 640px) {
+    /* O alerta do administrador quebrava a largura: o corpo do flex precisa
+       poder encolher. */
+    .cg-usu-corpo .ag-alert__corpo { min-width: 0; overflow-wrap: break-word; }
+    .cg-usu-corpo .ag-table-scroll { overflow: visible; }
+
+    /* Departamentos: cartão com nome e ações em cima, gestores e pessoas
+       embaixo, cada um com o rótulo que a coluna perdeu. */
+    .cg-tabela-dep, .cg-tabela-dep tbody, .cg-tabela-dep tr, .cg-tabela-dep td { display: block; width: auto; }
+    .cg-tabela-dep thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .cg-tabela-dep tbody tr:not(.cg-state-row) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "nome acoes"
+            "gestores gestores"
+            "num num";
+        gap: var(--space-1) var(--space-3);
+        align-items: center;
+        padding: var(--space-3) 0;
+        border-bottom: var(--bw-1) solid var(--border-subtle);
+    }
+    .cg-tabela-dep tbody tr:hover { background: transparent; }
+    .cg-tabela-dep tbody tr td { padding: 0; border: 0; white-space: normal; }
+    .cg-tabela-dep .cg-col-nome { grid-area: nome; }
+    .cg-tabela-dep .cg-col-gestores { grid-area: gestores; font-size: var(--text-xs); }
+    .cg-tabela-dep .cg-col-num { grid-area: num; width: auto; font-size: var(--text-xs); color: var(--text-secondary); }
+    .cg-tabela-dep .cg-col-num .ag-cell-sub { display: inline; margin-left: var(--space-1); }
+    .cg-tabela-dep .cg-col-acoes { grid-area: acoes; width: auto; }
+    .cg-dep-rotulo { display: inline; color: var(--text-muted); }
+    .cg-dep-num { display: none; }
+    .cg-dep-pessoas { display: inline; }
+
+    /* Níveis: módulo em cima, os dois seletores lado a lado com o papel
+       escrito acima de cada um. */
+    .cg-tabela-perm, .cg-tabela-perm tbody, .cg-tabela-perm tr, .cg-tabela-perm td { display: block; width: auto; }
+    .cg-tabela-perm thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .cg-tabela-perm tbody tr:not(.cg-state-row) {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "modulo modulo"
+            "gestor operador";
+        gap: var(--space-2) var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: var(--bw-1) solid var(--border-subtle);
+    }
+    .cg-tabela-perm tbody tr:hover { background: transparent; }
+    .cg-tabela-perm tbody tr td { padding: 0; border: 0; white-space: normal; }
+    .cg-tabela-perm .cg-col-modulo { grid-area: modulo; }
+    .cg-tabela-perm .cg-col-nivel { width: auto; }
+    .cg-tabela-perm .cg-col-nivel:nth-child(2) { grid-area: gestor; }
+    .cg-tabela-perm .cg-col-nivel:nth-child(3) { grid-area: operador; }
+    .cg-tabela-perm .cg-col-nivel::before {
+        content: attr(data-papel-rotulo);
+        display: block;
+        margin-bottom: var(--space-1);
+        font-family: var(--font-display);
+        font-size: var(--text-overline);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: var(--tracking-caps);
+        color: var(--text-muted);
+    }
+    /* Duas colunas de ~150px: o padding padrão cortava "Ver e editar". */
+    .cg-tabela-perm .ag-select { min-width: 0; width: 100%; padding-left: var(--space-3); padding-right: var(--space-6); }
+    .perm-trilha__quando { min-width: 0; flex-basis: 100%; }
+    .perm-trilha__quem { padding-left: 0; }
+}
