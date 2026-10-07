@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
     <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
     <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+    <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10a" />
   </head>
   <body class="cg-aguia">
     <!--
@@ -276,6 +277,39 @@
            controle que o usuário precisa para continuar escolhendo. Só aparece
            quando há seleção. -->
     </main>
+
+    <!-- Detalhes do certificado (06/10/2026): abre ao clicar na linha fora do
+         modo de seleção. Os dados do responsável vêm de uma rota própria,
+         que só responde para quem tem o certificado no alcance. -->
+    <dialog class="ag-modal ag-modal--lg cg-det" id="modalDetalhes" aria-labelledby="det-titulo">
+      <div class="ag-modal__head">
+        <div class="cg-det__cab">
+          <h2 class="ag-modal__titulo" id="det-titulo">Certificado</h2>
+          <p class="cg-det__sub"><span id="det-doc"></span> <span id="det-status"></span></p>
+        </div>
+        <button type="button" class="ag-modal__x" data-det-fechar aria-label="Fechar">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="ag-modal__body">
+        <section aria-labelledby="det-sec-cert">
+          <h3 class="cg-det__secao" id="det-sec-cert">Certificado</h3>
+          <dl class="cg-det__lista" id="det-certificado"></dl>
+        </section>
+        <section aria-labelledby="det-sec-resp">
+          <h3 class="cg-det__secao" id="det-sec-resp">Responsável</h3>
+          <dl class="cg-det__lista" id="det-responsavel"></dl>
+          <p class="cg-det__nota" id="det-resp-nota" hidden></p>
+        </section>
+        <section aria-labelledby="det-sec-portal">
+          <h3 class="cg-det__secao" id="det-sec-portal">No portal</h3>
+          <dl class="cg-det__lista" id="det-portal"></dl>
+        </section>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-det-fechar>Fechar</button>
+      </div>
+    </dialog>
 
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=aguia-2026-10a"></script>
     <script nonce="{{ request.state.nonce }}">
@@ -827,6 +861,100 @@
         }
       }
 
+      // ── Detalhes do certificado ────────────────────────────────────────
+      let _itensTabela = [];
+      let _detPedido = 0;   // descarta resposta de um modal que já foi trocado
+
+      function fmtDataHoraDet(iso) {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+      }
+      function fmtNascimento(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+        return m ? m[3] + "/" + m[2] + "/" + m[1] : "—";
+      }
+      function fmtCpf(d) {
+        const s = String(d || "").replace(/\D/g, "");
+        return s.length === 11 ? s.slice(0, 3) + "." + s.slice(3, 6) + "." + s.slice(6, 9) + "-" + s.slice(9) : (d || "—");
+      }
+      function validadeTexto(it) {
+        if (!it.not_after) return "—";
+        const dias = Math.ceil((Date.parse(it.not_after) - Date.now()) / 86400000);
+        if (dias < 0) return "Vencido há " + (-dias) + (dias === -1 ? " dia" : " dias");
+        if (dias === 0) return "Válido · vence hoje";
+        return "Válido · vence em " + dias + (dias === 1 ? " dia" : " dias");
+      }
+      function linhasDet(pares) {
+        return pares.map(([rotulo, valor, mono]) =>
+          "<div class='cg-det__item'><dt>" + esc(rotulo) + "</dt><dd" + (mono ? " class='cg-det__mono'" : "") + ">" +
+          (valor === null || valor === undefined || valor === "" ? "<span class='cg-det__vazio'>—</span>" : esc(String(valor))) +
+          "</dd></div>").join("");
+      }
+
+      function preencherDetalhes(it, completo) {
+        const nome = it.nome || it.display_name || "";
+        const tipo = it.tipo_icp || (it.documento_tipo_label ? "e-" + it.documento_tipo_label : null);
+        document.getElementById("det-titulo").textContent = nomeExibicao(nome) || "Certificado";
+        document.getElementById("det-doc").textContent = it.documento_formatado || "";
+        document.getElementById("det-status").innerHTML = badge(it);
+        document.getElementById("det-certificado").innerHTML = linhasDet([
+          ["Nome", it.documento_numero ? nome + ":" + it.documento_numero : nome],
+          ["Tipo", tipo],
+          ["Validade", validadeTexto(it)],
+          [it.documento_tipo_label || "Documento", it.documento_formatado, true],
+          ["Cadeia", it.organizacao],
+          ["Emissão", fmtDataHoraDet(it.not_before), true],
+          ["Vencimento", fmtDataHoraDet(it.not_after), true],
+          ["Emissor", it.emissor],
+          ["Número de série", it.serial_number ? String(it.serial_number).toUpperCase() : null, true],
+        ]);
+        const resp = document.getElementById("det-responsavel");
+        const nota = document.getElementById("det-resp-nota");
+        if (!completo) {
+          resp.innerHTML = "<div class='cg-det__item'><dt>Carregando…</dt><dd></dd></div>";
+          nota.hidden = true;
+        } else {
+          resp.innerHTML = linhasDet([
+            ["Nome", it.responsavel_nome],
+            ["CPF", it.responsavel_cpf ? fmtCpf(it.responsavel_cpf) : null, true],
+            ["Data de nascimento", it.responsavel_nascimento ? fmtNascimento(it.responsavel_nascimento) : null, true],
+            ["E-mail", it.email],
+          ]);
+          // Chave ausente = o agente ainda não lê estes campos (anterior à
+          // 1.7.0); chave presente e vazia = o certificado não traz o dado.
+          const agenteAntigo = !("responsavel_cpf" in it);
+          nota.hidden = !agenteAntigo;
+          nota.textContent = agenteAntigo ? "Estes dados aparecem depois da próxima varredura do agente 1.7.0." : "";
+        }
+        const portal = [["No cofre", it.no_cofre === true ? "Sim" : it.no_cofre === false ? "Não enviado" : (completo ? "—" : "Carregando…")]];
+        if (it.pasta || it.nome_publico) portal.push(["Arquivo", [it.pasta, it.nome_publico].filter(Boolean).join("/"), true]);
+        document.getElementById("det-portal").innerHTML = linhasDet(portal);
+      }
+
+      async function abrirDetalhes(it, origem) {
+        const modal = document.getElementById("modalDetalhes");
+        const pedido = ++_detPedido;
+        _detOrigem = origem || null;
+        preencherDetalhes(it, false);
+        if (!modal.open) modal.showModal();
+        if (!it.fingerprint_sha256) { preencherDetalhes(it, true); return; }
+        try {
+          const r = await fetch("/api/certificados/" + encodeURIComponent(it.fingerprint_sha256) + "/detalhes", { headers: getHeaders() });
+          if (pedido !== _detPedido) return;
+          if (r.status === 401) { logout(); return; }
+          if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+          preencherDetalhes({ ...it, ...(await r.json()) }, true);
+        } catch (e) {
+          if (pedido !== _detPedido) return;
+          preencherDetalhes(it, true);
+          const nota = document.getElementById("det-resp-nota");
+          nota.hidden = false;
+          nota.textContent = "Não foi possível carregar os dados do responsável: " + e.message;
+        }
+      }
+      let _detOrigem = null;
+
       function renderTabela(items) {
         // Tipo em texto apagado e número em mono, numa linha só. O rótulo em
         // azul saiu: parecia link e não levava a lugar nenhum.
@@ -860,17 +988,21 @@
         // role="row"/"cell" sustentam o layout de cartões abaixo de 640px
         // (ver aguia-listas.css): `display:block` apagaria os papéis
         // implícitos da tabela para o leitor de tela.
+        _itensTabela = items;
         tb.innerHTML = items
-          .map((it) => {
+          .map((it, idx) => {
             const nome = it.nome != null && it.nome !== "" ? it.nome : it.display_name;
             return (
-              "<tr role='row'>" +
+              "<tr role='row' data-idx='" + idx + "'>" +
               celulaSelecao(it) +
               "<td role='cell' class='cg-col-status'>" +
               badge(it) +
               "</td><td role='cell' class='cg-col-nome'>" +
               "<div class='ag-cell-stack'>" +
-              "<span class='ag-cell-main' title='" + esc(nome) + "'>" + esc(nomeExibicao(nome)) + "</span>" +
+              // O nome é o botão do modal: teclado e leitor de tela chegam
+              // nele; o clique no resto da linha faz o mesmo (ver o listener).
+              "<button type='button' class='cg-det-abrir ag-cell-main' title='" + esc(nome) + "'>" +
+              "<span class='cg-sr-only'>Ver detalhes de </span>" + esc(nomeExibicao(nome)) + "</button>" +
               // Abaixo de 1024px a coluna CNPJ/CPF sai e o documento vem para
               // debaixo do nome (o padrão de célula do próprio DS); nas telas
               // largas fica só a coluna, ordenável. O CSS mostra um ou outro.
@@ -1313,13 +1445,26 @@
         // é pequena ao lado de um cartão, e quem lê o nome clica no nome.
         document.getElementById("tbody").addEventListener("click", (ev) => {
           if (!_modoSelecao) return;
-          if (ev.target.closest("input, label, button, a")) return;
+          if (ev.target.closest("input, label, a, button:not(.cg-det-abrir)")) return;
           const tr = ev.target.closest("tr");
           const c = tr && tr.querySelector(".chk-cert");
           if (!c || c.disabled) return;
           c.checked = !c.checked;
           c.dispatchEvent(new Event("change", { bubbles: true }));
         });
+
+        // Fora do modo de seleção, a linha abre os detalhes (06/10/2026).
+        document.getElementById("tbody").addEventListener("click", (ev) => {
+          if (_modoSelecao) return;
+          if (ev.target.closest("input, label, a, button:not(.cg-det-abrir)")) return;
+          const tr = ev.target.closest("tr[data-idx]");
+          const it = tr && _itensTabela[Number(tr.dataset.idx)];
+          if (it) void abrirDetalhes(it, tr.querySelector(".cg-det-abrir"));
+        });
+        const modalDet = document.getElementById("modalDetalhes");
+        modalDet.querySelectorAll("[data-det-fechar]").forEach((b) => b.addEventListener("click", () => modalDet.close()));
+        // Foco volta para o nome de onde o modal saiu.
+        modalDet.addEventListener("close", () => { if (_detOrigem && document.contains(_detOrigem)) _detOrigem.focus(); });
 
         document.getElementById("chkSelTodos").addEventListener("change", (ev) => {
           // Alcança só os instaláveis DESTA página — marcar 489 de uma vez com

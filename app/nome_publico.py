@@ -142,6 +142,19 @@ def sanitizar_item(item: Dict[str, Any]) -> Dict[str, Any]:
     return it
 
 
+# Dados pessoais do responsável lidos do certificado (agente 1.7.0). Só a
+# rota de detalhes os devolve, e só a quem tem o certificado no alcance; o
+# inventário sai sem eles por padrão (`settings_state.get_latest_snapshot`).
+CAMPOS_PESSOAIS = ("responsavel_nome", "responsavel_cpf", "responsavel_nascimento", "email")
+
+
+def sem_dados_pessoais(item: Dict[str, Any]) -> Dict[str, Any]:
+    it = dict(item)
+    for campo in CAMPOS_PESSOAIS:
+        it.pop(campo, None)
+    return it
+
+
 def sem_pasta(item: Dict[str, Any]) -> Dict[str, Any]:
     """O item para quem não é admin: o diretório do servidor não é dele."""
     it = dict(item)

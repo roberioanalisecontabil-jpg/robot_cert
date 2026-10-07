@@ -11,8 +11,10 @@ from typing import Iterable, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509.oid import ExtensionOID, NameOID
 
 # Padrão: "nome do certificado senha valorDaSenha.pfx" (ou .p12)
 # A palavra-chave "senha" (case-insensitive) separa o nome lógico da senha.
@@ -61,6 +63,10 @@ class CertInfo:
     documento_tipo: Optional[str] = None  # "cnpj" | "cpf" | None
     error_message: Optional[str] = None
     password_from_name: Optional[str] = field(default=None, repr=False)
+    # Campos ICP-Brasil (06/10/2026, modal de detalhes): ver `campos_icp`.
+    # Dados pessoais do responsável — o portal só os mostra a quem pode
+    # instalar o certificado; a lista do Início não os devolve.
+    icp: dict = field(default_factory=dict)
 
 
 def _now_utc() -> datetime:
@@ -121,14 +127,115 @@ def parse_pfx_filename(file_name: str) -> Optional[tuple[str, str]]:
     return logical_name, password
 
 
-def _load_pfx_info(file_path: Path, password: str) -> Tuple[datetime, datetime, str, str, str, str]:
-    data = file_path.read_bytes()
+def _abrir_pfx(file_path: Path, password: str) -> x509.Certificate:
     _key, cert, _more = pkcs12.load_key_and_certificates(
-        data,
+        file_path.read_bytes(),
         password.encode("utf-8"),
     )
     if cert is None:
         raise ValueError("PKCS#12 sem certificado (apenas chave).")
+    return cert
+
+
+# ── Campos ICP-Brasil (DOC-ICP-04) ────────────────────────────────────────
+#
+# No SubjectAltName, como otherName:
+#   2.16.76.1.3.1  e-CPF: nascimento DDMMAAAA + CPF + NIS + RG + órgão/UF
+#   2.16.76.1.3.2  e-CNPJ: nome do responsável
+#   2.16.76.1.3.4  e-CNPJ: dados do responsável, mesmo leiaute do 3.1
+# Campo não informado vem preenchido com zeros.
+OID_PF_DADOS = "2.16.76.1.3.1"
+OID_PJ_RESPONSAVEL_NOME = "2.16.76.1.3.2"
+OID_PJ_RESPONSAVEL_DADOS = "2.16.76.1.3.4"
+
+
+def _texto_do_der(valor: bytes) -> Optional[str]:
+    """Conteúdo de um TLV DER de string (OCTET, Printable, UTF8, IA5...)."""
+    try:
+        if len(valor) < 2:
+            return None
+        n = valor[1]
+        ini = 2
+        if n & 0x80:
+            k = n & 0x7F
+            if k == 0 or k > 4 or len(valor) < 2 + k:
+                return None
+            n = int.from_bytes(valor[2:2 + k], "big")
+            ini = 2 + k
+        bruto = valor[ini:ini + n]
+        if len(bruto) != n:
+            return None
+        try:
+            return bruto.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            return bruto.decode("latin-1").strip()
+    except Exception:  # noqa: BLE001 — campo torto não derruba a leitura
+        return None
+
+
+def _so_digitos(t: Optional[str]) -> str:
+    return "".join(c for c in (t or "") if c.isdigit())
+
+
+def _dados_pf(texto: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """(nascimento ISO, CPF) do bloco "DDMMAAAA + CPF + ..."; zeros → None."""
+    t = (texto or "").strip()
+    nasc, cpf = t[:8], t[8:19]
+    data_iso = None
+    if len(nasc) == 8 and nasc.isdigit() and nasc != "0" * 8:
+        try:
+            data_iso = datetime.strptime(nasc, "%d%m%Y").date().isoformat()
+        except ValueError:
+            data_iso = None
+    cpf_ok = cpf if (len(cpf) == 11 and cpf.isdigit() and cpf != "0" * 11) else None
+    return data_iso, cpf_ok
+
+
+def _primeiro_atributo(nome: Optional[x509.Name], oid) -> Optional[str]:
+    if nome is None:
+        return None
+    attrs = nome.get_attributes_for_oid(oid)
+    return str(attrs[0].value).strip() if attrs else None
+
+
+def campos_icp(cert: x509.Certificate) -> dict:
+    """Campos do modal de detalhes, lidos do certificado. Ausente = None."""
+    cn = _primeiro_atributo(cert.subject, NameOID.COMMON_NAME)
+    titular, _doc, tipo = parse_nome_cnpj_cpf_from_cn(cn)
+    outros: dict = {}
+    emails: List[str] = []
+    try:
+        san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
+        for o in san.get_values_for_type(x509.OtherName):
+            outros.setdefault(o.type_id.dotted_string, _texto_do_der(o.value))
+        emails = [e.strip() for e in san.get_values_for_type(x509.RFC822Name) if e and e.strip()]
+    except x509.ExtensionNotFound:
+        pass
+    except Exception:  # noqa: BLE001 — SAN torto: segue com o que o sujeito dá
+        logger.warning("SubjectAltName ilegível em %s", cn)
+
+    if tipo == "cpf":
+        nasc, cpf = _dados_pf(outros.get(OID_PF_DADOS))
+        resp_nome = titular
+    else:
+        nasc, cpf = _dados_pf(outros.get(OID_PJ_RESPONSAVEL_DADOS))
+        resp_nome = (outros.get(OID_PJ_RESPONSAVEL_NOME) or "").strip() or None
+    return {
+        "tipo_icp": "e-CPF" if tipo == "cpf" else "e-CNPJ" if tipo == "cnpj" else None,
+        "organizacao": _primeiro_atributo(cert.subject, NameOID.ORGANIZATION_NAME),
+        "emissor": _primeiro_atributo(cert.issuer, NameOID.COMMON_NAME),
+        "responsavel_nome": resp_nome,
+        "responsavel_cpf": cpf,
+        "responsavel_nascimento": nasc,
+        "email": emails[0] if emails else None,
+    }
+
+
+def _load_pfx_info(file_path: Path, password: str) -> Tuple[datetime, datetime, str, str, str, str]:
+    return _info_do_certificado(_abrir_pfx(file_path, password))
+
+
+def _info_do_certificado(cert: x509.Certificate) -> Tuple[datetime, datetime, str, str, str, str]:
     subj = cert.subject.rfc4514_string() if cert.subject else None
     iss = cert.issuer.rfc4514_string() if cert.issuer else ""
     nb = cert.not_valid_before_utc
@@ -236,7 +343,9 @@ def scan_folder(
         )
 
         try:
-            not_before, not_after, subj, iss, fp_hex, ser_hex = _load_pfx_info(p, pwd)
+            cert = _abrir_pfx(p, pwd)
+            not_before, not_after, subj, iss, fp_hex, ser_hex = _info_do_certificado(cert)
+            info.icp = campos_icp(cert)
             info.not_before = not_before
             info.not_after = not_after
             info.subject = subj
@@ -344,4 +453,13 @@ def cert_to_public_dict(c: CertInfo) -> dict:
         "serial_number": c.serial_number_hex,
         "fingerprint_sha256": c.fingerprint_sha256,
         "error_message": c.error_message,
+        # Campos ICP-Brasil (agente 1.7.0). Os quatro do responsável são dado
+        # pessoal: `app.main.CAMPOS_PESSOAIS` os tira da lista do Início.
+        "tipo_icp": c.icp.get("tipo_icp"),
+        "organizacao": c.icp.get("organizacao"),
+        "emissor": c.icp.get("emissor"),
+        "responsavel_nome": c.icp.get("responsavel_nome"),
+        "responsavel_cpf": c.icp.get("responsavel_cpf"),
+        "responsavel_nascimento": c.icp.get("responsavel_nascimento"),
+        "email": c.icp.get("email"),
     }

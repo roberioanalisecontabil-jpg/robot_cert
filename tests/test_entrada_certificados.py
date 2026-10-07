@@ -263,7 +263,7 @@ def test_agente_processa_a_entrada_antes_da_varredura_e_fora_dela() -> None:
     assert "/api/agent/entrada" in fonte and "observer_entrada" in fonte
     import agent
     from app import config
-    assert agent.__version__ == "1.6.1" == config.VERSAO_AGENTE_ESPERADA
+    assert agent.__version__ == "1.7.0" == config.VERSAO_AGENTE_ESPERADA
     exemplo = (RAIZ / "agent" / "agent_config.example.json").read_text(encoding="utf-8")
     assert "pasta_entrada" in exemplo
 
@@ -632,7 +632,7 @@ def test_instalador_solta_arquivos_presos_e_tira_o_event_log_de_internal() -> No
     _internal\\win32\\servicemanager.pyd). Apagar → renomear → reinício, e a
     origem de eventos passa a uma cópia estável."""
     iss = (RAIZ / "agent_setup.iss").read_text(encoding="utf-8", errors="replace")
-    assert "AppVersion=1.6.1" in iss
+    assert "AppVersion=1.7.0" in iss
     assert "procedure LiberarArquivosPresos" in iss and "RenameFile(Caminho, Caminho + '.old-'" in iss
     assert "LiberarArquivosPresos(ExpandConstant('{app}\\_internal'))" in iss
     assert iss.count("restartreplace") >= 2 and "uninsrestartdelete" in iss

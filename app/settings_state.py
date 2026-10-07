@@ -654,11 +654,23 @@ def upsert_cert_history(
     return novos
 
 
-def get_latest_snapshot() -> Optional[dict]:
-
+def get_latest_snapshot(com_dados_pessoais: bool = False) -> Optional[dict]:
     """
     Retorna o snapshot mais recente, qualquer machine_id, ou None.
+
+    Sem os dados pessoais do responsável por padrão (06/10/2026): toda tela
+    que lista o inventário passa por aqui, e só a rota de detalhes do
+    certificado pede `com_dados_pessoais=True`, depois de conferir o alcance.
     """
+    snap = _ultimo_snapshot_bruto()
+    if snap is None or com_dados_pessoais:
+        return snap
+    from app.nome_publico import sem_dados_pessoais
+
+    return {**snap, "items": [sem_dados_pessoais(it) for it in (snap.get("items") or [])]}
+
+
+def _ultimo_snapshot_bruto() -> Optional[dict]:
     client = _banco()
     if client:
         r = (

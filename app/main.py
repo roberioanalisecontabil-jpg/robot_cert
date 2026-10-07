@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile, BackgroundTasks
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -4658,6 +4659,64 @@ def _selecao_no_alcance(token: auth.TokenData, docs: List[str]) -> List[str]:
     if alcance is None:
         return list(docs)
     return [d for d in docs if d in alcance]
+
+
+@app.get("/api/certificados/{fingerprint}/detalhes", dependencies=[Depends(require_auth)])
+def detalhes_do_certificado(
+    fingerprint: str = PathParam(..., min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$"),
+    token: auth.TokenData = Depends(require_auth),
+) -> dict:
+    """Modal do Início: o item do inventário com os dados do responsável.
+
+    Mesmo alcance da lista e da instalação ("ver e instalar são um direito
+    só"): fora dele o certificado não existe para quem pergunta (404), e é
+    isso que guarda os dados pessoais (decisão Q7 de 06/10/2026). A pasta e o
+    nome do arquivo seguem só para o administrador, como na lista.
+    """
+    fp = fingerprint.lower()
+    snap = get_latest_snapshot(com_dados_pessoais=True) or {}
+    item = next((it for it in (snap.get("items") or []) if (it.get("fingerprint_sha256") or "").lower() == fp), None)
+    if item is None or not _recortar_pela_carteira([item], _documentos_ao_alcance(token)):
+        raise HTTPException(status_code=404, detail="Certificado não encontrado.")
+    saida = dict(item)
+    if (token.role or "").strip().lower() != "admin":
+        saida = nome_publico.sem_pasta(saida)
+        saida.pop("nome_publico", None)
+    saida["nome_exibicao"] = nomes.nome_exibicao(item.get("nome") or item.get("display_name"))
+    saida["no_cofre"] = _no_cofre(fp)
+    # Inventário de agente anterior à 1.7.0: emissor e cadeia saem do texto
+    # do emissor e do sujeito, que sempre vieram. O responsável não tem de
+    # onde sair e fica ausente (a tela explica).
+    if not saida.get("emissor"):
+        saida["emissor"] = _atributo_rfc4514(item.get("issuer"), "CN")
+    if not saida.get("organizacao"):
+        saida["organizacao"] = _atributo_rfc4514(item.get("subject"), "O")
+    return saida
+
+
+def _atributo_rfc4514(dn: Optional[str], nome: str) -> Optional[str]:
+    """Primeiro valor de `nome` num DN RFC 4514 ("CN=AC X,O=ICP-Brasil,C=BR")."""
+    if not dn:
+        return None
+    m = re.search(r"(?:^|,)\s*" + re.escape(nome) + r"=((?:\\.|[^,\\])+)", dn, re.IGNORECASE)
+    if not m:
+        return None
+    return re.sub(r"\\(.)", r"\1", m.group(1)).strip() or None
+
+
+def _no_cofre(fingerprint: str) -> Optional[bool]:
+    """Há PFX deste certificado no cofre? `None` = não deu para saber."""
+    from app.settings_state import _banco
+
+    client = _banco()
+    if not client:
+        return None
+    try:
+        r = client.table("cert_pfx_store").select("id").eq("fingerprint", fingerprint).limit(1).execute()
+        return bool(r.data)
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao consultar o cofre para o modal de detalhes")
+        return None
 
 
 @app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_modulo("acompanhamento"))])
