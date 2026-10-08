@@ -286,24 +286,52 @@ TIPOS_DE_AVISO = ("novo", "expiring", "expired")
 AVISO_SEGREDO_DIAS = 30
 
 
+def _pedidos_de_computador() -> List[Dict[str, Any]]:
+    """ADR 0002: computador esperando o administrador autorizar. Um aviso por
+    pedido (a chave inclui o id, então "Li" num pedido não cala o próximo)."""
+    try:
+        from app import computadores
+
+        pendentes = [v for v in computadores.listar() if v.get("estado") == computadores.PENDENTE]
+    except Exception:  # noqa: BLE001 — sem a tabela (migration pendente) o sino segue
+        return []
+    saida = []
+    for v in pendentes:
+        tipo = "como empréstimo" if v.get("tipo") == "emprestimo" else "como máquina principal"
+        saida.append({
+            "chave": f"sistema|computador|{v['id']}",
+            "fingerprint_sha256": None,
+            "nome": "Computador aguardando autorização",
+            "documento": f"{v.get('nome') or v.get('machine_id')} ({v.get('machine_id')})",
+            "tipo": "sistema",
+            "vencimento": str(v.get("pedido_em") or "")[:19],
+            "dias_restantes": 0,
+            "mensagem": f"Pedido de vínculo {tipo}. Autorize ou recuse em Usuários › Computadores.",
+            "acionavel": True,
+            "href": "/usuarios?aba=computadores",
+        })
+    return saida
+
+
 def avisos_do_portal(settings: Any, now: datetime) -> List[Dict[str, Any]]:
     """Avisos sobre o PRÓPRIO portal, para o administrador. Hoje, um: o
     segredo do aplicativo Microsoft 365 vence (ou venceu)."""
     from app import correio, graph_mail
 
+    avisos = _pedidos_de_computador()
     if correio.transporte(settings) != correio.TRANSPORTE_GRAPH:
-        return []
+        return avisos
     validade = str(getattr(settings, "graph_secret_validade", "") or "")
     dias = graph_mail.dias_para_vencer_segredo(validade, hoje=now.date())
     if dias is None or dias > AVISO_SEGREDO_DIAS:
-        return []
+        return avisos
     if dias < 0:
         mensagem = f"O segredo do aplicativo Microsoft 365 venceu há {-dias} dia(s): os e-mails do portal não saem até um segredo novo ser cadastrado."
     elif dias == 0:
         mensagem = "O segredo do aplicativo Microsoft 365 vence hoje."
     else:
         mensagem = f"O segredo do aplicativo Microsoft 365 vence em {dias} dia(s). Gere um novo no Entra e cole em Configuração › Alertas por e-mail."
-    return [{
+    return avisos + [{
         "chave": f"sistema|graph-secret|{validade[:10]}",
         "fingerprint_sha256": None,
         "nome": "Segredo do aplicativo Microsoft 365",

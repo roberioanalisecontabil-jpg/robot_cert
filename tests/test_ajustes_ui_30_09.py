@@ -158,7 +158,7 @@ def test_tela_de_usuarios_abre_so_com_ativos() -> None:
     assert "'user-status-filter').value = 'ativo';" in html, "limpar filtros volta ao padrão: ativos"
     assert "['ativo', 'desativado', 'todos'].includes(q.get('status'))" in html
     assert 'class="ag-input cg-usu-maiusculas"' in html
-    assert "aguia-usuarios.css?v=aguia-2026-10c" in html
+    assert "aguia-usuarios.css?v=aguia-2026-10d" in html
 
 
 # ══════════════════════════════════════════════════════════════════════════

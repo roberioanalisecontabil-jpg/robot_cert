@@ -1298,7 +1298,7 @@ def pagina_login(request: Request) -> HTMLResponse:
 def pagina_usuarios(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
     aba = request.query_params.get("aba") or "usuarios"
-    if aba not in ("usuarios", "departamentos", "permissoes"):
+    if aba not in ("usuarios", "departamentos", "permissoes", "computadores"):
         aba = "usuarios"
     return templates.TemplateResponse(
         request=request, name="usuarios.html", context={"pagina_ativa": "usuarios", "aba": aba}

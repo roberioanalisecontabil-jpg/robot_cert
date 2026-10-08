@@ -351,7 +351,9 @@ def test_maquina_calada_nao_conta_como_viva(banco: _Fake) -> None:
 
 def test_autenticar_carimba_visto_em(banco: _Fake) -> None:
     segredo = agent_devices.registrar("u-ana", MAQUINA)
-    assert banco.tabelas[agent_devices.TABELA][0]["visto_em"] is None
+    # Desde o ADR 0002 o registro já marca (quem acabou de entrar está ali);
+    # a autenticação continua avançando o carimbo.
+    banco.tabelas[agent_devices.TABELA][0]["visto_em"] = None
     agent_devices.autenticar(segredo)
     assert banco.tabelas[agent_devices.TABELA][0]["visto_em"] is not None
 

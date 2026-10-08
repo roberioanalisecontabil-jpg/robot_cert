@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-10c" />
+  <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-10d" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -49,6 +49,8 @@
          aria-selected="{{ 'true' if aba == 'departamentos' else 'false' }}" {% if aba != 'departamentos' %}tabindex="-1"{% endif %}>Departamentos</a>
       <a class="ag-abas__aba" role="tab" id="aba-permissoes" href="?aba=permissoes" aria-controls="painel-permissoes" data-aba="permissoes"
          aria-selected="{{ 'true' if aba == 'permissoes' else 'false' }}" {% if aba != 'permissoes' %}tabindex="-1"{% endif %}>Níveis de acesso</a>
+      <a class="ag-abas__aba" role="tab" id="aba-computadores" href="?aba=computadores" aria-controls="painel-computadores" data-aba="computadores"
+         aria-selected="{{ 'true' if aba == 'computadores' else 'false' }}" {% if aba != 'computadores' %}tabindex="-1"{% endif %}>Computadores <span class="ag-abas__contagem" id="aba-computadores-contagem"></span></a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
@@ -172,6 +174,63 @@
         <p class="cg-usu-cab__lead"><strong>Não entra</strong>: o módulo some do menu e as rotas recusam. <strong>Só ver</strong>: entra e consulta, não altera nada. <strong>Ver e editar</strong>: entra e altera.</p>
       </div>
     </section>
+
+    <!-- ── Computadores (ADR 0002, 07/10/2026) ────────────────────────
+         Quem pode instalar certificado em qual máquina. A bandeja da
+         estação entra com a conta deste portal e o vínculo fica pendente
+         até alguém daqui autorizar: Principal (a máquina de trabalho) ou
+         Empréstimo (com prazo). -->
+    <section class="ag-card cg-usu-aba" id="painel-computadores" role="tabpanel" aria-labelledby="aba-computadores" {% if aba != 'computadores' %}hidden{% endif %}>
+      <div class="cg-usu-cab">
+        <h2 class="ag-card__title">Computadores</h2>
+        <p class="cg-usu-cab__lead">A pessoa entra na bandeja do agente com a conta deste portal; o computador só recebe certificado depois de autorizado aqui. <strong>Principal</strong> é a máquina de trabalho (o Hardlyze mostra como responsável); <strong>Empréstimo</strong> vale até o prazo ou até a pessoa voltar para a principal.</p>
+      </div>
+      <div class="cg-usu-corpo">
+        <div class="cg-usu-filtros">
+          <label class="ag-check"><input type="checkbox" id="comp-historico" /> Mostrar histórico (encerrados e recusados)</label>
+          <p class="cg-usu-contagem" id="comp-resumo" aria-live="polite"></p>
+        </div>
+        <div class="ag-table-scroll" role="region" aria-label="Computadores">
+          <table class="ag-table cg-tabela-comp" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" class="ag-th--estatico">Pessoa</th>
+                <th role="columnheader" class="ag-th--estatico">Computador</th>
+                <th role="columnheader" class="ag-th--estatico">Vínculo</th>
+                <th role="columnheader" class="ag-th--estatico">Bandeja</th>
+                <th role="columnheader" class="ag-th--estatico cg-col-acoes"><span class="cg-sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup" id="comp-corpo"><tr class="cg-state-row"><td colspan="5" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <dialog class="ag-modal" id="modal-comp" aria-labelledby="modal-comp-titulo">
+      <form method="dialog">
+        <div class="ag-modal__head">
+          <h2 class="ag-modal__titulo" id="modal-comp-titulo">Autorizar empréstimo</h2>
+          <button type="button" class="ag-modal__x" data-comp-fechar aria-label="Fechar"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="ag-modal__body">
+          <p id="modal-comp-texto"></p>
+          <div class="ag-field" id="modal-comp-prazo-campo">
+            <label class="ag-label" for="modal-comp-prazo">Prazo</label>
+            <select id="modal-comp-prazo" class="ag-select">
+              <option value="fim_do_dia">Até o fim do dia</option>
+              <option value="3_dias">3 dias</option>
+              <option value="7_dias">7 dias</option>
+            </select>
+            <p class="ag-ajuda">Termina antes se a pessoa voltar para a máquina principal ou sair da bandeja.</p>
+          </div>
+        </div>
+        <div class="ag-modal__foot">
+          <button type="button" class="ag-btn ag-btn--outline" data-comp-fechar>Cancelar</button>
+          <button type="button" class="ag-btn ag-btn--primary" id="modal-comp-ok">Autorizar</button>
+        </div>
+      </form>
+    </dialog>
   </main>
 
   <!-- Editar / novo usuário. -->
@@ -453,8 +512,116 @@
             if (typeof setTableLoading === "function") setTableLoading("table-container-users", show, text);
         }
 
+
+        // ── Computadores (ADR 0002) ──────────────────────────────────────
+        const COMP_ESTADO = { pendente: ['warning', 'Aguardando'], ativo: ['success', 'Ativo'], encerrado: ['neutral', 'Encerrado'], recusado: ['danger', 'Recusado'] };
+        let _compItens = [];
+        let _compAcao = null;
+
+        function fmtQuandoComp(iso) {
+            const d = new Date(iso || '');
+            return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+        }
+
+        function linhaComputador(v) {
+            const [cor, rot] = COMP_ESTADO[v.estado] || ['neutral', v.estado];
+            const tipo = v.tipo === 'principal' ? 'Principal' : 'Empréstimo';
+            const prazo = v.tipo === 'emprestimo' && v.expira_em && v.estado === 'ativo' ? ' até ' + fmtQuandoComp(v.expira_em) : '';
+            const quando = v.estado === 'pendente' ? 'pedido ' + fmtQuandoComp(v.pedido_em)
+                : (v.decidido_por ? 'por ' + v.decidido_por + ' em ' + fmtQuandoComp(v.decidido_em) : '');
+            const bandeja = !v.na_bandeja ? '<span class="ag-cell-sub">—</span>'
+                : (v.vivo ? '<span class="ag-badge ag-badge--success">Conectada</span>' : '<span class="ag-badge ag-badge--neutral">Parada</span>')
+                  + (v.versao ? '<span class="ag-cell-sub">agente ' + esc(v.versao) + '</span>' : '');
+            let acoes = '';
+            if (v.estado === 'pendente') {
+                acoes = '<button type="button" class="ag-btn ag-btn--primary ag-btn--sm" data-comp="principal" data-id="' + esc(v.id) + '">Principal</button>' +
+                        '<button type="button" class="ag-btn ag-btn--outline ag-btn--sm" data-comp="emprestimo" data-id="' + esc(v.id) + '">Empréstimo</button>' +
+                        '<button type="button" class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-comp="recusar" data-id="' + esc(v.id) + '">Recusar</button>';
+            } else if (v.estado === 'ativo') {
+                acoes = '<button type="button" class="ag-btn ag-btn--ghost-danger ag-btn--sm" data-comp="desvincular" data-id="' + esc(v.id) + '">Desvincular</button>';
+            }
+            return '<tr role="row" class="' + (v.estado === 'pendente' ? 'is-pendente' : '') + '">' +
+                '<td role="cell" class="cg-col-nome"><span class="ag-cell-stack"><span class="ag-cell-main">' + esc(v.pessoa || v.email || '—') + '</span><span class="ag-cell-sub">' + esc(v.email || '') + '</span></span></td>' +
+                '<td role="cell"><span class="ag-cell-stack"><span class="ag-cell-main">' + esc(v.nome || v.machine_id) + '</span><span class="ag-cell-sub ag-cell-sub--mono">' + esc(v.machine_id) + '</span></span></td>' +
+                '<td role="cell"><span class="ag-cell-stack"><span><span class="ag-badge ag-badge--' + cor + '">' + esc(rot) + '</span> ' + esc(tipo + prazo) + '</span><span class="ag-cell-sub">' + esc(quando) + (v.motivo ? ' · ' + esc(v.motivo) : '') + '</span></span></td>' +
+                '<td role="cell"><span class="ag-cell-stack">' + bandeja + '</span></td>' +
+                '<td role="cell" class="cg-col-acoes"><div class="cg-comp-acoes">' + acoes + '</div></td></tr>';
+        }
+
+        function desenharComputadores() {
+            const corpo = document.getElementById('comp-corpo');
+            const historico = document.getElementById('comp-historico').checked;
+            const itens = _compItens.filter((v) => historico || v.estado === 'pendente' || v.estado === 'ativo');
+            corpo.innerHTML = itens.length ? itens.map(linhaComputador).join('')
+                : '<tr class="cg-state-row"><td colspan="5" class="ag-table__vazio">' + (_compItens.length
+                    ? 'Nenhum vínculo pendente ou ativo. Marque "Mostrar histórico" para ver os encerrados.'
+                    : 'Nenhum computador ainda. Quando alguém entrar na bandeja do agente com a conta deste portal, o pedido aparece aqui.') + '</td></tr>';
+        }
+
+        async function carregarComputadores() {
+            try {
+                const r = await fetch('/api/computadores', { headers: getHeaders() });
+                if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+                const d = await r.json();
+                _compItens = d.itens || [];
+                const pend = (d.resumo || {}).pendentes || 0;
+                document.getElementById('aba-computadores-contagem').textContent = pend ? '(' + pend + ')' : '';
+                const ativos = _compItens.filter((v) => v.estado === 'ativo').length;
+                document.getElementById('comp-resumo').textContent =
+                    (pend ? pend + (pend === 1 ? ' aguardando · ' : ' aguardando · ') : '') + ativos + (ativos === 1 ? ' vínculo ativo' : ' vínculos ativos');
+                desenharComputadores();
+            } catch (e) {
+                document.getElementById('comp-corpo').innerHTML = '<tr class="cg-state-row"><td colspan="5" class="ag-table__vazio">Não foi possível carregar: ' + esc(e.message) + '</td></tr>';
+            }
+        }
+
+        async function decidirComputador(id, rota, corpo) {
+            try {
+                const r = await fetch('/api/computadores/' + encodeURIComponent(id) + '/' + rota, {
+                    method: 'POST', headers: getHeaders(true), body: corpo ? JSON.stringify(corpo) : undefined,
+                });
+                if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+                showToast({ autorizar: 'Computador autorizado.', recusar: 'Pedido recusado.', desvincular: 'Computador desvinculado.' }[rota], 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+            await carregarComputadores();
+        }
+
+        const modalComp = document.getElementById('modal-comp');
+        modalComp.querySelectorAll('[data-comp-fechar]').forEach((b) => b.addEventListener('click', () => modalComp.close()));
+        document.getElementById('modal-comp-ok').addEventListener('click', () => {
+            const a = _compAcao;
+            modalComp.close();
+            if (!a) return;
+            if (a.tipo === 'emprestimo') void decidirComputador(a.id, 'autorizar', { tipo: 'emprestimo', prazo: document.getElementById('modal-comp-prazo').value });
+            else if (a.tipo === 'principal') void decidirComputador(a.id, 'autorizar', { tipo: 'principal' });
+            else void decidirComputador(a.id, a.tipo);
+        });
+        document.getElementById('comp-corpo').addEventListener('click', (ev) => {
+            const b = ev.target.closest('button[data-comp]');
+            if (!b) return;
+            const v = _compItens.find((x) => String(x.id) === b.dataset.id);
+            if (!v) return;
+            const quem = (v.pessoa || v.email) + ' em ' + (v.nome || v.machine_id);
+            const textos = {
+                principal: ['Autorizar como máquina principal', 'Autorizar ' + quem + ' como máquina principal? A principal anterior desta pessoa (e o dono anterior desta máquina, se houver) vão para o histórico.', 'Autorizar'],
+                emprestimo: ['Autorizar empréstimo', 'Autorizar ' + quem + ' como empréstimo?', 'Autorizar'],
+                recusar: ['Recusar pedido', 'Recusar o pedido de ' + quem + '? A bandeja dessa máquina é desconectada.', 'Recusar'],
+                desvincular: ['Desvincular computador', 'Desvincular ' + quem + '? A bandeja é desconectada e o computador deixa de receber certificados.', 'Desvincular'],
+            }[b.dataset.comp];
+            _compAcao = { id: v.id, tipo: b.dataset.comp };
+            document.getElementById('modal-comp-titulo').textContent = textos[0];
+            document.getElementById('modal-comp-texto').textContent = textos[1];
+            document.getElementById('modal-comp-ok').textContent = textos[2];
+            document.getElementById('modal-comp-ok').className = 'ag-btn ' + (['recusar', 'desvincular'].includes(b.dataset.comp) ? 'ag-btn--danger' : 'ag-btn--primary');
+            document.getElementById('modal-comp-prazo-campo').hidden = b.dataset.comp !== 'emprestimo';
+            modalComp.showModal();
+        });
+        document.getElementById('comp-historico').addEventListener('change', desenharComputadores);
+
         // ── Abas ──────────────────────────────────────────────────────────
-        const ABAS = ['usuarios', 'departamentos', 'permissoes'];
+        const ABAS = ['usuarios', 'departamentos', 'permissoes', 'computadores'];
 
         function trocarAba(qual, anunciar) {
             if (!ABAS.includes(qual)) qual = 'usuarios';
@@ -470,6 +637,7 @@
             history.replaceState(null, '', url.pathname + (url.search || ''));
             if (anunciar) document.getElementById('abas-anuncio').textContent = 'Aba ' + document.getElementById('aba-' + qual).textContent.trim() + ' aberta.';
             if (qual === 'permissoes') carregarPermissoes();
+            if (qual === 'computadores') void carregarComputadores();
         }
         for (const nome of ABAS) {
             const aba = document.getElementById('aba-' + nome);
@@ -1387,6 +1555,8 @@
         loadUsers().then(loadDepartamentos).then(() => {
             if ('{{ aba }}' === 'permissoes') carregarPermissoes();
         });
+        // Computadores: a contagem de pendentes aparece na aba mesmo de fora dela.
+        void carregarComputadores();
   </script>
 </body>
 </html>

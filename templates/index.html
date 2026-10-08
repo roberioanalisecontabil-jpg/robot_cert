@@ -754,7 +754,12 @@
       const MOTIVO_SEM_ESTACAO = {
         nao_configurado: "A instalação pelo agente não está ligada neste portal. Fale com o administrador.",
         indisponivel: "O Hardlyze não respondeu agora — tente de novo em instantes.",
-        sem_agente_vivo: "Sem agente ativo na sua estação — abra o Hardlyze Agent e entre com sua conta.",
+        sem_agente_vivo: "Sem agente ativo na sua estação — abra a bandeja do agente e entre com sua conta deste portal.",
+        // ADR 0002 (07/10/2026): a bandeja entra com a conta deste portal.
+        sem_computador: "Nenhum computador vinculado a você. Entre na bandeja do agente com sua conta deste portal; o administrador autoriza.",
+        aguardando_autorizacao: "Seu computador está aguardando o administrador autorizar.",
+        nao_vinculado: "Este computador não está vinculado a você. Peça ao administrador.",
+        bandeja_parada: "A bandeja do agente no seu computador não está respondendo. Abra o agente e confira se você está conectado.",
       };
 
       async function carregarMinhaEstacao() {

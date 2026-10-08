@@ -206,3 +206,18 @@
     .perm-trilha__quando { min-width: 0; flex-basis: 100%; }
     .perm-trilha__quem { padding-left: 0; }
 }
+
+/* ── Computadores (ADR 0002, 07/10/2026) ─────────────────────────────── */
+.cg-tabela-comp .ag-table-scroll { overflow: visible; }
+.cg-tabela-comp tr.is-pendente td:first-child { box-shadow: inset 3px 0 0 var(--warning-500); }
+.cg-tabela-comp .cg-col-acoes { width: 1%; white-space: nowrap; text-align: right; }
+.cg-comp-acoes { display: inline-flex; gap: var(--space-2); flex-wrap: nowrap; justify-content: flex-end; }
+.cg-tabela-comp .ag-cell-stack .ag-badge { margin-right: var(--space-1); }
+@media (max-width: 640px) {
+    .cg-tabela-comp, .cg-tabela-comp tbody, .cg-tabela-comp tr, .cg-tabela-comp td { display: block; width: auto; }
+    .cg-tabela-comp thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .cg-tabela-comp tbody tr:not(.cg-state-row) { display: grid; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: var(--bw-1) solid var(--border-subtle); }
+    .cg-tabela-comp tbody tr td { padding: 0; border: 0; white-space: normal; text-align: left; }
+    .cg-tabela-comp .cg-col-acoes { width: auto; }
+    .cg-comp-acoes { justify-content: flex-start; }
+}

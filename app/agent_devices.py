@@ -176,6 +176,9 @@ def registrar(user_id: str, machine_id: str, nome: str = "") -> str:
         "nome": (nome or "").strip()[:120],
         "segredo_hash": _hash(segredo),
         "revogado_em": None,
+        # Quem acabou de entrar está ali: sem isto a bandeja aparecia "Parada"
+        # na aba Computadores até a primeira consulta (ADR 0002).
+        "visto_em": _agora().isoformat(),
     }
 
     existente = (
