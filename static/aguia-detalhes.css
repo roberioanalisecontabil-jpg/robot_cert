@@ -18,9 +18,11 @@
     text-align: left;
     cursor: pointer;
 }
-.cg-det-abrir:hover { color: var(--text-brand); text-decoration: underline; text-underline-offset: 3px; }
+/* Sem cara de link no hover (08/10/2026): a linha inteira é o alvo, e o
+   fundo dela já diz isso. O anel de foco fica, só para o teclado. */
 .cg-det-abrir:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-xs); }
-.cg-tabela-card:not(.is-selecionando) tbody tr:not(.cg-state-row) { cursor: pointer; }
+.cg-tabela-card tbody tr:not(.cg-state-row) { cursor: pointer; }
+.cg-tabela-card tbody td.cg-col-sel { cursor: default; }
 
 .cg-det__cab { min-width: 0; }
 .cg-det__cab .ag-modal__titulo { overflow-wrap: break-word; }

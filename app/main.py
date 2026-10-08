@@ -4123,10 +4123,12 @@ def listar_certificados(
         # precisa do titular e do documento, não da árvore de diretórios.
         if (token.role or "").strip().lower() != "admin":
             base["itens"] = [nome_publico.sem_pasta(it) for it in base["itens"]]
-        # Recorte pela carteira ANTES de resumo, paginação e exportação (#5):
-        # tudo o que sai desta rota nasce desta lista.
+        # Ver é de todos; a carteira decide o que cada um INSTALA (08/10/2026,
+        # adendo ao ADR 0001). Antes a lista era recortada pela carteira
+        # (#5); agora cada item diz se a pessoa pode instalá-lo, e a barreira
+        # da instalação (`assegurar_carteira`) continua a mesma.
         alcance = _documentos_ao_alcance(token)
-        base["itens"] = _recortar_pela_carteira(base["itens"], alcance)
+        _marcar_instalaveis(base["itens"], alcance)
         # Operador sem Atribuição nenhuma vê a lista vazia. A tela precisa
         # distinguir isso de "o agente ainda não enviou dados" (01/10/2026):
         # o remédio é outro — pedir ao Gestor, não esperar o agente.
@@ -4534,6 +4536,19 @@ def _documentos_ao_alcance(token: auth.TokenData) -> Optional[Set[str]]:
         raise HTTPException(status_code=503, detail="Não foi possível verificar sua carteira. Tente de novo.")
 
 
+def _no_alcance(it: dict, alcance: Optional[Set[str]]) -> bool:
+    if alcance is None:
+        return True
+    doc = cert_installer.so_digitos(it.get("documento_numero") or it.get("documento_digitos") or it.get("documento"))
+    return bool(doc and doc in alcance)
+
+
+def _marcar_instalaveis(itens: List[dict], alcance: Optional[Set[str]]) -> None:
+    """`instalavel` em cada item do Início: está na carteira de quem pergunta."""
+    for it in itens:
+        it["instalavel"] = _no_alcance(it, alcance)
+
+
 def _recortar_pela_carteira(itens: List[dict], alcance: Optional[Set[str]]) -> List[dict]:
     """Só os itens cujo documento está no alcance. Item sem documento não é
     de ninguém e fica de fora para quem não tem alcance total."""
@@ -4704,17 +4719,24 @@ def detalhes_do_certificado(
 ) -> dict:
     """Modal do Início: o item do inventário com os dados do responsável.
 
-    Mesmo alcance da lista e da instalação ("ver e instalar são um direito
-    só"): fora dele o certificado não existe para quem pergunta (404), e é
-    isso que guarda os dados pessoais (decisão Q7 de 06/10/2026). A pasta e o
+    Desde 08/10/2026 todos veem todos os certificados; a carteira decide só
+    quem instala. Fora da carteira o modal abre com os dados do certificado,
+    mas SEM os dados pessoais do responsável (eles continuam guardados pelo
+    alcance, decisão Q7 de 06/10/2026) e com `instalavel: false`. A pasta e o
     nome do arquivo seguem só para o administrador, como na lista.
     """
     fp = fingerprint.lower()
     snap = get_latest_snapshot(com_dados_pessoais=True) or {}
     item = next((it for it in (snap.get("items") or []) if (it.get("fingerprint_sha256") or "").lower() == fp), None)
-    if item is None or not _recortar_pela_carteira([item], _documentos_ao_alcance(token)):
+    if item is None:
         raise HTTPException(status_code=404, detail="Certificado não encontrado.")
+    instalavel = _no_alcance(item, _documentos_ao_alcance(token))
+    if not instalavel:
+        from app.nome_publico import sem_dados_pessoais
+
+        item = sem_dados_pessoais(item)
     saida = dict(item)
+    saida["instalavel"] = instalavel
     if (token.role or "").strip().lower() != "admin":
         saida = nome_publico.sem_pasta(saida)
         saida.pop("nome_publico", None)
@@ -4766,12 +4788,14 @@ def _no_cofre(fingerprint: str) -> Optional[bool]:
 FP_PARAM = PathParam(..., min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
 
 
-def _certificado_no_alcance(fp: str, token: auth.TokenData) -> Tuple[dict, dict]:
-    """(item do inventário, snapshot) — 404 se fora do alcance ou inexistente."""
+def _certificado_no_alcance(fp: str, token: auth.TokenData, exigir_carteira: bool = True) -> Tuple[dict, dict]:
+    """(item do inventário, snapshot) — 404 se inexistente ou, quando
+    `exigir_carteira`, fora da carteira. Ler a situação no SIEG é de todos
+    (08/10/2026); ligar o interruptor segue a carteira, como instalar."""
     snap = get_latest_snapshot() or {}
     fp = fp.lower()
     item = next((it for it in (snap.get("items") or []) if (it.get("fingerprint_sha256") or "").lower() == fp), None)
-    if item is None or not _recortar_pela_carteira([item], _documentos_ao_alcance(token)):
+    if item is None or (exigir_carteira and not _no_alcance(item, _documentos_ao_alcance(token))):
         raise HTTPException(status_code=404, detail="Certificado não encontrado.")
     return item, snap
 
@@ -4795,8 +4819,8 @@ def _sieg_payload(item: dict, settings) -> dict:
 
 @app.get("/api/sieg/certificado/{fingerprint}", dependencies=[Depends(require_auth)])
 def sieg_do_certificado(fingerprint: str = FP_PARAM, token: auth.TokenData = Depends(require_auth)) -> dict:
-    item, _snap = _certificado_no_alcance(fingerprint, token)
-    return _sieg_payload(item, load_settings())
+    item, _snap = _certificado_no_alcance(fingerprint, token, exigir_carteira=False)
+    return {**_sieg_payload(item, load_settings()), "na_carteira": _no_alcance(item, _documentos_ao_alcance(token))}
 
 
 @app.post("/api/sieg/certificado/{fingerprint}/incluir", status_code=202,
@@ -7668,7 +7692,11 @@ def preparar_instalacao(
     # ADR 0002: a máquina tem a bandeja nova, com vínculo autorizado? Então a
     # entrega é pela fila deste portal, e o servidor confere de quem é.
     canal = "hardlyze"
+    e_admin = (token.role or "").strip().lower() == "admin"
+    disp_alvo = None
+    bandeja_nova_da_pessoa = None
     try:
+        bandeja_nova_da_pessoa = computadores.dispositivo_da_pessoa(user_id)
         disp_alvo = computadores.dispositivo_da_maquina(machine_id)
         if disp_alvo and computadores.situacao(str(disp_alvo["user_id"]), machine_id)["autorizacao"] == computadores.AUTORIZADO:
             canal = "portal"
@@ -7680,6 +7708,18 @@ def preparar_instalacao(
         raise
     except Exception:  # noqa: BLE001 — migration pendente: segue pelo Hardlyze
         logger.warning("Vínculos de computador indisponíveis no prepare", exc_info=True)
+
+    # Sem desvio silencioso (08/10/2026): a bandeja 2.1.x não atende o caminho
+    # antigo, e o pedido mandado por ele expirava sem aviso. Se a máquina já
+    # tem bandeja nova (só não autorizada) ou a pessoa já usa a bandeja nova,
+    # recusa aqui com o que fazer.
+    if canal == "hardlyze" and (disp_alvo or (bandeja_nova_da_pessoa and not e_admin)):
+        raise HTTPException(
+            status_code=409,
+            detail=("A bandeja deste computador ainda não foi autorizada em Usuários › Computadores." if e_admin else
+                    "Este computador não está autorizado para você. Entre na bandeja dele com sua conta "
+                    "e aguarde a autorização do administrador."),
+        )
 
     if canal == "hardlyze":
         if not config.ponte_invent_configurada():

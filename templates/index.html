@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
     <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
     <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-    <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10c" />
+    <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10d" />
   </head>
   <body class="cg-aguia">
     <!--
@@ -648,13 +648,16 @@
         vencido: "Certificado vencido",
         ilegivel: "O robô não conseguiu ler este arquivo",
         bloqueado: "Custódia desativada pelo administrador",
-        fora_da_carteira: "Fora da sua carteira — peça ao gestor",
+        fora_da_carteira: "Fora da sua carteira",
         nao_enviado: "Aguardando o envio pelo agente",
       };
 
       function estadoDe(it) {
         const fp = it.fingerprint_sha256;
         if (!fp) return { estado: "ilegivel", id: null };
+        // Todos veem todos (08/10/2026); a carteira decide quem instala. A
+        // instalabilidade não traz os de fora (#30), então vem da lista.
+        if (it.instalavel === false) return { estado: "fora_da_carteira", id: null };
         return _instalabilidade[fp] || { estado: "nao_enviado", id: null };
       }
 
@@ -895,6 +898,10 @@
         const rotulo = btn.textContent;
         btn.textContent = "Enviando...";
         try {
+          // A máquina lida ao abrir a página pode ter mudado (a pessoa entrou
+          // na bandeja de outro computador, o vínculo caiu): confere de novo.
+          await carregarMinhaEstacao();
+          if (!_estacao) throw new Error(document.getElementById("semAgente")?.textContent || "Nenhum computador disponível.");
           const r = await fetch("/api/cert-installer/prepare", {
             method: "POST",
             headers: getHeaders(true),
@@ -987,9 +994,11 @@
           ]);
           // Chave ausente = o agente ainda não lê estes campos (anterior à
           // 1.7.0); chave presente e vazia = o certificado não traz o dado.
-          const agenteAntigo = !("responsavel_cpf" in it);
-          nota.hidden = !agenteAntigo;
-          nota.textContent = agenteAntigo ? "Estes dados aparecem depois da próxima varredura do agente 1.7.0." : "";
+          const foraDaCarteira = it.instalavel === false;
+          const agenteAntigo = !foraDaCarteira && !("responsavel_cpf" in it);
+          nota.hidden = !(agenteAntigo || foraDaCarteira);
+          nota.textContent = foraDaCarteira ? "Os dados do responsável aparecem só para quem tem este cliente na carteira."
+            : agenteAntigo ? "Estes dados aparecem depois da próxima varredura do agente 1.7.0." : "";
         }
         const portal = [["No cofre", it.no_cofre === true ? "Sim" : it.no_cofre === false ? "Não enviado" : (completo ? "—" : "Carregando…")]];
         if (it.pasta || it.nome_publico) portal.push(["Arquivo", [it.pasta, it.nome_publico].filter(Boolean).join("/"), true]);
@@ -1013,6 +1022,10 @@
         const tentar = document.getElementById("det-sieg-tentar");
         const conferir = document.getElementById("det-sieg-conferir");
         const e = d && d.estado;
+        // Fora da carteira: vê a situação, sem o interruptor (08/10/2026).
+        const semInterruptor = !!(d && d.na_carteira === false);
+        const caixa = chk.closest(".ag-switch") || chk.parentElement;
+        if (caixa) caixa.style.display = semInterruptor ? "none" : "";
         chk.checked = !!(e && e.ligado);
         // Ligado não desliga; sem condição não liga.
         chk.disabled = !!(e && e.ligado) || !!(d && d.motivo) || !d;
@@ -1021,6 +1034,7 @@
         let texto = "";
         if (!d) texto = "Não foi possível consultar o SIEG agora.";
         else if (d.motivo) texto = d.motivo_texto;
+        else if (!e && semInterruptor) texto = "Ainda não está no SIEG. Quem tem este cliente na carteira pode incluir.";
         else if (!e) texto = "Inclui este certificado na conta do SIEG. Pede confirmação.";
         else {
           const quem = e.solicitado_por ? "Ligado por " + e.solicitado_por + " em " + fmtQuando(e.solicitado_em) + ". " : "";
@@ -1168,7 +1182,7 @@
               "<div class='ag-cell-stack'>" +
               // O nome é o botão do modal: teclado e leitor de tela chegam
               // nele; o clique no resto da linha faz o mesmo (ver o listener).
-              "<button type='button' class='cg-det-abrir ag-cell-main' title='" + esc(nome) + "'>" +
+              "<button type='button' class='cg-det-abrir ag-cell-main'>" +
               "<span class='cg-sr-only'>Ver detalhes de </span>" + esc(nomeExibicao(nome)) + "</button>" +
               // Abaixo de 1024px a coluna CNPJ/CPF sai e o documento vem para
               // debaixo do nome (o padrão de célula do próprio DS); nas telas
@@ -1624,20 +1638,10 @@
 
         // No modo de seleção a linha inteira marca: no celular a caixa de 44px
         // é pequena ao lado de um cartão, e quem lê o nome clica no nome.
+        // A linha abre os detalhes, também no modo de seleção (08/10/2026):
+        // só a caixa (e a célula dela) marca.
         document.getElementById("tbody").addEventListener("click", (ev) => {
-          if (!_modoSelecao) return;
-          if (ev.target.closest("input, label, a, button:not(.cg-det-abrir)")) return;
-          const tr = ev.target.closest("tr");
-          const c = tr && tr.querySelector(".chk-cert");
-          if (!c || c.disabled) return;
-          c.checked = !c.checked;
-          c.dispatchEvent(new Event("change", { bubbles: true }));
-        });
-
-        // Fora do modo de seleção, a linha abre os detalhes (06/10/2026).
-        document.getElementById("tbody").addEventListener("click", (ev) => {
-          if (_modoSelecao) return;
-          if (ev.target.closest("input, label, a, button:not(.cg-det-abrir)")) return;
+          if (ev.target.closest("input, label, a, td.cg-col-sel, button:not(.cg-det-abrir)")) return;
           const tr = ev.target.closest("tr[data-idx]");
           const it = tr && _itensTabela[Number(tr.dataset.idx)];
           if (it) void abrirDetalhes(it, tr.querySelector(".cg-det-abrir"));

@@ -60,7 +60,8 @@ def test_ocultar_vencidos_tira_da_lista_e_conta(client: TestClient, banco: _Fake
 def test_operador_sem_atribuicao_recebe_alcance_vazio(client: TestClient, banco: _Fake) -> None:
     banco.tabelas["carteira"] = [r for r in banco.tabelas["carteira"] if r["user_id"] != "u-fis"]
     d = client.get(CERTS, headers=_h(*FISCAL_OP)).json()
-    assert d["itens"] == [] and d["alcance_vazio"] is True
+    assert d["alcance_vazio"] is True
+    assert d["itens"] and not any(i["instalavel"] for i in d["itens"]), "vê tudo, não instala nada (08/10/2026)"
     assert client.get(CERTS, headers=_h(*SOLTO)).json()["alcance_vazio"] is False, "quem tem atribuição não está vazio"
     assert client.get(CERTS, headers=_h(*ADMIN)).json()["alcance_vazio"] is False
     assert client.get(CERTS, headers=_h(*GESTOR)).json()["alcance_vazio"] is False

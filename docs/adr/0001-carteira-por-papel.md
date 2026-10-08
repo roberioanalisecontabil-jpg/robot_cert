@@ -62,3 +62,21 @@ perder o alcance total.
   gestor têm alcance total" ou "gestores limitados" devem ser atualizados junto com o código.
 
 Vocabulário em [GLOSSARY.md](../../GLOSSARY.md).
+
+## Adendo (08/10/2026): ver é de todos, a carteira decide quem instala
+
+Decidido depois do teste com operador da bandeja 2.1.0 (ADR 0002).
+
+- O Início lista todos os certificados para todos os papéis. A carteira (e as Exceções do
+  Gestor) deixa de recortar a lista e passa a decidir só o que cada um pode instalar; cada
+  item vem com `instalavel`. A barreira da instalação (`assegurar_carteira`) não mudou.
+- Fora da carteira, a caixa de seleção fica desabilitada, sem selo; ao passar o mouse aparece
+  "Fora da sua carteira".
+- Os detalhes abrem para qualquer certificado, mas sem os dados pessoais do responsável fora da
+  carteira. A situação no SIEG aparece; o interruptor "Incluir no SIEG" só aparece para quem
+  tem o cliente na carteira (ligar continua barrado no servidor).
+- A instalabilidade continua sem trazer fingerprint e id do cofre dos certificados de fora (#30).
+- Histórico, vencidos e as demais leituras continuam recortadas pela carteira; esta mudança é
+  só do Início e do modal de detalhes.
+- Na lista, clicar em qualquer parte da linha abre os detalhes, também no modo de seleção; só a
+  caixa marca. O nome deixa de ter cara de link (sem sublinhado, sem dica flutuante).

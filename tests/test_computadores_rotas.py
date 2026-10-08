@@ -184,3 +184,25 @@ def test_importar_do_hardlyze_cria_pedidos_pendentes(client: TestClient, banco: 
 def test_importar_sem_ponte_avisa(client: TestClient, banco: _Fake) -> None:
     r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN))
     assert r.status_code == 409 and "ponte" in r.json()["detail"]
+
+
+def test_sem_desvio_silencioso_para_o_hardlyze(client: TestClient, banco: _Fake, tokens: dict, monkeypatch) -> None:
+    """08/10/2026: com a ponte ligada, o pedido para máquina sem bandeja
+    autorizada ia pelo Hardlyze, que a bandeja 2.1.x não atende, e expirava
+    sem aviso. Agora é recusado com o que fazer."""
+    monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent", raising=False)
+    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "tk", raising=False)
+    import app.main as m
+
+    monkeypatch.setattr(m, "_pedir_instalacao_ao_invent", lambda *a, **k: pytest.fail("não pode ir pelo Hardlyze"))
+    _entrar(client, "fis@x.com", PC_FIS)
+    _autorizar_pendente(client, PC_FIS)
+    # Operador com bandeja nova pede para outra máquina: recusa.
+    r = client.post("/api/cert-installer/prepare", headers=_h(*FISCAL_OP),
+                    json={"certificate_ids": ["pfx-a"], "machine_id": "aa:aa:aa:aa:aa:77"})
+    assert r.status_code == 409 and "autorizado" in r.json()["detail"]
+    # Máquina com bandeja nova ainda pendente: recusa até para o admin.
+    _entrar(client, "solto@x.com", PC_SOL)
+    r = client.post("/api/cert-installer/prepare", headers=_h(*ADMIN),
+                    json={"certificate_ids": ["pfx-a"], "machine_id": PC_SOL})
+    assert r.status_code == 409 and "Usuários › Computadores" in r.json()["detail"]

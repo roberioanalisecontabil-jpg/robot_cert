@@ -65,8 +65,17 @@ def test_detalhes_trazem_os_campos_do_modal(client: TestClient, banco: _Fake) ->
     assert "pasta" not in d, "arquivo e pasta só para o administrador"
 
 
-def test_fora_do_alcance_o_certificado_nao_existe(client: TestClient, banco: _Fake) -> None:
-    assert _det(client, "b" * 64, FISCAL_OP).status_code == 404  # DOC_B é de outro operador
+def test_fora_da_carteira_abre_sem_dado_pessoal(client: TestClient, banco: _Fake) -> None:
+    """08/10/2026: todos veem todos; fora da carteira o modal abre, mas sem os
+    dados pessoais do responsável e marcado como não instalável."""
+    r = _det(client, "b" * 64, FISCAL_OP)  # DOC_B é de outro operador
+    assert r.status_code == 200, r.text
+    assert CPF_SECRETO not in r.text and EMAIL_SECRETO not in r.text
+    assert r.json()["instalavel"] is False and "pasta" not in r.json()
+    assert _det(client, "a" * 64, FISCAL_OP).json()["instalavel"] is True
+    sieg = client.get("/api/sieg/certificado/" + "b" * 64, headers=_h(*FISCAL_OP))
+    assert sieg.status_code == 200 and sieg.json()["na_carteira"] is False
+    assert client.post("/api/sieg/certificado/" + "b" * 64 + "/incluir", headers=_h(*FISCAL_OP)).status_code == 404,         "ligar o SIEG segue a carteira"
     assert _det(client, "f" * 64, ADMIN).status_code == 404
     assert _det(client, "nao-hex", ADMIN).status_code in (404, 422)
 

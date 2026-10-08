@@ -123,6 +123,11 @@ def _docs(itens: List[dict]) -> Set[str]:
     return {ci.so_digitos(i.get("documento_numero") or i.get("documento")) for i in itens}
 
 
+def _instalaveis(itens: List[dict]) -> Set[str]:
+    """Desde 08/10/2026 o Início lista tudo; a carteira decide o que instala."""
+    return _docs([i for i in itens if i.get("instalavel")])
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # #5 — /api/certificados
 # ──────────────────────────────────────────────────────────────────────────
@@ -130,12 +135,15 @@ def _docs(itens: List[dict]) -> Set[str]:
 def test_operador_so_ve_a_propria_carteira(client: TestClient, banco: _Fake) -> None:
     r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*FISCAL_OP))
     assert r.status_code == 200, r.text
-    assert _docs(r.json()["itens"]) == {DOC_A}
+    todos = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*ADMIN)).json()["itens"]
+    assert len(r.json()["itens"]) == len(todos), "ver é de todos (08/10/2026)"
+    assert all("pasta" not in i for i in r.json()["itens"]), "a pasta segue só para o admin"
+    assert _instalaveis(r.json()["itens"]) == {DOC_A}
 
 
 def test_operador_sem_setor_so_ve_a_propria_carteira(client: TestClient, banco: _Fake) -> None:
     r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*SOLTO))
-    assert _docs(r.json()["itens"]) == {DOC_B}
+    assert _instalaveis(r.json()["itens"]) == {DOC_B}
 
 
 def test_gestor_ve_tudo_menos_as_excecoes(client: TestClient, banco: _Fake) -> None:
@@ -143,10 +151,10 @@ def test_gestor_ve_tudo_menos_as_excecoes(client: TestClient, banco: _Fake) -> N
     tudo que tem documento, menos as Exceções que o administrador registrou.
     O item sem documento continua fora: não é de ninguém."""
     r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*GESTOR))
-    assert _docs(r.json()["itens"]) == {DOC_A, DOC_B, DOC_C, DOC_L}
+    assert _instalaveis(r.json()["itens"]) == {DOC_A, DOC_B, DOC_C, DOC_L}
     banco.tabelas["carteira_excecao"] = [{"user_id": "u-lf", "documento": DOC_B, "registrado_por_email": "admin@x.com"}]
     r = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*GESTOR))
-    assert _docs(r.json()["itens"]) == {DOC_A, DOC_C, DOC_L}
+    assert _instalaveis(r.json()["itens"]) == {DOC_A, DOC_C, DOC_L}
 
 
 def test_admin_continua_vendo_tudo(client: TestClient, banco: _Fake) -> None:
@@ -159,9 +167,9 @@ def test_admin_continua_vendo_tudo(client: TestClient, banco: _Fake) -> None:
 def test_paginacao_conta_so_o_que_a_pessoa_alcanca(client: TestClient, banco: _Fake) -> None:
     r = client.get("/api/certificados?fonte=remoto&pagina=1&por_pagina=10", headers=_h(*FISCAL_OP))
     j = r.json()
-    assert _docs(j["itens"]) == {DOC_A}
-    assert j["paginacao"]["total_itens"] == 1
-    assert j["paginacao"]["total_paginas"] == 1
+    assert _instalaveis(j["itens"]) == {DOC_A}
+    # A lista é a mesma para todos; a paginação conta o inventário inteiro.
+    assert j["paginacao"]["total_itens"] == len(j["itens"]) > 1
 
 
 def test_carteira_indisponivel_e_503_e_nao_lista_vazia(client: TestClient, banco: _Fake) -> None:

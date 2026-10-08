@@ -74,7 +74,9 @@ def _ve(client: TestClient, quem, sv: int = 0) -> set:
     h = {"Authorization": "Bearer " + auth.create_access_token({"sub": quem[0], "role": quem[1], "sv": sv})}
     r = client.get(CERTS, headers=h)
     assert r.status_code == 200, r.text
-    return _docs(r.json()["itens"])
+    # Desde 08/10/2026 todos veem a lista inteira; "vê", aqui, é o que a
+    # pessoa pode INSTALAR (a carteira), marcado em `instalavel`.
+    return _docs([i for i in r.json()["itens"] if i.get("instalavel")])
 
 
 # ── 1. A carteira do Gestor é de Exceções ─────────────────────────────────
