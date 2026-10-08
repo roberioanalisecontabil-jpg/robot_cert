@@ -64,3 +64,21 @@ compartilhado com o Hardlyze sai do caminho da chave privada.
 - Reaproveita o registro de dispositivo por e-mail e senha do portal (`app/agent_devices.py`),
   parado desde agosto.
 - Vem antes da Leva D (sessão em cookie).
+
+## Adendo (08/10/2026): independência do Hardlyze
+
+Decidido depois do primeiro teste com operador. Na estação, `Failed to resolve` era rede ou VPN,
+não a aprovação pendente no Hardlyze.
+
+- A aprovação da máquina no Hardlyze vale só para o inventário. Instalar certificado depende
+  apenas da autorização em Usuários › Computadores: uma máquina pendente, recusada ou ausente
+  no Hardlyze recebe certificado se estiver autorizada aqui. A bandeja 2.1.0 já não espera a
+  aprovação do Hardlyze, e este portal não o consulta no login, na autorização nem na
+  instalação.
+- Continua um instalador só (o do Hardlyze), com o serviço de inventário e a bandeja de
+  certificados separados por dentro.
+- O caminho antigo (fila de comandos e login de pessoa do Hardlyze) fica até todas as estações
+  estarem no 2.1.x e então sai.
+- A publicação na internet fica para depois. Para instalar fora do escritório basta este portal
+  estar acessível; o Hardlyze fora da VPN afeta só o inventário. O usuário fornece o
+  certificado quando for o momento.
