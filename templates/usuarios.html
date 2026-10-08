@@ -189,6 +189,8 @@
         <div class="cg-usu-filtros">
           <label class="ag-check"><input type="checkbox" id="comp-historico" /> Mostrar histórico (encerrados e recusados)</label>
           <p class="cg-usu-contagem" id="comp-resumo" aria-live="polite"></p>
+          <button type="button" class="ag-btn ag-btn--outline ag-btn--sm" id="comp-importar"
+                  title="Transição: quem já entrou na bandeja antiga (conta do Hardlyze) vira pedido pendente aqui">Importar do Hardlyze</button>
         </div>
         <div class="ag-table-scroll" role="region" aria-label="Computadores">
           <table class="ag-table cg-tabela-comp" role="table">
@@ -619,6 +621,20 @@
             modalComp.showModal();
         });
         document.getElementById('comp-historico').addEventListener('change', desenharComputadores);
+        document.getElementById('comp-importar').addEventListener('click', async (ev) => {
+            const b = ev.currentTarget;
+            b.disabled = true;
+            try {
+                const r = await fetch('/api/computadores/importar-do-hardlyze', { method: 'POST', headers: getHeaders(true) });
+                if (!r.ok) throw new Error(await mensagemCorpoErro(r));
+                showToast('Importação do Hardlyze: ' + (await r.json()).message, 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                b.disabled = false;
+            }
+            await carregarComputadores();
+        });
 
         // ── Abas ──────────────────────────────────────────────────────────
         const ABAS = ['usuarios', 'departamentos', 'permissoes', 'computadores'];

@@ -149,3 +149,38 @@ def test_principais_para_o_hardlyze_exige_o_segredo_da_ponte(client: TestClient,
     r = client.get("/api/computadores/principais", headers={"Authorization": "Bearer segredo-da-ponte"})
     assert r.status_code == 200
     assert r.json()["principais"] == [{**r.json()["principais"][0], "machine_id": PC_FIS, "email": "fis@x.com"}]
+
+
+def test_importar_do_hardlyze_cria_pedidos_pendentes(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    """Transição: logins da bandeja antiga viram pedidos; a máquina vista por
+    último vira principal sugerida; o resto é empréstimo; repetir não duplica."""
+    import httpx
+
+    monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent", raising=False)
+    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "tk", raising=False)
+    logins = [
+        {"email": "FIS@x.com", "machine_id": PC_FIS.upper(), "nome": "PC-FIS", "visto_em": "2026-10-07T10:00:00Z"},
+        {"email": "fis@x.com", "machine_id": PC_SOL, "nome": "PC-SOL", "visto_em": "2026-10-01T10:00:00Z"},
+        {"email": "ninguem@x.com", "machine_id": "aa:aa:aa:aa:aa:09", "nome": "PC-9", "visto_em": None},
+    ]
+    vistos = []
+
+    def falso_get(url, headers=None, timeout=None):
+        vistos.append((url, headers))
+        return httpx.Response(200, json={"dispositivos": logins}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", falso_get)
+    assert client.post("/api/computadores/importar-do-hardlyze", headers=_h(*FISCAL_OP)).status_code == 403
+    r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert (r.json()["criados"], r.json()["sem_conta"]) == (2, 1)
+    assert vistos[0] == ("http://invent/api/agent/devices/todos", {"Authorization": "Bearer tk"})
+    pend = {v["machine_id"]: v["tipo"] for v in banco.tabelas["computador_vinculo"] if v["estado"] == "pendente"}
+    assert pend == {PC_FIS: "principal", PC_SOL: "emprestimo"}
+    r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN)).json()
+    assert (r["criados"], r["pulados"]) == (0, 2), "repetir não duplica"
+
+
+def test_importar_sem_ponte_avisa(client: TestClient, banco: _Fake) -> None:
+    r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN))
+    assert r.status_code == 409 and "ponte" in r.json()["detail"]

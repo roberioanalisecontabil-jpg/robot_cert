@@ -303,6 +303,47 @@ def principais() -> List[Dict[str, Any]]:
             for v in _vinculos(tipo=PRINCIPAL, estado=ATIVO)]
 
 
+def importar(logins: List[Dict[str, Any]], usuarios_por_email: Dict[str, str]) -> Dict[str, int]:
+    """Transição (ADR 0002): os logins de pessoa do Hardlyze viram PEDIDOS
+    pendentes aqui, para o administrador só confirmar.
+
+    `logins`: [{email, machine_id, nome, visto_em}] do Hardlyze.
+    `usuarios_por_email`: e-mail → user_id das contas ATIVAS deste portal.
+    Sugere principal para a máquina vista por último de cada pessoa sem
+    principal; as outras viram empréstimo. Par que já tem vínculo pendente
+    ou ativo é pulado. Não cria sessão de bandeja: autorizado o pedido, a
+    pessoa ainda entra na bandeja 2.1.0 e cai direto em "autorizado".
+    """
+    criados = pulados = sem_conta = 0
+    por_pessoa: Dict[str, List[Dict[str, Any]]] = {}
+    for l in logins:
+        uid = usuarios_por_email.get((l.get("email") or "").strip().lower())
+        if not uid:
+            sem_conta += 1
+            continue
+        if not mac(l.get("machine_id")):
+            continue
+        por_pessoa.setdefault(uid, []).append(l)
+    for uid, lista in por_pessoa.items():
+        lista.sort(key=lambda l: str(l.get("visto_em") or ""), reverse=True)
+        tem_principal = principal_da_pessoa(uid) is not None or any(
+            v["tipo"] == PRINCIPAL for v in _vinculos(user_id=uid, estado=PENDENTE))
+        for l in lista:
+            mid = mac(l["machine_id"])
+            if vinculo_vigente(uid, mid) or pendente_do_par(uid, mid):
+                pulados += 1
+                continue
+            tipo = EMPRESTIMO if tem_principal else PRINCIPAL
+            tem_principal = True
+            _banco().table(TABELA).insert({
+                "user_id": uid, "machine_id": mid, "nome": (l.get("nome") or mid)[:120], "tipo": tipo,
+                "estado": PENDENTE, "pedido_em": _iso(_agora()), "decidido_por": "",
+                "motivo": "Importado do Hardlyze (login da bandeja antiga).",
+            }).execute()
+            criados += 1
+    return {"criados": criados, "pulados": pulados, "sem_conta": sem_conta}
+
+
 # ── Fila de instalação ───────────────────────────────────────────────────
 
 def enfileirar(machine_id: str, token_raw: str, token_id: str, expira_em: datetime) -> None:

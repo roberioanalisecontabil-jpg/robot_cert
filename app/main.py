@@ -7499,6 +7499,36 @@ def desvincular_computador(vinculo_id: str, token: auth.TokenData = Depends(requ
     return _decidir(computadores.desvincular, _id_do_vinculo(vinculo_id), (token.email or "").lower())
 
 
+@app.post("/api/computadores/importar-do-hardlyze", dependencies=[Depends(require_admin)])
+def importar_computadores_do_hardlyze() -> dict:
+    """Transição (ADR 0002): logins atuais do Hardlyze viram pedidos pendentes."""
+    if not config.ponte_invent_configurada():
+        raise HTTPException(status_code=409, detail="A ponte com o Hardlyze não está configurada (INVENT_API_URL / CERT_PORTAL_TOKEN).")
+    try:
+        import httpx
+
+        r = httpx.get(f"{config.INVENT_API_URL}/api/agent/devices/todos",
+                      headers={"Authorization": f"Bearer {config.CERT_PORTAL_TOKEN}"}, timeout=15.0)
+    except Exception:  # noqa: BLE001
+        logger.warning("Hardlyze indisponível na importação de computadores", exc_info=True)
+        raise HTTPException(status_code=502, detail="O Hardlyze não respondeu. Tente de novo em instantes.")
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"O Hardlyze respondeu {r.status_code} (atualizado para a versão com a rota de importação?).")
+    logins = list((r.json() or {}).get("dispositivos") or [])
+    pessoas = _nomes_das_pessoas()
+    sb = _sb_do_login()
+    ativos = {str(u["id"]) for u in (sb.table("users").select("id, ativo").execute().data or []) if conta_ativa(u)}
+    por_email = {str(p.get("email") or "").strip().lower(): uid for uid, p in pessoas.items() if uid in ativos}
+    try:
+        res = computadores.importar(logins, por_email)
+    except computadores.SemBanco as e:
+        raise _erro_sem_banco(e)
+    from app import texto as _texto
+    return {**res, "message": (f"{_texto.plural(res['criados'], 'pedido criado', 'pedidos criados')}; "
+                               f"{_texto.plural(res['pulados'], 'já existia', 'já existiam')}; "
+                               f"{_texto.plural(res['sem_conta'], 'login sem conta neste portal', 'logins sem conta neste portal')}.")}
+
+
 @app.get("/api/computadores/principais")
 def computadores_principais(request: Request) -> dict:
     """Para o Hardlyze (ponte servidor a servidor): máquina → dono principal."""
