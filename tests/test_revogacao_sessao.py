@@ -262,7 +262,7 @@ def test_id_da_sessao_nao_reconsulta_o_banco(
     def _nao_deveria(_email: str) -> str:
         raise AssertionError("consultou users de novo; o id já estava na sessão")
 
-    monkeypatch.setattr(m, "_resolve_user_id", _nao_deveria)
+    monkeypatch.setattr("app.sessao._resolve_user_id", _nao_deveria)
     token = auth.TokenData(email="chefe@x.com", role="admin", user_id="u-adm")
     assert m._user_id_da_sessao(token) == "u-adm"
 
@@ -277,7 +277,7 @@ def test_id_da_sessao_recorre_a_consulta_quando_nao_houve_leitura(
     """
     from app import main as m
 
-    monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-vindo-da-consulta")
+    monkeypatch.setattr("app.sessao._resolve_user_id", lambda email: "u-vindo-da-consulta")
     token = auth.TokenData(email="chefe@x.com", role="admin")
     assert m._user_id_da_sessao(token) == "u-vindo-da-consulta"
 

@@ -421,7 +421,7 @@ def test_sessao_le_a_coluna_da_troca_de_senha() -> None:
     from pathlib import Path
 
     fonte = (
-        Path(__file__).resolve().parent.parent / "app" / "main.py"
+        Path(__file__).resolve().parent.parent / "app" / "sessao.py"
     ).read_text(encoding="utf-8")
     trecho = fonte.split("def _conta_da_sessao")[1].split("\ndef ")[0]
 

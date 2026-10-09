@@ -171,7 +171,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             {"documento_numero": "02509642448", "nome": "PESSOA FISICA"},
         ]}]
     monkeypatch.setattr(ci, "_banco", lambda: fake)
-    monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-" + email.split("@")[0])
+    monkeypatch.setattr("app.sessao._resolve_user_id", lambda email: "u-" + email.split("@")[0])
     # O que viria depois da barreira não interessa aqui; o que interessa é se
     # chegou a ser chamado.
     monkeypatch.setattr(ci, "create_install_token",

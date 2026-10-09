@@ -460,7 +460,8 @@ def test_conta_desativada_responde_igual_a_senha_errada(client: TestClient, banc
 # ──────────────────────────────────────────────────────────────────────────
 
 def test_x_api_key_e_comparada_em_tempo_constante() -> None:
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    # require_auth mora em app/sessao.py desde a Frente 3, leva 1 (09/10/2026).
+    fonte = (RAIZ / "app" / "sessao.py").read_text(encoding="utf-8")
     assert "x_api_key == config.API_KEY" not in fonte
     assert re.search(r"compare_digest\([^)]*x_api_key", fonte), "esperava hmac.compare_digest na X-API-Key"
 

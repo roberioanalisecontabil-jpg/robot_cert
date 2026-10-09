@@ -254,7 +254,7 @@ def test_cert_history_gravado_pela_chave_publica(inventario_antigo: _Fake) -> No
 ])
 def test_nenhuma_rota_devolve_senha_nem_nome_bruto(client: TestClient, inventario_antigo: _Fake, rota: str,
                                                    monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-ana")
+    monkeypatch.setattr("app.sessao._resolve_user_id", lambda email: "u-ana")
     r = client.get(rota, headers=_h(*USER))
     assert r.status_code == 200, r.text
     corpo = r.text
@@ -263,7 +263,7 @@ def test_nenhuma_rota_devolve_senha_nem_nome_bruto(client: TestClient, inventari
 
 
 def test_pasta_so_para_admin(client: TestClient, inventario_antigo: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-ana")
+    monkeypatch.setattr("app.sessao._resolve_user_id", lambda email: "u-ana")
     de_user = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*USER)).json()
     de_admin = client.get("/api/certificados?fonte=remoto&todas_filtradas=true", headers=_h(*ADMIN)).json()
     assert all("pasta" not in it for it in de_user["itens"])
@@ -288,7 +288,7 @@ def test_snapshot_antigo_ainda_no_banco_sai_sanitizado(client: TestClient, banco
     banco.tabelas["cert_snapshots"].append({"id": "s1", "machine_id": "srv", "scanned_at": "2026-09-01T00:00:00+00:00",
                                             "source_folder": "F:/C", "expired_folder": "F:/V",
                                             "items": [_item_bruto()]})
-    monkeypatch.setattr(m, "_resolve_user_id", lambda email: "u-ana")
+    monkeypatch.setattr("app.sessao._resolve_user_id", lambda email: "u-ana")
     for rota in ["/api/certificados?fonte=remoto&todas_filtradas=true", "/api/certificados/duplicidades",
                  "/api/certificados/historico"]:
         r = client.get(rota, headers=_h(*USER))

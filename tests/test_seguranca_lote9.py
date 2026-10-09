@@ -115,7 +115,7 @@ def test_migration_da_versao_de_sessao_existe() -> None:
 def test_a_sessao_le_a_coluna_da_versao() -> None:
     """Mesma lógica de `test_sessao_le_a_coluna_da_troca_de_senha`: o fake
     devolve a linha inteira e não pegaria a coluna fora do select."""
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    fonte = (RAIZ / "app" / "sessao.py").read_text(encoding="utf-8")
     trecho = fonte.split("def _conta_da_sessao")[1].split("\ndef ")[0]
     selects = re.findall(r'\.select\(\s*"([^"]*)"', trecho)
     assert selects and all("sessao_versao" in s for s in selects)

@@ -129,7 +129,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     })
     monkeypatch.setattr(ci, "_banco", lambda: fake)
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
-    monkeypatch.setattr(m, "_resolve_user_id",
+    monkeypatch.setattr("app.sessao._resolve_user_id",
                         lambda email: {
                             "admin@x.com": "u-adm",
                             "lider.fiscal@x.com": "u-lf",
