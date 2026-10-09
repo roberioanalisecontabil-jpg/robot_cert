@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import auth, config, machine_credentials, permissoes, sessao_cookie
+from app import agent_devices, auth, config, machine_credentials, permissoes, sessao_cookie
 
 logger = logging.getLogger("app.main")
 
@@ -593,3 +593,15 @@ def _resolve_user_id(email: str) -> Optional[str]:
     except Exception:
         logger.exception("Erro ao resolver user_id para email=%s", email)
     return None
+
+
+def _sb_do_login():
+    from app.settings_state import _banco
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Sistema sem banco configurado para login.")
+    return sb
+
+
+def _erro_sem_banco(e: agent_devices.SemBanco) -> HTTPException:
+    return HTTPException(status_code=503, detail=str(e))
