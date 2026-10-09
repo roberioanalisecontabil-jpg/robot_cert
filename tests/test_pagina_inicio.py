@@ -126,3 +126,15 @@ def test_vocabulario_dos_modulos_do_inicio() -> None:
     for arq in ("app/cert_installer.py", "app/novos_certificados.py", "app/notification_service.py"):
         texto = (RAIZ / arq).read_text(encoding="utf-8")
         assert "líder" not in texto and "setores" not in texto.lower(), arq
+
+
+def test_instalar_nao_apaga_o_rotulo_do_botao() -> None:
+    """09/10/2026: `btn.textContent = "Enviando..."` apagava o ícone e o
+    <span class="cg-btn__rotulo">; atualizarBarraSelecao() procurava o span e
+    o clique em Instalar caía em "Cannot set properties of null"."""
+    from pathlib import Path
+
+    html = (Path(__file__).resolve().parent.parent / "templates" / "index.html").read_text(encoding="utf-8")
+    trecho = html.split("async function instalarNaEstacao")[1].split("\n      }\n")[0]
+    assert "btn.textContent =" not in trecho
+    assert 'querySelector(".cg-btn__rotulo").textContent' not in html, "procurar o rótulo sem conferir se existe"

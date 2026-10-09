@@ -629,7 +629,8 @@
         document.getElementById("table-container-dash").classList.toggle("is-selecionando", ligado);
         const btn = document.getElementById("btnModoSelecao");
         btn.setAttribute("aria-pressed", String(ligado));
-        btn.querySelector(".cg-btn__rotulo").textContent = ligado ? "Cancelar" : "Selecionar";
+        const rotuloSel = btn.querySelector(".cg-btn__rotulo");
+        if (rotuloSel) rotuloSel.textContent = ligado ? "Cancelar" : "Selecionar";
         if (!ligado) {
           _selecao.clear();
           sincronizarCheckboxesDaPagina();
@@ -698,7 +699,8 @@
         if (!ativa) return;
         document.getElementById("selContagem").textContent =
           n === 1 ? "1 certificado selecionado" : `${n} certificados selecionados`;
-        btn.querySelector(".cg-btn__rotulo").textContent = `Instalar selecionados (${n})`;
+        const rotuloBtn = btn.querySelector(".cg-btn__rotulo");
+        if (rotuloBtn) rotuloBtn.textContent = `Instalar selecionados (${n})`;
         const excedeu = n > MAX_CERTIFICADOS;
         document.getElementById("selAviso").textContent = excedeu
           ? `Máximo de ${MAX_CERTIFICADOS} por instalador — desmarque ${n - MAX_CERTIFICADOS}.`
@@ -895,8 +897,12 @@
         if (!escolhidos.length) return;
 
         btn.disabled = true;
-        const rotulo = btn.textContent;
-        btn.textContent = "Enviando...";
+        // Só o rótulo muda: trocar o textContent do botão apagava o ícone e o
+        // <span> do rótulo, e atualizarBarraSelecao() quebrava ao procurá-lo
+        // ("Cannot set properties of null", 09/10/2026).
+        const rotuloEl = btn.querySelector(".cg-btn__rotulo");
+        const rotulo = rotuloEl ? rotuloEl.textContent : "";
+        if (rotuloEl) rotuloEl.textContent = "Enviando...";
         try {
           // A máquina lida ao abrir a página pode ter mudado (a pessoa entrou
           // na bandeja de outro computador, o vínculo caiu): confere de novo.
@@ -928,7 +934,7 @@
           showToast("Não foi possível instalar: " + e.message, "error");
         } finally {
           btn.disabled = false;
-          btn.textContent = rotulo;
+          if (rotuloEl) rotuloEl.textContent = rotulo;
         }
       }
 
