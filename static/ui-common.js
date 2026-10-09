@@ -1,6 +1,7 @@
 /**
  * Funções partilhadas entre o painel (/) e a configuração (/configuracao).
- * O token JWT fica no localStorage do browser.
+ * A sessão fica num cookie HttpOnly desde 09/10/2026 (Leva D): o JavaScript
+ * não lê o token; ele vai sozinho em cada requisição ao mesmo site.
  */
 (function() {
   const currentTheme = localStorage.getItem("cert_robot_theme");
@@ -9,7 +10,8 @@
   }
 })();
 
-const KEY_STORAGE = "cert_robot_api_key"; // Agora armazena o Token JWT
+// Onde o JWT morava até a Leva D. Só serve para apagar o que ficou de antes.
+const KEY_STORAGE = "cert_robot_api_key";
 const FONT_STORAGE = "cert_robot_data_fonte";
 // Formato: {email, modulos}. Ver `initSidebarPorPapel` para o porque do e-mail.
 const MENU_CACHE_STORAGE = "cg_menu_modulos";
@@ -26,30 +28,30 @@ function setDataFonte(_v) {
   try { localStorage.removeItem(FONT_STORAGE); } catch (_e) { /* sem storage */ }
 }
 
-// Sem sessão, a página nem monta (decisão L2): até 30/09 o HTML inteiro era
-// entregue e a expulsão só vinha no primeiro 401 da API. O servidor não tem
-// como guardar a rota HTML — o token vive no localStorage —, então a cerca é
-// aqui, antes de qualquer fetch; `next` devolve a pessoa à página de origem.
-(function exigirSessao() {
-  try {
-    if (window.location.pathname.startsWith("/login")) return;
-    if (localStorage.getItem(KEY_STORAGE)) return;
-    const destino = window.location.pathname + window.location.search;
-    window.location.replace("/login?next=" + encodeURIComponent(destino));
-  } catch (_e) { /* sem storage: deixa a API decidir */ }
+// A cerca das páginas mora no servidor desde a Leva D (09/10/2026): sem
+// sessão no cookie, ele manda ao login antes de entregar o HTML. O token que
+// ficou no localStorage de antes não serve para mais nada e sai aqui.
+(function apagarTokenAntigo() {
+  try { localStorage.removeItem(KEY_STORAGE); } catch (_e) { /* sem storage */ }
 })();
 
-function getToken() {
-  return localStorage.getItem(KEY_STORAGE) || "";
+function lerCookie(nome) {
+  const par = document.cookie.split("; ").find((c) => c.startsWith(nome + "="));
+  return par ? decodeURIComponent(par.slice(nome.length + 1)) : "";
+}
+
+// O cookie anti-CSRF é legível (o de sessão não): presença dele = há sessão.
+function temSessao() {
+  return !!lerCookie("cg_csrf");
 }
 
 function getHeaders(json = false) {
   const h = {};
   if (json) h["Content-Type"] = "application/json";
-  const token = getToken();
-  if (token) {
-    h["Authorization"] = `Bearer ${token}`;
-  }
+  // Repete o valor do cookie anti-CSRF: o servidor recusa alteração vinda
+  // pelo cookie de sessão sem ele (outro site não consegue ler o valor).
+  const csrf = lerCookie("cg_csrf");
+  if (csrf) h["X-CSRF-Token"] = csrf;
   return h;
 }
 
@@ -66,12 +68,11 @@ function logout(motivo) {
   // copiado. `keepalive` porque a página vai embora logo abaixo; a limpeza
   // local não espera a resposta — se a rede falhar, o navegador sai do mesmo
   // jeito, como sempre saiu.
-  try {
-    const token = localStorage.getItem(KEY_STORAGE);
-    if (token) {
-      fetch("/api/logout", { method: "POST", headers: { Authorization: "Bearer " + token }, keepalive: true }).catch(() => {});
-    }
-  } catch (e) { /* sem storage, sem sessão a encerrar */ }
+  // O cookie de sessão sai pela resposta do servidor; se ela não chegar, a
+  // tela de login abre igual e o cookie expira no prazo dele.
+  if (temSessao()) {
+    fetch("/api/logout", { method: "POST", headers: getHeaders(), keepalive: true }).catch(() => {});
+  }
   localStorage.removeItem(KEY_STORAGE);
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_email');
@@ -1548,8 +1549,7 @@ function _initFiltrosNotificacoes() {
 }
 
 async function fetchNotifications() {
-  const token = getToken();
-  if (!token) return;
+  if (!temSessao()) return;
   const body = document.getElementById("notifications-body");
   if (!body) return;
 
@@ -1592,8 +1592,7 @@ async function fetchNotifications() {
 
 function initNotifications() {
   if (document.getElementById("notifications-container")) return;
-  const token = getToken();
-  if (!token) return;
+  if (!temSessao()) return;
 
   let bar = document.getElementById("topbar-actions");
   if (!bar) {

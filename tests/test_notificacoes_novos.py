@@ -566,7 +566,7 @@ def test_estilo_do_novo_e_busters() -> None:
     for t in (ROOT / "templates").glob("*.html"):
         s = t.read_text(encoding="utf-8")
         if "ui-common.js?v=" in s:
-            assert "ui-common.js?v=aguia-2026-10a" in s, t.name  # 10a: Leva B (03/10)
+            assert "ui-common.js?v=leva-d-2026-10" in s, t.name  # 10a: Leva B (03/10)
         if "style.css?v=" in s:
             assert "style.css?v=menu-lateral-2026-09d" in s, t.name
 

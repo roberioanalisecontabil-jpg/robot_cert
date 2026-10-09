@@ -21,14 +21,14 @@ from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile, BackgroundTasks
 from fastapi import Path as PathParam
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, atividade, auth, config, correio, db_pg, graph_mail, machine_credentials, nome_publico, nomes, papeis, permissoes, senha_reset, taxa
+from app import agent_devices, atividade, auth, config, correio, db_pg, graph_mail, machine_credentials, nome_publico, nomes, papeis, permissoes, senha_reset, sessao_cookie, taxa
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict, formatar_cnpj_cpf, move_to_expired, scan_folder
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
@@ -300,8 +300,21 @@ async def require_auth(
     """
     # 1. Tentar JWT. Assinatura válida ainda não é sessão válida: `_sessao_do_token`
     #    confere no banco se a conta segue existindo, ativa, e com qual papel.
-    if auth_creds:
-        token_data = auth.decode_access_token(auth_creds.credentials)
+    #    O navegador manda o JWT no cookie HttpOnly (Leva D, 09/10/2026); o
+    #    cabeçalho Bearer continua aceito na transição e vale primeiro.
+    credencial = auth_creds.credentials if auth_creds else None
+    via_cookie = False
+    if not credencial and not x_api_key:
+        # Credencial explícita (Bearer, X-API-Key do agente) vale antes do
+        # cookie: o cookie é o que o navegador manda sozinho.
+        credencial = sessao_cookie.token_do_cookie(request)
+        via_cookie = bool(credencial)
+    if credencial:
+        token_data = auth.decode_access_token(credencial)
+        if token_data and via_cookie and not sessao_cookie.csrf_confere(request):
+            # Outro site consegue fazer o navegador mandar o cookie (num
+            # formulário, por exemplo), mas não consegue ler o par anti-CSRF.
+            raise HTTPException(status_code=403, detail="Sessão sem a confirmação de origem. Recarregue a página.")
 
         # 1b. (Até 05/09/2026 havia aqui um segundo caminho: token do Supabase
         #     Auth, a "lista única de pessoas" da fase 3. O portal não roda mais
@@ -790,6 +803,41 @@ app = FastAPI(
 )
 
 import secrets
+
+@app.middleware("http")
+async def paginas_exigem_sessao_middleware(request: Request, call_next):
+    """As páginas só abrem com sessão (Leva D, 09/10/2026).
+
+    Registrado ANTES do de cabeçalhos de segurança para ficar por dentro dele:
+    o redirecionamento também sai com CSP, HSTS etc.
+
+    Até aqui o HTML ia para qualquer um e a cerca era um `if` no JavaScript
+    (o token morava no `localStorage`, que o servidor não vê). Com a sessão no
+    cookie, o servidor confere antes de entregar a página e manda ao login,
+    com `next`, quem não tem sessão válida. Vale quando o portal está fechado
+    (`API_KEY` configurada), a mesma regra que `require_auth` segue na API.
+    """
+    if (request.method in ("GET", "HEAD") and request.url.path in sessao_cookie.PAGINAS
+            and config.API_KEY):
+        valida = False
+        token = sessao_cookie.token_do_cookie(request)
+        dados = auth.decode_access_token(token) if token else None
+        if dados:
+            try:
+                _sessao_do_token(dados)
+                valida = True
+            except HTTPException:
+                valida = False
+        if not valida:
+            from urllib.parse import quote
+
+            destino = request.url.path + (("?" + request.url.query) if request.url.query else "")
+            resposta = RedirectResponse(url="/login?next=" + quote(destino, safe=""), status_code=303)
+            if token:
+                sessao_cookie.apagar(resposta, request)
+            return resposta
+    return await call_next(request)
+
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
@@ -1447,7 +1495,7 @@ def _hash_falso() -> str:
 
 
 @app.post("/api/login")
-def login(body: LoginBody, request: Request) -> dict:
+def login(body: LoginBody, request: Request, response: Response) -> dict:
     # Teto por IP ANTES de qualquer ida ao banco (junto do item 13 da Frente
     # 2; achado do levantamento de superfície anônima de 01/09/2026): o /claim
     # sempre teve teto e o login não — e login é o alvo clássico de spray de
@@ -1480,6 +1528,10 @@ def login(body: LoginBody, request: Request) -> dict:
             # este token deixa de valer. Coluna ausente (migration pendente) → 0.
             "sv": int(user.get("sessao_versao") or 0),
         })
+        # Leva D: a sessão do navegador vai no cookie HttpOnly. O token no
+        # corpo fica durante a transição (scripts e abas antigas); a tela de
+        # login não o guarda mais.
+        sessao_cookie.gravar(response, request, token)
         return {"access_token": token, "token_type": "bearer", "role": user["role"]}
     except HTTPException:
         # O `except Exception` abaixo engolia estas: uma senha errada saía como
@@ -1493,7 +1545,7 @@ def login(body: LoginBody, request: Request) -> dict:
 
 
 @app.post("/api/logout")
-def logout(request: Request, token: auth.TokenData = Depends(require_auth)) -> dict:
+def logout(request: Request, response: Response, token: auth.TokenData = Depends(require_auth)) -> dict:
     """
     Sair de verdade (achado #23): incrementa `users.sessao_versao`, e todo
     token desta conta emitido com a versão anterior passa a ser recusado por
@@ -1506,6 +1558,7 @@ def logout(request: Request, token: auth.TokenData = Depends(require_auth)) -> d
     """
     from app.settings_state import _banco
 
+    sessao_cookie.apagar(response, request)
     sb = _banco()
     uid = _user_id_da_sessao(token)
     if not sb or not uid:

@@ -243,7 +243,8 @@
     </main>
 
     <script nonce="{{ request.state.nonce }}">
-        const KEY_STORAGE = "cert_robot_api_key"; // o nome ficou por compatibilidade; guarda o JWT
+        // Onde o JWT morava até a Leva D (09/10/2026); só para apagar o de antes.
+        const KEY_STORAGE = "cert_robot_api_key";
 
         // Para onde ir depois de entrar: a página de origem (`?next=`), quando
         // for um caminho deste portal; senão o Início. Nada de URL absoluta.
@@ -251,6 +252,21 @@
             const next = new URLSearchParams(location.search).get("next") || "";
             return /^\/(?!\/)[^\s]*$/.test(next) && !next.startsWith("/login") ? next : "/";
         }
+
+        // Já há sessão (o cookie anti-CSRF é legível; o de sessão, não)? Então
+        // a pessoa chegou aqui por um link de outro site — um e-mail, por
+        // exemplo —, e o SameSite=Strict não deixou o cookie ir junto. Daqui a
+        // navegação é do próprio portal e o cookie vai. Uma vez só por minuto:
+        // se a sessão não valer, o servidor apaga os cookies e a tela fica.
+        (function seguirSeJaTemSessao() {
+            try {
+                if (!document.cookie.split("; ").some((c) => c.startsWith("cg_csrf="))) return;
+                const ultima = Number(sessionStorage.getItem("cg_login_seguiu") || 0);
+                if (Date.now() - ultima < 60000) return;
+                sessionStorage.setItem("cg_login_seguiu", String(Date.now()));
+                location.replace(destinoAposLogin());
+            } catch (_e) { /* sem storage: fica na tela de login */ }
+        })();
 
         // Mensagem de um erro HTTP: `detail` pode ser texto (nossos erros) ou a
         // lista do validador do servidor — que virava "[object Object]".
@@ -322,7 +338,9 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    localStorage.setItem(KEY_STORAGE, data.access_token);
+                    // A sessão veio no cookie HttpOnly (Leva D); o token do
+                    // corpo não é guardado. Apaga o de antes, se houver.
+                    localStorage.removeItem(KEY_STORAGE);
                     localStorage.setItem('user_role', data.role);
                     localStorage.setItem('user_email', email);
                     window.location.href = destinoAposLogin();
@@ -461,7 +479,7 @@
                 // nesta tela, e o código já provou quem é a pessoa.
                 const login = await postar('/api/login', { email, password: senha });
                 if (login.ok) {
-                    localStorage.setItem(KEY_STORAGE, login.dados.access_token);
+                    localStorage.removeItem(KEY_STORAGE);
                     localStorage.setItem('user_role', login.dados.role);
                     localStorage.setItem('user_email', email);
                     window.location.href = destinoAposLogin();

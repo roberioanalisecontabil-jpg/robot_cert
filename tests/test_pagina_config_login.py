@@ -73,7 +73,9 @@ def test_codigo_morto_do_login_antigo_saiu() -> None:
 def test_gate_de_administrador_num_ponto_so() -> None:
     ui = (RAIZ / "static" / "ui-common.js").read_text(encoding="utf-8")
     assert "function gateAdmin" in ui and 'dataset.soAdmin !== "1"' in ui
-    assert "function exigirSessao" in ui and '"/login?next="' in ui, "L2"
+    # L2 (sem sessão a página nem monta) saiu do navegador para o servidor na
+    # Leva D (09/10/2026): ver tests/test_sessao_cookie.py.
+    assert "function exigirSessao" not in ui and "function apagarTokenAntigo" in ui, "L2"
     assert 'logout("sessao")' in ui and "Sessão encerrada. Entre novamente." in ui
     assert 'minlength="12"' in ui and 'minlength="6"' not in ui
     assert 'return "auto";' in ui, "L3: fonte fixa"
