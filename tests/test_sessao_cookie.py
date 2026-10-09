@@ -98,3 +98,10 @@ def test_paginas_guardadas_sao_as_do_menu() -> None:
             if "GET" in getattr(r, "methods", set())
             and getattr(getattr(r, "response_class", None), "__name__", "") == "HTMLResponse"}
     assert html - {"/login"} == set(sessao_cookie.PAGINAS), "página nova sem a cerca do servidor (ou cerca sobrando)"
+
+
+def test_o_token_nao_volta_no_corpo_do_login(client: TestClient, banco: _Fake) -> None:
+    """Fim da transição (09/10/2026): no corpo, um script da página o leria."""
+    r = _entrar(client)
+    assert "access_token" not in r.json() and r.json()["role"]
+    assert r.cookies.get("cg_sessao") not in r.text

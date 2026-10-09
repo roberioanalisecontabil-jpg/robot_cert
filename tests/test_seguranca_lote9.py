@@ -91,7 +91,7 @@ def test_login_emite_token_com_a_versao_da_sessao(client: TestClient, banco: _Fa
     banco.tabelas["users"][1]["sessao_versao"] = 4
     r = client.post("/api/login", json={"email": "ana@x.com", "password": SENHA})
     assert r.status_code == 200, r.text
-    dados = auth.decode_access_token(r.json()["access_token"])
+    dados = auth.decode_access_token(r.cookies["cg_sessao"])
     assert dados is not None and dados.sessao_versao == 4
 
 

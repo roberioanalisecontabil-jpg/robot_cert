@@ -106,7 +106,7 @@ def test_o_sub_do_token_sai_normalizado(client: TestClient, banco: _Fake) -> Non
     login funcionaria e o portal se comportaria como se o token fosse inválido.
     """
     r = _login(client, "ANA@X.COM")
-    dados = auth.decode_access_token(r.json()["access_token"])
+    dados = auth.decode_access_token(r.cookies["cg_sessao"])
     assert dados.email == "ana@x.com"
 
 

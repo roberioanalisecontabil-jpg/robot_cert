@@ -139,7 +139,7 @@ def _token(client: TestClient, segredo: str):
 def _cabecalho(client: TestClient, email: str = EMAIL) -> Dict[str, str]:
     r = client.post("/api/login", json={"email": email, "password": SENHA})
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['cg_sessao']}"}
 
 
 # ──────────────────────────────────────────────────────────────────────────

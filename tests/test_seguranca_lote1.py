@@ -536,7 +536,7 @@ def test_conta_importada_por_csv_nasce_com_senha_provisoria(client: TestClient, 
 def test_senha_do_csv_nao_abre_o_portal(client: TestClient, banco: _Fake) -> None:
     client.post("/api/users/import", headers=_h(*ADMIN),
                 files=_csv("nome;email;senha;nivel;departamento\nBia;bia@x.com;senha-123456;user;Fiscal\n"))
-    token = _login(client, "bia@x.com", "senha-123456").json()["access_token"]
+    token = _login(client, "bia@x.com", "senha-123456").cookies["cg_sessao"]
     r = client.get("/api/permissoes/minhas", headers={"Authorization": "Bearer " + token})
     assert r.status_code == 403
     assert r.headers.get("X-Senha-Provisoria") == "1"
@@ -572,7 +572,7 @@ def test_reset_por_admin_derruba_a_sessao_antiga(
 
     with monkeypatch.context() as mp:
         mp.setattr(auth, "datetime", _Passado)
-        token_ana = _login(client, "ana@x.com").json()["access_token"]
+        token_ana = _login(client, "ana@x.com").cookies["cg_sessao"]
     assert client.post("/api/users/u-ana/reset-password", headers=_h(*ADMIN),
                        json={"password": "senha-123456"}).status_code == 200
     r = client.post("/api/senha/trocar", headers={"Authorization": "Bearer " + token_ana},

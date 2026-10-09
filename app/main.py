@@ -1528,11 +1528,12 @@ def login(body: LoginBody, request: Request, response: Response) -> dict:
             # este token deixa de valer. Coluna ausente (migration pendente) → 0.
             "sv": int(user.get("sessao_versao") or 0),
         })
-        # Leva D: a sessão do navegador vai no cookie HttpOnly. O token no
-        # corpo fica durante a transição (scripts e abas antigas); a tela de
-        # login não o guarda mais.
+        # Leva D: a sessão do navegador vai SÓ no cookie HttpOnly. O token não
+        # volta no corpo desde 09/10/2026 (fim da transição): no corpo, um
+        # script da página o leria. O cabeçalho Bearer continua aceito para
+        # quem tem um token por outro meio (testes, credencial de dispositivo).
         sessao_cookie.gravar(response, request, token)
-        return {"access_token": token, "token_type": "bearer", "role": user["role"]}
+        return {"token_type": "cookie", "role": user["role"]}
     except HTTPException:
         # O `except Exception` abaixo engolia estas: uma senha errada saía como
         # 500 com "401: E-mail ou senha incorretos." no corpo — mensagem certa,

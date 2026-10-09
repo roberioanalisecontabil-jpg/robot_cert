@@ -65,7 +65,7 @@ def _provisionar(client: TestClient, chave: str, maquina: str = MAQUINA):
 def _cabecalho_admin(client: TestClient) -> Dict[str, str]:
     r = client.post("/api/login", json={"email": ADMIN, "password": SENHA})
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['cg_sessao']}"}
 
 
 # ──────────────────────────────────────────────────────────────────────────
