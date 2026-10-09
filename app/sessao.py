@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, auth, config, machine_credentials, permissoes, sessao_cookie
+from app import agent_devices, auth, config, machine_credentials, permissoes, sessao_cookie, taxa
 
 logger = logging.getLogger("app.main")
 
@@ -605,3 +605,48 @@ def _sb_do_login():
 
 def _erro_sem_banco(e: agent_devices.SemBanco) -> HTTPException:
     return HTTPException(status_code=503, detail=str(e))
+
+
+def _ip_do_cliente(request: Request) -> str:
+    """O IP de quem chama, atrás de `config.NUM_PROXIES_CONFIAVEIS` proxies.
+
+    Contado a partir do FIM do X-Forwarded-For: cada proxy anexa o IP de quem
+    falou com ele, então só os N últimos valores foram escritos por alguém de
+    confiança. O primeiro valor é o que o cliente mandou — até o lote 1 da
+    auditoria (24/09/2026) era ele que virava a chave do rate limit, e um
+    `X-Forwarded-For: 1.2.3.<n>` novo a cada requisição tornava os tetos do
+    login e do /claim decorativos (achado #6).
+
+    Sem proxy configurado, ou com cabeçalho mais curto que a cadeia esperada
+    (alguém forjou o cabeçalho sem passar por proxy nenhum), vale o socket.
+    Antes de existir esta função os limites usavam `request.client.host`, que
+    atrás do proxy é o PROXY — teto global compartilhado por todo mundo.
+    """
+    socket_ip = request.client.host if request.client else "desconhecido"
+    n = int(getattr(config, "NUM_PROXIES_CONFIAVEIS", 0) or 0)
+    if n <= 0:
+        return socket_ip
+    cadeia = [
+        p.strip()
+        for p in (request.headers.get("x-forwarded-for") or "").split(",")
+        if p.strip()
+    ]
+    if len(cadeia) >= n:
+        return cadeia[-n]
+    return socket_ip
+
+
+def _limitar(prefixo: str, maximo: int, janela_seg: float):
+    """Teto por IDENTIDADE para rotas caras (achados #28, #60).
+
+    Por identidade, e não por IP: estas rotas exigem sessão, e a identidade é
+    o que o atacante não troca de graça. A janela é a durável de `app/taxa.py`.
+    """
+
+    async def _dep(request: Request, token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
+        quem = (token.email or "").strip().lower() or _ip_do_cliente(request)
+        if not taxa.permitir(f"{prefixo}:{quem}", maximo, janela_seg):
+            raise HTTPException(status_code=429, detail="Muitas requisições. Aguarde alguns minutos.")
+        return token
+
+    return _dep

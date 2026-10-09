@@ -70,6 +70,8 @@ from app.settings_state import (
 )
 
 from app.sessao import (  # noqa: F401 — Frente 3, leva 1: reexportados para rotas e testes
+    _ip_do_cliente,
+    _limitar,
     _erro_sem_banco,
     _sb_do_login,
     security,
@@ -98,6 +100,13 @@ from app.sessao import (  # noqa: F401 — Frente 3, leva 1: reexportados para r
     require_admin_ou_agente_leitura,
     _parse_iso_utc,
     _resolve_user_id,
+)
+from app.alcance import (  # noqa: F401 — Frente 3, leva 3
+    _documentos_ao_alcance,
+    _marcar_instalaveis,
+    _no_alcance,
+    _no_cofre,
+    _recortar_pela_carteira,
 )
 
 # O que se mascara no log (achado #57, lote 9): VALORES, não frases. Até aqui
@@ -1188,20 +1197,6 @@ async def _ler_upload_limitado(request: Request, file: Any) -> bytes:
     return b"".join(partes)
 
 
-def _limitar(prefixo: str, maximo: int, janela_seg: float):
-    """Teto por IDENTIDADE para rotas caras (achados #28, #60).
-
-    Por identidade, e não por IP: estas rotas exigem sessão, e a identidade é
-    o que o atacante não troca de graça. A janela é a durável de `app/taxa.py`.
-    """
-
-    async def _dep(request: Request, token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
-        quem = (token.email or "").strip().lower() or _ip_do_cliente(request)
-        if not taxa.permitir(f"{prefixo}:{quem}", maximo, janela_seg):
-            raise HTTPException(status_code=429, detail="Muitas requisições. Aguarde alguns minutos.")
-        return token
-
-    return _dep
 
 
 @app.post("/api/users/import", dependencies=[Depends(require_admin)])
@@ -4037,53 +4032,12 @@ def _status_prioridade(status: str) -> int:
     return 0
 
 
-def _documentos_ao_alcance(token: auth.TokenData) -> Optional[Set[str]]:
-    """O que esta sessão pode LER, em documentos. `None` = tudo.
-
-    Um ponto só para todas as leituras do acervo (achados #5, #32): antes o
-    portal impedia INSTALAR fora da carteira e deixava LER a base inteira de
-    clientes. Sem banco configurado (modo local de arquivos) não há
-    diretório de usuários nem carteira — e nem login que emita sessão — então
-    não há por onde recortar; a leitura segue como sempre seguiu.
-    """
-    from app.settings_state import _banco
-
-    papel = (token.role or "").strip().lower()
-    if papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL or papel == "agent":
-        return None
-    if not _banco():
-        return None
-    try:
-        return cert_installer.documentos_ao_alcance(_user_id_da_sessao(token) or "", papel)
-    except (cert_installer.CarteiraIndisponivel, cert_installer.AlcanceIndisponivel) as e:
-        logger.warning("Alcance de leitura indisponível para %s: %s", token.email, e)
-        raise HTTPException(status_code=503, detail="Não foi possível verificar sua carteira. Tente de novo.")
 
 
-def _no_alcance(it: dict, alcance: Optional[Set[str]]) -> bool:
-    if alcance is None:
-        return True
-    doc = cert_installer.so_digitos(it.get("documento_numero") or it.get("documento_digitos") or it.get("documento"))
-    return bool(doc and doc in alcance)
 
 
-def _marcar_instalaveis(itens: List[dict], alcance: Optional[Set[str]]) -> None:
-    """`instalavel` em cada item do Início: está na carteira de quem pergunta."""
-    for it in itens:
-        it["instalavel"] = _no_alcance(it, alcance)
 
 
-def _recortar_pela_carteira(itens: List[dict], alcance: Optional[Set[str]]) -> List[dict]:
-    """Só os itens cujo documento está no alcance. Item sem documento não é
-    de ninguém e fica de fora para quem não tem alcance total."""
-    if alcance is None:
-        return itens
-    saida = []
-    for it in itens:
-        doc = cert_installer.so_digitos(it.get("documento_numero") or it.get("documento_digitos") or it.get("documento"))
-        if doc and doc in alcance:
-            saida.append(it)
-    return saida
 
 
 def _lista_base_docs_historico() -> List[dict]:
@@ -4286,202 +4240,14 @@ def _atributo_rfc4514(dn: Optional[str], nome: str) -> Optional[str]:
     return re.sub(r"\\(.)", r"\1", m.group(1)).strip() or None
 
 
-def _no_cofre(fingerprint: str) -> Optional[bool]:
-    """Há PFX deste certificado no cofre? `None` = não deu para saber."""
-    from app.settings_state import _banco
-
-    client = _banco()
-    if not client:
-        return None
-    try:
-        r = client.table("cert_pfx_store").select("id").eq("fingerprint", fingerprint).limit(1).execute()
-        return bool(r.data)
-    except Exception:  # noqa: BLE001
-        logger.exception("Falha ao consultar o cofre para o modal de detalhes")
-        return None
 
 
-# ──────────────────────────────────────────────────────────────────────────
-# SIEG (07/10/2026) — docs/modal-detalhes-e-sieg.md, regras em app/sieg.py
-#
-# Ligar: quem tem o certificado no alcance (a regra da instalação, a mesma
-# da rota de detalhes). Configurar, testar, sincronizar, reconciliar e a
-# aba do Instalador: administrador.
-# ──────────────────────────────────────────────────────────────────────────
+# SIEG: app/rotas/sieg.py (Frente 3, leva 3).
+from app.rotas.sieg import router as _rotas_sieg  # noqa: E402
 
-FP_PARAM = PathParam(..., min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
+app.include_router(_rotas_sieg)
 
 
-def _certificado_no_alcance(fp: str, token: auth.TokenData, exigir_carteira: bool = True) -> Tuple[dict, dict]:
-    """(item do inventário, snapshot) — 404 se inexistente ou, quando
-    `exigir_carteira`, fora da carteira. Ler a situação no SIEG é de todos
-    (08/10/2026); ligar o interruptor segue a carteira, como instalar."""
-    snap = get_latest_snapshot() or {}
-    fp = fp.lower()
-    item = next((it for it in (snap.get("items") or []) if (it.get("fingerprint_sha256") or "").lower() == fp), None)
-    if item is None or (exigir_carteira and not _no_alcance(item, _documentos_ao_alcance(token))):
-        raise HTTPException(status_code=404, detail="Certificado não encontrado.")
-    return item, snap
-
-
-def _quem(token: auth.TokenData) -> str:
-    return (token.email or "").strip().lower() or "?"
-
-
-def _sieg_payload(item: dict, settings) -> dict:
-    fp = item["fingerprint_sha256"].lower()
-    atual = sieg.estado(fp)
-    motivo = None if atual and atual["ligado"] else sieg.motivo_para_nao_ligar(item, _no_cofre(fp), settings)
-    return {
-        "estado": atual,
-        "motivo": motivo,
-        "motivo_texto": sieg.MOTIVOS.get(motivo) if motivo else None,
-        "configurado": sieg.configurado(settings),
-        "trilha": sieg.trilha(fp, limite=10) if atual else [],
-    }
-
-
-@app.get("/api/sieg/certificado/{fingerprint}", dependencies=[Depends(require_auth)])
-def sieg_do_certificado(fingerprint: str = FP_PARAM, token: auth.TokenData = Depends(require_auth)) -> dict:
-    item, _snap = _certificado_no_alcance(fingerprint, token, exigir_carteira=False)
-    return {**_sieg_payload(item, load_settings()), "na_carteira": _no_alcance(item, _documentos_ao_alcance(token))}
-
-
-@app.post("/api/sieg/certificado/{fingerprint}/incluir", status_code=202,
-          dependencies=[Depends(require_auth), Depends(_limitar("sieg-incluir", 60, 3600))])
-def sieg_incluir(background: BackgroundTasks, fingerprint: str = FP_PARAM,
-                 token: auth.TokenData = Depends(require_auth)) -> dict:
-    """Liga o interruptor: grava "incluindo" e faz a chamada em segundo plano."""
-    item, snap = _certificado_no_alcance(fingerprint, token)
-    settings = load_settings()
-    atual = sieg.estado(item["fingerprint_sha256"])
-    if atual and atual["estado"] in (sieg.INCLUINDO, sieg.NO_SIEG, sieg.SUBSTITUIDO):
-        raise HTTPException(status_code=409, detail="Este certificado já foi ligado ao SIEG.")
-    motivo = sieg.motivo_para_nao_ligar(item, _no_cofre(item["fingerprint_sha256"].lower()), settings)
-    if motivo:
-        raise HTTPException(status_code=409, detail=sieg.MOTIVOS[motivo])
-    try:
-        sieg.solicitar(item, _quem(token))
-    except sieg.SiegIndisponivel:
-        raise HTTPException(status_code=503, detail="Não foi possível gravar o pedido. Tente de novo.")
-    background.add_task(sieg.executar, item, settings, _quem(token), machine_id=snap.get("machine_id"))
-    return _sieg_payload(item, settings)
-
-
-@app.post("/api/sieg/certificado/{fingerprint}/reconciliar", dependencies=[Depends(require_admin)])
-def sieg_reconciliar(fingerprint: str = FP_PARAM, token: auth.TokenData = Depends(require_auth)) -> dict:
-    item, _snap = _certificado_no_alcance(fingerprint, token)
-    settings = load_settings()
-    try:
-        sieg.reconciliar(item["fingerprint_sha256"].lower(), settings, _quem(token))
-    except LookupError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    except SiegErro as e:
-        raise HTTPException(status_code=502, detail=f"Não foi possível consultar o SIEG: {e}")
-    return _sieg_payload(item, settings)
-
-
-@app.get("/api/sieg/inclusoes", dependencies=[Depends(require_admin)])
-def sieg_inclusoes(estado: Optional[str] = Query(None, max_length=20),
-                   limite: int = Query(500, ge=1, le=2000)) -> dict:
-    """Aba SIEG do Instalador: um certificado por linha, com a última tentativa."""
-    linhas = sorted(sieg.estados(None).values(), key=lambda l: str(l.get("solicitado_em") or ""), reverse=True)
-    resumo: Dict[str, int] = {}
-    for l in linhas:
-        resumo[l["estado"]] = resumo.get(l["estado"], 0) + 1
-    if estado:
-        linhas = [l for l in linhas if l["estado"] == estado]
-    return {"itens": linhas[:limite], "total": len(linhas), "resumo": resumo,
-            "rotulos": sieg.ROTULOS, "configurado": sieg.configurado(load_settings())}
-
-
-@app.get("/api/sieg/trilha", dependencies=[Depends(require_admin)])
-def sieg_trilha_rota(fingerprint: Optional[str] = Query(None, min_length=64, max_length=64),
-                     limite: int = Query(200, ge=1, le=1000)) -> dict:
-    return {"itens": sieg.trilha(fingerprint, limite=limite)}
-
-
-class SiegConfigBody(BaseModel):
-    client_id: Optional[str] = Field(None, max_length=200)
-    secret_key: Optional[str] = Field(None, max_length=1024)  # vazio/None = mantém
-    api_key: Optional[str] = Field(None, max_length=1024)     # vazio/None = mantém
-    padroes: Optional[Dict[str, Any]] = None
-
-
-def _sieg_config_dict(s) -> dict:
-    return {
-        "client_id": s.sieg_client_id,
-        "secret_key_set": bool(s.sieg_secret_key_encrypted),
-        "api_key_set": bool(s.sieg_api_key_encrypted),
-        "padroes": sieg.padroes(s),
-        "configurado": sieg.configurado(s),
-    }
-
-
-@app.get("/api/sieg/configuracao", dependencies=[Depends(require_admin)])
-def sieg_config_get() -> dict:
-    return _sieg_config_dict(load_settings())
-
-
-@app.put("/api/sieg/configuracao", dependencies=[Depends(require_admin)])
-def sieg_config_put(body: SiegConfigBody) -> dict:
-    from app.sieg_api import CAMPOS_CONSULTA, PADROES
-
-    atual = load_settings()
-    if body.client_id is not None:
-        atual.sieg_client_id = body.client_id.strip()
-    try:
-        if body.secret_key and body.secret_key.strip():
-            atual.sieg_secret_key_encrypted = encrypt_password(body.secret_key.strip())
-        if body.api_key and body.api_key.strip():
-            atual.sieg_api_key_encrypted = encrypt_password(body.api_key.strip())
-    except Exception:
-        raise HTTPException(status_code=500, detail="Erro ao cifrar as credenciais do SIEG.")
-    if body.padroes is not None:
-        limpos: Dict[str, Any] = {}
-        for k, v in body.padroes.items():
-            if k not in PADROES:
-                continue
-            if k in CAMPOS_CONSULTA:
-                limpos[k] = bool(v)
-            elif k == "DiasRetroativos":
-                try:
-                    limpos[k] = max(0, min(int(v or 0), 365))
-                except (TypeError, ValueError):
-                    raise HTTPException(status_code=422, detail="Dias retroativos deve ser um número de 0 a 365.")
-            elif k == "UfCertificado":
-                uf = so_digitos(v)[:2]
-                if len(uf) != 2:
-                    raise HTTPException(status_code=422, detail="UF do certificado: use o código IBGE de 2 dígitos (27 = AL).")
-                limpos[k] = uf
-            else:
-                limpos[k] = str(v or "").strip()[:40]
-        atual.sieg_padroes = json.dumps(limpos, ensure_ascii=False)
-    try:
-        save_settings(atual, exigir_banco=True)
-    except GravacaoNaoPersistida:
-        raise HTTPException(status_code=503, detail="Não foi possível gravar a configuração do SIEG. Veja o log do servidor.")
-    return _sieg_config_dict(atual)
-
-
-@app.post("/api/sieg/testar", dependencies=[Depends(require_admin), Depends(_limitar("sieg-testar", 10, 3600))])
-def sieg_testar() -> dict:
-    try:
-        n = sieg.cliente(load_settings()).testar()
-    except SiegErro as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"ok": True, "message": f"Conectado ao SIEG. A primeira página da listagem trouxe {texto.plural(n, 'cadastro')}."}
-
-
-@app.post("/api/sieg/sincronizar", dependencies=[Depends(require_admin), Depends(_limitar("sieg-sincronizar", 6, 3600))])
-def sieg_sincronizar(token: auth.TokenData = Depends(require_auth)) -> dict:
-    snap = get_latest_snapshot() or {}
-    try:
-        r = sieg.sincronizar(snap.get("items") or [], load_settings(), _quem(token))
-    except SiegErro as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {**r, "message": (f"{texto.plural(r['clientes_no_sieg'], 'cliente')} no SIEG; "
-                             f"{texto.plural(r['marcados'], 'certificado marcado', 'certificados marcados')} agora.")}
 
 
 @app.get("/api/colaborador/certificados/opcoes", dependencies=[Depends(require_modulo("acompanhamento"))])
@@ -7247,33 +7013,6 @@ _CLAIM_JANELA_SEC = 60
 _CLAIM_MAX_POR_JANELA = 10
 
 
-def _ip_do_cliente(request: Request) -> str:
-    """O IP de quem chama, atrás de `config.NUM_PROXIES_CONFIAVEIS` proxies.
-
-    Contado a partir do FIM do X-Forwarded-For: cada proxy anexa o IP de quem
-    falou com ele, então só os N últimos valores foram escritos por alguém de
-    confiança. O primeiro valor é o que o cliente mandou — até o lote 1 da
-    auditoria (24/09/2026) era ele que virava a chave do rate limit, e um
-    `X-Forwarded-For: 1.2.3.<n>` novo a cada requisição tornava os tetos do
-    login e do /claim decorativos (achado #6).
-
-    Sem proxy configurado, ou com cabeçalho mais curto que a cadeia esperada
-    (alguém forjou o cabeçalho sem passar por proxy nenhum), vale o socket.
-    Antes de existir esta função os limites usavam `request.client.host`, que
-    atrás do proxy é o PROXY — teto global compartilhado por todo mundo.
-    """
-    socket_ip = request.client.host if request.client else "desconhecido"
-    n = int(getattr(config, "NUM_PROXIES_CONFIAVEIS", 0) or 0)
-    if n <= 0:
-        return socket_ip
-    cadeia = [
-        p.strip()
-        for p in (request.headers.get("x-forwarded-for") or "").split(",")
-        if p.strip()
-    ]
-    if len(cadeia) >= n:
-        return cadeia[-n]
-    return socket_ip
 
 
 def _claim_rate_limit(ip: str) -> bool:
