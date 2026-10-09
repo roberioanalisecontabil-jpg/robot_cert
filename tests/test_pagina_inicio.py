@@ -73,7 +73,10 @@ def test_instalabilidade_confere_o_vinculo_pela_estacao(client: TestClient, banc
     """`machine_id` é o servidor que varreu (snapshot "srv"); `estacao` é a
     máquina da pessoa. O vínculo é da estação. Até 30/09 era conferido contra
     o servidor, e operador/gestor recebiam 403 sempre."""
-    monkeypatch.setattr(m, "_dispositivos_da_pessoa", lambda email: [{"machine_id": "pc-fis", "nome": "PC DA FIS"}])
+    from app import computadores
+
+    monkeypatch.setattr(m, "_computador_autorizado_da_pessoa",
+                        lambda uid: {"machine_id": "pc-fis", "nome": "PC DA FIS", "autorizacao": computadores.AUTORIZADO})
     r = client.get("/api/cert-installer/instalabilidade?machine_id=srv&estacao=pc-fis", headers=_h(*FISCAL_OP))
     assert r.status_code == 200, r.text
     assert r.json()["estacao"] == "pc-fis" and r.json()["machine_id"] == "srv"
@@ -81,8 +84,13 @@ def test_instalabilidade_confere_o_vinculo_pela_estacao(client: TestClient, banc
     # Estação de outra pessoa: 403.
     r = client.get("/api/cert-installer/instalabilidade?machine_id=srv&estacao=pc-de-outro", headers=_h(*FISCAL_OP))
     assert r.status_code == 403
-    # Sem `estacao`, o vínculo é conferido contra `machine_id`, como antes (achado #30).
+    # Com computador autorizado e sem `estacao`, o vínculo é conferido contra
+    # `machine_id`, como antes (achado #30).
     assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP)).status_code == 403
+    # Sem computador nenhum: só o inventário do servidor da varredura,
+    # recortado pela carteira (08/10/2026; antes perguntava ao Hardlyze).
+    monkeypatch.setattr(m, "_computador_autorizado_da_pessoa", lambda uid: None)
+    assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP)).status_code == 200
     # Administrador não tem vínculo a conferir.
     assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*ADMIN)).status_code == 200
 

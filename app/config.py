@@ -441,7 +441,7 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
     if not ponte_invent_configurada():
         avisos.append(
             "Ponte com o INVENT desligada (INVENT_API_URL/CERT_PORTAL_TOKEN) — "
-            "o botão 'instalar nesta máquina' não aparece."
+            "o Hardlyze não lê o responsável das máquinas e 'Importar do Hardlyze' não funciona."
         )
     elif (
         producao

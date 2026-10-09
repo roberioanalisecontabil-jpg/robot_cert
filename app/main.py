@@ -7329,23 +7329,10 @@ def instalabilidade(
     if meu and meu["autorizacao"] == computadores.AUTORIZADO:
         if computadores.mac(estacao or machine_id) != computadores.mac(meu["machine_id"]):
             raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
-    elif not alcance_total:
-        # A estação tem de ser uma das desta pessoa (achado #30): a rota era
-        # `require_auth` puro com `machine_id` livre, e devolvia o inventário
-        # de qualquer estação a qualquer operador. Quem sabe o vínculo é o
-        # portal de inventário; sem ele, o vínculo não é verificável e a
-        # resposta segue — recortada pela carteira, abaixo — com aviso.
-        dispositivos = _dispositivos_da_pessoa((token.email or "").strip().lower())
-        if dispositivos is None:
-            logger.warning(
-                "Instalabilidade sem conferir o vínculo pessoa↔estação (%s): portal de "
-                "inventário indisponível ou ponte não configurada.", machine_id,
-            )
-        else:
-            minhas = {str(d.get("machine_id") or "").strip().lower() for d in dispositivos}
-            alvo = (estacao or machine_id).strip().lower()
-            if alvo not in minhas:
-                raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
+    elif not alcance_total and (estacao or "").strip():
+        # A estação tem de ser a desta pessoa (achado #30). O vínculo mora
+        # aqui desde 08/10/2026; sem computador autorizado, nenhuma estação.
+        raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
 
     try:
         itens = cert_installer.estado_de_instalabilidade(machine_id, user_id, token.role)
@@ -7608,58 +7595,34 @@ def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
         return {"disponivel": True, "motivo": "", "canal": "portal", "computador": c,
                 "dispositivos": [{"machine_id": c["machine_id"], "nome": c["nome"], "canal": "portal"}]}
 
-    # Transição (ADR 0002): quem ainda não tem a bandeja nova segue pelo Hardlyze.
-    if not config.ponte_invent_configurada():
-        return {"disponivel": False, "motivo": "sem_computador", "dispositivos": []}
-
-    email = (token.email or "").strip().lower()
-    if not email:
-        return {"disponivel": False, "motivo": "sem_email", "dispositivos": []}
-
-    dispositivos = _dispositivos_da_pessoa(email)
-    if dispositivos is None:
-        return {"disponivel": False, "motivo": "indisponivel", "dispositivos": []}
-
-    return {
-        "disponivel": bool(dispositivos),
-        "motivo": "" if dispositivos else "sem_agente_vivo",
-        "dispositivos": dispositivos,
-    }
-
-
-def _dispositivos_da_pessoa(email: str) -> Optional[List[dict]]:
-    """As estações com agente vivo desta pessoa, segundo o portal de inventário.
-
-    `None` quando não dá para saber (ponte não configurada ou indisponível) —
-    diferente de lista vazia, que é "sei, e não há nenhuma". Quem chama decide
-    o que fazer com a dúvida: o Início esconde o botão e diz o motivo, e a
-    instalabilidade deixa de conferir o vínculo, avisando.
-    """
-    if not config.ponte_invent_configurada() or not (email or "").strip():
-        return None
-    try:
-        import httpx
-
-        r = httpx.get(
-            f"{config.INVENT_API_URL}/api/agent/devices/vivos",
-            params={"email": email},
-            headers={"Authorization": f"Bearer {config.CERT_PORTAL_TOKEN}"},
-            timeout=8.0,
-        )
-        if r.status_code != 200:
-            logger.warning("Portal de inventário respondeu %s ao consultar estações", r.status_code)
-            return None
-        return list((r.json() or {}).get("dispositivos") or [])
-    except Exception:  # noqa: BLE001
-        logger.warning("Não foi possível consultar as estações no portal de inventário", exc_info=True)
-        return None
-
+    return {"disponivel": False, "motivo": "sem_computador", "dispositivos": []}
 
 class PrepararInstalacaoRequest(BaseModel):
     """Instalar na máquina onde a pessoa está, pelo agente residente."""
     certificate_ids: List[str] = Field(max_length=MAX_CERTIFICADOS_POR_TOKEN)
     machine_id: str = Field(max_length=128)
     hostname: Optional[str] = Field(default=None, max_length=253)
+
+
+def _exigir_maquina_autorizada(user_id: str, machine_id: str, e_admin: bool) -> None:
+    """ADR 0002: instala só pela fila deste portal, em máquina com bandeja
+    autorizada; operador e gestor, só na própria. O caminho antigo (comando
+    pela fila do Hardlyze) foi cortado em 08/10/2026."""
+    try:
+        disp = computadores.dispositivo_da_maquina(machine_id)
+        autorizado = bool(disp) and computadores.situacao(
+            str(disp["user_id"]), machine_id)["autorizacao"] == computadores.AUTORIZADO
+    except computadores.SemBanco as e:
+        raise _erro_sem_banco(e)
+    if not autorizado:
+        raise HTTPException(
+            status_code=409,
+            detail=("A bandeja deste computador não está autorizada em Usuários › Computadores." if e_admin else
+                    "Este computador não está autorizado para você. Entre na bandeja dele com sua conta "
+                    "e aguarde a autorização do administrador."),
+        )
+    if not e_admin and str(disp["user_id"]) != str(user_id):
+        raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
 
 
 @app.post("/api/cert-installer/prepare")
@@ -7689,50 +7652,8 @@ def preparar_instalacao(
     if not user_id:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    # ADR 0002: a máquina tem a bandeja nova, com vínculo autorizado? Então a
-    # entrega é pela fila deste portal, e o servidor confere de quem é.
-    canal = "hardlyze"
-    e_admin = (token.role or "").strip().lower() == "admin"
-    disp_alvo = None
-    bandeja_nova_da_pessoa = None
-    try:
-        bandeja_nova_da_pessoa = computadores.dispositivo_da_pessoa(user_id)
-        disp_alvo = computadores.dispositivo_da_maquina(machine_id)
-        if disp_alvo and computadores.situacao(str(disp_alvo["user_id"]), machine_id)["autorizacao"] == computadores.AUTORIZADO:
-            canal = "portal"
-            if (token.role or "").strip().lower() != "admin" and str(disp_alvo["user_id"]) != str(user_id):
-                raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
-    except computadores.SemBanco:
-        pass
-    except HTTPException:
-        raise
-    except Exception:  # noqa: BLE001 — migration pendente: segue pelo Hardlyze
-        logger.warning("Vínculos de computador indisponíveis no prepare", exc_info=True)
-
-    # Sem desvio silencioso (08/10/2026): a bandeja 2.1.x não atende o caminho
-    # antigo, e o pedido mandado por ele expirava sem aviso. Se a máquina já
-    # tem bandeja nova (só não autorizada) ou a pessoa já usa a bandeja nova,
-    # recusa aqui com o que fazer.
-    if canal == "hardlyze" and (disp_alvo or (bandeja_nova_da_pessoa and not e_admin)):
-        raise HTTPException(
-            status_code=409,
-            detail=("A bandeja deste computador ainda não foi autorizada em Usuários › Computadores." if e_admin else
-                    "Este computador não está autorizado para você. Entre na bandeja dele com sua conta "
-                    "e aguarde a autorização do administrador."),
-        )
-
-    if canal == "hardlyze":
-        if not config.ponte_invent_configurada():
-            raise HTTPException(
-                status_code=409,
-                detail="Este computador não está vinculado. Entre na bandeja com sua conta deste portal e aguarde a autorização.",
-            )
-        # Transição: o Hardlyze diz se a máquina é da pessoa (antes não conferia).
-        if (token.role or "").strip().lower() != "admin":
-            dispositivos = _dispositivos_da_pessoa((token.email or "").strip().lower())
-            if dispositivos is not None and computadores.mac(machine_id) not in {
-                    computadores.mac(d.get("machine_id")) for d in dispositivos}:
-                raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
+    _exigir_maquina_autorizada(user_id, machine_id, (token.role or "").strip().lower() == "admin")
+    canal = "portal"
 
     _validar_pedido_de_instalacao(user_id, token.role, body.certificate_ids)
 
@@ -7759,20 +7680,9 @@ def preparar_instalacao(
     # antes deixaria a trilha afirmando um pedido que talvez nunca tenha saído
     # daqui — e a trilha existe justamente para ser confiável.
     try:
-        if canal == "portal":
-            computadores.enfileirar(machine_id, token_raw, token_id, expires_at)
-        else:
-            _pedir_instalacao_ao_invent(machine_id, token_raw, body.hostname, expires_at)
-    except PonteRecusou as e:
-        # Motivo curado pelo outro portal: "Erro interno" mandaria alguém ao
-        # log por algo que se resolve na tela (token da ponte, máquina).
-        logger.warning("Portal de inventário recusou o pedido: %s", e)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Não foi possível avisar o agente desta máquina: {e}",
-        )
+        computadores.enfileirar(machine_id, token_raw, token_id, expires_at)
     except Exception:  # noqa: BLE001
-        logger.exception("Falha ao pedir a instalação ao portal de inventário")
+        logger.exception("Falha ao enfileirar a instalação")
         raise HTTPException(
             status_code=502,
             detail="Não foi possível avisar o agente desta máquina. Veja o log do servidor.",
@@ -7904,64 +7814,6 @@ def acompanhar_instalacao(
     )
 
 
-class PonteRecusou(RuntimeError):
-    """O portal de inventário respondeu, e disse não.
-
-    O `detail` dele é texto do NOSSO outro portal, escrito para o operador
-    ("CERT_PORTAL_TOKEN inválido", "máquina não encontrada"), e resolve na
-    tela. É diferente de uma falha de rede ou de um proxy no caminho, cujo
-    texto não é de ninguém de confiança — esse fica no log.
-    """
-
-
-def _pedir_instalacao_ao_invent(
-    machine_id: str,
-    token_raw: str,
-    hostname: Optional[str],
-    expira_em: Optional[datetime] = None,
-) -> None:
-    """
-    Chama o portal de inventário, servidor a servidor.
-
-    Levanta em qualquer desfecho que não seja sucesso: quem chama transforma em
-    502 com o motivo. Silenciar aqui produziria a pior tela possível — "pedido
-    enviado" para um agente que nunca vai receber nada.
-
-    ── O prazo viaja junto ──────────────────────────────────────────────
-
-    Sem ele, o outro portal não tem como saber que o comando morreu: o token é
-    opaco do lado de lá, e a validade é configurável aqui (1 min a 24 h), então
-    nenhum teto fixo adivinhado lá serviria. O efeito de não mandar é a máquina
-    desligada acordar horas depois, tentar, ser recusada — e a trilha ganhar um
-    ERRO que não é erro nenhum, no lugar onde ela é usada como prova.
-
-    Opcional: um portal de inventário anterior a este campo simplesmente o
-    ignora, e o comportamento volta a ser o de hoje.
-    """
-    import httpx
-
-    r = httpx.post(
-        f"{config.INVENT_API_URL}/api/agent-commands/instalar-certificado",
-        headers={"Authorization": f"Bearer {config.CERT_PORTAL_TOKEN}"},
-        json={
-            "mac_address": machine_id,
-            "token": token_raw,
-            "hostname": hostname or None,
-            "expira_em": expira_em.isoformat() if expira_em else None,
-        },
-        timeout=20.0,
-    )
-    if r.status_code != 200:
-        detalhe = ""
-        try:
-            detalhe = str((r.json() or {}).get("detail") or "")
-        except Exception:  # noqa: BLE001
-            # Sem JSON não é o nosso portal falando (página de erro de proxy,
-            # HTML): o texto cru não vai para a tela (achado #35), só o status.
-            detalhe = ""
-        raise PonteRecusou(detalhe or f"o portal de inventário respondeu {r.status_code}")
-
-
 class RedeemRequest(BaseModel):
     """Payload enviado pelo agente para resgatar o bundle criptografado."""
     token: str = Field(max_length=256)
@@ -8083,48 +7935,6 @@ def _claim_rate_limit(ip: str) -> bool:
     return taxa.permitir(f"claim:{ip}", _CLAIM_MAX_POR_JANELA, _CLAIM_JANELA_SEC)
 
 
-def _exigir_maquina_alvo_no_claim(request: Request, target_machine: Optional[str]) -> None:
-    """Quem resgata é a máquina para a qual o token foi emitido (achado #21).
-
-    Com `CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA`: a X-API-Key precisa ser a
-    credencial de máquina da estação-alvo. A chave compartilhada nunca serve —
-    "qualquer agente" não é a máquina-alvo.
-
-    Sem a flag (janela): o agente do INVENT ainda não apresenta credencial
-    deste portal, então o resgate segue só com o token, mas um `X-Machine-Id`
-    presente tem de casar com o alvo, e a ausência dele fica no log. É o que
-    anula o roubo oportunista de token pela fila (#3) sem parar a instalação.
-    """
-    alvo = (target_machine or "").strip().lower()
-    if config.CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA:
-        segredo = (request.headers.get("x-api-key") or "").strip()
-        maquina = None
-        if segredo and not (config.API_KEY and hmac.compare_digest(
-            segredo.encode("utf-8"), config.API_KEY.encode("utf-8")
-        )):
-            try:
-                maquina = machine_credentials.autenticar(segredo)
-            except Exception:  # noqa: BLE001
-                logger.exception("Credenciais de máquina indisponíveis no /claim")
-                raise HTTPException(status_code=503, detail="Credenciais de máquina indisponíveis. Tente de novo.")
-        propria = str((maquina or {}).get("machine_id") or "").strip().lower()
-        if not propria or (alvo and propria != alvo):
-            logger.warning("Resgate recusado: credencial de máquina ausente ou de outra estação (alvo %r).", alvo)
-            raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
-        return
-
-    declarado = (request.headers.get("x-machine-id") or "").strip().lower()
-    if not declarado:
-        logger.warning(
-            "Resgate de token sem identificação da máquina (alvo %r). O agente ainda não "
-            "manda X-Machine-Id; janela do achado #21.", alvo,
-        )
-        return
-    if alvo and declarado != alvo:
-        logger.warning("Resgate recusado: X-Machine-Id %r não é a máquina-alvo %r.", declarado, alvo)
-        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
-
-
 @app.post("/api/cert-installer/claim")
 def claim_install(body: RedeemRequest, request: Request):
     """
@@ -8162,7 +7972,10 @@ def claim_install(body: RedeemRequest, request: Request):
                            disp.get("machine_id"), alvo.get("target_machine"))
             raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
     else:
-        _exigir_maquina_alvo_no_claim(request, alvo.get("target_machine"))
+        # Sem credencial da bandeja não há resgate (08/10/2026): o caminho
+        # antigo, que resgatava só com o token, foi cortado.
+        logger.warning("Resgate recusado: sem credencial da bandeja (alvo %r).", alvo.get("target_machine"))
+        raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
 
     token_data = cert_installer.validate_and_consume_token(body.token)
     if not token_data:

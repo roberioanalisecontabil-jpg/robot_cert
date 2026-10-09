@@ -82,3 +82,15 @@ não a aprovação pendente no Hardlyze.
 - A publicação na internet fica para depois. Para instalar fora do escritório basta este portal
   estar acessível; o Hardlyze fora da VPN afeta só o inventário. O usuário fornece o
   certificado quando for o momento.
+
+## Corte do caminho antigo (08/10/2026)
+
+Feito depois do teste com administrador e operador na bandeja 2.1.1, por decisão do usuário,
+antes de todas as estações migrarem (o rollout do 2.1.1 e a importação dos vínculos ficam
+manuais). Saíram daqui a consulta `devices/vivos` ao Hardlyze, o pedido de instalação pela fila
+dele e o resgate sem credencial da bandeja: `prepare` exige máquina com bandeja autorizada (409
+com o que fazer), `minha-estacao` sem computador responde `sem_computador`, e `claim` sem
+`X-Device-Secret` é 403. No Hardlyze, as rotas do caminho antigo respondem 410. A ponte
+`CERT_PORTAL_TOKEN` continua para o responsável (`/api/computadores/principais`) e para
+"Importar do Hardlyze" (`/api/agent/devices/todos`). Estação ainda no 2.0.x ou 2.1.0 aberta sem
+`--tray-only` não instala até receber o 2.1.1.

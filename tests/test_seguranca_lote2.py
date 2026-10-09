@@ -271,31 +271,15 @@ def test_claim_com_x_machine_id_de_outra_maquina_e_recusado(client: TestClient, 
     assert not _token_consumido(banco), "o token tem de sobrar para a máquina certa"
 
 
-def test_claim_com_x_machine_id_da_maquina_alvo_passa(client: TestClient, banco: _Fake, token_para_b: str) -> None:
-    r = _claim(client, token_para_b, **{"X-Machine-Id": MAQ_B.upper()})
-    assert r.status_code == 200, r.text
-    assert _token_consumido(banco)
-
-
-def test_claim_sem_identificacao_ainda_passa_na_janela_mas_avisa(
+def test_claim_sem_credencial_da_bandeja_e_recusado(
     client: TestClient, banco: _Fake, token_para_b: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """O agente do INVENT ainda não manda identificação: bloquear hoje pararia
-    toda instalação. A janela é explícita, e cada resgate sem máquina avisa."""
-    assert _claim(client, token_para_b).status_code == 200
-    assert "sem identifica" in caplog.text.lower()
-
-
-def test_claim_exige_credencial_de_maquina_quando_a_flag_manda(
-    client_com_chave: TestClient, api_key: str, banco: _Fake, token_para_b: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(config, "CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA", True, raising=False)
-    assert _claim(client_com_chave, token_para_b).status_code == 403                                  # nada
-    assert _claim(client_com_chave, token_para_b, **{"X-API-Key": api_key}).status_code == 403        # compartilhada
-    assert _claim(client_com_chave, token_para_b, **{"X-API-Key": SEGREDO_A}).status_code == 403      # outra máquina
+    """08/10/2026: o caminho antigo, que resgatava só com o token (e um
+    X-Machine-Id opcional), foi cortado. Sem X-Device-Secret não há resgate."""
+    assert _claim(client, token_para_b, **{"X-Machine-Id": MAQ_B}).status_code == 403
+    assert _claim(client, token_para_b).status_code == 403
     assert not _token_consumido(banco)
-    assert _claim(client_com_chave, token_para_b, **{"X-API-Key": SEGREDO_B}).status_code == 200      # a máquina-alvo
-    assert _token_consumido(banco)
+    assert "sem credencial da bandeja" in caplog.text.lower()
 
 
 def test_redeem_nunca_aceita_a_chave_compartilhada(
@@ -335,7 +319,10 @@ def inventario(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> _Fake:
         {"id": "id-alheio", "fingerprint": FP_ALHEIO, "machine_id": MAQ_A, "documento": DOC_ALHEIO, "uploaded_at": "2026-09-25"},
     ]
     banco.tabelas["carteira"].append({"user_id": "u-ana", "documento": DOC_MEU})
-    monkeypatch.setattr(m, "_dispositivos_da_pessoa", lambda email: [{"machine_id": MAQ_A, "nome": "PC-ANA"}])
+    from app import computadores
+
+    monkeypatch.setattr(m, "_computador_autorizado_da_pessoa",
+                        lambda uid: {"machine_id": MAQ_A, "nome": "PC-ANA", "autorizacao": computadores.AUTORIZADO})
     return banco
 
 
@@ -348,7 +335,7 @@ def test_instalabilidade_omite_o_que_esta_fora_da_carteira(client: TestClient, i
 
 
 def test_instalabilidade_de_estacao_nao_vinculada_e_recusada(client: TestClient, inventario: _Fake) -> None:
-    r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQ_B}", headers=_h("ana@x.com", "user"))
+    r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQ_A}&estacao={MAQ_B}", headers=_h("ana@x.com", "user"))
     assert r.status_code == 403, r.text
 
 
@@ -357,18 +344,6 @@ def test_admin_continua_vendo_tudo_em_qualquer_estacao(client: TestClient, inven
     assert r.status_code == 200
     r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQ_A}", headers=_h(*ADMIN))
     assert set(r.json()["itens"]) == {FP_MEU, FP_ALHEIO}
-
-
-def test_sem_ponte_com_o_inventario_a_estacao_nao_e_conferida_mas_a_carteira_sim(
-    client: TestClient, inventario: _Fake, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Degradar, não quebrar: sem o INVENT o vínculo não é verificável, e o
-    Início continua funcionando — o que sai da resposta continua saindo."""
-    monkeypatch.setattr(m, "_dispositivos_da_pessoa", lambda email: None)
-    r = client.get(f"/api/cert-installer/instalabilidade?machine_id={MAQ_B}", headers=_h("ana@x.com", "user"))
-    assert r.status_code == 200
-    assert FP_ALHEIO not in r.json()["itens"]
-    assert "vínculo" in caplog.text.lower() or "vinculo" in caplog.text.lower()
 
 
 def test_vault_optin_so_responde_a_propria_maquina(client_com_chave: TestClient, inventario: _Fake) -> None:

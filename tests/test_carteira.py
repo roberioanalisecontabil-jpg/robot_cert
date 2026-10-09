@@ -179,12 +179,11 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
                             __import__("datetime").timezone.utc)))
     monkeypatch.setattr(ci, "log_event", lambda **kw: None)
 
-    # A rota /prepare so passa da configuracao para a carteira se a ponte com o
-    # portal de inventario estiver ligada; e o pedido a ele nao pode ir a rede
-    # num teste. Nada disto afrouxa a barreira — ela roda antes de ambos.
-    monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent-de-teste", raising=False)
-    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "segredo-de-teste", raising=False)
-    monkeypatch.setattr(m, "_pedir_instalacao_ao_invent", lambda *a, **k: None)
+    # A máquina de destino com bandeja autorizada e a fila deste portal não
+    # interessam aqui (test_computadores_rotas.py); a barreira da carteira
+    # roda depois da conferência da máquina e antes de emitir o token.
+    monkeypatch.setattr(m, "_exigir_maquina_autorizada", lambda *a, **k: None)
+    monkeypatch.setattr(m.computadores, "enfileirar", lambda *a, **k: None)
     return fake
 
 

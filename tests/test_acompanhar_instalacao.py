@@ -145,9 +145,8 @@ def test_o_prepare_devolve_o_id_do_registro_e_nao_o_token(
     monkeypatch.setattr(m, "_validar_pedido_de_instalacao", lambda *a, **k: None)
     monkeypatch.setattr(ci, "create_install_token", lambda **kw: ("TOKEN-SECRETO", TOKEN_ID, None))
     monkeypatch.setattr(ci, "log_event", lambda **kw: None)
-    monkeypatch.setattr("app.config.INVENT_API_URL", "http://x", raising=False)
-    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "s", raising=False)
-    monkeypatch.setattr(m, "_pedir_instalacao_ao_invent", lambda *a, **k: None)
+    monkeypatch.setattr(m, "_exigir_maquina_autorizada", lambda *a, **k: None)
+    monkeypatch.setattr(m.computadores, "enfileirar", lambda *a, **k: None)
 
     r = client.post(
         "/api/cert-installer/prepare",
