@@ -544,11 +544,13 @@ def test_gravar_sem_banco_avisa_em_vez_de_fingir_que_salvou(
 # ── A declaracao nao pode mentir ────────────────────────────────────────────
 
 def _modulos_ligados_de_verdade() -> dict:
-    """Le `main.py` e devolve {modulo: {niveis usados}} a partir das rotas."""
+    """Le as rotas e devolve {modulo: {niveis usados}}."""
     import re
     from pathlib import Path
 
-    fonte = Path("app/main.py").read_text(encoding="utf-8")
+    from tests import fonte_do_portal
+
+    fonte = fonte_do_portal.texto()  # main.py e app/rotas/ (Frente 3)
     achados: dict = {}
     padrao = re.compile(
         # O  opcional entra no padrao: sem ele, uma rota de
@@ -696,7 +698,7 @@ def test_carteiras_mantem_os_dois_eixos(client, monkeypatch: pytest.MonkeyPatch)
     from fastapi import HTTPException
     from app import cert_installer, main as _main
 
-    monkeypatch.setattr(_main, "_user_id_da_sessao", lambda _t: "uid-de-teste")
+    monkeypatch.setattr("app.alcance._user_id_da_sessao", lambda _t: "uid-de-teste")
     G, U = permissoes.PADRAO["gestor"], permissoes.PADRAO["user"]
 
     def cenario(matriz, lidera):

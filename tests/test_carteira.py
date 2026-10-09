@@ -438,7 +438,7 @@ def test_remover_da_carteira_tira_o_acesso(client: TestClient, banco: _Fake) -> 
 
 def test_toda_rota_que_cria_token_passa_pela_carteira() -> None:
     """
-    Lê `app/main.py` e exige que quem emite token confira a carteira.
+    Lê as rotas (`tests/fonte_do_portal.py`) e exige que quem emite token confira a carteira.
 
     Não há RLS que segure isto: a aplicação usa o service_role, que ignora
     políticas. A barreira mora inteiramente no código da rota, e uma rota nova
@@ -448,8 +448,7 @@ def test_toda_rota_que_cria_token_passa_pela_carteira() -> None:
     `create_install_token` é o gargalo certo para vigiar: um token de instalação
     É a entrega da chave privada. Sem token não há bundle.
     """
-    fonte = (Path(__file__).resolve().parent.parent / "app" / "main.py").read_text(encoding="utf-8")
-    arvore = ast.parse(fonte)
+    from tests import fonte_do_portal
 
     def nomes_chamados(no: ast.AST) -> set:
         out = set()
@@ -463,7 +462,7 @@ def test_toda_rota_que_cria_token_passa_pela_carteira() -> None:
         return out
 
     faltando = []
-    for no in ast.walk(arvore):
+    for no in (n for arvore in fonte_do_portal.arvores() for n in ast.walk(arvore)):
         if not isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         chamados = nomes_chamados(no)
@@ -483,10 +482,11 @@ def test_o_teste_estrutural_realmente_encontra_as_rotas() -> None:
     Contraprova do anterior: se o padrão de busca parasse de casar com o
     código, o teste acima passaria por vácuo e não protegeria nada.
     """
-    fonte = (Path(__file__).resolve().parent.parent / "app" / "main.py").read_text(encoding="utf-8")
-    arvore = ast.parse(fonte)
+    from tests import fonte_do_portal
+
     emissoras = [
         no.name
+        for arvore in fonte_do_portal.arvores()
         for no in ast.walk(arvore)
         if isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef))
         and any(
