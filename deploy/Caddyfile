@@ -1,4 +1,4 @@
-# Caddyfile - HTTPS na frente dos dois portais no ANALISESRV.
+# Caddyfile - HTTPS na frente dos portais no ANALISESRV.
 #
 # Versionado no lote 9 da auditoria (SECURITY_AUDIT #37): o portal emite
 # Strict-Transport-Security, mas a terminacao TLS e o redirecionamento
@@ -46,4 +46,9 @@ certificado.analisegroup.cnt.br {
 
 hardlyze.analisegroup.cnt.br {
 	import portal 8021
+}
+
+# Validacao de Eficacia (repositorio Validacao-de-Eficacia, servico NSSM "eficacia").
+eficacia.analisegroup.cnt.br {
+	import portal 8022
 }
