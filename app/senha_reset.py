@@ -39,6 +39,11 @@ Os limites acima só valem se a decisão estiver DENTRO da instrução que grava
   * teto de pedidos: conta-se DEPOIS de inserir, e quem passou do teto apaga
     a própria linha — dois pedidos no limite não passam os dois.
 
+Residual aceito: um anônimo que saiba o e-mail ainda pode invalidar o código
+da vítima pedindo outro (até o teto do endereço dele) ou queimá-lo com 3
+erros. Não ganha acesso, só atrasa; o envio pelo administrador (`pelo_admin`)
+fica fora dos tetos anônimos e continua sendo a saída.
+
 É o oposto do `install_token`, onde 32 bytes aleatórios carregavam a garantia
 sozinhos.
 """
