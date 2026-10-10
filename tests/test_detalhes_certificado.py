@@ -104,6 +104,44 @@ def test_nenhuma_rota_de_lista_vaza_dado_pessoal(client: TestClient, banco: _Fak
     assert not vazou, f"dado pessoal saiu por: {vazou}"
 
 
+def _varredura_com_dado_pessoal(monkeypatch: pytest.MonkeyPatch) -> list:
+    """A leitura do disco do servidor devolve itens com os campos pessoais
+    (é o que `cert_to_public_dict` faz com `campos_icp`)."""
+    import app.main as m
+
+    chamadas = []
+    monkeypatch.setattr(m, "scan_folder", lambda *a, **k: chamadas.append(1) or ["pfx"])
+    monkeypatch.setattr(m, "cert_to_public_dict", lambda c: {
+        "fingerprint_sha256": "f" * 64, "nome": "CLIENTE X", "status": "ok", "documento_numero": DOC_A, **PESSOAIS})
+    return chamadas
+
+
+def test_fonte_local_e_so_do_admin_e_nao_traz_dado_pessoal(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auditoria de 10/10/2026 (listar_certificados:fonte-local-dados-pessoais e
+    fonte-local-varredura-sem-limite): qualquer logado pedia `fonte=local`,
+    disparava a varredura inteira do disco e recebia CPF, nascimento e e-mail
+    de todos os titulares — a lista nunca passava por `sem_dados_pessoais`."""
+    chamadas = _varredura_com_dado_pessoal(monkeypatch)
+    r = client.get("/api/certificados?fonte=local&pagina=1&por_pagina=5", headers=_h(*FISCAL_OP))
+    assert r.status_code == 403 and not chamadas
+    r = client.get("/api/certificados?fonte=local&pagina=1&por_pagina=5", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert CPF_SECRETO not in r.text and EMAIL_SECRETO not in r.text
+
+
+def test_sem_snapshot_o_operador_nao_dispara_a_varredura(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    chamadas = _varredura_com_dado_pessoal(monkeypatch)
+    monkeypatch.setattr("app.main.get_latest_snapshot", lambda *a, **k: None)
+    r = client.get("/api/certificados?pagina=1&por_pagina=5", headers=_h(*FISCAL_OP))
+    assert r.status_code == 200, r.text
+    assert not chamadas and r.json()["itens"] == []
+    assert CPF_SECRETO not in r.text
+
+
 def test_lista_do_inicio_continua_com_os_campos_publicos(client: TestClient, banco: _Fake) -> None:
     r = client.get("/api/certificados?pagina=1&por_pagina=50", headers=_h(*ADMIN))
     itens = {i["fingerprint_sha256"]: i for i in r.json()["itens"]}

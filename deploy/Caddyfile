@@ -29,13 +29,29 @@
 		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 		resolvers 1.1.1.1 8.8.8.8
 	}
-	# X-Forwarded-For/-Proto sao acrescentados pelo Caddy; o portal confia em
-	# UM proxy (NUM_PROXIES_CONFIAVEIS=1, lote 1) e le o penultimo valor.
+	# X-Forwarded-For/-Proto sao escritos pelo Caddy; o portal confia em UM
+	# proxy (NUM_PROXIES_CONFIAVEIS=1) e le o ULTIMO valor, so quando a conexao
+	# vem de 127.0.0.1 (PROXIES_CONFIAVEIS, auditoria de 10/10/2026).
+	#
+	# Teto de corpo na frente do portal (auditoria de 10/10/2026): o FastAPI le
+	# o corpo inteiro antes de autenticar. O portal tem tetos por rota
+	# (app/limite_corpo.py, 1 MB por padrao); este e o maior deles (o /api/ingest
+	# do agente), para nada maior nem chegar ao processo.
+	request_body {
+		max_size 64MB
+	}
 	reverse_proxy 127.0.0.1:{args[0]}
 	log {
 		output file C:\Apps\caddy\logs\acesso-{args[0]}.log {
 			roll_size 10MiB
 			roll_keep 5
+		}
+		# Segredos de longa duracao que o Caddy nao mascara sozinho: a credencial
+		# do agente e o segredo da bandeja (que vira sessao em /token).
+		format filter {
+			wrap json
+			request>headers>X-Api-Key delete
+			request>headers>X-Device-Secret delete
 		}
 	}
 }

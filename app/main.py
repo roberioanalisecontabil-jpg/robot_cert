@@ -430,6 +430,14 @@ async def hosts_permitidos_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+# Registrado por ÚLTIMO para ser o mais externo: o teto de corpo tem de valer
+# antes de qualquer outro middleware ou rota ler a requisição (auditoria de
+# 10/10/2026; ver app/limite_corpo.py).
+from app.limite_corpo import LimiteDeCorpo  # noqa: E402
+
+app.add_middleware(LimiteDeCorpo)
+
+
 @app.exception_handler(Exception)
 async def _erro_nao_tratado(request: Request, exc: Exception) -> JSONResponse:
     """Erro inesperado sai com uma referência, nunca com o texto (achado #35).
@@ -1659,11 +1667,14 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
     # alternasse as duas rotas.
     if not taxa.permitir(f"login:{ip}", 20, 60):
         raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
-    # E um teto por CONTA, que trocar de IP não contorna. Só aqui, e não no
-    # login do navegador: lá, dez erros em cinco minutos trancariam a conta de
-    # quem está sendo atacado — aqui o registro de dispositivo é ato raro.
+    # E tetos por CONTA: por conta e endereço (10/5 min) e, acima dele, por
+    # conta (50/5 min), que trocar de IP não contorna. Até a auditoria de
+    # 10/10/2026 só existia o segundo, com 10: um anônimo que soubesse o e-mail
+    # mandava 10 senhas erradas a cada 5 minutos e o dono nunca mais registrava
+    # a bandeja. Agora trancar o dono exige vários endereços reais (o teto do
+    # login segura cada um), e o de um endereço só tranca aquele endereço.
     email_alvo = (body.email or "").strip().lower()
-    if not taxa.permitir(f"senha:{email_alvo}", 10, 300):
+    if not taxa.permitir(f"senha:{email_alvo}:{ip}", 10, 300) or not taxa.permitir(f"senha:{email_alvo}", 50, 300):
         raise HTTPException(status_code=429, detail="Muitas tentativas nesta conta. Aguarde alguns minutos.")
 
     user = _conferir_credenciais(body.email, body.password, ip)
@@ -1964,15 +1975,31 @@ def listar_certificados(
     Com ``pagina`` e ``por_pagina`` na query, devolve ``paginacao`` e ``resumo`` (painel).
     Sem esses parâmetros, mantém o comportamento antigo: lista completa em ``itens``.
     """
+    e_admin = (token.role or "").strip().lower() == "admin"
+    # Ler o disco do servidor é do administrador (auditoria de 10/10/2026): a
+    # varredura abre e decifra cada PFX da pasta, sem cache nem teto, e era
+    # disparável por qualquer logado com `fonte=local`.
+    if fonte == "local" and not e_admin:
+        raise HTTPException(status_code=403, detail="A leitura direta da pasta do servidor é só do administrador.")
     try:
         sets = load_settings()
         snap = get_latest_snapshot()
-        base = _list_certificados_payload(sets, snap, fonte)
-        base["itens"] = ordenar_por_titular(base.get("itens") or [])
+        if not e_admin and not snap:
+            # Sem inventário do agente, o `auto` caía na varredura do disco.
+            # Para quem não é admin, a lista simplesmente ainda não existe.
+            base = {"source_dir": "", "expired_dir": "", "itens": [], "data_source": "remoto",
+                    "atualizado_em": datetime.now(timezone.utc).isoformat(), "machine_id": None}
+        else:
+            base = _list_certificados_payload(sets, snap, fonte)
+        # Dado pessoal do titular (responsável, CPF, nascimento, e-mail) nunca
+        # sai pela lista, para ninguém: só pela rota de detalhes, no alcance
+        # (Q7, 06/10/2026). A leitura do disco os trazia de `cert_to_public_dict`.
+        base["itens"] = ordenar_por_titular([nome_publico.sem_dados_pessoais(it) for it in base.get("itens") or []])
         # A pasta do servidor só para admin (SECURITY_AUDIT #2): o operador
         # precisa do titular e do documento, não da árvore de diretórios.
-        if (token.role or "").strip().lower() != "admin":
+        if not e_admin:
             base["itens"] = [nome_publico.sem_pasta(it) for it in base["itens"]]
+            base["source_dir"] = base["expired_dir"] = ""
         # Ver é de todos; a carteira decide o que cada um INSTALA (08/10/2026,
         # adendo ao ADR 0001). Antes a lista era recortada pela carteira
         # (#5); agora cada item diz se a pessoa pode instalá-lo, e a barreira

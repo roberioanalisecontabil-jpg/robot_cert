@@ -304,6 +304,26 @@ def test_sem_proxy_confiavel_o_cabecalho_e_ignorado(monkeypatch: pytest.MonkeyPa
     assert m._ip_do_cliente(_Req("9.9.9.9", host="10.0.0.5")) == "10.0.0.5"
 
 
+def test_cabecalho_so_vale_vindo_do_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auditoria de 10/10/2026 (app/sessao.py:_ip_do_cliente:xff-trusted-without-
+    peer-check): quem chegasse à porta do portal sem passar pelo Caddy mandava
+    um X-Forwarded-For novo por requisição e escapava de todo teto por IP."""
+    monkeypatch.setattr(config, "NUM_PROXIES_CONFIAVEIS", 1, raising=False)
+    monkeypatch.setattr(config, "PROXIES_CONFIAVEIS", frozenset({"127.0.0.1", "::1"}), raising=False)
+    assert m._ip_do_cliente(_Req("9.9.9.9", host="203.0.113.50")) == "203.0.113.50"
+    assert m._ip_do_cliente(_Req("9.9.9.9, 198.51.100.4", host="127.0.0.1")) == "198.51.100.4"
+
+
+def test_login_direto_na_porta_nao_escapa_do_teto_trocando_o_cabecalho(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config, "NUM_PROXIES_CONFIAVEIS", 1, raising=False)
+    monkeypatch.setattr(config, "PROXIES_CONFIAVEIS", frozenset({"127.0.0.1", "::1"}), raising=False)
+    codigos = [client.post("/api/login", json={"email": "x@x.com", "password": "errada"},
+                           headers={"X-Forwarded-For": f"198.51.100.{i}"}).status_code for i in range(22)]
+    assert 429 in codigos, codigos
+
+
 def test_cadeia_mais_curta_que_os_proxies_cai_no_socket(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cabeçalho forjado sem proxy à frente não pode virar identidade."""
     monkeypatch.setattr(config, "NUM_PROXIES_CONFIAVEIS", 2, raising=False)
@@ -354,11 +374,26 @@ def test_registrar_tem_teto_por_conta_que_ip_nenhum_contorna(
     client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(config, "NUM_PROXIES_CONFIAVEIS", 1, raising=False)
+    # Teto da conta (50/5 min) acima do teto por conta e endereço (10/5 min):
+    # trocar de IP a cada tentativa não passa de 50 (auditoria de 10/10/2026).
     codigos = [
         _registrar(client, "ana@x.com", "errada", **{"X-Forwarded-For": f"198.51.100.{i}"}).status_code
-        for i in range(12)
+        for i in range(52)
     ]
     assert codigos[-1] == 429, codigos
+
+
+def test_anonimo_nao_tranca_o_registro_do_dono_em_outro_endereco(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auditoria de 10/10/2026 (registrar_dispositivo:senha-por-conta-cobrada-
+    antes-da-prova): dez senhas erradas de um anônimo trancavam a conta inteira
+    e o dono não registrava mais a bandeja. O teto agora é por conta E endereço."""
+    monkeypatch.setattr(config, "NUM_PROXIES_CONFIAVEIS", 1, raising=False)
+    for _ in range(12):
+        _registrar(client, "ana@x.com", "errada", **{"X-Forwarded-For": "198.51.100.66"})
+    r = _registrar(client, "ana@x.com", "errada", **{"X-Forwarded-For": "203.0.113.10"})
+    assert r.status_code != 429, "o dono, de outro endereço, foi trancado pelo anônimo"
 
 
 # ──────────────────────────────────────────────────────────────────────────

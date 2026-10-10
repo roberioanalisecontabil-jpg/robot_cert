@@ -81,6 +81,15 @@ def _env_int(name: str, default: int, lo: int, hi: int) -> int:
 # do ANALISESRV. Zero desliga o cabeçalho e usa o socket (dev, testes).
 NUM_PROXIES_CONFIAVEIS = _env_int("NUM_PROXIES_CONFIAVEIS", default=1, lo=0, hi=5)
 
+# DE QUEM se aceita o X-Forwarded-For: o endereço do socket tem de ser um
+# destes. Padrão: loopback, que é de onde o Caddy do ANALISESRV fala. Sem isto
+# (até a auditoria de 10/10/2026), quem chegasse à porta do portal sem passar
+# pelo Caddy escolhia a própria chave de rate limit a cada requisição. `*`
+# confia em qualquer origem — só para testes.
+PROXIES_CONFIAVEIS = frozenset(
+    p.strip() for p in (os.getenv("PROXIES_CONFIAVEIS") or "127.0.0.1,::1").split(",") if p.strip()
+)
+
 # Raízes em que as pastas de certificados podem estar (separadas por `;` no
 # Windows e `:` no Linux — `os.pathsep`). Vazio = qualquer pasta local, como
 # sempre foi (janela do lote 6, com aviso em `verificar_ambiente`); caminhos

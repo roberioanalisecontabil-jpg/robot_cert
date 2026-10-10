@@ -69,6 +69,14 @@ def limpar_rate_limit() -> None:
     taxa._memoria.clear()
 
 
+@pytest.fixture(autouse=True)
+def proxy_de_teste_confiavel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O TestClient chega como `testclient`, não como o Caddy em loopback.
+    Os testes que simulam IPs pelo X-Forwarded-For precisam que o cabeçalho
+    valha; quem testa a regra do proxy confiável sobrescreve isto."""
+    monkeypatch.setattr("app.config.PROXIES_CONFIAVEIS", frozenset({"*"}), raising=False)
+
+
 @pytest.fixture
 def no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """API sem exigir X-API-Key (reproduz ambiente dev sem API_KEY)."""

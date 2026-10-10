@@ -626,6 +626,11 @@ def _ip_do_cliente(request: Request) -> str:
     n = int(getattr(config, "NUM_PROXIES_CONFIAVEIS", 0) or 0)
     if n <= 0:
         return socket_ip
+    # O cabeçalho só vale vindo do proxy (auditoria de 10/10/2026): numa conexão
+    # direta à porta do portal ele é do cliente, e contá-lo pelo fim não ajuda.
+    confiaveis = getattr(config, "PROXIES_CONFIAVEIS", frozenset())
+    if "*" not in confiaveis and socket_ip not in confiaveis:
+        return socket_ip
     cadeia = [
         p.strip()
         for p in (request.headers.get("x-forwarded-for") or "").split(",")

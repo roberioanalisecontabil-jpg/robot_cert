@@ -155,7 +155,10 @@ def test_api_settings_200_com_chave_correta(
 def test_certificados_local_200(
     client_com_chave: TestClient, api_key: str
 ) -> None:
-    h = {"X-API-Key": api_key}
+    # Ler a pasta do servidor é do administrador (auditoria de 10/10/2026); o
+    # agente nunca chamou esta rota e passa a receber 403.
+    assert client_com_chave.get("/api/certificados?fonte=local", headers={"X-API-Key": api_key}).status_code == 403
+    h = _headers_portal(api_key, "admin")
     r = client_com_chave.get(
         "/api/certificados?fonte=local", headers=h
     )
@@ -170,7 +173,7 @@ def test_certificados_dashboard_paginacao(
     client_com_chave: TestClient, api_key: str
 ) -> None:
     """O painel envia pagina/por_pagina; a API deve devolver paginacao e resumo."""
-    h = {"X-API-Key": api_key}
+    h = _headers_portal(api_key, "admin")
     r = client_com_chave.get(
         "/api/certificados?fonte=local&pagina=1&por_pagina=5",
         headers=h,

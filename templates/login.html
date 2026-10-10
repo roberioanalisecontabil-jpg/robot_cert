@@ -248,9 +248,18 @@
 
         // Para onde ir depois de entrar: a página de origem (`?next=`), quando
         // for um caminho deste portal; senão o Início. Nada de URL absoluta.
+        // Resolvido pelo próprio parser de URL e comparado pela origem: a regex
+        // de antes recusava `//host` mas aceitava `/\host`, que o navegador lê
+        // como `//host` e levava para outro site (auditoria de 10/10/2026).
         function destinoAposLogin() {
             const next = new URLSearchParams(location.search).get("next") || "";
-            return /^\/(?!\/)[^\s]*$/.test(next) && !next.startsWith("/login") ? next : "/";
+            try {
+                const u = new URL(next, location.origin);
+                if (next.startsWith("/") && u.origin === location.origin && !u.pathname.startsWith("/login")) {
+                    return u.pathname + u.search + u.hash;
+                }
+            } catch (_e) { /* inválido: vai para o Início */ }
+            return "/";
         }
 
         // Já há sessão (o cookie anti-CSRF é legível; o de sessão, não)? Então
