@@ -94,3 +94,33 @@ com o que fazer), `minha-estacao` sem computador responde `sem_computador`, e `c
 `CERT_PORTAL_TOKEN` continua para o responsável (`/api/computadores/principais`) e para
 "Importar do Hardlyze" (`/api/agent/devices/todos`). Estação ainda no 2.0.x ou 2.1.0 aberta sem
 `--tray-only` não instala até receber o 2.1.1.
+
+## Adendo (10/10/2026): chave da máquina e publicação na internet
+
+A auditoria de segurança de 10/10/2026 mostrou que "reconectar onde já está autorizado não pede
+autorização" se apoiava num `machine_id` que a própria bandeja declara. Com a senha de alguém e o
+`machine_id` da máquina dela (que o Início mostra à própria pessoa), dava para, de qualquer
+lugar, registrar uma bandeja "autorizada", derrubar a verdadeira e receber os PFX da carteira. O
+usuário decidiu publicar o portal inteiro na internet, bandeja inclusive, protegida por uma chave
+da máquina, com esta regra: **senha trocada, a bandeja sai e espera a senha nova; login em outra
+máquina segue a regra de equipamento novo.**
+
+- A bandeja 2.1.4 gera na instalação uma chave secreta guardada na estação (DPAPI de máquina,
+  ACL de SYSTEM e Administradores) e a manda no registro (`chave_maquina`).
+- A aprovação do administrador **fixa** a chave daquela máquina (`maquina_chave`, só o sha256).
+- Reconectar um par autorizado **com** a chave fixada entra na hora. **Sem** ela, ou com outra,
+  é equipamento novo: não sai segredo, a bandeja que está lá não é tocada, e o administrador
+  recebe um pedido "Confirmar a máquina". Pedido pendente com chave não aceita registro com outra
+  chave (409).
+- Bandeja antiga (sem chave): cada confirmação do administrador libera **uma** reconexão na hora
+  seguinte, até a frota estar na 2.1.4.
+- "Um acesso por vez" continua, com uma mudança: derrubar a sessão de **outra pessoa** na máquina
+  exige a máquina provada (chave certa ou reconexão confirmada) ou a aprovação do pedido. Um
+  registro remoto e pendente não derruba mais ninguém.
+- Trocar a própria senha derruba a bandeja, como já faziam a redefinição por código e pelo
+  administrador.
+- O token de instalação só vai para a bandeja de quem o pediu (ou de qualquer máquina, se quem
+  pediu foi um administrador), na entrega e no resgate.
+
+Consequência: a primeira entrada de cada estação na 2.1.4 passa pelo administrador uma vez, para
+fixar a chave. Migration `20261011100000_chave_da_maquina.sql`.

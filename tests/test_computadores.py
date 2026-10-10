@@ -26,13 +26,26 @@ def banco(banco_base: _Fake) -> _Fake:
     banco_base.tabelas["computador_vinculo"] = []
     banco_base.tabelas["fila_instalacao"] = []
     banco_base.tabelas["agent_devices"] = []
+    banco_base.tabelas["maquina_chave"] = []
     return banco_base
 
 
+def chave(maquina: str) -> str:
+    """A chave que a bandeja 2.1.4 gerou na instalação daquela máquina física."""
+    return ("chave-da-maquina-" + maquina).ljust(43, "x")
+
+
+CHAVE_DE_OUTRO_LUGAR = "chave-de-quem-so-tem-a-senha".ljust(43, "z")
+
+
+def entrar_com(user: str, maquina: str, chave_maquina) -> tuple:
+    """O que a rota de registro faz: (segredo ou None, situação)."""
+    return cp.entrar(user, maquina, maquina, chave_maquina)
+
+
 def entrar(user: str, maquina: str) -> dict:
-    """O que a rota de registro faz: dispositivo + regras."""
-    agent_devices.registrar(user, maquina, nome=maquina)
-    return cp.ao_entrar(user, maquina, maquina)
+    """A bandeja de verdade, sentada na máquina: manda a chave dela."""
+    return entrar_com(user, maquina, chave(maquina))[1]
 
 
 def pendente(user: str, maquina: str) -> dict:
@@ -141,3 +154,69 @@ def test_principais_para_o_hardlyze(banco: _Fake) -> None:
     entrar(SOL, PC_CEDIDO)
     cp.autorizar(pendente(SOL, PC_CEDIDO)["id"], "emprestimo", ADMIN)
     assert [(p["machine_id"], p["user_id"]) for p in cp.principais()] == [(PC_FIS, FIS)]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Chave da máquina (adendo ao ADR 0002, auditoria de 10/10/2026)
+#
+# O machine_id é um texto que a bandeja manda. Com a senha de alguém, dava para
+# dizer "sou a máquina dele" de qualquer lugar: o par autorizado reconectava sem
+# o administrador, o segredo da bandeja verdadeira era sobrescrito e os PFX da
+# carteira iam para quem chamou. A primeira aprovação fixa a chave da máquina;
+# depois, sem ela, é equipamento novo.
+# ──────────────────────────────────────────────────────────────────────────
+
+def _autorizado(user: str, maquina: str, tipo: str = "principal") -> str:
+    segredo, _ = entrar_com(user, maquina, chave(maquina))
+    cp.autorizar(pendente(user, maquina)["id"], tipo, ADMIN)
+    return segredo
+
+
+def test_aprovacao_fixa_a_chave_da_maquina(banco: _Fake) -> None:
+    _autorizado(FIS, PC_FIS)
+    assert banco.tabelas["maquina_chave"][0]["machine_id"] == PC_FIS
+    assert chave(PC_FIS) not in str(banco.tabelas["maquina_chave"]), "a chave não fica em claro"
+
+
+def test_reconexao_sem_a_chave_vira_confirmacao_e_nao_derruba_a_bandeja(banco: _Fake) -> None:
+    seg = _autorizado(FIS, PC_FIS)
+    segredo, s = entrar_com(FIS, PC_FIS, CHAVE_DE_OUTRO_LUGAR)
+    assert segredo is None and s["autorizacao"] == "pendente"
+    assert agent_devices.autenticar(seg) is not None, "a bandeja verdadeira foi derrubada"
+    assert pendente(FIS, PC_FIS)["motivo"] == cp.MOTIVO_CONFIRMACAO, "o admin precisa ver o pedido de confirmação"
+    # Tentar de novo com outra chave (ou sem) não troca a chave do pedido aberto.
+    with pytest.raises(cp.OutroDispositivo):
+        entrar_com(FIS, PC_FIS, None)
+    assert agent_devices.autenticar(seg) is not None
+
+
+def test_reconexao_com_a_chave_entra_na_hora(banco: _Fake) -> None:
+    _autorizado(FIS, PC_FIS)
+    segredo, s = entrar_com(FIS, PC_FIS, chave(PC_FIS))
+    assert segredo and s["autorizacao"] == "autorizado"
+
+
+def test_registro_remoto_nao_derruba_quem_esta_na_maquina(banco: _Fake) -> None:
+    """Achado app/computadores.py:ao_entrar:revoga-bandeja-alheia-por-machine-id:
+    qualquer conta derrubava a bandeja de outra pessoa dizendo o machine_id dela."""
+    _autorizado(FIS, PC_FIS)
+    entrar_com(SOL, PC_FIS, None)
+    assert sessoes(banco, FIS) == [PC_FIS]
+
+
+def test_pedido_pendente_com_chave_nao_aceita_outro_dispositivo(banco: _Fake) -> None:
+    entrar_com(FIS, PC_FIS, chave(PC_FIS))
+    with pytest.raises(cp.OutroDispositivo):
+        entrar_com(FIS, PC_FIS, CHAVE_DE_OUTRO_LUGAR)
+
+
+def test_bandeja_antiga_sem_chave_tem_um_reacesso_depois_de_cada_confirmacao(banco: _Fake) -> None:
+    """Até a frota ter a 2.1.4: aprovar sem chave libera UMA reconexão em 1 hora."""
+    entrar_com(FIS, PC_FIS, None)
+    cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN)
+    segredo, s = entrar_com(FIS, PC_FIS, None)
+    assert segredo and s["autorizacao"] == "autorizado"
+    segredo, s = entrar_com(FIS, PC_FIS, None)
+    assert segredo is None and s["autorizacao"] == "pendente", "a janela vale uma vez só"
+    cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN)
+    assert entrar_com(FIS, PC_FIS, None)[0], "confirmado de novo, reconecta"

@@ -50,9 +50,20 @@ def tokens(monkeypatch: pytest.MonkeyPatch):
     return emitidos
 
 
+def _chave(maquina: str) -> str:
+    """A chave que a bandeja 2.1.4 gerou na máquina física (adendo ao ADR 0002)."""
+    return ("chave-da-maquina-" + maquina.lower()).ljust(43, "x")
+
+
+def _registrar(client: TestClient, email: str, maquina: str, chave=None):
+    corpo = {"email": email, "password": SENHA, "machine_id": maquina, "nome": "PC " + maquina[-2:]}
+    if chave is not None:
+        corpo["chave_maquina"] = chave
+    return client.post("/api/agent/dispositivos/registrar", json=corpo)
+
+
 def _entrar(client: TestClient, email: str, maquina: str) -> dict:
-    r = client.post("/api/agent/dispositivos/registrar",
-                    json={"email": email, "password": SENHA, "machine_id": maquina, "nome": "PC " + maquina[-2:]})
+    r = _registrar(client, email, maquina, _chave(maquina))
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -251,3 +262,23 @@ def test_sem_bandeja_autorizada_nao_ha_instalacao(client: TestClient, banco: _Fa
     assert r.status_code == 409 and "Usuários › Computadores" in r.json()["detail"]
     me = client.get("/api/cert-installer/minha-estacao", headers=_h(*ADMIN)).json()
     assert me["motivo"] == "sem_computador", "sem computador não há mais consulta ao Hardlyze"
+
+
+def test_senha_sozinha_nao_da_bandeja_autorizada_na_maquina_da_vitima(
+    client: TestClient, banco: _Fake, tokens: dict
+) -> None:
+    """Auditoria de 10/10/2026, item 1 (app/agent_devices.py:registrar:machine-id-
+    autodeclarado-autoriza-reentrada): com a senha e o machine_id da vítima, de
+    qualquer lugar, o par autorizado reconectava sem o admin, o segredo da bandeja
+    verdadeira era trocado e os PFX da carteira saíam pelo /claim."""
+    seg_real = _entrar(client, "fis@x.com", PC_FIS)["segredo"]
+    _autorizar_pendente(client, PC_FIS)
+    me = client.get("/api/cert-installer/minha-estacao", headers=_h(*FISCAL_OP)).json()
+    assert me["dispositivos"][0]["machine_id"] == PC_FIS  # o machine_id não é segredo
+
+    for chave_do_intruso in (None, "chave-de-quem-so-tem-a-senha".ljust(43, "z")):
+        r = _registrar(client, "fis@x.com", PC_FIS, chave_do_intruso)
+        assert r.status_code in (403, 409), r.text
+        assert "segredo" not in r.text
+    assert r.status_code == 409 or r.headers.get("X-Confirmacao-Pendente") == "1"
+    assert client.get("/api/estacao/situacao", headers=_bandeja(seg_real)).status_code == 200,         "a bandeja verdadeira foi derrubada"

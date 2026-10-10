@@ -14,18 +14,45 @@ aquele dispositivo pode receber instalação:
   autorizado também não pede.
 
 Sem banco não há vínculo: as funções levantam `SemBanco` e a rota decide.
+
+── Chave da máquina (adendo de 10/10/2026) ───────────────────────────────
+
+O `machine_id` é um texto que a bandeja manda. Com a senha de alguém, dava
+para dizer "sou a máquina dele" de qualquer lugar: o par autorizado
+reconectava sem o administrador, o segredo da bandeja verdadeira era
+sobrescrito e os PFX da carteira iam para quem chamou (auditoria, achado
+app/agent_devices.py:registrar:machine-id-autodeclarado-autoriza-reentrada).
+
+A bandeja 2.1.4 gera na instalação uma chave secreta guardada na estação. A
+aprovação do administrador FIXA a chave daquela máquina (`maquina_chave`, só
+o hash). Daí em diante:
+
+* reconectar com a chave certa entra na hora (é a mesma máquina);
+* reconectar sem ela, ou com outra, é **equipamento novo**: não sai segredo,
+  a bandeja que está lá não é tocada, e o administrador recebe um pedido de
+  confirmação;
+* bandeja antiga, que não manda chave: cada confirmação do administrador
+  libera UMA reconexão na hora seguinte, até a frota estar na 2.1.4;
+* derrubar a sessão de OUTRA pessoa na máquina exige a máquina provada (chave
+  certa ou reconexão confirmada) ou a aprovação — um registro remoto e
+  pendente não derruba ninguém (achado ...ao_entrar:revoga-bandeja-alheia).
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 TABELA = "computador_vinculo"
+TABELA_CHAVE = "maquina_chave"
 FILA = "fila_instalacao"
+JANELA_RECONEXAO = timedelta(hours=1)
+MOTIVO_CONFIRMACAO = "Confirmar a máquina: entrou sem a chave desta estação."
 PRINCIPAL, EMPRESTIMO = "principal", "emprestimo"
 PENDENTE, ATIVO, ENCERRADO, RECUSADO = "pendente", "ativo", "encerrado", "recusado"
 AUTORIZADO = "autorizado"
@@ -40,6 +67,10 @@ class SemBanco(RuntimeError):
 
 class VinculoInvalido(ValueError):
     pass
+
+
+class OutroDispositivo(RuntimeError):
+    """O par já tem pedido pendente com a chave de outra estação."""
 
 
 def _banco():
@@ -199,7 +230,97 @@ def _revogar_dispositivos(filtro_user: Optional[str] = None, filtro_maquina: Opt
     return n
 
 
-def ao_entrar(user_id: str, machine_id: str, nome: str = "") -> Dict[str, Any]:
+def hash_da_chave(chave: Optional[str]) -> Optional[str]:
+    """sha256 da chave da máquina; None se ausente ou fora do formato.
+
+    A chave tem 32 bytes aleatórios (43+ caracteres): hash simples basta, e o
+    banco nunca a vê em claro.
+    """
+    c = (chave or "").strip()
+    if not (32 <= len(c) <= 256):
+        return None
+    return hashlib.sha256(c.encode("utf-8")).hexdigest()
+
+
+def chave_fixada(machine_id: str) -> Optional[str]:
+    linhas = _banco().table(TABELA_CHAVE).select("chave_hash").eq("machine_id", mac(machine_id)).limit(1).execute().data or []
+    return linhas[0].get("chave_hash") if linhas else None
+
+
+def _fixar_chave(machine_id: str, chave_hash: str, por: str) -> None:
+    sb, mid = _banco(), mac(machine_id)
+    campos = {"chave_hash": chave_hash, "fixada_em": _iso(_agora()), "fixada_por": por}
+    if sb.table(TABELA_CHAVE).select("machine_id").eq("machine_id", mid).limit(1).execute().data:
+        sb.table(TABELA_CHAVE).update(campos).eq("machine_id", mid).execute()
+    else:
+        sb.table(TABELA_CHAVE).insert({"machine_id": mid, **campos}).execute()
+    logger.info("Computador: chave da máquina %s fixada por %s", mid, por)
+
+
+def _maquina_provada(machine_id: str, chave_hash: Optional[str]) -> bool:
+    fixada = chave_fixada(machine_id)
+    return bool(fixada and chave_hash and hmac.compare_digest(str(fixada), chave_hash))
+
+
+def _janela_aberta(v: Dict[str, Any]) -> bool:
+    fim = _quando(v.get("reconexao_liberada_ate"))
+    return bool(fim and fim > _agora())
+
+
+def _pedir_confirmacao(uid: str, mid: str, nome: str, chave_hash: Optional[str]) -> Dict[str, Any]:
+    """Par autorizado que entrou sem provar a máquina: pedido para o admin,
+    sem tocar no vínculo ativo nem na bandeja que está lá."""
+    p = pendente_do_par(uid, mid)
+    if p:
+        if p.get("chave_hash") and p["chave_hash"] != chave_hash:
+            raise OutroDispositivo(mid)
+    else:
+        atual = vinculo_vigente(uid, mid) or {}
+        _banco().table(TABELA).insert({
+            "user_id": uid, "machine_id": mid, "nome": (nome or mid)[:120], "tipo": atual.get("tipo") or PRINCIPAL,
+            "estado": PENDENTE, "pedido_em": _iso(_agora()), "decidido_por": "", "motivo": MOTIVO_CONFIRMACAO,
+            "chave_hash": chave_hash,
+        }).execute()
+        logger.warning("Computador: %s entrou em %s sem a chave da máquina; pedido de confirmação aberto.", uid, mid)
+    p = pendente_do_par(uid, mid) or {}
+    return {"autorizacao": PENDENTE, "tipo": p.get("tipo"), "vinculo_id": p.get("id"), "confirmacao": True}
+
+
+def entrar(user_id: str, machine_id: str, nome: str = "", chave: Optional[str] = None) -> Tuple[Optional[str], Dict[str, Any]]:
+    """A bandeja entrou com a senha certa. Devolve (segredo ou None, situação).
+
+    Sem segredo quando o par já autorizado não provou a máquina: aí é pedido de
+    confirmação, e a bandeja que está lá continua com o segredo dela.
+    """
+    from app import agent_devices
+
+    uid, mid = str(user_id), mac(machine_id)
+    h = hash_da_chave(chave)
+    provada = _maquina_provada(mid, h)
+    v = vinculo_vigente(uid, mid)
+    if v:
+        if not provada:
+            if not _janela_aberta(v):
+                return None, _pedir_confirmacao(uid, mid, nome, h)
+            _banco().table(TABELA).update({"reconexao_liberada_ate": None}).eq("id", v["id"]).execute()
+            provada = True  # o administrador confirmou esta reconexão
+    else:
+        p = pendente_do_par(uid, mid)
+        if p and p.get("chave_hash") and p["chave_hash"] != h:
+            raise OutroDispositivo(mid)
+    segredo = agent_devices.registrar(user_id=uid, machine_id=mid, nome=nome or mid)
+    return segredo, ao_entrar(uid, mid, nome, chave_hash=h, maquina_provada=provada)
+
+
+def _so_ela_na_maquina(uid: str, mid: str) -> None:
+    _revogar_dispositivos(filtro_maquina=mid, exceto_user=uid)
+    for v in _vinculos(machine_id=mid, tipo=EMPRESTIMO, estado=ATIVO):
+        if str(v["user_id"]) != uid:
+            _encerrar(v["id"], "Outra pessoa entrou nesta máquina.")
+
+
+def ao_entrar(user_id: str, machine_id: str, nome: str = "", chave_hash: Optional[str] = None,
+              maquina_provada: bool = False) -> Dict[str, Any]:
     """Chamada depois de `agent_devices.registrar`: aplica as regras do ADR 0002."""
     uid, mid = str(user_id), mac(machine_id)
     # Um acesso por vez: a pessoa sai das outras máquinas...
@@ -207,11 +328,10 @@ def ao_entrar(user_id: str, machine_id: str, nome: str = "") -> Dict[str, Any]:
     for v in _vinculos(user_id=uid, tipo=EMPRESTIMO, estado=ATIVO):
         if mac(v["machine_id"]) != mid:
             _encerrar(v["id"], "A pessoa entrou em outra máquina.")
-    # ...e a máquina fica só com ela.
-    _revogar_dispositivos(filtro_maquina=mid, exceto_user=uid)
-    for v in _vinculos(machine_id=mid, tipo=EMPRESTIMO, estado=ATIVO):
-        if str(v["user_id"]) != uid:
-            _encerrar(v["id"], "Outra pessoa entrou nesta máquina.")
+    # ...e a máquina fica só com ela — mas só quem PROVOU estar nela derruba
+    # outra pessoa. Sem prova, a vez chega na aprovação (`autorizar`).
+    if maquina_provada:
+        _so_ela_na_maquina(uid, mid)
 
     s = situacao(uid, mid)
     if s["autorizacao"] in (AUTORIZADO, PENDENTE):
@@ -221,6 +341,7 @@ def ao_entrar(user_id: str, machine_id: str, nome: str = "") -> Dict[str, Any]:
     _banco().table(TABELA).insert({
         "user_id": uid, "machine_id": mid, "nome": (nome or mid)[:120], "tipo": tipo,
         "estado": PENDENTE, "pedido_em": _iso(_agora()), "decidido_por": "", "motivo": "",
+        "chave_hash": chave_hash,
     }).execute()
     logger.info("Computador: pedido de vínculo %s para %s em %s", tipo, uid, mid)
     return situacao(uid, mid)
@@ -251,7 +372,19 @@ def autorizar(vinculo_id: Any, tipo: str, por: str, prazo: Optional[str] = None)
         campos["expira_em"] = _iso(fim_do_prazo(prazo or "fim_do_dia", agora))
     else:
         raise VinculoInvalido("Tipo: principal ou emprestimo.")
+    # Confirmação de um par que já tinha vínculo: o novo substitui o antigo.
+    for antigo in _vinculos(user_id=str(v["user_id"]), machine_id=mac(v["machine_id"]), estado=ATIVO):
+        if antigo["id"] != v["id"]:
+            _encerrar(antigo["id"], "Substituído pela confirmação da máquina.")
+    if v.get("chave_hash"):
+        _fixar_chave(v["machine_id"], v["chave_hash"], por)
+    else:
+        # Bandeja antiga, sem chave: uma reconexão na próxima hora, para ela
+        # não ficar presa pedindo confirmação a cada entrada.
+        campos["reconexao_liberada_ate"] = _iso(agora + JANELA_RECONEXAO)
     _banco().table(TABELA).update(campos).eq("id", v["id"]).execute()
+    # Aprovado, a máquina é desta pessoa agora: quem estava nela sai.
+    _so_ela_na_maquina(str(v["user_id"]), mac(v["machine_id"]))
     return _um(v["id"])
 
 

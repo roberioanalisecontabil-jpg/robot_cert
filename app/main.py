@@ -1634,6 +1634,9 @@ class RegistrarDispositivoBody(BaseModel):
     password: str = Field(max_length=1024)
     machine_id: str = Field(max_length=128)
     nome: Optional[str] = Field(default=None, max_length=128)
+    # Gerada pela bandeja 2.1.4 na instalação e guardada na estação (adendo ao
+    # ADR 0002, 10/10/2026). Opcional: bandeja antiga não manda.
+    chave_maquina: Optional[str] = Field(default=None, max_length=256)
 
 
 class TokenDoDispositivoBody(BaseModel):
@@ -1691,18 +1694,31 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
         raise HTTPException(status_code=400, detail="Informe a máquina do agente.")
 
     try:
-        segredo = agent_devices.registrar(
-            user_id=str(user["id"]),
-            machine_id=machine_id,
-            nome=body.nome or machine_id,
+        # ADR 0002: um acesso por vez e vínculo autorizado pelo administrador;
+        # adendo de 10/10/2026: reconexão só com a chave da máquina.
+        segredo, situacao = computadores.entrar(
+            str(user["id"]), machine_id, body.nome or machine_id, body.chave_maquina
         )
-        # ADR 0002: um acesso por vez e vínculo autorizado pelo administrador.
-        situacao = computadores.ao_entrar(str(user["id"]), machine_id, body.nome or machine_id)
     except (agent_devices.SemBanco, computadores.SemBanco) as e:
         raise _erro_sem_banco(e)
+    except computadores.OutroDispositivo:
+        raise HTTPException(
+            status_code=409,
+            detail="Já há um pedido para esta máquina vindo de outra estação. Peça ao administrador para recusá-lo.",
+        )
     except Exception:
         logger.exception("Falha ao registrar dispositivo do agente")
         raise HTTPException(status_code=500, detail="Erro interno ao registrar o dispositivo.")
+
+    if segredo is None:
+        # Par autorizado que não provou a máquina: equipamento novo. Sem
+        # segredo — a bandeja que está lá continua a dela.
+        raise HTTPException(
+            status_code=403,
+            detail="Esta máquina precisa ser confirmada pelo administrador (Usuários › Computadores). "
+                   "Entre de novo depois da aprovação.",
+            headers={"X-Confirmacao-Pendente": "1"},
+        )
 
     return {
         "segredo": segredo,
