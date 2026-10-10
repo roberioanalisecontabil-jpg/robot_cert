@@ -789,9 +789,10 @@ def enviar_codigo_de_redefinicao(
     if conta.get("ativo") is False:
         raise HTTPException(status_code=400, detail="A conta está desativada; reative antes de enviar o código.")
     try:
-        codigo = senha_reset.criar_codigo(str(conta["id"]), client_ip=_ip_do_cliente(request))
-    except senha_reset.LimiteDePedidos:
-        raise HTTPException(status_code=429, detail=f"Essa conta já recebeu {senha_reset.MAX_PEDIDOS_HORA} códigos na última hora. Aguarde.")
+        # `pelo_admin`: fora dos tetos de pedido anônimo. Antes, um anônimo que
+        # soubesse o e-mail esgotava o teto e esta rota respondia 429 — a
+        # vítima ficava sem saída. O limite daqui é o da rota (20/h por admin).
+        codigo = senha_reset.criar_codigo(str(conta["id"]), client_ip=_ip_do_cliente(request), pelo_admin=True)
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao criar código de redefinição por pedido do administrador")
         raise HTTPException(status_code=503, detail="Não foi possível gerar o código agora. Tente de novo em instantes.")
@@ -1129,8 +1130,9 @@ def senha_pedir_codigo(body: SenhaCodigoBody, request: Request, background: Back
         # Mesma resposta de propósito: dizer "você pediu demais" confirmaria
         # que a conta existe, que é justamente o que o genérico esconde.
         logger.warning(
-            "Teto de %d pedidos/hora atingido para uma conta.",
+            "Teto de pedidos de código atingido para uma conta (%d/h por endereço, %d/h no total).",
             senha_reset.MAX_PEDIDOS_HORA,
+            senha_reset.MAX_PEDIDOS_HORA_CONTA,
         )
         return {"ok": True, "message": RESPOSTA_GENERICA}
     except Exception:  # noqa: BLE001

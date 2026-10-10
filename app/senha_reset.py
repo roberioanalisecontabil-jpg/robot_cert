@@ -25,7 +25,19 @@ opcional:
   * `MAX_TENTATIVAS`    — o código QUEIMA no terceiro erro, não fica adivinhável
   * `MAX_PEDIDOS_HORA`  — sem teto, 3 tentativas por código não valem nada:
                           bastaria pedir mil códigos para ter três mil chances
+    (por conta E endereço de origem; `MAX_PEDIDOS_HORA_CONTA` por conta)
   * pedido novo invalida os anteriores, senão as tentativas se acumulam
+
+── Concorrência (auditoria de 10/10/2026) ────────────────────────────────
+
+Cada `execute()` é uma instrução em autocommit, então "ler, decidir, gravar"
+em três instruções não é atômico: pedidos simultâneos leem o mesmo estado.
+Os limites acima só valem se a decisão estiver DENTRO da instrução que grava:
+
+  * tentativa: reservada por compare-and-swap (`UPDATE ... WHERE tentativas
+    = <lido>`) ANTES de comparar o palpite — quem perde a corrida relê;
+  * teto de pedidos: conta-se DEPOIS de inserir, e quem passou do teto apaga
+    a própria linha — dois pedidos no limite não passam os dois.
 
 É o oposto do `install_token`, onde 32 bytes aleatórios carregavam a garantia
 sozinhos.
@@ -48,7 +60,14 @@ TABELA = "password_reset_codigo"
 DIGITOS = 6
 VALIDADE_MIN = 15
 MAX_TENTATIVAS = 3
+# Por conta e endereço de origem. Por conta só, um anônimo que soubesse o
+# e-mail esgotava o teto da vítima com 3 pedidos e a recuperação dela parava.
 MAX_PEDIDOS_HORA = 3
+# Por conta, somando os endereços: segura quem troca de IP. 10 códigos x 3
+# tentativas = 30 palpites/hora em 10^6, e o admin continua enviando por fora.
+MAX_PEDIDOS_HORA_CONTA = 10
+# Releituras quando outro pedido mexe na mesma linha entre a leitura e a escrita.
+_MAX_CORRIDAS = 5
 
 
 class LimiteDePedidos(RuntimeError):
@@ -127,15 +146,21 @@ def _agora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def criar_codigo(user_id: str, client_ip: Optional[str] = None) -> str:
+def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: bool = False) -> str:
     """
     Invalida os códigos anteriores da conta e devolve um novo, em claro.
 
     O valor em claro só existe aqui e no e-mail: a tabela guarda o hash.
 
-    Levanta `LimiteDePedidos` se a conta estourou `MAX_PEDIDOS_HORA`. O teto é
-    por CONTA, e não por IP: quem ataca troca de IP com facilidade, mas o alvo
-    continua sendo a mesma conta.
+    Levanta `LimiteDePedidos` se o pedido passou de `MAX_PEDIDOS_HORA` para a
+    conta naquele endereço de origem, ou de `MAX_PEDIDOS_HORA_CONTA` para a
+    conta. Até 10/10/2026 o teto era só por conta: um anônimo que soubesse o
+    e-mail o esgotava com 3 pedidos, e nem a vítima nem o administrador
+    conseguiam mais gerar código naquela hora.
+
+    `pelo_admin` (envio pela tela Usuários) não passa pelos tetos: a rota é
+    autenticada e tem limite próprio, e é a saída que sobra à vítima quando um
+    anônimo está gastando os pedidos dela.
     """
     sb = _banco()
     if not sb:
@@ -144,53 +169,76 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None) -> str:
     agora = _agora()
     desde = (agora - timedelta(hours=1)).isoformat()
 
-    recentes = (
-        sb.table(TABELA)
-        .select("id")
-        .eq("user_id", user_id)
-        .gt("created_at", desde)
-        .execute()
-    )
-    if len(recentes.data or []) >= MAX_PEDIDOS_HORA:
-        raise LimiteDePedidos(user_id)
-
-    # Queima o que estava pendente ANTES de criar o novo. Sem isto, os códigos
-    # antigos continuariam válidos e as 3 tentativas de cada um se somariam —
-    # o teto de tentativas viraria "3 vezes o número de pedidos".
-    sb.table(TABELA).update({"consumed_at": agora.isoformat()}).eq(
-        "user_id", user_id
-    ).is_("consumed_at", "null").execute()
-
     codigo = gerar_codigo()
-    sb.table(TABELA).insert(
+    inserida = sb.table(TABELA).insert(
         {
             "user_id": user_id,
             "codigo_hash": _hash(codigo),
             # `created_at` explícito, e não deixado para o DEFAULT da coluna: é
-            # por ele que o teto de pedidos conta. Linha sem `created_at` não
-            # casaria com o filtro `> uma hora atrás`, e o limitador passaria a
-            # contar zero — abrindo exatamente o buraco que ele fecha, sem
-            # nenhum sintoma. O DEFAULT continua na tabela como rede.
+            # por ele que o teto de pedidos conta e que o código mais novo
+            # vence. Linha sem `created_at` não casaria com o filtro `> uma
+            # hora atrás`, e o limitador passaria a contar zero — abrindo
+            # exatamente o buraco que ele fecha, sem nenhum sintoma.
             "created_at": agora.isoformat(),
             "expires_at": (agora + timedelta(minutes=VALIDADE_MIN)).isoformat(),
             "client_ip": client_ip,
+            # Explícito como o `created_at`: o compare-and-swap de `conferir`
+            # parte deste valor, e não pode depender do DEFAULT da coluna.
+            "tentativas": 0,
         }
     ).execute()
+    nova_id = ((inserida.data or [{}])[0]).get("id")
+
+    # O teto conta DEPOIS de inserir, incluindo a própria linha. Contado antes,
+    # dois pedidos simultâneos viam o mesmo número abaixo do teto e passavam os
+    # dois. Assim, quem chega por último enxerga o outro e fica de fora. A
+    # linha recusada é APAGADA, não queimada: queimada continuaria contando, e
+    # pedidos recusados encheriam o teto da conta para quem pede de outro lugar.
+    if not pelo_admin:
+        recentes = (
+            sb.table(TABELA).select("id, client_ip").eq("user_id", user_id).gt("created_at", desde).execute()
+        ).data or []
+        do_endereco = [x for x in recentes if (x.get("client_ip") or None) == (client_ip or None)]
+        if len(recentes) > MAX_PEDIDOS_HORA_CONTA or len(do_endereco) > MAX_PEDIDOS_HORA:
+            if nova_id is not None:
+                sb.table(TABELA).delete().eq("id", nova_id).execute()
+            raise LimiteDePedidos(user_id)
+
+    # Queima o que estava pendente. Sem isto, os códigos antigos continuariam
+    # válidos e as 3 tentativas de cada um se somariam — o teto de tentativas
+    # viraria "3 vezes o número de pedidos". Só os MAIS ANTIGOS que este: um
+    # pedido simultâneo que também passou queima o mais velho dos dois, e não
+    # os dois um ao outro.
+    pendentes = (
+        sb.table(TABELA).select("id, created_at").eq("user_id", user_id).is_("consumed_at", "null").execute()
+    ).data or []
+    for p in pendentes:
+        if p.get("id") != nova_id and str(p.get("created_at") or "") < agora.isoformat():
+            sb.table(TABELA).update({"consumed_at": agora.isoformat()}).eq("id", p["id"]).is_(
+                "consumed_at", "null"
+            ).execute()
     return codigo
 
 
 def _vigente(sb, user_id: str) -> Optional[Dict[str, Any]]:
-    """O código não consumido e não expirado da conta, se houver."""
+    """O código não consumido e não expirado mais novo da conta, se houver.
+
+    Normalmente há um só. Se uma corrida deixar dois vivos por um instante,
+    vale o mais novo — o que a pessoa acabou de receber — e a escolha não pode
+    depender da ordem em que o banco devolve as linhas.
+    """
     r = (
         sb.table(TABELA)
-        .select("id, codigo_hash, tentativas, expires_at")
+        .select("id, codigo_hash, tentativas, expires_at, created_at")
         .eq("user_id", user_id)
         .is_("consumed_at", "null")
         .gt("expires_at", _agora().isoformat())
         .execute()
     )
     linhas = r.data or []
-    return linhas[0] if linhas else None
+    if not linhas:
+        return None
+    return max(linhas, key=lambda x: str(x.get("created_at") or ""))
 
 
 def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
@@ -207,28 +255,56 @@ def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
 
     Não distingue "não existe", "expirou", "já foi usado" e "está errado" para
     o chamador — a distinção viraria oráculo.
+
+    A tentativa é RESERVADA no banco antes de o palpite ser comparado, por
+    compare-and-swap no valor lido (`tentativas = <lido>` no WHERE). Até
+    10/10/2026 a ordem era ler, comparar e só então gravar `lido + 1`:
+    palpites simultâneos liam todos zero e eram todos comparados, e o limite
+    de 3 virava "quantos pedidos cabem na janela". Quem perde a corrida relê
+    a linha; acertar devolve a tentativa, para o código certo no /verificar e
+    de novo no /redefinir não gastar o que é de quem errou um dígito.
     """
     sb = _banco()
     if not sb:
         return False, None
 
-    linha = _vigente(sb, user_id)
-    if not linha:
+    for _ in range(_MAX_CORRIDAS):
+        linha = _vigente(sb, user_id)
+        if not linha:
+            return False, None
+        usadas = int(linha.get("tentativas") or 0)
+        if usadas >= MAX_TENTATIVAS:
+            return False, None
+
+        reservada = (
+            sb.table(TABELA)
+            .update({"tentativas": usadas + 1})
+            .eq("id", linha["id"])
+            .eq("tentativas", usadas)
+            .is_("consumed_at", "null")
+            .execute()
+        )
+        if not (reservada.data or []):
+            continue  # outro pedido mexeu na linha entre a leitura e a escrita
+
+        # `compare_digest` em vez de `==`: comparação de string sai cedo no
+        # primeiro byte diferente, e o tempo de resposta vaza quantos dígitos
+        # iniciais estavam certos. Com 6 dígitos e 3 tentativas isso é margem
+        # estreita, mas o custo de fechar é uma linha.
+        if _confere(str(linha.get("codigo_hash") or ""), codigo):
+            sb.table(TABELA).update({"tentativas": usadas}).eq("id", linha["id"]).eq(
+                "tentativas", usadas + 1
+            ).execute()
+            return True, str(linha["id"])
+
+        if usadas + 1 >= MAX_TENTATIVAS:
+            sb.table(TABELA).update({"consumed_at": _agora().isoformat()}).eq(
+                "id", linha["id"]
+            ).is_("consumed_at", "null").execute()
+            logger.info("Código de redefinição queimado após %d erros.", usadas + 1)
         return False, None
 
-    # `compare_digest` em vez de `==`: comparação de string sai cedo no
-    # primeiro byte diferente, e o tempo de resposta vaza quantos dígitos
-    # iniciais estavam certos. Com 6 dígitos e 3 tentativas isso é margem
-    # estreita, mas o custo de fechar é uma linha.
-    if _confere(str(linha.get("codigo_hash") or ""), codigo):
-        return True, str(linha["id"])
-
-    tentativas = int(linha.get("tentativas") or 0) + 1
-    campos: Dict[str, Any] = {"tentativas": tentativas}
-    if tentativas >= MAX_TENTATIVAS:
-        campos["consumed_at"] = _agora().isoformat()
-        logger.info("Código de redefinição queimado após %d erros.", tentativas)
-    sb.table(TABELA).update(campos).eq("id", linha["id"]).execute()
+    logger.warning("Conferência de código desistiu após %d corridas na mesma linha.", _MAX_CORRIDAS)
     return False, None
 
 

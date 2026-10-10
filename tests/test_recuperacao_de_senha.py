@@ -450,3 +450,106 @@ def test_codigo_preserva_zeros_a_esquerda() -> None:
 def test_codigos_nao_se_repetem_na_pratica() -> None:
     """Contraprova rasteira contra um gerador constante ou de espaço mínimo."""
     assert len({sr.gerar_codigo() for _ in range(200)}) > 150
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 6. Concorrência e teto por conta (auditoria de 10/10/2026)
+#
+# Três achados da auditoria da Cloudflare sobre este módulo:
+#   - `conferir` lia `tentativas`, comparava e só depois gravava o valor
+#     calculado no cliente: palpites simultâneos liam todos zero e passavam
+#     do limite de 3 (senha_reset.conferir.tentativas-nao-atomicas);
+#   - `criar_codigo` contava, queimava e inseria em três instruções soltas
+#     (senha_reset.criar_codigo.teto-de-pedidos-nao-atomico);
+#   - o teto de 3 pedidos/hora era por CONTA e qualquer anônimo o esgotava,
+#     bloqueando a recuperação da vítima e até o código enviado pelo admin
+#     (app/senha_reset.py:criar_codigo:teto-por-conta-esgotavel-por-anonimo).
+# ──────────────────────────────────────────────────────────────────────────
+
+def _errado(certo: str) -> str:
+    return "000000" if certo != "000000" else "111111"
+
+
+def test_palpites_simultaneos_nao_passam_de_tres(
+    banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Simula a corrida: toda leitura enxerga a linha como estava ANTES de
+    qualquer escrita (tentativas = 0), como acontece quando os pedidos chegam
+    juntos. Nenhum palpite pode ser comparado sem antes reservar a tentativa
+    no banco, então o número de comparações fica no limite."""
+    certo = sr.criar_codigo("u-ana", client_ip="1.1.1.1")
+    retrato = dict(banco.tabelas[TABELA][0])
+    monkeypatch.setattr(sr, "_vigente", lambda sb, uid: dict(retrato))
+    comparacoes = []
+    original = sr._confere
+    monkeypatch.setattr(sr, "_confere", lambda g, c: comparacoes.append(c) or original(g, c))
+
+    for _ in range(10):
+        assert sr.conferir("u-ana", _errado(certo)) == (False, None)
+    assert len(comparacoes) <= sr.MAX_TENTATIVAS, comparacoes
+
+
+def test_codigo_certo_nao_gasta_tentativa(banco: _Fake) -> None:
+    """Reservar a tentativa antes de comparar não pode punir quem acerta:
+    dois erros, depois o código certo no /verificar e de novo no /redefinir."""
+    certo = sr.criar_codigo("u-ana", client_ip="1.1.1.1")
+    for _ in range(sr.MAX_TENTATIVAS - 1):
+        assert sr.conferir("u-ana", _errado(certo))[0] is False
+    assert sr.conferir("u-ana", certo)[0] is True
+    assert sr.consumir("u-ana", certo) is True
+
+
+def test_terceiro_erro_ainda_queima(banco: _Fake) -> None:
+    certo = sr.criar_codigo("u-ana", client_ip="1.1.1.1")
+    for _ in range(sr.MAX_TENTATIVAS):
+        sr.conferir("u-ana", _errado(certo))
+    assert banco.tabelas[TABELA][0]["consumed_at"], "não queimou no terceiro erro"
+    assert sr.conferir("u-ana", certo)[0] is False
+
+
+def test_pedido_que_estoura_o_teto_nao_deixa_codigo_vivo(banco: _Fake) -> None:
+    """Conta-se DEPOIS de inserir: quem passa do teto queima o próprio código.
+    Assim dois pedidos simultâneos no limite não passam os dois."""
+    for _ in range(sr.MAX_PEDIDOS_HORA):
+        sr.criar_codigo("u-ana", client_ip="6.6.6.6")
+    with pytest.raises(sr.LimiteDePedidos):
+        sr.criar_codigo("u-ana", client_ip="6.6.6.6")
+    vivos = [r for r in banco.tabelas[TABELA] if r["consumed_at"] is None]
+    assert len(vivos) == 1, vivos
+
+
+def test_codigo_mais_novo_e_o_que_vale(banco: _Fake) -> None:
+    """Se uma corrida deixar duas linhas vivas, vale a mais nova — e a
+    escolha não depende da ordem em que o banco devolve as linhas."""
+    sr.criar_codigo("u-ana", client_ip="1.1.1.1")
+    velho = dict(banco.tabelas[TABELA][0])
+    novo = sr.criar_codigo("u-ana", client_ip="1.1.1.1")
+    velho["id"], velho["consumed_at"] = "id-velho", None
+    banco.tabelas[TABELA].insert(0, velho)  # sobrevivente de uma corrida, devolvido primeiro
+    assert sr.conferir("u-ana", novo)[0] is True
+
+
+def test_anonimo_de_um_ip_nao_bloqueia_o_dono_em_outro(banco: _Fake) -> None:
+    for _ in range(sr.MAX_PEDIDOS_HORA):
+        sr.criar_codigo("u-ana", client_ip="6.6.6.6")
+    with pytest.raises(sr.LimiteDePedidos):
+        sr.criar_codigo("u-ana", client_ip="6.6.6.6")
+    assert sr.criar_codigo("u-ana", client_ip="10.0.0.7")
+
+
+def test_teto_por_conta_segura_ips_rotativos(banco: _Fake) -> None:
+    """O teto por IP sozinho deixaria quem troca de IP pedir sem fim; o teto
+    da conta limita o total de códigos (e de palpites) por hora."""
+    for i in range(sr.MAX_PEDIDOS_HORA_CONTA):
+        sr.criar_codigo("u-ana", client_ip=f"9.9.9.{i}")
+    with pytest.raises(sr.LimiteDePedidos):
+        sr.criar_codigo("u-ana", client_ip="9.9.9.250")
+
+
+def test_codigo_do_admin_sai_mesmo_com_os_tetos_esgotados(banco: _Fake) -> None:
+    """O envio pelo administrador é autenticado e tem teto próprio na rota;
+    um anônimo não pode tirar dele a única saída que sobra à vítima."""
+    for i in range(sr.MAX_PEDIDOS_HORA_CONTA):
+        sr.criar_codigo("u-ana", client_ip=f"9.9.9.{i}")
+    codigo = sr.criar_codigo("u-ana", client_ip="10.0.0.1", pelo_admin=True)
+    assert sr.conferir("u-ana", codigo)[0] is True

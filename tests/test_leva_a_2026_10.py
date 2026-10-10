@@ -183,6 +183,26 @@ def test_admin_envia_codigo_e_a_pessoa_recebe_pelo_fluxo_existente(client: TestC
     assert any(c.get("user_id") == "u-fis" for c in banco.tabelas["password_reset_codigo"])
 
 
+def test_admin_envia_codigo_mesmo_com_o_teto_anonimo_esgotado(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auditoria de 10/10/2026: um anônimo que soubesse o e-mail esgotava o
+    teto de pedidos da conta e o envio pelo administrador respondia 429 — a
+    vítima ficava sem nenhuma saída pelo portal."""
+    from datetime import datetime, timezone
+    import app.senha_reset as sr
+
+    agora = datetime.now(timezone.utc).isoformat()
+    banco.tabelas.setdefault("password_reset_codigo", []).extend(
+        {"id": f"anon-{i}", "user_id": "u-fis", "codigo_hash": "x", "tentativas": 0, "created_at": agora,
+         "expires_at": agora, "consumed_at": agora, "client_ip": f"203.0.113.{i}"}
+        for i in range(sr.MAX_PEDIDOS_HORA_CONTA)
+    )
+    enviados = []
+    monkeypatch.setattr(usuarios, "_enviar_codigo_por_email", lambda conta, codigo: enviados.append(codigo))
+    r = client.post("/api/users/u-fis/enviar-codigo", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert enviados
+
+
 def test_so_administrador_envia_codigo(client: TestClient, banco: _Fake) -> None:
     assert client.post("/api/users/u-fis/enviar-codigo", headers=_h(*GESTOR)).status_code == 403
     assert client.post("/api/users/u-fis/enviar-codigo", headers=_h(*FISCAL_OP)).status_code == 403
