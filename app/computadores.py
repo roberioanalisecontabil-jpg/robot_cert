@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -355,8 +355,32 @@ def enfileirar(machine_id: str, token_raw: str, token_id: str, expira_em: dateti
     }).execute()
 
 
-def entregar(machine_id: str) -> List[str]:
-    """Tokens pendentes desta máquina, uma vez só (marca entregue)."""
+def pode_receber(user_do_dispositivo: str, user_do_pedido: Optional[str]) -> bool:
+    """O token de instalação pedido por `user_do_pedido` pode ir para a bandeja
+    de `user_do_dispositivo`?
+
+    Só para a própria pessoa que pediu — o pedido passou pela carteira DELA.
+    Até 10/10/2026 a fila entregava por máquina e o resgate conferia o vínculo
+    de quem chegava: o dono que retomasse a máquina recebia o certificado que a
+    pessoa do empréstimo tinha pedido (auditoria, claim-token-not-bound-to-
+    requesting-user). A exceção é o pedido do administrador, que instala em
+    qualquer máquina autorizada por desenho; o papel é relido do banco.
+    """
+    if not user_do_pedido:
+        return False
+    if str(user_do_pedido) == str(user_do_dispositivo):
+        return True
+    linhas = _banco().table("users").select("role").eq("id", str(user_do_pedido)).limit(1).execute().data or []
+    return bool(linhas) and (linhas[0].get("role") or "").strip().lower() == "admin"
+
+
+def entregar(machine_id: str, aceitar: Optional[Callable[[str], bool]] = None) -> List[str]:
+    """Tokens pendentes desta máquina, uma vez só (marca entregue).
+
+    `aceitar` decide, token a token, se ele pode ir para quem está pedindo; o
+    que for recusado não é marcado como entregue e continua esperando a bandeja
+    de quem o pediu.
+    """
     from app.smtp_service import decrypt_password
 
     sb = _banco()
@@ -368,8 +392,9 @@ def entregar(machine_id: str) -> List[str]:
         fim = _quando(linha.get("expira_em"))
         if fim and fim <= agora:
             continue
-        sb.table(FILA).update({"entregue_em": _iso(agora)}).eq("id", linha["id"]).execute()
         token = decrypt_password(linha["token_cifrado"])
-        if token:
-            saida.append(token)
+        if not token or (aceitar is not None and not aceitar(token)):
+            continue
+        sb.table(FILA).update({"entregue_em": _iso(agora)}).eq("id", linha["id"]).execute()
+        saida.append(token)
     return saida

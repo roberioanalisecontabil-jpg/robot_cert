@@ -1313,6 +1313,11 @@ def senha_trocar(
         logger.exception("Falha ao gravar a senha nova")
         raise HTTPException(status_code=400, detail=SENHA_NAO_GRAVADA)
 
+    # A bandeja cai junto, como na redefinição por código e pelo admin. Faltava
+    # aqui (auditoria de 10/10/2026): quem troca a senha por suspeitar de
+    # invasão deixava valendo o segredo da bandeja que o invasor registrou com
+    # a senha antiga — e ele seguia trocando esse segredo por sessão.
+    computadores.sair_de_tudo(uid, "senha trocada pela própria pessoa")
     atividade.registrar(
         atividade.EVENTO_SENHA_REDEFINIDA,
         user_id=uid,

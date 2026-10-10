@@ -110,6 +110,43 @@ def test_operador_nao_instala_na_maquina_de_outro_e_admin_instala(client: TestCl
     assert len(client.get("/api/estacao/instalacoes", headers=_bandeja(seg_sol)).json()["tokens"]) == 1
 
 
+def test_token_de_quem_pediu_nao_vai_para_quem_ocupa_a_maquina_depois(
+    client: TestClient, banco: _Fake, tokens: dict
+) -> None:
+    """Auditoria de 10/10/2026 (claim-token-not-bound-to-requesting-user): a
+    fila entregava por máquina e o /claim conferia o vínculo de quem chegava,
+    não quem pediu. O dono principal que retomasse a máquina recebia o
+    certificado que a pessoa do empréstimo pediu — fora da carteira dele."""
+    _entrar(client, "solto@x.com", PC_FIS)
+    _autorizar_pendente(client, PC_FIS)  # solto: principal
+    _entrar(client, "fis@x.com", PC_FIS)
+    _autorizar_pendente(client, PC_FIS, tipo="emprestimo", prazo="fim_do_dia")
+    r = client.post("/api/cert-installer/prepare", headers=_h(*FISCAL_OP),
+                    json={"certificate_ids": ["pfx-a"], "machine_id": PC_FIS})
+    assert r.status_code == 200, r.text
+    raw = next(iter(tokens))
+
+    seg_solto = _entrar(client, "solto@x.com", PC_FIS)["segredo"]  # dono retoma
+    assert client.get("/api/estacao/instalacoes", headers=_bandeja(seg_solto)).json()["tokens"] == []
+    r = client.post("/api/cert-installer/claim", headers=_bandeja(seg_solto), json={"token": raw, "clientPublicKey": "x"})
+    assert r.status_code == 403
+    assert raw in tokens, "o token de quem pediu não pode ser queimado por quem não pediu"
+
+
+def test_token_pedido_pelo_admin_vai_para_a_bandeja_da_maquina(
+    client: TestClient, banco: _Fake, tokens: dict
+) -> None:
+    """Instalar na máquina de alguém é poder do administrador por desenho: o
+    token dele continua sendo entregue e resgatado pela bandeja daquela máquina."""
+    seg_sol = _entrar(client, "solto@x.com", PC_SOL)["segredo"]
+    _autorizar_pendente(client, PC_SOL)
+    assert client.post("/api/cert-installer/prepare", headers=_h(*ADMIN),
+                       json={"certificate_ids": ["pfx-a"], "machine_id": PC_SOL}).status_code == 200
+    raw = client.get("/api/estacao/instalacoes", headers=_bandeja(seg_sol)).json()["tokens"][0]
+    r = client.post("/api/cert-installer/claim", headers=_bandeja(seg_sol), json={"token": raw, "clientPublicKey": "x"})
+    assert r.status_code == 200 and r.json()["ids"] == ["pfx-a"]
+
+
 def test_resgate_de_outra_maquina_e_recusado(client: TestClient, banco: _Fake, tokens: dict) -> None:
     seg_fis = _entrar(client, "fis@x.com", PC_FIS)["segredo"]
     _autorizar_pendente(client, PC_FIS)
@@ -126,6 +163,20 @@ def test_senha_redefinida_derruba_a_bandeja(client: TestClient, banco: _Fake) ->
     r = client.post("/api/users/u-fis/reset-password", headers=_h(*ADMIN), json={"password": "Outra-senha-123!"})
     assert r.status_code == 200, r.text
     assert client.get("/api/estacao/situacao", headers=_bandeja(seg)).status_code == 401
+
+
+def test_trocar_a_propria_senha_derruba_a_bandeja(client: TestClient, banco: _Fake) -> None:
+    """Auditoria de 10/10/2026 (app/rotas/usuarios.py:senha_trocar:sem-sair_de_tudo):
+    a redefinição pelo admin e por código derrubavam a bandeja, a troca pela
+    própria pessoa não. Quem troca a senha por suspeitar de invasão deixava o
+    segredo da bandeja do invasor valendo."""
+    seg = _entrar(client, "fis@x.com", PC_FIS)["segredo"]
+    assert client.get("/api/estacao/situacao", headers=_bandeja(seg)).status_code == 200
+    r = client.post("/api/senha/trocar", headers=_h(*FISCAL_OP),
+                    json={"senha_atual": SENHA, "nova_senha": "Outra-senha-123!"})
+    assert r.status_code == 200, r.text
+    assert client.get("/api/estacao/situacao", headers=_bandeja(seg)).status_code == 401
+    assert client.post("/api/agent/dispositivos/token", json={"segredo": seg}).status_code == 401
 
 
 def test_bandeja_sair_e_recusar(client: TestClient, banco: _Fake) -> None:

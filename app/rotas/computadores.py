@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import agent_devices, computadores, config, nomes
+from app import agent_devices, cert_installer, computadores, config, nomes
 from app.sessao import _erro_sem_banco, _sb_do_login, conta_ativa, require_admin, require_auth
 from app import auth
 
@@ -76,7 +76,11 @@ def estacao_instalacoes(request: Request) -> dict:
         s = computadores.situacao(str(disp["user_id"]), disp["machine_id"])
         if s["autorizacao"] != computadores.AUTORIZADO:
             return {"tokens": [], **_texto_da_situacao(s)}
-        return {"tokens": computadores.entregar(disp["machine_id"]), **_texto_da_situacao(s)}
+        # Só os tokens que a própria pessoa pediu (ou um admin): a fila é por
+        # máquina, e quem ocupa a máquina agora pode não ser quem pediu.
+        def _dela(raw: str) -> bool:
+            return computadores.pode_receber(str(disp["user_id"]), (cert_installer.alvo_do_token(raw) or {}).get("user_id"))
+        return {"tokens": computadores.entregar(disp["machine_id"], aceitar=_dela), **_texto_da_situacao(s)}
     except computadores.SemBanco as e:
         raise _erro_sem_banco(e)
 

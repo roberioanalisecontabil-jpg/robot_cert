@@ -1049,9 +1049,13 @@ def claim_install(body: RedeemRequest, request: Request):
         mesma = computadores.mac(disp["machine_id"]) == computadores.mac(alvo.get("target_machine"))
         try:
             autorizado = computadores.situacao(str(disp["user_id"]), disp["machine_id"])["autorizacao"] == computadores.AUTORIZADO
+            # E de quem PEDIU (ou de um admin). Sem isto, o dono que retomasse
+            # a máquina resgatava o pedido da pessoa do empréstimo — fora da
+            # carteira dele (auditoria de 10/10/2026).
+            de_quem_pediu = computadores.pode_receber(str(disp["user_id"]), alvo.get("user_id"))
         except computadores.SemBanco:
-            autorizado = False
-        if not (mesma and autorizado):
+            autorizado = de_quem_pediu = False
+        if not (mesma and autorizado and de_quem_pediu):
             logger.warning("Resgate recusado: dispositivo de %r sem vínculo autorizado com o alvo %r.",
                            disp.get("machine_id"), alvo.get("target_machine"))
             raise HTTPException(status_code=403, detail="Token inválido, expirado ou já utilizado")
