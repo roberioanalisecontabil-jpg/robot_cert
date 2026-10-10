@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from app import auth
 import app.cert_installer as ci
 import app.main as m
+from app.rotas import instalador
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -182,7 +183,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     # A máquina de destino com bandeja autorizada e a fila deste portal não
     # interessam aqui (test_computadores_rotas.py); a barreira da carteira
     # roda depois da conferência da máquina e antes de emitir o token.
-    monkeypatch.setattr(m, "_exigir_maquina_autorizada", lambda *a, **k: None)
+    monkeypatch.setattr(instalador, "_exigir_maquina_autorizada", lambda *a, **k: None)
     monkeypatch.setattr(m.computadores, "enfileirar", lambda *a, **k: None)
     return fake
 

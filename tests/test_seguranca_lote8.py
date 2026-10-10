@@ -314,7 +314,9 @@ def test_ajuda_do_revalidar_nao_promete_correcao() -> None:
     certificados' — dava a entender que o botão consertava o cofre. Ele só
     prova; quem corrige é o Recifrar."""
     html = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    from tests import fonte_do_portal
+
+    fonte = fonte_do_portal.texto()
     assert "Confere de novo as senhas e chaves de todos" not in html
     assert "Confere de novo as senhas e chaves de todos" not in fonte
     assert "recifrar-cofre" in html, "a tela precisa do botão que recifra"

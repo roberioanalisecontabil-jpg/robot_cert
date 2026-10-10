@@ -40,6 +40,7 @@ from fastapi.testclient import TestClient
 from app import auth, config
 import app.cert_installer as ci
 import app.main as m
+from app.rotas import instalador
 from app.settings_state import PortalSettings
 
 
@@ -73,6 +74,8 @@ def settings_em_memoria(monkeypatch: pytest.MonkeyPatch) -> PortalSettings:
 
     monkeypatch.setattr(m, "load_settings", _load)
     monkeypatch.setattr(m, "save_settings", _save)
+    monkeypatch.setattr(instalador, "load_settings", _load)
+    monkeypatch.setattr(instalador, "save_settings", _save)
     monkeypatch.setattr("app.settings_state.load_settings", _load)
     return estado
 

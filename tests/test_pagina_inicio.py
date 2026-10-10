@@ -25,6 +25,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app.rotas import instalador
 from app import permissoes
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, DOC_A, DOC_B, DOC_C, DOC_L, FISCAL_OP, GESTOR, SOLTO, _docs, _h  # noqa: F401
@@ -75,7 +76,7 @@ def test_instalabilidade_confere_o_vinculo_pela_estacao(client: TestClient, banc
     o servidor, e operador/gestor recebiam 403 sempre."""
     from app import computadores
 
-    monkeypatch.setattr(m, "_computador_autorizado_da_pessoa",
+    monkeypatch.setattr(instalador, "_computador_autorizado_da_pessoa",
                         lambda uid: {"machine_id": "pc-fis", "nome": "PC DA FIS", "autorizacao": computadores.AUTORIZADO})
     r = client.get("/api/cert-installer/instalabilidade?machine_id=srv&estacao=pc-fis", headers=_h(*FISCAL_OP))
     assert r.status_code == 200, r.text
@@ -89,7 +90,7 @@ def test_instalabilidade_confere_o_vinculo_pela_estacao(client: TestClient, banc
     assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP)).status_code == 403
     # Sem computador nenhum: só o inventário do servidor da varredura,
     # recortado pela carteira (08/10/2026; antes perguntava ao Hardlyze).
-    monkeypatch.setattr(m, "_computador_autorizado_da_pessoa", lambda uid: None)
+    monkeypatch.setattr(instalador, "_computador_autorizado_da_pessoa", lambda uid: None)
     assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP)).status_code == 200
     # Administrador não tem vínculo a conferir.
     assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*ADMIN)).status_code == 200

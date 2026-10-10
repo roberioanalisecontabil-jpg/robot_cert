@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 import app.cert_installer as ci
 import app.command_queue as cq
 import app.main as m
+from app.rotas import instalador
 from app import auth, config, machine_credentials
 from tests.test_seguranca_lote1 import _Fake, _usuario
 
@@ -321,7 +322,7 @@ def inventario(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> _Fake:
     banco.tabelas["carteira"].append({"user_id": "u-ana", "documento": DOC_MEU})
     from app import computadores
 
-    monkeypatch.setattr(m, "_computador_autorizado_da_pessoa",
+    monkeypatch.setattr(instalador, "_computador_autorizado_da_pessoa",
                         lambda uid: {"machine_id": MAQ_A, "nome": "PC-ANA", "autorizacao": computadores.AUTORIZADO})
     return banco
 

@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 import app.cert_installer as ci
 import app.main as m
+from app.rotas import instalador
 from app import auth
 
 TOKEN_ID = "tid-123"
@@ -141,11 +142,11 @@ def test_o_prepare_devolve_o_id_do_registro_e_nao_o_token(
     É o id do REGISTRO que a tela usa para acompanhar. O token em si é a
     entrega da chave privada e não tem o que fazer no navegador.
     """
-    monkeypatch.setattr(m, "_user_id_da_sessao", lambda t: "u-op")
-    monkeypatch.setattr(m, "_validar_pedido_de_instalacao", lambda *a, **k: None)
+    monkeypatch.setattr(instalador, "_user_id_da_sessao", lambda t: "u-op")
+    monkeypatch.setattr(instalador, "_validar_pedido_de_instalacao", lambda *a, **k: None)
     monkeypatch.setattr(ci, "create_install_token", lambda **kw: ("TOKEN-SECRETO", TOKEN_ID, None))
     monkeypatch.setattr(ci, "log_event", lambda **kw: None)
-    monkeypatch.setattr(m, "_exigir_maquina_autorizada", lambda *a, **k: None)
+    monkeypatch.setattr(instalador, "_exigir_maquina_autorizada", lambda *a, **k: None)
     monkeypatch.setattr(m.computadores, "enfileirar", lambda *a, **k: None)
 
     r = client.post(
