@@ -77,6 +77,13 @@ def proxy_de_teste_confiavel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.config.PROXIES_CONFIAVEIS", frozenset({"*"}), raising=False)
 
 
+@pytest.fixture(autouse=True)
+def login_sem_codigo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A suíte faz dezenas de logins de um passo só. O segundo passo (código por
+    e-mail ou app) tem os próprios testes, que religam isto."""
+    monkeypatch.setattr("app.config.LOGIN_EXIGE_CODIGO", False, raising=False)
+
+
 @pytest.fixture
 def no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """API sem exigir X-API-Key (reproduz ambiente dev sem API_KEY)."""

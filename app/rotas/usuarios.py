@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
-from app import atividade, auth, cert_installer, computadores, correio, nomes, papeis, permissoes, senha_reset, sessao_cookie, taxa
+from app import atividade, auth, cert_installer, computadores, correio, login_codigo, nomes, papeis, permissoes, senha_reset, sessao_cookie, taxa
 from app.alcance import _papel_da_conta
 from app.comum import ERRO_INTERNO_VEJA_LOG, ERRO_LINHAS_DEMAIS, MAX_LINHAS_IMPORT, _ler_upload_limitado, _norm_header
 from app.rotas.departamentos import _nome_de_departamento
@@ -131,8 +131,86 @@ def _hash_falso() -> str:
     return _HASH_FALSO
 
 
+def _abrir_sessao(user: Dict[str, Any], request: Request, response: Response, ip: Optional[str]) -> dict:
+    """A sessão do navegador: o último passo do login, com ou sem código."""
+    atividade.registrar(
+        atividade.EVENTO_LOGIN,
+        user_id=str(user.get("id") or "") or None,
+        user_email=user["email"],
+        client_ip=ip,
+    )
+    token = auth.create_access_token({
+        "sub": user["email"],
+        "role": user["role"],
+        # Versão da sessão em vigor (#23): `/api/logout` a incrementa e
+        # este token deixa de valer. Coluna ausente (migration pendente) → 0.
+        "sv": int(user.get("sessao_versao") or 0),
+    })
+    # Leva D: a sessão do navegador vai SÓ no cookie HttpOnly. O token não
+    # volta no corpo desde 09/10/2026 (fim da transição): no corpo, um
+    # script da página o leria. O cabeçalho Bearer continua aceito para
+    # quem tem um token por outro meio (testes, credencial de dispositivo).
+    sessao_cookie.gravar(response, request, token)
+    return {"token_type": "cookie", "role": user["role"]}
+
+
+def _enviar_codigo_de_login(conta: dict, codigo: str) -> None:
+    """Manda o código de entrada. Levanta se o envio falhar."""
+    s = load_settings()
+    if not correio.configurado(s):
+        raise RuntimeError("Envio de e-mail não configurado")
+    nome = html.escape(str(conta.get("full_name") or "").strip() or "Olá")
+    correio.send_smtp_email(
+        host=s.smtp_host, port=s.smtp_port, user=s.smtp_user, password_enc=s.smtp_password_encrypted,
+        use_tls=s.smtp_use_tls, use_ssl=s.smtp_use_ssl, from_email=s.smtp_from_email,
+        to_email=str(conta["email"]), settings=s,
+        subject="Código para entrar no portal de certificados",
+        html_content=(
+            f"<p>{nome},</p>"
+            "<p>Use o código abaixo para entrar no portal de certificados:</p>"
+            f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;margin:24px 0;">{codigo}</p>'
+            f"<p>Ele vale por {senha_reset.VALIDADE_MIN} minutos e só pode ser usado uma vez.</p>"
+            "<p><strong>Se não foi você que tentou entrar</strong>, alguém sabe a sua senha: "
+            "troque-a agora no portal e avise o TI.</p>"
+        ),
+    )
+
+
+def _enviar_codigo_de_login_em_segundo_plano(conta: dict, codigo: str) -> None:
+    try:
+        _enviar_codigo_de_login(conta, codigo)
+    except Exception:  # noqa: BLE001
+        logger.exception("Código de login gerado mas NÃO enviado — a pessoa vai esperar um e-mail que não chega.")
+
+
+def _pedir_codigo(user: Dict[str, Any], request: Request, background: BackgroundTasks) -> dict:
+    """Passo 1 sem navegador lembrado: código por e-mail e o desafio do passo 2.
+    Sem sessão aqui — só a senha não abre o portal (10/10/2026)."""
+    tem_app = bool(user.get("totp_ativado_em"))
+    enviado = False
+    try:
+        codigo = senha_reset.criar_codigo(str(user["id"]), client_ip=_ip_do_cliente(request),
+                                          proposito=senha_reset.LOGIN)
+        background.add_task(_enviar_codigo_de_login_em_segundo_plano, user, codigo)
+        enviado = True
+    except senha_reset.LimiteDePedidos:
+        if not tem_app:
+            raise HTTPException(status_code=429, detail="Muitos códigos pedidos para esta conta. Aguarde alguns minutos.")
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao gerar o código de login")
+        if not tem_app:
+            raise HTTPException(status_code=503, detail="Não foi possível enviar o código agora. Tente de novo em instantes.")
+    return {
+        "etapa": "codigo",
+        "desafio": login_codigo.criar_desafio(user),
+        "email": login_codigo.mascarar_email(user.get("email") or "") if enviado else None,
+        "app_autenticador": tem_app,
+        "validade_min": senha_reset.VALIDADE_MIN,
+    }
+
+
 @router.post("/api/login")
-def login(body: LoginBody, request: Request, response: Response) -> dict:
+def login(body: LoginBody, request: Request, response: Response, background: BackgroundTasks) -> dict:
     # Teto por IP ANTES de qualquer ida ao banco (junto do item 13 da Frente
     # 2; achado do levantamento de superfície anônima de 01/09/2026): o /claim
     # sempre teve teto e o login não — e login é o alvo clássico de spray de
@@ -152,25 +230,11 @@ def login(body: LoginBody, request: Request, response: Response) -> dict:
         # Supabase Auth era tentado primeiro, como "lista única de pessoas" da
         # fase 3; o portal não roda mais no Supabase e esse caminho saiu.)
         user = _conferir_credenciais(body.email, body.password, ip)
-        atividade.registrar(
-            atividade.EVENTO_LOGIN,
-            user_id=str(user.get("id") or "") or None,
-            user_email=user["email"],
-            client_ip=ip,
-        )
-        token = auth.create_access_token({
-            "sub": user["email"],
-            "role": user["role"],
-            # Versão da sessão em vigor (#23): `/api/logout` a incrementa e
-            # este token deixa de valer. Coluna ausente (migration pendente) → 0.
-            "sv": int(user.get("sessao_versao") or 0),
-        })
-        # Leva D: a sessão do navegador vai SÓ no cookie HttpOnly. O token não
-        # volta no corpo desde 09/10/2026 (fim da transição): no corpo, um
-        # script da página o leria. O cabeçalho Bearer continua aceito para
-        # quem tem um token por outro meio (testes, credencial de dispositivo).
-        sessao_cookie.gravar(response, request, token)
-        return {"token_type": "cookie", "role": user["role"]}
+        # Segundo passo (10/10/2026): sem o navegador lembrado, a senha só
+        # pede o código. A sessão sai em `/api/login/codigo`.
+        if login_codigo.exige_codigo() and not login_codigo.navegador_confiavel(request, user):
+            return _pedir_codigo(user, request, background)
+        return _abrir_sessao(user, request, response, ip)
     except HTTPException:
         # O `except Exception` abaixo engolia estas: uma senha errada saía como
         # 500 com "401: E-mail ou senha incorretos." no corpo — mensagem certa,
@@ -180,6 +244,53 @@ def login(body: LoginBody, request: Request, response: Response) -> dict:
     except Exception:
         logger.exception("Erro no login")
         raise HTTPException(status_code=500, detail="Não foi possível concluir o login. Tente de novo.")
+
+
+class LoginCodigoBody(BaseModel):
+    desafio: str = Field(max_length=2048)
+    codigo: str = Field(max_length=12)
+    # "email": o código que chegou por e-mail; "app": o do app autenticador.
+    metodo: str = Field(default="email", pattern=r"^(email|app)$")
+    lembrar: bool = False
+
+
+CODIGO_DE_LOGIN_INVALIDO = "Código inválido ou expirado."
+DESAFIO_EXPIRADO = "O tempo para digitar o código acabou. Entre de novo com sua senha."
+
+
+@router.post("/api/login/codigo")
+def entrar_com_codigo(body: LoginCodigoBody, request: Request, response: Response) -> dict:
+    """Passo 2: o desafio do passo 1 e o código. Só aqui sai a sessão."""
+    if not taxa.permitir(f"login-codigo:{_ip_do_cliente(request)}", 20, 60):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+    uid = login_codigo.user_id_do_desafio(body.desafio)
+    if not uid:
+        raise HTTPException(status_code=400, detail=DESAFIO_EXPIRADO)
+    sb = _sb_do_login()
+    linhas = sb.table("users").select("*").eq("id", uid).limit(1).execute().data or []
+    user = linhas[0] if linhas else None
+    if not user or not login_codigo.desafio_vale_para(body.desafio, user):
+        raise HTTPException(status_code=400, detail=DESAFIO_EXPIRADO)
+    # Teto por CONTA, além do por endereço: com a senha na mão e endereços à
+    # vontade, o código do app (sem queima por erros, como o do e-mail) seria
+    # adivinhável aos poucos.
+    if not taxa.permitir(f"login-codigo-conta:{uid}", 10, 900):
+        raise HTTPException(status_code=429, detail="Muitas tentativas nesta conta. Aguarde alguns minutos.")
+
+    ip = request.client.host if request and request.client else None
+    if body.metodo == "app":
+        ok = login_codigo.conferir_totp(sb, user, body.codigo)
+    else:
+        ok = senha_reset.consumir(uid, body.codigo, proposito=senha_reset.LOGIN)
+    if not ok:
+        atividade.registrar(atividade.EVENTO_LOGIN_NEGADO, user_id=uid, user_email=user.get("email") or "",
+                            client_ip=ip, contexto={"motivo": "codigo_incorreto", "metodo": body.metodo})
+        raise HTTPException(status_code=400, detail=CODIGO_DE_LOGIN_INVALIDO)
+
+    saida = _abrir_sessao(user, request, response, ip)
+    if body.lembrar:
+        login_codigo.gravar_confianca(response, request, user)
+    return saida
 
 
 @router.post("/api/logout")
@@ -197,6 +308,9 @@ def logout(request: Request, response: Response, token: auth.TokenData = Depends
     from app.settings_state import _banco
 
     sessao_cookie.apagar(response, request)
+    # A confiança do navegador cai junto (e o `sessao_versao` abaixo a invalida
+    # também nos outros navegadores da conta).
+    login_codigo.apagar_confianca(response, request)
     sb = _banco()
     uid = _user_id_da_sessao(token)
     if not sb or not uid:

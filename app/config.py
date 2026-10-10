@@ -53,6 +53,11 @@ ACEITAR_API_KEY_COMPARTILHADA = _env_bool(
 # manda e avisa no log quando não manda (janela do achado #21).
 CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA = _env_bool("CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA", default=False)
 
+# Login em dois passos (senha + código por e-mail ou app autenticador), desde
+# 10/10/2026. Desligar só em emergência, no servidor: e-mail fora do ar e
+# ninguém com o app cadastrado (app/login_codigo.py).
+LOGIN_EXIGE_CODIGO = _env_bool("LOGIN_EXIGE_CODIGO", default=True)
+
 # Se `/docs`, `/redoc` e `/openapi.json` ficam públicos. Desligado por padrão:
 # em produção o schema das ~97 rotas só ajuda quem está mapeando a API — era o
 # único dado que um visitante anônimo levava do portal (levantamento de

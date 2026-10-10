@@ -71,6 +71,13 @@ MAX_PEDIDOS_HORA = 3
 # Por conta, somando os endereços: segura quem troca de IP. 10 códigos x 3
 # tentativas = 30 palpites/hora em 10^6, e o admin continua enviando por fora.
 MAX_PEDIDOS_HORA_CONTA = 10
+
+# Para quê o código serve. Um código de LOGIN nunca redefine senha, e vice-versa:
+# cada propósito tem as próprias linhas, a própria conferência e os próprios
+# tetos (login com código, 10/10/2026). Linhas antigas são `senha` (DEFAULT).
+SENHA, LOGIN = "senha", "login"
+# (por conta e endereço, por conta) — o login pede mais códigos ao longo do dia.
+TETOS = {SENHA: (MAX_PEDIDOS_HORA, MAX_PEDIDOS_HORA_CONTA), LOGIN: (5, 15)}
 # Releituras quando outro pedido mexe na mesma linha entre a leitura e a escrita.
 _MAX_CORRIDAS = 5
 
@@ -151,7 +158,8 @@ def _agora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: bool = False) -> str:
+def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: bool = False,
+                 proposito: str = SENHA) -> str:
     """
     Invalida os códigos anteriores da conta e devolve um novo, em claro.
 
@@ -190,6 +198,7 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: b
             # Explícito como o `created_at`: o compare-and-swap de `conferir`
             # parte deste valor, e não pode depender do DEFAULT da coluna.
             "tentativas": 0,
+            "proposito": proposito,
         }
     ).execute()
     nova_id = ((inserida.data or [{}])[0]).get("id")
@@ -201,10 +210,12 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: b
     # pedidos recusados encheriam o teto da conta para quem pede de outro lugar.
     if not pelo_admin:
         recentes = (
-            sb.table(TABELA).select("id, client_ip").eq("user_id", user_id).gt("created_at", desde).execute()
+            sb.table(TABELA).select("id, client_ip").eq("user_id", user_id).eq("proposito", proposito)
+            .gt("created_at", desde).execute()
         ).data or []
         do_endereco = [x for x in recentes if (x.get("client_ip") or None) == (client_ip or None)]
-        if len(recentes) > MAX_PEDIDOS_HORA_CONTA or len(do_endereco) > MAX_PEDIDOS_HORA:
+        teto_endereco, teto_conta = TETOS.get(proposito, TETOS[SENHA])
+        if len(recentes) > teto_conta or len(do_endereco) > teto_endereco:
             if nova_id is not None:
                 sb.table(TABELA).delete().eq("id", nova_id).execute()
             raise LimiteDePedidos(user_id)
@@ -215,7 +226,8 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: b
     # pedido simultâneo que também passou queima o mais velho dos dois, e não
     # os dois um ao outro.
     pendentes = (
-        sb.table(TABELA).select("id, created_at").eq("user_id", user_id).is_("consumed_at", "null").execute()
+        sb.table(TABELA).select("id, created_at").eq("user_id", user_id).eq("proposito", proposito)
+        .is_("consumed_at", "null").execute()
     ).data or []
     for p in pendentes:
         if p.get("id") != nova_id and str(p.get("created_at") or "") < agora.isoformat():
@@ -225,7 +237,7 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: b
     return codigo
 
 
-def _vigente(sb, user_id: str) -> Optional[Dict[str, Any]]:
+def _vigente(sb, user_id: str, proposito: str = SENHA) -> Optional[Dict[str, Any]]:
     """O código não consumido e não expirado mais novo da conta, se houver.
 
     Normalmente há um só. Se uma corrida deixar dois vivos por um instante,
@@ -236,6 +248,7 @@ def _vigente(sb, user_id: str) -> Optional[Dict[str, Any]]:
         sb.table(TABELA)
         .select("id, codigo_hash, tentativas, expires_at, created_at")
         .eq("user_id", user_id)
+        .eq("proposito", proposito)
         .is_("consumed_at", "null")
         .gt("expires_at", _agora().isoformat())
         .execute()
@@ -246,7 +259,7 @@ def _vigente(sb, user_id: str) -> Optional[Dict[str, Any]]:
     return max(linhas, key=lambda x: str(x.get("created_at") or ""))
 
 
-def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
+def conferir(user_id: str, codigo: str, proposito: str = SENHA) -> Tuple[bool, Optional[str]]:
     """
     O código bate? Devolve (ok, id_da_linha).
 
@@ -274,7 +287,7 @@ def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
         return False, None
 
     for _ in range(_MAX_CORRIDAS):
-        linha = _vigente(sb, user_id)
+        linha = _vigente(sb, user_id, proposito)
         if not linha:
             return False, None
         usadas = int(linha.get("tentativas") or 0)
@@ -313,7 +326,7 @@ def conferir(user_id: str, codigo: str) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
-def consumir(user_id: str, codigo: str) -> bool:
+def consumir(user_id: str, codigo: str, proposito: str = SENHA) -> bool:
     """
     Confere e consome, de uma vez. É o passo final da redefinição.
 
@@ -328,7 +341,7 @@ def consumir(user_id: str, codigo: str) -> bool:
     if not sb:
         return False
 
-    ok, linha_id = conferir(user_id, codigo)
+    ok, linha_id = conferir(user_id, codigo, proposito)
     if not ok or not linha_id:
         return False
 

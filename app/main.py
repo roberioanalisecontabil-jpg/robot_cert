@@ -933,6 +933,11 @@ from app.rotas.usuarios import (  # noqa: E402,F401 — o agente, o teste de SMT
 
 app.include_router(_rotas_usuarios)
 
+# App autenticador da própria conta (login em dois passos, 10/10/2026).
+from app.rotas.autenticador import router as _rotas_autenticador  # noqa: E402
+
+app.include_router(_rotas_autenticador)
+
 
 
 

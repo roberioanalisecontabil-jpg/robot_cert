@@ -144,6 +144,31 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
 
+# Tokens de UM propósito, com `aud` próprio (login com código, 10/10/2026). O
+# `aud` diferente é o que impede que um deles valha como sessão: a sessão só
+# aceita "robot_cert_users". Um é o desafio entre o passo da senha e o do
+# código (15 min); o outro diz "este navegador já passou pelo código" (7 dias).
+AUD_DESAFIO_DE_LOGIN = "robot_cert_login_codigo"
+AUD_NAVEGADOR_CONFIAVEL = "robot_cert_navegador_confiavel"
+
+
+def criar_token_de(aud: str, sub: str, duracao: timedelta, **extras) -> str:
+    agora = datetime.now(timezone.utc)
+    corpo = {**extras, "sub": sub, "exp": agora + duracao, "nbf": agora, "iat": agora,
+             "iss": "robot_cert_portal", "aud": aud}
+    return jwt.encode(corpo, _get_secret_key(), algorithm=ALGORITHM)
+
+
+def ler_token_de(aud: str, token: Optional[str]) -> Optional[dict]:
+    """As claims, se a assinatura, o `aud`, o emissor e a validade conferem; senão None."""
+    if not token:
+        return None
+    try:
+        return jwt.decode(token, _get_secret_key(), algorithms=[ALGORITHM], audience=aud, issuer="robot_cert_portal")
+    except (JWTError, RuntimeError):
+        return None
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     # Aware em vez de utcnow() (deprecado). O epoch gravado em exp/nbf não muda:

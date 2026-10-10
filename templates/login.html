@@ -98,7 +98,8 @@
             cursor: not-allowed;
         }
         #login-error,
-        #rec-msg {
+        #rec-msg,
+        #lc-msg {
             padding: var(--sp-3);
             border-radius: var(--radius-md);
             margin-bottom: var(--sp-4);
@@ -140,7 +141,8 @@
         }
         .link-discreto:hover { text-decoration: underline; }
 
-        #campo-codigo {
+        #campo-codigo,
+        #lc-codigo {
             text-align: center;
             font-size: var(--fs-section);
             letter-spacing: 0.5em;
@@ -156,6 +158,16 @@
             text-align: center;
             line-height: 1.5;
         }
+        .lembrar {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-2);
+            margin: 0 0 var(--sp-4);
+            font-size: var(--fs-ui-sm);
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+        .lembrar input { width: auto; margin: 0; }
         [hidden] { display: none !important; }
     </style>
 </head>
@@ -190,6 +202,24 @@
             </form>
 
             <button type="button" class="link-discreto" id="btn-esqueci">Esqueci minha senha</button>
+        </section>
+
+        <!-- ── Segundo passo do login (10/10/2026) ───────────────────── -->
+        <section id="view-codigo-login" hidden>
+            <div id="lc-msg" role="alert" aria-live="assertive"></div>
+            <form id="form-lc">
+                <p class="passo-dica" id="lc-dica"></p>
+                <div class="form-group">
+                    <label for="lc-codigo" id="lc-rotulo">Código de 6 dígitos</label>
+                    <input type="text" id="lc-codigo" required
+                           inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                           autocomplete="one-time-code" placeholder="000000">
+                </div>
+                <label class="lembrar"><input type="checkbox" id="lc-lembrar"> Lembrar deste navegador por 7 dias</label>
+                <button type="submit" class="login-btn" id="btn-lc">Entrar</button>
+            </form>
+            <button type="button" class="link-discreto" id="btn-lc-metodo" hidden></button>
+            <button type="button" class="link-discreto" id="btn-lc-voltar">Voltar e pedir outro código</button>
         </section>
 
         <!-- ── Recuperar ─────────────────────────────────────────────── -->
@@ -346,13 +376,7 @@
                 });
 
                 if (response.ok) {
-                    const data = await response.json();
-                    // A sessão veio no cookie HttpOnly (Leva D); o token do
-                    // corpo não é guardado. Apaga o de antes, se houver.
-                    localStorage.removeItem(KEY_STORAGE);
-                    localStorage.setItem('user_role', data.role);
-                    localStorage.setItem('user_email', email);
-                    window.location.href = destinoAposLogin();
+                    aposSenha(email, await response.json());
                 } else {
                     const error = await response.json().catch(() => ({}));
                     errorDiv.textContent = textoDoErro(error, 'Falha ao autenticar.');
@@ -364,6 +388,97 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Acessar o painel';
+            }
+        });
+
+        // A sessão veio no cookie HttpOnly (Leva D); o token do corpo não é
+        // guardado. Apaga o de antes, se houver.
+        function entrou(email, role) {
+            localStorage.removeItem(KEY_STORAGE);
+            localStorage.setItem('user_role', role);
+            localStorage.setItem('user_email', email);
+            window.location.href = destinoAposLogin();
+        }
+
+        // ── Segundo passo (10/10/2026) ─────────────────────────────────
+        // Sem o navegador lembrado, a senha só devolve um desafio: a sessão
+        // sai com o código do e-mail ou do app autenticador.
+        const lc = { email: '', desafio: '', metodo: 'email', temApp: false, enviado: null };
+
+        function aposSenha(email, dados) {
+            if (dados.etapa !== 'codigo') { entrou(email, dados.role); return; }
+            lc.email = email;
+            lc.desafio = dados.desafio;
+            lc.temApp = !!dados.app_autenticador;
+            lc.enviado = dados.email;
+            lc.metodo = lc.enviado ? 'email' : 'app';
+            $('view-login').hidden = true;
+            $('view-recuperar').hidden = true;
+            $('view-codigo-login').hidden = false;
+            $('subtitulo').textContent = 'Confirme que é você';
+            $('lc-msg').style.display = 'none';
+            mostrarMetodo();
+        }
+
+        function mostrarMetodo() {
+            const porEmail = lc.metodo === 'email';
+            $('lc-dica').textContent = porEmail
+                ? `Enviamos um código para ${lc.enviado}. Ele vale por 15 minutos e permite 3 tentativas.`
+                : 'Abra o app autenticador no celular e digite o código que aparece para o portal de certificados.';
+            $('lc-rotulo').textContent = porEmail ? 'Código do e-mail' : 'Código do app';
+            const alt = $('btn-lc-metodo');
+            alt.hidden = !(lc.temApp && lc.enviado);
+            alt.textContent = porEmail ? 'Usar o código do app autenticador' : 'Usar o código do e-mail';
+            $('lc-codigo').value = '';
+            $('lc-codigo').focus();
+        }
+
+        $('btn-lc-metodo').addEventListener('click', () => {
+            lc.metodo = lc.metodo === 'email' ? 'app' : 'email';
+            $('lc-msg').style.display = 'none';
+            mostrarMetodo();
+        });
+
+        $('btn-lc-voltar').addEventListener('click', () => {
+            $('view-codigo-login').hidden = true;
+            $('view-login').hidden = false;
+            $('subtitulo').textContent = 'Faça login para acessar o monitor';
+            lc.desafio = '';
+            $('password').value = '';
+            $('password').focus();
+        });
+
+        $('form-lc').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = $('btn-lc');
+            const msg = $('lc-msg');
+            btn.disabled = true;
+            btn.textContent = 'Conferindo...';
+            msg.style.display = 'none';
+            try {
+                const r = await fetch('/api/login/codigo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        desafio: lc.desafio,
+                        codigo: $('lc-codigo').value.trim(),
+                        metodo: lc.metodo,
+                        lembrar: $('lc-lembrar').checked
+                    })
+                });
+                const dados = await r.json().catch(() => ({}));
+                if (r.ok) { entrou(lc.email, dados.role); return; }
+                msg.textContent = textoDoErro(dados, 'Código inválido ou expirado.');
+                msg.className = 'msg-erro';
+                msg.style.display = 'block';
+                $('lc-codigo').select();
+            } catch (err) {
+                msg.textContent = 'Erro de conexão com o servidor.';
+                msg.className = 'msg-erro';
+                msg.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Entrar';
             }
         });
 
@@ -488,10 +603,9 @@
                 // nesta tela, e o código já provou quem é a pessoa.
                 const login = await postar('/api/login', { email, password: senha });
                 if (login.ok) {
-                    localStorage.removeItem(KEY_STORAGE);
-                    localStorage.setItem('user_role', login.dados.role);
-                    localStorage.setItem('user_email', email);
-                    window.location.href = destinoAposLogin();
+                    // Sem o navegador lembrado, o login ainda pede o código
+                    // de entrada: é o mesmo segundo passo de sempre.
+                    aposSenha(email, login.dados);
                 } else {
                     // A mensagem vai para a caixa da tela de login, que é a que
                     // fica visível depois de `trocarView(false)`.

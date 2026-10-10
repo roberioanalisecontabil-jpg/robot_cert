@@ -374,6 +374,8 @@ def test_codigo_legado_em_sha256_puro_ainda_confere(reset: _Fake, caplog) -> Non
         "id": "legado", "user_id": "u-9", "codigo_hash": hashlib.sha256(b"123456").hexdigest(),
         "tentativas": 0, "consumed_at": None, "created_at": "2099-01-01T00:00:00+00:00",
         "expires_at": "2099-01-01T00:00:00+00:00",
+        # A migration de 10/10/2026 preenche o DEFAULT nas linhas antigas.
+        "proposito": "senha",
     })
     with caplog.at_level(logging.WARNING):
         assert sr.conferir("u-9", "123456")[0] is True

@@ -90,6 +90,10 @@ document.addEventListener('click', function(e) {
     e.preventDefault();
     logout();
   }
+  if (e.target.closest('[data-action="app-autenticador"]')) {
+    e.preventDefault();
+    abrirAppAutenticador();
+  }
 });
 
 function initSidebarPorPapel() {
@@ -1110,6 +1114,120 @@ function abrirTrocaDeSenhaObrigatoria() {
 
   dlg.showModal();
   dlg.querySelector("#so-atual").focus();
+}
+
+// ── App autenticador (login em dois passos, 10/10/2026) ──────────────
+// A saída do login quando o código por e-mail não chega. Cadastrar e remover
+// pedem a senha atual: com a sessão aberta, quem sentasse na cadeira
+// cadastraria o próprio celular. O segredo aparece uma vez só, como texto
+// (sem QR: o portal não carrega biblioteca de terceiros para isso).
+function abrirAppAutenticador() {
+  if (document.getElementById("modal-app-autenticador")) return;
+  const dlg = document.createElement("dialog");
+  dlg.className = "modal";
+  dlg.id = "modal-app-autenticador";
+  dlg.innerHTML = `
+    <form class="modal__form" id="form-app-aut" novalidate>
+      <div class="modal__head">
+        <h2>App autenticador</h2>
+        <p class="modal__sub" id="aa-sub">Carregando…</p>
+      </div>
+      <div class="modal__body">
+        <div class="modal__erro" id="aa-erro" role="alert"></div>
+        <div class="modal__campo" id="aa-campo-senha" hidden>
+          <label for="aa-senha">Senha atual</label>
+          <input type="password" id="aa-senha" autocomplete="current-password">
+        </div>
+        <div id="aa-cadastro" hidden>
+          <p class="modal__sub">No app (Microsoft Authenticator, Google Authenticator ou outro),
+            escolha adicionar conta e digite a chave abaixo. Ela aparece só agora.</p>
+          <p><code id="aa-segredo" style="font-size:1.1em;letter-spacing:0.05em;user-select:all;"></code></p>
+          <p><a id="aa-link" href="#">Abrir no app deste aparelho</a></p>
+          <div class="modal__campo">
+            <label for="aa-codigo">Código que o app mostra</label>
+            <input type="text" id="aa-codigo" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                   autocomplete="one-time-code" placeholder="000000">
+          </div>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn-action" id="aa-fechar">Fechar</button>
+        <button type="submit" class="primary" id="aa-acao" hidden></button>
+      </div>
+    </form>`;
+  document.body.appendChild(dlg);
+  const q = (s) => dlg.querySelector(s);
+  let etapa = "";
+  const erro = (t) => { q("#aa-erro").textContent = t || ""; q("#aa-erro").setAttribute("data-visivel", t ? "1" : "0"); };
+  const fechar = () => { dlg.close(); dlg.remove(); };
+  q("#aa-fechar").addEventListener("click", fechar);
+  dlg.addEventListener("close", () => dlg.remove());
+
+  function mostrar(novaEtapa, dados) {
+    etapa = novaEtapa;
+    erro("");
+    const acao = q("#aa-acao");
+    acao.hidden = false;
+    q("#aa-campo-senha").hidden = !(etapa === "inativo" || etapa === "ativo");
+    q("#aa-cadastro").hidden = etapa !== "cadastro";
+    q("#aa-senha").value = "";
+    if (etapa === "inativo") {
+      q("#aa-sub").textContent = "Com o app cadastrado, você entra com o código dele quando o código por e-mail não chegar.";
+      acao.textContent = "Cadastrar app";
+      q("#aa-senha").focus();
+    } else if (etapa === "ativo") {
+      q("#aa-sub").textContent = "O app autenticador está ativo nesta conta. Para trocar de celular, remova e cadastre de novo.";
+      acao.textContent = "Remover app";
+      q("#aa-senha").focus();
+    } else if (etapa === "cadastro") {
+      q("#aa-sub").textContent = "Falta confirmar: digite o código que o app mostra.";
+      q("#aa-segredo").textContent = dados.segredo;
+      q("#aa-link").href = dados.uri;
+      acao.textContent = "Confirmar";
+      q("#aa-codigo").value = "";
+      q("#aa-codigo").focus();
+    } else if (etapa === "pronto") {
+      q("#aa-sub").textContent = "Pronto: o app autenticador está ativo. No login, use “Usar o código do app autenticador”.";
+      acao.hidden = true;
+    }
+  }
+
+  async function chamar(url, corpo) {
+    const r = await fetch(url, { method: "POST", headers: getHeaders(true), body: JSON.stringify(corpo) });
+    let d = {};
+    try { d = await r.json(); } catch (_) {}
+    return { ok: r.ok, d };
+  }
+
+  q("#form-app-aut").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const acao = q("#aa-acao");
+    acao.disabled = true;
+    erro("");
+    try {
+      if (etapa === "inativo" || etapa === "ativo") {
+        const url = etapa === "inativo" ? "/api/users/me/app-autenticador/iniciar" : "/api/users/me/app-autenticador/remover";
+        const { ok, d } = await chamar(url, { senha_atual: q("#aa-senha").value });
+        if (!ok) { erro(d.detail || "Não foi possível concluir."); return; }
+        if (etapa === "inativo") mostrar("cadastro", d);
+        else mostrar("inativo");
+      } else if (etapa === "cadastro") {
+        const { ok, d } = await chamar("/api/users/me/app-autenticador/confirmar", { codigo: q("#aa-codigo").value.trim() });
+        if (!ok) { erro(d.detail || "Código não confere."); return; }
+        mostrar("pronto");
+      }
+    } catch (_) {
+      erro("Erro de conexão com o servidor.");
+    } finally {
+      acao.disabled = false;
+    }
+  });
+
+  dlg.showModal();
+  fetch("/api/users/me/app-autenticador", { headers: getHeaders() })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+    .then((d) => mostrar(d.ativo ? "ativo" : "inativo"))
+    .catch(() => erro("Não foi possível consultar o app autenticador agora."));
 }
 
 // Interceptar todas as requisições para verificar 401 e senha provisória

@@ -110,7 +110,15 @@
       </svg>
       Configuração
     </a>
-    <a href="#" data-action="logout" data-tooltip="Sair" title="Sair" aria-label="Sair" style="margin-top: auto; color: var(--sidebar-danger);">
+    {# Login em dois passos (10/10/2026): cadastrar ou remover o app
+       autenticador, a saída quando o código por e-mail não chega. #}
+    <a href="#" data-action="app-autenticador" data-tooltip="App autenticador" title="App autenticador" aria-label="App autenticador" style="margin-top: auto;">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+      </svg>
+      App autenticador
+    </a>
+    <a href="#" data-action="logout" data-tooltip="Sair" title="Sair" aria-label="Sair" style="color: var(--sidebar-danger);">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
       </svg>

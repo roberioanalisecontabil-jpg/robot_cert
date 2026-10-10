@@ -479,7 +479,7 @@ def test_palpites_simultaneos_nao_passam_de_tres(
     no banco, então o número de comparações fica no limite."""
     certo = sr.criar_codigo("u-ana", client_ip="1.1.1.1")
     retrato = dict(banco.tabelas[TABELA][0])
-    monkeypatch.setattr(sr, "_vigente", lambda sb, uid: dict(retrato))
+    monkeypatch.setattr(sr, "_vigente", lambda sb, uid, proposito="senha": dict(retrato))
     comparacoes = []
     original = sr._confere
     monkeypatch.setattr(sr, "_confere", lambda g, c: comparacoes.append(c) or original(g, c))

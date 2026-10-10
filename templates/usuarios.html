@@ -474,6 +474,7 @@
                                 <button type="button" class="ag-menu__item" role="menuitem" data-action="editar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg> Editar</button>
                                 <button type="button" class="ag-menu__item" role="menuitem" data-action="redefinir" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg> Redefinir senha</button>
                                 ${ativo ? `<button type="button" class="ag-menu__item" role="menuitem" data-action="codigo" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Enviar código de redefinição</button>` : ""}
+                                ${ativo ? `<button type="button" class="ag-menu__item" role="menuitem" data-action="tirar-app" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg> Remover app autenticador</button>` : ""}
                                 ${ativo
                                     ? `<button type="button" class="ag-menu__item ag-menu__item--perigo" role="menuitem" data-action="desativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Desativar</button>`
                                     : `<button type="button" class="ag-menu__item" role="menuitem" data-action="reativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg> Reativar</button>`}
@@ -500,6 +501,7 @@
                 if (act === 'editar') editarUsuario(id);
                 else if (act === 'redefinir') redefinirSenha(id);
                 else if (act === 'codigo') enviarCodigo(id, btn);
+                else if (act === 'tirar-app') removerAppAutenticador(id, btn);
                 else if (act === 'desativar') desativarUsuario(id);
                 else if (act === 'reativar') reativarUsuario(id);
             };
@@ -1291,6 +1293,25 @@
                 }
                 const d = await r.json();
                 showToast(d.message || 'Código enviado.', 'success');
+            } catch (_e) {
+                showToast('Erro de conexão com o servidor.', 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+                document.querySelectorAll('details.ag-menu[open]').forEach((m) => m.removeAttribute('open'));
+            }
+        }
+
+        // A pessoa perdeu o celular (login em dois passos, 10/10/2026): sem o
+        // app, ela volta a entrar com o código por e-mail e cadastra de novo.
+        async function removerAppAutenticador(id, btn) {
+            if (btn) btn.disabled = true;
+            try {
+                const r = await fetch(`/api/users/${id}/app-autenticador/remover`, { method: 'POST', headers: getHeaders(true) });
+                if (!r.ok) {
+                    showToast(await mensagemCorpoErro(r), 'error');
+                    return;
+                }
+                showToast('App autenticador removido. A pessoa entra com o código por e-mail.', 'success');
             } catch (_e) {
                 showToast('Erro de conexão com o servidor.', 'error');
             } finally {
