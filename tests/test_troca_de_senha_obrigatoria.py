@@ -243,18 +243,18 @@ def test_redefinicao_pelo_admin_marca_para_trocar(
     assert banco.tabelas["users"][0]["deve_trocar_senha"] is True
 
 
-def test_recuperacao_por_codigo_nao_marca(client: TestClient, banco: _Fake) -> None:
+def test_recuperacao_por_codigo_nao_marca(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Aqui foi a própria pessoa quem escolheu, com um código que só ela recebeu.
     Cobrar outra troca em seguida seria pedir duas senhas novas para o mesmo
     esquecimento.
     """
     import app.senha_reset as sr
-    import app.main as m
+    import app.rotas.usuarios as m
 
     banco.tabelas["users"][0]["deve_trocar_senha"] = False
     enviados = []
-    m._enviar_codigo_por_email = lambda conta, codigo: enviados.append(codigo)
+    monkeypatch.setattr(m, "_enviar_codigo_por_email", lambda conta, codigo: enviados.append(codigo))
 
     client.post("/api/senha/codigo", json={"email": "novo@x.com"})
     r = client.post("/api/senha/redefinir", json={

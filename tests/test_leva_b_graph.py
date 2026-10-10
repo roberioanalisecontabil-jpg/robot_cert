@@ -26,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app.rotas import usuarios
 from app import correio, graph_mail, notification_service as ns, smtp_service
 from app.settings_state import PortalSettings
 from app.smtp_service import encrypt_password
@@ -232,8 +233,9 @@ def test_os_chamadores_passam_pelo_despachante() -> None:
         assert "from app.correio import send_smtp_email" in fonte, nome
         assert "from app.smtp_service import send_smtp_email" not in fonte, nome
         assert "settings.smtp_host" not in fonte.replace("host=settings.smtp_host", ""), nome
-    main = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    assert "smtp_service.send_smtp_email(" not in main
+    from tests import fonte_do_portal
+
+    assert "smtp_service.send_smtp_email(" not in fonte_do_portal.texto()
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -314,8 +316,8 @@ def test_rota_de_teste_traduz_os_erros_do_graph(client: TestClient, monkeypatch:
 def test_codigo_de_senha_sai_pelo_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     chamadas: List[Dict[str, Any]] = []
     monkeypatch.setattr(graph_mail, "enviar", lambda **kw: chamadas.append(kw))
-    monkeypatch.setattr(m, "load_settings", _settings_graph)
-    m._enviar_codigo_por_email({"email": "ana@x.com", "full_name": "Ana"}, "123456")
+    monkeypatch.setattr(usuarios, "load_settings", _settings_graph)
+    usuarios._enviar_codigo_por_email({"email": "ana@x.com", "full_name": "Ana"}, "123456")
     assert chamadas[0]["to_email"] == "ana@x.com" and "123456" in chamadas[0]["html_content"]
 
 

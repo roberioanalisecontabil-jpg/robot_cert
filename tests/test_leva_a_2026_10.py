@@ -26,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app.rotas import usuarios
 from app import snapshots
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, DOC_A, DOC_B, FISCAL_OP, GESTOR, _h  # noqa: F401
@@ -173,7 +174,7 @@ def test_dashboard_aponta_para_os_avisos_enviados() -> None:
 
 def test_admin_envia_codigo_e_a_pessoa_recebe_pelo_fluxo_existente(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     enviados = []
-    monkeypatch.setattr(m, "_enviar_codigo_por_email", lambda conta, codigo: enviados.append((conta["email"], codigo)))
+    monkeypatch.setattr(usuarios, "_enviar_codigo_por_email", lambda conta, codigo: enviados.append((conta["email"], codigo)))
     r = client.post("/api/users/u-fis/enviar-codigo", headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert "fis@x.com" in r.json()["message"]
@@ -190,7 +191,7 @@ def test_so_administrador_envia_codigo(client: TestClient, banco: _Fake) -> None
 def test_conta_desativada_nao_recebe_codigo(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     next(u for u in banco.tabelas["users"] if u["id"] == "u-fis")["ativo"] = False
     enviados = []
-    monkeypatch.setattr(m, "_enviar_codigo_por_email", lambda conta, codigo: enviados.append(1))
+    monkeypatch.setattr(usuarios, "_enviar_codigo_por_email", lambda conta, codigo: enviados.append(1))
     r = client.post("/api/users/u-fis/enviar-codigo", headers=_h(*ADMIN))
     assert r.status_code == 400 and not enviados
 

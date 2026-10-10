@@ -172,7 +172,9 @@ def test_trocar_a_propria_senha_recusa_senha_fraca(client: TestClient, banco: _F
 
 
 def test_a_regra_mora_num_lugar_so() -> None:
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    from tests import fonte_do_portal
+
+    fonte = fonte_do_portal.texto()
     assert "len(new_pw) < 6" not in fonte
     assert "no mínimo 6 caracteres" not in fonte
     assert "SENHA_MINIMA = 6" not in fonte
@@ -289,7 +291,9 @@ def test_409_nao_ecoa_o_email(client: TestClient, banco: _Fake) -> None:
 
 
 def test_importacao_de_carteiras_nao_ecoa_o_email() -> None:
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    from tests import fonte_do_portal
+
+    fonte = fonte_do_portal.texto()
     assert "Não existe usuário com o e-mail {email}" not in fonte
 
 

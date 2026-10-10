@@ -40,6 +40,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app.rotas import usuarios
 from app import auth, config, permissoes, smtp_service, taxa
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -371,7 +372,7 @@ def smtp_gravador(monkeypatch: pytest.MonkeyPatch) -> List[dict]:
     def _falso(conta: dict, codigo: str) -> None:
         enviados.append({"email": conta["email"], "codigo": codigo})
 
-    monkeypatch.setattr(m, "_enviar_codigo_por_email", _falso)
+    monkeypatch.setattr(usuarios, "_enviar_codigo_por_email", _falso)
     return enviados
 
 
@@ -382,7 +383,7 @@ def test_pedido_de_codigo_tem_teto_por_ip_e_responde_200_generico(
     emails = ["admin@x.com", "gestor@x.com", "ana@x.com", "admin@x.com", "gestor@x.com", "ana@x.com"]
     respostas = [client.post("/api/senha/codigo", json={"email": e}) for e in emails]
     assert all(r.status_code == 200 for r in respostas)
-    assert all(r.json()["message"] == m.RESPOSTA_GENERICA for r in respostas)
+    assert all(r.json()["message"] == usuarios.RESPOSTA_GENERICA for r in respostas)
     assert len(smtp_gravador) <= 5, len(smtp_gravador)
 
 
@@ -395,7 +396,7 @@ def test_envio_do_codigo_sai_do_caminho_da_resposta(
     agendadas: List = []
     chamadas_diretas: List = []
     monkeypatch.setattr(BackgroundTasks, "add_task", lambda self, fn, *a, **k: agendadas.append(fn))
-    monkeypatch.setattr(m, "_enviar_codigo_por_email", lambda conta, codigo: chamadas_diretas.append(codigo))
+    monkeypatch.setattr(usuarios, "_enviar_codigo_por_email", lambda conta, codigo: chamadas_diretas.append(codigo))
 
     r = client.post("/api/senha/codigo", json={"email": "ana@x.com"})
 
@@ -414,7 +415,7 @@ def test_verificar_codigo_tem_teto_por_ip(
         client.post("/api/senha/verificar", json={"email": "ninguem@x.com", "codigo": "000000"})
     r = client.post("/api/senha/verificar", json={"email": "ana@x.com", "codigo": codigo})
     assert r.status_code == 400
-    assert r.json()["detail"] == m.CODIGO_INVALIDO
+    assert r.json()["detail"] == usuarios.CODIGO_INVALIDO
 
 
 def test_redefinir_senha_tem_teto_por_ip(
@@ -428,7 +429,7 @@ def test_redefinir_senha_tem_teto_por_ip(
     r = client.post("/api/senha/redefinir",
                     json={"email": "ana@x.com", "codigo": codigo, "password": "nova-senha-12"})
     assert r.status_code == 400
-    assert r.json()["detail"] == m.CODIGO_INVALIDO
+    assert r.json()["detail"] == usuarios.CODIGO_INVALIDO
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -842,13 +843,16 @@ def test_teste_de_smtp_responde_por_classe_de_erro(
 
 def test_nenhum_except_generico_devolve_str_da_excecao() -> None:
     """Fonte: `except Exception`/`RuntimeError` seguido de `detail=str(e)` é o padrão que vaza."""
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8").splitlines()
+    from tests import fonte_do_portal
+
     ruins = []
-    for i, linha in enumerate(fonte):
-        if re.search(r"except (Exception|RuntimeError)( as e)?:", linha):
-            bloco = "\n".join(fonte[i:i + 5])
-            if re.search(r"detail=.*(str\(e\)|\{e\})", bloco):
-                ruins.append(i + 1)
+    for arq in fonte_do_portal.arquivos():
+        fonte = arq.read_text(encoding="utf-8").splitlines()
+        for i, linha in enumerate(fonte):
+            if re.search(r"except (Exception|RuntimeError)( as e)?:", linha):
+                bloco = "\n".join(fonte[i:i + 5])
+                if re.search(r"detail=.*(str\(e\)|\{e\})", bloco):
+                    ruins.append(f"{arq.name}:{i + 1}")
     assert not ruins, f"linhas com detail=str(e) em except genérico: {ruins}"
 
 

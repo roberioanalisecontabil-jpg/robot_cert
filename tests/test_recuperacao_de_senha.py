@@ -131,7 +131,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
 
     # O envio real exigiria SMTP configurado. O duplo guarda o código para os
     # testes poderem usá-lo — é o que o e-mail entregaria à pessoa.
-    import app.main as m
+    import app.rotas.usuarios as m
 
     def _fake_envio(conta: Dict[str, Any], codigo: str) -> None:
         fake.enviados.append({"para": conta["email"], "codigo": codigo})
