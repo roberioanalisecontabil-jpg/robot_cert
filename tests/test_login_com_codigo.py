@@ -152,11 +152,17 @@ def test_confianca_cai_com_troca_de_senha(client: TestClient, banco: _Fake) -> N
     assert _senha(client).json()["etapa"] == "codigo"
 
 
-def test_confianca_cai_com_sair(client: TestClient, banco: _Fake) -> None:
+def test_confianca_sobrevive_ao_sair(client: TestClient, banco: _Fake) -> None:
+    """11/10/2026: o lembrete morria com o Sair (que sobe a versão da sessão
+    e apagava o cookie) — e todo caminho de volta ao login passa pelo Sair."""
     desafio = _senha(client).json()["desafio"]
     _codigo(client, desafio, banco.enviados[-1]["codigo"], lembrar=True)
-    _ana(banco)["sessao_versao"] = 1
-    assert _senha(client).json()["etapa"] == "codigo"
+    r = client.post("/api/logout", headers={"X-CSRF-Token": client.cookies.get("cg_csrf") or ""})
+    assert r.status_code in (200, 204), r.text
+    assert _ana(banco)["sessao_versao"] == 1
+    assert client.cookies.get(login_codigo.COOKIE_CONFIA)
+    r = _senha(client)
+    assert r.json().get("role") == "user", r.text
 
 
 def test_confianca_e_da_conta_nao_do_navegador(client: TestClient, banco: _Fake) -> None:

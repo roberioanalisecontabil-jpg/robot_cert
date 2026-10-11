@@ -12,9 +12,12 @@ O código é o mesmo mecanismo da recuperação de senha (`app/senha_reset.py`:
 15 minutos, 3 erros e queima, tetos por conta e endereço), com propósito
 próprio — um código de login nunca redefine senha.
 
-A confiança do navegador é um cookie HttpOnly assinado, preso à conta e à
-versão da sessão. Cai com "Sair" (que sobe `sessao_versao`), com troca de
-senha (`senha_alterada_em` depois de emitida) e com a conta desativada.
+A confiança do navegador é um cookie HttpOnly assinado, preso à conta. Cai
+com troca de senha (`senha_alterada_em` depois de emitida) e com a conta
+desativada. NÃO cai com "Sair" (11/10/2026): presa à versão da sessão, que o
+Sair sobe, ela morria em todo caminho de volta ao login — e o "lembrar por 7
+dias" não lembrava nada. Sair continua exigindo a senha; o lembrete só
+dispensa o código.
 
 Emergência: `LOGIN_EXIGE_CODIGO=0` no ambiente do servidor desliga o passo 2
 (o e-mail caiu e ninguém tem o app cadastrado). Só quem tem acesso ao
@@ -62,12 +65,13 @@ def _quando(v: Any) -> Optional[datetime]:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
-def _vale_para(claims: Optional[dict], user: Dict[str, Any]) -> bool:
-    """As claims ainda valem para esta conta: mesma conta, mesma versão de
-    sessão, emitidas depois da última troca de senha, conta ativa."""
+def _vale_para(claims: Optional[dict], user: Dict[str, Any], *, mesma_sessao: bool = True) -> bool:
+    """As claims ainda valem para esta conta: mesma conta, emitidas depois da
+    última troca de senha, conta ativa — e, com `mesma_sessao`, a mesma
+    versão de sessão."""
     if not claims or str(claims.get("sub")) != str(user.get("id")):
         return False
-    if int(claims.get("sv") or 0) != _versao(user):
+    if mesma_sessao and int(claims.get("sv") or 0) != _versao(user):
         return False
     if not auth.conta_ativa(user):
         return False
@@ -95,17 +99,13 @@ def desafio_vale_para(desafio: Optional[str], user: Dict[str, Any]) -> bool:
 
 def navegador_confiavel(request: Request, user: Dict[str, Any]) -> bool:
     token = (request.cookies.get(COOKIE_CONFIA) or "").strip() or None
-    return _vale_para(auth.ler_token_de(auth.AUD_NAVEGADOR_CONFIAVEL, token), user)
+    return _vale_para(auth.ler_token_de(auth.AUD_NAVEGADOR_CONFIAVEL, token), user, mesma_sessao=False)
 
 
 def gravar_confianca(response: Response, request: Request, user: Dict[str, Any]) -> None:
-    token = auth.criar_token_de(auth.AUD_NAVEGADOR_CONFIAVEL, str(user["id"]), VALIDADE_CONFIANCA, sv=_versao(user))
+    token = auth.criar_token_de(auth.AUD_NAVEGADOR_CONFIAVEL, str(user["id"]), VALIDADE_CONFIANCA)
     response.set_cookie(COOKIE_CONFIA, token, max_age=int(VALIDADE_CONFIANCA.total_seconds()), httponly=True,
                         secure=_seguro(request), samesite="strict", path="/")
-
-
-def apagar_confianca(response: Response, request: Request) -> None:
-    response.delete_cookie(COOKIE_CONFIA, path="/", secure=_seguro(request), httponly=True, samesite="strict")
 
 
 # ── App autenticador ───────────────────────────────────────────────────

@@ -308,9 +308,6 @@ def logout(request: Request, response: Response, token: auth.TokenData = Depends
     from app.settings_state import _banco
 
     sessao_cookie.apagar(response, request)
-    # A confiança do navegador cai junto (e o `sessao_versao` abaixo a invalida
-    # também nos outros navegadores da conta).
-    login_codigo.apagar_confianca(response, request)
     sb = _banco()
     uid = _user_id_da_sessao(token)
     if not sb or not uid:
