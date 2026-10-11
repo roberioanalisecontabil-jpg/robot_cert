@@ -405,6 +405,7 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
                 status_code=503,
                 detail="Leitura de .xlsx indisponível no servidor. Envie o arquivo como .csv.",
             )
+        _conferir_zip_do_xlsx(raw)
         try:
             wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
             ws = wb.active
@@ -447,6 +448,36 @@ def _linhas_da_planilha(nome: str, raw: bytes) -> List[Dict[str, str]]:
     if len(linhas) > MAX_LINHAS_IMPORT:
         raise HTTPException(status_code=413, detail=ERRO_LINHAS_DEMAIS)
     return linhas
+
+
+# Uma carteira de verdade tem algumas centenas de linhas: dezenas de KB
+# descompactados. O teto é folgado para isso e baixo para uma bomba de zip — o
+# upload de 5 MB expandia para GB no openpyxl (auditoria de 10/10/2026).
+MAX_XLSX_DESCOMPACTADO = 40 * 1024 * 1024
+MAX_XLSX_PARTE = 20 * 1024 * 1024
+MAX_XLSX_PARTES = 200
+MAX_XLSX_RAZAO = 200
+
+
+def _conferir_zip_do_xlsx(raw: bytes) -> None:
+    import zipfile
+
+    try:
+        partes = zipfile.ZipFile(io.BytesIO(raw)).infolist()
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail="Isto não é um .xlsx válido.")
+    total = sum(p.file_size for p in partes)
+    exagero = (
+        len(partes) > MAX_XLSX_PARTES
+        or total > MAX_XLSX_DESCOMPACTADO
+        or any(p.file_size > MAX_XLSX_PARTE for p in partes)
+        # Razão só em parte grande: XML pequeno e repetitivo comprime muito
+        # sem ser ameaça nenhuma.
+        or any(p.file_size > 1024 * 1024 and p.compress_size and p.file_size / p.compress_size > MAX_XLSX_RAZAO
+               for p in partes)
+    )
+    if exagero:
+        raise HTTPException(status_code=422, detail="Planilha grande demais para importar. Envie só as colunas da carteira, ou em .csv.")
 
 
 @router.post("/api/carteira/importar", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])

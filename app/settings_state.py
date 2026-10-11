@@ -100,7 +100,10 @@ class PastaRecusada(ValueError):
 
 
 def _e_unc(texto: str) -> bool:
-    return texto.startswith(("\\\\", "//"))
+    # As formas mistas ('\\/host', '/\\host') o Windows também lê como UNC, e
+    # escapavam do teste por prefixo literal: o `resolve()` abaixo abria SMB
+    # contra o host antes da recusa (auditoria de 10/10/2026).
+    return texto.replace("/", "\\").startswith("\\\\")
 
 
 def _sob_raiz_unc(p: str, raizes) -> bool:

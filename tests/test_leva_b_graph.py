@@ -381,3 +381,17 @@ def test_configuracao_tem_a_forma_de_envio_e_o_bloco_do_graph() -> None:
     assert "docs/envio-microsoft-365.md" in html
     assert (RAIZ / "docs" / "envio-microsoft-365.md").is_file()
     assert (RAIZ / "supabase" / "migrations" / "20261003120000_envio_microsoft_graph.sql").is_file()
+
+
+def test_senha_smtp_nao_segue_para_outro_servidor(client: TestClient, banco: _Fake) -> None:
+    """Auditoria de 10/10/2026: trocar o servidor sem redigitar a senha a
+    mandava ao servidor novo no próximo teste ou envio."""
+    base = dict(smtp_host="smtp.empresa.com.br", smtp_port=587, smtp_user="noreply@empresa.com.br")
+    assert client.put("/api/settings", json=_corpo(**base, smtp_password="senha-do-smtp"), headers=_h(*ADMIN)).status_code == 200
+    # Mesmo destino, senha em branco: preserva.
+    assert client.put("/api/settings", json=_corpo(**base), headers=_h(*ADMIN)).status_code == 200
+    assert smtp_service.decrypt_password(banco.tabelas["portal_settings"][0]["smtp_password_encrypted"]) == "senha-do-smtp"
+    # Outro servidor, senha em branco: descarta.
+    r = client.put("/api/settings", json=_corpo(**{**base, "smtp_host": "smtp.atacante.example"}), headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert not banco.tabelas["portal_settings"][0]["smtp_password_encrypted"]

@@ -1151,6 +1151,16 @@ def put_settings(body: SettingsBody) -> dict:
         raise HTTPException(status_code=422, detail=str(e))
 
     enc_password = old.smtp_password_encrypted
+    # A senha guardada foi digitada para AQUELE servidor e usuário. Trocar o
+    # destino sem redigitá-la a mandaria para o servidor novo no próximo envio
+    # ou teste (auditoria de 10/10/2026): sem senha nova, ela é descartada.
+    destino_mudou = (
+        (body.smtp_host or "").strip().lower() != (old.smtp_host or "").strip().lower()
+        or (body.smtp_user or "").strip().lower() != (old.smtp_user or "").strip().lower()
+        or int(body.smtp_port or 0) != int(old.smtp_port or 0)
+    )
+    if destino_mudou:
+        enc_password = ""
     if body.smtp_password is not None and body.smtp_password.strip() != "":
         try:
             enc_password = encrypt_password(body.smtp_password.strip())
