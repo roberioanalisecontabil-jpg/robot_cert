@@ -37,8 +37,11 @@ import ctypes
 import json
 import logging
 import os
+import secrets
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -134,6 +137,58 @@ def _aplicar_acl(arquivo: Path) -> None:
         raise SemCofreLocal(f"icacls falhou ao restringir {arquivo}: {erro or 'sem detalhe'}")
 
 
+def _restringir_pasta(pasta: Path) -> None:
+    """Só SYSTEM e Administradores na pasta, herdando para o que nascer nela."""
+    resultado = subprocess.run(
+        [
+            "icacls", str(pasta),
+            "/inheritance:r",
+            "/grant", "*S-1-5-18:(OI)(CI)F",
+            "/grant", "*S-1-5-32-544:(OI)(CI)F",
+        ],
+        capture_output=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        timeout=30,
+        check=False,
+    )
+    if resultado.returncode != 0:
+        erro = (resultado.stderr or resultado.stdout or b"").decode("utf-8", "replace").strip()
+        raise SemCofreLocal(f"icacls falhou ao restringir {pasta}: {erro or 'sem detalhe'}")
+
+
+def gravar_protegido(destino: Path, dados: bytes) -> None:
+    """Grava `dados` em `destino` sem nenhum instante legível por conta comum.
+
+    Até a auditoria de 10/10/2026 o arquivo era escrito e SÓ DEPOIS restrito:
+    quem abrisse um handle nesse meio tempo, ou tivesse criado o arquivo antes
+    (ficando dono dele), lia o segredo. A pasta do ProgramData deixa conta
+    comum criar arquivos.
+
+    Agora o conteúdo nasce numa subpasta temporária já restrita a SYSTEM e
+    Administradores — o arquivo herda essa ACL ao ser criado —, com nome
+    aleatório e criação exclusiva (O_EXCL), e só então troca de lugar com o
+    destino. O que existisse no destino é substituído, não reaproveitado. A
+    ACL é reaplicada no destino, protegida da herança da pasta.
+    """
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    temp = Path(tempfile.mkdtemp(prefix=".novo-", dir=str(destino.parent)))
+    try:
+        _restringir_pasta(temp)
+        novo = temp / (secrets.token_hex(16) + ".tmp")
+        fd = os.open(str(novo), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(dados)
+        os.replace(str(novo), str(destino))
+    finally:
+        shutil.rmtree(temp, ignore_errors=True)
+    try:
+        _aplicar_acl(destino)
+    except Exception:
+        with contextlib.suppress(OSError):
+            destino.unlink()
+        raise
+
+
 def guardar(segredo: str, base_url: str, machine_id: str) -> Path:
     """
     Cifra, grava e restringe a ACL. Levanta em vez de deixar legível.
@@ -153,18 +208,10 @@ def guardar(segredo: str, base_url: str, machine_id: str) -> Path:
 
     cifrado = proteger(conteudo)
     destino = caminho()
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(cifrado)
-    try:
-        _aplicar_acl(destino)
-    except Exception:
-        # Sem ACL o arquivo está legível para qualquer conta local — e um
-        # arquivo assim é pior que arquivo nenhum. Apaga e deixa o erro subir:
-        # o banco já tem o hash, e o caminho de recuperação é a reemissão pelo
-        # admin.
-        with contextlib.suppress(OSError):
-            destino.unlink()
-        raise
+    # Sem ACL o arquivo estaria legível para qualquer conta local — pior que
+    # arquivo nenhum. `gravar_protegido` apaga e deixa o erro subir: o banco já
+    # tem o hash, e o caminho de recuperação é a reemissão pelo admin.
+    gravar_protegido(destino, cifrado)
     return destino
 
 

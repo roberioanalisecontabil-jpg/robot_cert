@@ -608,6 +608,27 @@ def _erro_sem_banco(e: agent_devices.SemBanco) -> HTTPException:
 
 
 def _ip_do_cliente(request: Request) -> str:
+    """O endereço de quem chama, como os tetos o contam: IPv6 agrupado na rede
+    /64 (auditoria de 10/10/2026). Um assinante IPv6 recebe uma /64 inteira, e
+    trocar de endereço dentro dela multiplicava os tetos por endereço."""
+    return _agrupar_ipv6(_ip_exato_do_cliente(request))
+
+
+def _agrupar_ipv6(ip: str) -> str:
+    import ipaddress
+
+    try:
+        end = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if end.version == 6:
+        if end.ipv4_mapped:
+            return str(end.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{end}/64", strict=False))
+    return str(end)
+
+
+def _ip_exato_do_cliente(request: Request) -> str:
     """O IP de quem chama, atrás de `config.NUM_PROXIES_CONFIAVEIS` proxies.
 
     Contado a partir do FIM do X-Forwarded-For: cada proxy anexa o IP de quem

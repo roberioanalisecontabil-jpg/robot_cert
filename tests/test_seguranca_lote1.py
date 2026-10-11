@@ -942,3 +942,29 @@ def test_sem_lista_de_hosts_nada_muda(client: TestClient, monkeypatch: pytest.Mo
     """Janela de compatibilidade: sem HOSTS_PERMITIDOS o portal aceita qualquer Host."""
     monkeypatch.setattr(config, "HOSTS_PERMITIDOS", [], raising=False)
     assert client.get("/api/health", headers={"Host": "qualquer.coisa"}).status_code == 200
+
+
+def test_ipv6_conta_pela_rede_64() -> None:
+    """Auditoria de 10/10/2026: um assinante IPv6 tem a /64 inteira, e trocar
+    de endereço dentro dela multiplicava os tetos por endereço."""
+    from app.sessao import _agrupar_ipv6
+
+    assert _agrupar_ipv6("2001:db8:1:2::1") == _agrupar_ipv6("2001:db8:1:2:ffff::9") == "2001:db8:1:2::/64"
+    assert _agrupar_ipv6("2001:db8:1:3::1") != _agrupar_ipv6("2001:db8:1:2::1")
+    assert _agrupar_ipv6("203.0.113.7") == "203.0.113.7"
+    assert _agrupar_ipv6("::ffff:203.0.113.7") == "203.0.113.7"
+    assert _agrupar_ipv6("testclient") == "testclient"
+
+
+def test_poda_geral_das_tentativas(monkeypatch) -> None:
+    """Chave de uso único nunca voltava para ser podada."""
+    from datetime import datetime, timedelta, timezone
+
+    from app import taxa
+
+    velha = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    fake = _Fake({taxa.TABELA: [{"id": "v", "chave": "login:198.51.100.1", "quando": velha}]})
+    monkeypatch.setattr(taxa, "_banco", lambda: fake)
+    monkeypatch.setattr(taxa, "PODA_GERAL_A_CADA", 1)
+    assert taxa.permitir("login:203.0.113.9", 20, 60)
+    assert [x["chave"] for x in fake.tabelas[taxa.TABELA]] == ["login:203.0.113.9"]

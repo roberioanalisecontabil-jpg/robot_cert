@@ -27,7 +27,6 @@ deixa de existir.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import os
@@ -60,14 +59,7 @@ def guardar(chave: str, base_url: str) -> Path:
     ).encode("utf-8")
     cifrado = identidade_maquina.proteger(conteudo)
     destino = caminho()
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(cifrado)
-    try:
-        identidade_maquina._aplicar_acl(destino)
-    except Exception:
-        with contextlib.suppress(OSError):
-            destino.unlink()
-        raise
+    identidade_maquina.gravar_protegido(destino, cifrado)
     return destino
 
 

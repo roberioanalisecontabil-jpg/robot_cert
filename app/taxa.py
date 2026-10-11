@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -44,6 +45,8 @@ TABELA = "rate_limit_tentativas"
 # Poda: linhas desta chave mais velhas que isto saem a cada chamada. Muito
 # maior que qualquer janela em uso, para nunca podar o que ainda conta.
 IDADE_MAXIMA_SEG = 3600.0
+# Uma em cada N tentativas também poda as chaves velhas de toda a tabela.
+PODA_GERAL_A_CADA = 200
 
 _memoria: dict[str, list[float]] = {}
 _memoria_lock = threading.Lock()
@@ -116,6 +119,11 @@ def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
                 client.table(TABELA).delete().eq("chave", chave).lt(
                     "quando", corte_antigo
                 ).execute()
+                # E, de vez em quando, a tabela inteira: chave que aparece uma
+                # vez só (um endereço por tentativa) nunca voltava para ser
+                # podada e ficava para sempre (auditoria de 10/10/2026).
+                if secrets.randbelow(PODA_GERAL_A_CADA) == 0:
+                    client.table(TABELA).delete().lt("quando", corte_antigo).execute()
             return True
         except Exception:  # noqa: BLE001
             _estado_persistente = False

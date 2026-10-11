@@ -44,6 +44,7 @@ def cofre(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(identidade_maquina, "proteger", lambda b: b"DPAPI:" + b)
     monkeypatch.setattr(identidade_maquina, "desproteger", lambda b: b[len(b"DPAPI:"):])
     monkeypatch.setattr(identidade_maquina, "_aplicar_acl", lambda arquivo: acls.append(Path(arquivo)))
+    monkeypatch.setattr(identidade_maquina, "_restringir_pasta", lambda pasta: None)
     monkeypatch.setattr(chave_api, "caminho", lambda: tmp_path / "Analise CertiDigital Agent" / "chave_api.dat")
     monkeypatch.delenv("CERT_ROBOT_API_KEY", raising=False)
     monkeypatch.delenv("API_KEY", raising=False)
@@ -295,5 +296,5 @@ def test_instalador_guarda_a_chave_pelo_agente() -> None:
 
 def test_versao_do_agente_subiu() -> None:
     """Mudança no agente é versão nova: a frota é atualizada e o portal acusa a atrasada."""
-    assert agent.__version__ == "1.7.0"
-    assert config.VERSAO_AGENTE_ESPERADA == "1.7.0"
+    assert agent.__version__ == "1.7.1"
+    assert config.VERSAO_AGENTE_ESPERADA == "1.7.1"

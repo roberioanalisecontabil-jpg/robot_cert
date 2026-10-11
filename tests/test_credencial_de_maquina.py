@@ -418,6 +418,7 @@ def cofre(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     destino = tmp_path / "maquina.dat"
     monkeypatch.setattr(identidade_maquina, "caminho", lambda: destino)
     monkeypatch.setattr(identidade_maquina, "_aplicar_acl", lambda arquivo: None)
+    monkeypatch.setattr(identidade_maquina, "_restringir_pasta", lambda pasta: None)
     return destino
 
 
@@ -453,10 +454,27 @@ def test_guardar_aplica_a_acl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     destino = tmp_path / "maquina.dat"
     monkeypatch.setattr(identidade_maquina, "caminho", lambda: destino)
     restritos: list = []
+    pastas: list = []
+    escrito_em: list = []
     monkeypatch.setattr(identidade_maquina, "_aplicar_acl", restritos.append)
+    monkeypatch.setattr(identidade_maquina, "_restringir_pasta", pastas.append)
+    original = identidade_maquina.os.open
+
+    def _open(caminho, *a, **k):
+        # O conteúdo nasce DENTRO da pasta já restrita, nunca direto no destino
+        # (auditoria de 10/10/2026: escrever e só depois restringir deixava
+        # uma janela, e quem criasse o arquivo antes virava dono dele).
+        escrito_em.append(Path(caminho).parent)
+        return original(caminho, *a, **k)
+
+    monkeypatch.setattr(identidade_maquina.os, "open", _open)
+    destino.write_bytes(b"criado antes por uma conta comum")
 
     identidade_maquina.guardar("um-segredo", "https://p", MAQUINA)
     assert restritos == [destino]
+    assert escrito_em == pastas and pastas[0].parent == destino.parent
+    assert not pastas[0].exists(), "a pasta temporaria some"
+    assert destino.read_bytes() != b"criado antes por uma conta comum"
 
 
 @_dpapi
