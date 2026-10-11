@@ -169,3 +169,34 @@ def test_atributo_de_dn_com_escape() -> None:
     assert f(r"CN=EMPRESA\, LTDA:1,O=ICP-Brasil", "CN") == "EMPRESA, LTDA:1"
     assert f("OU=CN teste,CN=X", "CN") == "X"
     assert f(None, "CN") is None and f("C=BR", "O") is None
+
+
+@pytest.fixture
+def como_maquina():
+    """A credencial de uma estação: papel agent, com a máquina que ela prova."""
+    from app.main import app
+    from app import auth
+    from app.sessao import require_auth
+
+    app.dependency_overrides[require_auth] = lambda: auth.TokenData(
+        email="agent@internal", role="agent", machine_id="estacao-a")
+    yield
+    app.dependency_overrides.pop(require_auth, None)
+
+
+def test_maquina_nao_le_dado_pessoal_nem_liga_o_sieg(client: TestClient, banco: _Fake, como_maquina) -> None:
+    """Auditoria de 10/10/2026: o alcance total do agente (que serve à
+    varredura) abria o CPF de todos no modal e ligava o SIEG de qualquer
+    cliente — decisão irreversível que é de uma pessoa com a carteira."""
+    r = client.get("/api/certificados/" + "a" * 64 + "/detalhes")
+    assert r.status_code == 200, r.text
+    assert CPF_SECRETO not in r.text and EMAIL_SECRETO not in r.text
+    assert r.json()["instalavel"] is False
+    assert client.post("/api/sieg/certificado/" + "a" * 64 + "/incluir").status_code == 403
+
+
+def test_entrada_da_maquina_e_so_a_dela(client: TestClient, banco: _Fake, como_maquina) -> None:
+    """Auditoria de 10/10/2026: com o `machine_id` do corpo, uma estação
+    fechava as pendências da outra."""
+    r = client.post("/api/agent/entrada", json={"machine_id": "estacao-b", "eventos": [], "pendentes": []})
+    assert r.status_code == 403

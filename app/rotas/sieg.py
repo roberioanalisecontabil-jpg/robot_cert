@@ -76,6 +76,12 @@ def sieg_do_certificado(fingerprint: str = FP_PARAM, token: auth.TokenData = Dep
 def sieg_incluir(background: BackgroundTasks, fingerprint: str = FP_PARAM,
                  token: auth.TokenData = Depends(require_auth)) -> dict:
     """Liga o interruptor: grava "incluindo" e faz a chamada em segundo plano."""
+    # Decisão irreversível de uma PESSOA com o certificado na carteira. A
+    # identidade de máquina tem alcance total de leitura e, sem esta guarda,
+    # mandava ao SIEG o PFX e a senha de qualquer cliente (auditoria de
+    # 10/10/2026).
+    if (token.role or "").strip().lower() == "agent":
+        raise HTTPException(status_code=403, detail="Só uma pessoa, pela tela, liga o SIEG.")
     item, snap = _certificado_no_alcance(fingerprint, token)
     settings = load_settings()
     atual = sieg.estado(item["fingerprint_sha256"])

@@ -482,3 +482,14 @@ def test_acl_que_falha_apaga_o_arquivo_e_levanta(
 def test_pode_guardar_ensaia_de_verdade(cofre: Path) -> None:
     assert identidade_maquina.pode_guardar() is True
     assert not cofre.with_name("maquina.probe").exists(), "o ensaio se limpa"
+
+
+def test_credencial_de_maquina_nao_emite_para_outra(
+    client_com_chave: TestClient, api_key: str, banco: _Fake
+) -> None:
+    """Auditoria de 10/10/2026: o segredo de uma estação emitia credenciais para
+    nomes novos, que sobreviviam à revogação dela."""
+    segredo = _provisionar(client_com_chave, api_key).json()["segredo"]
+    r = _provisionar(client_com_chave, segredo, maquina="outra-estacao")
+    assert r.status_code == 403
+    assert len(banco.tabelas[machine_credentials.TABELA]) == 1

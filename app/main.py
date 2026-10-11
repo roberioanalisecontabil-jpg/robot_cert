@@ -1587,7 +1587,10 @@ def agent_entrada(
     fica em Instalador › Entrada. Nenhum nome de arquivo com senha chega aqui:
     o agente já os limpou (`nome_publico_de_arquivo`).
     """
-    machine_id = (body.machine_id or "default").strip()[:128] or "default"
+    # A estação só relata a própria pasta (auditoria de 10/10/2026): com o
+    # `machine_id` do corpo, uma estação fechava as pendências de outra.
+    declarado = _machine_da_credencial(token, body.machine_id)
+    machine_id = (declarado or "default").strip()[:128] or "default"
     r = entrada_certificados.receber_relatorio(machine_id, body.eventos, body.pendentes)
     return {"ok": True, **r}
 
@@ -1880,7 +1883,11 @@ def provisionar_maquina(
     reabrir uma revogação, revogar não revogaria nada para quem tem a chave
     compartilhada; o caminho de volta é um admin reemitir.
     """
-    mid = (body.machine_id or "").strip()
+    # Credencial de máquina só fala por si (auditoria de 10/10/2026): sem isto,
+    # o segredo de UMA estação emitia credenciais para nomes novos, que
+    # sobreviviam à revogação dela. Para a própria máquina, a linha já existe e
+    # o 409 abaixo responde.
+    mid = _machine_da_credencial(token, body.machine_id)
     if not mid:
         raise HTTPException(status_code=400, detail="Informe a máquina do agente.")
     try:
@@ -2568,7 +2575,12 @@ def detalhes_do_certificado(
     item = next((it for it in (snap.get("items") or []) if (it.get("fingerprint_sha256") or "").lower() == fp), None)
     if item is None:
         raise HTTPException(status_code=404, detail="Certificado não encontrado.")
-    instalavel = _no_alcance(item, _documentos_ao_alcance(token))
+    # Identidade de máquina não é pessoa: o alcance total do agente serve à
+    # varredura, não a este modal, que nenhum agente chama (auditoria de
+    # 10/10/2026). Sem isto, a credencial de uma estação lia CPF, nascimento e
+    # e-mail de todos os titulares.
+    agente = (token.role or "").strip().lower() == "agent"
+    instalavel = not agente and _no_alcance(item, _documentos_ao_alcance(token))
     if not instalavel:
         from app.nome_publico import sem_dados_pessoais
 

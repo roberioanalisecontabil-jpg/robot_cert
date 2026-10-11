@@ -1187,11 +1187,27 @@ def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
         logger.exception("Erro ao verificar token no report")
         raise HTTPException(status_code=500, detail="Erro interno")
 
+    # O relatório é da instalação que o token cobriu, e uma vez só (auditoria
+    # de 10/10/2026). Antes, quem tivesse um token resgatado gravava quantas
+    # linhas quisesse, de quaisquer certificados e a qualquer tempo, em nome de
+    # quem pediu — e a trilha do Instalador e o /acompanhar mostravam isso.
+    consumido = _quando_do_banco(token_row.get("consumed_at"))
+    if consumido and datetime.now(timezone.utc) - consumido > JANELA_DO_RELATORIO:
+        raise HTTPException(status_code=403, detail="Prazo do relatório desta instalação encerrado.")
+    do_token = {str(c).lower() for c in (token_row.get("certificate_ids") or [])}
+    ja_relatados = _ja_relatados(sb, str(token_row["id"]))
+
     user_id = token_row["user_id"]
     token_id = str(token_row["id"])
 
     # Gravar log para cada resultado
+    aceitos = 0
     for result in body.results:
+        cid = str(result.certificateId or "").lower()
+        if cid not in do_token or cid in ja_relatados:
+            continue
+        ja_relatados.add(cid)
+        aceitos += 1
         event = "CONCLUIDO" if result.status.upper() == "OK" else "ERRO"
         cert_installer.log_event(
             event=event,
@@ -1208,8 +1224,33 @@ def _registrar_relatorio(body: ReportRequest, request: Request) -> dict:
 
     return {
         "status": "ok",
-        "processed": len(body.results),
+        "processed": aceitos,
     }
+
+
+JANELA_DO_RELATORIO = timedelta(hours=24)
+
+
+def _quando_do_banco(v):
+    if not v:
+        return None
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def _ja_relatados(sb, token_id: str) -> set:
+    """Certificados deste token que já têm resultado na trilha."""
+    try:
+        linhas = sb.table("install_log").select("certificate_id, event").eq("token_id", token_id).execute().data or []
+    except Exception:  # noqa: BLE001 — sem a leitura, aceita (o filtro por token já limita)
+        logger.exception("Falha ao ler a trilha do token para o relatório")
+        return set()
+    return {str(x.get("certificate_id")).lower() for x in linhas if x.get("event") in ("CONCLUIDO", "ERRO")}
 
 
 # ── Endpoints auxiliares do instalador ────────────────────────────────────
