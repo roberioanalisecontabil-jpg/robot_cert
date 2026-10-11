@@ -859,10 +859,16 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     # anterior que o alimentava, viraram código morto e saíram — poder apagar
     # aquele helper era o sinal de que o rechaveamento tinha terminado.
     try:
+        anterior = sb.table("users").select("email").eq("id", user_id).limit(1).execute().data or []
         sb.table("users").update(campos).eq("id", user_id).execute()
     except Exception:
         logger.exception("Falha ao atualizar usuário %s", user_id)
         raise HTTPException(status_code=400, detail="Não foi possível salvar o usuário.")
+    # A sessão acha a conta pelo e-mail. Endereço que muda de dono levaria o
+    # token do dono antigo para a conta nova (auditoria de 10/10/2026): a conta
+    # que RECEBE um endereço tem as sessões derrubadas, e a que o perde também.
+    if anterior and str(anterior[0].get("email") or "").lower() != email:
+        papeis.derrubar_sessoes(sb, user_id)
     if ativo is False:
         _revogar_tokens_de_instalacao(user_id)
     saida: Dict[str, Any] = {"ok": True}
@@ -940,6 +946,7 @@ def reset_user_password(user_id: str, body: UserResetPasswordBody, ator: auth.To
                 "senha_alterada_em": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", user_id).execute()
+        papeis.derrubar_sessoes(sb, user_id)
         computadores.sair_de_tudo(user_id, "senha redefinida pelo administrador")
         return {"ok": True}
     except Exception:
@@ -1348,6 +1355,7 @@ def senha_redefinir(body: SenhaRedefinirBody, request: Request) -> dict:
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao gravar a senha nova")
         raise HTTPException(status_code=400, detail=SENHA_NAO_GRAVADA)
+    papeis.derrubar_sessoes(sb, str(conta["id"]))
 
     computadores.sair_de_tudo(str(conta["id"]), "senha redefinida por código")
     atividade.registrar(
@@ -1431,6 +1439,7 @@ def senha_trocar(
     # aqui (auditoria de 10/10/2026): quem troca a senha por suspeitar de
     # invasão deixava valendo o segredo da bandeja que o invasor registrou com
     # a senha antiga — e ele seguia trocando esse segredo por sessão.
+    papeis.derrubar_sessoes(sb, uid)
     computadores.sair_de_tudo(uid, "senha trocada pela própria pessoa")
     atividade.registrar(
         atividade.EVENTO_SENHA_REDEFINIDA,

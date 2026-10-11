@@ -65,24 +65,42 @@ def papel_efetivo(sb: Any, user_id: str, pedido: str) -> str:
     return GESTOR if user_id and lidera(sb, user_id) else OPERADOR
 
 
+def derrubar_sessoes(sb: Any, user_id: str) -> bool:
+    """Sobe `users.sessao_versao`: todo token da conta emitido antes morre —
+    navegador, bandeja (token sem `sv` vale 0) e o navegador lembrado. Nunca
+    levanta; devolve se conseguiu.
+
+    Na troca de senha, a regra de antes era só o `senha_alterada_em` com 5 s
+    de margem, e um token emitido nesses 5 s sobrevivia até expirar (auditoria
+    de 10/10/2026). A versão não tem margem."""
+    try:
+        r = sb.table("users").select("sessao_versao").eq("id", str(user_id)).limit(1).execute()
+        linhas = r.data or []
+        atual = int((linhas[0].get("sessao_versao") if linhas else 0) or 0)
+        sb.table("users").update({"sessao_versao": atual + 1}).eq("id", str(user_id)).execute()
+        return True
+    except Exception:  # noqa: BLE001
+        logger.exception("As sessões de %s não foram derrubadas", user_id)
+        return False
+
+
 def apos_troca_de_papel(sb: Any, user_id: str) -> Dict[str, Any]:
-    """Esvazia a carteira e derruba as sessões. Nunca levanta: a conta já foi
-    gravada com o papel novo; falhar aqui vira aviso na resposta e no log."""
+    """Esvazia a carteira, queima os tokens de instalação pendentes e derruba
+    as sessões. Nunca levanta: a conta já foi gravada com o papel novo; falhar
+    aqui vira aviso na resposta e no log."""
     saida: Dict[str, Any] = {}
     try:
         saida.update(cert_installer.esvaziar_carteira(str(user_id)))
     except Exception as e:  # noqa: BLE001
         logger.exception("Papel de %s trocado, mas a carteira não foi esvaziada", user_id)
         saida["erro"] = "A conta foi salva, mas a carteira não pôde ser esvaziada. Confira em Carteiras."
+    # O token já emitido levava os certificados do alcance ANTIGO, e o resgate
+    # não confere o alcance de novo (auditoria de 10/10/2026).
     try:
-        r = sb.table("users").select("sessao_versao").eq("id", str(user_id)).limit(1).execute()
-        linhas = r.data or []
-        atual = int((linhas[0].get("sessao_versao") if linhas else 0) or 0)
-        sb.table("users").update({"sessao_versao": atual + 1}).eq("id", str(user_id)).execute()
-        saida["sessoes_derrubadas"] = True
+        cert_installer.revogar_tokens_pendentes(str(user_id))
     except Exception:  # noqa: BLE001
-        logger.exception("Papel de %s trocado, mas as sessões não foram derrubadas", user_id)
-        saida["sessoes_derrubadas"] = False
+        logger.exception("Papel de %s trocado, mas os tokens pendentes não foram queimados", user_id)
+    saida["sessoes_derrubadas"] = derrubar_sessoes(sb, user_id)
     return saida
 
 

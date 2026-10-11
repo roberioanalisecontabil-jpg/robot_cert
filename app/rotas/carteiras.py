@@ -617,12 +617,17 @@ def remover_carteira(
             cert_installer.registrar_excecoes(
                 user_id, [documento], _user_id_da_sessao(token), token.email or "desconhecido",
             )
+            cert_installer.revogar_tokens_pendentes(user_id)
             return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "excecoes"}
         except Exception:
             logger.exception("Erro ao registrar exceção")
             raise HTTPException(status_code=500, detail="Erro interno ao registrar a exceção")
     try:
         cert_installer.remover_da_carteira(user_id, documento)
+        # O token já pedido levava este cliente e o resgate não confere a
+        # carteira de novo (auditoria de 10/10/2026). A pessoa pede outra vez
+        # o que ainda é dela.
+        cert_installer.revogar_tokens_pendentes(user_id)
         return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "atribuicoes"}
     except RuntimeError as e:
         # O texto vinha do cofre/banco e podia trazer nome de chave de
