@@ -11,6 +11,9 @@ pydantic>=2.0.0
 gunicorn>=21.2.0
 bcrypt>=4.1.0
 python-jose[cryptography]>=3.3.0
+# QR do app autenticador (11/10/2026): Python puro, sem dependências; o
+# segredo vira imagem aqui no servidor, sem passar por serviço de fora.
+segno==1.6.6
 python-multipart>=0.0.12
 # Importação de carteiras por planilha. O .xlsx entra porque é o que sai do
 # Excel sem passo extra; pedir "salve como CSV" antes de cada importação é o

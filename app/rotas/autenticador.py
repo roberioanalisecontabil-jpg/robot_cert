@@ -82,7 +82,8 @@ def iniciar(body: SenhaBody, request: Request, token: auth.TokenData = Depends(r
     sb.table("users").update(
         {"totp_cifrado": encrypt_password(segredo), "totp_ativado_em": None, "totp_ultimo_passo": None}
     ).eq("id", user["id"]).execute()
-    return {"segredo": totp.agrupado(segredo), "uri": totp.uri(segredo, user.get("email") or "")}
+    uri = totp.uri(segredo, user.get("email") or "")
+    return {"segredo": totp.agrupado(segredo), "uri": uri, "qr": totp.qr_data_uri(uri)}
 
 
 @router.post("/api/users/me/app-autenticador/confirmar")

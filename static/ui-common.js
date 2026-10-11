@@ -1140,7 +1140,12 @@ function abrirAppAutenticador() {
         </div>
         <div id="aa-cadastro" hidden>
           <p class="modal__sub">No app (Microsoft Authenticator, Google Authenticator ou outro),
-            escolha adicionar conta e digite a chave abaixo. Ela aparece só agora.</p>
+            escolha adicionar conta e aponte a câmera para o QR. Sem câmera, digite a chave
+            abaixo. Os dois aparecem só agora.</p>
+          <p id="aa-qr-caixa" hidden style="text-align:center;margin:12px 0;">
+            <img id="aa-qr" alt="QR para cadastrar o portal no app autenticador" width="220" height="220"
+                 style="background:#fff;padding:8px;border-radius:8px;image-rendering:pixelated;">
+          </p>
           <p><code id="aa-segredo" style="font-size:1.1em;letter-spacing:0.05em;user-select:all;"></code></p>
           <p><a id="aa-link" href="#">Abrir no app deste aparelho</a></p>
           <div class="modal__campo">
@@ -1182,6 +1187,10 @@ function abrirAppAutenticador() {
     } else if (etapa === "cadastro") {
       q("#aa-sub").textContent = "Falta confirmar: digite o código que o app mostra.";
       q("#aa-segredo").textContent = dados.segredo;
+      // Só imagem `data:` gerada pelo próprio servidor; sem ela, fica a chave.
+      const qr = typeof dados.qr === "string" && dados.qr.startsWith("data:image/svg+xml") ? dados.qr : "";
+      q("#aa-qr-caixa").hidden = !qr;
+      if (qr) q("#aa-qr").src = qr;
       q("#aa-link").href = dados.uri;
       acao.textContent = "Confirmar";
       q("#aa-codigo").value = "";
@@ -1210,7 +1219,7 @@ function abrirAppAutenticador() {
         const { ok, d } = await chamar(url, { senha_atual: q("#aa-senha").value });
         if (!ok) { erro(d.detail || "Não foi possível concluir."); return; }
         if (etapa === "inativo") mostrar("cadastro", d);
-        else mostrar("inativo");
+        else { q("#aa-qr").removeAttribute("src"); mostrar("inativo"); }
       } else if (etapa === "cadastro") {
         const { ok, d } = await chamar("/api/users/me/app-autenticador/confirmar", { codigo: q("#aa-codigo").value.trim() });
         if (!ok) { erro(d.detail || "Código não confere."); return; }

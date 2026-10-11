@@ -68,6 +68,17 @@ def uri(segredo_b32: str, conta: str, emissor: str = "Certificados Análise") ->
     return f"otpauth://totp/{rotulo}?secret={segredo_b32}&issuer={quote(emissor)}&digits={DIGITOS}&period={PASSO_SEG}"
 
 
+def qr_data_uri(conteudo: str):
+    """O QR do link `otpauth://` como imagem SVG em `data:`, ou None se a
+    biblioteca não estiver instalada (servidor ainda sem a dependência: a tela
+    fica com a chave em texto, que sempre funciona)."""
+    try:
+        import segno
+    except ImportError:
+        return None
+    return segno.make(conteudo, error="m").svg_data_uri(scale=5, border=2, dark="#000", light="#fff")
+
+
 def agrupado(segredo_b32: str) -> str:
     """Para digitar no app: blocos de 4."""
     return " ".join(segredo_b32[i:i + 4] for i in range(0, len(segredo_b32), 4))

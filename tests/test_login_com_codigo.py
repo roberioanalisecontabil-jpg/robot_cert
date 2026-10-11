@@ -252,6 +252,9 @@ def test_cadastro_do_app_pede_senha_e_confirmacao(client: TestClient, banco: _Fa
     assert r.status_code == 200, r.text
     segredo = r.json()["segredo"].replace(" ", "")
     assert r.json()["uri"].startswith("otpauth://totp/")
+    # QR (11/10/2026): imagem do próprio servidor, do mesmo link otpauth.
+    assert r.json()["qr"] == totp.qr_data_uri(r.json()["uri"])
+    assert r.json()["qr"].startswith("data:image/svg+xml")
     assert _ana(banco)["totp_cifrado"] and segredo not in _ana(banco)["totp_cifrado"]
     assert not _ana(banco).get("totp_ativado_em"), "inativo até confirmar"
 
