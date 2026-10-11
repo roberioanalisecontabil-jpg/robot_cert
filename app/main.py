@@ -2028,6 +2028,13 @@ def listar_certificados(
             base = {"source_dir": "", "expired_dir": "", "itens": [], "data_source": "remoto",
                     "atualizado_em": datetime.now(timezone.utc).isoformat(), "machine_id": None}
         else:
+            if (fonte == "local" or not snap) and not taxa.permitir(
+                f"varredura-local:{(token.email or '').strip().lower()}", 10, 300
+            ):
+                # A varredura decifra cada PFX da pasta, sem cache: mesmo para
+                # o administrador, repetida em laço ela ocupa o único processo
+                # do portal (auditoria de 10/10/2026).
+                raise HTTPException(status_code=429, detail="Muitas leituras da pasta em sequência. Aguarde alguns minutos.")
             base = _list_certificados_payload(sets, snap, fonte)
         # Dado pessoal do titular (responsável, CPF, nascimento, e-mail) nunca
         # sai pela lista, para ninguém: só pela rota de detalhes, no alcance

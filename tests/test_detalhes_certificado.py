@@ -200,3 +200,15 @@ def test_entrada_da_maquina_e_so_a_dela(client: TestClient, banco: _Fake, como_m
     fechava as pendências da outra."""
     r = client.post("/api/agent/entrada", json={"machine_id": "estacao-b", "eventos": [], "pendentes": []})
     assert r.status_code == 403
+
+
+def test_varredura_local_tem_teto_mesmo_para_o_admin(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A varredura decifra cada PFX sem cache; em laço, ocupava o único
+    processo do portal (auditoria de 10/10/2026)."""
+    chamadas = _varredura_com_dado_pessoal(monkeypatch)
+    for _ in range(10):
+        assert client.get("/api/certificados?fonte=local&pagina=1&por_pagina=5", headers=_h(*ADMIN)).status_code == 200
+    r = client.get("/api/certificados?fonte=local&pagina=1&por_pagina=5", headers=_h(*ADMIN))
+    assert r.status_code == 429 and len(chamadas) == 10
