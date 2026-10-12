@@ -68,6 +68,11 @@ class VinculoInvalido(ValueError):
     pass
 
 
+class ChaveDiferente(VinculoInvalido):
+    """O pedido não traz a chave já fixada para a máquina. Aprovar exige o
+    administrador confirmar a troca (`trocar_chave`)."""
+
+
 class OutroDispositivo(RuntimeError):
     """O par já tem pedido pendente com a chave de outra estação."""
 
@@ -273,6 +278,8 @@ def _pedir_confirmacao(uid: str, mid: str, nome: str, chave_hash: Optional[str])
     if p:
         if p.get("chave_hash") and p["chave_hash"] != chave_hash:
             raise OutroDispositivo(mid)
+        if not p.get("chave_hash") and chave_hash:
+            _gravar_chave_no_pedido(p, chave_hash)
     else:
         atual = vinculo_vigente(uid, mid) or {}
         _banco().table(TABELA).insert({
@@ -283,6 +290,21 @@ def _pedir_confirmacao(uid: str, mid: str, nome: str, chave_hash: Optional[str])
         logger.warning("Computador: %s entrou em %s sem a chave da máquina; pedido de confirmação aberto.", uid, mid)
     p = pendente_do_par(uid, mid) or {}
     return {"autorizacao": PENDENTE, "tipo": p.get("tipo"), "vinculo_id": p.get("id"), "confirmacao": True}
+
+
+def _gravar_chave_no_pedido(p: Dict[str, Any], chave_hash: str) -> None:
+    """Pedido pendente sem chave (importado do Hardlyze, ou aberto por bandeja
+    antiga) fica com a chave da primeira bandeja que entra com uma — e passa a
+    recusar outra (auditoria run-2, 12/10/2026). Antes, a aprovação de um
+    pedido importado autorizava a última bandeja que tivesse entrado com a
+    senha, sem prova nenhuma da máquina. Compare-and-swap: duas bandejas ao
+    mesmo tempo não gravam as duas."""
+    gravou = (_banco().table(TABELA).update({"chave_hash": chave_hash})
+              .eq("id", p["id"]).is_("chave_hash", "null").execute().data or [])
+    if not gravou:
+        atual = pendente_do_par(str(p["user_id"]), mac(p["machine_id"])) or {}
+        if atual.get("chave_hash") and atual["chave_hash"] != chave_hash:
+            raise OutroDispositivo(mac(p["machine_id"]))
 
 
 def entrar(user_id: str, machine_id: str, nome: str = "", chave: Optional[str] = None) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -307,6 +329,8 @@ def entrar(user_id: str, machine_id: str, nome: str = "", chave: Optional[str] =
         p = pendente_do_par(uid, mid)
         if p and p.get("chave_hash") and p["chave_hash"] != h:
             raise OutroDispositivo(mid)
+        if p and not p.get("chave_hash") and h:
+            _gravar_chave_no_pedido(p, h)
     segredo = agent_devices.registrar(user_id=uid, machine_id=mid, nome=nome or mid)
     return segredo, ao_entrar(uid, mid, nome, chave_hash=h, maquina_provada=provada)
 
@@ -355,10 +379,28 @@ def _um(vinculo_id: Any) -> Dict[str, Any]:
     return r[0]
 
 
-def autorizar(vinculo_id: Any, tipo: str, por: str, prazo: Optional[str] = None) -> Dict[str, Any]:
+def autorizar(vinculo_id: Any, tipo: str, por: str, prazo: Optional[str] = None,
+              trocar_chave: bool = False) -> Dict[str, Any]:
     v = _um(vinculo_id)
     if v["estado"] != PENDENTE:
         raise VinculoInvalido("Só pedido pendente pode ser autorizado.")
+    # A chave fixada é a prova de que a bandeja está naquele computador. Antes
+    # (auditoria run-2, 12/10/2026) aprovar qualquer pedido para a máquina
+    # trocava essa chave pela do pedido — ou, sem chave, abria a janela de
+    # uma hora —, e um aparelho em outro lugar passava a "provar" a máquina.
+    # Agora a troca é decisão explícita do administrador (reinstalação).
+    fixada = chave_fixada(v["machine_id"])
+    if fixada and not trocar_chave:
+        if not v.get("chave_hash"):
+            raise ChaveDiferente(
+                "Este computador já tem chave registrada, e o pedido veio de uma bandeja sem chave "
+                "(versão antiga ou outro aparelho)."
+            )
+        if not hmac.compare_digest(str(fixada), str(v["chave_hash"])):
+            raise ChaveDiferente(
+                "O pedido veio de uma bandeja com chave diferente da registrada para este computador "
+                "(reinstalação, ou outro aparelho usando o mesmo nome)."
+            )
     agora = _agora()
     campos: Dict[str, Any] = {"estado": ATIVO, "tipo": tipo, "decidido_por": por, "decidido_em": _iso(agora)}
     if tipo == PRINCIPAL:
@@ -379,7 +421,12 @@ def autorizar(vinculo_id: Any, tipo: str, por: str, prazo: Optional[str] = None)
         _fixar_chave(v["machine_id"], v["chave_hash"], por)
     else:
         # Bandeja antiga, sem chave: uma reconexão na próxima hora, para ela
-        # não ficar presa pedindo confirmação a cada entrada.
+        # não ficar presa pedindo confirmação a cada entrada. Se a máquina
+        # tinha chave e o admin escolheu trocá-la, a chave antiga sai: a
+        # próxima aprovação com chave fixa a nova.
+        if fixada:
+            _banco().table(TABELA_CHAVE).delete().eq("machine_id", mac(v["machine_id"])).execute()
+            logger.warning("Computador: chave da máquina %s removida por %s (aprovação sem chave)", v["machine_id"], por)
         campos["reconexao_liberada_ate"] = _iso(agora + JANELA_RECONEXAO)
     _banco().table(TABELA).update(campos).eq("id", v["id"]).execute()
     # Aprovado, a máquina é desta pessoa agora: quem estava nela sai.

@@ -586,7 +586,10 @@ def test_vencido_que_nao_sai_vira_pendencia_depois_de_duas_tentativas(tmp_path: 
     assert r["eventos"] == []
     (p,) = r["pendentes"]
     assert p["resultado"] == "vencido_preso" and p["pasta_origem"] == str(pj_a)
-    assert "sendo usado" in p["motivo"] and "senha" not in p["arquivo_original"].lower()
+    # Desde a auditoria run-2 (12/10/2026) o texto cru do erro de sistema não
+    # sai do agente: ele pode trazer o caminho, e o nome traz a senha.
+    assert "em uso" in p["motivo"] and "Errno" not in p["motivo"]
+    assert "senha" not in p["arquivo_original"].lower()
     assert _nomes(pj_a) == ["ALFA 1 senha a.pfx"], "o arquivo fica onde está, nada se perde"
 
 

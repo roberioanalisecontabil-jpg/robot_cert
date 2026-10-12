@@ -29,6 +29,7 @@ from app import alertas_config
 from app.auth import conta_ativa
 from app.settings_state import _banco, load_settings
 from app.correio import send_smtp_email
+from app.nome_publico import mensagem_sem_arquivo
 from app import correio
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,9 @@ def _linha(machine_id: str, ev: Dict[str, Any], *, pendente: bool) -> Dict[str, 
     }
     for campo in _CAMPOS_TEXTO:
         row[campo] = str(ev.get(campo) or "")[:1024]
+    # O motivo do agente anterior à 1.7.2 pode trazer o texto cru do erro de
+    # sistema, com o caminho e a senha do PFX (auditoria run-2, 12/10/2026).
+    row["motivo"] = mensagem_sem_arquivo(row["motivo"])
     return row
 
 

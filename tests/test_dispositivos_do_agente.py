@@ -132,8 +132,9 @@ def _registrar(client: TestClient, email: str = EMAIL, senha: str = SENHA,
     )
 
 
-def _token(client: TestClient, segredo: str):
-    return client.post("/api/agent/dispositivos/token", json={"segredo": segredo})
+def _na_bandeja(client: TestClient, segredo: str):
+    """O segredo vale onde ele serve: nas rotas da estação (12/10/2026)."""
+    return client.get("/api/estacao/situacao", headers={"X-Device-Secret": segredo})
 
 
 def _cabecalho(client: TestClient, email: str = EMAIL) -> Dict[str, str]:
@@ -146,35 +147,31 @@ def _cabecalho(client: TestClient, email: str = EMAIL) -> Dict[str, str]:
 # 1. O caminho feliz
 # ──────────────────────────────────────────────────────────────────────────
 
-def test_registra_e_troca_o_segredo_por_token(client: TestClient, banco: _Fake) -> None:
+def test_registra_e_o_segredo_vale_na_bandeja(client: TestClient, banco: _Fake) -> None:
     r = _registrar(client)
     assert r.status_code == 200, r.text
     segredo = r.json()["segredo"]
     assert len(segredo) >= 40
 
-    t = _token(client, segredo)
+    t = _na_bandeja(client, segredo)
     assert t.status_code == 200, t.text
-    corpo = t.json()
     # ADR 0002: a máquina é guardada em minúsculas (vínculo e fila comparam por igualdade).
-    assert corpo["machine_id"] == MAQUINA.lower()
-    # O papel REAL da pessoa, não `agent`: é o que permite às rotas perguntarem
-    # "este certificado é seu" em vez de "que papel você tem".
-    assert corpo["role"] == "user"
-
-    dados = auth.decode_access_token(corpo["access_token"])
-    assert dados is not None and dados.email == EMAIL
+    assert t.json()["machine_id"] == MAQUINA.lower()
 
 
-def test_o_token_do_agente_abre_as_rotas_do_portal(client: TestClient, banco: _Fake) -> None:
-    """O JWT do dispositivo é um JWT normal — `require_auth` não o distingue."""
+def test_o_segredo_nao_vira_sessao_do_portal(client: TestClient, banco: _Fake) -> None:
+    """Auditoria run-2 (12/10/2026): o registro só pede a senha, e o segredo
+    virava um JWT com o papel real do dono — senha → sessão de admin sem o
+    código do login. O dispositivo agora não abre sessão nenhuma."""
     segredo = _registrar(client).json()["segredo"]
-    jwt = _token(client, segredo).json()["access_token"]
-
-    r = client.get(
-        "/api/agent/dispositivos", headers={"Authorization": f"Bearer {jwt}"}
-    )
-    assert r.status_code == 200
-    assert r.json()["alcance"] == "proprios"
+    r = client.post("/api/agent/dispositivos/token", json={"segredo": segredo})
+    assert r.status_code == 410
+    assert "access_token" not in r.text
+    # Nem como Bearer, nem como X-API-Key o segredo autentica o portal como o
+    # dono (sem API_KEY configurada, o teste cai na identidade anônima: 404).
+    for cab in ({"Authorization": f"Bearer {segredo}"}, {"X-API-Key": segredo}):
+        r = client.get("/api/agent/dispositivos", headers=cab)
+        assert r.status_code != 200 and "dispositivos" not in r.text
 
 
 def test_a_senha_do_portal_nao_vira_o_segredo(client: TestClient, banco: _Fake) -> None:
@@ -186,7 +183,7 @@ def test_a_senha_do_portal_nao_vira_o_segredo(client: TestClient, banco: _Fake) 
     assert segredo != SENHA
     assert SENHA not in segredo
     # E a senha não serve como segredo de dispositivo.
-    assert _token(client, SENHA).status_code == 401
+    assert _na_bandeja(client, SENHA).status_code == 401
 
 
 def test_o_hash_nunca_sai_pela_api(client: TestClient, banco: _Fake) -> None:
@@ -203,7 +200,7 @@ def test_o_hash_nunca_sai_pela_api(client: TestClient, banco: _Fake) -> None:
 
 def test_revogar_corta_o_segredo_que_funcionava(client: TestClient, banco: _Fake) -> None:
     segredo = _registrar(client).json()["segredo"]
-    assert _token(client, segredo).status_code == 200
+    assert _na_bandeja(client, segredo).status_code == 200
 
     dev = client.get("/api/agent/dispositivos", headers=_cabecalho(client)).json()
     device_id = dev["dispositivos"][0]["id"]
@@ -211,7 +208,7 @@ def test_revogar_corta_o_segredo_que_funcionava(client: TestClient, banco: _Fake
     r = client.delete(f"/api/agent/dispositivos/{device_id}", headers=_cabecalho(client))
     assert r.status_code == 200
 
-    assert _token(client, segredo).status_code == 401
+    assert _na_bandeja(client, segredo).status_code == 401
 
 
 def test_revogado_some_da_lista_de_vivos(banco: _Fake) -> None:
@@ -238,7 +235,7 @@ def test_ninguem_revoga_a_maquina_de_outro(client: TestClient, banco: _Fake) -> 
     assert r.status_code == 404
 
     # E o segredo do dono continua de pé — a tentativa não tocou nele.
-    assert _token(client, segredo).status_code == 200
+    assert _na_bandeja(client, segredo).status_code == 200
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -254,13 +251,13 @@ def test_conta_desativada_depois_do_registro_para_de_emitir(
     desligada seguiria instalando certificado pelo agente.
     """
     segredo = _registrar(client).json()["segredo"]
-    assert _token(client, segredo).status_code == 200
+    assert _na_bandeja(client, segredo).status_code == 200
 
     for u in banco.tabelas["users"]:
         if u["email"] == EMAIL:
             u["ativo"] = False
 
-    assert _token(client, segredo).status_code == 403
+    assert _na_bandeja(client, segredo).status_code == 403
 
 
 def test_senha_provisoria_nao_produz_dispositivo(client: TestClient, banco: _Fake) -> None:
@@ -296,8 +293,8 @@ def test_registrar_de_novo_substitui_e_invalida_o_anterior(
 
     assert novo != velho
     assert len(banco.tabelas[agent_devices.TABELA]) == 1
-    assert _token(client, velho).status_code == 401
-    assert _token(client, novo).status_code == 200
+    assert _na_bandeja(client, velho).status_code == 401
+    assert _na_bandeja(client, novo).status_code == 200
 
 
 def test_registrar_de_novo_limpa_a_revogacao(client: TestClient, banco: _Fake) -> None:
@@ -306,7 +303,7 @@ def test_registrar_de_novo_limpa_a_revogacao(client: TestClient, banco: _Fake) -
     agent_devices.revogar(device_id)
 
     novo = _registrar(client).json()["segredo"]
-    assert _token(client, novo).status_code == 200
+    assert _na_bandeja(client, novo).status_code == 200
 
 
 def test_admin_ve_a_frota_e_o_operador_so_a_dele(client: TestClient, banco: _Fake) -> None:
@@ -365,8 +362,8 @@ def test_segredo_inexistente_e_revogado_respondem_igual(
     segredo = _registrar(client).json()["segredo"]
     agent_devices.revogar(agent_devices.listar("u-ana")[0]["id"])
 
-    revogado = _token(client, segredo)
-    inventado = _token(client, "nunca-existiu-este-segredo-aqui-00000000")
+    revogado = _na_bandeja(client, segredo)
+    inventado = _na_bandeja(client, "nunca-existiu-este-segredo-aqui-00000000")
 
     assert revogado.status_code == inventado.status_code == 401
     assert revogado.json()["detail"] == inventado.json()["detail"]
@@ -382,7 +379,7 @@ def test_sem_banco_responde_503(client: TestClient) -> None:
     Dispositivos não têm fallback em arquivo de propósito: uma fila local de
     credenciais sobreviveria à revogação feita no portal.
     """
-    r = _token(client, "qualquer-coisa")
+    r = _na_bandeja(client, "qualquer-coisa")
     assert r.status_code == 503
 
 

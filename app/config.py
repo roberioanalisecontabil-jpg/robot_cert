@@ -327,6 +327,18 @@ def _hex_de_32_bytes(valor: str) -> bool:
         return False
 
 
+# Valores publicados no .env.example e no guia de instalação
+# (docs/GUIA_MIGRACAO_WINDOWS_SERVER.md). Quem copiou o modelo e esqueceu de
+# trocar fica com um segredo que qualquer leitor do repositório conhece.
+SEGREDOS_DE_EXEMPLO = frozenset({
+    "troque-por-um-segredo-longo-e-unico",
+    "uma_string_longa_e_aleatoria",
+    "sua_chave_secreta_aqui",
+    "changeme",
+    "secret",
+})
+
+
 def verificar_ambiente() -> tuple[list[str], list[str]]:
     """As variáveis críticas, conferidas de uma vez — na subida, não no uso.
 
@@ -411,9 +423,28 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
             "as linhas sem AAD e ligue COFRE_EXIGE_AAD=1."
         )
 
-    if not (os.getenv("JWT_SECRET_KEY") or "").strip():
+    jwt_secreto = (os.getenv("JWT_SECRET_KEY") or "").strip()
+    if not jwt_secreto:
         (fatais if producao else avisos).append(
             "JWT_SECRET_KEY não definida — o login falharia na primeira sessão."
+        )
+    elif jwt_secreto.lower() in SEGREDOS_DE_EXEMPLO:
+        # Auditoria run-2 (12/10/2026): o guia manda copiar o .env.example, e o
+        # boot aceitava o valor dele. Com a chave publicada, qualquer um assina
+        # uma sessão de administrador — sem senha, sem código.
+        (fatais if producao else avisos).append(
+            "JWT_SECRET_KEY é o valor de exemplo da documentação — quem o conhece forja sessões. "
+            "Gere um novo: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        )
+    elif len(jwt_secreto) < 32:
+        avisos.append(
+            f"JWT_SECRET_KEY tem {len(jwt_secreto)} caracteres — use pelo menos 32 aleatórios "
+            "(python -c \"import secrets; print(secrets.token_urlsafe(48))\")."
+        )
+
+    if API_KEY and API_KEY.strip().lower() in SEGREDOS_DE_EXEMPLO:
+        (fatais if producao else avisos).append(
+            "API_KEY é o valor de exemplo da documentação — troque por um valor aleatório."
         )
 
     if not API_KEY:

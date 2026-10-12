@@ -48,7 +48,11 @@ def _destinos(nexts):
 @pytest.mark.skipif(NODE is None, reason="node não está no PATH")
 def test_next_para_fora_do_portal_vai_para_o_inicio() -> None:
     fora = ["/\\evil.example", "/\\/evil.example", "//evil.example", "https://evil.example/",
-            "\\\\evil.example", "javascript:alert(1)", " /\\evil.example"]
+            "\\\\evil.example", "javascript:alert(1)", " /\\evil.example",
+            # Auditoria run-2 (12/10/2026): o caminho normalizado de "/.//host"
+            # é "//host" — a origem confere, mas o texto devolvido é um URL
+            # sem esquema que leva para fora.
+            "/.//evil.example", "/..//evil.example", "/.\\/evil.example", "/./\\evil.example"]
     assert _destinos(fora) == ["/"] * len(fora)
 
 

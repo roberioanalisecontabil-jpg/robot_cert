@@ -8,13 +8,12 @@ fica com os certificados, que é o que ele alimenta.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app import agent_devices, auth, computadores, config, machine_credentials, taxa
+from app import agent_devices, auth, computadores, machine_credentials, taxa
 from app import entrada as entrada_certificados
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.rotas.computadores import _texto_da_situacao
@@ -23,9 +22,7 @@ from app.sessao import (
     _erro_sem_banco,
     _ip_do_cliente,
     _machine_da_credencial,
-    _sb_do_login,
     _user_id_da_sessao,
-    conta_ativa,
     require_admin,
     require_agent_or_admin,
     require_auth,
@@ -138,16 +135,6 @@ class RegistrarDispositivoBody(BaseModel):
     chave_maquina: Optional[str] = Field(default=None, max_length=256)
 
 
-class TokenDoDispositivoBody(BaseModel):
-    segredo: str
-    # Reportada pela estação, não medida pelo portal. Opcional porque um agente
-    # anterior a esta coluna continua trocando token normalmente — exigir aqui
-    # deixaria a frota velha sem acesso no deploy, que é o oposto do objetivo.
-    versao: Optional[str] = None
-
-
-
-
 @router.post("/api/agent/dispositivos/registrar")
 def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> dict:
     """
@@ -224,65 +211,27 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
         "machine_id": machine_id,
         "email": user["email"],
         "role": user["role"],
-        # O agente usa isto para renovar antes de expirar, em vez de descobrir
-        # pelo 401 — que chegaria no meio de uma instalação.
-        "validade_token_min": agent_devices.VALIDADE_TOKEN_MIN,
         **_texto_da_situacao(situacao),
     }
 
 
-@router.post("/api/agent/dispositivos/token")
-def token_do_dispositivo(body: TokenDoDispositivoBody) -> dict:
+@router.post("/api/agent/dispositivos/token", status_code=410)
+def token_do_dispositivo() -> dict:
+    """Retirada em 12/10/2026 (auditoria run-2): o segredo do dispositivo virava
+    um JWT de sessão do portal com o papel real do dono — e o registro só pede a
+    senha. Era o atalho em volta do código do login: senha → bandeja → sessão de
+    administrador, sem o segundo passo.
+
+    O dispositivo agora vale só nas rotas da bandeja (`/api/estacao/*`,
+    `/api/cert-installer/claim` e `report-avulso`), com o `X-Device-Secret`.
+    A bandeja do Hardlyze nunca usou esta rota; quem a chamava era o login de
+    pessoa dormente de `agent/identidade.py`. O agente de certificados das
+    estações (separação do Hardlyze, ADR 0003) segue o mesmo modelo.
     """
-    Segredo do dispositivo vira JWT curto.
-
-    O JWT sai com o papel REAL da pessoa (`user`, `gestor`, `admin`), não com
-    `agent`. É o ponto da fase: as rotas passam a poder perguntar "este
-    certificado é seu" em vez de "que papel você tem", e a barreira de carteira
-    volta a valer para quem opera o agente.
-
-    A contrapartida, que é preciso ter em conta ao instalar o agente: **um
-    dispositivo vale o que vale o dono.** O segredo guardado na estação de um
-    administrador emite token de administrador. Não é regressão — a chave
-    compartilhada de antes dava papel `agent` a QUALQUER máquina que a tivesse,
-    e sem revogação individual —, mas troca "todo mundo tem a mesma chave" por
-    "cada máquina tem o poder de quem a usa". Agente de admin merece a mesma
-    cautela que a sessão de admin no navegador.
-    """
-    try:
-        disp = agent_devices.autenticar(body.segredo, versao=body.versao)
-    except agent_devices.SemBanco as e:
-        raise _erro_sem_banco(e)
-
-    if not disp:
-        # Mesma resposta para segredo inexistente e revogado: distinguir diria a
-        # quem tenta se aquele valor já existiu.
-        raise HTTPException(status_code=401, detail="Dispositivo não autorizado.")
-
-    sb = _sb_do_login()
-    r = sb.table("users").select("*").eq("id", disp["user_id"]).limit(1).execute()
-    user = r.data[0] if r.data else None
-    # A conta pode ter sido desativada depois do registro. Sem esta conferência,
-    # o dispositivo continuaria emitindo token para quem já perdeu o portal.
-    if not user or not conta_ativa(user):
-        raise HTTPException(status_code=403, detail="Conta sem acesso ao portal.")
-
-    token = auth.create_access_token(
-        {"sub": user["email"], "role": user["role"]},
-        expires_delta=timedelta(minutes=agent_devices.VALIDADE_TOKEN_MIN),
+    raise HTTPException(
+        status_code=410,
+        detail="O dispositivo não abre sessão no portal. A bandeja usa o X-Device-Secret nas rotas da estação.",
     )
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "role": user["role"],
-        "machine_id": disp.get("machine_id"),
-        "validade_token_min": agent_devices.VALIDADE_TOKEN_MIN,
-        # O agente compara com a própria e registra no log quando está atrás.
-        # Não atualiza sozinho: distribuir o instalador do agente pelo portal
-        # ainda é decisão em aberto — são 33 MB que teriam de entrar no
-        # repositório e no pacote da Vercel.
-        "versao_esperada": config.VERSAO_AGENTE_ESPERADA,
-    }
 
 
 @router.get("/api/agent/dispositivos")
@@ -311,10 +260,9 @@ def revogar_dispositivo(
     device_id: str, token: auth.TokenData = Depends(require_auth)
 ) -> dict:
     """
-    Revoga o segredo. O dispositivo para de trocar por token no próximo ciclo.
-
-    Tokens já emitidos continuam válidos até expirar — daí `VALIDADE_TOKEN_MIN`
-    ser uma hora, e não as 24 h do navegador: é a janela real da revogação.
+    Revoga o segredo. A bandeja recebe 401 na próxima chamada às rotas da
+    estação: desde 12/10/2026 o segredo não vira sessão, então não há token
+    emitido sobrevivendo à revogação.
     """
     admin = (token.role or "").strip().lower() == "admin"
     dono = None if admin else _user_id_da_sessao(token)

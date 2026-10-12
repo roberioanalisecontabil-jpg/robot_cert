@@ -12,6 +12,8 @@ from typing import Iterable, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 from cryptography import x509
+
+from app.nome_publico import MENSAGEM_ARQUIVO_INACESSIVEL, mensagem_sem_arquivo
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import ExtensionOID, NameOID
@@ -363,8 +365,13 @@ def scan_folder(
             msg = str(e)
             if "invalid password" in msg.lower():
                 msg = "Senha incorreta"
+            elif isinstance(e, OSError) or msg:
+                # Erro de leitura traz o caminho, e o nome do arquivo traz a
+                # senha (auditoria run-2, 12/10/2026). O detalhe fica no log.
+                logger.warning("Falha ao ler %s: %s", p, e)
+                msg = mensagem_sem_arquivo(msg) if not isinstance(e, OSError) else MENSAGEM_ARQUIVO_INACESSIVEL
             info.status = CertStatus.ERROR
-            info.error_message = msg or repr(e)
+            info.error_message = msg or type(e).__name__
 
         results.append(info)
 

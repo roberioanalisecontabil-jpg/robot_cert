@@ -868,6 +868,7 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         papeis.derrubar_sessoes(sb, user_id)
     if ativo is False:
         _revogar_tokens_de_instalacao(user_id)
+        papeis.derrubar_sessoes(sb, user_id)
     saida: Dict[str, Any] = {"ok": True}
     if role is not None and role != papel_anterior:
         saida["papel"] = papeis.apos_troca_de_papel(sb, user_id)
@@ -972,6 +973,10 @@ def deactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
         logger.exception("Falha ao desativar %s", user_id)
         raise HTTPException(status_code=400, detail="Não foi possível desativar a conta.")
     _revogar_tokens_de_instalacao(user_id)
+    # Desativar é revogar (auditoria run-2, 12/10/2026): o `ativo` é
+    # reversível, e reativar ressuscitava todo token emitido antes. A versão da
+    # sessão sobe junto, como na troca de senha, de e-mail e de papel.
+    papeis.derrubar_sessoes(sb, user_id)
 
     # Liderancas saem junto (decisao de 01/10/2026): gestor que nao entra no
     # portal nao libera nada, e um departamento com gestor inativo parece

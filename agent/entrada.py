@@ -54,7 +54,7 @@ from app.cert_scanner import (
     parse_pfx_filename,
     scan_folder,
 )
-from app.nome_publico import nome_publico_de_arquivo
+from app.nome_publico import mensagem_sem_arquivo, nome_publico_de_arquivo
 
 LOGGER = logging.getLogger("analise_certidigital_agent.entrada")
 
@@ -299,7 +299,7 @@ def processar_entrada(cfg: ConfigEntrada) -> Dict[str, List[Dict[str, Any]]]:
                     eventos.append(ev)
                     LOGGER.info("Entrada: %s → %s (%s)", ev.arquivo_original, ev.arquivo_novo or "-", ev.resultado)
         except OSError as e:
-            ev = _pendente(cert, f"Não foi possível mover o arquivo: {e}")
+            ev = _pendente(cert, f"Não foi possível mover o arquivo: {mensagem_sem_arquivo(e)}")
             pendentes.append(ev)
             LOGGER.error("Entrada: %s ficou na pasta: %s", nome_publico_de_arquivo(cert.file_name), e)
     for ev in pendentes:
@@ -331,7 +331,7 @@ def mover_vencidos_do_acervo(src: Path, exp: Path, exclude_dirs: List[Path]) -> 
             try:
                 dest = move_to_expired(c, exp)
             except OSError as ex:
-                motivos[str(c.path)] = str(ex)
+                motivos[str(c.path)] = mensagem_sem_arquivo(ex)
                 LOGGER.error("Falha ao mover %s (tentativa %d): %s", nome_publico_de_arquivo(c.file_name), tentativa, ex)
                 continue
             motivos.pop(str(c.path), None)

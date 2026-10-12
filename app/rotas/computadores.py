@@ -53,6 +53,16 @@ def _dispositivo_da_requisicao(request: Request) -> dict:
         raise _erro_sem_banco(e)
     if not disp:
         raise HTTPException(status_code=401, detail="Sessão da bandeja encerrada. Entre de novo.")
+    # A conta pode ter sido desativada sem a bandeja ser revogada (direto no
+    # banco, ou numa falha do `sair_de_tudo`). A conferência morava na rota que
+    # trocava o segredo por sessão, retirada em 12/10/2026; vem para cá, que é
+    # por onde toda rota da bandeja passa.
+    try:
+        conta = _sb_do_login().table("users").select("id, ativo").eq("id", disp["user_id"]).limit(1).execute().data or []
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail="Não foi possível conferir a conta agora.")
+    if not conta or not conta_ativa(conta[0]):
+        raise HTTPException(status_code=403, detail="Conta sem acesso ao portal.")
     return disp
 
 
@@ -124,6 +134,9 @@ def listar_computadores() -> dict:
 class DecisaoComputadorBody(BaseModel):
     tipo: str = Field(pattern=r"^(principal|emprestimo)$")
     prazo: Optional[str] = Field(default=None, pattern=r"^(fim_do_dia|3_dias|7_dias)$")
+    # O administrador confirmou trocar a chave já registrada da máquina
+    # (reinstalação). Sem isto, pedido com chave diferente leva 409.
+    trocar_chave: bool = False
 
 
 def _id_do_vinculo(vinculo_id: str) -> Any:
@@ -138,6 +151,8 @@ def _decidir(fn, *args) -> dict:
         return fn(*args)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except computadores.ChaveDiferente as e:
+        raise HTTPException(status_code=409, detail=str(e), headers={"X-Chave-Diferente": "1"})
     except computadores.VinculoInvalido as e:
         raise HTTPException(status_code=409, detail=str(e))
     except computadores.SemBanco as e:
@@ -147,7 +162,8 @@ def _decidir(fn, *args) -> dict:
 @router.post("/api/computadores/{vinculo_id}/autorizar", dependencies=[Depends(require_admin)])
 def autorizar_computador(vinculo_id: str, body: DecisaoComputadorBody,
                          token: auth.TokenData = Depends(require_auth)) -> dict:
-    return _decidir(computadores.autorizar, _id_do_vinculo(vinculo_id), body.tipo, (token.email or "").lower(), body.prazo)
+    return _decidir(computadores.autorizar, _id_do_vinculo(vinculo_id), body.tipo, (token.email or "").lower(),
+                    body.prazo, body.trocar_chave)
 
 
 @router.post("/api/computadores/{vinculo_id}/recusar", dependencies=[Depends(require_admin)])

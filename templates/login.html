@@ -285,8 +285,15 @@
             const next = new URLSearchParams(location.search).get("next") || "";
             try {
                 const u = new URL(next, location.origin);
-                if (next.startsWith("/") && u.origin === location.origin && !u.pathname.startsWith("/login")) {
-                    return u.pathname + u.search + u.hash;
+                // O que se confere tem de ser o que se navega (auditoria run-2,
+                // 12/10/2026): "/.//host" resolve na origem do portal, mas o
+                // caminho normalizado é "//host" — e "//host" no location.href
+                // vai para outro site. Uma barra só, seguida de algo que não seja
+                // barra nem barra invertida.
+                const destino = u.pathname + u.search + u.hash;
+                if (next.startsWith("/") && u.origin === location.origin && !u.pathname.startsWith("/login")
+                    && /^\/(?![\/\\])/.test(destino)) {
+                    return destino;
                 }
             } catch (_e) { /* inválido: vai para o Início */ }
             return "/";

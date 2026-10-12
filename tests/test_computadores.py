@@ -212,3 +212,47 @@ def test_bandeja_antiga_sem_chave_tem_um_reacesso_depois_de_cada_confirmacao(ban
     assert segredo is None and s["autorizacao"] == "pendente", "a janela vale uma vez só"
     cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN)
     assert entrar_com(FIS, PC_FIS, None)[0], "confirmado de novo, reconecta"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Auditoria run-2 (12/10/2026): a aprovação confere a chave já fixada, e o
+# pedido importado do Hardlyze fica com a chave da primeira bandeja.
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_aprovar_pedido_com_chave_diferente_exige_trocar_a_chave(banco: _Fake) -> None:
+    seg_fis = _autorizado(FIS, PC_FIS)
+    fixada = cp.chave_fixada(PC_FIS)
+    entrar_com(SOL, PC_FIS, CHAVE_DE_OUTRO_LUGAR)  # outra conta, de outro lugar, com o nome da máquina
+    pedido = pendente(SOL, PC_FIS)
+    with pytest.raises(cp.ChaveDiferente):
+        cp.autorizar(pedido["id"], "emprestimo", ADMIN, "fim_do_dia")
+    assert cp.chave_fixada(PC_FIS) == fixada, "a chave da máquina não pode mudar sem o admin confirmar"
+    assert agent_devices.autenticar(seg_fis) is not None, "quem está na máquina continua"
+    # Reinstalação de verdade: o admin confirma a troca.
+    cp.autorizar(pedido["id"], "emprestimo", ADMIN, "fim_do_dia", trocar_chave=True)
+    assert cp.chave_fixada(PC_FIS) == cp.hash_da_chave(CHAVE_DE_OUTRO_LUGAR)
+
+
+def test_aprovar_sem_chave_em_maquina_com_chave_nao_abre_a_janela(banco: _Fake) -> None:
+    _autorizado(FIS, PC_FIS)
+    segredo, s = entrar_com(FIS, PC_FIS, None)  # só a senha, sem a chave
+    assert segredo is None and s["confirmacao"]
+    with pytest.raises(cp.ChaveDiferente):
+        cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN)
+    assert entrar_com(FIS, PC_FIS, None)[0] is None, "sem a confirmação explícita, nenhuma janela sem chave"
+    # Trocar explicitamente: a chave antiga sai e abre a reconexão de uma hora.
+    cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN, trocar_chave=True)
+    assert cp.chave_fixada(PC_FIS) is None
+    assert entrar_com(FIS, PC_FIS, None)[0]
+
+
+def test_pedido_importado_fica_com_a_chave_da_primeira_bandeja(banco: _Fake) -> None:
+    cp.importar([{"email": "fis@x.com", "machine_id": PC_FIS, "nome": "PC FIS", "visto_em": "2026-10-01"}],
+                {"fis@x.com": FIS})
+    assert pendente(FIS, PC_FIS) and not pendente(FIS, PC_FIS).get("chave_hash")
+    entrar_com(FIS, PC_FIS, chave(PC_FIS))
+    assert pendente(FIS, PC_FIS)["chave_hash"] == cp.hash_da_chave(chave(PC_FIS))
+    with pytest.raises(cp.OutroDispositivo):
+        entrar_com(FIS, PC_FIS, CHAVE_DE_OUTRO_LUGAR)
+    cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN)
+    assert cp.chave_fixada(PC_FIS) == cp.hash_da_chave(chave(PC_FIS)), "a aprovação fixa a chave da bandeja que estava lá"

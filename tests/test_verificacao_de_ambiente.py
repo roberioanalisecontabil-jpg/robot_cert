@@ -87,6 +87,32 @@ def test_producao_sem_jwt_e_sem_api_key_e_fatal(
     assert any("API_KEY" in f for f in fatais)
 
 
+@pytest.mark.parametrize("exemplo", ["troque-por-um-segredo-longo-e-unico", "uma_string_longa_e_aleatoria"])
+def test_jwt_de_exemplo_da_documentacao_e_fatal_em_producao(
+    producao: None, monkeypatch: pytest.MonkeyPatch, exemplo: str
+) -> None:
+    """Auditoria run-2 (12/10/2026): o guia manda copiar o .env.example e o boot
+    aceitava o valor dele — com a chave publicada, qualquer um assina uma
+    sessão de administrador."""
+    monkeypatch.setenv("JWT_SECRET_KEY", exemplo)
+    fatais, _ = config.verificar_ambiente()
+    assert any("exemplo" in f and "JWT_SECRET_KEY" in f for f in fatais)
+
+
+def test_api_key_de_exemplo_e_fatal_em_producao(producao: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "API_KEY", "sua_chave_secreta_aqui", raising=False)
+    fatais, _ = config.verificar_ambiente()
+    assert any("API_KEY" in f and "exemplo" in f for f in fatais)
+
+
+def test_jwt_curto_avisa_sem_derrubar(producao: None) -> None:
+    """Curto é aviso, não fatal: virar fatal derrubaria o portal no próximo
+    deploy se a chave de produção for curta, antes de o dono poder trocar."""
+    fatais, avisos = config.verificar_ambiente()  # "segredo-de-teste" tem 16
+    assert fatais == []
+    assert any("JWT_SECRET_KEY tem 16 caracteres" in a for a in avisos)
+
+
 def test_cron_ausente_em_producao_e_aviso_nao_fatal(
     producao: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

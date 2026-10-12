@@ -187,7 +187,6 @@ def test_trocar_a_propria_senha_derruba_a_bandeja(client: TestClient, banco: _Fa
                     json={"senha_atual": SENHA, "nova_senha": "Outra-senha-123!"})
     assert r.status_code == 200, r.text
     assert client.get("/api/estacao/situacao", headers=_bandeja(seg)).status_code == 401
-    assert client.post("/api/agent/dispositivos/token", json={"segredo": seg}).status_code == 401
 
 
 def test_bandeja_sair_e_recusar(client: TestClient, banco: _Fake) -> None:

@@ -60,6 +60,32 @@ _ESTADOS_SEM_SUBJECT = frozenset({"erro", "fora_do_padrao"})
 CHAVES_SENSIVEIS = ("file_name", "path", "password", "password_from_name", "senha")
 
 
+# Texto de erro que pode carregar o nome do arquivo — e, com ele, a senha do
+# PFX: caminho (barra ou barra invertida), extensão de certificado, ou a
+# assinatura do erro de sistema operacional do Python ("[Errno 13] ...:
+# 'F:\\...\\EMPRESA senha 123456.pfx'"). Auditoria run-2 (12/10/2026): o nome
+# saía limpo nos campos de arquivo, mas a mensagem de erro levava o caminho
+# inteiro para o inventário, o banco, a tela e o e-mail do administrador.
+_TEXTO_COM_ARQUIVO = re.compile(r"[\\/]|\.(pfx|p12)\b|\[(errno|winerror)\b", re.IGNORECASE)
+
+MENSAGEM_ARQUIVO_INACESSIVEL = "Não foi possível ler ou mover o arquivo (sem permissão, em uso ou removido). Detalhe no log do agente."
+
+
+def mensagem_sem_arquivo(texto: Any, padrao: str = MENSAGEM_ARQUIVO_INACESSIVEL) -> str:
+    """A mensagem de erro, ou `padrao` se ela puder conter o nome do arquivo.
+
+    Mensagens de biblioteca sem caminho ("Senha incorreta", "Could not
+    deserialize PKCS12 data") passam como estão; qualquer coisa com cara de
+    caminho vira o texto fixo. O detalhe completo continua no log local de quem
+    viu o erro, que é onde ele pode ficar."""
+    t = str(texto or "").strip()
+    if not t:
+        return t
+    if _TEXTO_COM_ARQUIVO.search(t):
+        return padrao
+    return t[:500]
+
+
 def nome_publico_de_arquivo(file_name: Optional[str]) -> str:
     """O nome do arquivo sem a senha e sem a extensão.
 
@@ -135,6 +161,9 @@ def sanitizar_item(item: Dict[str, Any]) -> Dict[str, Any]:
 
     for chave in CHAVES_SENSIVEIS:
         it.pop(chave, None)
+    # Agente anterior à 1.7.2 manda o texto cru da exceção.
+    if it.get("error_message"):
+        it["error_message"] = mensagem_sem_arquivo(it["error_message"])
 
     it["nome_publico"] = nome_pub
     it["pasta"] = pasta

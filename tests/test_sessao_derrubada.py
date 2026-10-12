@@ -64,3 +64,15 @@ def test_troca_de_papel_queima_token_de_instalacao(banco: _Fake, monkeypatch: py
     t1, t2 = banco.tabelas["install_token"]
     assert t1["consumed_at"] and t2["consumed_at"] is None
     assert banco.tabelas["users"][0]["sessao_versao"] == 1
+
+
+def test_reativar_nao_ressuscita_o_token_de_antes_da_desativacao(client: TestClient, banco_usuarios) -> None:
+    """Auditoria run-2 (12/10/2026): desativar só mexia no `ativo`, reversível.
+    Reativar devolvia a vida a todo token ainda no prazo — inclusive o de quem
+    motivou a desativação."""
+    h_da_ana = _h("ana@x.com")
+    assert _vale(client, h_da_ana)
+    assert client.post("/api/users/u-ana/deactivate", headers=_admin()).status_code == 200
+    assert not _vale(client, h_da_ana)
+    assert client.post("/api/users/u-ana/reactivate", headers=_admin()).status_code == 200
+    assert not _vale(client, h_da_ana), "o token de antes da desativação voltou a valer"

@@ -584,6 +584,21 @@
                 const r = await fetch('/api/computadores/' + encodeURIComponent(id) + '/' + rota, {
                     method: 'POST', headers: getHeaders(true), body: corpo ? JSON.stringify(corpo) : undefined,
                 });
+                // A chave do pedido não é a já registrada para o computador
+                // (auditoria run-2, 12/10/2026): trocar é decisão explícita.
+                if (r.status === 409 && r.headers.get('X-Chave-Diferente')) {
+                    const motivo = await mensagemCorpoErro(r);
+                    _compAcao = { id: id, tipo: 'trocar_chave', corpo: Object.assign({}, corpo, { trocar_chave: true }) };
+                    document.getElementById('modal-comp-titulo').textContent = 'Chave do computador diferente';
+                    document.getElementById('modal-comp-texto').textContent = motivo
+                        + ' Autorize só se o computador foi reinstalado e a pessoa está nele agora; '
+                        + 'senão, recuse o pedido.';
+                    document.getElementById('modal-comp-ok').textContent = 'Trocar a chave e autorizar';
+                    document.getElementById('modal-comp-ok').className = 'ag-btn ag-btn--danger';
+                    document.getElementById('modal-comp-prazo-campo').hidden = true;
+                    modalComp.showModal();
+                    return;
+                }
                 if (!r.ok) throw new Error(await mensagemCorpoErro(r));
                 showToast({ autorizar: 'Computador autorizado.', recusar: 'Pedido recusado.', desvincular: 'Computador desvinculado.' }[rota], 'success');
             } catch (e) {
@@ -598,7 +613,8 @@
             const a = _compAcao;
             modalComp.close();
             if (!a) return;
-            if (a.tipo === 'emprestimo') void decidirComputador(a.id, 'autorizar', { tipo: 'emprestimo', prazo: document.getElementById('modal-comp-prazo').value });
+            if (a.tipo === 'trocar_chave') void decidirComputador(a.id, 'autorizar', a.corpo);
+            else if (a.tipo === 'emprestimo') void decidirComputador(a.id, 'autorizar', { tipo: 'emprestimo', prazo: document.getElementById('modal-comp-prazo').value });
             else if (a.tipo === 'principal') void decidirComputador(a.id, 'autorizar', { tipo: 'principal' });
             else void decidirComputador(a.id, a.tipo);
         });
