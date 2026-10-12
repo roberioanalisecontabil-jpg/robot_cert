@@ -34,6 +34,7 @@ from app.smtp_service import encrypt_password
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, FISCAL_OP, _h  # noqa: F401
 from tests.test_seguranca_lote4 import banco as banco_base  # noqa: F401
+import app.rotas.certificados as cert
 
 RAIZ = Path(__file__).resolve().parents[1]
 TENANT = "11111111-2222-3333-4444-555555555555"
@@ -358,7 +359,7 @@ def test_aviso_do_portal_entra_na_lista_do_admin_e_nao_na_do_operador(monkeypatc
     monkeypatch.setattr(ns, "load_settings", lambda: _settings_graph(graph_secret_validade=em_10))
     monkeypatch.setattr(ns, "get_latest_snapshot", lambda: {"items": []})
     monkeypatch.setattr(ns, "chaves_registradas_recentemente", lambda _d: {})
-    monkeypatch.setattr(m, "_list_certificados_payload", lambda *_a, **_k: {"itens": []})
+    monkeypatch.setattr(cert, "_list_certificados_payload", lambda *_a, **_k: {"itens": []})
     monkeypatch.setattr(ns, "load_colaborador_selecao", lambda *_a, **_k: [])
     monkeypatch.setattr(ns, "documentos_ao_alcance", lambda *_a, **_k: set())
     admin = ns.get_active_alerts("admin@x.com", "admin", "u-adm")

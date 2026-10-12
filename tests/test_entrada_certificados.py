@@ -510,7 +510,10 @@ def test_sem_banco_a_fila_vive_em_memoria(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_ingest_usa_o_agendamento_e_o_lifespan_tem_o_laco_da_hora() -> None:
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    from tests import fonte_do_portal
+
+    # Frente 3, leva 10: as rotas dos certificados saíram de main.py.
+    fonte = fonte_do_portal.texto()
     assert "background_tasks.add_task(agendar_ou_notificar, novos)" in fonte
     assert "background_tasks.add_task(notificar_novos, novos)" not in fonte
     assert "segundos_ate_a_proxima_hora_cheia()" in fonte and "enviar_novos_pendentes" in fonte

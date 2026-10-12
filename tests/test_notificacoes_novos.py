@@ -34,6 +34,7 @@ from app import config
 from app.nome_publico import chave_de_arquivo
 from tests.test_seguranca_lote1 import _Fake, _usuario
 from tests.test_seguranca_lote3 import ADMIN, _h
+import app.rotas.certificados as cert
 
 ROOT = Path(__file__).resolve().parent.parent
 UI = (ROOT / "static" / "ui-common.js").read_text(encoding="utf-8")
@@ -210,7 +211,7 @@ def sino(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ns, "documentos_ao_alcance", lambda uid, role: alcance["docs"])
 
     def _montar(itens: List[Dict[str, Any]], email="admin@x.com", papel="admin", uid="u-1"):
-        monkeypatch.setattr("app.main._list_certificados_payload", lambda *a, **k: {"itens": itens})
+        monkeypatch.setattr("app.rotas.certificados._list_certificados_payload", lambda *a, **k: {"itens": itens})
         return ns.build_notifications_payload(email, papel, uid)
 
     return _montar, recentes, lidas, alcance
@@ -506,7 +507,7 @@ def test_ingest_agenda_o_aviso_dos_novos(client: TestClient, monkeypatch: pytest
     monkeypatch.setattr(config, "ACEITAR_API_KEY_COMPARTILHADA", True, raising=False)
     recebidos: List[List[Dict[str, Any]]] = []
     # Desde 02/10/2026 o ingest chama `agendar_ou_notificar` (hora cheia ou imediato).
-    monkeypatch.setattr(m, "agendar_ou_notificar", lambda novos: recebidos.append(list(novos)))
+    monkeypatch.setattr(cert, "agendar_ou_notificar", lambda novos: recebidos.append(list(novos)))
 
     corpo = {"machine_id": "srv", "source_folder": "F:/C", "expired_folder": "F:/V",
              "items": [{"file_name": "ALFA_12345678000199.pfx", "nome": "ALFA", "fingerprint_sha256": "fp-a",

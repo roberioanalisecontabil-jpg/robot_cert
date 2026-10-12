@@ -29,6 +29,7 @@ import app.main as m
 import app.rotas.configuracao as cfg
 from app import auth, config, permissoes, taxa
 from tests.test_seguranca_lote1 import _Fake, _usuario
+import app.rotas.certificados as cert
 
 ADMIN = ("admin@x.com", "admin")
 
@@ -50,11 +51,11 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     monkeypatch.setattr(config, "ACEITAR_API_KEY_COMPARTILHADA", True, raising=False)
     # O debounce do disparo por ingest é um carimbo do processo: outro teste
     # que ingeriu há segundos deixaria este começar "já disparado".
-    monkeypatch.setattr(m, "_ultimo_disparo_por_ingest", 0.0, raising=False)
+    monkeypatch.setattr(cert, "_ultimo_disparo_por_ingest", 0.0, raising=False)
     from app import historico_agg_cache
 
     historico_agg_cache.invalidate_all()
-    m._dup_cache_limpar() if hasattr(m, "_dup_cache_limpar") else None
+    cert._dup_cache_limpar()
     yield fake
     historico_agg_cache.invalidate_all()
 
@@ -161,8 +162,8 @@ def _item(i: int, fp: str | None = None) -> dict:
 def test_duplicidades_reusa_o_resultado_da_mesma_varredura(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     _snapshot(banco, [_item(1, "a" * 64), _item(2, "a" * 64)])
     chamadas: List[int] = []
-    original = m._agrupar_duplicidades
-    monkeypatch.setattr(m, "_agrupar_duplicidades", lambda rows, incluir_pasta=False: (chamadas.append(1), original(rows, incluir_pasta))[1])
+    original = cert._agrupar_duplicidades
+    monkeypatch.setattr(cert, "_agrupar_duplicidades", lambda rows, incluir_pasta=False: (chamadas.append(1), original(rows, incluir_pasta))[1])
     for _ in range(3):
         assert client.get("/api/certificados/duplicidades", headers=_h(*ADMIN)).status_code == 200
     assert len(chamadas) == 1, "o snapshot não mudou: a análise não pode rodar de novo"
@@ -171,8 +172,8 @@ def test_duplicidades_reusa_o_resultado_da_mesma_varredura(client: TestClient, b
 def test_duplicidades_recalcula_quando_a_varredura_muda(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     _snapshot(banco, [_item(1)])
     chamadas: List[int] = []
-    original = m._agrupar_duplicidades
-    monkeypatch.setattr(m, "_agrupar_duplicidades", lambda rows, incluir_pasta=False: (chamadas.append(1), original(rows, incluir_pasta))[1])
+    original = cert._agrupar_duplicidades
+    monkeypatch.setattr(cert, "_agrupar_duplicidades", lambda rows, incluir_pasta=False: (chamadas.append(1), original(rows, incluir_pasta))[1])
     client.get("/api/certificados/duplicidades", headers=_h(*ADMIN))
     _snapshot(banco, [_item(1), _item(2)], scanned_at="2026-09-25T11:00:00+00:00")
     client.get("/api/certificados/duplicidades", headers=_h(*ADMIN))
@@ -189,7 +190,7 @@ def test_duplicidades_tem_teto_de_analises_por_identidade(client: TestClient, ba
 
 
 def test_duplicidades_recusa_inventario_grande_demais(client: TestClient, banco: _Fake) -> None:
-    _snapshot(banco, [_item(i) for i in range(m.MAX_ITENS_DUPLICIDADE + 1)])
+    _snapshot(banco, [_item(i) for i in range(cert.MAX_ITENS_DUPLICIDADE + 1)])
     r = client.get("/api/certificados/duplicidades", headers=_h(*ADMIN))
     assert r.status_code == 413, r.text
 
@@ -200,7 +201,7 @@ def test_nomes_similares_nao_e_quadratico() -> None:
     rows = [{"nome_publico": f"CLIENTE {i:05d}", "nome": f"CLIENTE {chr(65 + i % 26)}{i:05d} COMERCIO",
              "documento_numero": f"{i:014d}", "status": "ok", "fingerprint_sha256": None} for i in range(3000)]
     t0 = time.perf_counter()
-    m._agrupar_duplicidades(rows)
+    cert._agrupar_duplicidades(rows)
     # 15 s, e não 5: o que se prova é que não é n² (o laço antigo levava
     # minutos). Sozinho roda em ~3 s; na suíte inteira, com a máquina
     # carregada, chegou a passar de 5 s e barrava commits sem defeito nenhum.
@@ -210,7 +211,7 @@ def test_nomes_similares_nao_e_quadratico() -> None:
 def test_nomes_similares_continuam_sendo_achados_dentro_do_bloco() -> None:
     rows = [{"nome_publico": "A", "nome": "PADARIA CENTRAL LTDA", "documento_numero": "11111111000191", "status": "ok", "fingerprint_sha256": None},
             {"nome_publico": "B", "nome": "PADARIA CENTRAL LTDA ME", "documento_numero": "22222222000192", "status": "ok", "fingerprint_sha256": None}]
-    _gd, gn, _gci = m._agrupar_duplicidades(rows)
+    _gd, gn, _gci = cert._agrupar_duplicidades(rows)
     assert len(gn) == 1 and len(gn[0]["itens"]) == 2
 
 
@@ -289,7 +290,7 @@ def test_revalidar_cofre_tem_teto(client: TestClient, banco: _Fake, monkeypatch:
 
 def test_ingest_com_itens_demais_e_422(client: TestClient, banco: _Fake) -> None:
     corpo = {"machine_id": "srv", "source_folder": "F:/C", "expired_folder": "F:/V",
-             "items": [{"nome_publico": "x", "status": "ok"}] * (m.MAX_ITENS_INGEST + 1)}
+             "items": [{"nome_publico": "x", "status": "ok"}] * (cert.MAX_ITENS_INGEST + 1)}
     assert client.post("/api/ingest", headers=_h(*ADMIN), json=corpo).status_code == 422
 
 

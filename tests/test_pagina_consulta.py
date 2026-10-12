@@ -27,6 +27,7 @@ from app import permissoes
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, DOC_A, DOC_B, DOC_C, DOC_L, FISCAL_OP, GESTOR, _docs, _h, _item  # noqa: F401
 from tests.test_seguranca_lote4 import banco as banco_base  # noqa: F401
+import app.rotas.certificados as cert
 
 RAIZ = Path(__file__).resolve().parents[1]
 AGORA = datetime.now(timezone.utc)
@@ -123,7 +124,7 @@ def test_historico_devolve_atualizado_em_e_alcance_vazio(client: TestClient, ban
 
 def test_historico_busca_por_digitos_do_documento() -> None:
     itens = [{"nome": "ALFA", "documento": "11.111.111/0001-91", "nome_publico": "ALFA.pfx"}]
-    assert m._historico_filtrar_busca(itens, "11111111000191") == itens
+    assert cert._historico_filtrar_busca(itens, "11111111000191") == itens
     assert "documento_numero.ilike" in m._historico_busca_or_filter("1111") if hasattr(m, "_historico_busca_or_filter") else True
 
 

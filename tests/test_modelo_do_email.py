@@ -18,6 +18,7 @@ import pytest
 
 from app import alert_state
 from app import email_modelo as em
+import app.rotas.certificados as cert
 
 
 AGORA = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
@@ -209,7 +210,7 @@ def _sem_inventario(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.main as m
     from app import settings_state
     monkeypatch.setattr(settings_state, "get_latest_snapshot", lambda *a, **k: None)
-    monkeypatch.setattr(m, "_list_certificados_payload", lambda *a, **k: {"itens": []})
+    monkeypatch.setattr(cert, "_list_certificados_payload", lambda *a, **k: {"itens": []})
 
 
 def test_previa_usa_exemplo_quando_a_janela_esta_vazia(monkeypatch) -> None:
@@ -248,7 +249,7 @@ def test_previa_sobrevive_a_inventario_indisponivel(monkeypatch) -> None:
     import app.main as m
     def _explode(*a, **k):
         raise RuntimeError("banco fora")
-    monkeypatch.setattr(m, "_list_certificados_payload", _explode)
+    monkeypatch.setattr(cert, "_list_certificados_payload", _explode)
     p = alert_state.previa_do_resumo(_Settings(), None, AGORA)
     assert p["exemplo"] is True
     assert "Resumo de certificados" in p["html"]

@@ -70,7 +70,7 @@ def disparar(tmp_path, monkeypatch: pytest.MonkeyPatch):
             "app.settings_state.get_latest_snapshot", lambda *a, **k: None
         )
         monkeypatch.setattr(
-            "app.main._list_certificados_payload", lambda *a, **k: {"itens": itens}
+            "app.rotas.certificados._list_certificados_payload", lambda *a, **k: {"itens": itens}
         )
         enviados: list[dict] = []
 

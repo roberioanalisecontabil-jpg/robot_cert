@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from app.main import _normalize_ingest_items_status
+from app.rotas.certificados import _normalize_ingest_items_status
 
 
 def test_ingest_normaliza_ok_para_expirado_quando_not_after_passou() -> None:

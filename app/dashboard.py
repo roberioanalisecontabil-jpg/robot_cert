@@ -345,7 +345,7 @@ def painel_acervo() -> Dict[str, Any]:
                 .select("vencimento_certificado, status_ultimo, ultima_data_registrada")
                 .range(i, f)
             )
-        from app.main import _lista_base_docs_historico
+        from app.rotas.certificados import _lista_base_docs_historico
         clientes = _lista_base_docs_historico()
     except Exception as e:  # noqa: BLE001
         logger.exception("Falha no painel do acervo")

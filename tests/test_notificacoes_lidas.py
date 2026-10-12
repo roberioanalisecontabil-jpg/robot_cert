@@ -50,7 +50,7 @@ def sino(monkeypatch: pytest.MonkeyPatch):
 
     def _montar(itens: List[Dict[str, Any]]) -> Dict[str, Any]:
         monkeypatch.setattr(
-            "app.main._list_certificados_payload", lambda *a, **k: {"itens": itens}
+            "app.rotas.certificados._list_certificados_payload", lambda *a, **k: {"itens": itens}
         )
         return ns.build_notifications_payload("admin@x.com", "admin", "uid-1")
 

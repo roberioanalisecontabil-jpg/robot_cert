@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 
 from app import auth
 import app.main as m
+import app.rotas.certificados as cert
 
 
 def _admin() -> dict:
@@ -52,7 +53,7 @@ def acervo(monkeypatch: pytest.MonkeyPatch) -> List[Dict[str, Any]]:
         + [_cert(f"FALHA {i}", "fora_do_padrao") for i in range(2)]
     )
     monkeypatch.setattr(
-        m, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)}
+        cert, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)}
     )
     return itens
 
@@ -143,8 +144,8 @@ def test_pedir_erro_com_a_exclusao_ligada_devolve_vazio(client: TestClient, acer
 
 def test_a_funcao_que_decide_e_a_mesma_para_os_dois_status() -> None:
     """`erro` e `fora_do_padrao` são o mesmo caso: o robô não conseguiu ler."""
-    assert m._e_ilegivel({"status": "erro"})
-    assert m._e_ilegivel({"status": "fora_do_padrao"})
-    assert not m._e_ilegivel({"status": "ok"})
-    assert not m._e_ilegivel({"status": "expirado"})
-    assert not m._e_ilegivel({})
+    assert cert._e_ilegivel({"status": "erro"})
+    assert cert._e_ilegivel({"status": "fora_do_padrao"})
+    assert not cert._e_ilegivel({"status": "ok"})
+    assert not cert._e_ilegivel({"status": "expirado"})
+    assert not cert._e_ilegivel({})

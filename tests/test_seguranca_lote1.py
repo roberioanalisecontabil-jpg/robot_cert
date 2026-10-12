@@ -43,6 +43,7 @@ import app.main as m
 import app.rotas.configuracao as cfg
 from app.rotas import usuarios
 from app import auth, config, permissoes, smtp_service, taxa
+import app.rotas.certificados as cert
 
 RAIZ = Path(__file__).resolve().parent.parent
 UI_COMMON = RAIZ / "static" / "ui-common.js"
@@ -834,7 +835,7 @@ def test_listagem_de_certificados_nao_vaza_a_excecao(client: TestClient, monkeyp
     def _explode(*_a: Any, **_k: Any) -> dict:
         raise RuntimeError(SEGREDO_NO_ERRO)
 
-    monkeypatch.setattr(m, "_list_certificados_payload", _explode)
+    monkeypatch.setattr(cert, "_list_certificados_payload", _explode)
     r = client.get("/api/certificados", headers=_h(*ADMIN))
     assert r.status_code == 500
     assert SEGREDO_NO_ERRO not in r.text

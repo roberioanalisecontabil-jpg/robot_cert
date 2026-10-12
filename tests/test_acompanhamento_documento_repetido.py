@@ -21,6 +21,7 @@ from typing import Any, Dict, List
 import pytest
 
 import app.main as m
+import app.rotas.certificados as cert
 
 
 def _arquivo(nome: str, doc: str, status: str, dias: int, pasta: str) -> dict:
@@ -44,9 +45,9 @@ def _arquivo(nome: str, doc: str, status: str, dias: int, pasta: str) -> dict:
 def inventario(monkeypatch: pytest.MonkeyPatch):
     def _usar(itens: List[Dict[str, Any]]):
         monkeypatch.setattr(m, "load_settings", lambda: object())
-        monkeypatch.setattr(m, "get_latest_snapshot", lambda *a, **k: None)
+        monkeypatch.setattr(cert, "get_latest_snapshot", lambda *a, **k: None)
         monkeypatch.setattr(
-            m, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)}
+            cert, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)}
         )
     return _usar
 

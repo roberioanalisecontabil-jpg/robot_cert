@@ -19,6 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.certificados as cert
 
 
 def _item(nome: str, **extra: Any) -> Dict[str, Any]:
@@ -50,7 +51,7 @@ def inventario(monkeypatch: pytest.MonkeyPatch) -> List[Dict[str, Any]]:
         _item("Ágata Comercio"),      # acento e caixa mista
         _item("BOI PRIME"),
     ]
-    monkeypatch.setattr(m, "get_latest_snapshot", lambda: {
+    monkeypatch.setattr(cert, "get_latest_snapshot", lambda: {
         "machine_id": "SRV", "scanned_at": "2026-08-16T10:00:00Z",
         "source_folder": "F:/x", "expired_folder": "F:/y", "items": itens,
     })
@@ -105,7 +106,7 @@ def test_sem_nome_vai_para_o_fim(client: TestClient, monkeypatch) -> None:
         _item("ZELIA MARIA"),
         _item("ANALISE ASSESSORIA"),
     ]
-    monkeypatch.setattr(m, "get_latest_snapshot", lambda: {
+    monkeypatch.setattr(cert, "get_latest_snapshot", lambda: {
         "machine_id": "SRV", "scanned_at": "2026-08-16T10:00:00Z",
         "source_folder": "", "expired_folder": "", "items": itens,
     })
@@ -130,13 +131,13 @@ def test_ordena_antes_de_paginar(client: TestClient, inventario) -> None:
 
     assert p1 == ["ACLECIO EVANGELISTA", "Ágata Comercio", "ANALISE ASSESSORIA"]
     assert p2 == ["BOI PRIME", "MERCADO CENTRAL", "ZELIA MARIA"]
-    assert p1 + p2 == sorted(p1 + p2, key=lambda n: m.chave_alfabetica({"nome": n}))
+    assert p1 + p2 == sorted(p1 + p2, key=lambda n: cert.chave_alfabetica({"nome": n}))
 
 
 def test_ordem_sobrevive_ao_filtro(client: TestClient, inventario) -> None:
     """Filtrar não pode reembaralhar o que sobrou."""
     nomes = _nomes(client, pagina=1, por_pagina=50, busca="a")
-    assert nomes == sorted(nomes, key=lambda n: m.chave_alfabetica({"nome": n}))
+    assert nomes == sorted(nomes, key=lambda n: cert.chave_alfabetica({"nome": n}))
 
 
 def test_exportacao_tambem_sai_ordenada(client: TestClient, inventario) -> None:
@@ -145,7 +146,7 @@ def test_exportacao_tambem_sai_ordenada(client: TestClient, inventario) -> None:
     a tela: some com o contexto e ninguém tem como conferir.
     """
     nomes = _nomes(client, todas_filtradas="true")
-    assert nomes == sorted(nomes, key=lambda n: m.chave_alfabetica({"nome": n}))
+    assert nomes == sorted(nomes, key=lambda n: cert.chave_alfabetica({"nome": n}))
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -163,7 +164,7 @@ def test_exportacao_tambem_sai_ordenada(client: TestClient, inventario) -> None:
     ({}, (1, "")),
 ])
 def test_chave_alfabetica(item: dict, esperado: tuple) -> None:
-    assert m.chave_alfabetica(item) == esperado
+    assert cert.chave_alfabetica(item) == esperado
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -194,7 +195,7 @@ def acervo_para_ordenar(monkeypatch: pytest.MonkeyPatch):
         _com_data("Bruno", "2026-02-01T00:00:00Z", "2027-01-01T00:00:00Z", "200"),
         _com_data("SEM DATA", "", "", "400"),
     ]
-    monkeypatch.setattr(m, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)})
+    monkeypatch.setattr(cert, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)})
     return itens
 
 
@@ -259,7 +260,7 @@ def test_ordenar_compoe_com_filtro_e_exclusao(client, monkeypatch) -> None:
         _com_data("ALFA", "2026-01-01T00:00:00Z", "2027-02-01T00:00:00Z", "2"),
         _com_data("ILEGIVEL", "", "", "3", status="fora_do_padrao"),
     ]
-    monkeypatch.setattr(m, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)})
+    monkeypatch.setattr(cert, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)})
     nomes = _nomes_da_url(
         client,
         "/api/certificados?pagina=1&por_pagina=50&ordenar=nome&direcao=desc&ocultar_ilegiveis=true",

@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
+import app.rotas.certificados as cert
 
 
 
@@ -279,7 +280,7 @@ def test_duplicidades_detecta_mesmo_documento(
             ],
         }
 
-    monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
+    monkeypatch.setattr(cert, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
         "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
@@ -315,7 +316,7 @@ def test_duplicidades_nome_sem_documento_distinto(
             ],
         }
 
-    monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
+    monkeypatch.setattr(cert, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
         "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
@@ -357,7 +358,7 @@ def test_duplicidades_mesmo_documento_nao_duplica_quando_so_fingerprint_igual(
             ],
         }
 
-    monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
+    monkeypatch.setattr(cert, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
         "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )
@@ -418,7 +419,7 @@ def test_duplicidades_certificado_igual_por_fingerprint(
             ],
         }
 
-    monkeypatch.setattr(main_mod, "get_latest_snapshot", fake_snapshot)
+    monkeypatch.setattr(cert, "get_latest_snapshot", fake_snapshot)
     r = client_com_chave.get(
         "/api/certificados/duplicidades", headers=_headers_portal(api_key)
     )

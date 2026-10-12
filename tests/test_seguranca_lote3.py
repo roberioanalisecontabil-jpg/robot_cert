@@ -32,6 +32,7 @@ import app.main as m
 from app import auth, config, nome_publico as np_
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict
 from tests.test_seguranca_lote1 import _Fake, _usuario
+import app.rotas.certificados as cert
 
 RAIZ = Path(__file__).resolve().parent.parent
 ADMIN = ("admin@x.com", "admin")
@@ -297,7 +298,10 @@ def test_snapshot_antigo_ainda_no_banco_sai_sanitizado(client: TestClient, banco
 
 
 def test_busca_do_historico_procura_no_nome_publico() -> None:
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    from tests import fonte_do_portal
+
+    # Frente 3, leva 10: as rotas dos certificados saíram de main.py.
+    fonte = fonte_do_portal.texto()
     assert "file_name.ilike" not in fonte
     assert "nome_publico.ilike" in fonte
 
@@ -328,7 +332,7 @@ def test_mover_vencidos_nao_devolve_o_nome_bruto(client: TestClient, monkeypatch
                     display_name=f"VELHA SA_{DOC}", status=CertStatus.EXPIRED,
                     not_after=datetime(2020, 1, 1, tzinfo=timezone.utc))
     venc.path.write_bytes(b"x")
-    monkeypatch.setattr(m, "scan_folder", lambda *a, **k: [venc])
+    monkeypatch.setattr(cert, "scan_folder", lambda *a, **k: [venc])
     monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
         "effective_source": lambda self: tmp_path, "effective_expired": lambda self: tmp_path / "venc"})())
     r = client.post("/api/mover-vencidos", headers=_h(*ADMIN))

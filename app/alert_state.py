@@ -694,7 +694,7 @@ def trigger_all_alerts() -> Dict[str, Any]:
     # 2. Carrega todos os certificados do sistema
     # Tenta usar o último snapshot ou faz scan local
     from app.settings_state import get_latest_snapshot
-    from app.main import _list_certificados_payload
+    from app.rotas.certificados import _list_certificados_payload
     snap = get_latest_snapshot()
     payload = _list_certificados_payload(settings, snap, "auto")
     # Um aviso por Cliente, pelo certificado vigente (A1, 01/10/2026): o
@@ -877,7 +877,7 @@ def previa_do_resumo(settings, modelo: Optional[Dict[str, str]] = None,
     itens: List[Dict[str, Any]] = []
     try:
         from app.settings_state import get_latest_snapshot
-        from app.main import _list_certificados_payload
+        from app.rotas.certificados import _list_certificados_payload
         payload = _list_certificados_payload(settings, get_latest_snapshot(), "auto")
         # Mesma base do envio (A1): um certificado por Cliente, o vigente.
         from app import vigencia

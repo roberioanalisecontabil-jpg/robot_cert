@@ -28,6 +28,7 @@ from app import settings_state as ss
 from app.cert_scanner import scan_folder
 from app.db_pg import Query, _dividir_or
 from tests.test_db_pg import _q, _sql
+import app.rotas.certificados as cert
 
 ADMIN = ("admin@x.com", "admin")
 
@@ -240,7 +241,7 @@ def test_or_com_valor_entre_aspas_vira_um_parametro_so() -> None:
 
 
 def test_busca_com_virgula_nao_injeta_clausula() -> None:
-    filtro = m._filtro_or_da_busca("x,machine_id.eq.outra")
+    filtro = cert._filtro_or_da_busca("x,machine_id.eq.outra")
     partes = _dividir_or(filtro)
     # Quatro cláusulas desde 01/10/2026: `documento_numero` entrou para a
     # busca só com dígitos casar. O que o teste prova é que a vírgula não
@@ -252,7 +253,7 @@ def test_busca_com_virgula_nao_injeta_clausula() -> None:
 
 
 def test_busca_com_aspas_e_barra_sobrevive() -> None:
-    filtro = m._filtro_or_da_busca('a"b\\c')
+    filtro = cert._filtro_or_da_busca('a"b\\c')
     (texto, params), = _sql(_q().select("*").or_(filtro))
     assert params[0] == '%a"b\\\\c%'
 
@@ -272,7 +273,7 @@ def test_mover_vencidos_devolve_caminhos_relativos_as_raizes(client: TestClient,
     arq.write_bytes(b"x")
     venc = CertInfo(path=arq, file_name=arq.name, display_name="VELHA SA_11111111000191", status=CertStatus.EXPIRED,
                     not_after=datetime(2020, 1, 1, tzinfo=timezone.utc))
-    monkeypatch.setattr(m, "scan_folder", lambda *a, **k: [venc])
+    monkeypatch.setattr(cert, "scan_folder", lambda *a, **k: [venc])
     monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
         "effective_source": lambda self: tmp_path / "origem",
         "effective_expired": lambda self: tmp_path / "vencidos"})())

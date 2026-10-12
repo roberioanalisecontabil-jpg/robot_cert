@@ -274,7 +274,7 @@ def _clientes_do_historico(banco: _Fake):
 
 
 def test_curva_de_vencimento_separa_as_faixas(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
-    import app.main as _m
+    import app.rotas.certificados as _m
     monkeypatch.setattr(_m, "_lista_base_docs_historico", lambda: _clientes_do_historico(banco))
     v = dash.painel_acervo()["vencimento"]
     assert v["vencido"] == 1
@@ -290,7 +290,7 @@ def test_ilegiveis_sao_somados(banco: _Fake, monkeypatch: pytest.MonkeyPatch) ->
     Separados, "erro" e "fora do padrão" parecem ruído; juntos, são arquivos
     que ninguém consegue instalar pelo portal.
     """
-    import app.main as _m
+    import app.rotas.certificados as _m
     monkeypatch.setattr(_m, "_lista_base_docs_historico", lambda: _clientes_do_historico(banco))
     a = dash.painel_acervo()
     assert a["ilegiveis"] == 2
@@ -392,7 +392,7 @@ def test_pagina_do_dashboard_responde(client: TestClient) -> None:
 def _fake_acervo(monkeypatch: pytest.MonkeyPatch, hist: List[dict]) -> _Fake:
     fake = _Fake({"cert_history": hist})
     monkeypatch.setattr(dash, "_banco", lambda: fake)
-    import app.main as _m
+    import app.rotas.certificados as _m
     monkeypatch.setattr(_m, "_lista_base_docs_historico", lambda: _clientes_do_historico(fake))
     return fake
 

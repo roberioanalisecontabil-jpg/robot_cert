@@ -91,7 +91,8 @@ def get_active_alerts(
     O acúmulo que motivou a dúvida (58 itens) é problema de leitura, e quem
     resolve isso é o "Li todos" — não estreitar o escopo.
     """
-    from app.main import _list_certificados_payload, _parse_iso_utc
+    from app.rotas.certificados import _list_certificados_payload
+    from app.sessao import _parse_iso_utc
 
     settings = load_settings()
     now = datetime.now(timezone.utc)

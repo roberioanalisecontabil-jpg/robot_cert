@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, DOC_A, DOC_B, FISCAL_OP, GESTOR, _h  # noqa: F401
 from tests.test_seguranca_lote4 import banco as banco_base  # noqa: F401
+import app.rotas.certificados as cert
 
 CPF_SECRETO = "05375987406"
 EMAIL_SECRETO = "responsavel.secreto@exemplo.com.br"
@@ -45,9 +46,9 @@ def banco(banco_base: _Fake):
             it.update(PESSOAIS)
     # O teste de vazamento passa por /duplicidades, que memoiza por data da
     # varredura: sem limpar, o resultado daqui responde pelo próximo teste.
-    m._dup_cache.clear()
+    cert._dup_cache.clear()
     yield banco_base
-    m._dup_cache.clear()
+    cert._dup_cache.clear()
 
 
 def _det(client: TestClient, fp: str, quem) -> "object":
@@ -110,8 +111,8 @@ def _varredura_com_dado_pessoal(monkeypatch: pytest.MonkeyPatch) -> list:
     import app.main as m
 
     chamadas = []
-    monkeypatch.setattr(m, "scan_folder", lambda *a, **k: chamadas.append(1) or ["pfx"])
-    monkeypatch.setattr(m, "cert_to_public_dict", lambda c: {
+    monkeypatch.setattr(cert, "scan_folder", lambda *a, **k: chamadas.append(1) or ["pfx"])
+    monkeypatch.setattr(cert, "cert_to_public_dict", lambda c: {
         "fingerprint_sha256": "f" * 64, "nome": "CLIENTE X", "status": "ok", "documento_numero": DOC_A, **PESSOAIS})
     return chamadas
 
@@ -135,7 +136,7 @@ def test_sem_snapshot_o_operador_nao_dispara_a_varredura(
     client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     chamadas = _varredura_com_dado_pessoal(monkeypatch)
-    monkeypatch.setattr("app.main.get_latest_snapshot", lambda *a, **k: None)
+    monkeypatch.setattr("app.rotas.certificados.get_latest_snapshot", lambda *a, **k: None)
     r = client.get("/api/certificados?pagina=1&por_pagina=5", headers=_h(*FISCAL_OP))
     assert r.status_code == 200, r.text
     assert not chamadas and r.json()["itens"] == []
@@ -165,7 +166,7 @@ def test_inventario_de_agente_antigo_tira_emissor_e_cadeia_do_texto(client: Test
 
 
 def test_atributo_de_dn_com_escape() -> None:
-    from app.main import _atributo_rfc4514 as f
+    from app.rotas.certificados import _atributo_rfc4514 as f
     assert f(r"CN=EMPRESA\, LTDA:1,O=ICP-Brasil", "CN") == "EMPRESA, LTDA:1"
     assert f("OU=CN teste,CN=X", "CN") == "X"
     assert f(None, "CN") is None and f("C=BR", "O") is None
