@@ -35,6 +35,7 @@ from app.nome_publico import chave_de_arquivo
 from tests.test_seguranca_lote1 import _Fake, _usuario
 from tests.test_seguranca_lote3 import ADMIN, _h
 import app.rotas.certificados as cert
+import app.rotas.acompanhamento as acomp
 
 ROOT = Path(__file__).resolve().parent.parent
 UI = (ROOT / "static" / "ui-common.js").read_text(encoding="utf-8")
@@ -353,11 +354,11 @@ def test_rota_aceita_tipo_e_recusa_valor_estranho(client: TestClient, monkeypatc
 
 def test_li_todos_marca_o_novo_tambem(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     gravado: List[str] = []
-    monkeypatch.setattr(m, "get_active_alerts", lambda *a, **k: [
+    monkeypatch.setattr(acomp, "get_active_alerts", lambda *a, **k: [
         {"chave": "fp-b|novo", "tipo": "novo", "acionavel": True},
         {"chave": "fp-a|expired", "tipo": "expired", "acionavel": True},
     ])
-    monkeypatch.setattr(m, "marcar_notificacoes_lidas", lambda uid, chaves: gravado.extend(chaves) or len(chaves))
+    monkeypatch.setattr(acomp, "marcar_notificacoes_lidas", lambda uid, chaves: gravado.extend(chaves) or len(chaves))
     r = client.post("/api/colaborador/notificacoes/lidas", headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert "fp-b|novo" in gravado

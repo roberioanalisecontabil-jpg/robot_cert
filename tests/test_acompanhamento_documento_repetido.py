@@ -22,6 +22,7 @@ import pytest
 
 import app.main as m
 import app.rotas.certificados as cert
+import app.rotas.acompanhamento as acomp
 
 
 def _arquivo(nome: str, doc: str, status: str, dias: int, pasta: str) -> dict:
@@ -44,7 +45,7 @@ def _arquivo(nome: str, doc: str, status: str, dias: int, pasta: str) -> dict:
 @pytest.fixture
 def inventario(monkeypatch: pytest.MonkeyPatch):
     def _usar(itens: List[Dict[str, Any]]):
-        monkeypatch.setattr(m, "load_settings", lambda: object())
+        monkeypatch.setattr(acomp, "load_settings", lambda: object())
         monkeypatch.setattr(cert, "get_latest_snapshot", lambda *a, **k: None)
         monkeypatch.setattr(
             cert, "_list_certificados_payload", lambda *a, **k: {"itens": list(itens)}
@@ -61,7 +62,7 @@ def test_renovado_mostra_o_valido_e_nao_o_vencido(inventario) -> None:
         _arquivo("ANALISE", DOC, "ok", 349, "00.REVISAR"),
         _arquivo("ANALISE", DOC, "expirado", -3, "99.CERTIFICADOS VENCIDOS"),
     ])
-    [r] = m._painel_docs_selecionados([DOC])
+    [r] = acomp._painel_docs_selecionados([DOC])
     assert r["status"] == "ativo", r
     assert r["dias_restantes"] > 0
 
@@ -80,7 +81,7 @@ def test_a_ordem_dos_arquivos_nao_muda_o_resultado(inventario) -> None:
         if ordem == "vencido_primeiro":
             itens.reverse()
         inventario(itens)
-        [r] = m._painel_docs_selecionados([DOC])
+        [r] = acomp._painel_docs_selecionados([DOC])
         assert r["status"] == "ativo", (ordem, r)
 
 
@@ -90,7 +91,7 @@ def test_entre_dois_validos_vence_a_validade_mais_distante(inventario) -> None:
         _arquivo("ACME", DOC, "ok", 100, "PASTA_A"),
         _arquivo("ACME", DOC, "ok", 400, "PASTA_B"),
     ])
-    [r] = m._painel_docs_selecionados([DOC])
+    [r] = acomp._painel_docs_selecionados([DOC])
     assert 395 <= r["dias_restantes"] <= 401, r
 
 
@@ -100,7 +101,7 @@ def test_entre_dois_vencidos_vence_o_que_venceu_por_ultimo(inventario) -> None:
         _arquivo("ACME", DOC, "expirado", -400, "ANTIGO"),
         _arquivo("ACME", DOC, "expirado", -5, "RECENTE"),
     ])
-    [r] = m._painel_docs_selecionados([DOC])
+    [r] = acomp._painel_docs_selecionados([DOC])
     assert r["status"] == "vencido"
     assert -8 <= r["dias_restantes"] <= -3, r
 
@@ -112,7 +113,7 @@ def test_ilegivel_perde_para_qualquer_certificado_que_se_leia(inventario) -> Non
         _arquivo("ACME", DOC, "fora_do_padrao", 0, "REVISAR"),
         _arquivo("ACME", DOC, "expirado", -10, "VENCIDOS"),
     ])
-    [r] = m._painel_docs_selecionados([DOC])
+    [r] = acomp._painel_docs_selecionados([DOC])
     assert r["status"] == "vencido", r
 
 
@@ -120,6 +121,6 @@ def test_documento_ausente_do_inventario_continua_dizendo_isso(inventario) -> No
     """"Não encontrado" é diferente de "vencido", e a distinção precisa
     sobreviver à troca de fonte."""
     inventario([])
-    [r] = m._painel_docs_selecionados([DOC])
+    [r] = acomp._painel_docs_selecionados([DOC])
     assert r["status"] == "nao_encontrado"
     assert r["vencimento_certificado"] is None

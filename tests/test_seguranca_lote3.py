@@ -33,6 +33,7 @@ from app import auth, config, nome_publico as np_
 from app.cert_scanner import CertInfo, CertStatus, cert_to_public_dict
 from tests.test_seguranca_lote1 import _Fake, _usuario
 import app.rotas.certificados as cert
+import app.rotas.acompanhamento as acomp
 
 RAIZ = Path(__file__).resolve().parent.parent
 ADMIN = ("admin@x.com", "admin")
@@ -333,7 +334,7 @@ def test_mover_vencidos_nao_devolve_o_nome_bruto(client: TestClient, monkeypatch
                     not_after=datetime(2020, 1, 1, tzinfo=timezone.utc))
     venc.path.write_bytes(b"x")
     monkeypatch.setattr(cert, "scan_folder", lambda *a, **k: [venc])
-    monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
+    monkeypatch.setattr(acomp, "load_settings", lambda: type("S", (), {
         "effective_source": lambda self: tmp_path, "effective_expired": lambda self: tmp_path / "venc"})())
     r = client.post("/api/mover-vencidos", headers=_h(*ADMIN))
     assert r.status_code == 200, r.text

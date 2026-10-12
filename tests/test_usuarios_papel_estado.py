@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from app import auth
 import app.main as m
+import app.rotas.acompanhamento as acomp
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ def _users() -> List[Dict[str, Any]]:
 def banco(monkeypatch: pytest.MonkeyPatch) -> _FakeBanco:
     fake = _FakeBanco(_users())
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
-    monkeypatch.setattr(m, "load_settings", lambda *a, **k: None)
+    monkeypatch.setattr(acomp, "load_settings", lambda *a, **k: None)
     return fake
 
 

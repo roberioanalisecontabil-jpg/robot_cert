@@ -27,6 +27,7 @@ from app import atividade, auth
 import app.dashboard as dash
 import app.main as m
 from app.settings_state import PortalSettings
+import app.rotas.acompanhamento as acomp
 
 
 AGORA = datetime.now(timezone.utc)
@@ -129,7 +130,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     cfg = PortalSettings(source_folder="", expired_folder="")
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
     monkeypatch.setattr("app.settings_state.load_settings", lambda: cfg)
-    monkeypatch.setattr(m, "load_settings", lambda: cfg)
+    monkeypatch.setattr(acomp, "load_settings", lambda: cfg)
     monkeypatch.setattr(dash, "_banco", lambda: fake)
     fake.cfg = cfg
     return fake

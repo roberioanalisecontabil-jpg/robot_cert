@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 import app.main as m
 from app import auth
+import app.rotas.acompanhamento as acomp
 
 RAIZ = Path(__file__).resolve().parents[1]
 
@@ -34,12 +35,12 @@ def _admin() -> dict:
 def avisos(monkeypatch: pytest.MonkeyPatch) -> dict:
     """Dois avisos acionáveis desta pessoa e um que não é; a gravação é capturada."""
     gravado: dict = {"chaves": []}
-    monkeypatch.setattr(m, "get_active_alerts", lambda email, role, uid: [
+    monkeypatch.setattr(acomp, "get_active_alerts", lambda email, role, uid: [
         {"chave": "fp-a|30", "acionavel": True, "nome": "ALFA"},
         {"chave": "fp-b|7", "acionavel": True, "nome": "BETA"},
         {"chave": "fp-c|0", "acionavel": False, "nome": "GAMA"},
     ])
-    monkeypatch.setattr(m, "marcar_notificacoes_lidas", lambda uid, chaves: gravado["chaves"].extend(chaves) or len(chaves))
+    monkeypatch.setattr(acomp, "marcar_notificacoes_lidas", lambda uid, chaves: gravado["chaves"].extend(chaves) or len(chaves))
     return gravado
 
 

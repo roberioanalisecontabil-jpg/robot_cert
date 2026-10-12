@@ -43,6 +43,7 @@ import app.main as m
 import app.rotas.configuracao as cfg
 from app.rotas import instalador
 from app.settings_state import PortalSettings
+import app.rotas.acompanhamento as acomp
 
 
 def _admin() -> dict:
@@ -73,7 +74,7 @@ def settings_em_memoria(monkeypatch: pytest.MonkeyPatch) -> PortalSettings:
             setattr(estado, campo, getattr(s, campo))
         return True
 
-    monkeypatch.setattr(m, "load_settings", _load)
+    monkeypatch.setattr(acomp, "load_settings", _load)
     monkeypatch.setattr(m, "save_settings", _save, raising=False)
     monkeypatch.setattr(cfg, "load_settings", _load)
     monkeypatch.setattr(cfg, "save_settings", _save)

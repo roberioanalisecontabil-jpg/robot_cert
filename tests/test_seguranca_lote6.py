@@ -29,6 +29,7 @@ from app.cert_scanner import scan_folder
 from app.db_pg import Query, _dividir_or
 from tests.test_db_pg import _q, _sql
 import app.rotas.certificados as cert
+import app.rotas.acompanhamento as acomp
 
 ADMIN = ("admin@x.com", "admin")
 
@@ -274,7 +275,7 @@ def test_mover_vencidos_devolve_caminhos_relativos_as_raizes(client: TestClient,
     venc = CertInfo(path=arq, file_name=arq.name, display_name="VELHA SA_11111111000191", status=CertStatus.EXPIRED,
                     not_after=datetime(2020, 1, 1, tzinfo=timezone.utc))
     monkeypatch.setattr(cert, "scan_folder", lambda *a, **k: [venc])
-    monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
+    monkeypatch.setattr(acomp, "load_settings", lambda: type("S", (), {
         "effective_source": lambda self: tmp_path / "origem",
         "effective_expired": lambda self: tmp_path / "vencidos"})())
     r = client.post("/api/mover-vencidos", headers=_h(*ADMIN))
