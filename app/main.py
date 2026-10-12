@@ -1,26 +1,18 @@
 from __future__ import annotations
 
 import logging
-import hmac
 import json
 import os
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Set
-from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
 from app import auth, config, nomes, sessao_cookie, taxa
-from app.cert_scanner import formatar_cnpj_cpf
 from app.config import ROOT
-from app import texto
-from app.sieg_api import SiegErro, so_digitos
 from app import smtp_service
 from app.alert_state import trigger_all_alerts, job_ja_executado_recentemente
 from app.novos_certificados import (
@@ -29,7 +21,6 @@ from app.novos_certificados import (
     segundos_ate_a_proxima_hora_cheia,
 )
 from app.settings_state import (
-    carregar_notificacoes_lidas,
     banco_configurado,
 )
 
@@ -654,39 +645,10 @@ app.include_router(_rotas_carteiras)
 
 
 
-@app.get("/api/dashboard", dependencies=[Depends(require_admin)])
-def dashboard_visao_geral(dias: int = Query(30, ge=1, le=365)) -> dict:
-    """
-    Os painéis baratos do dashboard, numa chamada (~1s).
+# Dashboard (visão geral e renovações): app/rotas/dashboard.py (Frente 3, leva 12).
+from app.rotas.dashboard import router as _rotas_dashboard  # noqa: E402
 
-    Separado das renovações de propósito: aquele precisa de dois snapshots
-    completos (~1 MB) e os outros sete somam poucas dezenas de KB. Fazer o
-    barato esperar o caro atrasaria toda a tela pelo painel menos urgente.
-    """
-    from app import dashboard
-
-    return dashboard.visao_geral(dias)
-
-
-@app.get("/api/dashboard/renovacoes", dependencies=[Depends(require_admin)])
-def dashboard_renovacoes(
-    dias: int = Query(30, ge=1, le=365),
-    machine_id: str = Query("ANALISESRV", min_length=1),
-) -> dict:
-    """
-    Renovações: o inventário de hoje contra o de N dias atrás.
-
-    Sai de `cert_snapshots`, não de `cert_history` — aquela é
-    `upsert(on_conflict="arquivo_chave")` e guarda só o estado atual, então o valor
-    anterior já foi sobrescrito e a conta daria zero.
-
-    A resposta traz `referencia`: as varreduras têm lacunas, e pedir 30 dias
-    pode devolver a comparação com uma de 54 dias atrás. Apresentar isso como
-    "últimos 30 dias" seria mentira.
-    """
-    from app import dashboard
-
-    return dashboard.painel_renovacoes(dias=dias, machine_id=machine_id)
+app.include_router(_rotas_dashboard)
 
 
 @app.get("/carteiras", response_class=HTMLResponse)
@@ -712,11 +674,7 @@ def pagina_dashboard(request: Request) -> HTMLResponse:
 
 
 # Computadores e bandeja (ADR 0002): app/rotas/computadores.py (Frente 3, leva 2).
-from app.rotas.computadores import (  # noqa: E402,F401 — o resgate e o Início usam estas
-    _dispositivo_da_requisicao,
-    _nomes_das_pessoas,
-    router as _rotas_computadores,
-)
+from app.rotas.computadores import router as _rotas_computadores  # noqa: E402
 
 app.include_router(_rotas_computadores)
 
