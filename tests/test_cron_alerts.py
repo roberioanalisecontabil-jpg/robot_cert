@@ -27,7 +27,7 @@ def com_segredo(monkeypatch: pytest.MonkeyPatch) -> str:
 
 
 def test_dispara_com_o_segredo_correto(client: TestClient, com_segredo: str) -> None:
-    with patch("app.main.trigger_all_alerts", lambda: {"enviados": 3}) as _:
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: {"enviados": 3}) as _:
         r = client.get(
             "/api/cron/alerts",
             headers={"Authorization": f"Bearer {com_segredo}"},
@@ -40,7 +40,7 @@ def test_dispara_com_o_segredo_correto(client: TestClient, com_segredo: str) -> 
 
 def test_sem_authorization_recusa(client: TestClient, com_segredo: str) -> None:
     chamou = []
-    with patch("app.main.trigger_all_alerts", lambda: chamou.append(1)):
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: chamou.append(1)):
         r = client.get("/api/cron/alerts")
 
     assert r.status_code == 401
@@ -49,7 +49,7 @@ def test_sem_authorization_recusa(client: TestClient, com_segredo: str) -> None:
 
 def test_segredo_errado_recusa(client: TestClient, com_segredo: str) -> None:
     chamou = []
-    with patch("app.main.trigger_all_alerts", lambda: chamou.append(1)):
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: chamou.append(1)):
         r = client.get(
             "/api/cron/alerts",
             headers={"Authorization": "Bearer segredo-errado"},
@@ -62,7 +62,7 @@ def test_segredo_errado_recusa(client: TestClient, com_segredo: str) -> None:
 def test_sem_prefixo_bearer_recusa(client: TestClient, com_segredo: str) -> None:
     """O segredo cru, sem "Bearer ", não pode passar."""
     chamou = []
-    with patch("app.main.trigger_all_alerts", lambda: chamou.append(1)):
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: chamou.append(1)):
         r = client.get("/api/cron/alerts", headers={"Authorization": com_segredo})
 
     assert r.status_code == 401
@@ -82,7 +82,7 @@ def test_sem_cron_secret_configurada_falha_fechada(
     monkeypatch.delenv("CRON_SECRET", raising=False)
 
     chamou = []
-    with patch("app.main.trigger_all_alerts", lambda: chamou.append(1)):
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: chamou.append(1)):
         r = client.get("/api/cron/alerts", headers={"Authorization": "Bearer qualquer"})
 
     assert r.status_code == 503
@@ -96,7 +96,7 @@ def test_cron_secret_vazia_tambem_falha_fechada(
     monkeypatch.setenv("CRON_SECRET", "   ")
 
     chamou = []
-    with patch("app.main.trigger_all_alerts", lambda: chamou.append(1)):
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: chamou.append(1)):
         r = client.get("/api/cron/alerts", headers={"Authorization": "Bearer    "})
 
     assert r.status_code == 503
@@ -107,7 +107,7 @@ def test_erro_na_varredura_vira_500(client: TestClient, com_segredo: str) -> Non
     def explode():
         raise RuntimeError("falha ao varrer certificados")
 
-    with patch("app.main.trigger_all_alerts", explode):
+    with patch("app.rotas.configuracao.trigger_all_alerts", explode):
         r = client.get(
             "/api/cron/alerts",
             headers={"Authorization": f"Bearer {com_segredo}"},

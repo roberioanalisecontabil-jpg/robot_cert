@@ -22,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.configuracao as cfg
 from app import auth, config, smtp_service
 from app import settings_state as ss
 from app.cert_scanner import scan_folder
@@ -94,7 +95,7 @@ def test_put_settings_recusa_pasta_fora_da_raiz(client: TestClient, tmp_path: Pa
                                                 campo: str) -> None:
     monkeypatch.setattr(config, "PASTAS_PERMITIDAS", [tmp_path.resolve()], raising=False)
     gravados: List[Any] = []
-    monkeypatch.setattr(m, "save_settings", lambda s, **k: gravados.append(s))
+    monkeypatch.setattr(cfg, "save_settings", lambda s, **k: gravados.append(s))
     r = client.put("/api/settings", headers=_h(*ADMIN), json={campo: r"\\atacante\share"})
     assert r.status_code == 422, r.text
     r = client.put("/api/settings", headers=_h(*ADMIN), json={campo: r"C:\Windows"})
@@ -105,7 +106,7 @@ def test_put_settings_recusa_pasta_fora_da_raiz(client: TestClient, tmp_path: Pa
 def test_put_settings_aceita_pasta_dentro_da_raiz(client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "PASTAS_PERMITIDAS", [tmp_path.resolve()], raising=False)
     gravados: List[Any] = []
-    monkeypatch.setattr(m, "save_settings", lambda s, **k: gravados.append(s))
+    monkeypatch.setattr(cfg, "save_settings", lambda s, **k: gravados.append(s))
     (tmp_path / "ok").mkdir()
     r = client.put("/api/settings", headers=_h(*ADMIN), json={"source_folder": str(tmp_path / "ok")})
     assert r.status_code == 200, r.text
@@ -209,7 +210,7 @@ def test_envio_confere_o_destino_antes_de_abrir_conexao(dns, monkeypatch: pytest
 
 
 def test_teste_de_smtp_responde_curado_para_destino_interno(client: TestClient, dns, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
+    monkeypatch.setattr(cfg, "load_settings", lambda: type("S", (), {
         "smtp_host": "meta.local", "smtp_port": 587, "smtp_user": "u", "smtp_password_encrypted": "",
         "smtp_use_tls": True, "smtp_use_ssl": False, "smtp_from_email": "u@x"})())
     r = client.post("/api/settings/smtp/test", headers=_h(*ADMIN), json={"target_email": "d@x.com"})
@@ -219,7 +220,7 @@ def test_teste_de_smtp_responde_curado_para_destino_interno(client: TestClient, 
 
 
 def test_put_settings_recusa_porta_fora_da_lista(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(m, "save_settings", lambda s, **k: None)
+    monkeypatch.setattr(cfg, "save_settings", lambda s, **k: None)
     r = client.put("/api/settings", headers=_h(*ADMIN), json={"smtp_host": "smtp.exemplo.com", "smtp_port": 8080})
     assert r.status_code == 422, r.text
 

@@ -26,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.configuracao as cfg
 from app.rotas import usuarios
 from app import correio, graph_mail, notification_service as ns, smtp_service
 from app.settings_state import PortalSettings
@@ -243,7 +244,7 @@ def test_os_chamadores_passam_pelo_despachante() -> None:
 # ──────────────────────────────────────────────────────────────────────────
 
 def _corpo(**extra: Any) -> dict:
-    return {**m.SettingsBody().model_dump(), **extra}
+    return {**cfg.SettingsBody().model_dump(), **extra}
 
 
 def test_put_graph_grava_cifrado_e_get_nunca_devolve_o_segredo(client: TestClient, banco: _Fake) -> None:
@@ -294,7 +295,7 @@ def test_put_smtp_nao_exige_graph(client: TestClient, banco: _Fake) -> None:
 def test_rota_de_teste_usa_o_graph(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     chamadas: List[Dict[str, Any]] = []
     monkeypatch.setattr(graph_mail, "enviar", lambda **kw: chamadas.append(kw))
-    with patch("app.main.load_settings", _settings_graph):
+    with patch("app.rotas.configuracao.load_settings", _settings_graph):
         r = client.post("/api/settings/smtp/test", json={"target_email": "destino@x.com"}, headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert chamadas[0]["to_email"] == "destino@x.com" and "Microsoft 365" in chamadas[0]["html_content"]
@@ -304,11 +305,11 @@ def test_rota_de_teste_traduz_os_erros_do_graph(client: TestClient, monkeypatch:
     def _nega(**kw):
         raise graph_mail.ErroPermissaoGraph("403")
     monkeypatch.setattr(graph_mail, "enviar", _nega)
-    with patch("app.main.load_settings", _settings_graph):
+    with patch("app.rotas.configuracao.load_settings", _settings_graph):
         r = client.post("/api/settings/smtp/test", json={"target_email": "destino@x.com"}, headers=_h(*ADMIN))
     assert r.status_code == 400 and "permissão" in r.json()["detail"]
 
-    with patch("app.main.load_settings", lambda: _settings_graph(graph_remetente="")):
+    with patch("app.rotas.configuracao.load_settings", lambda: _settings_graph(graph_remetente="")):
         r = client.post("/api/settings/smtp/test", json={"target_email": "destino@x.com"}, headers=_h(*ADMIN))
     assert r.status_code == 400 and "Microsoft 365 não configurado" in r.json()["detail"]
 

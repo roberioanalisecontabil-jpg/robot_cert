@@ -43,6 +43,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.configuracao as cfg
 import app.novos_certificados as nc
 import app.settings_state as ss
 from agent import entrada as ag
@@ -397,7 +398,7 @@ def test_tela_de_configuracao_tem_as_pastas_e_a_chave_do_aviso() -> None:
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_settings_devolve_e_valida_as_pastas_da_entrada(client: TestClient, banco: _Fake, tmp_path: Path) -> None:
-    base = m.SettingsBody().model_dump()
+    base = cfg.SettingsBody().model_dump()
     s = client.get("/api/settings", headers=_h(*ADMIN)).json()
     assert s["pasta_entrada"] == "" and s["alertas_novos_enabled"] is True and s["alertas_novos_modo_efetivo"] == "hora"
 

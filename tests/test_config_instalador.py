@@ -40,6 +40,7 @@ from fastapi.testclient import TestClient
 from app import auth, config
 import app.cert_installer as ci
 import app.main as m
+import app.rotas.configuracao as cfg
 from app.rotas import instalador
 from app.settings_state import PortalSettings
 
@@ -73,7 +74,9 @@ def settings_em_memoria(monkeypatch: pytest.MonkeyPatch) -> PortalSettings:
         return True
 
     monkeypatch.setattr(m, "load_settings", _load)
-    monkeypatch.setattr(m, "save_settings", _save)
+    monkeypatch.setattr(m, "save_settings", _save, raising=False)
+    monkeypatch.setattr(cfg, "load_settings", _load)
+    monkeypatch.setattr(cfg, "save_settings", _save)
     monkeypatch.setattr(instalador, "load_settings", _load)
     monkeypatch.setattr(instalador, "save_settings", _save)
     monkeypatch.setattr("app.settings_state.load_settings", _load)
@@ -299,7 +302,7 @@ def test_cron_reporta_o_expurgo_e_sobrevive_a_falha_dele(
     de o erro sumir.
     """
     monkeypatch.setenv("CRON_SECRET", "segredo-de-teste")
-    monkeypatch.setattr(m, "trigger_all_alerts", lambda: {"enviados": 3})
+    monkeypatch.setattr(cfg, "trigger_all_alerts", lambda: {"enviados": 3})
 
     def _explode():
         raise RuntimeError("expurgo quebrado")
@@ -336,7 +339,7 @@ def test_gravacao_que_nao_chegou_ao_banco_nao_responde_salvo(
             raise GravacaoNaoPersistida("PGRST204: coluna inexistente")
         return False
 
-    monkeypatch.setattr(m, "save_settings", _save_que_falha)
+    monkeypatch.setattr(cfg, "save_settings", _save_que_falha)
 
     r = client.put(
         "/api/settings",

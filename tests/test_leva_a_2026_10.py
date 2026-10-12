@@ -26,6 +26,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app import atividade as _atividade_mod
+from app import cert_installer as _ci_mod
 from app.rotas import usuarios
 from app import snapshots
 from tests.test_seguranca_lote1 import _Fake
@@ -263,7 +265,7 @@ def test_retencao_padrao_e_180_dias(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_expurgo_diario_inclui_snapshots_e_nao_derruba_os_outros(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     def quebra():
         raise RuntimeError("cofre fora")
-    monkeypatch.setattr(m.cert_installer, "expurgar_cofre", quebra)
+    monkeypatch.setattr(_ci_mod, "expurgar_cofre", quebra)
     banco.tabelas["cert_snapshots"] = [_snap("a", "srv", 400), _snap("b", "srv", 1)]
     out = m._expurgo_diario()
     assert out["cofre"]["executado"] is False

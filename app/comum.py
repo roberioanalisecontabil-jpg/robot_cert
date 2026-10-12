@@ -29,6 +29,10 @@ LIMITE_UPLOAD_BYTES = 5 * 1024 * 1024
 
 MAX_LINHAS_IMPORT = 2000
 
+# Teto das listas exportadas inteiras (Início, histórico, vencidos, alertas
+# enviados). Saiu de main.py na Frente 3, leva 9: a Configuração também usa.
+LISTAGEM_EXPORT_MAX = 5000
+
 
 ERRO_UPLOAD_GRANDE = f"Arquivo muito grande (limite de {LIMITE_UPLOAD_BYTES // (1024 * 1024)} MB)."
 

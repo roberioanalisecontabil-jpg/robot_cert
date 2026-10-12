@@ -47,7 +47,7 @@ def _configuracao_valida() -> PortalSettings:
 
 def test_envio_de_teste_chega_ao_smtp(client: TestClient) -> None:
     """O caminho feliz: a rota tem de alcançar send_smtp_email, não estourar."""
-    with patch("app.main.load_settings", _configuracao_valida):
+    with patch("app.rotas.configuracao.load_settings", _configuracao_valida):
         with patch.object(smtp_service, "send_smtp_email") as enviar:
             r = client.post(
                 "/api/settings/smtp/test",
@@ -73,7 +73,7 @@ def test_erro_do_servidor_smtp_vira_400_com_a_mensagem(client: TestClient) -> No
     mas pela CLASSE da falha, não pelo texto do servidor (auditoria #35, item
     91 da spec de telas): o texto trazia o usuário e o host resolvido.
     """
-    with patch("app.main.load_settings", _configuracao_valida):
+    with patch("app.rotas.configuracao.load_settings", _configuracao_valida):
         with patch.object(
             smtp_service,
             "send_smtp_email",
@@ -93,7 +93,7 @@ def test_erro_do_servidor_smtp_vira_400_com_a_mensagem(client: TestClient) -> No
 def test_sem_host_configurado_recusa_antes_de_tentar(client: TestClient) -> None:
     vazio = PortalSettings(source_folder="", expired_folder="", machine_id="default")
 
-    with patch("app.main.load_settings", lambda: vazio):
+    with patch("app.rotas.configuracao.load_settings", lambda: vazio):
         with patch.object(smtp_service, "send_smtp_email") as enviar:
             r = client.post(
                 "/api/settings/smtp/test",
@@ -124,7 +124,7 @@ def test_disparo_manual_de_alertas_responde(client: TestClient) -> None:
     A rota vizinha, que funcionava. Fica aqui para que as duas passem a ser
     exercitadas juntas — foi a diferença entre elas que escondeu o defeito.
     """
-    with patch("app.main.trigger_all_alerts", lambda: {"enviados": 0}):
+    with patch("app.rotas.configuracao.trigger_all_alerts", lambda: {"enviados": 0}):
         r = client.post("/api/settings/alerts/trigger", headers=_admin())
 
     assert r.status_code == 200

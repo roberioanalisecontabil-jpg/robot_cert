@@ -40,6 +40,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.configuracao as cfg
 from app.rotas import usuarios
 from app import auth, config, permissoes, smtp_service, taxa
 
@@ -867,7 +868,7 @@ def test_teste_de_smtp_responde_por_classe_de_erro(
         raise excecao("535 5.7.8 " + SEGREDO_NO_ERRO)
 
     monkeypatch.setattr(smtp_service, "send_smtp_email", _falha)
-    monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
+    monkeypatch.setattr(cfg, "load_settings", lambda: type("S", (), {
         "smtp_host": "smtp.x", "smtp_port": 587, "smtp_user": "u", "smtp_password_encrypted": "",
         "smtp_use_tls": True, "smtp_use_ssl": False, "smtp_from_email": "u@x"})())
     r = client.post("/api/settings/smtp/test", headers=_h(*ADMIN), json={"target_email": "d@x.com"})

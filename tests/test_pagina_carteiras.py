@@ -26,6 +26,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app import atividade as _atividade_mod
+from app import cert_installer as _ci_mod
 from tests.test_seguranca_lote1 import _Fake, _usuario
 from tests.test_seguranca_lote4 import ADMIN, DOC_A, DOC_B, DOC_C, DOC_L, FISCAL, FISCAL_OP, GESTOR, _h  # noqa: F401
 from tests.test_seguranca_lote4 import banco as banco_base  # noqa: F401
@@ -104,8 +106,8 @@ def test_gestor_ve_instalacoes_dos_seus_operadores(client: TestClient, banco: _F
         return [{"token_id": "t", "user_email": user_email, "inicio": desde, "certificados": 1,
                  "target_machine": "pc", "desfecho": "Concluída", "client_ip": "10.0.0.5"}]
 
-    monkeypatch.setattr(m.cert_installer, "cadeias_de_instalacao", _cadeias)
-    monkeypatch.setattr(m.cert_installer, "resumo_das_cadeias", lambda c: {"total": len(c), "concluidas": len(c), "falhadas": 0})
+    monkeypatch.setattr(_ci_mod, "cadeias_de_instalacao", _cadeias)
+    monkeypatch.setattr(_ci_mod, "resumo_das_cadeias", lambda c: {"total": len(c), "concluidas": len(c), "falhadas": 0})
 
     r = client.get("/api/carteira/u-fis/instalacoes", headers=_h(*GESTOR))
     assert r.status_code == 200, r.text

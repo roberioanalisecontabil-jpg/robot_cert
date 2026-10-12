@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 
 import app.cert_installer as ci
 import app.main as m
+import app.rotas.configuracao as cfg
 from app import auth, config, permissoes, taxa
 from tests.test_seguranca_lote1 import _Fake, _usuario
 
@@ -223,7 +224,7 @@ def smtp_configurado(monkeypatch: pytest.MonkeyPatch) -> List[str]:
     from app import smtp_service
 
     monkeypatch.setattr(smtp_service, "send_smtp_email", lambda **kw: enviados.append(kw["to_email"]))
-    monkeypatch.setattr(m, "load_settings", lambda: type("S", (), {
+    monkeypatch.setattr(cfg, "load_settings", lambda: type("S", (), {
         "smtp_host": "smtp.x", "smtp_port": 587, "smtp_user": "u", "smtp_password_encrypted": "",
         "smtp_use_tls": True, "smtp_use_ssl": False, "smtp_from_email": "u@x"})())
     return enviados

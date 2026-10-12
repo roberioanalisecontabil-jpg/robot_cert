@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 
 import app.cert_installer as ci
 import app.main as m
+import app.rotas.configuracao as cfg
 import app.notification_service as ns
 import app.novos_certificados as nc
 import app.settings_state as ss
@@ -341,7 +342,7 @@ def test_rota_aceita_tipo_e_recusa_valor_estranho(client: TestClient, monkeypatc
         visto["tipo"] = tipo
         return {"itens": [], "tipo": tipo}
 
-    monkeypatch.setattr(m, "build_notifications_payload", _payload)
+    monkeypatch.setattr(cfg, "build_notifications_payload", _payload)
     assert client.get("/api/colaborador/notificacoes?tipo=expired", headers=_h(*ADMIN)).status_code == 200
     assert visto["tipo"] == "expired"
     assert client.get("/api/colaborador/notificacoes", headers=_h(*ADMIN)).status_code == 200

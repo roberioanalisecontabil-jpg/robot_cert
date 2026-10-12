@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.configuracao as cfg
 from app import cert_installer, sieg
 from app.sieg_api import ClienteSieg
 from tests import sieg_falso as sf
@@ -90,7 +91,7 @@ def test_configuracao_cifra_e_nao_devolve_os_segredos(client: TestClient, banco:
 
 def test_salvar_a_configuracao_geral_nao_apaga_o_sieg(client: TestClient, banco: _Fake) -> None:
     _configurar(client)
-    corpo = {**m.SettingsBody().model_dump(), "machine_id": "srv"}
+    corpo = {**cfg.SettingsBody().model_dump(), "machine_id": "srv"}
     corpo = {k: v for k, v in corpo.items() if v is not None}
     client.put("/api/settings", headers=_h(*ADMIN), json=corpo)
     assert client.get("/api/sieg/configuracao", headers=_h(*ADMIN)).json()["configurado"] is True

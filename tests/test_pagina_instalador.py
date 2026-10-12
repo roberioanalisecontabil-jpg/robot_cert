@@ -20,6 +20,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+from app import atividade as _atividade_mod
+from app import cert_installer as _ci_mod
 from app import permissoes
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, FISCAL_OP, GESTOR, _h  # noqa: F401
@@ -64,19 +66,21 @@ def test_rotas_sem_chamador_sumiram(client: TestClient, banco: _Fake) -> None:
 
 def test_expurgar_trilha_so_expurga_a_trilha(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     chamadas = []
-    monkeypatch.setattr(m.cert_installer, "expurgar_install_log", lambda *a, **k: chamadas.append("trilha") or {"apagados": 0})
-    monkeypatch.setattr(m.atividade, "expurgar", lambda *a, **k: chamadas.append("atividade") or {})
-    monkeypatch.setattr(m.cert_installer, "expurgar_cofre", lambda *a, **k: chamadas.append("cofre") or {})
+    monkeypatch.setattr(_ci_mod, "expurgar_install_log", lambda *a, **k: chamadas.append("trilha") or {"apagados": 0})
+    monkeypatch.setattr(_atividade_mod, "expurgar", lambda *a, **k: chamadas.append("atividade") or {})
+    monkeypatch.setattr(_ci_mod, "expurgar_cofre", lambda *a, **k: chamadas.append("cofre") or {})
     r = client.post("/api/cert-installer/expurgar-log", headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert chamadas == ["trilha"]
     assert set(r.json()) == {"install_log"}
     # O job diário continua cuidando dos outros (em `_expurgo_diario`, que o
     # laço do lifespan e o cron chamam — 03/10/2026).
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    i = fonte.index("def _expurgo_diario")
-    trecho = fonte[i:fonte.index("\n@app.", i)]
+    # Frente 3, leva 9: `_expurgo_diario` mora em app/rotas/configuracao.py.
+    cfg_fonte = (RAIZ / "app" / "rotas" / "configuracao.py").read_text(encoding="utf-8")
+    i = cfg_fonte.index("def _expurgo_diario")
+    trecho = cfg_fonte[i:cfg_fonte.index("\n@router.", i)]
     assert "atividade.expurgar" in trecho and "expurgar_cofre" in trecho and "snapshots.expurgar" in trecho
+    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
     assert "_expurgo_diario" in fonte[fonte.index("async def daily_alerts_job_loop"):fonte.index("async def novos_por_hora_loop")]
 
 
@@ -86,12 +90,12 @@ def test_trilha_diz_quando_o_teto_cortou(client: TestClient, banco: _Fake, monke
     def _cadeias(limite, desde, user_email=None, apenas_com_falha=False):
         return [{"token_id": "t", "eventos": [{"event": "SOLICITADO"}] * limite, "desfecho": "incompleto",
                  "parou_em": "SOLICITADO", "certificados": 1, "target_machine": "pc"}]
-    monkeypatch.setattr(m.cert_installer, "cadeias_de_instalacao", _cadeias)
-    monkeypatch.setattr(m.cert_installer, "resumo_das_cadeias", lambda c: {"total": 1, "concluidas": 0, "falhadas": 0})
+    monkeypatch.setattr(_ci_mod, "cadeias_de_instalacao", _cadeias)
+    monkeypatch.setattr(_ci_mod, "resumo_das_cadeias", lambda c: {"total": 1, "concluidas": 0, "falhadas": 0})
     r = client.get("/api/cert-installer/trilha?limite=10", headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert r.json()["truncado"] is True
-    monkeypatch.setattr(m.cert_installer, "cadeias_de_instalacao", lambda **k: [])
+    monkeypatch.setattr(_ci_mod, "cadeias_de_instalacao", lambda **k: [])
     assert client.get("/api/cert-installer/trilha", headers=_h(*ADMIN)).json()["truncado"] is False
 
 

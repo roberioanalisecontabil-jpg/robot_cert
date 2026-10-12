@@ -23,6 +23,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as m
+import app.rotas.configuracao as cfg
 from app import permissoes
 from tests.test_seguranca_lote1 import _Fake
 from tests.test_seguranca_lote4 import ADMIN, FISCAL_OP, GESTOR, _h  # noqa: F401
@@ -57,7 +58,7 @@ def test_logout_passa_com_senha_provisoria() -> None:
 
 
 def test_remetente_invalido_e_recusado(client: TestClient, banco: _Fake) -> None:
-    corpo = {**m.SettingsBody().model_dump(), "smtp_from_email": "nao-e-email"}
+    corpo = {**cfg.SettingsBody().model_dump(), "smtp_from_email": "nao-e-email"}
     r = client.put("/api/settings", json=corpo, headers=_h(*ADMIN))
     assert r.status_code == 422 and "remetente" in r.json()["detail"], r.text
 
