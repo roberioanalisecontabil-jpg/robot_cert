@@ -184,7 +184,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
     # interessam aqui (test_computadores_rotas.py); a barreira da carteira
     # roda depois da conferência da máquina e antes de emitir o token.
     monkeypatch.setattr(instalador, "_exigir_maquina_autorizada", lambda *a, **k: None)
-    monkeypatch.setattr(m.computadores, "enfileirar", lambda *a, **k: None)
+    monkeypatch.setattr("app.computadores.enfileirar", lambda *a, **k: None)
     return fake
 
 

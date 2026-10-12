@@ -147,7 +147,7 @@ def test_o_prepare_devolve_o_id_do_registro_e_nao_o_token(
     monkeypatch.setattr(ci, "create_install_token", lambda **kw: ("TOKEN-SECRETO", TOKEN_ID, None))
     monkeypatch.setattr(ci, "log_event", lambda **kw: None)
     monkeypatch.setattr(instalador, "_exigir_maquina_autorizada", lambda *a, **k: None)
-    monkeypatch.setattr(m.computadores, "enfileirar", lambda *a, **k: None)
+    monkeypatch.setattr("app.computadores.enfileirar", lambda *a, **k: None)
 
     r = client.post(
         "/api/cert-installer/prepare",

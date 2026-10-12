@@ -98,9 +98,10 @@ def test_o_painel_nao_e_gateado_por_permissao_de_modulo() -> None:
     um computador que não usa mais — a conta que está lá é a dele. Por isso o
     painel mora no Início, e a rota usa `require_auth` puro.
     """
-    main = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    trecho = main[main.index('@app.get("/api/agent/dispositivos")'):]
-    trecho = trecho[: trecho.index("\n@app.")]
+    # Frente 3, leva 8: a rota mora em app/rotas/agente.py.
+    fonte = (RAIZ / "app" / "rotas" / "agente.py").read_text(encoding="utf-8")
+    trecho = fonte[fonte.index('@router.get("/api/agent/dispositivos")'):]
+    trecho = trecho[: trecho.index("\n@router.")]
 
     assert "require_auth" in trecho
     assert "require_modulo" not in trecho
