@@ -8,7 +8,6 @@ pendente até o administrador autorizar) mora em `app/computadores.py`.
 
 from __future__ import annotations
 
-import hmac
 import logging
 from typing import Any, Dict, Optional
 
@@ -191,20 +190,7 @@ def importar_computadores_do_hardlyze() -> dict:
                                f"{_texto.plural(res['sem_conta'], 'login sem conta neste portal', 'logins sem conta neste portal')}.")}
 
 
-@router.get("/api/computadores/principais")
-def computadores_principais(request: Request) -> dict:
-    """Para o Hardlyze (ponte servidor a servidor): máquina → dono principal."""
-    esperado = (config.CERT_PORTAL_TOKEN or "").strip()
-    recebido = (request.headers.get("authorization") or "").removeprefix("Bearer ").strip()
-    if not esperado or not hmac.compare_digest(recebido.encode("utf-8"), esperado.encode("utf-8")):
-        raise HTTPException(status_code=401, detail="Não autorizado.")
-    try:
-        pessoas = _nomes_das_pessoas()
-        saida = []
-        for pr in computadores.principais():
-            p = pessoas.get(pr["user_id"], {})
-            saida.append({"machine_id": pr["machine_id"], "email": p.get("email", ""),
-                          "nome": nomes.nome_pessoa(p.get("full_name") or p.get("email")), "desde": pr.get("desde")})
-    except computadores.SemBanco as e:
-        raise _erro_sem_banco(e)
-    return {"principais": saida}
+# `GET /api/computadores/principais` saiu em 12/10/2026, por decisão do
+# usuário: era a ponte para o Hardlyze mostrar o responsável pela máquina, e
+# desde o Hardlyze 2.1.3 o responsável é escolhido na aprovação lá mesmo —
+# ninguém mais a chamava, e rota sem consumidor é superfície de graça.

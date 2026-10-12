@@ -4,8 +4,7 @@ A bandeja da estação entra com a conta DESTE portal; o dispositivo é a linha
 de `agent_devices` (credencial por pessoa e máquina). Este módulo decide se
 aquele dispositivo pode receber instalação:
 
-* **Principal**: a máquina de trabalho, uma por pessoa e uma por máquina. É o
-  que o Hardlyze mostra como responsável (`principais()`).
+* **Principal**: a máquina de trabalho, uma por pessoa e uma por máquina.
 * **Empréstimo**: outra máquina, com prazo (fim do dia, 3 ou 7 dias).
 * Todo vínculo novo nasce **pendente** até o administrador autorizar.
 * **Um acesso por vez**: entrar numa máquina derruba as outras sessões da
@@ -428,12 +427,6 @@ def listar() -> List[Dict[str, Any]]:
             v["estado"], v["motivo"] = ENCERRADO, "Prazo do empréstimo terminou."
     linhas.sort(key=lambda v: (v.get("estado") != PENDENTE, str(v.get("pedido_em") or "")), reverse=False)
     return linhas
-
-
-def principais() -> List[Dict[str, Any]]:
-    """Para o Hardlyze: máquina → dono principal."""
-    return [{"machine_id": v["machine_id"], "user_id": str(v["user_id"]), "desde": v.get("decidido_em")}
-            for v in _vinculos(tipo=PRINCIPAL, estado=ATIVO)]
 
 
 def importar(logins: List[Dict[str, Any]], usuarios_por_email: Dict[str, str]) -> Dict[str, int]:

@@ -202,15 +202,13 @@ def test_bandeja_sair_e_recusar(client: TestClient, banco: _Fake) -> None:
     assert client.get("/api/computadores", headers=_h(*FISCAL_OP)).status_code == 403
 
 
-def test_principais_para_o_hardlyze_exige_o_segredo_da_ponte(client: TestClient, banco: _Fake,
-                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rota_de_principais_saiu(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    """12/10/2026: sem consumidor desde o Hardlyze 2.1.3. Nem com o segredo
+    da ponte ela responde."""
     monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "segredo-da-ponte", raising=False)
-    _entrar(client, "fis@x.com", PC_FIS)
-    _autorizar_pendente(client, PC_FIS)
-    assert client.get("/api/computadores/principais").status_code == 401
     r = client.get("/api/computadores/principais", headers={"Authorization": "Bearer segredo-da-ponte"})
-    assert r.status_code == 200
-    assert r.json()["principais"] == [{**r.json()["principais"][0], "machine_id": PC_FIS, "email": "fis@x.com"}]
+    assert r.status_code in (401, 404, 405)
+    assert "principais" not in r.text
 
 
 def test_importar_do_hardlyze_cria_pedidos_pendentes(client: TestClient, banco: _Fake, monkeypatch) -> None:

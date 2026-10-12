@@ -148,14 +148,6 @@ def test_fila_entrega_uma_vez_e_ignora_vencido(banco: _Fake) -> None:
     assert cp.entregar(PC_FIS) == []
 
 
-def test_principais_para_o_hardlyze(banco: _Fake) -> None:
-    entrar(FIS, PC_FIS)
-    cp.autorizar(pendente(FIS, PC_FIS)["id"], "principal", ADMIN)
-    entrar(SOL, PC_CEDIDO)
-    cp.autorizar(pendente(SOL, PC_CEDIDO)["id"], "emprestimo", ADMIN)
-    assert [(p["machine_id"], p["user_id"]) for p in cp.principais()] == [(PC_FIS, FIS)]
-
-
 # ──────────────────────────────────────────────────────────────────────────
 # Chave da máquina (adendo ao ADR 0002, auditoria de 10/10/2026)
 #

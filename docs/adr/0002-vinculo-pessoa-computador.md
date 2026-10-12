@@ -91,8 +91,9 @@ manuais). Saíram daqui a consulta `devices/vivos` ao Hardlyze, o pedido de inst
 dele e o resgate sem credencial da bandeja: `prepare` exige máquina com bandeja autorizada (409
 com o que fazer), `minha-estacao` sem computador responde `sem_computador`, e `claim` sem
 `X-Device-Secret` é 403. No Hardlyze, as rotas do caminho antigo respondem 410. A ponte
-`CERT_PORTAL_TOKEN` continua para o responsável (`/api/computadores/principais`) e para
-"Importar do Hardlyze" (`/api/agent/devices/todos`). Estação ainda no 2.0.x ou 2.1.0 aberta sem
+`CERT_PORTAL_TOKEN` continua para "Importar do Hardlyze" (`/api/agent/devices/todos`). A rota
+do responsável (`/api/computadores/principais`) saiu em 12/10/2026: desde o Hardlyze 2.1.3 o
+responsável é escolhido na aprovação, lá mesmo, e ninguém mais a chamava. Estação ainda no 2.0.x ou 2.1.0 aberta sem
 `--tray-only` não instala até receber o 2.1.1.
 
 ## Adendo (10/10/2026): chave da máquina e publicação na internet
