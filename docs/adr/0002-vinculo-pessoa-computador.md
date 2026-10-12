@@ -76,7 +76,8 @@ não a aprovação pendente no Hardlyze.
   aprovação do Hardlyze, e este portal não o consulta no login, na autorização nem na
   instalação.
 - Continua um instalador só (o do Hardlyze), com o serviço de inventário e a bandeja de
-  certificados separados por dentro.
+  certificados separados por dentro. *(Substituído em 12/10/2026 pelo ADR 0003: agente de
+  certificados próprio, com instalador e autorização separados.)*
 - O caminho antigo (fila de comandos e login de pessoa do Hardlyze) fica até todas as estações
   estarem no 2.1.x e então sai.
 - A publicação na internet fica para depois. Para instalar fora do escritório basta este portal
