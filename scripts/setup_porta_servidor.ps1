@@ -100,7 +100,7 @@ try {
     Write-Log "  OK - Regra de firewall criada!" "Green"
     Write-Log "  Nome   : $NOME_REGRA"
     Write-Log "  Portas : $($PORTAS_PROXY -join ', ')/TCP"
-    Write-Log "  Perfis : Dominio, Privado (a rede e privada + VPN; nada vai para a internet)"
+    Write-Log "  Perfis : Dominio, Privado (o encaminhamento da 443 pelo roteador chega pela rede local; ver docs/publicacao-na-web.md)"
 } catch {
     Write-Log "  ERRO ao criar regra: $_" "Red"
 }

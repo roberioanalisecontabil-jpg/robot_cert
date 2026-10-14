@@ -9,9 +9,16 @@
 # O que este arquivo garante:
 #   * porta 80 responde 308 para https:// (comportamento padrao do Caddy
 #     quando um site tem TLS) -- e o "redirect" que o HSTS pressupoe;
-#   * certificados Let's Encrypt por desafio DNS na Cloudflare: os nomes
-#     resolvem para 10.200.0.4 (rede + VPN), sem porta 80/443 aberta para a
-#     internet, entao o desafio HTTP nao serviria;
+#   * certificados Let's Encrypt por desafio DNS na Cloudflare (continua
+#     valendo com a porta 443 aberta: nao depende de a 80 chegar aqui);
+#   * desde 14/10/2026 o portal de certificados esta NA INTERNET: o nome
+#     certificado. passa pelo proxy da Cloudflare (nuvem laranja) e o firewall
+#     encaminha a 443 do IP publico para o 10.200.0.4. So ele: hardlyze. e
+#     eficacia. continuam so rede + VPN, e este arquivo recusa quem chega a
+#     eles de fora (a 443 e uma so; sem a recusa, bastava pedir o nome certo
+#     ao IP publico). E o certificado. so atende quem chega PELA Cloudflare:
+#     e ela que filtra rajadas (auditoria run-2, item 14), e ir direto ao IP
+#     publico pularia o filtro;
 #   * a aplicacao so e alcancada por 127.0.0.1 -- uvicorn/NSSM fazem bind em
 #     loopback (ver docs/GUIA_MIGRACAO_WINDOWS_SERVER.md), e o firewall so
 #     abre 80/443 (scripts/setup_porta_servidor.ps1).
@@ -21,6 +28,32 @@
 # Nunca o escreva aqui.
 {
 	email ti@analisegroup.cnt.br
+	servers {
+		# Quem chega por estes enderecos e a Cloudflare, e o IP verdadeiro de
+		# quem acessa vem no CF-Connecting-IP. Sem isto, todo mundo pareceria
+		# um punhado de IPs da Cloudflare, e os tetos por endereco do portal
+		# (login, codigo, bandeja) virariam tetos compartilhados.
+		# Lista oficial: https://www.cloudflare.com/ips (conferida em 14/10/2026).
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+# So quem conecta a partir da Cloudflare (mesmos enderecos de trusted_proxies)
+# ou da rede interna. remote_ip e o endereco da CONEXAO, nao o
+# CF-Connecting-IP, que qualquer um escreve. A rede interna fica aceita para a
+# troca do DNS nao derrubar ninguem no meio, e para o portal continuar
+# alcancavel por dentro (arquivo hosts) se a internet da empresa cair.
+(so_cloudflare) {
+	@fora_da_cloudflare not remote_ip private_ranges 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+	abort @fora_da_cloudflare
+}
+
+# So rede da empresa e VPN (10.200.0.0/24, VPN 10.255.255.x) e a propria
+# maquina: hardlyze. e eficacia. nao estao na internet.
+(so_rede_interna) {
+	@de_fora not remote_ip private_ranges
+	abort @de_fora
 }
 
 (portal) {
@@ -32,6 +65,8 @@
 	# X-Forwarded-For/-Proto sao escritos pelo Caddy; o portal confia em UM
 	# proxy (NUM_PROXIES_CONFIAVEIS=1) e le o ULTIMO valor, so quando a conexao
 	# vem de 127.0.0.1 (PROXIES_CONFIAVEIS, auditoria de 10/10/2026).
+	# {client_ip} e o CF-Connecting-IP quando quem conectou e a Cloudflare, e o
+	# proprio endereco da conexao nos outros casos: um valor so, o verdadeiro.
 	#
 	# Teto de corpo na frente do portal (auditoria de 10/10/2026): o FastAPI le
 	# o corpo inteiro antes de autenticar. O portal tem tetos por rota
@@ -40,7 +75,9 @@
 	request_body {
 		max_size 64MB
 	}
-	reverse_proxy 127.0.0.1:{args[0]}
+	reverse_proxy 127.0.0.1:{args[0]} {
+		header_up X-Forwarded-For {client_ip}
+	}
 	log {
 		output file C:\Apps\caddy\logs\acesso-{args[0]}.log {
 			roll_size 10MiB
@@ -57,14 +94,19 @@
 }
 
 certificado.analisegroup.cnt.br {
+	# So pela Cloudflare. Todo mundo, de dentro ou de fora, chega por ela
+	# (decisao de 14/10/2026); o servidor tambem (o agente usa o mesmo nome).
+	import so_cloudflare
 	import portal 8020
 }
 
 hardlyze.analisegroup.cnt.br {
+	import so_rede_interna
 	import portal 8021
 }
 
 # Validacao de Eficacia (repositorio Validacao-de-Eficacia, servico NSSM "eficacia").
 eficacia.analisegroup.cnt.br {
+	import so_rede_interna
 	import portal 8022
 }
