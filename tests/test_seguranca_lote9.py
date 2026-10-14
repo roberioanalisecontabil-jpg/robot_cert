@@ -203,31 +203,13 @@ def test_documentacao_nao_orienta_mais_http_em_todas_as_interfaces() -> None:
     assert not re.search(r"-LocalPort\s+\$PORTA\b", script), "a porta da aplicação não é aberta para fora"
 
 
-# ──────────────────────────────────────────────────────────────────────────
-# #40 — ponte só por https fora da própria máquina
-# ──────────────────────────────────────────────────────────────────────────
+# #40 (ponte com o INVENT só por https) saiu com a ponte, em 14/10/2026.
 
 def _producao(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "DATABASE_URL", "postgresql://u:p@127.0.0.1:5433/x")
     monkeypatch.setattr(config, "CERT_ENCRYPTION_KEY", "11" * 32)
     monkeypatch.setattr(config, "CERT_PASSWORD_ENCRYPTION_KEY", "22" * 32)
     monkeypatch.setattr(config, "API_KEY", "chave")
-    monkeypatch.setattr(config, "CERT_PORTAL_TOKEN", "t")
-
-
-def test_ponte_por_http_para_outro_host_e_fatal_em_producao(monkeypatch) -> None:
-    _producao(monkeypatch)
-    monkeypatch.setattr(config, "INVENT_API_URL", "http://10.200.0.9:8021")
-    fatais, _ = config.verificar_ambiente()
-    assert any("INVENT_API_URL" in f and "https" in f for f in fatais)
-
-
-def test_ponte_por_http_na_propria_maquina_e_aceita(monkeypatch) -> None:
-    """O ANALISESRV fala com o INVENT por 127.0.0.1:8021: não sai da máquina."""
-    _producao(monkeypatch)
-    monkeypatch.setattr(config, "INVENT_API_URL", "http://127.0.0.1:8021")
-    fatais, _ = config.verificar_ambiente()
-    assert not any("INVENT_API_URL" in f for f in fatais)
 
 
 # ──────────────────────────────────────────────────────────────────────────

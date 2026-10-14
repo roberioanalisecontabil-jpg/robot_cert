@@ -664,18 +664,16 @@ def instalabilidade(
 # obriga qualquer rota nova que emita token a passar por elas." É exatamente o
 # que segue abaixo.
 #
-# O que MUDOU em relação à original: ela enfileirava na fila deste portal, para
-# o agente daqui. Agora o agente é o do INVENT, que escuta a fila DE LÁ — então
-# este portal pede, servidor a servidor, que o outro enfileire. Nenhum dos dois
-# ganha acesso ao banco do outro.
+# Desde 08/10/2026 ela enfileira de novo na fila deste portal, agora para a
+# bandeja da estação (ADR 0002; Certguard Análise desde o ADR 0003).
 
 
 def _computador_autorizado_da_pessoa(user_id: str) -> Optional[dict]:
     """A máquina ativa e autorizada da pessoa neste portal (None se não há ou sem tabela)."""
     try:
         c = computadores.computador_da_pessoa(user_id)
-    except Exception:  # noqa: BLE001 — migration pendente: cai no caminho do Hardlyze
-        logger.warning("Vínculos de computador indisponíveis; usando o Hardlyze", exc_info=True)
+    except Exception:  # noqa: BLE001 — migration pendente: sem computador
+        logger.warning("Vínculos de computador indisponíveis", exc_info=True)
         return None
     return c
 
@@ -686,8 +684,8 @@ def minha_estacao(token: auth.TokenData = Depends(require_auth)) -> dict:
     Há um agente vivo desta pessoa agora? Em qual máquina?
 
     O Início usa isto para mostrar (ou não) o botão "Instalar na estação" e
-    dizer o motivo quando não há estação. Quem sabe a resposta é o Hardlyze: o
-    vínculo pessoa↔estação nasce do login que ela mesma fez na máquina. Uma
+    dizer o motivo quando não há estação. O vínculo pessoa↔estação nasce do
+    login que ela mesma fez na bandeja, autorizado em Usuários › Computadores. Uma
     pessoa tem UMA estação: a atual, a que está com o agente vivo (decisão I2,
     01/10/2026); se trocar de máquina, a nova passa a ser a padrão.
 
@@ -743,7 +741,7 @@ def preparar_instalacao(
     token: auth.TokenData = Depends(require_auth),
 ):
     """
-    Emite o token e pede ao INVENT que a estação instale.
+    Emite o token e o põe na fila da bandeja da estação.
 
     Desde 23/08/2026 e a UNICA rota que emite token de instalacao — o caminho de
     download saiu. A barreira de carteira continua sendo o que a governa, porque
@@ -787,7 +785,7 @@ def preparar_instalacao(
         logger.exception("Erro ao emitir token de instalação pelo agente")
         raise HTTPException(status_code=500, detail="Erro interno ao preparar a instalação")
 
-    # Só registra SOLICITADO depois de o comando CHEGAR ao outro portal. Registrar
+    # Só registra SOLICITADO depois de o comando entrar na fila. Registrar
     # antes deixaria a trilha afirmando um pedido que talvez nunca tenha saído
     # daqui — e a trilha existe justamente para ser confiável.
     try:

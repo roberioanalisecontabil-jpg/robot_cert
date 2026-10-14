@@ -196,7 +196,7 @@
         <div id="barraSelecao" class="cg-selecao-status" role="status" hidden>
           <span id="selContagem" class="cg-selecao-status__contagem"></span>
           <span id="selAviso" class="cg-selecao-status__aviso"></span>
-          <span id="semAgente" class="cg-selecao-status__aviso" hidden>Sem agente ativo na sua estação — abra o Hardlyze Agent e entre com sua conta.</span>
+          <span id="semAgente" class="cg-selecao-status__aviso" hidden>Sem agente ativo na sua estação — abra o Certguard Análise e entre com sua conta.</span>
         </div>
 
         <div class="table-scroll-anchor">
@@ -758,7 +758,7 @@
       let _estacao = null;   // { machine_id, nome } quando ha agente vivo
       const MOTIVO_SEM_ESTACAO = {
         nao_configurado: "A instalação pelo agente não está ligada neste portal. Fale com o administrador.",
-        indisponivel: "O Hardlyze não respondeu agora — tente de novo em instantes.",
+        indisponivel: "Não foi possível verificar sua estação agora — tente de novo em instantes.",
         sem_agente_vivo: "Sem agente ativo na sua estação — abra a bandeja do agente e entre com sua conta deste portal.",
         // ADR 0002 (07/10/2026): a bandeja entra com a conta deste portal.
         sem_computador: "Nenhum computador vinculado a você. Entre na bandeja do agente com sua conta deste portal; o administrador autoriza.",
@@ -830,7 +830,7 @@
         const expirou = () =>
           showToast(
             "O pedido expirou — esta máquina não respondeu a tempo. " +
-              "Verifique se ela está ligada com o Hardlyze Agent aberto e peça de novo.",
+              "Verifique se ela está ligada com o Certguard Análise aberto e peça de novo.",
             "warning"
           );
 
@@ -1717,7 +1717,7 @@
         // A estação ANTES da tabela: a instalabilidade é consultada com a
         // estação da pessoa (revisão de 01/10/2026), não com o servidor da
         // varredura — era por isso que operador e gestor viam "não foi possível
-        // verificar" sempre que a ponte com o Hardlyze estava de pé.
+        // verificar": a consulta ia com a máquina errada.
         await carregarMinhaEstacao();
         await carregarTabela();
       })();

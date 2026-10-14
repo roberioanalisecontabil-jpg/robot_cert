@@ -64,7 +64,8 @@ def test_quem_nao_tem_agente_recebe_instrucao_e_nao_silencio() -> None:
     mais nada deixaria a tela muda — e ela não teria como saber o que fazer.
     """
     assert 'id="semAgente"' in INICIO
-    assert "Hardlyze Agent" in INICIO
+    assert "Certguard Análise" in INICIO
+    assert "Hardlyze" not in INICIO
 
 
 def test_o_teto_de_certificados_desabilita_o_botao() -> None:

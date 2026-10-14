@@ -247,8 +247,13 @@ def test_aprovar_sem_chave_em_maquina_com_chave_nao_abre_a_janela(banco: _Fake) 
 
 
 def test_pedido_importado_fica_com_a_chave_da_primeira_bandeja(banco: _Fake) -> None:
-    cp.importar([{"email": "fis@x.com", "machine_id": PC_FIS, "nome": "PC FIS", "visto_em": "2026-10-01"}],
-                {"fis@x.com": FIS})
+    """A importação do Hardlyze saiu em 14/10/2026, mas os pedidos sem chave que
+    ela criou podem continuar no banco: a primeira bandeja que entra fixa a dela."""
+    cp._banco().table(cp.TABELA).insert({
+        "user_id": FIS, "machine_id": PC_FIS, "nome": "PC FIS", "tipo": cp.PRINCIPAL, "estado": cp.PENDENTE,
+        "pedido_em": "2026-10-01T00:00:00+00:00", "decidido_por": "",
+        "motivo": "Importado do Hardlyze (login da bandeja antiga).",
+    }).execute()
     assert pendente(FIS, PC_FIS) and not pendente(FIS, PC_FIS).get("chave_hash")
     entrar_com(FIS, PC_FIS, chave(PC_FIS))
     assert pendente(FIS, PC_FIS)["chave_hash"] == cp.hash_da_chave(chave(PC_FIS))

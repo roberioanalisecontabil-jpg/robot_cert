@@ -301,8 +301,8 @@ def test_instalar_em_estacao_e_o_unico_caminho() -> None:
     1. O instalador avulso **fica**. Máquina sem agente não recebe comando, e
        ele é como o agente chega na primeira vez; removê-lo tiraria a saída de
        quem não é da frota.
-    2. A rota nova não pode ser usada por acidente: sem a ponte com o portal de
-       inventário configurada, ela recusa antes de emitir token — senão sobraria
+    2. A rota nova não pode ser usada por acidente: sem bandeja autorizada
+       na máquina de destino, ela recusa antes de emitir token — senão sobraria
        uma credencial válida sem consumidor, até expirar.
     """
     from app import config
@@ -324,7 +324,11 @@ def test_instalar_em_estacao_e_o_unico_caminho() -> None:
     # caminho que o AGENTE usa — ele também chega sem credencial neste portal,
     # tendo só o token. Removê-la quebraria a única instalação que restou.
     assert "/api/cert-installer/claim" in caminhos
-    assert hasattr(config, "ponte_invent_configurada"), (
+    # O portão que impede emitir token sem ter para quem mandar era a ponte
+    # com o INVENT; desde 08/10/2026 é a bandeja autorizada da máquina.
+    from app.rotas import instalador
+
+    assert hasattr(instalador, "_exigir_maquina_autorizada"), (
         "sumiu o portão que impede emitir token sem ter para quem mandar"
     )
 

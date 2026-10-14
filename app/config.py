@@ -46,10 +46,10 @@ ACEITAR_API_KEY_COMPARTILHADA = _env_bool(
     "ACEITAR_API_KEY_COMPARTILHADA", default=not bool(DATABASE_URL)
 )
 
-# /claim exige credencial de MÁQUINA deste portal? Hoje quem resgata é o
-# agente do INVENT, que não tem credencial aqui — ele manda só o token. Ligar
-# antes de o agente do INVENT passar a apresentar uma credencial pararia toda
-# instalação. Desligada, o /claim confere o `X-Machine-Id` quando o agente o
+# /claim exige credencial de MÁQUINA deste portal? Quem resgata é a bandeja da
+# estação (Certguard Análise, ou o Hardlyze 2.x onde ainda não foi trocado),
+# que não tem credencial de máquina aqui — ela manda só o token. Ligar pararia
+# toda instalação. Desligada, o /claim confere o `X-Machine-Id` quando o agente o
 # manda e avisa no log quando não manda (janela do achado #21).
 CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA = _env_bool("CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA", default=False)
 
@@ -228,38 +228,13 @@ CERT_INSTALL_TOKEN_TTL_MIN = _env_int(
 VERSAO_AGENTE_ESPERADA = "1.7.1"
 
 
-# ── Ponte com o portal de inventário (INVENT/Hardlyze) ────────────────────
-#
-# É por ela que "instalar nesta máquina" chega ao agente: o agente escuta a fila
-# do INVENT e mais nada, então este portal precisa PEDIR a ele que enfileire.
-#
-# Servidor a servidor, com segredo dedicado. Nenhum dos dois ganha acesso ao
-# banco do outro — o muro que mantém o cofre fora do alcance do código de
-# inventário continua de pé, e essa foi a razão de não unificar os bancos.
-#
-# Vazio = o botão "Instalar na estação" não aparece e o Início diz que a
-# instalação pelo agente não está ligada. Ligar é definir estas duas.
-INVENT_API_URL = (os.getenv("INVENT_API_URL") or "").strip().rstrip("/")
-
-# O MESMO valor configurado como CERT_PORTAL_TOKEN do outro lado. Próprio, e não
-# um token de admin: dá exatamente uma capacidade — enfileirar uma instalação.
-CERT_PORTAL_TOKEN = (os.getenv("CERT_PORTAL_TOKEN") or "").strip()
-
-
-def ponte_invent_configurada() -> bool:
-    return bool(INVENT_API_URL and CERT_PORTAL_TOKEN)
+# A ponte com o INVENT (INVENT_API_URL, CERT_PORTAL_TOKEN) saiu em 14/10/2026:
+# a instalação vai pela fila deste portal desde 08/10, a bandeja das estações
+# é o Certguard Análise (ADR 0003), e a importação de logins do Hardlyze
+# acabou com a transição. Variáveis que sobrarem no .env são ignoradas.
 
 
 _HOSTS_LOCAIS = ("127.0.0.1", "localhost", "::1", "[::1]")
-
-
-def _host_da_url(url: str) -> str:
-    from urllib.parse import urlsplit
-
-    try:
-        return (urlsplit(url).hostname or "").lower()
-    except ValueError:
-        return ""
 
 
 # O portal acrescenta `sslmode=require` a um DATABASE_URL de host não local que
@@ -481,25 +456,6 @@ def verificar_ambiente() -> tuple[list[str], list[str]]:
         avisos.append(
             "CRON_SECRET não definida — no Vercel, o disparo agendado de "
             "alertas responderá 503 e nada será enviado."
-        )
-
-    if not ponte_invent_configurada():
-        avisos.append(
-            "Ponte com o INVENT desligada (INVENT_API_URL/CERT_PORTAL_TOKEN) — "
-            "o Hardlyze não lê o responsável das máquinas e 'Importar do Hardlyze' não funciona."
-        )
-    elif (
-        producao
-        and INVENT_API_URL.lower().startswith("http://")
-        and _host_da_url(INVENT_API_URL) not in _HOSTS_LOCAIS
-    ):
-        # Fatal, não aviso (achado #40): por essa ponte viajam o
-        # CERT_PORTAL_TOKEN e o token de instalação em claro. Na própria
-        # máquina (127.0.0.1:8021, o caso do ANALISESRV) não há fio a escutar.
-        fatais.append(
-            "INVENT_API_URL usa http:// para fora desta máquina — o CERT_PORTAL_TOKEN e "
-            "os tokens de instalação viajariam em claro. Use https:// (ou 127.0.0.1 "
-            "quando o INVENT roda no mesmo servidor)."
         )
 
     if DATABASE_URL:

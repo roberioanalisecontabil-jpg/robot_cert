@@ -27,8 +27,6 @@ def banco(banco_base: _Fake, monkeypatch: pytest.MonkeyPatch) -> _Fake:
         u["deve_trocar_senha"] = False
     for t in ("computador_vinculo", "fila_instalacao", "agent_devices", "carteira_excecao", "install_tokens"):
         banco_base.tabelas[t] = []
-    # Ponte com o Hardlyze desligada: só o caminho novo.
-    monkeypatch.setattr("app.config.INVENT_API_URL", "", raising=False)
     return banco_base
 
 
@@ -210,39 +208,14 @@ def test_rota_de_principais_saiu(client: TestClient, banco: _Fake, monkeypatch: 
     assert "principais" not in r.text
 
 
-def test_importar_do_hardlyze_cria_pedidos_pendentes(client: TestClient, banco: _Fake, monkeypatch) -> None:
-    """Transição: logins da bandeja antiga viram pedidos; a máquina vista por
-    último vira principal sugerida; o resto é empréstimo; repetir não duplica."""
-    import httpx
+def test_ponte_com_o_invent_saiu(client: TestClient, banco: _Fake) -> None:
+    """14/10/2026: projetos separados. A importação de logins do Hardlyze era
+    a transição do ADR 0002 e saiu com a ponte."""
+    from app import config
 
-    monkeypatch.setattr("app.config.INVENT_API_URL", "http://invent", raising=False)
-    monkeypatch.setattr("app.config.CERT_PORTAL_TOKEN", "tk", raising=False)
-    logins = [
-        {"email": "FIS@x.com", "machine_id": PC_FIS.upper(), "nome": "PC-FIS", "visto_em": "2026-10-07T10:00:00Z"},
-        {"email": "fis@x.com", "machine_id": PC_SOL, "nome": "PC-SOL", "visto_em": "2026-10-01T10:00:00Z"},
-        {"email": "ninguem@x.com", "machine_id": "aa:aa:aa:aa:aa:09", "nome": "PC-9", "visto_em": None},
-    ]
-    vistos = []
-
-    def falso_get(url, headers=None, timeout=None):
-        vistos.append((url, headers))
-        return httpx.Response(200, json={"dispositivos": logins}, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(httpx, "get", falso_get)
-    assert client.post("/api/computadores/importar-do-hardlyze", headers=_h(*FISCAL_OP)).status_code == 403
     r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN))
-    assert r.status_code == 200, r.text
-    assert (r.json()["criados"], r.json()["sem_conta"]) == (2, 1)
-    assert vistos[0] == ("http://invent/api/agent/devices/todos", {"Authorization": "Bearer tk"})
-    pend = {v["machine_id"]: v["tipo"] for v in banco.tabelas["computador_vinculo"] if v["estado"] == "pendente"}
-    assert pend == {PC_FIS: "principal", PC_SOL: "emprestimo"}
-    r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN)).json()
-    assert (r["criados"], r["pulados"]) == (0, 2), "repetir não duplica"
-
-
-def test_importar_sem_ponte_avisa(client: TestClient, banco: _Fake) -> None:
-    r = client.post("/api/computadores/importar-do-hardlyze", headers=_h(*ADMIN))
-    assert r.status_code == 409 and "ponte" in r.json()["detail"]
+    assert r.status_code in (404, 405)
+    assert not hasattr(config, "INVENT_API_URL") and not hasattr(config, "ponte_invent_configurada")
 
 
 def test_sem_bandeja_autorizada_nao_ha_instalacao(client: TestClient, banco: _Fake, tokens: dict) -> None:
