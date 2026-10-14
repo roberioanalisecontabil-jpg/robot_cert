@@ -145,6 +145,8 @@ def _abrir_sessao(user: Dict[str, Any], request: Request, response: Response, ip
         # Versão da sessão em vigor (#23): `/api/logout` a incrementa e
         # este token deixa de valer. Coluna ausente (migration pendente) → 0.
         "sv": int(user.get("sessao_versao") or 0),
+        # A conta, e não só o e-mail, que pode mudar de dono (run-2, item 7).
+        "uid": str(user.get("id") or "") or None,
     })
     # Leva D: a sessão do navegador vai SÓ no cookie HttpOnly. O token não
     # volta no corpo desde 09/10/2026 (fim da transição): no corpo, um

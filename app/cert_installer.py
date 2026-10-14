@@ -2373,6 +2373,31 @@ def revogar_tokens_pendentes(user_id: str) -> int:
         return 0
 
 
+def _conferir_par_e_emissor(chave: Any, cert: Any) -> None:
+    """O PFX tem de ser um certificado emitido por alguém, com a chave dele.
+
+    Auditoria run-2, item 11: os metadados do cofre vêm do certificado dentro
+    do PFX, mas um agente comprometido podia montar um autoassinado com
+    "CLIENTE:<CNPJ>" no CN, ou o certificado público verdadeiro do cliente com
+    uma chave qualquer, e o cofre arquivava sob o CNPJ do cliente. Isto não é
+    validar a cadeia até a raiz ICP-Brasil (o portal não carrega as raízes);
+    fecha as duas montagens baratas. Certificados extras no PFX (a cadeia da
+    AC) continuam aceitos: os A1 de verdade vêm com eles.
+    """
+    from cryptography.hazmat.primitives import serialization
+
+    if chave is None:
+        raise ValueError("PFX sem chave privada: o cofre só guarda certificado que instala.")
+    formato = (serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+    if chave.public_key().public_bytes(*formato) != cert.public_key().public_bytes(*formato):
+        raise ValueError("A chave privada do PFX não é a do certificado.")
+    try:
+        cert.verify_directly_issued_by(cert)
+    except Exception:  # noqa: BLE001 — não se assina sozinho: é o esperado
+        return
+    raise ValueError("Certificado autoassinado: o cofre só guarda certificado emitido por uma AC.")
+
+
 def ler_metadados_do_pfx(pfx_bytes: bytes, password: Optional[str]) -> Dict[str, Any]:
     """O que o PFX diz de si mesmo: fingerprint, titular, documento e datas.
 
@@ -2394,16 +2419,17 @@ def ler_metadados_do_pfx(pfx_bytes: bytes, password: Optional[str]) -> Dict[str,
     if password:
         tentativas.append(password.encode("utf-8"))
     tentativas.append(None)
-    cert = None
+    cert = chave = None
     for senha in tentativas:
         try:
-            _key, cert, _more = pkcs12.load_key_and_certificates(pfx_bytes, senha)
+            chave, cert, _more = pkcs12.load_key_and_certificates(pfx_bytes, senha)
             if cert is not None:
                 break
         except Exception:  # noqa: BLE001
             cert = None
     if cert is None:
         raise ValueError("PFX ilegível com a senha informada: o cofre não guarda o que não consegue abrir.")
+    _conferir_par_e_emissor(chave, cert)
 
     subject = cert.subject.rfc4514_string() if cert.subject else None
     nome, documento, tipo = parse_nome_cnpj_cpf_from_cn(extract_cn_rfc4514(subject))

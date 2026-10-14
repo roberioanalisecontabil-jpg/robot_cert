@@ -3,8 +3,9 @@
 Desde o lote 2 da auditoria (#4) o servidor LÊ o PFX enviado em /upload-pfx:
 o fingerprint declarado tem de ser o do certificado dentro dele, e os
 metadados gravados são os do certificado. Quatro bytes em base64 deixaram de
-servir como PFX; este módulo gera um autoassinado, com CN no padrão
-ICP-Brasil "NOME:CNPJ", uma vez por processo.
+servir como PFX; este módulo gera um, com CN no padrão ICP-Brasil
+"NOME:CNPJ", uma vez por processo. Emitido por uma AC de teste, e não
+autoassinado: o cofre recusa autoassinado desde a run-2 (item 11).
 """
 
 from __future__ import annotations
@@ -16,6 +17,17 @@ from typing import Any, Dict
 
 DOC_PADRAO = "12345678000195"
 SENHA_PADRAO = "abc123"
+
+
+@lru_cache(maxsize=None)
+def ac_de_teste() -> Any:
+    """(chave, nome) da AC que assina os certificados de teste."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    chave = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return chave, x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AC TESTE")])
 
 
 @lru_cache(maxsize=None)
@@ -36,11 +48,11 @@ def gerar_pfx(cnpj: str = DOC_PADRAO, senha: str = SENHA_PADRAO,
     agora = datetime.now(timezone.utc)
     cert = (
         x509.CertificateBuilder()
-        .subject_name(sujeito).issuer_name(sujeito).public_key(key.public_key())
+        .subject_name(sujeito).issuer_name(ac_de_teste()[1]).public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(agora - timedelta(days=1))
         .not_valid_after(agora + timedelta(days=dias))
-        .sign(key, hashes.SHA256())
+        .sign(ac_de_teste()[0], hashes.SHA256())
     )
     pfx = pkcs12.serialize_key_and_certificates(
         b"teste", key, cert, None, serialization.BestAvailableEncryption(senha.encode()),

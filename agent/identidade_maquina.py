@@ -252,13 +252,15 @@ def pode_guardar() -> bool:
     """
     if sys.platform != "win32" or not hasattr(ctypes, "windll"):
         return False
-    ensaio = caminho().with_name("maquina.probe")
+    # Nome aleatório e o mesmo caminho de `gravar_protegido` (auditoria run-2,
+    # item 16): o nome fixo `maquina.probe`, numa pasta onde conta comum cria
+    # arquivos, deixava alguém plantar um link ali e o `icacls` deste serviço
+    # (LocalSystem) trocar a ACL do arquivo para onde o link apontasse.
+    ensaio = caminho().with_name(f".ensaio-{secrets.token_hex(16)}.probe")
     try:
         if desproteger(proteger(b"ensaio")) != b"ensaio":
             return False
-        ensaio.parent.mkdir(parents=True, exist_ok=True)
-        ensaio.write_bytes(b"ensaio")
-        _aplicar_acl(ensaio)
+        gravar_protegido(ensaio, b"ensaio")
         return True
     except Exception:  # noqa: BLE001
         LOGGER.warning(

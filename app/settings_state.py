@@ -103,7 +103,11 @@ def _e_unc(texto: str) -> bool:
     # As formas mistas ('\\/host', '/\\host') o Windows também lê como UNC, e
     # escapavam do teste por prefixo literal: o `resolve()` abaixo abria SMB
     # contra o host antes da recusa (auditoria de 10/10/2026).
-    return texto.replace("/", "\\").startswith("\\\\")
+    # '\??\' é o espaço de nomes do NT ('\??\UNC\host\...',
+    # '\??\GLOBALROOT\Device\Mup\...'): começa com UMA barra e escapava do
+    # mesmo jeito (auditoria run-2, item 17). Pasta de verdade não começa assim.
+    normal = texto.replace("/", "\\")
+    return normal.startswith("\\\\") or normal.startswith("\\??\\")
 
 
 def _sob_raiz_unc(p: str, raizes) -> bool:

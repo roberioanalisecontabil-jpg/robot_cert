@@ -126,6 +126,13 @@ class TokenData(BaseModel):
     # anterior ao lote 9 — vale como 0, que é o DEFAULT da coluna, para o
     # deploy não deslogar ninguém.
     sessao_versao: Optional[int] = None
+    # `users.id` da conta para a qual o token foi emitido (`uid`, assinado).
+    # A sessão é achada pelo e-mail, que o admin pode passar de uma conta para
+    # outra; `sv` é um contador por conta e pode coincidir entre duas, então só
+    # o id amarra o token à conta (auditoria run-2, item 7). None em token
+    # anterior a 14/10/2026: aceito até expirar, para o deploy não deslogar
+    # ninguém.
+    conta_id: Optional[str] = None
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -216,9 +223,11 @@ def decode_access_token(token: str) -> Optional[TokenData]:
             datetime.fromtimestamp(int(bruto), tz=timezone.utc) if bruto else None
         )
         sv = payload.get("sv")
+        uid = payload.get("uid")
         return TokenData(
             email=email, role=role, emitido_em=emitido,
             sessao_versao=int(sv) if sv is not None else None,
+            conta_id=str(uid) if uid else None,
         )
     except (JWTError, RuntimeError, TypeError, ValueError, OSError, OverflowError):
         return None

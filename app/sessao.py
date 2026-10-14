@@ -171,6 +171,13 @@ def _sessao_do_token(token_data: auth.TokenData) -> auth.TokenData:
 
     if conta is None:
         return token_data
+    if token_data.conta_id and str(conta.get("id")) != token_data.conta_id:
+        # O e-mail do token agora é de outra conta (auditoria run-2, item 7).
+        raise HTTPException(
+            status_code=401,
+            detail=SESSAO_ENCERRADA,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     if not auth.conta_ativa(conta):
         raise HTTPException(
             status_code=401,

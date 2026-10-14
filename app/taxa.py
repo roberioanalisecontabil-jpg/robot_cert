@@ -22,11 +22,15 @@ melhor que negar serviço a todo mundo por causa do limitador. A queda é
 logada; um limitador que degrada em silêncio é o defeito que este módulo veio
 corrigir.
 
-── A corrida entre instâncias é aceita ───────────────────────────────────
+── Conta depois de inserir ───────────────────────────────────────────────
 
-Duas instâncias podem contar 9 ao mesmo tempo e ambas inserirem — o teto vira
-11 por um instante. Rate limit é amortecedor, não catraca: o custo de fechar a
-corrida (lock/RPC) não paga o ganho de uma tentativa a menos.
+Até 14/10/2026 contava e só depois inseria, e pedidos simultâneos viam todos
+o mesmo número abaixo do teto: a rajada passava inteira (auditoria run-2,
+item 8 — o código do app autenticador, que não queima no erro, só tem este
+teto por conta). Agora insere, conta incluindo a própria linha e, passando do
+teto, apaga a própria linha e recusa — o padrão de `senha_reset.criar_codigo`.
+Numa rajada, quem chega depois enxerga os outros; no pior caso todos se veem e
+todos ficam de fora, o que erra para o lado seguro.
 """
 
 from __future__ import annotations
@@ -98,6 +102,11 @@ def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
         agora = datetime.now(timezone.utc)
         corte_janela = (agora - timedelta(seconds=janela_seg)).isoformat()
         try:
+            inserida = client.table(TABELA).insert(
+                {"chave": chave, "quando": agora.isoformat()}
+            ).execute()
+            global _estado_persistente
+            _estado_persistente = True
             r = (
                 client.table(TABELA)
                 .select("id")
@@ -105,13 +114,18 @@ def permitir(chave: str, maximo: int, janela_seg: float) -> bool:
                 .gte("quando", corte_janela)
                 .execute()
             )
-            global _estado_persistente
-            _estado_persistente = True
-            if len(r.data or []) >= maximo:
+            if len(r.data or []) > maximo:
+                # Apagada, não mantida: recusa não conta, como antes, senão
+                # uma rajada recusada manteria a chave travada pela janela toda.
+                minha_id = ((inserida.data or [{}])[0]).get("id")
+                apagar = client.table(TABELA).delete()
+                if minha_id is not None:
+                    apagar = apagar.eq("id", minha_id)
+                else:
+                    apagar = apagar.eq("chave", chave).eq("quando", agora.isoformat())
+                with contextlib.suppress(Exception):
+                    apagar.execute()
                 return False
-            client.table(TABELA).insert(
-                {"chave": chave, "quando": agora.isoformat()}
-            ).execute()
             # Poda da própria chave: barata (índice em chave+quando) e mantém a
             # tabela no tamanho de (chaves ativas × máximo).
             with contextlib.suppress(Exception):

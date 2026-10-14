@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app import auth, cert_installer, nomes, permissoes
@@ -457,6 +458,11 @@ MAX_XLSX_DESCOMPACTADO = 40 * 1024 * 1024
 MAX_XLSX_PARTE = 20 * 1024 * 1024
 MAX_XLSX_PARTES = 200
 MAX_XLSX_RAZAO = 200
+# Estilos e textos compartilhados o openpyxl lê INTEIROS antes do teto de
+# linhas, com ou sem read_only (auditoria run-2, item 15). Os de uma carteira
+# têm dezenas de KB; 20 MB de styles.xml prendiam o processo.
+MAX_XLSX_LIDO_INTEIRO = 5 * 1024 * 1024
+PARTES_LIDAS_INTEIRAS = ("xl/styles.xml", "xl/sharedstrings.xml")
 
 
 def _conferir_zip_do_xlsx(raw: bytes) -> None:
@@ -471,6 +477,8 @@ def _conferir_zip_do_xlsx(raw: bytes) -> None:
         len(partes) > MAX_XLSX_PARTES
         or total > MAX_XLSX_DESCOMPACTADO
         or any(p.file_size > MAX_XLSX_PARTE for p in partes)
+        or any(p.filename.lower() in PARTES_LIDAS_INTEIRAS and p.file_size > MAX_XLSX_LIDO_INTEIRO
+               for p in partes)
         # Razão só em parte grande: XML pequeno e repetitivo comprime muito
         # sem ser ameaça nenhuma.
         or any(p.file_size > 1024 * 1024 and p.compress_size and p.file_size / p.compress_size > MAX_XLSX_RAZAO
@@ -518,7 +526,9 @@ async def importar_carteiras(
     if nome.endswith(".xlsx") and not raw.startswith(b"PK"):
         raise HTTPException(status_code=422, detail="Isto não é um .xlsx válido.")
 
-    linhas = _linhas_da_planilha(nome, raw)
+    # Numa thread: o openpyxl é síncrono e, aqui no laço de eventos, parava
+    # todas as outras requisições do processo enquanto lia (run-2, item 15).
+    linhas = await run_in_threadpool(_linhas_da_planilha, nome, raw)
     if not linhas:
         raise HTTPException(status_code=422, detail="A planilha não tem nenhuma linha de dados.")
 

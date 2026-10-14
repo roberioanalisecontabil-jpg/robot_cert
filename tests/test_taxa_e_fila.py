@@ -295,3 +295,33 @@ def test_sem_a_migration_o_pop_cai_no_caminho_antigo(
     assert any("20260902110000" in m for m in caplog.messages), (
         "o aviso precisa apontar a migration que falta"
     )
+
+
+def test_rajada_simultanea_nao_passa_do_teto(banco_taxa: _FakeBancoTaxa, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auditoria run-2, item 8: contando antes de inserir, cinco pedidos ao
+    mesmo tempo viam todos zero e passavam os cinco num teto de três. A
+    barreira segura o resultado de cada contagem até os cinco terem contado:
+    o pior caso da corrida. Contando depois de inserir, a n-ésima linha
+    gravada vê pelo menos n linhas, e a quarta em diante é recusada."""
+    import threading
+
+    n = 5
+    barreira = threading.Barrier(n, timeout=5)
+    original = _QueryTaxa.execute
+
+    def execute(self: _QueryTaxa) -> _Res:
+        res = original(self)
+        if self._op == "select":
+            barreira.wait()
+        return res
+
+    monkeypatch.setattr(_QueryTaxa, "execute", execute)
+    resultados: List[bool] = []
+    threads = [threading.Thread(target=lambda: resultados.append(taxa.permitir("r:u1", 3, 60.0))) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(resultados) == n
+    assert sum(resultados) <= 3, f"{sum(resultados)} de {n} passaram num teto de 3"
+    assert len(banco_taxa.linhas) == sum(resultados), "recusa não pode ficar contando"

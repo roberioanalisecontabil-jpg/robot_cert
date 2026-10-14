@@ -499,7 +499,23 @@ def test_acl_que_falha_apaga_o_arquivo_e_levanta(
 @_dpapi
 def test_pode_guardar_ensaia_de_verdade(cofre: Path) -> None:
     assert identidade_maquina.pode_guardar() is True
-    assert not cofre.with_name("maquina.probe").exists(), "o ensaio se limpa"
+    assert list(cofre.parent.iterdir()) == [], "o ensaio se limpa"
+
+
+@_dpapi
+def test_ensaio_nao_reaproveita_o_que_alguem_plantou(cofre: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auditoria run-2, item 16: o ensaio abria e truncava `maquina.probe`, nome
+    fixo numa pasta onde conta comum cria arquivos, e o `icacls` seguia links.
+    Agora o nome é aleatório e o arquivo nasce pelo `gravar_protegido`."""
+    plantado = cofre.with_name("maquina.probe")
+    plantado.write_bytes(b"de outra conta")
+    tocados: list = []
+    monkeypatch.setattr(identidade_maquina, "_aplicar_acl", lambda arquivo: tocados.append(Path(arquivo)))
+
+    assert identidade_maquina.pode_guardar() is True
+    assert plantado.read_bytes() == b"de outra conta"
+    assert tocados and all(t.name != "maquina.probe" for t in tocados)
+    assert [p.name for p in cofre.parent.iterdir()] == ["maquina.probe"]
 
 
 def test_credencial_de_maquina_nao_emite_para_outra(

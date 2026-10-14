@@ -76,3 +76,38 @@ def test_reativar_nao_ressuscita_o_token_de_antes_da_desativacao(client: TestCli
     assert not _vale(client, h_da_ana)
     assert client.post("/api/users/u-ana/reactivate", headers=_admin()).status_code == 200
     assert not _vale(client, h_da_ana), "o token de antes da desativação voltou a valer"
+
+
+def test_contadores_iguais_nao_levam_o_token_para_a_conta_que_recebeu_o_email(
+    client: TestClient, banco_usuarios
+) -> None:
+    """Auditoria run-2, item 7: `sv` é contador por conta. A Ana (sv 1) perde o
+    e-mail; a Carla (sv 0) o recebe e sobe para 1. Sem o id da conta no token,
+    o token da Ana passava a ser sessão da Carla, com o papel dela."""
+    from tests.test_seguranca_lote1 import _usuario
+
+    contas = {u["id"]: u for u in banco_usuarios.tabelas["users"]}
+    contas["u-ana"]["sessao_versao"] = 1
+    contas["u-adm"]["sessao_versao"] = 0
+    banco_usuarios.tabelas["users"].append(_usuario("u-carla", "carla@x.com", "admin", sessao_versao=0))
+    h_da_ana = {"Authorization": "Bearer " + auth.create_access_token(
+        {"sub": "ana@x.com", "role": "user", "sv": 1, "uid": "u-ana"})}
+    assert _vale(client, h_da_ana)
+    r = client.put("/api/users/u-ana", json={"email": "ana.antiga@x.com", "full_name": "Ana", "role": "user"},
+                   headers=_admin())
+    assert r.status_code == 200, r.text
+    r = client.put("/api/users/u-carla", json={"email": "ana@x.com", "full_name": "Carla", "role": "admin"},
+                   headers=_admin())
+    assert r.status_code == 200, r.text
+    carla = next(u for u in banco_usuarios.tabelas["users"] if u["id"] == "u-carla")
+    assert carla["sessao_versao"] == 1, "o cenário precisa dos contadores iguais"
+    assert not _vale(client, h_da_ana), "o token da Ana entrou como a Carla"
+
+
+def test_login_grava_o_id_da_conta_no_token() -> None:
+    from app.rotas import usuarios
+    import inspect
+
+    assert '"uid": str(user.get("id")' in inspect.getsource(usuarios._abrir_sessao)
+    dados = auth.decode_access_token(auth.create_access_token({"sub": "a@x.com", "role": "user", "uid": "u-1"}))
+    assert dados is not None and dados.conta_id == "u-1"
