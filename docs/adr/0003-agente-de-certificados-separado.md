@@ -88,3 +88,36 @@ combinada em `decisoes-proximas-frentes.md`.
    certificados.
 7. **Ensaio** numa máquina de teste: Hardlyze com bandeja antiga → atualização → agente novo
    entra sozinho, instala um certificado de teste; depois uma versão quebrada volta sozinha.
+
+## Adendo de 14/10/2026: separação antes da atualização automática
+
+O ensaio da atualização automática do Hardlyze 2.2.x falhou de novo, e esperar por ele
+travava os dois portais. A ordem foi invertida (decidido em conversa, 14/10/2026): o agente de
+certificados sai **agora**, o INVENT põe o próprio agente em pleno funcionamento e publica o
+site, e a atualização automática dos dois agentes fica **por último**. O que muda neste ADR:
+
+- **Instalação manual, máquina por máquina.** Em cada estação: desinstalar o Hardlyze atual,
+  instalar o Hardlyze sem certificados e o agente novo. Nunca há duas bandejas de certificado
+  na mesma máquina. O passo 6 do plano deixa de ser "o Hardlyze instala o agente novo".
+- **1.0 sem serviço.** Sem atualização automática, o serviço só guardaria a chave da máquina.
+  Quem cuida dela é o **instalador**, que já roda como administrador: copia
+  `%ProgramData%\InventAgent\chave_certificados.dat` para `%ProgramData%\CertguardAnalise\`
+  (mesma ACL: SYSTEM e Administradores total, Usuários leitura) e **apaga o original**; se não
+  houver chave antiga, gera uma nova (e a máquina passa pela aprovação do administrador, como
+  equipamento novo). O serviço volta junto com a atualização automática.
+- **Transição.** A bandeja, no primeiro uso de cada pessoa, lê o
+  `%LOCALAPPDATA%\InventAgent\certificados.dat` do Hardlyze, grava o seu e **apaga o
+  original**. Como o hash da chave não muda, quem já estava autorizado continua autorizado.
+  Consequência aceita: se o Hardlyze antigo for reinstalado, ele gera outra chave e aquela
+  máquina volta a pedir aprovação; o agente novo não é afetado.
+- **1.0 só com o que a bandeja do Hardlyze faz hoje** (entrar, situação, receber e instalar,
+  sair). Nada de função nova: se algo quebrar, foi a separação.
+- **Nada no portal para distribuir** (passo 1 do plano adiado): o instalador fica numa pasta
+  do ANALISESRV.
+- **Nome e lugar:** "Certguard Análise", `C:\Program Files\Certguard Analise`,
+  `%ProgramData%\CertguardAnalise`, `%LOCALAPPDATA%\CertguardAnalise`,
+  `certguard_analise.exe`, versão 1.0.0, código em `estacao/`.
+- **Ensaio** na máquina de teste, na ordem real (Hardlyze logado → desinstala → instala os
+  dois → bandeja já entra logada → instala um certificado), antes de qualquer estação.
+
+O que o INVENT precisa tirar do Hardlyze está em `docs/separacao-agente-hardlyze.md`.

@@ -40,6 +40,9 @@ build/
 dist/*
 dist_smoke/
 build_smoke/
+# Certguard Analise (scripts/build_estacao.ps1)
+dist_estacao/
+build_estacao/
 
 # Excecao: o instalador avulso PRECISA estar no repositorio. O deploy e um push
 # para o Render, que builda com pip num container Linux e nunca geraria um .exe
