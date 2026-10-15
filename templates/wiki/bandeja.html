@@ -1,0 +1,68 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Todos"]) }}
+
+<p>A bandeja <strong>Certguard Análise</strong> é o programa que fica no canto da barra de tarefas do Windows, perto do relógio. Ela liga o seu computador à sua conta do portal e instala os certificados que você pede no Início. É preciso tê-la em cada computador onde se instala certificado.</p>
+{{ print("bandeja-icone", "Área de notificação do Windows, perto do relógio, com o ícone do Certguard Análise", "O ícone da bandeja") }}
+
+<h2 id="entrar">Entrar na bandeja pela primeira vez</h2>
+<ol>
+  <li>Na primeira vez, a janela <strong>Entrar no portal de certificados</strong> abre sozinha. Se não abrir, clique com o botão direito no ícone <strong>Certguard Análise</strong> e escolha <strong>Entrar no portal de certificados…</strong>.</li>
+  <li>Digite o <strong>E-mail</strong> e a <strong>Senha</strong> do portal, os mesmos do navegador.
+    {{ print("bandeja-login", "Janela Entrar no portal de certificados com os campos E-mail e Senha e o botão Entrar") }}
+  </li>
+  <li>Clique em <strong>Entrar</strong>. O botão mostra "Entrando…".</li>
+  <li>Se o computador já está autorizado, aparece "Computador autorizado.". Se é a primeira vez, aparece "Aguardando o administrador autorizar este computador.".
+    {{ print("bandeja-pendente", "Janela de login da bandeja com a mensagem Aguardando o administrador autorizar este computador e o botão Pronto") }}
+  </li>
+  <li>Clique em <strong>Pronto</strong> para fechar a janela.</li>
+</ol>
+
+{% call dica("Senha provisória") %}
+<p>Se a janela disser "Sua senha é provisória. Troque-a no portal e volte aqui.", entre primeiro no portal pelo navegador e defina a sua senha. Veja <a href="/wiki-certguard?modulo=primeiros-passos">Primeiros passos</a>.</p>
+{% endcall %}
+
+<h2 id="autorizacao">Esperar a autorização do administrador</h2>
+<ol>
+  <li>Clique com o botão direito no ícone. A primeira linha do menu mostra a situação: seu e-mail e "aguardando autorização".</li>
+  <li>O administrador recebe o pedido no sino do portal e autoriza na página <strong>Usuários</strong>, aba <strong>Computadores</strong>.</li>
+  <li>Quando o computador for autorizado, a bandeja mostra o aviso "Este computador foi autorizado no portal de certificados." e a primeira linha do menu passa a "computador autorizado".
+    {{ print("bandeja-menu", "Menu do ícone da bandeja com a linha computador autorizado e os itens Status e histórico, Entrar no portal de certificados, Sair da conta de certificados e Fechar") }}
+  </li>
+</ol>
+
+<h2 id="instalar">Receber e instalar um certificado pedido no portal</h2>
+<ol>
+  <li>Com a bandeja conectada e autorizada, peça a instalação no Início do portal: <strong>Selecionar</strong> e depois <strong>Instalar selecionados</strong>. Veja <a href="/wiki-certguard?modulo=inicio#instalar">Início</a>.</li>
+  <li>A bandeja confere a cada 20 segundos se há pedido para este computador.</li>
+  <li>Ao receber, ela instala sozinha, sem perguntar nada.</li>
+  <li>No canto da tela aparece "1 certificado(s) instalado(s).", com a quantidade instalada e, se houver, quantos falharam.
+    {{ print("bandeja-aviso-instalado", "Aviso do Windows dizendo 1 certificado(s) instalado(s)") }}
+  </li>
+  <li>O certificado fica no seu usuário do Windows, pronto para usar.</li>
+</ol>
+
+<h2 id="status">Ver o que a bandeja fez</h2>
+<ol>
+  <li>Dê dois cliques no ícone ou escolha <strong>Status e histórico</strong> no menu.</li>
+  <li>A janela mostra <strong>Usuário</strong>, <strong>Máquina</strong>, <strong>Portal</strong>, <strong>Versão</strong> e o "Histórico das ações realizadas:".
+    {{ print("bandeja-status", "Janela Status e histórico da bandeja com os dados do usuário e da máquina e o histórico de instalações") }}
+  </li>
+  <li>No menu <strong>Conta</strong> da janela há <strong>Entrar no portal…</strong> e <strong>Sair da conta nesta máquina</strong>.</li>
+</ol>
+
+<h2 id="sair">Sair da conta neste computador</h2>
+<ol>
+  <li>Clique com o botão direito no ícone.</li>
+  <li>Escolha <strong>Sair da conta de certificados</strong>. A primeira linha do menu volta para "Certificados: entre com sua conta".</li>
+</ol>
+
+<h2 id="dicas">Dicas e cuidados</h2>
+{% call cuidado("Um computador por vez") %}
+<p>Cada pessoa usa a bandeja em um computador por vez. Entrar na bandeja de outro computador, de um colega por exemplo, encerra a sua sessão nos outros. O computador novo fica aguardando o administrador autorizar, como empréstimo com prazo ou como troca do seu computador principal. No seu computador principal, basta entrar de novo.</p>
+{% endcall %}
+{% call cuidado("Trocar a senha encerra a bandeja") %}
+<p>Trocar ou redefinir a senha encerra a bandeja. Aparece "Sua sessão no portal de certificados foi encerrada neste computador.". Entre de novo com a senha nova.</p>
+{% endcall %}
+{% call dica("Fechar a bandeja") %}
+<p>A bandeja abre sozinha quando o Windows inicia. <strong>Fechar</strong>, no menu do ícone, encerra a bandeja, e os pedidos deixam de chegar até ela ser aberta de novo: pelo atalho <strong>Certguard Análise</strong> no menu Iniciar ou reiniciando o computador.</p>
+{% endcall %}

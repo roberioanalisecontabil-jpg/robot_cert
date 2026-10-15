@@ -1,0 +1,68 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+
+<p>No Acompanhamento você escolhe quais clientes quer acompanhar e como quer ser avisado por e-mail antes do vencimento. O sino e os e-mails de vencimento seguem essa escolha.</p>
+
+<h2 id="escolher">Escolher os clientes que vai acompanhar</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Acompanhamento</strong>. A página se chama <strong>Acompanhamento de certificados</strong>.</li>
+  <li>Clique na aba <strong>Escolher certificados</strong>.</li>
+  <li>Use a busca (<strong>Nome ou CNPJ/CPF</strong>) para achar o cliente.</li>
+  <li>Marque a caixa ao lado de cada cliente. A barra de baixo mostra quantos estão marcados e avisa que há alterações não salvas.
+    {{ print("acomp-escolher", "Aba Escolher certificados com dois clientes marcados e a barra de baixo avisando alterações não salvas", "Marque e depois salve") }}
+  </li>
+  <li>Clique em <strong>Salvar seleção</strong>. O número entre parênteses é quantos estão marcados.</li>
+  <li>O portal confirma, por exemplo, "3 certificados selecionados para acompanhamento.".
+    {{ print("acomp-salvo", "Aviso de sucesso confirmando os certificados selecionados para acompanhamento") }}
+  </li>
+  <li>Mudou de ideia antes de salvar? Clique em <strong>Desfazer</strong>.</li>
+</ol>
+
+{% call dica("A seleção vale para todas as páginas") %}
+<p>O que você marcou em outra página da lista continua marcado na hora de salvar.</p>
+{% endcall %}
+
+<h2 id="acompanhados">Ver os acompanhados</h2>
+<ol>
+  <li>Clique na aba <strong>Acompanhados</strong>. O número entre parênteses é o total.</li>
+  <li>No topo estão <strong>Vencidos</strong>, <strong>A vencer em 30 dias</strong>, <strong>Ativos</strong> (mais de 30 dias de validade) e, quando houver, <strong>Sem leitura</strong>.
+    {{ print("acomp-acompanhados", "Aba Acompanhados com os números de vencidos, a vencer e ativos e a tabela de clientes", "O resumo dos clientes que você acompanha") }}
+  </li>
+  <li>A tabela mostra <strong>Cliente</strong>, <strong>Vencimento</strong> e <strong>Status</strong>, do vencimento mais próximo para o mais distante.</li>
+  <li>Use a busca <strong>Nome ou CNPJ/CPF</strong> para filtrar a tabela. Os números do topo não mudam com a busca.</li>
+</ol>
+<p>Se você ainda não escolheu ninguém, a aba mostra "Você ainda não acompanha nenhum certificado" e um atalho para <strong>Escolher certificados</strong>.</p>
+{{ print("acomp-vazio", "Aba Acompanhados vazia, com a mensagem Você ainda não acompanha nenhum certificado e o botão Escolher certificados") }}
+
+<h2 id="aviso-por-email">Ligar ou ajustar o aviso por e-mail</h2>
+<ol>
+  <li>Na aba <strong>Acompanhados</strong>, clique na linha <strong>Aviso por e-mail</strong> para abri-la.</li>
+  <li>Marque <strong>Quero receber aviso dos certificados que acompanho</strong>.</li>
+  <li>Em <strong>Avisar quando faltarem</strong>, marque os prazos que quer receber, por exemplo 30 dias.
+    {{ print("acomp-aviso-email", "Bloco Aviso por e-mail aberto, com a caixa para receber aviso e os prazos para marcar") }}
+  </li>
+  <li>Clique em <strong>Salvar preferência</strong>. Aparece "Preferência salva.".</li>
+</ol>
+
+{% call dica("Desmarcar um prazo") %}
+<p>Desmarcar um prazo dispensa só aquele lembrete. O aviso de que o certificado venceu continua chegando enquanto o aviso por e-mail estiver ligado.</p>
+{% endcall %}
+
+<h2 id="avisos-enviados">Conferir os avisos que já foram enviados</h2>
+<ol>
+  <li>Clique na aba <strong>Avisos enviados</strong>.</li>
+  <li>Em <strong>Período</strong>, escolha <strong>Últimos 7 dias</strong>, <strong>Últimos 30 dias</strong> ou <strong>Últimos 90 dias</strong>.
+    {{ print("acomp-enviados", "Aba Avisos enviados com o período Últimos 30 dias e a tabela de avisos") }}
+  </li>
+  <li>A tabela mostra <strong>Quando</strong>, <strong>Aviso</strong> e <strong>Cliente</strong>. O administrador vê também a coluna <strong>Para</strong>, com quem recebeu.
+    {{ print("acomp-enviados-admin", "Aba Avisos enviados vista pelo administrador, com a coluna Para") }}
+  </li>
+</ol>
+
+<h2 id="dicas">Dicas</h2>
+{% call dica("Só clientes da sua carteira") %}
+<p>Só aparecem para escolha os clientes da sua carteira. Se um cliente sair da sua carteira, ele sai do acompanhamento; se voltar, a escolha volta.</p>
+{% endcall %}
+{% call dica("Botões de salvar apagados") %}
+<p>Se os botões de salvar estiverem apagados, com a mensagem "Seu perfil só consulta o acompanhamento", você pode consultar mas não mudar a escolha. Peça ao administrador a permissão de edição.</p>
+{% endcall %}

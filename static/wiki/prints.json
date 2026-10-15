@@ -1,0 +1,452 @@
+{
+ "acomp-acompanhados": {
+  "w": 1440,
+  "h": 900,
+  "v": "8acd2738"
+ },
+ "acomp-aviso-email": {
+  "w": 1150,
+  "h": 306,
+  "v": "f598d3d2"
+ },
+ "acomp-enviados-admin": {
+  "w": 1150,
+  "h": 860,
+  "v": "411d15c8"
+ },
+ "acomp-enviados": {
+  "w": 1150,
+  "h": 283,
+  "v": "5736d44c"
+ },
+ "acomp-escolher": {
+  "w": 1440,
+  "h": 900,
+  "v": "7d5414eb"
+ },
+ "acomp-salvo": {
+  "w": 1440,
+  "h": 900,
+  "v": "efd50399"
+ },
+ "acomp-vazio": {
+  "w": 1150,
+  "h": 324,
+  "v": "490fa7d4"
+ },
+ "app-aut-inicio": {
+  "w": 460,
+  "h": 286,
+  "v": "90549763"
+ },
+ "app-aut-menu": {
+  "w": 250,
+  "h": 900,
+  "v": "8454dec6"
+ },
+ "app-aut-qr": {
+  "w": 460,
+  "h": 676,
+  "v": "852413d9"
+ },
+ "carteiras-filtro": {
+  "w": 740,
+  "h": 624,
+  "v": "9b0ea298"
+ },
+ "carteiras-gestor-excecoes": {
+  "w": 740,
+  "h": 755,
+  "v": "68bd0d96"
+ },
+ "carteiras-historico": {
+  "w": 724,
+  "h": 119,
+  "v": "45bd10ed"
+ },
+ "carteiras-importar": {
+  "w": 704,
+  "h": 428,
+  "v": "26e761a5"
+ },
+ "carteiras-inicio": {
+  "w": 1440,
+  "h": 900,
+  "v": "b973e68c"
+ },
+ "carteiras-operador": {
+  "w": 740,
+  "h": 716,
+  "v": "0d13b8ff"
+ },
+ "carteiras-selecao": {
+  "w": 692,
+  "h": 449,
+  "v": "ddd60be7"
+ },
+ "carteiras-sem-carteira": {
+  "w": 740,
+  "h": 677,
+  "v": "e7ce6216"
+ },
+ "configuracao-alertas-disparo": {
+  "w": 512,
+  "h": 314,
+  "v": "ef4415e8"
+ },
+ "configuracao-alertas-m365": {
+  "w": 1440,
+  "h": 900,
+  "v": "410ad514"
+ },
+ "configuracao-alertas-quem-quando": {
+  "w": 1440,
+  "h": 900,
+  "v": "7bda4f8d"
+ },
+ "configuracao-alertas-texto": {
+  "w": 704,
+  "h": 782,
+  "v": "e101230d"
+ },
+ "configuracao-alertas-topo": {
+  "w": 1440,
+  "h": 900,
+  "v": "f2e94822"
+ },
+ "configuracao-chave": {
+  "w": 1440,
+  "h": 900,
+  "v": "6a7d2984"
+ },
+ "configuracao-comandos": {
+  "w": 1118,
+  "h": 317,
+  "v": "e5a0a170"
+ },
+ "configuracao-pastas": {
+  "w": 1118,
+  "h": 1147,
+  "v": "bb876df2"
+ },
+ "configuracao-sieg": {
+  "w": 1118,
+  "h": 670,
+  "v": "340befe7"
+ },
+ "dashboard-acesso": {
+  "w": 362,
+  "h": 507,
+  "v": "f4f39cd9"
+ },
+ "dashboard-atividade": {
+  "w": 1118,
+  "h": 730,
+  "v": "3d366cf6"
+ },
+ "dashboard-geral": {
+  "w": 1190,
+  "h": 2450,
+  "v": "003ff24c"
+ },
+ "dashboard-instalacoes": {
+  "w": 362,
+  "h": 420,
+  "v": "61461e5b"
+ },
+ "dashboard-periodo": {
+  "w": 1142,
+  "h": 67,
+  "v": "581510bb"
+ },
+ "dashboard-vencimentos": {
+  "w": 362,
+  "h": 507,
+  "v": "eda06892"
+ },
+ "dup-atualizando": {
+  "w": 1190,
+  "h": 1306,
+  "v": "328ab3f1"
+ },
+ "dup-confirmado": {
+  "w": 1118,
+  "h": 336,
+  "v": "a8b48704"
+ },
+ "dup-copiar": {
+  "w": 1118,
+  "h": 337,
+  "v": "29f43fb8"
+ },
+ "dup-resumo": {
+  "w": 1440,
+  "h": 900,
+  "v": "33204a6b"
+ },
+ "dup-revisar": {
+  "w": 1118,
+  "h": 227,
+  "v": "a47b12e0"
+ },
+ "historico-busca": {
+  "w": 1118,
+  "h": 336,
+  "v": "bdc3b15e"
+ },
+ "historico-exportar": {
+  "w": 1118,
+  "h": 872,
+  "v": "20d2dff5"
+ },
+ "historico-filtro-expirados": {
+  "w": 1118,
+  "h": 336,
+  "v": "afcc6911"
+ },
+ "historico-lista": {
+  "w": 1440,
+  "h": 900,
+  "v": "419e9467"
+ },
+ "inicio-busca": {
+  "w": 1118,
+  "h": 256,
+  "v": "85b0ad51"
+ },
+ "inicio-detalhes": {
+  "w": 704,
+  "h": 868,
+  "v": "046b9952"
+ },
+ "inicio-exportar": {
+  "w": 1118,
+  "h": 799,
+  "v": "df70c1a5"
+ },
+ "inicio-filtro-expirando": {
+  "w": 1118,
+  "h": 555,
+  "v": "85f90939"
+ },
+ "inicio-filtro-sieg": {
+  "w": 1118,
+  "h": 510,
+  "v": "f46a7e44"
+ },
+ "inicio-lista": {
+  "w": 1440,
+  "h": 900,
+  "v": "9ba86e74"
+ },
+ "inicio-selecao": {
+  "w": 1118,
+  "h": 1014,
+  "v": "d220257c"
+ },
+ "inicio-sem-agente": {
+  "w": 1118,
+  "h": 1014,
+  "v": "ce368a48"
+ },
+ "inicio-sieg-confirmar": {
+  "w": 512,
+  "h": 398,
+  "v": "2f8b7911"
+ },
+ "inicio-sino": {
+  "w": 320,
+  "h": 400,
+  "v": "33b7ea76"
+ },
+ "instalador-configuracao": {
+  "w": 1118,
+  "h": 387,
+  "v": "8ccfc0d3"
+ },
+ "instalador-custodia-busca": {
+  "w": 1118,
+  "h": 470,
+  "v": "a215b864"
+ },
+ "instalador-custodia-desativar": {
+  "w": 512,
+  "h": 412,
+  "v": "24d2d803"
+ },
+ "instalador-custodia": {
+  "w": 1118,
+  "h": 1210,
+  "v": "1cf3d823"
+ },
+ "instalador-diagnostico": {
+  "w": 1118,
+  "h": 578,
+  "v": "a1f92310"
+ },
+ "instalador-expurgo-previa": {
+  "w": 512,
+  "h": 328,
+  "v": "668f6fcd"
+ },
+ "instalador-movimentos-pendencias": {
+  "w": 1116,
+  "h": 340,
+  "v": "b2ed5c67"
+ },
+ "instalador-movimentos": {
+  "w": 1118,
+  "h": 1458,
+  "v": "c7245018"
+ },
+ "instalador-revalidar": {
+  "w": 1118,
+  "h": 642,
+  "v": "18994e41"
+ },
+ "instalador-sieg-tentativas": {
+  "w": 1118,
+  "h": 1291,
+  "v": "adf45e9d"
+ },
+ "instalador-sieg": {
+  "w": 1118,
+  "h": 1095,
+  "v": "26c104b7"
+ },
+ "instalador-trilha-falhas": {
+  "w": 1118,
+  "h": 743,
+  "v": "1caf80f9"
+ },
+ "instalador-trilha": {
+  "w": 1118,
+  "h": 900,
+  "v": "ac5d2e3c"
+ },
+ "login-codigo": {
+  "w": 400,
+  "h": 550,
+  "v": "f375999b"
+ },
+ "login-erro": {
+  "w": 400,
+  "h": 580,
+  "v": "d577c7df"
+ },
+ "login-esqueci-codigo": {
+  "w": 400,
+  "h": 602,
+  "v": "b16f24e9"
+ },
+ "login-esqueci": {
+  "w": 400,
+  "h": 484,
+  "v": "b71b746b"
+ },
+ "login-tela": {
+  "w": 400,
+  "h": 516,
+  "v": "c189104c"
+ },
+ "senha-provisoria": {
+  "w": 460,
+  "h": 450,
+  "v": "6f08eec5"
+ },
+ "usuarios-computadores-emprestimo": {
+  "w": 512,
+  "h": 422,
+  "v": "714b26f1"
+ },
+ "usuarios-computadores-historico": {
+  "w": 1118,
+  "h": 918,
+  "v": "9a26550a"
+ },
+ "usuarios-computadores": {
+  "w": 1118,
+  "h": 763,
+  "v": "faee8379"
+ },
+ "usuarios-departamento-editar": {
+  "w": 512,
+  "h": 540,
+  "v": "b3630bfc"
+ },
+ "usuarios-departamentos": {
+  "w": 1118,
+  "h": 446,
+  "v": "ac74cf47"
+ },
+ "usuarios-desativar": {
+  "w": 460,
+  "h": 300,
+  "v": "568458c5"
+ },
+ "usuarios-editar": {
+  "w": 512,
+  "h": 662,
+  "v": "15ad07c1"
+ },
+ "usuarios-importar": {
+  "w": 704,
+  "h": 408,
+  "v": "17bf3934"
+ },
+ "usuarios-lista": {
+  "w": 1440,
+  "h": 900,
+  "v": "41408263"
+ },
+ "usuarios-menu-linha": {
+  "w": 1118,
+  "h": 735,
+  "v": "830d331f"
+ },
+ "usuarios-novo": {
+  "w": 512,
+  "h": 746,
+  "v": "5a2e980b"
+ },
+ "usuarios-permissoes-alterada": {
+  "w": 1118,
+  "h": 1444,
+  "v": "1e30281e"
+ },
+ "usuarios-permissoes-historico": {
+  "w": 1100,
+  "h": 224,
+  "v": "9057d9f0"
+ },
+ "usuarios-permissoes": {
+  "w": 1118,
+  "h": 1366,
+  "v": "8a175b91"
+ },
+ "usuarios-redefinir-senha": {
+  "w": 512,
+  "h": 488,
+  "v": "57254657"
+ },
+ "vencidos-busca": {
+  "w": 1118,
+  "h": 278,
+  "v": "5239de4f"
+ },
+ "vencidos-exportar": {
+  "w": 1118,
+  "h": 566,
+  "v": "b71f11df"
+ },
+ "vencidos-lista": {
+  "w": 1440,
+  "h": 900,
+  "v": "2b52e750"
+ },
+ "vencidos-periodo": {
+  "w": 1440,
+  "h": 900,
+  "v": "f543342a"
+ }
+}

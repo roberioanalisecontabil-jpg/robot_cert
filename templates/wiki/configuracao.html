@@ -1,0 +1,143 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<p>Configuração reúne os ajustes de funcionamento do portal: como as estações se identificam, quais pastas o agente do servidor lê, como saem os alertas por e-mail, os comandos para o agente e a ligação com o SIEG.</p>
+
+<p>Só o administrador abre esta tela. Quem não é administrador e tenta abrir volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
+
+<p>No alto da página, duas etiquetas mostram o estado do servidor: <strong>Banco de dados conectado</strong> (ou desconectado, ou não verificado) e <strong>Chave API obrigatória</strong> (ou aberta). A página tem cinco abas: <strong>Chave API</strong>, <strong>Pastas e agente</strong>, <strong>Alertas por e-mail</strong>, <strong>Fila de comandos</strong> e <strong>SIEG</strong>.</p>
+
+<h2 id="chave">Aba Chave API</h2>
+<p>É só informativa: não tem campo nem botão de salvar. Ela explica que a chave das estações não passa pelo navegador. A chave é digitada no instalador do agente, que a guarda protegida no próprio computador.</p>
+{{ print("configuracao-chave", "Aba Chave API com as duas etiquetas de estado no topo e a explicação de como a chave entra numa estação", "A aba Chave API é só informativa.") }}
+
+<h3 id="trocar-chave">Trocar a chave de uma estação já instalada</h3>
+<p>É tarefa do técnico, feita no próprio computador da estação.</p>
+<ol>
+  <li>Grave a chave num arquivo de texto.</li>
+  <li>Abra o prompt de comando como administrador do Windows e rode o comando mostrado na aba, trocando o caminho pelo do seu arquivo.</li>
+  <li>O agente guarda a chave e apaga o arquivo.</li>
+</ol>
+
+<h2 id="pastas">Aba Pastas e agente</h2>
+<p>Diz ao agente do servidor quais pastas olhar.</p>
+
+<h3 id="mudar-pastas">Mudar as pastas</h3>
+<ol>
+  <li>Preencha <strong>Origem (.pfx)</strong>, onde estão os certificados, e <strong>Vencidos (destino)</strong>, para onde vão os vencidos.</li>
+  <li><strong>ID do servidor</strong> identifica o agente. Normalmente fica <strong>default</strong>.</li>
+  <li>No bloco <strong>Entrada de certificados</strong>, preencha <strong>Pasta de entrada</strong>, <strong>Pessoa jurídica (CNPJ)</strong> e <strong>Pessoa física (CPF)</strong>. Deixar a pasta de entrada vazia desliga esse passo. Escreva os caminhos como o servidor os vê, não como aparecem no seu computador.</li>
+  <li>Clique em <strong>Guardar e sincronizar</strong>.</li>
+  <li>Confira em <strong>Leitura local efetiva</strong> os caminhos que valem.
+    {{ print("configuracao-pastas", "Aba Pastas e agente com os campos de pastas preenchidos e a Leitura local efetiva carregada", "As pastas e a leitura efetiva.") }}
+  </li>
+</ol>
+
+{% call cuidado("Caminho errado cega o agente") %}<p>Caminhos de pasta errados fazem o agente parar de ver certificados. Depois de <strong>Guardar e sincronizar</strong>, confira <strong>Leitura local efetiva</strong> e, se quiser, use <strong>Forçar leitura</strong> na <a href="#comandos">Fila de comandos</a>.</p>{% endcall %}
+
+<h3 id="arquivo-agente">Gerar o arquivo de configuração do agente</h3>
+<ol>
+  <li>Confira o campo <strong>URL do portal no agent_config.json</strong>. Ele só vai para o arquivo baixado.</li>
+  <li>Clique em <strong>Baixar agent_config.json</strong> e copie o arquivo para a pasta onde o agente está instalado. O arquivo não leva a chave.</li>
+</ol>
+<p>O fim da aba lembra a regra do nome dos arquivos: a senha do certificado vem depois da palavra <strong>senha</strong>, por exemplo <strong>MeuNome certificado senha aMinhaSenha.pfx</strong>.</p>
+
+<h2 id="alertas">Aba Alertas por e-mail</h2>
+
+<h3 id="ligar-alertas">Ligar ou desligar os alertas</h3>
+<ol>
+  <li>Use o interruptor <strong>Enviar alertas automaticamente</strong>. A etiqueta ao lado diz <strong>Ligado</strong> ou <strong>Desligado</strong>, e a frase embaixo diz o que está valendo.</li>
+  <li>Clique em <strong>Salvar alterações</strong>, na barra do rodapé. Enquanto houver mudança pendente, a barra avisa que há alterações não salvas.</li>
+</ol>
+
+<h3 id="forma-envio">Escolher a forma de envio</h3>
+<ol>
+  <li>Em <strong>Enviar por</strong>, escolha <strong>SMTP (servidor de e-mail com usuário e senha)</strong> ou <strong>Microsoft 365 (aplicativo, pelo Graph)</strong>.
+    {{ print("configuracao-alertas-topo", "Interruptor Enviar alertas automaticamente, campo Enviar por e bloco Servidor de e-mail com a senha vazia e a etiqueta Senha guardada", "O interruptor geral e a forma de envio.") }}
+  </li>
+  <li>Para Microsoft 365, preencha <strong>ID do tenant (diretório)</strong>, <strong>ID do aplicativo (cliente)</strong>, <strong>Segredo do aplicativo</strong>, <strong>Segredo vence em</strong>, <strong>Caixa de envio (remetente)</strong> e <strong>Responder para</strong>. Esses dados vêm do cadastro do aplicativo feito pela TI no Microsoft 365.
+    {{ print("configuracao-alertas-m365", "Forma de envio Microsoft 365 com o bloco Aplicativo no Microsoft 365 e o campo de segredo vazio", "Os campos do Microsoft 365.") }}
+  </li>
+  <li>Para SMTP, preencha <strong>Servidor</strong>, <strong>Porta</strong>, <strong>Segurança da conexão</strong>, <strong>Usuário</strong>, <strong>Senha</strong> e <strong>E-mail do remetente</strong>.</li>
+  <li>Clique em <strong>Salvar alterações</strong>.</li>
+</ol>
+<p>Os campos de senha e de segredo sempre aparecem vazios. Uma etiqueta ao lado diz <strong>Senha guardada</strong> ou <strong>Segredo guardado</strong> quando já existe um valor. Deixe o campo vazio para manter o atual; só digite para trocar.</p>
+
+{% call cuidado("Anote quando o segredo vence") %}<p>Preencha <strong>Segredo vence em</strong> com a data de validade do segredo do Microsoft 365: o sino do administrador avisa 30 dias antes. Sem a data, ninguém é avisado, e os alertas param no dia em que o segredo vencer.</p>{% endcall %}
+
+<h3 id="testar">Testar o envio</h3>
+<ol>
+  <li>Salve antes: o teste usa o que está salvo.</li>
+  <li>Digite um e-mail em <strong>Enviar teste para</strong> e clique em <strong>Enviar teste</strong>.</li>
+  <li>A resposta aparece logo abaixo: a confirmação de que o e-mail de teste foi enviado, ou o motivo da recusa.</li>
+</ol>
+
+<h3 id="certificado-novo">Aviso de certificado novo</h3>
+<ol>
+  <li>Ligue <strong>Avisar quando chegar certificado novo</strong> para avisar os administradores e quem tem o cliente na carteira.</li>
+  <li>Em <strong>Enviar</strong>, escolha <strong>A cada hora cheia (padrão)</strong> ou <strong>Imediatamente, a cada varredura com novos</strong>.</li>
+  <li>Clique em <strong>Salvar alterações</strong>.</li>
+</ol>
+
+<h3 id="quem-quando">Para quem e quando sai o resumo</h3>
+<ol>
+  <li>Em <strong>Destinatários do resumo</strong>, escreva os e-mails separados por vírgula. Vazio envia para todos os administradores ativos. Um endereço fora da empresa faz aparecer o aviso <strong>Endereço fora da empresa</strong>.</li>
+  <li>Em <strong>Prazos de aviso</strong>, escreva os dias antes do vencimento, separados por vírgula. A linha embaixo do campo mostra os prazos em uso. O aviso de que o certificado venceu é sempre enviado.</li>
+  <li>Em <strong>Verificar a cada</strong>, escolha <strong>20 horas (padrão)</strong>, <strong>12 horas</strong>, <strong>24 horas</strong> ou <strong>7 dias</strong>. É o intervalo entre verificações, não um horário fixo.
+    {{ print("configuracao-alertas-quem-quando", "Blocos Certificado novo e Para quem, e quando, com os destinatários, os prazos de aviso, o intervalo e o botão Disparar agora", "Quem recebe o resumo e com que frequência.") }}
+  </li>
+  <li>Clique em <strong>Salvar alterações</strong>.</li>
+</ol>
+
+<h3 id="disparar">Mandar o resumo agora</h3>
+<ol>
+  <li>Clique em <strong>Disparar agora</strong>.</li>
+  <li>A janela <strong>Disparar o resumo agora</strong> diz para quem vai.
+    {{ print("configuracao-alertas-disparo", "Janela Disparar o resumo agora com os destinatários, antes de confirmar", "A confirmação antes de disparar o resumo.") }}
+  </li>
+  <li>Clique em <strong>Enviar agora</strong> só se quiser mesmo enviar. Para desistir, clique em <strong>Cancelar</strong>.</li>
+</ol>
+
+{% call cuidado("Disparar agora manda e-mails de verdade") %}<p><strong>Disparar agora</strong> é o mesmo envio do horário, com e-mails reais para os destinatários. Para testar, use <strong>Enviar teste</strong> com o seu próprio e-mail.</p>{% endcall %}
+
+<h3 id="texto-email">Mudar o texto do e-mail</h3>
+<ol>
+  <li>Em <strong>Texto do e-mail</strong>, clique em <strong>Editar texto…</strong>.</li>
+  <li>Ajuste <strong>Assunto</strong>, <strong>Título</strong>, <strong>Abertura</strong> e <strong>Recado final</strong>. Os botões em <strong>Variáveis disponíveis</strong> inserem dados automáticos no ponto onde está o cursor. A prévia, à direita, mostra o resultado.
+    {{ print("configuracao-alertas-texto", "Janela Texto do e-mail de alerta com os campos Assunto, Título, Abertura e Recado final e a prévia à direita", "O texto do e-mail e a prévia.") }}
+  </li>
+  <li>Clique em <strong>Salvar</strong>. <strong>Restaurar padrão</strong> limpa os campos, mas ainda é preciso salvar.</li>
+</ol>
+
+<h2 id="comandos">Aba Fila de comandos</h2>
+<p>Manda ordens para o agente do servidor de certificados.</p>
+<ol>
+  <li>Confira o <strong>Servidor alvo</strong>. Normalmente é <strong>default</strong>.</li>
+  <li>Clique em <strong>Forçar leitura</strong> para o agente reler as pastas agora, sem esperar o intervalo normal. <strong>Ping</strong> só testa se o agente responde.</li>
+  <li>A tabela <strong>Pendentes</strong> mostra o que o agente ainda não buscou. Clique em <strong>Atualizar</strong> para recarregar.
+    {{ print("configuracao-comandos", "Aba Fila de comandos com o campo Servidor alvo, os botões Forçar leitura e Ping e a tabela Pendentes", "A fila de comandos do agente.") }}
+  </li>
+</ol>
+
+{% call dica("Comando parado há mais de um dia") %}<p>Um comando pendente há mais de um dia costuma indicar agente parado ou nome de servidor errado em <strong>Servidor alvo</strong>.</p>{% endcall %}
+
+<h2 id="sieg">Aba SIEG</h2>
+<p>Liga o portal à conta do SIEG. Quando alguém liga o SIEG nos detalhes de um certificado, no Início, o portal envia o certificado ao SIEG. As tentativas ficam no <a href="/wiki-certguard?modulo=instalador">Instalador</a>, aba <strong>SIEG</strong>.</p>
+
+<h3 id="credenciais-sieg">Configurar as credenciais</h3>
+<ol>
+  <li>No SIEG, abra Minha conta e depois Integração API SIEG.</li>
+  <li>Copie <strong>Client ID</strong>, <strong>Secret Key</strong> e <strong>API Key</strong> para os campos de mesmo nome. A API Key é diferente da Secret Key. Os campos secretos aparecem vazios; a etiqueta <strong>Guardada</strong> indica que já existe valor, e <strong>Não informada</strong>, que ainda não.</li>
+  <li>Em <strong>Cadastro no SIEG</strong>, ajuste <strong>UF do certificado (código IBGE)</strong> (27 é Alagoas), <strong>Dias retroativos</strong> e <strong>Consulta de NFS-e</strong>, e marque as <strong>Consultas</strong> desejadas. Isso vale para todo certificado enviado.
+    {{ print("configuracao-sieg", "Aba SIEG com as credenciais, os campos secretos vazios com suas etiquetas e a grade de Consultas", "As credenciais e o cadastro no SIEG.") }}
+  </li>
+  <li>Clique em <strong>Salvar</strong>.</li>
+  <li>Clique em <strong>Testar conexão</strong> para conferir.</li>
+</ol>
+
+<h3 id="sincronizar-sieg">Acertar o que já está no SIEG</h3>
+<ol>
+  <li>Clique em <strong>Sincronizar com o SIEG</strong>. Os certificados que já estão na conta do SIEG ficam marcados como <strong>No SIEG</strong>. Nada é enviado.</li>
+</ol>
+
+{% call cuidado("Segredo não vai para print, e-mail ou chamado") %}<p>Nunca deixe uma senha ou um segredo à vista num print, num e-mail ou num chamado. Os campos de senha voltam vazios de propósito: deixe vazio para manter o valor atual.</p>{% endcall %}

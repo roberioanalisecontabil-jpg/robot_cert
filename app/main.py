@@ -650,6 +650,11 @@ from app.rotas.dashboard import router as _rotas_dashboard  # noqa: E402
 
 app.include_router(_rotas_dashboard)
 
+# Wiki do Certguard (tutoriais por módulo): app/rotas/wiki.py, 14/10/2026.
+from app.rotas.wiki import router as _rotas_wiki  # noqa: E402
+
+app.include_router(_rotas_wiki)
+
 
 @app.get("/carteiras", response_class=HTMLResponse)
 def pagina_carteiras(request: Request) -> HTMLResponse:

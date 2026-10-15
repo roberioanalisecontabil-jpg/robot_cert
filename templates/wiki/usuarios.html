@@ -1,0 +1,196 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<p>Em Usuários se cadastra e se cuida de quem entra no portal: as contas, os departamentos e seus gestores, o que cada papel pode ver e quais computadores podem receber certificado. Quem sai da equipe é desativado, não apagado.</p>
+
+<p>Só o administrador abre esta tela. Quem não é administrador e tenta abrir volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
+
+<p>A página tem quatro abas: <strong>Usuários</strong>, <strong>Departamentos</strong>, <strong>Níveis de acesso</strong> e <strong>Computadores</strong>.</p>
+
+<h2 id="usuarios">Aba Usuários</h2>
+<p>A lista mostra <strong>Nome</strong> (com o e-mail embaixo), <strong>Nível</strong>, <strong>Status</strong> e <strong>Carteira</strong>. Por padrão aparecem só as contas ativas.</p>
+{{ print("usuarios-lista", "Aba Usuários com a lista de contas, os filtros Buscar, Nível e Status e os botões Importar CSV e Novo usuário", "A lista de contas ativas.") }}
+
+<h3 id="encontrar">Encontrar alguém</h3>
+<ol>
+  <li>Digite parte do nome ou do e-mail em <strong>Buscar</strong>.</li>
+  <li>Se precisar, escolha em <strong>Nível</strong> (Todos, Administrador, Gestor ou Operador) e em <strong>Status</strong> (Ativo, Inativo ou Todos).</li>
+  <li>Se nada aparecer, clique em <strong>Limpar filtros</strong>.</li>
+</ol>
+
+<h3 id="cadastrar">Cadastrar uma pessoa</h3>
+<ol>
+  <li>Clique em <strong>Novo usuário</strong>, o botão dourado no alto, à direita.
+    {{ print("usuarios-novo", "Janela Novo usuário aberta e vazia, com os campos Nome completo, E-mail, Senha inicial, Nível e Departamento", "A janela de cadastro.") }}
+  </li>
+  <li>Preencha <strong>Nome completo</strong> e <strong>E-mail</strong>. É com esse e-mail que a pessoa entra no portal.</li>
+  <li>Em <strong>Senha inicial</strong>, digite uma senha de pelo menos 12 caracteres. O olho ao lado mostra o que você digitou.</li>
+  <li>Em <strong>Nível</strong>, escolha <strong>Operador</strong> ou <strong>Administrador</strong>. Gestor não se escolhe aqui: veja <a href="#departamentos">Departamentos</a>.</li>
+  <li>Em <strong>Departamento</strong>, escolha o departamento. É obrigatório. Se a lista disser <strong>Cadastre um departamento primeiro</strong>, crie o departamento antes.</li>
+  <li>Clique em <strong>Cadastrar</strong>. A pessoa aparece destacada na lista e a mensagem <strong>Usuário cadastrado.</strong> confirma.</li>
+</ol>
+<p>Depois de cadastrar um operador, monte a carteira dele em <a href="/wiki-certguard?modulo=carteiras">Carteiras</a>. Sem carteira, ele não instala nenhum certificado.</p>
+
+<h3 id="importar">Cadastrar várias pessoas de uma vez</h3>
+<ol>
+  <li>Clique em <strong>Importar CSV</strong>.
+    {{ print("usuarios-importar", "Janela Importar usuários por CSV com a área para arrastar o arquivo e o link Baixar o modelo", "A janela de importação.") }}
+  </li>
+  <li>Clique em <strong>Baixar o modelo (.csv)</strong> e preencha as colunas <strong>nome</strong>, <strong>email</strong>, <strong>senha</strong>, <strong>nivel</strong> e <strong>departamento</strong>.</li>
+  <li>Na coluna <strong>nivel</strong>, escreva exatamente <strong>admin</strong> (administrador) ou <strong>user</strong> (operador). Na coluna <strong>departamento</strong>, o nome de um departamento já cadastrado.</li>
+  <li>Salve a planilha como CSV, arraste o arquivo para a área <strong>Arraste o arquivo ou clique para escolher</strong> e clique em <strong>Importar</strong>.</li>
+  <li>Leia o resultado. As linhas boas entram; as que ficaram de fora aparecem com o número da linha e o motivo, por exemplo um e-mail que já existe. Corrija só essas e importe de novo.</li>
+</ol>
+
+<h3 id="editar">Editar uma conta</h3>
+<ol>
+  <li>Clique no nome da pessoa, ou nos três pontos da linha e depois em <strong>Editar</strong>.
+    {{ print("usuarios-menu-linha", "Menu de três pontos aberto numa linha, com Editar, Redefinir senha, Enviar código de redefinição, Remover app autenticador e Desativar", "As ações de cada conta ficam nos três pontos.") }}
+  </li>
+  <li>Ajuste <strong>Nome completo</strong>, <strong>E-mail</strong>, <strong>Nível</strong> ou <strong>Departamento</strong>.
+    {{ print("usuarios-editar", "Janela Editar usuário de uma conta de operador", "A janela de edição.") }}
+  </li>
+  <li>Clique em <strong>Salvar</strong>. Trocar o e-mail encerra a sessão aberta da pessoa.</li>
+</ol>
+
+<h3 id="senha">A pessoa esqueceu a senha</h3>
+<p>Há dois caminhos, os dois nos três pontos da linha.</p>
+<ul>
+  <li><strong>Enviar código de redefinição</strong> (recomendado): o portal manda, sem pedir confirmação, um código de 6 dígitos para o e-mail da pessoa. A mensagem confirma o envio e avisa que o código vale 15 minutos. Você não fica sabendo a senha nova.</li>
+  <li><strong>Redefinir senha</strong>: você digita a <strong>Nova senha</strong> e repete em <strong>Repita a senha</strong> (mínimo de 12 caracteres) e clica em <strong>Redefinir</strong>. A pessoa é obrigada a trocá-la no próximo acesso, e a sessão aberta dela cai na hora.</li>
+</ul>
+{{ print("usuarios-redefinir-senha", "Janela Redefinir senha aberta com os campos Nova senha e Repita a senha vazios", "A janela para redefinir a senha.") }}
+
+<h3 id="autenticador">A pessoa perdeu o celular do app autenticador</h3>
+<ol>
+  <li>Nos três pontos da linha, clique em <strong>Remover app autenticador</strong>. A remoção é feita no clique, sem confirmação.</li>
+  <li>A mensagem confirma: <strong>App autenticador removido. A pessoa entra com o código por e-mail.</strong> Depois ela pode cadastrar o app de novo pela própria conta. Veja <a href="/wiki-certguard?modulo=primeiros-passos">Primeiros passos</a>.</li>
+</ol>
+
+<h3 id="desativar">Alguém saiu da equipe</h3>
+<ol>
+  <li>Nos três pontos da linha, clique em <strong>Desativar</strong>.</li>
+  <li>Leia a confirmação. Ela diz quantos clientes da carteira da pessoa serão apagados e, se ela era gestora, que deixa de ser gestora.
+    {{ print("usuarios-desativar", "Janela Desativar usuário com o aviso sobre a carteira da pessoa, antes de confirmar", "A confirmação antes de desativar.") }}
+  </li>
+  <li>Confirme em <strong>Desativar</strong>, ou em <strong>Desativar e remover</strong> seguido do número de clientes, quando a pessoa tem carteira.</li>
+  <li>A pessoa perde o acesso na hora, inclusive a bandeja do computador.</li>
+</ol>
+
+{% call cuidado("Desativar apaga a carteira") %}<p>Não existe apagar usuário: desativar guarda o registro de quem instalou o quê. Mas desativar apaga a carteira da pessoa, e reativar devolve a conta com a carteira vazia.</p>{% endcall %}
+
+<h3 id="reativar">Alguém voltou</h3>
+<ol>
+  <li>Em <strong>Status</strong>, escolha <strong>Inativo</strong> ou <strong>Todos</strong>.</li>
+  <li>Nos três pontos da linha, clique em <strong>Reativar</strong> e confirme.</li>
+  <li>A conta volta com o mesmo nível, com duas exceções: quem era gestor volta como Operador, e a carteira volta vazia.</li>
+</ol>
+
+{% call dica("Sempre um administrador ativo") %}<p>O portal não deixa desativar nem rebaixar o último administrador ativo. Promova outro administrador antes.</p>{% endcall %}
+
+<h2 id="departamentos">Aba Departamentos</h2>
+<p>Quem lidera um departamento é o gestor dele: vê todos os certificados e libera clientes para os operadores do departamento. A tabela mostra <strong>Departamento</strong>, <strong>Gestores</strong> e <strong>Pessoas</strong> (as inativas aparecem à parte). Departamento sem gestor aparece com o aviso <strong>sem gestor</strong>.</p>
+{{ print("usuarios-departamentos", "Aba Departamentos com a tabela de departamentos, seus gestores e o número de pessoas", "Os departamentos e quem lidera cada um.") }}
+
+<h3 id="criar-departamento">Criar um departamento</h3>
+<ol>
+  <li>Clique em <strong>Novo departamento</strong>.</li>
+  <li>Digite o <strong>Nome</strong>, por exemplo Fiscal.</li>
+  <li>Em <strong>Gestores</strong>, escolha quem lidera. Para escolher mais de um, segure Ctrl enquanto clica. Só contas ativas aparecem.</li>
+  <li>Clique em <strong>Salvar</strong>. Mensagens confirmam quem virou gestor.</li>
+</ol>
+
+<h3 id="editar-departamento">Trocar o gestor ou renomear</h3>
+<ol>
+  <li>Clique em <strong>Editar</strong> na linha do departamento.
+    {{ print("usuarios-departamento-editar", "Janela Editar departamento com o campo Nome e a lista Gestores", "A janela do departamento, com a lista de gestores.") }}
+  </li>
+  <li>Mude o <strong>Nome</strong> ou a seleção em <strong>Gestores</strong>.</li>
+  <li>Clique em <strong>Salvar</strong>. Quem saiu da lista e não lidera outro departamento volta a operador, com a carteira vazia.</li>
+</ol>
+
+<h3 id="apagar-departamento">Apagar um departamento</h3>
+<ol>
+  <li>Clique em <strong>Apagar</strong> na linha.</li>
+  <li>Leia o aviso: as pessoas não são apagadas, mas ficam sem departamento, e só o administrador libera certificados para elas até serem colocadas em outro. Quem só era gestor daquele departamento volta a operador, com a carteira vazia.</li>
+  <li>Confirme em <strong>Apagar</strong>.</li>
+</ol>
+
+{% call dica("Gestor se escolhe no departamento") %}<p>Gestor não se escolhe no cadastro da pessoa: ela vira gestora quando entra na lista de <strong>Gestores</strong> de um departamento. Quem sai de todos os departamentos que liderava volta a operador, com a carteira vazia.</p>{% endcall %}
+
+<h2 id="permissoes">Aba Níveis de acesso</h2>
+<p>Uma tabela com cada <strong>Módulo</strong> (página do portal) e duas colunas, <strong>Gestor</strong> e <strong>Operador</strong>. Os níveis são:</p>
+<ul>
+  <li><strong>Não entra</strong>: o módulo some do menu e o portal recusa mesmo quem digita o endereço.</li>
+  <li><strong>Só ver</strong>: entra e consulta, sem alterar nada.</li>
+  <li><strong>Ver e editar</strong>: entra e altera. Só aparece nos módulos onde existe o que editar: Acompanhamento e Carteiras.</li>
+</ul>
+<p>O administrador não aparece como coluna porque alcança tudo, sempre. Algumas linhas ficam travadas, com um cadeado e o motivo: o Início, onde todos os papéis entram porque é a tela de instalação, e Usuários, Configuração, Instalador e Dashboard, que são só do administrador.</p>
+{{ print("usuarios-permissoes", "Aba Níveis de acesso com a tabela de módulos e as colunas Gestor e Operador", "A tabela de níveis de acesso.") }}
+
+<h3 id="mudar-nivel">Mudar o que um papel pode ver</h3>
+<ol>
+  <li>Na linha do módulo, escolha o novo nível na coluna do papel.</li>
+  <li>Aparece o aviso <strong>1 alteração ainda não salva.</strong> Para voltar atrás, clique em <strong>Desfazer alterações</strong>.
+    {{ print("usuarios-permissoes-alterada", "Tabela de níveis de acesso com um nível alterado, o aviso de alteração ainda não salva e o botão Salvar habilitado", "Uma alteração ainda não salva.") }}
+  </li>
+  <li>Clique em <strong>Salvar</strong>. A mensagem avisa que quem já está no portal vê a mudança em até 30 segundos.</li>
+</ol>
+
+{% call cuidado("A mudança vale para todo o papel") %}<p>Cada nível vale para todas as pessoas daquele papel. Tirar um módulo do Operador, por exemplo, tira de todos os operadores ao mesmo tempo. Confira a linha e a coluna antes de salvar.</p>{% endcall %}
+
+<h3 id="historico-niveis">Ver quem mudou o quê</h3>
+<ol>
+  <li>Abra <strong>Histórico de alterações</strong>, abaixo dos botões.</li>
+  <li>Cada linha mostra quando, o módulo, o papel, o nível de antes, o de depois e quem alterou.
+    {{ print("usuarios-permissoes-historico", "Histórico de alterações dos níveis de acesso aberto, com as mudanças anteriores", "O histórico das mudanças de nível.") }}
+  </li>
+</ol>
+
+<h2 id="computadores">Aba Computadores</h2>
+<p>Define em qual computador cada pessoa pode receber certificado. A pessoa entra na bandeja da estação com a conta deste portal; o pedido aparece aqui e o computador só recebe certificado depois de autorizado. O número ao lado do nome da aba é a quantidade de pedidos esperando. Veja também <a href="/wiki-certguard?modulo=bandeja">Bandeja Certguard Análise</a>.</p>
+<p>A tabela mostra <strong>Pessoa</strong>, <strong>Computador</strong> (nome e identificação), <strong>Vínculo</strong> (Aguardando, Ativo, Encerrado ou Recusado; Principal ou Empréstimo; quem decidiu e quando) e <strong>Bandeja</strong> (Conectada ou Parada, com a versão do programa).</p>
+{{ print("usuarios-computadores", "Aba Computadores com um pedido Aguardando, com os botões Principal, Empréstimo e Recusar, e um vínculo Ativo", "Pedidos e vínculos de computadores.") }}
+
+<h3 id="principal">Autorizar a máquina de trabalho da pessoa</h3>
+<ol>
+  <li>Na linha com <strong>Aguardando</strong>, clique em <strong>Principal</strong>.</li>
+  <li>Confirme em <strong>Autorizar</strong>. A principal anterior da pessoa, e o dono anterior daquela máquina, se houver, vão para o histórico.</li>
+</ol>
+
+<h3 id="emprestimo">Autorizar uso temporário</h3>
+<p>Para a máquina de um colega ou uma máquina cedida.</p>
+<ol>
+  <li>Na linha com <strong>Aguardando</strong>, clique em <strong>Empréstimo</strong>.</li>
+  <li>Em <strong>Prazo</strong>, escolha <strong>Até o fim do dia</strong>, <strong>3 dias</strong> ou <strong>7 dias</strong>.
+    {{ print("usuarios-computadores-emprestimo", "Janela Autorizar empréstimo com o campo Prazo", "O prazo do empréstimo.") }}
+  </li>
+  <li>Clique em <strong>Autorizar</strong>. O empréstimo termina antes se a pessoa voltar para a máquina principal ou sair da bandeja.</li>
+</ol>
+
+<h3 id="recusar">Negar um pedido</h3>
+<ol>
+  <li>Clique em <strong>Recusar</strong> e confirme. A bandeja daquela máquina é desconectada.</li>
+</ol>
+
+<h3 id="desvincular">Tirar o acesso de um computador</h3>
+<ol>
+  <li>Na linha com <strong>Ativo</strong>, clique em <strong>Desvincular</strong> e confirme. A bandeja é desconectada e o computador deixa de receber certificados.</li>
+</ol>
+
+<h3 id="confirmar-maquina">Pedido para confirmar a máquina</h3>
+<p>Cada computador tem uma chave própria, guardada nele. Se a pessoa entrar sem essa chave, por exemplo depois de formatar o computador, o pedido chega com a nota <strong>Confirmar a máquina: entrou sem a chave desta estação.</strong> Ao autorizar, pode abrir a janela <strong>Chave do computador diferente</strong>.</p>
+{{ print("usuarios-computadores-chave", "Janela Chave do computador diferente com os botões Cancelar e Trocar a chave e autorizar", "A janela que aparece quando a chave do computador mudou.") }}
+<ol>
+  <li>Só clique em <strong>Trocar a chave e autorizar</strong> se o computador foi mesmo reinstalado e a pessoa está nele agora. Confirme com ela por telefone ou pessoalmente.</li>
+  <li>Em qualquer outro caso, clique em <strong>Cancelar</strong> e depois em <strong>Recusar</strong>.</li>
+</ol>
+
+{% call cuidado("Desconfie de pedido que ninguém avisou") %}<p>Um pedido para confirmar a máquina que ninguém avisou que viria pode ser outra pessoa tentando usar a conta. Na dúvida, recuse: a pessoa pode pedir de novo.</p>{% endcall %}
+
+<h3 id="historico-computadores">Ver vínculos antigos</h3>
+<ol>
+  <li>Marque <strong>Mostrar histórico (encerrados e recusados)</strong>.
+    {{ print("usuarios-computadores-historico", "Aba Computadores com o histórico ligado, mostrando vínculos Encerrado e Recusado", "Com o histórico, aparecem os vínculos encerrados e recusados.") }}
+  </li>
+</ol>

@@ -1,0 +1,118 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Todos"]) }}
+
+<p>Esta é a porta do portal. Você entra com e-mail e senha e, na maioria das vezes, confirma com um código de 6 dígitos que chega por e-mail. Aqui também estão a recuperação de senha, a troca da senha provisória e o app autenticador, a saída para quando o e-mail não chega.</p>
+
+<h2 id="entrar">Entrar no portal</h2>
+<ol>
+  <li>Abra o endereço do portal. A tela mostra <strong>Analise Certificado</strong> e "Faça login para acessar o monitor".</li>
+  <li>Preencha <strong>E-mail</strong> e <strong>Senha</strong>. O ícone de olho ao lado da senha mostra o que você digitou.
+    {{ print("login-tela", "Tela de login com os campos E-mail e Senha vazios e o botão Acessar o painel", "A tela de entrada do portal") }}
+  </li>
+  <li>Clique em <strong>Acessar o painel</strong>. Se o e-mail ou a senha estiverem errados, a tela avisa "E-mail ou senha incorretos.".
+    {{ print("login-erro", "Tela de login com o aviso E-mail ou senha incorretos acima dos campos") }}
+  </li>
+</ol>
+
+<h2 id="codigo-por-email">Confirmar com o código do e-mail</h2>
+<p>Se este navegador não estiver lembrado, depois da senha aparece "Confirme que é você". O portal mandou um código de 6 dígitos para o seu e-mail.</p>
+<ol>
+  <li>Abra seu e-mail e copie o código.</li>
+  <li>Digite o código em <strong>Código do e-mail</strong>.
+    {{ print("login-codigo", "Tela Confirme que é você com o campo Código do e-mail, a caixa Lembrar deste navegador por 7 dias e o botão Entrar", "O código chega por e-mail e vale 15 minutos") }}
+  </li>
+  <li>Se o computador é seu, marque <strong>Lembrar deste navegador por 7 dias</strong>. Nos próximos 7 dias, neste navegador, a senha basta.</li>
+  <li>Clique em <strong>Entrar</strong>. Você cai no Início, ou na página que tentou abrir antes.</li>
+</ol>
+
+<h3 id="codigo-nao-chegou">O código não chegou ou expirou</h3>
+<p>O código vale <strong>15 minutos</strong> e aceita <strong>3 tentativas</strong>.</p>
+<ol>
+  <li>Clique em <strong>Voltar e pedir outro código</strong>. A tela volta para e-mail e senha.</li>
+  <li>Digite a senha de novo e clique em <strong>Acessar o painel</strong>. Um código novo é enviado.</li>
+  <li>Se você tem o app autenticador cadastrado, pode usar o código dele (veja abaixo).</li>
+</ol>
+
+{% call cuidado("Lembrar o navegador só no seu computador") %}
+<p>Só marque <strong>Lembrar deste navegador por 7 dias</strong> no computador que é seu. Em máquina de colega ou compartilhada, deixe desmarcado.</p>
+{% endcall %}
+
+<h2 id="app-autenticador">App autenticador</h2>
+<p>O app autenticador do celular (Microsoft Authenticator, Google Authenticator ou outro) gera um código que serve no lugar do código do e-mail. Cadastre uma vez, com o portal aberto, antes de precisar dele.</p>
+
+<h3 id="cadastrar-app">Cadastrar o app</h3>
+<ol>
+  <li>No menu lateral, clique em <strong>App autenticador</strong>, perto de <strong>Sair</strong>, no fim do menu.
+    {{ print("app-aut-menu", "Menu lateral do portal com o item App autenticador logo acima de Sair") }}
+  </li>
+  <li>Digite sua <strong>Senha atual</strong> e clique em <strong>Cadastrar app</strong>.
+    {{ print("app-aut-inicio", "Janela App autenticador com o campo Senha atual e o botão Cadastrar app") }}
+  </li>
+  <li>No celular, abra o app e escolha adicionar conta.</li>
+  <li>Aponte a câmera para o QR que aparece na janela. Sem câmera, digite a chave que aparece em texto. Se estiver no próprio celular, toque em <strong>Abrir no app deste aparelho</strong>.
+    {{ print("app-aut-qr", "Janela App autenticador mostrando o QR, a chave em texto e o campo Código que o app mostra", "O QR e a chave aparecem uma vez só") }}
+  </li>
+  <li>Digite em <strong>Código que o app mostra</strong> o número que o app exibe e clique em <strong>Confirmar</strong>.</li>
+  <li>A janela confirma: "Pronto: o app autenticador está ativo".</li>
+</ol>
+
+<h3 id="entrar-com-app">Entrar com o código do app</h3>
+<ol>
+  <li>Depois da senha, na tela "Confirme que é você", clique em <strong>Usar o código do app autenticador</strong>.</li>
+  <li>O campo passa a se chamar <strong>Código do app</strong>.
+    {{ print("login-codigo-app", "Tela Confirme que é você com o campo Código do app e o link Usar o código do e-mail") }}
+  </li>
+  <li>Abra o app no celular e digite o código de 6 dígitos do portal de certificados.</li>
+  <li>Clique em <strong>Entrar</strong>.</li>
+  <li>Para voltar ao código do e-mail, clique em <strong>Usar o código do e-mail</strong>.</li>
+</ol>
+
+<h3 id="trocar-celular">Trocar de celular ou remover o app</h3>
+<ol>
+  <li>No menu lateral, clique em <strong>App autenticador</strong>.</li>
+  <li>Digite a <strong>Senha atual</strong> e clique em <strong>Remover app</strong>.</li>
+  <li>Para o celular novo, cadastre de novo, como em <a href="#cadastrar-app">Cadastrar o app</a>.</li>
+</ol>
+
+{% call dica("Cadastre o app antes de precisar") %}
+<p>Se o e-mail cair, o app autenticador é a única forma de entrar sem chamar o TI.</p>
+{% endcall %}
+
+<h2 id="esqueci-a-senha">Esqueci minha senha</h2>
+<ol>
+  <li>Na tela de login, clique em <strong>Esqueci minha senha</strong>. O título muda para "Recuperação de senha".
+    {{ print("login-esqueci", "Tela Recuperação de senha com o campo E-mail e o botão Enviar código") }}
+  </li>
+  <li>Confira o <strong>E-mail</strong> e clique em <strong>Enviar código</strong>.</li>
+  <li>Digite o <strong>Código de 6 dígitos</strong> recebido e clique em <strong>Continuar</strong>. O código vale 15 minutos e aceita 3 tentativas.
+    {{ print("login-esqueci-codigo", "Tela Recuperação de senha pedindo o código de 6 dígitos, com o botão Continuar") }}
+  </li>
+  <li>Escolha a <strong>Nova senha</strong>, com no mínimo 12 caracteres, e clique em <strong>Salvar e entrar</strong>.
+    {{ print("login-nova-senha", "Tela Recuperação de senha com o campo Nova senha e o botão Salvar e entrar") }}
+  </li>
+  <li>A tela de login volta com "Senha alterada. Entre com a nova senha.".</li>
+  <li>Para desistir no meio, clique em <strong>Voltar para o login</strong>.</li>
+</ol>
+
+{% call dica("O código não chegou?") %}
+<p>A tela sempre diz que enviou o código, mesmo para um e-mail sem cadastro. Se nada chegar, confira o e-mail digitado e a caixa de spam.</p>
+{% endcall %}
+
+<h2 id="senha-provisoria">Primeiro acesso com senha provisória</h2>
+<p>Quando o administrador cria a sua senha, ela é provisória. Depois de entrar, abre a janela <strong>Defina sua senha</strong>, e o portal só funciona depois da troca.</p>
+<ol>
+  <li>Preencha <strong>Senha atual</strong> (a provisória), <strong>Nova senha</strong> (mínimo de 12 caracteres) e <strong>Repita a nova senha</strong>.
+    {{ print("senha-provisoria", "Janela Defina sua senha com os campos Senha atual, Nova senha e Repita a nova senha") }}
+  </li>
+  <li>Clique em <strong>Definir senha</strong>.</li>
+  <li>O portal volta para a tela de login. Entre com a nova senha.</li>
+</ol>
+
+{% call cuidado("Trocar a senha encerra a bandeja") %}
+<p>Trocar ou redefinir a senha encerra a sua sessão na bandeja <strong>Certguard Análise</strong>. Entre de novo nela depois. Veja <a href="/wiki-certguard?modulo=bandeja">Bandeja Certguard Análise</a>.</p>
+{% endcall %}
+
+<h2 id="sair">Sair</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Sair</strong>, o último item, em vermelho.</li>
+</ol>

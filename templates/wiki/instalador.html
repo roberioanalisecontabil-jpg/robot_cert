@@ -1,0 +1,187 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<p>O Instalador é a sala de máquinas da instalação. Ele mostra se o cofre e as chaves estão em ordem, quais certificados estão guardados (custódia), o que o agente fez com os arquivos que chegaram (movimentos), cada tentativa de instalação (trilha) e quem incluiu certificados no SIEG. O Instalador não instala nada: para instalar, use o <a href="/wiki-certguard?modulo=inicio">Início</a>.</p>
+
+<p>Só o administrador vê o Instalador. O gestor acompanha as instalações dos seus operadores em <a href="/wiki-certguard?modulo=carteiras">Carteiras</a>, no bloco <strong>Instalações desta pessoa</strong>.</p>
+
+<p>A página tem seis abas: <strong>Diagnóstico</strong>, <strong>Custódia</strong>, <strong>Movimentos</strong>, <strong>Trilha</strong>, <strong>SIEG</strong> e <strong>Configuração</strong>. O botão <strong>Atualizar</strong>, no alto, recarrega todas.</p>
+
+<h2 id="diagnostico">Aba Diagnóstico</h2>
+<p>Mostra o estado do <strong>Cofre</strong> (quantos registros, último envio) e das <strong>Chaves de cifragem</strong>. O selo ao lado do título diz <strong>Tudo em ordem</strong>, <strong>Atenção</strong> ou <strong>Sem leitura</strong>.</p>
+
+<h3 id="cofre-saudavel">Conferir se o cofre está saudável</h3>
+<ol>
+  <li>Abra <strong>Instalador</strong> no menu lateral. A aba <strong>Diagnóstico</strong> é a primeira.
+    {{ print("instalador-diagnostico", "Aba Diagnóstico com os blocos Cofre e Chaves de cifragem e o selo de situação ao lado do título", "O diagnóstico do cofre e das chaves.") }}
+  </li>
+  <li>Veja o selo ao lado de <strong>Diagnóstico</strong>. Se for <strong>Atenção</strong>, leia o quadro vermelho logo abaixo: ele lista os problemas.</li>
+  <li>Clique em <strong>Revalidar cofre</strong>. O portal testa se as chaves atuais abrem uma amostra de cada versão. Esse teste não altera nada.</li>
+  <li>O resultado aparece abaixo do botão, uma linha por chave: <strong>decifrou a amostra</strong> (verde) ou <strong>falhou</strong> (vermelho).
+    {{ print("instalador-revalidar", "Resultado da revalidação do cofre, com uma linha por chave", "Cada chave em verde decifrou a amostra.") }}
+  </li>
+</ol>
+
+<h3 id="recifrar">Recifrar o cofre</h3>
+<p>Use só depois de trocar uma chave.</p>
+<ol>
+  <li>Clique em <strong>Recifrar cofre</strong>.</li>
+  <li>O portal regrava os registros antigos com as chaves atuais e mostra quantos foram recifrados.</li>
+  <li>Se aparecer <strong>Clique de novo para continuar</strong>, clique outra vez, até terminar.</li>
+</ol>
+
+{% call cuidado("Recifrar não pede confirmação") %}<p><strong>Recifrar cofre</strong> começa no clique e regrava os registros guardados. Só faz sentido depois de trocar uma chave. Na dúvida, use <strong>Revalidar cofre</strong>, que não altera nada.</p>{% endcall %}
+
+<p>Se o servidor não responder, aparece <strong>Não foi possível consultar o servidor.</strong> com o botão <strong>Tentar de novo</strong>.</p>
+
+<h2 id="custodia">Aba Custódia</h2>
+<p>Lista os certificados do servidor da varredura (o selo <strong>Servidor</strong> diz qual) e se cada um está guardado no cofre do portal. As colunas são <strong>Titular</strong>, <strong>Validade</strong>, <strong>Fingerprint</strong> (a impressão digital do certificado) e <strong>Custódia</strong>, mais o botão de ação.</p>
+<ul>
+  <li><strong>Ativa</strong>: o certificado está guardado e pode ser instalado pelo portal.</li>
+  <li><strong>Desativada</strong>: a cópia foi apagada e o agente ignora esse certificado.</li>
+  <li><strong>Fora da custódia · vencido</strong> ou <strong>Fora da custódia · ilegível</strong>: nunca entra no cofre e não tem botão.</li>
+</ul>
+{{ print("instalador-custodia", "Aba Custódia com o selo do servidor, a tabela de certificados e a paginação", "A custódia dos certificados.") }}
+
+<h3 id="procurar">Procurar um certificado</h3>
+<ol>
+  <li>Clique na aba <strong>Custódia</strong>.</li>
+  <li>Digite no campo <strong>Nome ou CNPJ/CPF</strong>. A tabela filtra enquanto você digita.
+    {{ print("instalador-custodia-busca", "Tabela da custódia filtrada por parte do nome de um titular", "A tabela filtrada pela busca.") }}
+  </li>
+  <li>Use <strong>Anterior</strong> e <strong>Seguinte</strong> para trocar de página, e a caixa <strong>10 por página</strong> para mostrar até 100 linhas.</li>
+  <li>Para copiar a impressão digital do certificado, clique em <strong>Copiar</strong> na coluna <strong>Fingerprint</strong>.</li>
+</ol>
+
+<h3 id="desativar">Desativar a custódia de um certificado</h3>
+<ol>
+  <li>Ache o certificado e clique em <strong>Desativar</strong> na linha.</li>
+  <li>Abre a janela <strong>Desativar custódia</strong>, com o nome, o documento e o servidor.
+    {{ print("instalador-custodia-desativar", "Janela Desativar custódia aberta, com o nome do titular, o documento e o aviso de que a cópia guardada será apagada", "A confirmação antes de desativar.") }}
+  </li>
+  <li>Leia o aviso: a cópia guardada será apagada e o certificado não volta ao cofre nas próximas varreduras.</li>
+  <li>Clique em <strong>Desativar custódia</strong> para confirmar, ou em <strong>Cancelar</strong>.</li>
+</ol>
+
+{% call cuidado("Desativar apaga a cópia guardada") %}<p>Depois de desativar, o certificado deixa de ser instalável pelo portal até alguém reativar e o agente enviar a cópia de novo.</p>{% endcall %}
+
+<h3 id="reativar">Reativar a custódia</h3>
+<ol>
+  <li>Ache o certificado com <strong>Desativada</strong> e clique em <strong>Reativar</strong>.</li>
+  <li>Não há confirmação. Uma mensagem avisa que o certificado está de volta à custódia e que o agente envia no próximo ciclo. Ele volta a ser instalável depois da próxima varredura.</li>
+</ol>
+
+<h2 id="movimentos">Aba Movimentos</h2>
+<p>Mostra o que o agente do servidor fez com cada arquivo: o certificado que chegou à pasta de entrada e foi renomeado e movido para a pasta da letra, o vencido que saiu da pasta da letra, e o que ficou pendente.</p>
+
+<h3 id="ver-movimentos">Ver os movimentos do período</h3>
+<ol>
+  <li>Clique na aba <strong>Movimentos</strong>.</li>
+  <li>Em <strong>Período</strong>, escolha <strong>Últimos 7 dias</strong>, <strong>Últimos 30 dias</strong>, <strong>Últimos 90 dias</strong> ou <strong>Último ano</strong> e clique em <strong>Filtrar</strong>.</li>
+  <li>A tabela mostra <strong>Quando</strong>, <strong>De</strong> (pasta de origem), <strong>Titular</strong>, <strong>Para</strong> (pasta de destino) e <strong>Resultado</strong>, com o motivo quando houver.
+    {{ print("instalador-movimentos", "Aba Movimentos com a tabela de movimentos do período", "Os movimentos de arquivos do período.") }}
+  </li>
+</ol>
+<p>Resultados possíveis: <strong>Renomeado e movido</strong>, <strong>Para vencidos</strong>, <strong>Substituiu o vencido</strong>, <strong>Cópia descartada</strong>, <strong>Duplicidade</strong>, <strong>Pendente na entrada</strong> e <strong>Vencido não movido</strong>.</p>
+
+<h3 id="pendencias">Resolver pendências</h3>
+<ol>
+  <li>Se houver pendências, o número aparece ao lado do nome da aba e um quadro amarelo <strong>Pendências</strong> aparece no alto, com a tabela <strong>Desde</strong>, <strong>Arquivo</strong>, <strong>Pasta</strong>, <strong>Situação</strong> e <strong>Motivo</strong>.
+    {{ print("instalador-movimentos-pendencias", "Quadro amarelo Pendências com a tabela de arquivos pendentes e o motivo de cada um", "As pendências e o motivo de cada uma.") }}
+  </li>
+  <li>Pendência <strong>na entrada</strong>: o arquivo não abriu e ficou com o nome original. Corrija o nome do arquivo (o nome, a palavra senha e a senha do certificado, terminando em .pfx) ou a senha.</li>
+  <li>Pendência <strong>na pasta da letra</strong>: o vencido não pôde ser movido. Veja o motivo e resolva na pasta.</li>
+  <li>O agente tenta de novo a cada varredura. A pendência some sozinha quando o arquivo sai da pasta.</li>
+</ol>
+<p>Se aparecer <strong>A pasta de entrada não está configurada</strong>, defina a pasta em <a href="/wiki-certguard?modulo=configuracao">Configuração</a>, aba <strong>Pastas e agente</strong>.</p>
+
+<h2 id="trilha">Aba Trilha</h2>
+<p>Uma linha por tentativa de instalação, do pedido ao desfecho. No alto fica o resumo do período: concluídas, a barra e as causas das falhas.</p>
+
+<h3 id="consultar-instalacoes">Consultar instalações</h3>
+<ol>
+  <li>Clique na aba <strong>Trilha</strong>.</li>
+  <li>Escolha o <strong>Período</strong>.</li>
+  <li>Para ver só uma pessoa, digite o e-mail dela em <strong>Solicitante</strong>.</li>
+  <li>Marque <strong>Só falhas</strong> para ver só o que deu errado.</li>
+  <li>Clique em <strong>Filtrar</strong>.
+    {{ print("instalador-trilha-falhas", "Trilha filtrada nos últimos 90 dias com Só falhas marcado", "Só as falhas dos últimos 90 dias.") }}
+  </li>
+  <li>Leia as colunas: <strong>Quando</strong>, <strong>Solicitante</strong>, <strong>Estação</strong>, <strong>Certificado</strong>, <strong>Etapas</strong> (pedido, resgate e conclusão) e <strong>Desfecho</strong> (<strong>Concluído</strong>, <strong>Falhou</strong> ou <strong>Sem desfecho</strong>, com o motivo da falha embaixo).
+    {{ print("instalador-trilha", "Aba Trilha com o resumo do período e a tabela com etapas e desfecho de cada instalação", "A trilha de instalações.") }}
+  </li>
+</ol>
+<p>Se não houver nada no período, o portal oferece o link <strong>Ver últimos 90 dias</strong>.</p>
+
+<h2 id="sieg">Aba SIEG</h2>
+<p>Lista os certificados que alguém incluiu no SIEG, com as colunas <strong>Certificado</strong>, <strong>Estado</strong>, <strong>Ligado por</strong>, <strong>Quando</strong> e <strong>Última resposta</strong>.</p>
+<p>A inclusão no SIEG não é feita aqui. Ela é feita pelo interruptor <strong>Incluir no SIEG</strong>, nos detalhes do certificado, no Início. Esta aba serve para acompanhar.</p>
+
+<h3 id="acompanhar-sieg">Acompanhar as inclusões</h3>
+<ol>
+  <li>Clique na aba <strong>SIEG</strong>. O número ao lado do nome da aba é quantos estão <strong>No SIEG</strong>.</li>
+  <li>Em <strong>Estado</strong>, filtre por <strong>Todos</strong>, <strong>No SIEG</strong>, <strong>Incluindo</strong>, <strong>Erro</strong>, <strong>Substituído</strong> ou <strong>Fora do SIEG</strong>.
+    {{ print("instalador-sieg", "Aba SIEG com o filtro Estado e a tabela dos certificados incluídos no SIEG", "Os certificados no SIEG.") }}
+  </li>
+  <li>Para ver todas as tentativas de um certificado, clique na coluna <strong>Última resposta</strong> da linha. Abre a lista com a data, a operação, quem fez e a mensagem do SIEG.
+    {{ print("instalador-sieg-tentativas", "Linha da tabela do SIEG aberta, com a lista de tentativas de um certificado", "As tentativas de um certificado.") }}
+  </li>
+</ol>
+
+<p>O que cada estado quer dizer:</p>
+<ul>
+  <li><strong>Incluindo</strong>: o portal está enviando.</li>
+  <li><strong>No SIEG</strong>: cadastrado e conferido.</li>
+  <li><strong>Erro</strong>: o envio falhou. Quem tem o cliente na carteira vê o botão <strong>Tentar de novo</strong> nos detalhes do certificado, no Início.</li>
+  <li><strong>Substituído</strong>: o cliente renovou e o certificado novo tomou o lugar.</li>
+  <li><strong>Fora do SIEG</strong>: conferido, e não está ativo lá. Pode ser incluído de novo.</li>
+</ul>
+<p>Se aparecer <strong>O SIEG ainda não foi configurado</strong>, informe as credenciais em <a href="/wiki-certguard?modulo=configuracao">Configuração</a>, aba <strong>SIEG</strong>.</p>
+
+<h3 id="incluir-sieg">Incluir um certificado no SIEG</h3>
+<ol>
+  <li>No Início, abra os detalhes do certificado.</li>
+  <li>Na seção <strong>SIEG</strong>, ligue o interruptor <strong>Incluir no SIEG</strong>.</li>
+  <li>Abre a janela <strong>Incluir no SIEG</strong>, com o nome do cliente e o aviso <strong>Esta ação não pode ser desfeita.</strong> Confira o cliente.
+    {{ print("inicio-sieg-confirmar", "Janela Incluir no SIEG com o nome do cliente e o aviso Esta ação não pode ser desfeita", "A confirmação antes de incluir no SIEG.") }}
+  </li>
+  <li>Clique em <strong>Incluir no SIEG</strong> para confirmar, ou em <strong>Cancelar</strong>.</li>
+</ol>
+
+{% call cuidado("Incluir no SIEG não tem volta pelo portal") %}<p>Depois de ligado, o interruptor não volta. Tirar o certificado do SIEG só pelo painel do próprio SIEG. Confira o cliente antes de confirmar.</p>{% endcall %}
+
+<h3 id="conferir-sieg">Conferir um certificado no SIEG</h3>
+<ol>
+  <li>No Início, abra os detalhes do certificado.</li>
+  <li>Na seção <strong>SIEG</strong>, clique em <strong>Conferir no SIEG</strong>.</li>
+  <li>Se o certificado estiver ativo lá, fica <strong>No SIEG</strong>. Se não, passa a <strong>Fora do SIEG</strong>.</li>
+</ol>
+
+<h2 id="configuracao">Aba Configuração</h2>
+<p>Dois ajustes. Campo em branco usa o padrão do sistema; o valor que vale aparece embaixo de cada campo, depois de <strong>Em vigor</strong>.</p>
+{{ print("instalador-configuracao", "Aba Configuração do Instalador com os campos Validade do token e Retenção da trilha e o valor em vigor de cada um", "Os dois ajustes do Instalador.") }}
+
+<h3 id="validade-pedido">Mudar a validade do pedido de instalação</h3>
+<ol>
+  <li>Clique na aba <strong>Configuração</strong>.</li>
+  <li>Em <strong>Validade do token</strong>, informe por quantos minutos um pedido de instalação continua valendo para a estação: de 1 a 1440. O padrão é 5.</li>
+  <li>Clique em <strong>Salvar configuração</strong>. Aparece a mensagem <strong>Configuração salva.</strong></li>
+</ol>
+
+<h3 id="retencao">Retenção da trilha</h3>
+<ol>
+  <li>Em <strong>Retenção da trilha</strong>, informe por quantos dias a trilha guarda o e-mail e o endereço da rede de quem instalou. Vazio quer dizer sem limite, que é a decisão em vigor desde 03/10/2026.</li>
+  <li>Clique em <strong>Salvar configuração</strong>.</li>
+</ol>
+
+<h3 id="expurgo">Expurgar a trilha</h3>
+<ol>
+  <li>Para uma limpeza pontual, clique em <strong>Expurgar log agora</strong>, embaixo do campo <strong>Retenção da trilha</strong>.</li>
+  <li>Abre a janela <strong>Expurgar a trilha</strong>, que conta quantos registros seriam apagados e até que data.
+    {{ print("instalador-expurgo-previa", "Janela Expurgar a trilha com a contagem de registros que seriam apagados, antes de confirmar", "A contagem antes de expurgar.") }}
+  </li>
+  <li>Se não houver retenção definida, a janela diz <strong>Nada a expurgar</strong> e o botão fica desligado.</li>
+  <li>Para apagar, clique no botão <strong>Expurgar</strong>, que mostra o número de registros. Para desistir, clique em <strong>Cancelar</strong>.</li>
+</ol>
+
+{% call cuidado("Expurgar a trilha é irreversível") %}<p>A trilha é a prova de quem instalou o quê, e a regra atual é não ter limite. Só expurgue com motivo.</p>{% endcall %}

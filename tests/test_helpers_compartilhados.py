@@ -124,6 +124,11 @@ def test_ui_common_carrega_antes_do_script_da_pagina() -> None:
         inline = [
             m.start() for m in re.finditer(r"<script(?![^>]*\ssrc=)[^>]*>", html)
         ]
+        if f.name == "wiki.html":
+            # A wiki é texto renderizado no servidor: não tem script próprio,
+            # só o ui-common.js (menu por papel, sair, app autenticador).
+            assert not inline, "wiki.html ganhou script próprio; tire esta exceção"
+            continue
         assert inline, f"{f.name}: script da página não encontrado"
         assert pos_comum < inline[0], f"{f.name}: ui-common.js depois do script da página"
 

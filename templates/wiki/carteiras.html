@@ -1,0 +1,102 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Gestor", "Administrador"]) }}
+
+<p>A carteira define quais clientes cada operador pode instalar. O operador começa com a carteira vazia e só instala o que foi atribuído a ele. O gestor já alcança todos os clientes; o administrador pode retirar alguns clientes do alcance de um gestor, o que a tela chama de exceções.</p>
+
+<ul>
+  <li>O <strong>gestor</strong> vê e monta as carteiras dos operadores dos departamentos que ele lidera, só com clientes que estão no alcance dele.</li>
+  <li>O <strong>administrador</strong> monta a carteira de qualquer operador e também registra as exceções dos gestores.</li>
+  <li>O administrador não aparece na lista: ele sempre alcança todos os clientes.</li>
+</ul>
+
+<h2 id="termos">Termos usados na tela</h2>
+<ul>
+  <li><strong>Atribuir</strong>: dar um cliente a um operador. Ele passa a ver e instalar os certificados daquele cliente.</li>
+  <li><strong>Retirar</strong>: tirar o cliente da carteira de um operador, ou registrar uma exceção para um gestor.</li>
+  <li><strong>Devolver</strong>: desfazer a exceção de um gestor. Ele volta a ver e instalar aquele cliente.</li>
+</ul>
+<p>A carteira é por cliente (CNPJ ou CPF), não por arquivo. Quando o certificado é renovado, o operador continua com acesso sem que ninguém precise fazer nada.</p>
+
+<h2 id="montar">Montar a carteira de um operador</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Carteiras</strong>.
+    {{ print("carteiras-inicio", "Tela Carteiras com a lista Pessoas à esquerda e, à direita, o aviso Nenhum operador selecionado", "A lista de pessoas e o painel vazio à direita.") }}
+  </li>
+  <li>Na caixa <strong>Pessoas</strong>, à esquerda, encontre o operador. Se a lista for grande, digite parte do nome ou do e-mail na busca <strong>Nome ou e-mail</strong>. Quem está sem carteira aparece com o selo <strong>Sem carteira</strong>.</li>
+  <li>Clique no nome. À direita aparecem o nome, o e-mail e quantos clientes ele já tem.
+    {{ print("carteiras-operador", "Carteira de um operador aberta, com os painéis Disponíveis e Na carteira preenchidos", "Os clientes disponíveis à esquerda e os da carteira à direita.") }}
+  </li>
+  <li>No painel <strong>Disponíveis</strong>, clique nos clientes que quer dar a ele. Cada clique marca ou desmarca o cliente. Para achar um cliente, use a caixa <strong>Filtrar por nome ou CNPJ/CPF</strong>: ela filtra os dois painéis.
+    {{ print("carteiras-filtro", "Painéis Disponíveis e Na carteira filtrados por parte do nome de um cliente", "O filtro vale para os dois painéis.") }}
+  </li>
+  <li>Clique em <strong>Atribuir</strong>. O botão mostra quantos clientes estão marcados.
+    {{ print("carteiras-selecao", "Dois clientes marcados no painel Disponíveis e o botão Atribuir com o número 2", "Dois clientes marcados, prontos para atribuir.") }}
+  </li>
+  <li>Com um cliente só, a atribuição é imediata. Com mais de um, o portal pergunta se deve atribuir aquela quantidade de clientes à pessoa: confirme com <strong>OK</strong>.</li>
+  <li>Os clientes passam para o painel <strong>Na carteira</strong> e uma mensagem confirma a atribuição.</li>
+</ol>
+
+{% call dica("Atalho para quem está sem carteira") %}<p>Antes de escolher alguém, a caixa da direita mostra o botão <strong>Montar carteira de</strong> seguido do nome do primeiro operador sem carteira. Ele abre essa pessoa direto. No resumo acima da lista, a contagem de quem está sem carteira também é clicável: ela leva até o primeiro operador sem carteira na lista.</p>{% endcall %}
+
+<p>Um operador sem nenhum cliente aparece assim:</p>
+{{ print("carteiras-sem-carteira", "Painel Na carteira vazio com o aviso de que a pessoa não consegue instalar nenhum certificado", "Carteira vazia: a pessoa não instala nada.") }}
+
+<h3 id="atribuir-todos">Atribuir todos os clientes listados</h3>
+<ol>
+  <li>Abra o operador, como nos passos 1 a 3 acima.</li>
+  <li>Se quiser, filtre por nome ou CNPJ/CPF para limitar a lista.</li>
+  <li>Clique em <strong>Todos</strong>, no rodapé do painel <strong>Disponíveis</strong>.</li>
+  <li>Confirme com <strong>OK</strong>.</li>
+</ol>
+
+<h2 id="retirar">Retirar clientes da carteira de um operador</h2>
+<ol>
+  <li>Abra o operador.</li>
+  <li>No painel <strong>Na carteira</strong>, clique nos clientes que vão sair.</li>
+  <li>Clique em <strong>Retirar</strong>. Para retirar todos os listados, clique em <strong>Todos</strong>, no rodapé do mesmo painel.</li>
+  <li>O portal sempre pergunta antes de retirar. Confirme com <strong>OK</strong>.</li>
+  <li>A pessoa deixa de ver e instalar os certificados desses clientes na mesma hora.</li>
+</ol>
+
+<h2 id="excecoes">Exceções de um gestor</h2>
+<p>Só o administrador faz esta parte.</p>
+<ol>
+  <li>Na lista <strong>Pessoas</strong>, clique no gestor. Ele tem o selo <strong>Gestor</strong>.</li>
+  <li>Os painéis mudam de nome: <strong>Exceções</strong> (o que foi retirado dele) à esquerda e <strong>No alcance</strong> à direita. O cabeçalho mostra quantas exceções ele tem, por exemplo <strong>Todos os clientes, menos 2 exceções</strong>.
+    {{ print("carteiras-gestor-excecoes", "Carteira de um gestor com os painéis Exceções e No alcance e o botão Devolver", "Para um gestor, os painéis viram Exceções e No alcance.") }}
+  </li>
+  <li>Para retirar um cliente do gestor: marque o cliente em <strong>No alcance</strong> e clique em <strong>Retirar</strong>. Confirme. Aparece a mensagem <strong>Exceção registrada.</strong></li>
+  <li>Para devolver: marque o cliente em <strong>Exceções</strong> e clique em <strong>Devolver</strong>. Aparece a mensagem <strong>Cliente devolvido ao gestor.</strong></li>
+</ol>
+<p>A exceção também impede o gestor de atribuir esse cliente aos operadores dele.</p>
+
+<h2 id="importar">Importar carteiras por planilha</h2>
+<ol>
+  <li>Clique em <strong>Importar planilha</strong>, no alto da página.
+    {{ print("carteiras-importar", "Janela Importar carteiras por planilha aberta, com a área para arrastar o arquivo e o link do modelo", "A janela de importação.") }}
+  </li>
+  <li>Se precisar, clique em <strong>Baixar o modelo (.csv)</strong>.</li>
+  <li>Preencha duas colunas: o e-mail do operador (coluna <strong>email</strong>) e o CNPJ do cliente (coluna <strong>cnpj</strong>), uma linha por par. Também valem os nomes de coluna <strong>e-mail</strong>, <strong>documento</strong> e <strong>cpf</strong>.</li>
+  <li>Arraste o arquivo para a caixa ou clique em <strong>Arraste a planilha ou clique para escolher</strong>. Vale arquivo .xlsx ou .csv.</li>
+  <li>Clique em <strong>Importar</strong>.</li>
+  <li>Se tudo entrar, a janela fecha e uma mensagem diz quantos clientes foram atribuídos e quantas carteiras foram atualizadas.</li>
+  <li>Se alguma linha for recusada, a janela fica aberta e lista cada linha com o motivo, por exemplo conta inativa ou cliente fora do inventário. Corrija a planilha e importe de novo.</li>
+</ol>
+<p>A planilha só monta carteira de operador. As exceções de um gestor são editadas na tela.</p>
+
+<h2 id="instalacoes">Conferir o que um operador instalou</h2>
+<ol>
+  <li>Abra o operador.</li>
+  <li>Role até <strong>Instalações desta pessoa</strong>. Aparecem o resumo do último ano (tentativas, concluídas e com falha) e as 10 instalações mais recentes, com data, número de certificados, estação e desfecho.
+    {{ print("carteiras-historico", "Bloco Instalações desta pessoa com o resumo do último ano e as instalações mais recentes", "As instalações recentes de um operador.") }}
+  </li>
+</ol>
+
+<h2 id="dicas">Dicas e cuidados</h2>
+{% call cuidado("Operador sem carteira não instala") %}<p>Operador sem carteira não consegue instalar nenhum certificado. Depois de cadastrar uma pessoa nova, monte a carteira dela.</p>{% endcall %}
+
+{% call cuidado("Retirar vale na hora") %}<p><strong>Retirar</strong> tem efeito imediato: a pessoa perde o acesso aos certificados daquele cliente. Por isso o portal sempre pede confirmação.</p>{% endcall %}
+
+{% call dica("Desativar ou mudar o papel esvazia a carteira") %}<p>Desativar a conta de alguém, ou mudar o papel dele, esvazia a carteira. Ao reativar, é preciso montar a carteira de novo. Uma conta inativa que ainda tem carteira aparece na lista com o aviso <strong>Conta inativa, com carteira a limpar</strong>.</p>{% endcall %}
+
+{% call dica("Só clientes do inventário atual") %}<p>Para atribuir, só aparecem clientes que estão no inventário atual. Um cliente que saiu da pasta continua na carteira, marcado, até alguém retirar.</p>{% endcall %}

@@ -1,0 +1,93 @@
+/* Wiki do Certguard (templates/wiki.html e templates/wiki/*.html).
+   Só tokens do Águia DS; nenhuma cor literal, para o tema escuro valer igual. */
+
+.wiki { max-width: 60rem; }
+
+.wiki-trilha {
+  display: flex; gap: var(--space-2); align-items: center;
+  font-size: var(--text-sm); color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+}
+.wiki-trilha a { color: var(--text-brand); text-decoration: none; }
+.wiki-trilha a:hover { text-decoration: underline; }
+
+.wiki-aviso {
+  font-size: var(--text-sm); color: var(--text-secondary);
+  margin: 0 0 var(--space-6);
+}
+
+/* Índice: cartões numerados, na ordem do menu. */
+.wiki-indice {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+}
+.wiki-cartao {
+  display: grid; gap: var(--space-1); height: 100%; align-content: start;
+  padding: var(--space-5);
+  text-decoration: none; color: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+.wiki-cartao:hover, .wiki-cartao:focus-visible { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.wiki-cartao__numero { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-brand); }
+.wiki-cartao__titulo { font-weight: 600; font-size: var(--text-lg); }
+.wiki-cartao__resumo { font-size: var(--text-sm); color: var(--text-secondary); }
+
+/* Artigo. */
+.wiki-artigo { line-height: 1.6; }
+.wiki-artigo h2 {
+  font-size: var(--text-xl); margin: var(--space-10) 0 var(--space-3);
+  padding-top: var(--space-4); border-top: 1px solid var(--border-subtle);
+}
+.wiki-artigo h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.wiki-artigo h3 { font-size: var(--text-lg); margin: var(--space-6) 0 var(--space-2); }
+.wiki-artigo p, .wiki-artigo li { max-width: 70ch; }
+.wiki-artigo ol, .wiki-artigo ul { padding-left: var(--space-6); }
+.wiki-artigo li + li { margin-top: var(--space-1); }
+.wiki-artigo kbd, .wiki-artigo .wiki-botao {
+  font-family: var(--font-body); font-weight: 600; white-space: nowrap;
+}
+
+/* Quem usa: uma linha de selos logo abaixo do título. */
+.wiki-papeis { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-6); }
+
+/* Prints: a imagem inteira cabe na coluna; o clique abre em tamanho real. */
+.wiki-print { margin: var(--space-5) 0 var(--space-6); }
+.wiki-print a { display: block; }
+.wiki-print img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm); background: var(--bg-surface);
+}
+.wiki-print--falta {
+  padding: var(--space-4); border: 1px dashed var(--border-default); border-radius: var(--radius-md);
+  font-size: var(--text-sm); color: var(--text-secondary); background: var(--bg-surface-alt);
+}
+.wiki-artigo table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; font-size: var(--text-sm); }
+.wiki-artigo th, .wiki-artigo td { text-align: left; vertical-align: top; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.wiki-artigo th { color: var(--text-secondary); font-weight: 600; }
+.wiki-tabela { overflow-x: auto; }
+.wiki-print figcaption { font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-2); }
+
+.wiki-artigo .ag-alert { margin: var(--space-5) 0; }
+
+/* Anterior / próximo. */
+.wiki-vizinhos {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);
+  margin-top: var(--space-12); padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+.wiki-vizinho {
+  display: grid; gap: var(--space-1); padding: var(--space-4);
+  border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+  text-decoration: none; color: inherit;
+}
+.wiki-vizinho:hover, .wiki-vizinho:focus-visible { border-color: var(--border-strong); }
+.wiki-vizinho--proximo { text-align: right; grid-column: 2; }
+.wiki-vizinho__rotulo { font-size: var(--text-xs); color: var(--text-secondary); }
+.wiki-vizinho__titulo { font-weight: 600; }
+
+@media (max-width: 640px) {
+  .wiki-vizinhos { grid-template-columns: 1fr; }
+  .wiki-vizinho--proximo { grid-column: 1; }
+}

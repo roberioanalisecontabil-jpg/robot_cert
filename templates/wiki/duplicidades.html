@@ -1,0 +1,49 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+
+<p>Esta página aponta certificados que aparecem mais de uma vez na pasta, para limpar cópias e arquivos antigos. Os casos vêm separados pelo grau de certeza. A análise considera os clientes da sua carteira.</p>
+
+<h2 id="ler">Ler a análise</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Duplicidades</strong>.</li>
+  <li>No topo há três números, cada um com um selo:
+    <ul>
+      <li><strong>Mesmo certificado</strong> (<strong>Confirmado</strong>): cópias do mesmo arquivo.</li>
+      <li><strong>Mesmo CPF/CNPJ</strong> (<strong>Provável</strong>): o documento se repete com outra assinatura. Pode ser renovação ou certificado antigo esquecido na pasta.</li>
+      <li><strong>Nomes parecidos</strong> (<strong>Revisar</strong>): o arquivo não abriu e a comparação foi só pelo nome. Pode ser engano.</li>
+    </ul>
+    {{ print("dup-resumo", "Página Duplicidades com os três números Mesmo certificado, Mesmo CPF/CNPJ e Nomes parecidos", "Os três graus de certeza") }}
+  </li>
+  <li>Clique num número para pular até a seção correspondente.
+    {{ print("dup-confirmado", "Seção Mesmo certificado com os clientes e os arquivos repetidos") }}
+  </li>
+  <li>Em cada seção, veja o <strong>Cliente</strong> e os <strong>Arquivos</strong> envolvidos.
+    {{ print("dup-revisar", "Seção Nomes parecidos com os grupos de arquivos a revisar") }}
+  </li>
+</ol>
+
+<h2 id="copiar">Copiar o local de um arquivo</h2>
+<ol>
+  <li>Na linha do arquivo, clique em <strong>Copiar caminho</strong> (administrador) ou <strong>Copiar nome</strong> (demais papéis).
+    {{ print("dup-copiar", "Linha de um arquivo com o botão Copiar nome em destaque") }}
+  </li>
+  <li>Cole onde precisar: e-mail, chamado ou Explorador de Arquivos.</li>
+</ol>
+
+<h2 id="atualizar">Refazer a análise</h2>
+<ol>
+  <li>Clique em <strong>Atualizar</strong>. O botão muda para "Atualizando…" enquanto os arquivos são analisados.
+    {{ print("dup-atualizando", "Botão Atualizar mostrando Atualizando enquanto a análise roda") }}
+  </li>
+</ol>
+
+<h2 id="dicas">Dicas</h2>
+{% call dica("O portal não apaga nada") %}
+<p>A limpeza da pasta é feita por quem cuida do servidor de arquivos. Passe a ele o que você encontrou.</p>
+{% endcall %}
+{% call dica("Comece pelo Confirmado") %}
+<p><strong>Confirmado</strong> é o caso seguro. <strong>Revisar</strong> pede conferência manual: clientes com nomes iguais podem cair ali.</p>
+{% endcall %}
+{% call dica("Limite de análises") %}
+<p>Há um limite de análises por pessoa. Se aparecer "Limite de análises por pessoa; aguarde alguns minutos.", espere e tente de novo.</p>
+{% endcall %}

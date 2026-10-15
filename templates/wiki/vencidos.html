@@ -1,0 +1,49 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+
+<p>Esta página lista os clientes cujo certificado em uso já venceu, para cobrar a renovação. Quando o cliente renova, ele sai da lista. Você vê os clientes da sua carteira.</p>
+
+<h2 id="ver">Ver todos os vencidos</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Vencidos</strong>. A página se chama <strong>Certificados vencidos</strong>.</li>
+  <li>No topo estão o <strong>Total de vencidos</strong> e o gráfico <strong>Vencidos por ano</strong>.
+    {{ print("vencidos-lista", "Página Certificados vencidos com o total, o gráfico Vencidos por ano e a tabela de clientes", "Os vencidos, do mais recente para o mais antigo") }}
+  </li>
+  <li>A tabela mostra <strong>Cliente</strong> e <strong>Vencimento</strong>, do mais recente para o mais antigo.</li>
+</ol>
+
+<h2 id="periodo">Filtrar por período</h2>
+<ol>
+  <li>Preencha <strong>Vencimento de</strong> e <strong>Até</strong>.</li>
+  <li>Clique em <strong>Filtrar</strong>.
+    {{ print("vencidos-periodo", "Campos Vencimento de e Até preenchidos e a lista filtrada pelo período") }}
+  </li>
+  <li>Para ver todos de novo, apague as duas datas e clique em <strong>Filtrar</strong>.</li>
+</ol>
+
+<h2 id="buscar">Buscar um cliente</h2>
+<ol>
+  <li>Em <strong>Buscar</strong>, digite nome, CNPJ/CPF ou data.</li>
+  <li>Clique em <strong>Filtrar</strong>.
+    {{ print("vencidos-busca", "Lista de vencidos filtrada por um nome digitado no campo Buscar") }}
+  </li>
+</ol>
+
+<h2 id="ordenar-exportar">Ordenar e exportar</h2>
+<ol>
+  <li>Clique no título <strong>Vencimento</strong> para inverter a ordem.</li>
+  <li>Clique em <strong>Exportar</strong> e escolha <strong>Planilha (CSV)</strong> ou <strong>Documento (PDF)</strong>.
+    {{ print("vencidos-exportar", "Menu Exportar da página de vencidos aberto com Planilha (CSV) e Documento (PDF)") }}
+  </li>
+</ol>
+
+<h2 id="dicas">Dicas</h2>
+{% call dica("Só para consulta") %}
+<p>Certificado vencido não pode ser instalado. Esta página serve para consultar e cobrar a renovação.</p>
+{% endcall %}
+{% call dica("Atalho pelo sino") %}
+<p>O sino de avisos leva direto para cá quando você clica num aviso de certificado vencido.</p>
+{% endcall %}
+{% call dica("Carteira vazia") %}
+<p>Se a lista disser que sua carteira está vazia, peça ao gestor do seu departamento para atribuir clientes a você.</p>
+{% endcall %}

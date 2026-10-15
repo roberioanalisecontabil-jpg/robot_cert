@@ -1,0 +1,68 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<p>O Dashboard mostra num só lugar a saúde do portal: certificados vencendo, arquivos ilegíveis, quem está sem carteira, instalações, cofre, agente, renovações, alertas enviados e a atividade de cada pessoa. É uma tela de consulta: nada se altera por ela.</p>
+
+<p>Só o administrador vê o Dashboard. Ele não aparece no menu de gestores e operadores, e não pode ser liberado para eles em <strong>Níveis de acesso</strong>.</p>
+
+{{ print("dashboard-geral", "Dashboard com todos os cartões carregados: Vencimentos, Acervo ilegível, Acesso, Instalações, Cofre, Agente, Renovações, Alertas e Atividade por usuário", "O Dashboard completo, com os cartões carregados.") }}
+
+<h2 id="periodo">Escolher o período</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Dashboard</strong>.</li>
+  <li>No alto, à direita, abra a caixa de período e escolha <strong>Últimos 7 dias</strong>, <strong>Últimos 30 dias</strong>, <strong>Últimos 90 dias</strong> ou <strong>Último ano</strong>.
+    {{ print("dashboard-periodo", "Barra do alto do Dashboard com a caixa de período e o botão Atualizar", "A caixa de período e o botão Atualizar.") }}
+  </li>
+  <li>Os cartões recarregam sozinhos. À esquerda aparece a hora da última leitura, por exemplo <strong>Atualizado em 14/10/2026 às 09:30</strong>.</li>
+  <li>Para buscar os números de novo sem mudar o período, clique em <strong>Atualizar</strong>.</li>
+</ol>
+
+{% call dica("Salvar nos favoritos") %}<p>O período escolhido fica guardado no endereço da página. Se você salvar o Dashboard nos favoritos depois de escolher <strong>Últimos 90 dias</strong>, ele abre sempre com 90 dias.</p>{% endcall %}
+
+<h2 id="cartoes">Ler os cartões</h2>
+<p>Cada cartão tem um número grande, uma lista de detalhes e, às vezes, um selo no canto: <strong>Atenção</strong> (vermelho), <strong>Acompanhar</strong> (amarelo) ou <strong>Em dia</strong> (verde). Os atalhos no rodapé do cartão levam à tela onde se resolve o assunto.</p>
+
+<div class="wiki-tabela"><table>
+  <thead>
+    <tr><th>Cartão</th><th>O que mostra</th><th>Atalho no rodapé</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Vencimentos</strong></td><td>Quantos certificados vencem nos próximos 30 dias, os clientes com certificado vencido e as faixas de prazo (em até 7 dias, 8 a 30 dias e assim por diante).</td><td><strong>Ver os que vencem em 30 dias</strong> (abre o Início filtrado) e <strong>Ver vencidos</strong></td></tr>
+    <tr><td><strong>Acervo ilegível</strong></td><td>Arquivos que não puderam ser lidos e por isso não podem ser instalados.</td><td><strong>Ver arquivos ilegíveis</strong> (abre o Histórico filtrado)</td></tr>
+    <tr><td><strong>Acesso</strong></td><td>Operadores sem carteira, que não conseguem instalar; usuários ativos por papel; documentos atribuídos.</td><td><strong>Ver carteiras</strong></td></tr>
+    <tr><td><strong>Instalações</strong></td><td>Tentativas concluídas no período, a barra com concluídas, com falha e sem desfecho, e as causas mais comuns das falhas.</td><td><strong>Ver instalações</strong> (abre a Trilha do Instalador)</td></tr>
+    <tr><td><strong>Cofre</strong></td><td>Quanto dos arquivos da pasta está guardado no cofre. Só o que está no cofre pode ser instalado pelo portal.</td><td><strong>Ver acervo</strong></td></tr>
+    <tr><td><strong>Agente</strong></td><td>A última varredura de cada servidor. Atrasada quer dizer mais de 36 horas sem varredura.</td><td>Sem atalho</td></tr>
+    <tr><td><strong>Renovações</strong></td><td>Documentos com validade estendida, novos e que saíram do acervo, em comparação com uma varredura antiga. A data dessa varredura aparece no cartão.</td><td>Sem atalho</td></tr>
+    <tr><td><strong>Alertas</strong></td><td>E-mails de alerta enviados no período, por tipo.</td><td><strong>Ver avisos enviados</strong></td></tr>
+    <tr><td><strong>Atividade por usuário</strong></td><td>Tabela com <strong>Logins</strong>, <strong>Pedidas</strong>, <strong>Concluídas</strong>, <strong>Falhas</strong> e <strong>Última atividade</strong> de cada pessoa.</td><td>Sem atalho</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="cartao-vencimentos">Vencimentos</h3>
+{{ print("dashboard-vencimentos", "Cartão Vencimentos com o número de certificados que vencem em 30 dias e as faixas de prazo", "O cartão Vencimentos.") }}
+
+<h3 id="cartao-acesso">Acesso</h3>
+{{ print("dashboard-acesso", "Cartão Acesso com o número de operadores sem carteira e os usuários ativos por papel", "O cartão Acesso.") }}
+
+<h3 id="cartao-instalacoes">Instalações</h3>
+{{ print("dashboard-instalacoes", "Cartão Instalações com a barra de concluídas, com falha e sem desfecho, e as causas das falhas", "O cartão Instalações.") }}
+
+<h3 id="cartao-atividade">Atividade por usuário</h3>
+{{ print("dashboard-atividade", "Tabela Atividade por usuário com as colunas Logins, Pedidas, Concluídas, Falhas e Última atividade", "A atividade de cada pessoa no período.") }}
+
+<h2 id="agir">Agir a partir do Dashboard</h2>
+<ol>
+  <li>Cartão <strong>Acesso</strong> com número maior que zero: clique em <strong>Ver carteiras</strong> e monte a carteira de quem aparece como sem carteira. Veja como em <a href="/wiki-certguard?modulo=carteiras">Carteiras</a>.</li>
+  <li>Cartão <strong>Instalações</strong> com falhas: clique em <strong>Ver instalações</strong> e marque <strong>Só falhas</strong> na Trilha. Veja <a href="/wiki-certguard?modulo=instalador">Instalador</a>.</li>
+  <li>Cartão <strong>Agente</strong> com servidor atrasado: o agente não lê as pastas há mais de 36 horas. Avise a equipe de TI responsável pelo servidor.</li>
+</ol>
+
+<h2 id="dicas">Dicas e cuidados</h2>
+{% call dica("Renovações carrega por último") %}<p>O cartão <strong>Renovações</strong> demora mais que os outros. É normal ele aparecer depois.</p>{% endcall %}
+
+{% call dica("Confira a data das Renovações") %}<p>A comparação das <strong>Renovações</strong> pode ser feita com uma varredura mais antiga que o período escolhido: você pede 30 dias e a comparação vem com uma varredura de 54 dias atrás, por exemplo. A data certa aparece no rodapé do cartão.</p>{% endcall %}
+
+{% call dica("Um cartão com erro não invalida os outros") %}<p>Se um cartão mostrar <strong>Não foi possível calcular este painel</strong>, os demais continuam valendo. Clique em <strong>Atualizar</strong> depois de alguns minutos.</p>{% endcall %}
+
+{% call dica("O que a Atividade conta") %}<p><strong>Atividade por usuário</strong> conta ações registradas, não tempo conectado. O registro de login começou em 15/08/2026: antes disso não há histórico, o que é diferente de não ter havido uso.</p>{% endcall %}

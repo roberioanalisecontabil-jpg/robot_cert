@@ -39,7 +39,16 @@ PAGINAS = [
     ("/instalador", "instalador", "/instalador"),
     ("/usuarios", "usuarios", "/usuarios"),
     ("/configuracao", "configuracao", "/configuracao"),
+    ("/wiki-certguard", "wiki", "/wiki-certguard"),
 ]
+
+
+def _cabecalho_admin() -> dict:
+    """A wiki confere a sessão no servidor (o conteúdo é o próprio HTML); as
+    outras páginas ignoram o cabeçalho. Mandar para todas mantém um teste só."""
+    from app import auth
+
+    return {"Authorization": "Bearer " + auth.create_access_token({"sub": "admin@x.com", "role": "admin"})}
 
 
 def _links_acesos(html: str) -> list[str]:
@@ -103,7 +112,7 @@ def test_rota_acende_exatamente_o_seu_item(
     esquecida ou com a chave errada, e mais de um significa marcador fixo
     sobrevivendo no partial. Os dois passariam por uma inspeção visual rápida.
     """
-    r = client.get(rota)
+    r = client.get(rota, headers=_cabecalho_admin())
     assert r.status_code == 200, r.text
 
     acesos = _links_acesos(r.text)

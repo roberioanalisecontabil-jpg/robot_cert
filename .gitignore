@@ -82,3 +82,12 @@ agent/_build_config.py
 # sessao (imagens grandes, banco de ensaio), nao fonte.
 .impeccable/review/
 .impeccable/critique/
+
+# Banco de demonstracao da wiki (scripts/wiki_demo/seed_wiki.py): chaves do
+# ambiente e senha da demo sao geradas por maquina; PFX ficticios e dados
+# locais sao refeitos a cada seed.
+scripts/wiki_demo/ambiente-wiki.env
+scripts/wiki_demo/credenciais-demo.txt
+scripts/wiki_demo/acervo/
+scripts/wiki_demo/data-local/
+scripts/wiki_demo/*.log

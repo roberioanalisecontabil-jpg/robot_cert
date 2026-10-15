@@ -1,0 +1,50 @@
+{#
+  Peças dos tutoriais da wiki. Cada tutorial importa com contexto:
+
+    {% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+
+  `prints` vem da rota: o manifesto static/wiki/prints.json, que o script de
+  captura (scripts/wiki_capturas.py) escreve junto com as imagens. Ele dá a
+  largura e a altura de cada print, para a página não pular quando a imagem
+  chega. Print que ainda não foi capturado vira um aviso no lugar, em vez de
+  uma imagem quebrada.
+#}
+
+{% macro print(id, alt, legenda="") -%}
+  {%- set p = prints.get(id) if prints else None -%}
+  {%- if p -%}
+  <figure class="wiki-print">
+    <a href="/static/wiki/{{ id }}.png?v={{ p.v }}" target="_blank" rel="noopener" title="Abrir a imagem em tamanho real">
+      <img src="/static/wiki/{{ id }}.png?v={{ p.v }}" alt="{{ alt }}" width="{{ p.w }}" height="{{ p.h }}" loading="lazy" decoding="async">
+    </a>
+    {%- if legenda %}<figcaption>{{ legenda }}</figcaption>{% endif %}
+  </figure>
+  {%- else -%}
+  <p class="wiki-print wiki-print--falta">Imagem em preparação: {{ alt }}</p>
+  {%- endif -%}
+{%- endmacro %}
+
+{# Quem usa o módulo: selos logo abaixo do título. #}
+{% macro papeis(lista) -%}
+  <p class="wiki-papeis" aria-label="Quem usa">
+    {%- for papel in lista %}<span class="ag-badge ag-badge--neutral">{{ papel }}</span>{% endfor -%}
+  </p>
+{%- endmacro %}
+
+{% macro cuidado(titulo) -%}
+  <div class="ag-alert ag-alert--warning" role="note">
+    <div class="ag-alert__corpo">
+      <p class="ag-alert__titulo">{{ titulo }}</p>
+      {{ caller() }}
+    </div>
+  </div>
+{%- endmacro %}
+
+{% macro dica(titulo) -%}
+  <div class="ag-alert ag-alert--info" role="note">
+    <div class="ag-alert__corpo">
+      <p class="ag-alert__titulo">{{ titulo }}</p>
+      {{ caller() }}
+    </div>
+  </div>
+{%- endmacro %}

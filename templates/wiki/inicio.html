@@ -1,0 +1,106 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+
+<p>O Início mostra os certificados dos clientes e é daqui que você pede a instalação no seu computador. Também abre os detalhes de cada certificado e a inclusão no SIEG. Você pode instalar os certificados dos clientes da sua carteira; os demais aparecem, mas com a instalação bloqueada.</p>
+
+<h2 id="achar">Achar um certificado</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Início</strong>. A página se chama <strong>Painel de Certificados</strong>.</li>
+  <li>No topo há três números: <strong>Total</strong> (certificados mapeados), <strong>Ativo</strong> (válidos e prontos para instalar) e <strong>Expirando</strong> (vencem nos próximos 30 dias).
+    {{ print("inicio-lista", "Início com os números Total, Ativo e Expirando no topo e a lista de certificados abaixo", "A lista de certificados") }}
+  </li>
+  <li>Em <strong>Buscar</strong>, digite nome, CNPJ ou CPF.
+    {{ print("inicio-busca", "Lista do Início filtrada por um nome digitado no campo Buscar") }}
+  </li>
+  <li>Use <strong>Status</strong> para ver <strong>Todos</strong>, só <strong>Ativo</strong> ou só <strong>Expirando</strong>.
+    {{ print("inicio-filtro-expirando", "Filtro Status em Expirando, com a lista só dos certificados que vencem em até 30 dias") }}
+  </li>
+  <li>Use <strong>SIEG</strong> para filtrar <strong>No SIEG</strong>, <strong>Incluindo ou com erro</strong> ou <strong>Fora do SIEG</strong>.
+    {{ print("inicio-filtro-sieg", "Filtro SIEG em No SIEG, com as linhas marcadas pelo selo SIEG") }}
+  </li>
+  <li>Clique no título de uma coluna (Status, Nome, Emissão, Vencimento, CNPJ/CPF) para ordenar.</li>
+  <li>Clique em <strong>Atualizar tabela</strong> para buscar os dados mais novos.</li>
+</ol>
+
+{% call dica("Onde estão os vencidos") %}
+<p>Certificados vencidos não aparecem no Início. A linha de status abaixo dos botões diz quantos ficaram de fora e leva até eles. Veja <a href="/wiki-certguard?modulo=vencidos">Vencidos</a>.</p>
+{% endcall %}
+
+<h2 id="detalhes">Ver os detalhes de um certificado</h2>
+<ol>
+  <li>Clique no nome do cliente.</li>
+  <li>Abre uma janela com os blocos <strong>Certificado</strong> (nome, tipo, validade, documento, emissão, vencimento, emissor e outros dados), <strong>Responsável</strong> (nome, CPF, data de nascimento, e-mail) e <strong>No portal</strong>.
+    {{ print("inicio-detalhes", "Janela de detalhes de um certificado com os blocos Certificado, Responsável, No portal e SIEG", "Os detalhes de um certificado") }}
+  </li>
+  <li>Clique em <strong>Fechar</strong> para voltar à lista.</li>
+</ol>
+
+<h2 id="instalar">Instalar certificados no seu computador</h2>
+<p>Antes, confira: a bandeja <strong>Certguard Análise</strong> precisa estar aberta no seu computador, com você conectado e o computador autorizado. Veja <a href="/wiki-certguard?modulo=bandeja">Bandeja Certguard Análise</a>.</p>
+<ol>
+  <li>Clique em <strong>Selecionar</strong>. Aparece uma coluna de caixas de marcação e o botão vira <strong>Cancelar</strong>.</li>
+  <li>Marque os certificados que quer instalar. A caixa do cabeçalho marca todos os instaláveis desta página.</li>
+  <li>Abaixo dos botões aparece quantos certificados estão selecionados.
+    {{ print("inicio-selecao", "Modo de seleção com dois certificados marcados, a contagem de selecionados e o botão Instalar selecionados", "Dois certificados marcados para instalar") }}
+  </li>
+  <li>Clique em <strong>Instalar selecionados</strong>.</li>
+  <li>O portal avisa "Pedido enviado. Acompanhando a instalação…".
+    {{ print("inicio-pedido-enviado", "Aviso Pedido enviado. Acompanhando a instalação, no Início") }}
+  </li>
+  <li>Aguarde. Em alguns segundos aparece "Certificado instalado em" e o nome do seu computador. A bandeja também mostra um aviso no canto da tela.</li>
+  <li>Clique em <strong>Cancelar</strong> para sair do modo de seleção.</li>
+</ol>
+
+<h3 id="sem-botao-instalar">O botão de instalar não aparece</h3>
+<p>Sem a bandeja pronta no seu computador, o botão <strong>Instalar selecionados</strong> não aparece. No lugar dele, um aviso diz o que falta, por exemplo "Sem agente ativo na sua estação" ou que o computador está aguardando o administrador autorizar.</p>
+{{ print("inicio-sem-agente", "Modo de seleção com o aviso de que o computador aguarda a autorização do administrador, no lugar do botão de instalar") }}
+<ol>
+  <li>Abra a bandeja <strong>Certguard Análise</strong> e entre com a sua conta do portal.</li>
+  <li>Confira se o computador já foi autorizado.</li>
+  <li>Volte ao Início e marque os certificados de novo.</li>
+</ol>
+
+{% call dica("Caixa apagada") %}
+<p>Linha com a caixa de marcação apagada não pode ser instalada. Passe o mouse sobre ela para ver o motivo, por exemplo "Certificado vencido", "Fora da sua carteira" ou "Aguardando o envio pelo agente".</p>
+{% endcall %}
+
+{% call dica("Limite por pedido") %}
+<p>Cada pedido aceita até <strong>50 certificados</strong>. Se marcar mais, o portal pede para desmarcar o excesso.</p>
+{% endcall %}
+
+<h2 id="sieg">Incluir um certificado no SIEG</h2>
+<p>O interruptor aparece para os clientes da sua carteira. Nos demais, a janela mostra só a situação.</p>
+<ol>
+  <li>Abra os detalhes do certificado, clicando no nome.</li>
+  <li>No bloco <strong>SIEG</strong>, ligue o interruptor <strong>Incluir no SIEG</strong>.</li>
+  <li>Abre a janela <strong>Incluir no SIEG</strong>. Confira o cliente e clique de novo em <strong>Incluir no SIEG</strong>.
+    {{ print("inicio-sieg-confirmar", "Janela Incluir no SIEG com o aviso de que a ação não pode ser desfeita e os botões Cancelar e Incluir no SIEG") }}
+  </li>
+  <li>O estado passa para "Enviando ao SIEG…" e depois para <strong>No SIEG</strong>. Na lista, a linha ganha o selo <strong>SIEG</strong>.</li>
+  <li>Se der erro, aparece o motivo e o botão <strong>Tentar de novo</strong>.</li>
+</ol>
+
+{% call cuidado("Incluir no SIEG não tem volta") %}
+<p>Depois de ligado, o interruptor não volta pela tela. Tirar do SIEG é feito no painel do próprio SIEG. Confira o cliente antes de confirmar.</p>
+{% endcall %}
+
+<h2 id="exportar">Exportar a lista</h2>
+<ol>
+  <li>Clique em <strong>Exportar</strong>.
+    {{ print("inicio-exportar", "Menu Exportar aberto com as opções Planilha (CSV) e Documento (PDF)") }}
+  </li>
+  <li>Escolha <strong>Planilha (CSV)</strong> ou <strong>Documento (PDF)</strong>. O arquivo sai com os filtros aplicados.</li>
+</ol>
+
+<h2 id="sino">Usar o sino de avisos</h2>
+<ol>
+  <li>No canto superior, clique no sino (<strong>Alertas e notificações</strong>). O número vermelho indica avisos não lidos.
+    {{ print("inicio-sino", "Lista de avisos do sino aberta, com os filtros e os avisos de certificados") }}
+  </li>
+  <li>Filtre por <strong>Todos</strong>, <strong>Novos</strong>, <strong>Expirando</strong> ou <strong>Vencidos</strong>.</li>
+  <li>Clique em um aviso para abrir o cliente no Início, ou em Vencidos, se o certificado já venceu.</li>
+  <li>Clique em <strong>Li todos</strong> para limpar a lista.</li>
+</ol>
+
+<h2 id="carteira-vazia">Sua carteira está vazia</h2>
+<p>Se a lista mostrar "Sua carteira está vazia", ainda não há clientes atribuídos a você. Peça ao gestor do seu departamento.</p>

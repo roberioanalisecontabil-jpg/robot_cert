@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% if atual %}{{ atual.titulo }} — {% endif %}Wiki — Analise Certificado</title>
+  <link rel="icon" href="/favicon.ico?v=brand-gold-v1" type="image/x-icon" />
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=menu-lateral-2026-09d" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/wiki.css?v=wiki-2026-10" />
+</head>
+<body class="cg-aguia">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
+
+  <main class="main-content cg-painel wiki" id="main-content">
+    {% if atual %}
+      <nav class="wiki-trilha" aria-label="Você está em">
+        <a href="/wiki-certguard">Wiki</a>
+        <span aria-hidden="true">›</span>
+        <span aria-current="page">{{ atual.titulo }}</span>
+      </nav>
+      <header class="ag-page__head">
+        <p class="ag-page__eyebrow">Wiki do Certguard</p>
+        <h1 class="ag-page__title">{{ atual.titulo }}</h1>
+        <p class="ag-page__lead">{{ atual.resumo }}</p>
+      </header>
+
+      <article class="wiki-artigo">
+        {% include "wiki/" ~ atual.chave ~ ".html" %}
+      </article>
+
+      <nav class="wiki-vizinhos" aria-label="Outros tutoriais">
+        {% if anterior %}
+          <a class="wiki-vizinho" href="/wiki-certguard?modulo={{ anterior.chave }}">
+            <span class="wiki-vizinho__rotulo">Anterior</span>
+            <span class="wiki-vizinho__titulo">{{ anterior.titulo }}</span>
+          </a>
+        {% else %}<span></span>{% endif %}
+        {% if proximo %}
+          <a class="wiki-vizinho wiki-vizinho--proximo" href="/wiki-certguard?modulo={{ proximo.chave }}">
+            <span class="wiki-vizinho__rotulo">Próximo</span>
+            <span class="wiki-vizinho__titulo">{{ proximo.titulo }}</span>
+          </a>
+        {% endif %}
+      </nav>
+    {% else %}
+      <header class="ag-page__head">
+        <p class="ag-page__eyebrow">Wiki do Certguard</p>
+        <h1 class="ag-page__title">Como usar o portal</h1>
+        <p class="ag-page__lead">Um tutorial para cada parte do portal, com as telas de exemplo. Aparecem aqui só as partes que você usa.</p>
+      </header>
+
+      {# Os prints usam dados de demonstração: empresas, pessoas e documentos
+         inventados. Dizer isso evita alguém procurar "Padaria Pão Dourado" na
+         lista de verdade. #}
+      <p class="wiki-aviso">As telas dos tutoriais usam dados de demonstração: os nomes, CNPJs e CPFs que aparecem nelas são inventados.</p>
+
+      <ol class="wiki-indice" role="list">
+        {% for m in modulos %}
+          <li>
+            <a class="ag-card wiki-cartao" href="/wiki-certguard?modulo={{ m.chave }}">
+              <span class="wiki-cartao__numero" aria-hidden="true">{{ "%02d" % loop.index }}</span>
+              <span class="wiki-cartao__titulo">{{ m.titulo }}</span>
+              <span class="wiki-cartao__resumo">{{ m.resumo }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ol>
+    {% endif %}
+  </main>
+
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=app-autenticador-qr-2026-10"></script>
+</body>
+</html>

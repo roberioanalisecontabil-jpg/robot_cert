@@ -1,0 +1,44 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+
+<p>O Histórico lista, arquivo por arquivo, os certificados que o portal já encontrou na pasta, com a última data em que cada um foi verificado. A lista mostra os clientes da sua carteira.</p>
+
+<h2 id="consultar">Consultar o histórico de um cliente</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Histórico</strong>. A página se chama <strong>Histórico de Certificados</strong>.
+    {{ print("historico-lista", "Página Histórico de Certificados com a tabela de arquivos e a contagem de registros", "O histórico, arquivo por arquivo") }}
+  </li>
+  <li>Em <strong>Buscar</strong>, digite nome, CNPJ ou CPF. A lista filtra enquanto você digita.
+    {{ print("historico-busca", "Histórico filtrado por um nome digitado no campo Buscar") }}
+  </li>
+  <li>A tabela mostra <strong>Nome</strong>, <strong>CNPJ / CPF</strong>, <strong>Última verificação</strong>, <strong>Vencimento</strong> e <strong>Status</strong>.</li>
+</ol>
+
+<h2 id="filtrar">Filtrar por situação</h2>
+<ol>
+  <li>Em <strong>Status</strong>, escolha uma opção: <strong>Todos</strong>, <strong>Ilegíveis (erro ou fora do padrão)</strong>, <strong>Erro de leitura</strong>, <strong>Fora do padrão</strong>, <strong>Expirados</strong> ou <strong>Ativos</strong>.
+    {{ print("historico-filtro-expirados", "Filtro Status em Expirados, com a lista só dos arquivos vencidos") }}
+  </li>
+  <li>Para voltar à lista toda, escolha <strong>Todos</strong>, ou clique em <strong>Ver todos os status</strong> quando a lista ficar vazia.</li>
+</ol>
+
+<h2 id="exportar">Exportar</h2>
+<ol>
+  <li>Clique em <strong>Exportar</strong>.
+    {{ print("historico-exportar", "Menu Exportar do Histórico aberto com Planilha (CSV) e Documento (PDF)") }}
+  </li>
+  <li>Escolha <strong>Planilha (CSV)</strong> ou <strong>Documento (PDF)</strong>.</li>
+</ol>
+
+<h2 id="atualizar">Atualizar</h2>
+<ol>
+  <li>Clique em <strong>Atualizar</strong> para recarregar a lista. A linha de status mostra quando os dados foram atualizados pela última vez.</li>
+</ol>
+
+<h2 id="dicas">Dicas</h2>
+{% call dica("Um cliente, várias linhas") %}
+<p>O histórico é por arquivo. Um cliente que renovou o certificado aparece em mais de uma linha: o certificado antigo e o novo.</p>
+{% endcall %}
+{% call dica("Arquivo ilegível") %}
+<p>"Ilegível" é um arquivo que o portal não conseguiu ler. Esse arquivo não pode ser instalado. Avise o administrador.</p>
+{% endcall %}
