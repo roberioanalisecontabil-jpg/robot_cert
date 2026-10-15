@@ -49,6 +49,31 @@
   "h": 676,
   "v": "852413d9"
  },
+ "bandeja-aviso-instalado": {
+  "w": 366,
+  "h": 70,
+  "v": "6304d090"
+ },
+ "bandeja-login": {
+  "w": 442,
+  "h": 362,
+  "v": "1bc9b396"
+ },
+ "bandeja-menu": {
+  "w": 491,
+  "h": 116,
+  "v": "4412b3ed"
+ },
+ "bandeja-pendente": {
+  "w": 442,
+  "h": 362,
+  "v": "114807a9"
+ },
+ "bandeja-status": {
+  "w": 942,
+  "h": 732,
+  "v": "102fa984"
+ },
  "carteiras-filtro": {
   "w": 740,
   "h": 624,
@@ -239,6 +264,11 @@
   "h": 900,
   "v": "9ba86e74"
  },
+ "inicio-pedido-enviado": {
+  "w": 1440,
+  "h": 900,
+  "v": "eb699b0d"
+ },
  "inicio-selecao": {
   "w": 1118,
   "h": 1014,
@@ -324,6 +354,11 @@
   "h": 900,
   "v": "ac5d2e3c"
  },
+ "login-codigo-app": {
+  "w": 400,
+  "h": 578,
+  "v": "fbc5d05d"
+ },
  "login-codigo": {
   "w": 400,
   "h": 550,
@@ -344,6 +379,11 @@
   "h": 484,
   "v": "b71b746b"
  },
+ "login-nova-senha": {
+  "w": 400,
+  "h": 464,
+  "v": "2301c298"
+ },
  "login-tela": {
   "w": 400,
   "h": 516,
@@ -353,6 +393,11 @@
   "w": 460,
   "h": 450,
   "v": "6f08eec5"
+ },
+ "usuarios-computadores-chave": {
+  "w": 512,
+  "h": 364,
+  "v": "80e8fe4e"
  },
  "usuarios-computadores-emprestimo": {
   "w": 512,
