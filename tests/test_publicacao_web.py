@@ -20,7 +20,8 @@ def _site(nome: str) -> str:
 
 
 def test_so_o_portal_de_certificados_aceita_a_cloudflare() -> None:
-    assert "import so_cloudflare" in _site("certificado.analisegroup.cnt.br")
+    # 443 para a rede interna, 2053 para a Cloudflare (Origin Rule, 15/10/2026).
+    assert "import so_cloudflare" in _site("certificado.analisegroup.cnt.br, certificado.analisegroup.cnt.br:2053")
     for interno in ("hardlyze.analisegroup.cnt.br", "eficacia.analisegroup.cnt.br"):
         corpo = _site(interno)
         assert "import so_rede_interna" in corpo and "so_cloudflare" not in corpo, interno

@@ -93,7 +93,10 @@
 	}
 }
 
-certificado.analisegroup.cnt.br {
+# A 2053 e a porta que a Cloudflare usa para chegar aqui (Origin Rule
+# certificado-porta-2053, 15/10/2026): o pfSense da nuvem encaminha a 2053 do IP
+# publico para a MESMA porta deste servidor. A 443 continua para a rede interna.
+certificado.analisegroup.cnt.br, certificado.analisegroup.cnt.br:2053 {
 	# So pela Cloudflare. Todo mundo, de dentro ou de fora, chega por ela
 	# (decisao de 14/10/2026); o servidor tambem (o agente usa o mesmo nome).
 	import so_cloudflare
