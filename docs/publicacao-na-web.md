@@ -6,6 +6,8 @@ Decidido em 14/10/2026:
 - **Proxy da Cloudflare na frente** (nuvem laranja). Todo mundo passa por ela, de dentro ou de fora da empresa.
 - **Item 14 da auditoria run-2** (rajada de logins) tratado só na Cloudflare.
 
+Acrescentado em 15/10/2026: entrada pela **porta 2053** do IP público, com o firewall aceitando só os IPs da Cloudflare, e o portal **só para acessos do Brasil**, por uma regra na Cloudflare.
+
 O agente do servidor fala com o portal por `http://127.0.0.1:8020` e não passa por nada disso.
 
 ## Onde o servidor está
@@ -13,7 +15,7 @@ O agente do servidor fala com o portal por `http://127.0.0.1:8020` e não passa 
 O ANALISESRV (10.200.0.4) é uma máquina virtual na **Oracle Cloud**, num ambiente administrado pelo provedor. Não fica atrás do pfSense do escritório: o pfSense alcança a rede 10.200.0.0/24 por um túnel WireGuard.
 
 - **IP público do ambiente: 147.15.37.38.** É por ele que a intranet já está publicada pela Cloudflare.
-- **O encaminhamento de portas desse IP é feito pelo provedor**, não por nós. Não há painel desse firewall alcançável pela VPN.
+- **O encaminhamento de portas desse IP é feito no pfSense da nuvem**, pelo suporte (com chamado ao pessoal da nuvem para a WAN), não por nós.
 - **A intranet roda no próprio ANALISESRV**: Django com Waitress na porta 8191, em HTTP. A zona está em modo **Flexível**, então a Cloudflare fala com ela em HTTP pela porta 80 do IP público. Ou seja, o trecho entre a Cloudflare e o servidor não é cifrado. Fica para depois, fora deste roteiro: passar a intranet pelo Caddy, com HTTPS de ponta a ponta.
 
 ## O que o `deploy/Caddyfile` já faz
@@ -47,24 +49,29 @@ A zona `analisegroup.cnt.br` serve outros sites pelo proxy (a raiz, `bi.`, `gest
   - Contar por IP. Limite: **10 requisições em 10 segundos**. Ação: **Bloquear** por 10 segundos.
 
   Uma pessoa digitando nunca chega perto disso. O portal tem os próprios limites, por baixo. Para outro portal publicado depois, amplie esta mesma regra (o plano grátis não permite uma segunda).
+- **Security › WAF › Custom rules › `certificado-so-brasil`** (decidido em 15/10, A FAZER junto com a Origin Rule do passo 2):
+  - Se: host `certificado.analisegroup.cnt.br` **e** país **diferente de** Brasil (`ip.src.country ne "BR"`).
+  - Ação: **Bloquear**, e não Desafio, porque as bandejas são programas e não resolvem desafio.
+
+  É um filtro de ruído: tira a maior parte das varreduras e tentativas de login automáticas antes de chegarem ao servidor. Não é barreira forte, porque um servidor no Brasil passa. Efeito colateral aceito: quem estiver no exterior, ou numa VPN ou roaming com saída fora do país, não entra. Para uma viagem, desligue a regra pelos dias necessários. Nas primeiras semanas, confira em **Security › Events** o que ela barrou. Só a Cloudflare sabe o país: o firewall vê apenas os IPs dela, por isso esta regra não pode ficar no pfSense.
 
 O **Bot Fight Mode** está desligado na zona e deve continuar assim: ele não tem exceção por nome e pararia as bandejas.
 
 Enquanto o DNS de `certificado` estiver em nuvem cinza, essas regras não têm efeito.
 
-### 2. Provedor: encaminhamento no IP público
+### 2. pfSense da nuvem: encaminhamento no IP público (PEDIDO em 15/10, aguardando)
 
-Pedir ao provedor do ambiente na Oracle Cloud:
+O IP público passa pelo **pfSense da nuvem**, administrado pelo suporte, que abriu chamado com o pessoal da nuvem para liberar a porta na WAN. A 8443 desse pfSense já é usada para acessar a interface dele, e a 443 foi descartada por ser a mais visada. Ficou combinado:
 
-1. Quais portas do 147.15.37.38 estão encaminhadas hoje, e para onde.
-2. **Se a 443 estiver livre** (a intranet, em Flexível, usa a 80): encaminhar **147.15.37.38:443 → 10.200.0.4:443**. **Se não:** **147.15.37.38:8443 → 10.200.0.4:443**.
-3. Em ambos os casos: aceitar **só os IPs da Cloudflare** (https://www.cloudflare.com/ips) e **sem NAT de origem** (SNAT/masquerade). Se o provedor trocar a origem, todos os acessos vão parecer vir do firewall dele, um IP interno. Aí a Cloudflare deixa de ser reconhecida e os limites por endereço viram um só para todo mundo. O passo 5 confere isso.
+1. **NAT de destino (Port Forward): WAN 147.15.37.38:2053 → 10.200.0.4:443**, TCP, numa **regra nova**. As regras atuais não mudam, e a intranet continua chegando pela porta 80 do mesmo IP.
+2. **Origem permitida: só os IPs da Cloudflare** (https://www.cloudflare.com/ips), de preferência num Alias do pfSense. Quem conecta no firewall é sempre a Cloudflare, nunca o usuário: liberar IPs de usuários bloquearia todo mundo. A lista conferida em 15/10 é a mesma do `trusted_proxies` do Caddyfile.
+3. **Sem NAT de origem** (outbound NAT/SNAT/masquerade) nesse caminho. Com ele, o remetente vira o pfSense, um IP interno: o Caddy deixa de reconhecer a Cloudflare, o portal perde o IP real e os limites por endereço viram um só para todo mundo. Pode acontecer sem ninguém querer, se o pfSense alcançar 10.200.0.0/24 por uma interface com NAT de origem automático. O passo 5 confere isso. Se o NAT de origem não puder sair (por exemplo, porque a resposta do servidor não voltaria pelo mesmo pfSense), a saída é pôr o IP interno do pfSense no `trusted_proxies` do Caddyfile. Isso é seguro só porque o firewall deixa apenas a Cloudflare chegar na 2053.
 
-O destino é sempre o **Caddy na 443**, nunca a porta do portal (8020): ela só escuta em 127.0.0.1, e pular o Caddy pularia o TLS, o filtro de origem, o IP real e o teto de corpo.
+O destino é sempre o **Caddy na 443**, nunca a porta do portal (8020): ela só escuta em 127.0.0.1, e pular o Caddy pularia o TLS, o filtro de origem, o IP real e o teto de corpo. No ANALISESRV nada muda: o Caddy não sabe que lá fora a porta é outra, e o certificado é renovado pela API da Cloudflare, não por conexão de entrada.
 
 O firewall do Windows no ANALISESRV já aceita a 443 (regra `AnaliseCertiDigital-Proxy-HTTPS`).
 
-**Se for a 8443:** criar em **Rules › Origin Rules** uma regra para `http.host eq "certificado.analisegroup.cnt.br"` com **porta de destino 8443**. Quem acessa continua usando `https://certificado.analisegroup.cnt.br`, sem porta. A Cloudflare só usa estas portas HTTPS na origem: 443, 2053, 2083, 2087, 2096, 8443. Outros portais do ANALISESRV podem usar o mesmo encaminhamento e a mesma regra (o Caddy separa pelo nome); um servidor diferente precisaria de outra porta dessa lista.
+**Na Cloudflare, quando o suporte confirmar:** criar em **Rules › Origin Rules** uma regra para `http.host eq "certificado.analisegroup.cnt.br"` com **porta de destino 2053**, e a regra `certificado-so-brasil` do passo 1. Quem acessa continua usando `https://certificado.analisegroup.cnt.br`, sem porta. A Cloudflare só usa estas portas HTTPS na origem: 443, 2053, 2083, 2087, 2096, 8443. Outros sites do ANALISESRV usam o mesmo encaminhamento: basta acrescentar o nome à Origin Rule e um bloco no Caddyfile. Um servidor diferente precisaria de outra porta dessa lista (sobram 2083, 2087 e 2096), ou de passar pelo Caddy do ANALISESRV.
 
 ### 3. ANALISESRV: Caddyfile novo (FEITO em 14/10)
 
@@ -99,7 +106,9 @@ A troca chega em poucos minutos. Algumas máquinas guardam o endereço antigo po
   - a resposta traz o cabeçalho `cf-ray`;
   - um login falso dá 401 rápido;
   - o hardlyze continua respondendo só por dentro.
-- **No log do Caddy** (`C:\Apps\caddy\logs\acesso-8020.log`): numa requisição de fora, `remote_ip` tem de ser um IP da Cloudflare e `client_ip` o IP de quem acessou. Se `remote_ip` for um IP interno, o provedor está trocando a origem (ver o passo 2).
+- **No log do Caddy** (`C:\Apps\caddy\logs\acesso-8020.log`): numa requisição de fora, `remote_ip` tem de ser um IP da Cloudflare e `client_ip` o IP de quem acessou. Se `remote_ip` for um IP interno, o pfSense está trocando a origem (ver o passo 2).
+- **Brasil:** em **Security › Events**, a regra `certificado-so-brasil` aparece barrando acessos de fora. Ninguém daqui deve aparecer nela.
+- **Intranet e gest:** continuam abrindo como antes.
 - **Numa estação:** pedir pelo portal a instalação de um certificado. A bandeja instala como antes, agora pela Cloudflare.
 
 ### Voltar atrás
