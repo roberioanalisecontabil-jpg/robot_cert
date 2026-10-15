@@ -114,12 +114,12 @@ def test_lista_de_operadores_tem_o_mesmo_fio_das_colunas_da_carteira() -> None:
 def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     """Sem isto o navegador segue com o CSS/JS antigo e nada do acima aparece."""
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "aguia-carteiras.css?v=aguia-2026-10c" in html
-    assert "ui-common.js?v=app-autenticador-qr-2026-10" in html
-    assert "style.css?v=menu-lateral-2026-09d" in html
+    assert "aguia-carteiras.css?v=lista-rola-2026-10-15" in html
+    assert "ui-common.js?v=menu-rola-2026-10-15" in html
+    assert "style.css?v=menu-rola-2026-10-15" in html
     for nome in ("index.html", "usuarios.html", "vencidos.html"):
         t = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
-        assert "ui-common.js?v=app-autenticador-qr-2026-10" in t and "style.css?v=menu-lateral-2026-09d" in t
+        assert "ui-common.js?v=menu-rola-2026-10-15" in t and "style.css?v=menu-rola-2026-10-15" in t
 
 
 # ── 4. Nomes em maiúsculas e Usuários com ativos por padrão (30/09, tarde) ──

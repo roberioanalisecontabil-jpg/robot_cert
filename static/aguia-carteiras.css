@@ -26,11 +26,18 @@
    ficam parados e só a lista corre. A altura é o que sobra da janela depois
    do título, da busca e das margens. No celular a lista é a tela inteira e a
    rolagem da página basta. */
+.cg-op-rolagem { overflow-y: auto; max-height: none; }
+/* A regra base vem ANTES da media query (15/10/2026): depois dela, com a
+   mesma especificidade, o `max-height: none` vencia em qualquer largura e a
+   lista nunca rolou por dentro — o fim dela ficava abaixo da tela. */
 @media (min-width: 1025px) {
     .cg-cart-lista { position: sticky; top: var(--space-4); }
-    .cg-op-rolagem { overflow-y: auto; max-height: calc(100vh - 15rem); overscroll-behavior: contain; }
+    /* 25rem é o que fica ACIMA da lista com a página no topo (título, texto,
+       cabeçalho do cartão e busca: ~374px) mais uma margem — medido em
+       15/10/2026; 15rem deixava o fim 134px abaixo da tela. O piso de 12rem
+       segura a lista em janelas muito baixas, onde a página rola um pouco. */
+    .cg-op-rolagem { max-height: max(12rem, calc(100vh - 25rem)); overscroll-behavior: contain; }
 }
-.cg-op-rolagem { overflow-y: auto; max-height: none; }
 .cg-op-rolagem:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
 
 /* Cabeçalho do painel de operadores: título e o resumo discreto. */

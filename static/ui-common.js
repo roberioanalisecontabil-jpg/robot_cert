@@ -282,6 +282,14 @@ function initSidebarToggle() {
     header.appendChild(criarBotao("btn-sidebar-toggle", "sidebar-toggle-btn sidebar-toggle-btn--lateral"));
   }
   bar.appendChild(criarBotao("btn-sidebar-toggle-mobile", "sidebar-toggle-btn sidebar-toggle-btn--mobile"));
+
+  // O menu rola por dentro em janela baixa: a página atual pode ser um dos
+  // últimos itens (Wiki, App autenticador) e abrir fora da vista.
+  const ativo = sidebar.querySelector(".sidebar-nav a.active");
+  const nav = sidebar.querySelector(".sidebar-nav");
+  if (ativo && nav && nav.scrollHeight > nav.clientHeight) {
+    nav.scrollTop = Math.max(0, ativo.offsetTop - nav.offsetTop - (nav.clientHeight - ativo.offsetHeight) / 2);
+  }
 }
 
 /**
@@ -1830,10 +1838,57 @@ function initNotifications() {
   });
 }
 
+/**
+ * Balão dos itens da sidebar recolhida (15/10/2026). O menu passou a rolar por
+ * dentro, e a rolagem corta o ::after do [data-tooltip] que saía para a
+ * direita. Aqui é um elemento só, preso ao <body> com position: fixed
+ * (.cg-sidebar-dica, em style.css), posto ao lado do item em hover e em foco
+ * por teclado, com o mesmo atraso de 180ms do DS. Só aparece com o rótulo
+ * escondido (font-size 0: recolhida pelo botão ou entre 769 e 900px).
+ */
+function initSidebarDicas() {
+  const nav = document.querySelector(".sidebar-nav");
+  if (!nav || document.getElementById("cg-sidebar-dica")) return;
+  const dica = document.createElement("div");
+  dica.id = "cg-sidebar-dica";
+  dica.className = "cg-sidebar-dica";
+  dica.setAttribute("aria-hidden", "true"); // o item já tem aria-label
+  dica.hidden = true;
+  document.body.appendChild(dica);
+  let timer = null;
+
+  function esconder() {
+    clearTimeout(timer);
+    dica.hidden = true;
+  }
+  function mostrar(ev) {
+    const a = ev.target.closest && ev.target.closest(".sidebar-nav a[data-tooltip]");
+    if (!a) return;
+    esconder();
+    if (parseFloat(getComputedStyle(a).fontSize) > 0) return; // rótulo à vista
+    timer = setTimeout(() => {
+      const r = a.getBoundingClientRect();
+      dica.textContent = a.dataset.tooltip;
+      dica.style.left = `${Math.round(r.right + 8)}px`;
+      dica.style.top = `${Math.round(r.top + r.height / 2)}px`;
+      dica.hidden = false;
+    }, 180);
+  }
+  nav.addEventListener("mouseover", mostrar);
+  nav.addEventListener("focusin", (ev) => {
+    if (ev.target.matches && ev.target.matches(":focus-visible")) mostrar(ev);
+  });
+  nav.addEventListener("mouseleave", esconder);
+  nav.addEventListener("focusout", esconder);
+  nav.addEventListener("scroll", esconder, { passive: true });
+  window.addEventListener("resize", esconder);
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     initSidebarPorPapel();
     initSidebarToggle();
+    initSidebarDicas();
     initThemeToggle();
     initNotifications();
     initRegioesRolaveis();
@@ -1842,6 +1897,7 @@ if (document.readyState === "loading") {
 } else {
   initSidebarPorPapel();
   initSidebarToggle();
+  initSidebarDicas();
   initThemeToggle();
   initNotifications();
   initRegioesRolaveis();
