@@ -118,6 +118,9 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
         return
 
     raiz.title(f"{NOME} — Entrar")
+    from estacao import icone
+
+    icone.aplicar_na_janela(raiz)
     raiz.configure(bg=_COR_FUNDO)
     raiz.resizable(False, False)
     raiz.geometry("440x330")

@@ -186,6 +186,9 @@ def _rodar(obter_estado, ao_entrar, ao_sair_da_conta) -> None:
         return
 
     raiz.title(f"{NOME} — Status")
+    from estacao import icone
+
+    icone.aplicar_na_janela(raiz)
     raiz.configure(bg=_COR_FUNDO)
     raiz.geometry("940x680")
     raiz.minsize(700, 480)

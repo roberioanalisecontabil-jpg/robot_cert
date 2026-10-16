@@ -10,11 +10,13 @@ a = Analysis(
     [os.path.join("estacao", "__main__.py")],
     pathex=[REPO],
     binaries=[],
-    datas=[(os.path.join(REPO, "ico", "icone.ico"), "ico")],
+    # C dourado (estacao/icone.py): bandeja, janelas, exe e instalador.
+    datas=[(os.path.join(REPO, "ico", "certguard.png"), "ico"), (os.path.join(REPO, "ico", "certguard.ico"), "ico")],
     hiddenimports=[
         # Importados dentro das funções (menu, laço, --preparar-chave): a análise
         # estática não os alcança, e faltar um só aparece no clique, no exe.
         "estacao.bandeja",
+        "estacao.icone",
         "estacao.conta",
         "estacao.chave_maquina",
         "estacao.instalador_certificado",
@@ -59,5 +61,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(REPO, "ico", "icone.ico"),
+    icon=os.path.join(REPO, "ico", "certguard.ico"),
 )

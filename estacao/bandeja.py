@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -76,17 +75,6 @@ def instancia_unica() -> bool:
     except Exception:
         # Sem a trava, sobe assim mesmo: duas bandejas são incômodas, nenhuma é pior.
         return True
-
-
-def _icone():
-    from PIL import Image
-
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
-    try:
-        return Image.open(base / "ico" / "icone.ico")
-    except Exception:
-        logger.warning("Ícone não encontrado; usando um quadrado.")
-        return Image.new("RGB", (64, 64), (0, 120, 215))
 
 
 class Bandeja:
@@ -267,7 +255,9 @@ class Bandeja:
                  visible=lambda item: self._conectado()),
             item("Fechar", self.on_fechar),
         )
-        self.icon = pystray.Icon("certguard_analise", _icone(), NOME, menu)
+        from estacao import icone
+
+        self.icon = pystray.Icon("certguard_analise", icone.imagem(), NOME, menu)
 
         # Primeira vez nesta conta do Windows (e sem conta trazida do
         # Hardlyze): pede o login sozinho, em vez de esperar alguém achar o item.
