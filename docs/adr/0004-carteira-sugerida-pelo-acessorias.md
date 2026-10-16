@@ -75,6 +75,34 @@ Operador; departamentos que contam. O Gestor vê só os Operadores dos seus Depa
 - **Escrever no Acessórias** quando o admin muda a carteira: o Acessórias é o sistema do dia a
   dia do escritório; o portal não mexe nele.
 
+## Adendo (16/10/2026): departamentos espelhados do Acessórias
+
+No portal o departamento não é rótulo: ele decide qual Gestor edita (e aprova) a carteira de
+qual Operador (ADR 0001). Se os departamentos ficarem desatualizados, as sugestões caem no
+Gestor errado. Por isso o portal também **sugere os departamentos e quem está em cada um**, pelas
+mesmas regras: o Acessórias sugere, e quem aprova é o Administrador.
+
+- **Departamentos:** cada departamento do Acessórias pode ser ligado a um do portal. Na busca,
+  um departamento ainda sem ligação se liga sozinho ao do portal que tiver o mesmo nome (sem
+  distinguir maiúsculas e espaços). Um departamento com responsáveis e sem par no portal vira
+  sugestão de **criar**. Os que não têm responsáveis (em 16/10: "Danielle Carla" e
+  "Controladoria Contábil") não geram nada.
+- **Pessoa → departamento:** o portal guarda um departamento por pessoa. A sugestão é o
+  departamento em que a pessoa **mais aparece como responsável**, desde que apareça nele pelo
+  menos 3 vezes mais que no segundo. Nos outros casos, não há sugestão: a pessoa aparece como
+  "decidir à mão", com a contagem por departamento. Em 16/10 eram 78 pessoas com departamento
+  claro, 4 ambíguas e 2 presentes em 16 departamentos.
+- **A mudança manual vence.** Quando o Administrador põe alguém num departamento diferente do
+  sugerido, a sugestão é tratada como recusada e só volta se o Acessórias mudar aquela pessoa.
+  É a mesma regra da recusa das carteiras.
+- **A liderança continua só manual.** O Acessórias não sabe quem lidera. Ser Gestor continua
+  vindo de `departamento_lider` (ADR 0001), e nada aqui mexe nisso.
+- **Só Administrador aprova departamentos.** Mudar o departamento de alguém muda qual Gestor
+  alcança essa pessoa, e o Gestor não pode puxar ninguém para o próprio departamento.
+- **A ordem dentro da aba:** primeiro os departamentos, depois as carteiras. As sugestões de
+  carteira são mostradas ao Gestor pelo departamento de hoje, então vale acertar os
+  departamentos antes da primeira aprovação de carteiras.
+
 ## Consequências
 
 - O DIARIO2.0 não muda.
@@ -83,4 +111,5 @@ Operador; departamentos que contam. O Gestor vê só os Operadores dos seus Depa
 - Responsáveis com e-mail de outro domínio (analisecontabil.cnt.br, gmail) só casam se a conta
   do portal usar o mesmo e-mail; senão aparecem na lista "sem conta de Operador".
 - Ordem de entrega: este ADR → migration (cópia, origem, histórico, recusas, departamentos) →
-  busca noturna e Buscar agora → aba Acessórias.
+  busca noturna e Buscar agora → aba Acessórias (seção Departamentos, depois Carteiras).
+- A migration é aplicada pelo `atualizar-portal.ps1`, como as outras desde 08/10, e não à mão.
