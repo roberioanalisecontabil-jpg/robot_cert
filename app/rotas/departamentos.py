@@ -67,7 +67,7 @@ def listar_departamentos() -> List[dict]:
     if not sb:
         return []
     try:
-        deps = sb.table("departamento").select("id, nome, criado_em").execute().data or []
+        deps = sb.table("departamento").select("id, nome, criado_em, arquivado").execute().data or []
         lids = sb.table("departamento_lider").select("departamento_id, user_id").execute().data or []
         pessoas = sb.table("users").select("id, full_name, email, departamento_id, ativo, role").execute().data or []
     except Exception:  # noqa: BLE001
@@ -106,6 +106,8 @@ def listar_departamentos() -> List[dict]:
             "id": did,
             "nome": d.get("nome"),
             "criado_em": d.get("criado_em"),
+            # ADR 0005: sem par no Acessórias e posto de lado pelo Administrador.
+            "arquivado": bool(d.get("arquivado")),
             "lideres": sorted(lideres.get(did, []), key=lambda x: x["nome"] or ""),
             "membros": membros.get(did, 0),
             "inativos": inativos.get(did, 0),

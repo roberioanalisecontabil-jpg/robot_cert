@@ -360,6 +360,44 @@ def calcular_plano(dados: dict, estado: Estado) -> dict:
     }
 
 
+def chave_de_nome(nome: str) -> str:
+    """Nome comparável: sem acento, minúsculo, espaços simples ("Contábil" = "contabil")."""
+    import unicodedata
+
+    s = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode().lower()
+    return " ".join(s.split())
+
+
+def contar_responsabilidades(dados: dict) -> Dict[str, Dict[int, int]]:
+    """e-mail -> {departamento do Acessórias: empresas ativas pelas quais responde}."""
+    contagem: Dict[str, Dict[int, int]] = {}
+    for e in dados["empresas"]:
+        if not e["ativa"]:
+            continue
+        for d in e["departamentos"]:
+            if d["resp_email"]:
+                por_dep = contagem.setdefault(d["resp_email"], {})
+                por_dep[d["id"]] = por_dep.get(d["id"], 0) + 1
+    return contagem
+
+
+def sugestao_de_departamento(contagem: Dict[int, int], mapa: Dict[int, str]) -> Optional[str]:
+    """O departamento do portal da pessoa, ou None ("decidir à mão").
+
+    Adendo do ADR 0004, mantido no 0005: o departamento do Acessórias em que a
+    pessoa mais aparece como responsável, se aparecer nele pelo menos 3 vezes
+    mais que no segundo, e se ele estiver ligado a um do portal.
+    """
+    if not contagem:
+        return None
+    ordem = sorted(contagem.items(), key=lambda kv: (-kv[1], kv[0]))
+    primeiro, n1 = ordem[0]
+    n2 = ordem[1][1] if len(ordem) > 1 else 0
+    if n1 < 3 * n2:
+        return None
+    return mapa.get(primeiro)
+
+
 def motivo_para_confirmar(plano: dict, estado: Estado) -> str:
     """Vazio = pode aplicar sozinha. Texto = espera o Administrador."""
     r = plano["resumo"]
@@ -475,6 +513,74 @@ def _historico(cur, pares: Iterable[Par], movimento: str, emails: Dict[str, str]
         )
 
 
+def _ligar_departamentos(cur, so_estes: Optional[Iterable[int]] = None) -> Dict[str, int]:
+    """Liga cada departamento do Acessórias ao do portal de mesmo nome; cria no
+    portal o que está com "trazer" e não tem par (ADR 0005).
+
+    Ligado não se desfaz aqui: trocar a ligação é decisão do Administrador na
+    tela. Departamento arquivado não recebe ligação automática.
+    """
+    cur.execute("SELECT id, nome, departamento_id::text AS departamento_id, conta_para_carteira "
+                "FROM public.acessorias_departamento ORDER BY id")
+    deps = cur.fetchall()
+    if so_estes is not None:
+        alvo = set(so_estes)
+        deps = [d for d in deps if d["id"] in alvo]
+    cur.execute("SELECT id::text AS id, nome, arquivado FROM public.departamento")
+    portal = cur.fetchall()
+    cur.execute("SELECT departamento_id::text AS d FROM public.acessorias_departamento WHERE departamento_id IS NOT NULL")
+    usados = {r["d"] for r in cur.fetchall()}
+    livres = {chave_de_nome(p["nome"]): p["id"] for p in portal if not p["arquivado"] and p["id"] not in usados}
+    ligados = criados = 0
+    for d in deps:
+        if d["departamento_id"]:
+            continue
+        pid = livres.pop(chave_de_nome(d["nome"]), None)
+        if pid is None and d["conta_para_carteira"] and d["nome"].strip():
+            cur.execute("INSERT INTO public.departamento (nome) VALUES (%s) ON CONFLICT DO NOTHING RETURNING id::text AS id",
+                        (d["nome"].strip(),))
+            linha = cur.fetchone()
+            pid = linha["id"] if linha else None
+            criados += 1 if linha else 0
+        elif pid is not None:
+            ligados += 1
+        if pid is not None:
+            cur.execute("UPDATE public.acessorias_departamento SET departamento_id = %s WHERE id = %s", (pid, d["id"]))
+    return {"departamentos_criados": criados, "departamentos_ligados": ligados}
+
+
+def _mapa_de_departamentos(cur) -> Dict[int, str]:
+    cur.execute("SELECT id, departamento_id::text AS d FROM public.acessorias_departamento WHERE departamento_id IS NOT NULL")
+    return {r["id"]: r["d"] for r in cur.fetchall()}
+
+
+def _distribuir_pessoas(cur, contagem: Dict[str, Dict[int, int]]) -> Dict[str, int]:
+    """Põe cada pessoa no departamento sugerido, salvo quando o Administrador
+    já escolheu outro para a mesma sugestão (a mudança manual vence)."""
+    mapa = _mapa_de_departamentos(cur)
+    cur.execute("SELECT user_id::text AS u, chave FROM public.acessorias_recusa WHERE tipo = 'departamento'")
+    recusas = {(r["u"], r["chave"]) for r in cur.fetchall()}
+    cur.execute("SELECT id::text AS id, lower(email) AS email, departamento_id::text AS departamento_id "
+                "FROM public.users WHERE ativo AND role <> 'admin'")
+    movidas = a_decidir = 0
+    for c in cur.fetchall():
+        cont = contagem.get(c["email"])
+        if not cont:
+            continue
+        sug = sugestao_de_departamento(cont, mapa)
+        # A recusa vale só para a sugestão em que foi feita: se o Acessórias
+        # mudar a pessoa, a sugestão nova é outra e a recusa velha sai.
+        cur.execute("DELETE FROM public.acessorias_recusa WHERE tipo = 'departamento' AND user_id = %s "
+                    "AND chave IS DISTINCT FROM %s", (c["id"], sug))
+        if sug is None:
+            a_decidir += 1
+            continue
+        if sug != c["departamento_id"] and (c["id"], sug) not in recusas:
+            cur.execute("UPDATE public.users SET departamento_id = %s WHERE id = %s", (sug, c["id"]))
+            movidas += 1
+    return {"pessoas_movidas": movidas, "pessoas_a_decidir": a_decidir}
+
+
 def _hash_sem_senha() -> str:
     """Hash bcrypt de um segredo aleatório que ninguém guarda.
 
@@ -534,6 +640,9 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             cur.execute("DELETE FROM public.departamento_lider WHERE user_id = %s", (uid,))
             cur.execute("DELETE FROM public.carteira_excecao WHERE user_id = %s", (uid,))
 
+        # Departamentos depois das contas: a conta nova já nasce no seu.
+        deps = {**_ligar_departamentos(cur), **_distribuir_pessoas(cur, contar_responsabilidades(dados))}
+
         def real(par: Par) -> Optional[Par]:
             uid = ids_novos.get(par[0], par[0])
             return None if uid.startswith(PREFIXO_NOVA) else (uid, par[1])
@@ -555,7 +664,7 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             cur.execute("DELETE FROM public.carteira WHERE user_id = %s AND documento = %s", (uid, doc))
         _historico(cur, entradas, "entrada", emails, feito_por_email)
         _historico(cur, plano["saidas"], "saida", emails, feito_por_email, desativadas)
-    return {**plano["resumo"], "_depois": {"novas": novas, "desativadas": sorted(desativadas)}}
+    return {**plano["resumo"], **deps, "_depois": {"novas": novas, "desativadas": sorted(desativadas)}}
 
 
 def _enviar_convite(conta: dict, codigo: str) -> None:
@@ -768,3 +877,141 @@ def situacao(limite: int = 10) -> dict:
         "aguardando": next((b for b in buscas if b["estado"] == "aguardando"), None),
         "ultima_aplicada": next((b for b in buscas if b.get("aplicada_em")), None),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 4. Departamentos (tela Configuração › Acessórias)
+# ──────────────────────────────────────────────────────────────────────────
+
+def _contagem_da_copia(cur, email: Optional[str] = None) -> Dict[str, Dict[int, int]]:
+    """A mesma contagem de `contar_responsabilidades`, lida da cópia aplicada."""
+    sql = ("SELECT r.email, r.departamento_acessorias_id AS d, count(*) AS n "
+           "FROM public.acessorias_responsavel r JOIN public.acessorias_empresa e ON e.cnpj = r.cnpj AND e.ativa "
+           "WHERE r.email <> ''" + (" AND r.email = %s" if email else "") + " GROUP BY 1, 2")
+    cur.execute(sql, (email,) if email else None)
+    contagem: Dict[str, Dict[int, int]] = {}
+    for r in cur.fetchall():
+        contagem.setdefault(r["email"], {})[r["d"]] = r["n"]
+    return contagem
+
+
+def departamentos_situacao() -> dict:
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT a.id, a.nome, a.conta_para_carteira AS trazer, a.departamento_id::text AS departamento_id, "
+            "d.nome AS departamento_nome, "
+            "(SELECT count(DISTINCT r.email) FROM public.acessorias_responsavel r WHERE r.departamento_acessorias_id = a.id "
+            " AND r.email <> '') AS responsaveis, "
+            "(SELECT count(*) FROM public.acessorias_responsavel r WHERE r.departamento_acessorias_id = a.id "
+            " AND r.email <> '') AS empresas "
+            "FROM public.acessorias_departamento a LEFT JOIN public.departamento d ON d.id = a.departamento_id "
+            "ORDER BY (a.conta_para_carteira) DESC, responsaveis DESC, a.nome"
+        )
+        acessorias_deps = cur.fetchall()
+        cur.execute(
+            "SELECT d.id::text AS id, d.nome, d.arquivado, "
+            "(SELECT count(*) FROM public.users u WHERE u.departamento_id = d.id AND u.ativo) AS membros "
+            "FROM public.departamento d WHERE NOT EXISTS "
+            "(SELECT 1 FROM public.acessorias_departamento a WHERE a.departamento_id = d.id) ORDER BY d.arquivado, d.nome"
+        )
+        sem_par = cur.fetchall()
+        mapa = _mapa_de_departamentos(cur)
+        nomes_acess = {d["id"]: d["nome"] for d in acessorias_deps}
+        cur.execute("SELECT id::text AS id, lower(email) AS email, full_name, departamento_id::text AS departamento_id "
+                    "FROM public.users WHERE ativo AND role <> 'admin'")
+        contas = cur.fetchall()
+        contagem = _contagem_da_copia(cur)
+    a_decidir = []
+    for c in contas:
+        cont = contagem.get(c["email"])
+        if cont and sugestao_de_departamento(cont, mapa) is None:
+            a_decidir.append({
+                "id": c["id"], "email": c["email"], "nome": c["full_name"] or c["email"],
+                "departamento_id": c["departamento_id"],
+                "contagem": [{"departamento": nomes_acess.get(k, str(k)), "empresas": n}
+                             for k, n in sorted(cont.items(), key=lambda kv: -kv[1])],
+            })
+    return {"acessorias": acessorias_deps, "portal_sem_par": sem_par,
+            "a_decidir": sorted(a_decidir, key=lambda x: x["nome"].lower())}
+
+
+def configurar_departamento(acessorias_id: int, trazer: Optional[bool] = None,
+                            departamento_id: Optional[str] = None, desligar_par: bool = False) -> dict:
+    """Chave "trazer" e a ligação com o departamento do portal.
+
+    Ligar "trazer" já cria (ou liga pelo nome) o departamento no portal.
+    Desligar não tira nada agora: os acessos vindos dele saem na próxima
+    busca, passando pela trava.
+    """
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.transaction(), conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (_TRAVA_APLICACAO,))
+        cur.execute("SELECT id FROM public.acessorias_departamento WHERE id = %s", (acessorias_id,))
+        if not cur.fetchone():
+            raise ErroAcessorias("departamento do Acessórias não encontrado")
+        if desligar_par:
+            cur.execute("UPDATE public.acessorias_departamento SET departamento_id = NULL WHERE id = %s", (acessorias_id,))
+        elif departamento_id:
+            departamento_id = _uuid(departamento_id)
+            cur.execute("SELECT arquivado FROM public.departamento WHERE id = %s", (departamento_id,))
+            alvo = cur.fetchone()
+            if not alvo:
+                raise ErroAcessorias("esse departamento do portal não existe mais")
+            cur.execute("SELECT id, nome FROM public.acessorias_departamento WHERE departamento_id = %s AND id <> %s",
+                        (departamento_id, acessorias_id))
+            outro = cur.fetchone()
+            if outro:
+                raise ErroAcessorias(f"esse departamento do portal já está ligado a {outro['nome']} do Acessórias")
+            cur.execute("UPDATE public.acessorias_departamento SET departamento_id = %s WHERE id = %s",
+                        (departamento_id, acessorias_id))
+            cur.execute("UPDATE public.departamento SET arquivado = false WHERE id = %s", (departamento_id,))
+        if trazer is not None:
+            cur.execute("UPDATE public.acessorias_departamento SET conta_para_carteira = %s WHERE id = %s",
+                        (trazer, acessorias_id))
+        res = _ligar_departamentos(cur, so_estes=[acessorias_id]) if trazer else {}
+    return {"ok": True, **res}
+
+
+def _uuid(valor: str) -> str:
+    import uuid
+
+    try:
+        return str(uuid.UUID(str(valor)))
+    except ValueError:
+        raise ErroAcessorias("departamento não encontrado") from None
+
+
+def arquivar_departamento(departamento_id: str, arquivado: bool) -> None:
+    departamento_id = _uuid(departamento_id)
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE public.departamento SET arquivado = %s WHERE id = %s", (arquivado, departamento_id))
+        if cur.rowcount == 0:
+            raise ErroAcessorias("departamento não encontrado")
+
+
+def registrar_mudanca_manual(user_id: str, novo_departamento: str, por_email: str) -> None:
+    """O Administrador pôs a pessoa num departamento: se for diferente do que o
+    Acessórias sugere, a sugestão vira recusa e a busca não a desfaz. Se for o
+    sugerido, a recusa antiga sai. Nunca levanta: é anotação, não barreira."""
+    try:
+        cliente = _cliente()
+        with cliente.conexao() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT lower(email) AS email FROM public.users WHERE id = %s", (user_id,))
+            conta = cur.fetchone()
+            if not conta:
+                return
+            cont = _contagem_da_copia(cur, conta["email"]).get(conta["email"])
+            sug = sugestao_de_departamento(cont or {}, _mapa_de_departamentos(cur))
+            cur.execute("DELETE FROM public.acessorias_recusa WHERE tipo = 'departamento' AND user_id = %s", (user_id,))
+            if sug and sug != novo_departamento:
+                cur.execute(
+                    "INSERT INTO public.acessorias_recusa (tipo, user_id, chave, motivo, recusado_por_email) "
+                    "VALUES ('departamento', %s, %s, 'mudanca_manual', %s)",
+                    (user_id, sug, por_email),
+                )
+    except ErroAcessorias:
+        return
+    except Exception:  # noqa: BLE001
+        logger.exception("Mudança manual de departamento de %s não foi anotada para o Acessórias", user_id)

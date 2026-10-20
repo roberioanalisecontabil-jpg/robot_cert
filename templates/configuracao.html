@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=aguia-2026-10d" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=acessorias-2026-10-20" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -44,6 +44,7 @@
       <a class="ag-abas__aba" role="tab" id="tab-smtp" href="?aba=alertas" aria-controls="sec-smtp" data-aba="alertas" aria-selected="{{ 'true' if aba == 'alertas' else 'false' }}" {% if aba != 'alertas' %}tabindex="-1"{% endif %}>Alertas por e-mail</a>
       <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
       <a class="ag-abas__aba" role="tab" id="tab-sieg" href="?aba=sieg" aria-controls="sec-sieg" data-aba="sieg" aria-selected="{{ 'true' if aba == 'sieg' else 'false' }}" {% if aba != 'sieg' %}tabindex="-1"{% endif %}>SIEG</a>
+      <a class="ag-abas__aba" role="tab" id="tab-acessorias" href="?aba=acessorias" aria-controls="sec-acessorias" data-aba="acessorias" aria-selected="{{ 'true' if aba == 'acessorias' else 'false' }}" {% if aba != 'acessorias' %}tabindex="-1"{% endif %}>Acessórias</a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
@@ -368,6 +369,53 @@
         <div id="sieg-resultado" aria-live="polite"></div>
       </div>
     </section>
+
+    <!-- ── Acessórias (ADR 0005, 20/10/2026) ──────────────────────────
+         Quais departamentos do Acessórias dão carteira e a que departamento
+         do portal cada um corresponde. A busca e a confirmação ficam em
+         Carteiras; aqui só a configuração. -->
+    <section class="ag-card cg-cfg-aba" id="sec-acessorias" role="tabpanel" aria-labelledby="tab-acessorias" {% if aba != 'acessorias' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">Quem é responsável por uma empresa no Acessórias ganha o certificado dela aqui, e cada pessoa vai para o departamento em que mais aparece. Só contam os departamentos com <strong>Trazer</strong> ligado. A busca e a confirmação ficam em Carteiras.</p>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Departamentos do Acessórias</h3><p class="ag-form-subhead__nota">Ligar Trazer cria o departamento no portal, ou liga ao de mesmo nome. Desligar tira os acessos vindos dele na próxima busca, passando pela trava.</p></div>
+        <div class="ag-table-scroll" role="region" aria-label="Departamentos do Acessórias">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row">
+              <th role="columnheader" class="ag-th--estatico">Departamento</th>
+              <th role="columnheader" class="ag-th--estatico">Responsáveis</th>
+              <th role="columnheader" class="ag-th--estatico">Trazer</th>
+              <th role="columnheader" class="ag-th--estatico">No portal</th>
+            </tr></thead>
+            <tbody role="rowgroup" id="acess-deps"><tr class="cg-state-row"><td colspan="4" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Departamentos do portal sem par</h3><p class="ag-form-subhead__nota">Ligue a um do Acessórias na tabela acima, ou arquive: arquivado some da escolha em Usuários.</p></div>
+        <div class="ag-table-scroll" role="region" aria-label="Departamentos do portal sem par">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row">
+              <th role="columnheader" class="ag-th--estatico">Departamento</th>
+              <th role="columnheader" class="ag-th--estatico">Pessoas ativas</th>
+              <th role="columnheader" class="ag-th--estatico">Ação</th>
+            </tr></thead>
+            <tbody role="rowgroup" id="acess-sem-par"><tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Pessoas a decidir</h3><p class="ag-form-subhead__nota">Responsáveis sem um departamento claro (pelo menos 3 vezes mais empresas que no segundo). Ponha cada uma no seu em Usuários: a escolha fica até o Acessórias mudar a pessoa.</p></div>
+        <div class="ag-table-scroll" role="region" aria-label="Pessoas a decidir">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row">
+              <th role="columnheader" class="ag-th--estatico">Pessoa</th>
+              <th role="columnheader" class="ag-th--estatico">Empresas no Acessórias</th>
+              <th role="columnheader" class="ag-th--estatico">Hoje no portal</th>
+            </tr></thead>
+            <tbody role="rowgroup" id="acess-decidir"><tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Confirmação do disparo. -->
@@ -428,8 +476,8 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg" };
-      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg" };
+      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias" };
+      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
@@ -446,6 +494,7 @@
         if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
         if (aba === "comandos") void refreshCommandQueue();
         if (aba === "sieg") void carregarSieg();
+        if (aba === "acessorias") void carregarAcessoriasCfg();
       }
       ORDEM.forEach((a) => {
         const t = document.getElementById(TAB_IDS[a]);
@@ -1236,7 +1285,104 @@
         await syncPathsFromApi();
         await refreshCommandQueue();
         if (new URLSearchParams(location.search).get("aba") === "sieg") void carregarSieg();
+        if (new URLSearchParams(location.search).get("aba") === "acessorias") void carregarAcessoriasCfg();
       })();
+
+      // ── Acessórias (ADR 0005) ───────────────────────────────────────────
+      let _portalDeps = [];
+
+      function linhaVazia(tbody, colunas, texto) {
+        tbody.innerHTML = `<tr class="cg-state-row"><td colspan="${colunas}" class="ag-table__vazio">${esc(texto)}</td></tr>`;
+      }
+
+      function renderAcessoriasCfg(sit) {
+        const corpoDeps = document.getElementById("acess-deps");
+        const deps = sit.acessorias || [];
+        if (!deps.length) {
+          linhaVazia(corpoDeps, 4, "Nenhum departamento ainda: eles chegam na primeira busca (Carteiras › Buscar agora).");
+        } else {
+          // Um departamento do portal só pode estar ligado a um do Acessórias:
+          // cada lista oferece o seu e os livres (não arquivados).
+          const usados = new Set(deps.map((d) => d.departamento_id).filter(Boolean));
+          corpoDeps.innerHTML = deps.map((d) => {
+            const opcoes = ['<option value="">— sem par —</option>'].concat(
+              _portalDeps.filter((p) => p.id === d.departamento_id || (!usados.has(p.id) && !p.arquivado))
+                .map((p) => `<option value="${esc(p.id)}"${p.id === d.departamento_id ? " selected" : ""}>${esc(p.nome)}</option>`)
+            ).join("");
+            const resp = d.responsaveis
+              ? `${d.responsaveis} pessoa${d.responsaveis === 1 ? "" : "s"} <span class="ag-cell-sub">· ${d.empresas} empresa${d.empresas === 1 ? "" : "s"}</span>`
+              : `<span class="ag-cell-sub">ninguém</span>`;
+            return `<tr role="row">
+              <td role="cell"><span class="ag-cell-main">${esc(d.nome)}</span></td>
+              <td role="cell">${resp}</td>
+              <td role="cell"><label class="ag-switch"><input type="checkbox" data-acess-trazer="${d.id}"${d.trazer ? " checked" : ""} aria-label="Trazer ${esc(d.nome)}" /><span class="ag-switch__trilho" aria-hidden="true"></span></label></td>
+              <td role="cell"><select class="ag-input" data-acess-par="${d.id}" aria-label="Departamento do portal para ${esc(d.nome)}">${opcoes}</select></td>
+            </tr>`;
+          }).join("");
+        }
+
+        const corpoSem = document.getElementById("acess-sem-par");
+        const semPar = sit.portal_sem_par || [];
+        if (!semPar.length) {
+          linhaVazia(corpoSem, 3, "Todos os departamentos do portal estão ligados ao Acessórias.");
+        } else {
+          corpoSem.innerHTML = semPar.map((d) => `<tr role="row">
+              <td role="cell"><span class="ag-cell-main">${esc(d.nome)}</span>${d.arquivado ? ' <span class="ag-badge ag-badge--neutral">Arquivado</span>' : ""}</td>
+              <td role="cell">${d.membros}</td>
+              <td role="cell"><button type="button" class="ag-btn ag-btn--ghost ag-btn--sm" data-acess-arquivo="${esc(d.id)}" data-arquivado="${d.arquivado ? "1" : "0"}" aria-label="${d.arquivado ? "Desarquivar" : "Arquivar"} ${esc(d.nome)}">${d.arquivado ? "Desarquivar" : "Arquivar"}</button></td>
+            </tr>`).join("");
+        }
+
+        const corpoDec = document.getElementById("acess-decidir");
+        const decidir = sit.a_decidir || [];
+        const nomeDep = Object.fromEntries(_portalDeps.map((p) => [p.id, p.nome]));
+        if (!decidir.length) {
+          linhaVazia(corpoDec, 3, "Ninguém: todo responsável tem um departamento claro.");
+        } else {
+          corpoDec.innerHTML = decidir.map((p) => `<tr role="row">
+              <td role="cell"><a class="ag-cell-main" href="/usuarios?q=${encodeURIComponent(p.email)}">${esc(p.nome)}</a><div class="ag-cell-sub">${esc(p.email)}</div></td>
+              <td role="cell">${p.contagem.map((c) => `${esc(c.departamento)} ${c.empresas}`).join(" · ")}</td>
+              <td role="cell">${esc(nomeDep[p.departamento_id] || "—")}</td>
+            </tr>`).join("");
+        }
+      }
+
+      async function carregarAcessoriasCfg() {
+        try {
+          const [rs, rd] = await Promise.all([
+            fetch("/api/acessorias/departamentos", { headers: getHeaders() }),
+            fetch("/api/departamentos", { headers: getHeaders() }),
+          ]);
+          if (!rs.ok) { linhaVazia(document.getElementById("acess-deps"), 4, await mensagemCorpoErro(rs)); return; }
+          _portalDeps = rd.ok ? await rd.json() : [];
+          renderAcessoriasCfg(await rs.json());
+        } catch (e) {
+          linhaVazia(document.getElementById("acess-deps"), 4, "Erro de conexão com o servidor.");
+        }
+      }
+
+      async function salvarAcessorias(url, corpo) {
+        const r = await fetch(url, { method: "PUT", headers: getHeaders(true), body: JSON.stringify(corpo) });
+        if (!r.ok) showToast(await mensagemCorpoErro(r), "error");
+        else showToast((await r.json()).message || "Salvo.", "success");
+        await carregarAcessoriasCfg();
+      }
+
+      document.getElementById("sec-acessorias").addEventListener("change", (ev) => {
+        const t = ev.target;
+        if (t.dataset.acessTrazer) {
+          void salvarAcessorias(`/api/acessorias/departamentos/${t.dataset.acessTrazer}`, { trazer: t.checked });
+        } else if (t.dataset.acessPar) {
+          const corpo = t.value ? { departamento_id: t.value } : { desligar_par: true };
+          void salvarAcessorias(`/api/acessorias/departamentos/${t.dataset.acessPar}`, corpo);
+        }
+      });
+      document.getElementById("sec-acessorias").addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-acess-arquivo]");
+        if (!b) return;
+        void salvarAcessorias(`/api/acessorias/departamentos-portal/${encodeURIComponent(b.dataset.acessArquivo)}/arquivo`,
+          { arquivado: b.dataset.arquivado !== "1" });
+      });
   </script>
 </body>
 </html>

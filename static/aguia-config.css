@@ -114,3 +114,9 @@
 .cg-cfg-consultas { border: 0; margin: 0 0 var(--space-4); padding: 0; }
 .cg-cfg-consultas__grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0 var(--space-4); }
 .cg-cfg-consultas__grade .ag-check { justify-content: flex-start; font-size: var(--text-sm); }
+
+/* Acessórias (ADR 0005, 20/10/2026). O .ag-table-scroll daqui não rola por
+   conta própria; a tabela dos departamentos tem um seletor por linha e passava
+   de 390px no celular, empurrando a página inteira para o lado. */
+#sec-acessorias .ag-table-scroll { overflow-x: auto; margin-bottom: var(--space-6); }
+#sec-acessorias select.ag-input { min-width: 11rem; }

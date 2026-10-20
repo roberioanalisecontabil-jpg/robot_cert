@@ -7,9 +7,11 @@ o Buscar agora e a decisão sobre a busca que aguarda confirmação.
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi import Path as PathParam
+from pydantic import BaseModel
 
 from app import acessorias, auth, config
 from app.sessao import _limitar, require_admin
@@ -67,3 +69,53 @@ def acessorias_descartar(busca_id: int = BUSCA_ID, token: auth.TokenData = Depen
     except acessorias.ErroAcessorias as e:
         raise HTTPException(status_code=409, detail=str(e))
     return {"ok": True, "message": "Busca descartada. Nada mudou nas carteiras."}
+
+
+# ── Departamentos (Configuração › Acessórias) ────────────────────────────────
+
+class DepartamentoAcessoriasBody(BaseModel):
+    trazer: Optional[bool] = None
+    departamento_id: Optional[str] = None
+    desligar_par: bool = False
+
+
+class ArquivoBody(BaseModel):
+    arquivado: bool
+
+
+@router.get("/api/acessorias/departamentos")
+def acessorias_departamentos(_: auth.TokenData = Depends(require_admin)) -> dict:
+    try:
+        return acessorias.departamentos_situacao()
+    except acessorias.ErroAcessorias as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.put("/api/acessorias/departamentos/{acessorias_id}",
+            dependencies=[Depends(_limitar("acessorias-departamentos", 120, 3600))])
+def acessorias_configurar_departamento(body: DepartamentoAcessoriasBody, acessorias_id: int = PathParam(..., ge=1),
+                                       _: auth.TokenData = Depends(require_admin)) -> dict:
+    try:
+        r = acessorias.configurar_departamento(acessorias_id, body.trazer, (body.departamento_id or "").strip() or None,
+                                               body.desligar_par)
+    except acessorias.ErroAcessorias as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    if body.trazer is True:
+        msg = ("Departamento criado no portal." if r.get("departamentos_criados")
+               else "Ligado. Os responsáveis dele ganham as carteiras na próxima busca.")
+    elif body.trazer is False:
+        msg = "Desligado. Os acessos vindos dele saem na próxima busca, passando pela trava."
+    else:
+        msg = "Ligação salva."
+    return {**r, "message": msg}
+
+
+@router.put("/api/acessorias/departamentos-portal/{departamento_id}/arquivo",
+            dependencies=[Depends(_limitar("acessorias-departamentos", 120, 3600))])
+def acessorias_arquivar_departamento(departamento_id: str, body: ArquivoBody,
+                                     _: auth.TokenData = Depends(require_admin)) -> dict:
+    try:
+        acessorias.arquivar_departamento(departamento_id, body.arquivado)
+    except acessorias.ErroAcessorias as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"ok": True, "message": "Arquivado." if body.arquivado else "Desarquivado."}

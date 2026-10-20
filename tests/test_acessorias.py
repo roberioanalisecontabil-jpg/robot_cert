@@ -210,6 +210,20 @@ def test_conta_nova_ja_recebe_carteira_e_desativada_perde_tudo():
     assert p["resumo"]["contas_novas"] == 1 and p["resumo"]["contas_desativadas"] == 1
 
 
+def test_nome_de_departamento_sem_acento_e_espacos():
+    assert acessorias.chave_de_nome("  Contábil   - CISS ") == "contabil - ciss"
+    assert acessorias.chave_de_nome("CONTABIL") == acessorias.chave_de_nome("Contábil")
+
+
+def test_sugestao_de_departamento_3_vezes_o_segundo():
+    mapa = {1: "p-cont", 2: "p-fisc"}
+    assert acessorias.sugestao_de_departamento({1: 6, 2: 2}, mapa) == "p-cont"
+    assert acessorias.sugestao_de_departamento({1: 5, 2: 2}, mapa) is None   # ambígua
+    assert acessorias.sugestao_de_departamento({2: 1}, mapa) == "p-fisc"
+    assert acessorias.sugestao_de_departamento({9: 10, 1: 1}, mapa) is None  # o maior não tem par no portal
+    assert acessorias.sugestao_de_departamento({}, mapa) is None
+
+
 def test_intervalo_da_busca():
     assert acessorias.proxima_espera(datetime(2026, 10, 20, 7, 0)) == 300
     assert acessorias.proxima_espera(datetime(2026, 10, 20, 19, 59)) == 300
@@ -237,8 +251,12 @@ def banco(monkeypatch):
             "public.cert_history CASCADE"
         )
         cur.execute("DELETE FROM public.users WHERE email LIKE '%%@teste-acessorias'")
-        cur.execute("DELETE FROM public.departamento WHERE nome = 'T-acess'")
-        cur.execute("UPDATE public.acessorias_departamento SET conta_para_carteira = (id IN (1, 2, 3))")
+        cur.execute("UPDATE public.users SET departamento_id = NULL")
+        cur.execute("DELETE FROM public.departamento_lider")
+        cur.execute("DELETE FROM public.acessorias_recusa")
+        cur.execute("DELETE FROM public.acessorias_departamento WHERE id NOT IN (1, 2, 3)")
+        cur.execute("UPDATE public.acessorias_departamento SET departamento_id = NULL, conta_para_carteira = (id IN (1, 2, 3))")
+        cur.execute("DELETE FROM public.departamento")
         ids = {}
         for nome, role in (("ana", "user"), ("gil", "gestor"), ("adm", "admin")):
             cur.execute(
@@ -354,7 +372,53 @@ def test_contas_pelo_acessorias(banco, monkeypatch):
     assert h.startswith("$2") and len(h) == 60
     # Admin e contas manuais intocados.
     assert _linhas(cliente, "SELECT ativo FROM public.users WHERE id IN (%s, %s, %s)", ids["ana"], ids["gil"], ids["adm"]) == [(True,)] * 3
-    _linhas(cliente, "DELETE FROM public.departamento WHERE id = %s", dep)
+
+
+@integracao
+def test_departamentos_pelo_acessorias(banco, monkeypatch):
+    cliente, ids = banco
+    monkeypatch.setattr(acessorias, "depois_de_aplicar", lambda d: {})
+    cont = _linhas(cliente, "INSERT INTO public.departamento (nome) VALUES ('CONTABIL') RETURNING id::text")[0][0]
+    sem_par = _linhas(cliente, "INSERT INTO public.departamento (nome) VALUES ('Diretoria') RETURNING id::text")[0][0]
+    _linhas(cliente, "UPDATE public.users SET departamento_id = %s WHERE id = %s", sem_par, ids["ana"])
+    emp = [_empresa_api(str(10**13 + i), deps=[(1, "Contábil", "ana@teste-acessorias")]) for i in range(6)]
+    emp += [_empresa_api(str(10**13 + 50 + i), deps=[(1, "Contábil", "gil@teste-acessorias"),
+                                                    (2, "Fiscal", "gil@teste-acessorias")]) for i in range(3)]
+    emp += [_empresa_api(str(10**13 + 90), deps=[(2, "Fiscal", "ana@teste-acessorias")])]
+    api = lambda: _api_falsa({"/companies/ListAll": [emp], "/users/ListAll": [[]],
+                              "/departments/ListAll": [[{"ID": "1", "Nome": "Contábil"}, {"ID": "2", "Nome": "Fiscal"},
+                                                        {"ID": "7", "Nome": "Comercial"}]]})
+    r = acessorias.buscar(api=api())
+    r = acessorias.confirmar(r["id"], "adm@teste-acessorias")["resumo"]
+    assert r["departamentos_ligados"] == 1 and r["departamentos_criados"] == 2  # Fiscal e Pessoal (trazer)
+    assert r["pessoas_movidas"] == 1 and r["pessoas_a_decidir"] == 1
+    mapa = dict(_linhas(cliente, "SELECT id, departamento_id::text FROM public.acessorias_departamento"))
+    assert mapa[1] == cont and mapa[2] and mapa[7] is None
+    # Ana: 6 no Contábil, 1 no Fiscal -> Contábil. Gil: 3 e 3 -> decidir à mão.
+    assert _linhas(cliente, "SELECT departamento_id::text FROM public.users WHERE id = %s", ids["ana"]) == [(cont,)]
+
+    # O Administrador põe a Ana de volta na Diretoria: a busca não desfaz.
+    _linhas(cliente, "UPDATE public.users SET departamento_id = %s WHERE id = %s", sem_par, ids["ana"])
+    acessorias.registrar_mudanca_manual(ids["ana"], sem_par, "adm@teste-acessorias")
+    r = acessorias.buscar(api=api())
+    assert r["estado"] == "ok" and r["resumo"]["pessoas_movidas"] == 0
+    assert _linhas(cliente, "SELECT departamento_id::text FROM public.users WHERE id = %s", ids["ana"]) == [(sem_par,)]
+
+    sit = acessorias.departamentos_situacao()
+    assert [d["nome"] for d in sit["portal_sem_par"]] == ["Diretoria"]
+    assert [p["email"] for p in sit["a_decidir"]] == ["gil@teste-acessorias"]
+
+    # Ligar "trazer" no Comercial cria o departamento; ligar à Diretoria tira-a de "sem par".
+    acessorias.configurar_departamento(7, trazer=True)
+    assert _linhas(cliente, "SELECT count(*) FROM public.departamento WHERE nome = 'Comercial'") == [(1,)]
+    with pytest.raises(acessorias.ErroAcessorias, match="já está ligado"):
+        acessorias.configurar_departamento(7, departamento_id=cont)
+    acessorias.configurar_departamento(7, departamento_id=sem_par)
+    assert acessorias.departamentos_situacao()["portal_sem_par"][0]["nome"] == "Comercial"
+    acessorias.arquivar_departamento(acessorias.departamentos_situacao()["portal_sem_par"][0]["id"], True)
+    assert acessorias.departamentos_situacao()["portal_sem_par"][0]["arquivado"] is True
+    with pytest.raises(acessorias.ErroAcessorias):
+        acessorias.arquivar_departamento("nao-e-uuid", True)
 
 
 @integracao
@@ -387,7 +451,7 @@ RAIZ = __import__("pathlib").Path(__file__).resolve().parent.parent
 def test_rotas_so_de_administrador():
     fonte = (RAIZ / "app" / "rotas" / "acessorias.py").read_text(encoding="utf-8")
     blocos = fonte.split("@router.")[1:]
-    assert len(blocos) == 4
+    assert len(blocos) == 7
     for bloco in blocos:
         assert "Depends(require_admin)" in bloco.split(") -> ")[0], bloco[:60]
 
@@ -418,3 +482,18 @@ def test_convite_abre_direto_no_codigo_sem_pedir_outro():
 
     from app import senha_reset
     assert "validade_min" in inspect.signature(senha_reset.criar_codigo).parameters
+
+
+def test_aba_acessorias_na_configuracao():
+    html = (RAIZ / "templates" / "configuracao.html").read_text(encoding="utf-8")
+    css = (RAIZ / "static" / "aguia-config.css").read_text(encoding="utf-8")
+    main = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
+    assert 'id="sec-acessorias"' in html and 'acessorias: "sec-acessorias"' in html
+    assert '"sieg", "acessorias")' in main
+    # A tabela com seletor passava de 390px e a página inteira rolava de lado.
+    assert "#sec-acessorias .ag-table-scroll { overflow-x: auto;" in css
+    assert "aguia-config.css?v=acessorias-2026-10-20" in html
+    # Um PathParam por rota: compartilhado, o FastAPI amarrou o nome da
+    # primeira (busca_id) e a rota dos departamentos respondia 422.
+    rotas = (RAIZ / "app" / "rotas" / "acessorias.py").read_text(encoding="utf-8")
+    assert "acessorias_id: int = PathParam(..., ge=1)" in rotas

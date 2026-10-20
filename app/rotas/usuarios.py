@@ -858,7 +858,7 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     # anterior que o alimentava, viraram código morto e saíram — poder apagar
     # aquele helper era o sinal de que o rechaveamento tinha terminado.
     try:
-        anterior = sb.table("users").select("email").eq("id", user_id).limit(1).execute().data or []
+        anterior = sb.table("users").select("email, departamento_id").eq("id", user_id).limit(1).execute().data or []
         sb.table("users").update(campos).eq("id", user_id).execute()
     except Exception:
         logger.exception("Falha ao atualizar usuário %s", user_id)
@@ -868,6 +868,13 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
     # que RECEBE um endereço tem as sessões derrubadas, e a que o perde também.
     if anterior and str(anterior[0].get("email") or "").lower() != email:
         papeis.derrubar_sessoes(sb, user_id)
+    # A mudança manual de departamento vence a sugestão do Acessórias (ADR
+    # 0005): fica anotada, e a busca não devolve a pessoa ao sugerido.
+    if (anterior and "departamento_id" in campos
+            and str(anterior[0].get("departamento_id") or "") != campos["departamento_id"]):
+        from app import acessorias
+
+        acessorias.registrar_mudanca_manual(user_id, campos["departamento_id"], ator.email)
     if ativo is False:
         _revogar_tokens_de_instalacao(user_id)
         papeis.derrubar_sessoes(sb, user_id)

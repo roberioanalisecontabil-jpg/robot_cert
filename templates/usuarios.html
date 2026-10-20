@@ -905,7 +905,7 @@
                 const pessoas = d.membros === 1 ? '1 pessoa' : `${d.membros} pessoas`;
                 return `
                 <tr role="row">
-                  <td role="cell" class="cg-col-nome"><span class="ag-cell-main">${esc(d.nome)}</span></td>
+                  <td role="cell" class="cg-col-nome"><span class="ag-cell-main">${esc(d.nome)}</span>${d.arquivado ? ' <span class="ag-badge ag-badge--neutral">Arquivado</span>' : ''}</td>
                   <td role="cell" class="cg-col-gestores"><span class="cg-dep-rotulo">Gestores: </span>${lideres}</td>
                   <td role="cell" class="cg-col-num"><span class="cg-dep-num">${d.membros}</span><span class="cg-dep-pessoas">${pessoas}</span>${d.inativos ? `<span class="ag-cell-sub">+ ${d.inativos} inativa${d.inativos === 1 ? '' : 's'}</span>` : ''}</td>
                   <td role="cell" class="cg-col-acoes">
@@ -1119,6 +1119,8 @@
             vazio.disabled = true;
             sel.appendChild(vazio);
             depsCache.forEach((d) => {
+                // Arquivado (ADR 0005) não é oferecido, salvo para quem já está nele.
+                if (d.arquivado && d.id !== selecionado) return;
                 const op = document.createElement('option');
                 op.value = d.id;
                 op.textContent = d.nome;
