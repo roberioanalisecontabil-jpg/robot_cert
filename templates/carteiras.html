@@ -821,6 +821,10 @@
         `${plural(r.conversoes || 0, "liberação manual passa", "liberações manuais passam")} a seguir o Acessórias`,
         `${plural(r.pessoas_afetadas || 0, "pessoa afetada", "pessoas afetadas")}, ${plural(r.empresas || 0, "empresa lida", "empresas lidas")}`,
       ];
+      // Contas (ADR 0005): só aparecem quando há o que dizer.
+      if (r.contas_novas) linhas.push(`${plural(r.contas_novas, "conta nova", "contas novas")}, com convite por e-mail para definir a senha`);
+      if (r.contas_desativadas) linhas.push(`${plural(r.contas_desativadas, "conta desativada", "contas desativadas")} (inativas no Acessórias)`);
+      if (r.contas_reativadas) linhas.push(`${plural(r.contas_reativadas, "conta reativada", "contas reativadas")}`);
       document.getElementById("acessNumeros").innerHTML = linhas.map((t) => `<li>${esc(t)}</li>`).join("");
     }
 

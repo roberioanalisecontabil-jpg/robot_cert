@@ -234,11 +234,12 @@
                     <input type="email" id="rec-email" required autocomplete="username" placeholder="exemplo@email.com">
                 </div>
                 <button type="submit" class="login-btn" id="btn-pedir">Enviar código</button>
+                <button type="button" class="link-discreto" id="btn-ja-tenho">Já tenho um código</button>
             </form>
 
             <!-- Passo 2: conferir o código -->
             <form id="form-codigo" hidden>
-                <p class="passo-dica">
+                <p class="passo-dica" id="dica-codigo">
                     Digite o código que enviamos.<br>
                     Ele vale por 15 minutos e permite 3 tentativas.
                 </p>
@@ -510,6 +511,32 @@
         }
 
         $('btn-esqueci').addEventListener('click', () => trocarView(true));
+
+        // Direto ao passo do código, sem pedir outro: um pedido novo
+        // invalidaria o que a pessoa já tem. É o caminho do convite da conta
+        // criada pelo Acessórias (código de 7 dias, ADR 0005).
+        function irParaCodigo(convite) {
+            $('form-pedir').hidden = true;
+            $('form-codigo').hidden = false;
+            if (convite) {
+                $('dica-codigo').textContent =
+                    'Digite o código do e-mail "Seu acesso ao Monitor de Certificados". ' +
+                    'Ele vale por 7 dias e permite 3 tentativas.';
+            }
+            $('campo-codigo').focus();
+        }
+        $('btn-ja-tenho').addEventListener('click', () => {
+            if (!$('rec-email').reportValidity()) return;
+            irParaCodigo(false);
+        });
+        (function () {
+            const definir = (new URLSearchParams(location.search).get('definir') || '').trim().toLowerCase();
+            if (!definir) return;
+            trocarView(true);
+            $('subtitulo').textContent = 'Defina sua senha';
+            $('rec-email').value = definir;
+            irParaCodigo(true);
+        })();
         $('btn-voltar').addEventListener('click', () => {
             trocarView(false);
             // Volta ao passo 1: reabrir a recuperação depois de sair no meio
@@ -518,6 +545,7 @@
             $('form-codigo').hidden = true;
             $('form-senha').hidden = true;
             $('rec-msg').style.display = 'none';
+            $('dica-codigo').innerHTML = 'Digite o código que enviamos.<br>Ele vale por 15 minutos e permite 3 tentativas.';
             $('campo-codigo').value = '';
             $('nova-senha').value = '';
         });

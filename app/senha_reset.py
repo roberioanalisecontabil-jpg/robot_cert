@@ -159,7 +159,7 @@ def _agora() -> datetime:
 
 
 def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: bool = False,
-                 proposito: str = SENHA) -> str:
+                 proposito: str = SENHA, validade_min: int = VALIDADE_MIN) -> str:
     """
     Invalida os códigos anteriores da conta e devolve um novo, em claro.
 
@@ -174,6 +174,10 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: b
     `pelo_admin` (envio pela tela Usuários) não passa pelos tetos: a rota é
     autenticada e tem limite próprio, e é a saída que sobra à vítima quando um
     anônimo está gastando os pedidos dela.
+
+    `validade_min` só muda no convite da conta criada pelo Acessórias (7 dias,
+    ADR 0005): é o mesmo código, com as mesmas 3 tentativas, e um pedido novo
+    de "esqueci minha senha" o invalida como a qualquer outro.
     """
     sb = _banco()
     if not sb:
@@ -193,7 +197,7 @@ def criar_codigo(user_id: str, client_ip: Optional[str] = None, *, pelo_admin: b
             # hora atrás`, e o limitador passaria a contar zero — abrindo
             # exatamente o buraco que ele fecha, sem nenhum sintoma.
             "created_at": agora.isoformat(),
-            "expires_at": (agora + timedelta(minutes=VALIDADE_MIN)).isoformat(),
+            "expires_at": (agora + timedelta(minutes=validade_min)).isoformat(),
             "client_ip": client_ip,
             # Explícito como o `created_at`: o compare-and-swap de `conferir`
             # parte deste valor, e não pode depender do DEFAULT da coluna.

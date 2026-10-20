@@ -24,10 +24,16 @@ a primeira aplicação, quando tiraria mais de 10% dos acessos ou quando veio
 com bem menos empresas que a última aplicada. Uma busca nova substitui a que
 aguardava.
 
+── Contas (`calcular_contas`) ─────────────────────────────────────────────
+
+Usuário ativo do Acessórias sem conta ganha uma (Operador, sem senha, convite
+de 7 dias por e-mail); a conta vinda de lá é desativada e reativada com ele.
+Administrador e conta manual nunca mudam.
+
 ── O que fica para as etapas seguintes do ADR ─────────────────────────────
 
-Criar, desativar e reativar contas; ligar departamentos pela chave "trazer";
-o novo alcance do Gestor. Aqui só se copiam os usuários e departamentos.
+Ligar departamentos pela chave "trazer" e pôr cada pessoa no seu; o novo
+alcance do Gestor.
 """
 from __future__ import annotations
 
@@ -56,6 +62,8 @@ LIMITE_QUEDA_EMPRESAS = 0.90
 RODANDO_ABANDONADA = timedelta(minutes=15)
 
 AUTOR = "Acessórias (sincronização)"
+# Validade do código do convite da conta nova (ADR 0005).
+CONVITE_MIN = 7 * 24 * 60
 # Papéis que recebem carteira. Administrador alcança tudo e não precisa.
 PAPEIS_COM_CARTEIRA = ("user", "gestor")
 # Só um aplicador por vez, mesmo com a busca automática e o botão juntos.
@@ -235,7 +243,8 @@ Par = Tuple[str, str]  # (user_id, documento)
 @dataclass
 class Estado:
     """O que o cálculo precisa do banco, lido de uma vez."""
-    contas: Dict[str, dict]                     # e-mail em minúsculas -> {id, email, role, ativo}
+    # e-mail em minúsculas -> {id, email, role, ativo, origem, acessorias_id}
+    contas: Dict[str, dict]
     carteira: Dict[Par, str]                    # par -> origem
     bloqueios: Set[Par] = field(default_factory=set)
     trazer: Set[int] = field(default_factory=set)
@@ -244,7 +253,68 @@ class Estado:
     empresas_ultima_aplicada: Optional[int] = None
 
 
+PREFIXO_NOVA = "nova:"  # id provisório da conta que esta aplicação vai criar
+
+
+def calcular_contas(usuarios: List[dict], contas: Dict[str, dict]) -> dict:
+    """Contas do portal a partir dos usuários do Acessórias, ligados pelo e-mail.
+
+    - Usuário ativo lá sem conta aqui: conta nova (Operador, sem senha).
+    - Conta que veio do Acessórias (`origem = acessorias`): desativa quando o
+      usuário fica inativo ou some de lá, reativa quando volta.
+    - Administrador e conta manual nunca mudam; só ganham o id do Acessórias
+      quando o e-mail casa, para a tela mostrar a ligação.
+    """
+    por_id = {u["id"]: u for u in usuarios}
+    criar: List[dict] = []
+    desativar: List[str] = []
+    reativar: List[str] = []
+    ligar: List[Tuple[str, int]] = []
+    ids_em_uso = {c.get("acessorias_id") for c in contas.values() if c.get("acessorias_id") is not None}
+    vistos: Set[str] = set()
+    for u in usuarios:
+        if not u["email"] or u["email"] in vistos:
+            continue
+        vistos.add(u["email"])
+        conta = contas.get(u["email"])
+        if conta is None:
+            if u["ativo"]:
+                criar.append(u)
+            continue
+        if conta.get("acessorias_id") != u["id"] and u["id"] not in ids_em_uso:
+            ligar.append((conta["id"], u["id"]))
+            ids_em_uso.add(u["id"])
+        if conta.get("origem") != "acessorias" or conta["role"] == "admin":
+            continue
+        if u["ativo"] and not conta["ativo"]:
+            reativar.append(conta["id"])
+        elif not u["ativo"] and conta["ativo"]:
+            desativar.append(conta["id"])
+    # Conta vinda do Acessórias cujo usuário sumiu de lá (busca inteira):
+    # é o mesmo que inativo.
+    for c in contas.values():
+        aid = c.get("acessorias_id")
+        if (c.get("origem") == "acessorias" and c["ativo"] and c["role"] != "admin"
+                and aid is not None and aid not in por_id and c["id"] not in desativar):
+            desativar.append(c["id"])
+    return {"criar": criar, "desativar": sorted(desativar), "reativar": sorted(reativar), "ligar": ligar}
+
+
 def calcular_plano(dados: dict, estado: Estado) -> dict:
+    contas = calcular_contas(dados["usuarios"], estado.contas)
+    # As contas como ficarão depois desta aplicação: a conta criada agora já
+    # recebe a carteira, e a desativada perde a dela inteira.
+    efetivas = {email: dict(c) for email, c in estado.contas.items()}
+    por_id = {c["id"]: c for c in efetivas.values()}
+    for uid in contas["desativar"]:
+        por_id[uid]["ativo"] = False
+    for uid in contas["reativar"]:
+        por_id[uid]["ativo"] = True
+    for u in contas["criar"]:
+        efetivas[u["email"]] = {"id": f"{PREFIXO_NOVA}{u['id']}", "email": u["email"], "role": "user",
+                                "ativo": True, "origem": "acessorias", "acessorias_id": u["id"]}
+    desativadas = set(contas["desativar"])
+
     desejado: Set[Par] = set()
     for e in dados["empresas"]:
         if not e["ativa"]:
@@ -253,7 +323,7 @@ def calcular_plano(dados: dict, estado: Estado) -> dict:
         for d in e["departamentos"]:
             if d["id"] not in estado.trazer or not d["resp_email"]:
                 continue
-            conta = estado.contas.get(d["resp_email"])
+            conta = efetivas.get(d["resp_email"])
             if conta and conta["ativo"] and conta["role"] in PAPEIS_COM_CARTEIRA:
                 desejado.add((conta["id"], doc))
     desejado -= estado.bloqueios
@@ -263,17 +333,22 @@ def calcular_plano(dados: dict, estado: Estado) -> dict:
     conversoes = sorted(p for p in desejado & atuais.keys() if atuais[p] != "acessorias")
     # Na virada (primeira aplicação), a carteira manual que o Acessórias não
     # confirma também sai (ADR 0005). Exceto e-CPF: ele nunca vem do
-    # Acessórias, e tirá-lo só obrigaria a liberar de novo à mão.
+    # Acessórias, e tirá-lo só obrigaria a liberar de novo à mão. Conta
+    # desativada perde tudo, de qualquer origem (ADR 0001: sem estado dormente).
     saidas = sorted(
         p for p, origem in atuais.items()
         if p not in desejado
-        and (origem == "acessorias" or (not estado.ja_aplicou and len(p[1]) == 14))
+        and (origem == "acessorias" or p[0] in desativadas or (not estado.ja_aplicou and len(p[1]) == 14))
     )
     return {
+        "contas": contas,
         "entradas": entradas,
         "conversoes": conversoes,
         "saidas": saidas,
         "resumo": {
+            "contas_novas": len(contas["criar"]),
+            "contas_desativadas": len(contas["desativar"]),
+            "contas_reativadas": len(contas["reativar"]),
             "empresas": len(dados["empresas"]),
             "usuarios": len(dados["usuarios"]),
             "acessos_atuais": len(atuais),
@@ -322,7 +397,9 @@ def _cliente():
 
 
 def carregar_estado(cur) -> Estado:
-    cur.execute("SELECT id::text AS id, lower(email) AS email, role, ativo FROM public.users")
+    cur.execute(
+        "SELECT id::text AS id, lower(email) AS email, role, ativo, origem, acessorias_id FROM public.users"
+    )
     contas = {r["email"]: r for r in cur.fetchall()}
     cur.execute("SELECT user_id::text AS user_id, documento, origem FROM public.carteira")
     carteira = {(r["user_id"], r["documento"]): r["origem"] for r in cur.fetchall()}
@@ -386,14 +463,31 @@ def _gravar_copia(cur, dados: dict) -> None:
     cur.execute("DELETE FROM public.acessorias_usuario WHERE NOT (id = ANY(%s))", (ids,))
 
 
-def _historico(cur, pares: Iterable[Par], movimento: str, emails: Dict[str, str], feito_por_email: str) -> None:
+def _historico(cur, pares: Iterable[Par], movimento: str, emails: Dict[str, str], feito_por_email: str,
+               desativadas: Set[str] = frozenset()) -> None:
     for uid, doc in pares:
         cur.execute(
             "INSERT INTO public.carteira_historico "
             "(user_id, user_email, documento, movimento, origem, feito_por, feito_por_email) "
-            "VALUES (%s, %s, %s, %s, 'acessorias', NULL, %s)",
-            (uid, emails.get(uid, ""), doc, movimento, feito_por_email),
+            "VALUES (%s, %s, %s, %s, %s, NULL, %s)",
+            (uid, emails.get(uid, ""), doc, movimento,
+             "desativacao" if uid in desativadas else "acessorias", feito_por_email),
         )
+
+
+def _hash_sem_senha() -> str:
+    """Hash bcrypt de um segredo aleatório que ninguém guarda.
+
+    A conta nasce "sem senha" (ADR 0005), mas `password_hash` é NOT NULL e o
+    login precisa custar o mesmo tempo para ela: um marcador inválido faria o
+    bcrypt falhar na hora e entregaria, pelo tempo de resposta, quem ainda não
+    definiu a senha. Um hash por aplicação, calculado fora da transação.
+    """
+    import secrets
+
+    from app import auth
+
+    return auth.get_password_hash(secrets.token_urlsafe(32))
 
 
 def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
@@ -401,14 +495,52 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
 
     Recalcular, e não reaproveitar o plano da leitura, porque entre a leitura e
     a confirmação do Administrador alguém pode ter bloqueado ou liberado à mão.
+
+    Devolve o resumo e, em "_depois", o que precisa rodar fora da transação
+    (`depois_de_aplicar`): sessões, bandeja e tokens de quem foi desativado,
+    papel de quem perdeu liderança, convite de quem ganhou conta.
     """
+    hash_sem_senha = _hash_sem_senha()
     with conn.transaction(), conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (_TRAVA_APLICACAO,))
         estado = carregar_estado(cur)
         plano = calcular_plano(dados, estado)
+        contas = plano["contas"]
         emails = {c["id"]: c["email"] for c in estado.contas.values()}
         _gravar_copia(cur, dados)
-        for uid, doc in plano["entradas"]:
+
+        # Contas novas primeiro: a carteira delas usa o id que nasce aqui.
+        ids_novos: Dict[str, str] = {}
+        novas: List[dict] = []
+        for u in contas["criar"]:
+            cur.execute(
+                "INSERT INTO public.users (email, password_hash, full_name, role, ativo, origem, acessorias_id) "
+                "VALUES (%s, %s, %s, 'user', true, 'acessorias', %s) ON CONFLICT DO NOTHING RETURNING id::text AS id",
+                (u["email"], hash_sem_senha, u["nome"] or None, u["id"]),
+            )
+            linha = cur.fetchone()
+            if linha:  # e-mail criado à mão no meio do caminho: fica para a próxima busca
+                ids_novos[f"{PREFIXO_NOVA}{u['id']}"] = linha["id"]
+                emails[linha["id"]] = u["email"]
+                novas.append({"id": linha["id"], "email": u["email"], "full_name": u["nome"]})
+        for uid, aid in contas["ligar"]:
+            cur.execute("UPDATE public.users SET acessorias_id = %s WHERE id = %s", (aid, uid))
+        for uid in contas["reativar"]:
+            cur.execute("UPDATE public.users SET ativo = true WHERE id = %s", (uid,))
+        for uid in contas["desativar"]:
+            # O resto da desativação manual (deactivate_user): lideranças e
+            # exceções saem aqui; sessões, bandeja e tokens em depois_de_aplicar.
+            cur.execute("UPDATE public.users SET ativo = false WHERE id = %s", (uid,))
+            cur.execute("DELETE FROM public.departamento_lider WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM public.carteira_excecao WHERE user_id = %s", (uid,))
+
+        def real(par: Par) -> Optional[Par]:
+            uid = ids_novos.get(par[0], par[0])
+            return None if uid.startswith(PREFIXO_NOVA) else (uid, par[1])
+
+        entradas = [p for p in map(real, plano["entradas"]) if p]
+        desativadas = set(contas["desativar"])
+        for uid, doc in entradas:
             cur.execute(
                 "INSERT INTO public.carteira (user_id, documento, atribuido_por, atribuido_por_email, origem) "
                 "VALUES (%s, %s, NULL, %s, 'acessorias') ON CONFLICT (user_id, documento) DO NOTHING",
@@ -421,9 +553,82 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             )
         for uid, doc in plano["saidas"]:
             cur.execute("DELETE FROM public.carteira WHERE user_id = %s AND documento = %s", (uid, doc))
-        _historico(cur, plano["entradas"], "entrada", emails, feito_por_email)
-        _historico(cur, plano["saidas"], "saida", emails, feito_por_email)
-    return plano["resumo"]
+        _historico(cur, entradas, "entrada", emails, feito_por_email)
+        _historico(cur, plano["saidas"], "saida", emails, feito_por_email, desativadas)
+    return {**plano["resumo"], "_depois": {"novas": novas, "desativadas": sorted(desativadas)}}
+
+
+def _enviar_convite(conta: dict, codigo: str) -> None:
+    """E-mail "defina sua senha" da conta criada pelo Acessórias (ADR 0005)."""
+    import html
+    import os
+    from urllib.parse import quote
+
+    from app import correio
+    from app.settings_state import load_settings
+
+    s = load_settings()
+    if not correio.configurado(s):
+        raise RuntimeError("Envio de e-mail não configurado")
+    # Link só se o endereço vier de configuração, nunca do cabeçalho Host
+    # (mesma regra do código de senha em app/rotas/usuarios.py).
+    base = (os.getenv("PORTAL_BASE_URL") or "").strip().rstrip("/")
+    link = (f'<p style="margin:16px 0 0;"><a href="{base}/login?definir={quote(conta["email"])}">'
+            "Definir minha senha</a></p>") if base else ""
+    nome = html.escape(str(conta.get("full_name") or "").strip() or "Olá")
+    correio.send_smtp_email(
+        host=s.smtp_host, port=s.smtp_port, user=s.smtp_user, password_enc=s.smtp_password_encrypted,
+        use_tls=s.smtp_use_tls, use_ssl=s.smtp_use_ssl, from_email=s.smtp_from_email,
+        to_email=str(conta["email"]), settings=s,
+        subject="Seu acesso ao Monitor de Certificados",
+        html_content=(
+            f"<p>{nome},</p>"
+            "<p>Sua conta no Monitor de Certificados foi criada a partir do seu cadastro no "
+            "Acessórias. Com ela você vê e instala os certificados das empresas pelas quais é "
+            "responsável lá.</p>"
+            "<p>Para definir sua senha, abra o portal em <strong>Esqueci minha senha › já tenho "
+            "um código</strong> (ou use o link abaixo) e informe este código:</p>"
+            f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;margin:24px 0;">{codigo}</p>'
+            "<p>Ele vale por 7 dias e só pode ser usado uma vez. Depois disso, peça um novo em "
+            "<strong>Esqueci minha senha</strong>.</p>"
+            f"{link}"
+        ),
+    )
+
+
+def depois_de_aplicar(depois: dict) -> dict:
+    """O que não cabe na transação. Nunca levanta: a aplicação já foi gravada.
+
+    Desativadas: o mesmo que `deactivate_user` faz depois de gravar (sessões,
+    bandeja da estação, tokens de instalação) e o papel rederivado sem as
+    lideranças. Novas: código de 7 dias e o e-mail de convite.
+    """
+    from app import cert_installer, computadores, papeis, senha_reset
+    from app.settings_state import _banco
+
+    sb = _banco()
+    falhas = 0
+    for uid in depois.get("desativadas") or []:
+        try:
+            papeis.derrubar_sessoes(sb, uid)
+            computadores.sair_de_tudo(uid, "conta desativada pelo Acessórias")
+            cert_installer.revogar_tokens_pendentes(uid)
+            papeis.rederivar(sb, [uid])
+        except Exception:  # noqa: BLE001
+            falhas += 1
+            logger.exception("Conta %s desativada pelo Acessórias, mas a limpeza depois falhou", uid)
+    enviados = 0
+    for conta in depois.get("novas") or []:
+        try:
+            codigo = senha_reset.criar_codigo(conta["id"], pelo_admin=True, validade_min=CONVITE_MIN)
+            _enviar_convite(conta, codigo)
+            enviados += 1
+        except Exception:  # noqa: BLE001
+            falhas += 1
+            # ERROR: a pessoa tem conta e não sabe. O Administrador reenvia
+            # pelo "Enviar código" da tela Usuários.
+            logger.exception("Conta %s criada pelo Acessórias, mas o convite NÃO foi enviado", conta["id"])
+    return {"convites": enviados, "falhas": falhas}
 
 
 def _abrir_busca(cur, origem: str, por_email: str) -> Optional[int]:
@@ -491,6 +696,7 @@ def buscar(origem: str = "agendada", por_email: str = "", api: Optional[Api] = N
                 return {"id": busca_id, "estado": "aguardando", "resumo": resumo, "motivo": motivo}
 
         resumo_aplicado = _aplicar(conn, dados, AUTOR)
+        depois = resumo_aplicado.pop("_depois")
         resumo = {**resumo_aplicado, "motivo": ""}
         with conn.cursor() as cur:
             cur.execute(
@@ -498,7 +704,8 @@ def buscar(origem: str = "agendada", por_email: str = "", api: Optional[Api] = N
                 "paginas = %s, empresas = %s, resumo = %s WHERE id = %s",
                 (paginas, resumo["empresas"], json.dumps(resumo), busca_id),
             )
-        return {"id": busca_id, "estado": "ok", "resumo": resumo, "motivo": ""}
+    resumo["pos"] = depois_de_aplicar(depois)
+    return {"id": busca_id, "estado": "ok", "resumo": resumo, "motivo": ""}
 
 
 def confirmar(busca_id: int, por_email: str) -> dict:
@@ -516,13 +723,15 @@ def confirmar(busca_id: int, por_email: str) -> dict:
         if not dados:
             raise ErroAcessorias("a busca não guardou os dados; rode Buscar agora")
         resumo = {**_aplicar(conn, dados, por_email), "motivo": ""}
+        depois = resumo.pop("_depois")
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE public.acessorias_busca SET estado = 'ok', aplicada_em = now(), plano = '{}'::jsonb, "
                 "decidida_por_email = %s, decidida_em = now(), resumo = resumo || %s WHERE id = %s",
                 (por_email, json.dumps({"aplicado": resumo}), busca_id),
             )
-        return {"id": busca_id, "estado": "ok", "resumo": resumo}
+    resumo["pos"] = depois_de_aplicar(depois)
+    return {"id": busca_id, "estado": "ok", "resumo": resumo}
 
 
 def descartar(busca_id: int, por_email: str) -> None:

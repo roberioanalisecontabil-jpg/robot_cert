@@ -177,6 +177,39 @@ def test_trava():
     assert "empresas" in motivo_para_confirmar(calcular_plano(dados2, queda), queda)
 
 
+def _u(i, email, ativo=True):
+    return {"id": i, "nome": email.split("@")[0], "email": email, "ativo": ativo}
+
+
+def test_contas_criar_desativar_reativar_e_nunca_admin_nem_manual():
+    contas = {
+        "ana@e.com": {"id": "u-ana", "email": "ana@e.com", "role": "user", "ativo": True, "origem": "acessorias", "acessorias_id": 1},
+        "bia@e.com": {"id": "u-bia", "email": "bia@e.com", "role": "user", "ativo": False, "origem": "acessorias", "acessorias_id": 2},
+        "ti@e.com": {"id": "u-ti", "email": "ti@e.com", "role": "user", "ativo": True, "origem": "manual", "acessorias_id": None},
+        "adm@e.com": {"id": "u-adm", "email": "adm@e.com", "role": "admin", "ativo": True, "origem": "acessorias", "acessorias_id": 4},
+        "sumiu@e.com": {"id": "u-sumiu", "email": "sumiu@e.com", "role": "user", "ativo": True, "origem": "acessorias", "acessorias_id": 9},
+    }
+    usuarios = [_u(1, "ana@e.com", ativo=False), _u(2, "bia@e.com"), _u(3, "ti@e.com", ativo=False),
+                _u(4, "adm@e.com", ativo=False), _u(5, "nova@e.com"), _u(6, "inativa@e.com", ativo=False)]
+    c = acessorias.calcular_contas(usuarios, contas)
+    assert [u["email"] for u in c["criar"]] == ["nova@e.com"]
+    assert c["desativar"] == ["u-ana", "u-sumiu"]
+    assert c["reativar"] == ["u-bia"]
+    assert ("u-ti", 3) in c["ligar"]
+
+
+def test_conta_nova_ja_recebe_carteira_e_desativada_perde_tudo():
+    est = _estado({("u-ana", OUTRA): "manual", ("u-ana", "12345678901"): "manual"})
+    est.contas["ana@e.com"].update(origem="acessorias", acessorias_id=1)
+    dados = {"empresas": [_emp(FILIAL, (1, "nova@e.com"))], "departamentos": [],
+             "usuarios": [_u(1, "ana@e.com", ativo=False), _u(5, "nova@e.com")]}
+    p = calcular_plano(dados, est)
+    assert p["entradas"] == [(acessorias.PREFIXO_NOVA + "5", FILIAL)]
+    # Desativada perde até o e-CPF manual (ADR 0001: sem estado dormente).
+    assert p["saidas"] == sorted([("u-ana", "12345678901"), ("u-ana", OUTRA)])
+    assert p["resumo"]["contas_novas"] == 1 and p["resumo"]["contas_desativadas"] == 1
+
+
 def test_intervalo_da_busca():
     assert acessorias.proxima_espera(datetime(2026, 10, 20, 7, 0)) == 300
     assert acessorias.proxima_espera(datetime(2026, 10, 20, 19, 59)) == 300
@@ -204,6 +237,7 @@ def banco(monkeypatch):
             "public.cert_history CASCADE"
         )
         cur.execute("DELETE FROM public.users WHERE email LIKE '%%@teste-acessorias'")
+        cur.execute("DELETE FROM public.departamento WHERE nome = 'T-acess'")
         cur.execute("UPDATE public.acessorias_departamento SET conta_para_carteira = (id IN (1, 2, 3))")
         ids = {}
         for nome, role in (("ana", "user"), ("gil", "gestor"), ("adm", "admin")):
@@ -284,6 +318,46 @@ def test_ciclo_completo(banco):
 
 
 @integracao
+def test_contas_pelo_acessorias(banco, monkeypatch):
+    cliente, ids = banco
+    depois = []
+    monkeypatch.setattr(acessorias, "depois_de_aplicar", lambda d: depois.append(d) or {})
+    _linhas(cliente, "INSERT INTO public.users (email, password_hash, role, origem, acessorias_id) "
+                     "VALUES ('ex@teste-acessorias', 'x', 'user', 'acessorias', 20)")
+    ex = _linhas(cliente, "SELECT id::text FROM public.users WHERE email = 'ex@teste-acessorias'")[0][0]
+    _linhas(cliente, "INSERT INTO public.carteira (user_id, documento, atribuido_por_email) VALUES (%s, '12345678901', 'x')", ex)
+    dep = _linhas(cliente, "INSERT INTO public.departamento (nome) VALUES ('T-acess') RETURNING id::text")[0][0]
+    _linhas(cliente, "INSERT INTO public.departamento_lider (departamento_id, user_id) VALUES (%s, %s)", dep, ex)
+    api = _api_falsa({
+        "/companies/ListAll": [[_empresa_api(FILIAL, deps=[(1, "Contábil", "nova@teste-acessorias")])]],
+        "/users/ListAll": [[{"id": "21", "nome": "Nova Pessoa", "email": "Nova@teste-acessorias", "status": "Ativo"},
+                            {"id": "20", "nome": "Ex", "email": "ex@teste-acessorias", "status": "Inativo"}]],
+        "/departments/ListAll": [[{"ID": "1", "Nome": "Contábil"}]],
+    })
+    r = acessorias.buscar(api=api)
+    assert r["resumo"]["contas_novas"] == 1 and r["resumo"]["contas_desativadas"] == 1
+    assert _linhas(cliente, "SELECT count(*) FROM public.users WHERE email = 'nova@teste-acessorias'") == [(0,)]
+    acessorias.confirmar(r["id"], "adm@teste-acessorias")
+
+    nova = _linhas(cliente, "SELECT id::text, origem, acessorias_id, role, ativo, full_name FROM public.users "
+                            "WHERE email = 'nova@teste-acessorias'")
+    assert len(nova) == 1 and nova[0][1:] == ("acessorias", 21, "user", True, "Nova Pessoa")
+    assert _linhas(cliente, "SELECT documento, origem FROM public.carteira WHERE user_id = %s", nova[0][0]) == [(MATRIZ, "acessorias")]
+    assert _linhas(cliente, "SELECT ativo FROM public.users WHERE id = %s", ex) == [(False,)]
+    assert _linhas(cliente, "SELECT count(*) FROM public.carteira WHERE user_id = %s", ex) == [(0,)]
+    assert _linhas(cliente, "SELECT count(*) FROM public.departamento_lider WHERE user_id = %s", ex) == [(0,)]
+    assert ("desativacao",) in _linhas(cliente, "SELECT origem FROM public.carteira_historico WHERE user_id = %s", ex)
+    assert depois == [{"novas": [{"id": nova[0][0], "email": "nova@teste-acessorias", "full_name": "Nova Pessoa"}],
+                       "desativadas": [ex]}]
+    # A senha da conta nova é um hash bcrypt de verdade, de um segredo que ninguém tem.
+    h = _linhas(cliente, "SELECT password_hash FROM public.users WHERE id = %s", nova[0][0])[0][0]
+    assert h.startswith("$2") and len(h) == 60
+    # Admin e contas manuais intocados.
+    assert _linhas(cliente, "SELECT ativo FROM public.users WHERE id IN (%s, %s, %s)", ids["ana"], ids["gil"], ids["adm"]) == [(True,)] * 3
+    _linhas(cliente, "DELETE FROM public.departamento WHERE id = %s", dep)
+
+
+@integracao
 def test_erro_na_api_nao_muda_nada_e_libera_a_proxima(banco):
     cliente, _ = banco
     api = _api_falsa(PAGINAS, falhar_em="/departments/ListAll")
@@ -330,3 +404,17 @@ def test_painel_numa_linha_e_lista_descontada():
     media = css[css.index("@media (min-width: 1025px)"):]
     assert ".cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 30rem)); }" in media
     assert "aguia-carteiras.css?v=acessorias-2026-10-20" in html
+
+
+def test_convite_abre_direto_no_codigo_sem_pedir_outro():
+    # Pedir um código novo queimaria o do convite (criar_codigo invalida os
+    # anteriores): o link do e-mail e o "Já tenho um código" pulam o passo 1.
+    html = (RAIZ / "templates" / "login.html").read_text(encoding="utf-8")
+    assert "get('definir')" in html and 'id="btn-ja-tenho"' in html
+    trecho = html[html.index("function irParaCodigo"):html.index("$('btn-ja-tenho')")]
+    assert "/api/senha/codigo" not in trecho
+    assert acessorias.CONVITE_MIN == 7 * 24 * 60
+    import inspect
+
+    from app import senha_reset
+    assert "validade_min" in inspect.signature(senha_reset.criar_codigo).parameters
