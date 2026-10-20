@@ -56,6 +56,18 @@ def test_vencidos_conta_pelo_cliente_vigente(client: TestClient, banco: _Fake) -
     assert d["itens"] == [] and d["alcance_vazio"] is True
 
 
+def test_vencido_abre_o_modal_de_detalhes(client: TestClient, banco: _Fake) -> None:
+    """20/10/2026: a linha de Vencidos abre o mesmo modal do Início; para isso
+    o item traz o fingerprint, e a rota de detalhes responde para o vencido."""
+    d = client.get("/api/certificados/vencidos", headers=_h(*ADMIN)).json()
+    assert [it["fingerprint_sha256"] for it in d["itens"]] == ["d" * 64]
+    r = client.get("/api/certificados/" + "d" * 64 + "/detalhes", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert r.json()["documento_numero"] == DOC_L
+    html = (RAIZ / "templates" / "vencidos.html").read_text(encoding="utf-8")
+    assert '{% include "_modal_detalhes.html" %}' in html and "cgDetalhes.abrir(" in html
+
+
 def test_dashboard_curva_pelo_cliente_vigente(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     from app import dashboard as dash
     monkeypatch.setattr(dash, "_banco", lambda: banco)

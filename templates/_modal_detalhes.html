@@ -1,0 +1,73 @@
+{# Modal de detalhes do certificado e confirmação do SIEG (06/10/2026).
+   Usado no Início e em Vencidos; o comportamento está em
+   static/detalhes-certificado.js. #}
+<!-- Detalhes do certificado (06/10/2026): abre ao clicar na linha fora do
+     modo de seleção. Os dados do responsável vêm de uma rota própria,
+     que só responde para quem tem o certificado no alcance. -->
+<dialog class="ag-modal ag-modal--lg cg-det" id="modalDetalhes" aria-labelledby="det-titulo">
+  <div class="ag-modal__head">
+    <div class="cg-det__cab">
+      <h2 class="ag-modal__titulo" id="det-titulo">Certificado</h2>
+      <p class="cg-det__sub"><span id="det-doc"></span> <span id="det-status"></span></p>
+    </div>
+    <button type="button" class="ag-modal__x" data-det-fechar aria-label="Fechar">
+      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="ag-modal__body">
+    <section aria-labelledby="det-sec-cert">
+      <h3 class="cg-det__secao" id="det-sec-cert">Certificado</h3>
+      <dl class="cg-det__lista" id="det-certificado"></dl>
+    </section>
+    <section aria-labelledby="det-sec-resp">
+      <h3 class="cg-det__secao" id="det-sec-resp">Responsável</h3>
+      <dl class="cg-det__lista" id="det-responsavel"></dl>
+      <p class="cg-det__nota" id="det-resp-nota" hidden></p>
+    </section>
+    <section aria-labelledby="det-sec-portal">
+      <h3 class="cg-det__secao" id="det-sec-portal">No portal</h3>
+      <dl class="cg-det__lista" id="det-portal"></dl>
+    </section>
+    <!-- SIEG (07/10/2026): ligar não tem volta; o estado vai escrito, a
+         alavanca sozinha não conta. -->
+    <section aria-labelledby="det-sec-sieg" class="cg-det-sieg" id="det-sieg">
+      <h3 class="cg-det__secao" id="det-sec-sieg">SIEG</h3>
+      <div class="cg-det-sieg__linha">
+        <label class="ag-switch">
+          <input type="checkbox" role="switch" id="det-sieg-chk" aria-describedby="det-sieg-texto" />
+          <span class="ag-switch__trilho" aria-hidden="true"></span>
+          <span class="ag-switch__rotulo">Incluir no SIEG</span>
+        </label>
+        <span id="det-sieg-estado" aria-live="polite"></span>
+      </div>
+      <p class="cg-det__nota" id="det-sieg-texto"></p>
+      <div class="cg-det-sieg__acoes">
+        <button type="button" class="ag-btn ag-btn--outline ag-btn--sm" id="det-sieg-tentar" hidden>Tentar de novo</button>
+        <button type="button" class="ag-btn ag-btn--ghost ag-btn--sm" id="det-sieg-conferir" hidden>Conferir no SIEG</button>
+      </div>
+    </section>
+  </div>
+  <div class="ag-modal__foot">
+    <button type="button" class="ag-btn ag-btn--outline" data-det-fechar>Fechar</button>
+  </div>
+</dialog>
+
+<dialog class="ag-modal" id="modalSiegConfirmar" aria-labelledby="sieg-conf-titulo">
+  <div class="ag-modal__head">
+    <h2 class="ag-modal__titulo" id="sieg-conf-titulo">Incluir no SIEG</h2>
+    <button type="button" class="ag-modal__x" data-sieg-cancelar aria-label="Fechar">
+      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="ag-modal__body">
+    <p id="sieg-conf-texto"></p>
+    <div class="ag-alert ag-alert--warning">
+      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      <div class="ag-alert__corpo"><strong>Esta ação não pode ser desfeita.</strong> Depois de ligado, o interruptor não volta pela tela; tirar do SIEG é pelo painel do SIEG.</div>
+    </div>
+  </div>
+  <div class="ag-modal__foot">
+    <button type="button" class="ag-btn ag-btn--outline" data-sieg-cancelar>Cancelar</button>
+    <button type="button" class="ag-btn ag-btn--primary" id="sieg-conf-ok">Incluir no SIEG</button>
+  </div>
+</dialog>

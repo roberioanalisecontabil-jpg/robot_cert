@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
+  <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10e" />
 </head>
 <body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -155,7 +156,10 @@
     </section>
   </main>
 
+  {% include "_modal_detalhes.html" %}
+
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-rola-2026-10-15"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/detalhes-certificado.js?v=detalhes-2026-10-20"></script>
   <script nonce="{{ request.state.nonce }}">
     const ALLOWED_PER_PAGE_VENC = [10, 25, 50, 100];
     const LS_PER_PAGE_VENC = "cg_per_page_vencidos";
@@ -345,6 +349,21 @@
       }
     }
 
+    // Detalhes (20/10/2026): o mesmo modal do Início, para o certificado
+    // vencido que representa o cliente. A rota de detalhes completa o resto.
+    let _linhas = [];
+    function abrirDetalhesDaLinha(tr) {
+      const it = _linhas[Number(tr.dataset.det)];
+      if (!it || !it.fingerprint_sha256) return;
+      void cgDetalhes.abrir({
+        fingerprint_sha256: it.fingerprint_sha256,
+        nome: it.nome,
+        documento_formatado: it.documento,
+        not_after: it.vencimento_certificado,
+        status: "expirado",
+      }, tr.querySelector(".cg-det-abrir"));
+    }
+
     function renderTabelaVencidas(rows, totalServidor) {
       definirKpi("n-vencidos-total", typeof totalServidor === "number" ? totalServidor : rows.length);
       document.getElementById("n-vencidos-sub").textContent = subtituloDoTotal();
@@ -358,17 +377,22 @@
 
       // role="row"/"cell" sustentam o layout de cartões abaixo de 640px
       // (aguia-listas.css): `display:block` apagaria os papéis implícitos.
+      _linhas = rows;
       tb.innerHTML = rows
-        .map((it) => {
+        .map((it, idx) => {
           const nome = it.nome || "";
           const exib = it.nome_exibicao || nome;
           const venc = it.vencimento_certificado;
           const soData = fmtSoData(venc);
           return (
-            "<tr role='row'>" +
+            "<tr role='row' data-det='" + idx + "'>" +
             "<td role='cell' class='cg-col-nome'>" +
             "<div class='ag-cell-stack'>" +
-            "<span class='ag-cell-main' title='" + esc(nome) + "'>" + esc(exib) + "</span>" +
+            // Sem fingerprint (inventário antigo) não há o que abrir.
+            (it.fingerprint_sha256
+              ? "<button type='button' class='cg-det-abrir ag-cell-main' title='" + esc(nome) + "'>" +
+                "<span class='cg-sr-only'>Ver detalhes de </span>" + esc(exib) + "</button>"
+              : "<span class='ag-cell-main' title='" + esc(nome) + "'>" + esc(exib) + "</span>") +
             celulaDocumento(it.documento) +
             "</div>" +
             "</td>" +
@@ -658,6 +682,16 @@
       lerEstadoDaUrl();
       escreverEstadoNosCampos();
       carregarVencidos();
+    });
+
+    document.getElementById("tbody-vencidos").addEventListener("click", (ev) => {
+      const tr = ev.target.closest("tr[data-det]");
+      if (tr) abrirDetalhesDaLinha(tr);
+    });
+    // Tudo aqui está vencido; o nome segue a regra da lista (app/nomes.py).
+    cgDetalhes.iniciar({
+      badge: () => badgeStatus("vencido"),
+      nomeExibicao: (nome) => String(nome || "").toUpperCase(),
     });
 
     (async function init() {

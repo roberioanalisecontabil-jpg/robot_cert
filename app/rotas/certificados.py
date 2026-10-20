@@ -869,6 +869,8 @@ def _lista_base_docs_historico() -> List[dict]:
             "status_ultimo": str(it.get("status") or "").lower(),
             "vencimento_certificado": venc,
             "ultima_data_registrada": venc,
+            # Abre o modal de detalhes a partir de Vencidos (20/10/2026).
+            "fingerprint_sha256": it.get("fingerprint_sha256"),
         }
         atual = grupos.get(doc)
         if not atual:

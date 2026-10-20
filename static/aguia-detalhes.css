@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   Detalhes do certificado no Início (06/10/2026) — só desta tela (.cg-det)
+   Detalhes do certificado (06/10/2026) — Início e Vencidos (.cg-det)
 
    O nome na linha vira botão (abre o modal) sem mudar de cara; fora do modo
    de seleção a linha inteira é clicável. O modal lista rótulo/valor em três
@@ -23,6 +23,7 @@
 .cg-det-abrir:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-xs); }
 .cg-tabela-card tbody tr:not(.cg-state-row) { cursor: pointer; }
 .cg-tabela-card tbody td.cg-col-sel { cursor: default; }
+tbody tr[data-det] { cursor: pointer; }
 
 .cg-det__cab { min-width: 0; }
 .cg-det__cab .ag-modal__titulo { overflow-wrap: break-word; }
