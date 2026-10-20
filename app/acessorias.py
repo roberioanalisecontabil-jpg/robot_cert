@@ -1087,3 +1087,71 @@ def documentos_dos_departamentos(user_id: str) -> Set[str]:
         cnpjs = [r[0] for r in cur.fetchall()]
         com_cert = _documentos_com_certificado(cur) if cnpjs else frozenset()
     return {documento_da_empresa(c, com_cert) for c in cnpjs}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 6. Bloqueio e liberação manual (ADR 0005)
+# ──────────────────────────────────────────────────────────────────────────
+
+def retirar(user_id: str, documento: str, por_id: Optional[str], por_email: str) -> bool:
+    """Tira o documento da carteira depois da virada. Devolve se bloqueou.
+
+    O que veio do Acessórias voltaria na busca seguinte; por isso retirar é
+    bloquear (a busca respeita o bloqueio). Liberado à mão só sai. A trava
+    é a da aplicação: uma busca no meio não lê a carteira sem o bloqueio.
+    """
+    doc = so_digitos(documento)
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.transaction(), conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (_TRAVA_APLICACAO,))
+        cur.execute(
+            "DELETE FROM public.carteira WHERE user_id = %s AND documento = %s RETURNING origem",
+            (user_id, doc),
+        )
+        linha = cur.fetchone()
+        if not linha or linha[0] != "acessorias":
+            return False
+        cur.execute(
+            "INSERT INTO public.carteira_bloqueio (user_id, documento, bloqueado_por, bloqueado_por_email) "
+            "VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, documento) DO NOTHING",
+            (user_id, doc, por_id, por_email),
+        )
+        cur.execute("SELECT email FROM public.users WHERE id = %s", (user_id,))
+        email = (cur.fetchone() or [""])[0] or ""
+        cur.execute(
+            "INSERT INTO public.carteira_historico "
+            "(user_id, user_email, documento, movimento, origem, feito_por, feito_por_email) "
+            "VALUES (%s, %s, %s, 'saida', 'bloqueio', %s, %s)",
+            (user_id, email, doc, por_id, por_email),
+        )
+    return True
+
+
+def desbloquear(user_id: str, documentos: Iterable[str]) -> int:
+    """Atribuir à mão desfaz o bloqueio daquele documento para aquela pessoa."""
+    docs = [d for d in (so_digitos(x) for x in documentos) if d]
+    if not docs:
+        return 0
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM public.carteira_bloqueio WHERE user_id = %s AND documento = ANY(%s)",
+            (user_id, docs),
+        )
+        return cur.rowcount
+
+
+def bloqueios(user_id: str) -> List[Dict[str, Any]]:
+    """Os bloqueios da pessoa, com quem bloqueou e quando (para a tela)."""
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT documento, bloqueado_por_email, bloqueado_em FROM public.carteira_bloqueio "
+            "WHERE user_id = %s ORDER BY documento",
+            (user_id,),
+        )
+        return [
+            {"documento": l["documento"], "bloqueado_por": l["bloqueado_por_email"],
+             "bloqueado_em": l["bloqueado_em"].isoformat() if l["bloqueado_em"] else None}
+            for l in cur.fetchall()
+        ]

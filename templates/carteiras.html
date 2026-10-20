@@ -304,6 +304,7 @@
     // (gestor)? Decide os textos dos dois painéis e das confirmações.
     let _tipoCarteira = "atribuicoes";
     let _excecoes = {};
+    let _bloqueios = {};   // ADR 0005: o que a busca do Acessórias não devolve
     const deExcecoes = () => _tipoCarteira === "excecoes";
 
     function renderOperadores() {
@@ -461,6 +462,7 @@
         _carteiraAtual = new Set(d.documentos || []);
         _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
         _excecoes = Object.fromEntries((d.excecoes || []).map((i) => [i.documento, i]));
+        _bloqueios = Object.fromEntries((d.bloqueios || []).map((i) => [i.documento, i]));
         ajustarTitulosDosPaineis();
         ajustarRotulosDosBotoes();
         atualizarContagemOp();
@@ -539,6 +541,7 @@
     function linhaTransfer(x, naCarteira) {
       const t = naCarteira ? _trilha[x.documento] : null;
       const ex = !naCarteira && deExcecoes() ? _excecoes[x.documento] : null;
+      const bl = !naCarteira ? _bloqueios[x.documento] : null;
       const data = (iso) => (iso ? " em " + new Date(iso).toLocaleDateString("pt-BR") : "");
       const quem = (email, frase) => email
         ? ` ${frase} <span title="${esc(email)}">${esc(nomeDeQuem(email))}</span>`
@@ -548,6 +551,13 @@
         // Exceção: quem retirou o cliente do alcance do gestor, e quando.
         trilha = (quem(ex.registrado_por, "Retirado por") || "Retirado") + data(ex.registrado_em) +
           (x.fora_do_inventario ? " · fora do inventário atual" : "");
+      } else if (bl) {
+        // Bloqueio (ADR 0005): a busca do Acessórias não devolve; atribuir desfaz.
+        trilha = (quem(bl.bloqueado_por, "Bloqueado por") || "Bloqueado") + data(bl.bloqueado_em) +
+          (x.fora_do_inventario ? " · fora do inventário atual" : "");
+      } else if (t && t.origem === "acessorias") {
+        trilha = "Responsável no Acessórias" + data(t.atribuido_em) +
+          (t.no_inventario === false ? " · fora do inventário atual" : "");
       } else if (t && (t.atribuido_por || t.atribuido_em || t.origem === "papel")) {
         trilha = (t.origem === "papel" ? "Atribuído pelo papel de gestor" : (quem(t.atribuido_por, "Atribuído por") || "Atribuído")) +
           data(t.atribuido_em) +
@@ -616,6 +626,12 @@
           }
         }
       }
+      // Bloqueio de documento que saiu do inventário: aparece para poder ser desfeito.
+      for (const doc of Object.keys(_bloqueios)) {
+        if (!_carteiraAtual.has(doc) && !disponiveis.some((x) => x.documento === doc)) {
+          disponiveis.push({ documento: doc, nome: _bloqueios[doc].nome || "", fora_do_inventario: true });
+        }
+      }
       const dispFiltrados = filtrar(disponiveis);
       const cartFiltrados = filtrar(naCarteira);
 
@@ -648,6 +664,30 @@
 
     async function atribuir(documentos) {
       if (!documentos.length) return;
+      // Bloqueado que saiu do inventário: Atribuir recusaria; desfazer o
+      // bloqueio deixa a próxima busca do Acessórias decidir (ADR 0005).
+      const soDesbloquear = documentos.filter((d) => _bloqueios[d] && !_universo.some((x) => x.documento === d));
+      if (soDesbloquear.length) {
+        documentos = documentos.filter((d) => !soDesbloquear.includes(d));
+        let falhas = 0;
+        for (const doc of soDesbloquear) {
+          try {
+            const r = await fetch(
+              `/api/carteira/${encodeURIComponent(_selecionado.id)}/bloqueio/${encodeURIComponent(doc)}`,
+              { method: "DELETE", headers: getHeaders() }
+            );
+            if (!r.ok) falhas++;
+          } catch (_e) { falhas++; }
+        }
+        msg(falhas
+          ? `Não foi possível desfazer ${falhas === 1 ? "um bloqueio" : `${falhas} bloqueios`}.`
+          : "Bloqueio desfeito. O cliente está fora do inventário; volta na próxima busca do Acessórias se esta pessoa ainda for a responsável.",
+          falhas ? "error" : "success");
+        if (!documentos.length) {
+          await carregarCarteira();
+          return;
+        }
+      }
       // Atribuir em lote confirma; atribuir um não (C4): um é desfazível em
       // um clique, e a confirmação protege o clique distraído no lote.
       if (documentos.length > 1 && !confirm(
@@ -735,6 +775,7 @@
             `\n\nA pessoa deixa de ver e instalar os certificados ${um ? "dele" : "deles"}.`
       )) return;
       let falhas = 0;
+      let bloqueados = 0;
       for (const doc of documentos) {
         try {
           const r = await fetch(
@@ -742,6 +783,7 @@
             { method: "DELETE", headers: getHeaders() }
           );
           if (!r.ok) falhas++;
+          else if ((await r.json()).bloqueado) bloqueados++;
         } catch (_e) { falhas++; }
       }
       msg(
@@ -749,7 +791,9 @@
           ? `${documentos.length - falhas} retirados; ${falhas} falharam.`
           : deExcecoes()
             ? (um ? "Exceção registrada." : `${documentos.length} exceções registradas.`)
-            : (um ? "Cliente retirado da carteira." : `${documentos.length} clientes retirados da carteira.`),
+            : (um ? "Cliente retirado da carteira." : `${documentos.length} clientes retirados da carteira.`) +
+              // Veio do Acessórias: a busca devolveria, então ficou bloqueado.
+              (bloqueados ? ` ${bloqueados === 1 ? "Ficou bloqueado" : `${bloqueados} ficaram bloqueados`}: a busca do Acessórias não ${bloqueados === 1 ? "o devolve" : "os devolve"}; atribuir de novo desfaz.` : ""),
         falhas ? "error" : "success"
       );
       await Promise.all([carregarCarteira(), carregarOperadores()]);

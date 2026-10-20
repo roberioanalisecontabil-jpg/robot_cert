@@ -558,3 +558,29 @@ def test_aba_acessorias_na_configuracao():
     # primeira (busca_id) e a rota dos departamentos respondia 422.
     rotas = (RAIZ / "app" / "rotas" / "acessorias.py").read_text(encoding="utf-8")
     assert "acessorias_id: int = PathParam(..., ge=1)" in rotas
+
+
+@integracao
+def test_retirar_depois_da_virada_bloqueia_o_que_veio_do_acessorias(banco, monkeypatch):
+    cliente, ids = banco
+    monkeypatch.setattr(acessorias, "depois_de_aplicar", lambda d: {})
+    emp = _empresa_api(FILIAL, deps=[(1, "Contábil", "ana@teste-acessorias")])
+    acessorias.confirmar(acessorias.buscar(api=_api_com(emp))["id"], "adm@teste-acessorias")
+    assert _linhas(cliente, "SELECT documento, origem FROM public.carteira WHERE user_id = %s", ids["ana"]) == [(MATRIZ, "acessorias")]
+    _linhas(cliente, "INSERT INTO public.carteira (user_id, documento, atribuido_por_email) VALUES (%s, %s, 'adm')",
+            ids["ana"], OUTRA)
+
+    # Liberado à mão só sai; o do Acessórias sai bloqueado, com histórico.
+    assert acessorias.retirar(ids["ana"], OUTRA, ids["adm"], "adm@teste-acessorias") is False
+    assert acessorias.retirar(ids["ana"], MATRIZ, ids["adm"], "adm@teste-acessorias") is True
+    assert _linhas(cliente, "SELECT 1 FROM public.carteira WHERE user_id = %s", ids["ana"]) == []
+    assert [b["documento"] for b in acessorias.bloqueios(ids["ana"])] == [MATRIZ]
+    assert _linhas(cliente, "SELECT movimento, origem FROM public.carteira_historico ORDER BY id DESC LIMIT 1") == [("saida", "bloqueio")]
+    # Retirar de novo não duplica nada.
+    assert acessorias.retirar(ids["ana"], MATRIZ, ids["adm"], "adm@teste-acessorias") is False
+
+    # A busca seguinte respeita o bloqueio; desbloquear devolve na próxima.
+    assert acessorias.buscar(api=_api_com(emp))["resumo"]["entradas"] == 0
+    assert acessorias.desbloquear(ids["ana"], [MATRIZ]) == 1
+    assert acessorias.bloqueios(ids["ana"]) == []
+    assert acessorias.buscar(api=_api_com(emp))["resumo"]["entradas"] == 1

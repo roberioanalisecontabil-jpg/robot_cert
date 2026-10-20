@@ -50,6 +50,19 @@ def _carteira_de_excecoes(user_id: str) -> bool:
     return _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR and not _sincronizado()
 
 
+def _desbloquear(user_id: str, documentos: List[str]) -> None:
+    """Atribuir à mão depois da virada desfaz o bloqueio (ADR 0005)."""
+    if not _sincronizado():
+        return
+    from app import acessorias
+
+    try:
+        acessorias.desbloquear(user_id, documentos)
+    except Exception:
+        logger.exception("Erro ao desfazer bloqueio da carteira")
+        raise HTTPException(status_code=500, detail="Erro interno ao atribuir carteira")
+
+
 def _exigir_documentos_no_inventario(documentos: List[str]) -> None:
     """Atribuição e Exceção são sobre Documentos do Inventário (GLOSSARY).
 
@@ -319,10 +332,50 @@ def obter_carteira(
                 "no_inventario": l["documento"] in nomes,
                 "atribuido_por": l.get("atribuido_por_email"),
                 "atribuido_em": l.get("atribuido_em"),
+                "origem": l.get("origem") or "manual",
             }
             for l in linhas
         ],
+        "bloqueios": _bloqueios_para_tela(user_id, nomes),
     }
+
+
+@router.delete("/api/carteira/{user_id}/bloqueio/{documento}", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
+def desfazer_bloqueio(
+    user_id: str,
+    documento: str,
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """Desfaz o bloqueio sem atribuir (ADR 0005): a próxima busca devolve o
+    acesso se o Acessórias ainda o der. É o caminho para o documento que saiu
+    do inventário, que Atribuir recusa."""
+    _exigir_alcance(token, user_id)
+    if not _sincronizado():
+        raise HTTPException(status_code=409, detail="A carteira ainda não segue o Acessórias.")
+    from app import acessorias
+
+    try:
+        n = acessorias.desbloquear(user_id, [documento])
+    except Exception:
+        logger.exception("Erro ao desfazer bloqueio da carteira")
+        raise HTTPException(status_code=500, detail="Erro interno ao desfazer o bloqueio")
+    if not n:
+        raise HTTPException(status_code=404, detail="Não há bloqueio deste cliente para esta pessoa.")
+    return {"status": "ok", "user_id": user_id, "documento": documento}
+
+
+def _bloqueios_para_tela(user_id: str, nomes: Dict[str, str]) -> List[dict]:
+    """Bloqueios da pessoa (ADR 0005), com o nome do cliente. Antes da virada
+    não existem."""
+    if not _sincronizado():
+        return []
+    from app import acessorias
+
+    try:
+        return [{**b, "nome": nomes.get(b["documento"], "")} for b in acessorias.bloqueios(user_id)]
+    except Exception:
+        logger.exception("Erro ao ler os bloqueios da carteira")
+        raise HTTPException(status_code=503, detail="Não foi possível ler os bloqueios. Tente de novo.")
 
 
 @router.get("/api/carteira/{user_id}/instalacoes", dependencies=[Depends(require_modulo("carteiras"))])
@@ -388,6 +441,7 @@ def atribuir_carteira(
             raise HTTPException(status_code=500, detail="Erro interno ao devolver o cliente ao gestor")
         return {"status": "ok", "gravados": len(body.documentos), "tipo": "excecoes"}
     _exigir_documentos_ao_alcance(token, body.documentos)
+    _desbloquear(body.user_id, body.documentos)
     try:
         gravados = cert_installer.atribuir_carteira(
             user_id=body.user_id,
@@ -640,6 +694,7 @@ async def importar_carteiras(
     pessoas = 0
     for user_id, docs in por_usuario.items():
         try:
+            _desbloquear(user_id, sorted(docs))
             atribuidos += cert_installer.atribuir_carteira(
                 user_id=user_id,
                 documentos=sorted(docs),
@@ -680,6 +735,18 @@ def remover_carteira(
         except Exception:
             logger.exception("Erro ao registrar exceção")
             raise HTTPException(status_code=500, detail="Erro interno ao registrar a exceção")
+    if _sincronizado():
+        # Depois da virada (ADR 0005): o que veio do Acessórias voltaria na
+        # busca seguinte, então retirar é bloquear.
+        from app import acessorias
+
+        try:
+            bloqueou = acessorias.retirar(user_id, documento, _user_id_da_sessao(token), token.email or "desconhecido")
+            cert_installer.revogar_tokens_pendentes(user_id)
+        except Exception:
+            logger.exception("Erro ao retirar da carteira sincronizada")
+            raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
+        return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "atribuicoes", "bloqueado": bloqueou}
     try:
         cert_installer.remover_da_carteira(user_id, documento)
         # O token já pedido levava este cliente e o resgate não confere a

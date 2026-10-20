@@ -1182,7 +1182,7 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
     try:
         r = (
             client.table("carteira")
-            .select("documento, atribuido_por_email, atribuido_em")
+            .select("documento, atribuido_por_email, atribuido_em, origem")
             .eq("user_id", user_id)
             .execute()
         )

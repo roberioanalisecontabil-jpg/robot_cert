@@ -188,3 +188,43 @@ def test_painel_do_operador_usa_as_celulas_do_ds() -> None:
     assert "ainda sem spec" not in html
     assert "documento_formatado" in html and "nomeDeQuem(" in html
     assert 'class="ag-cell-main"' in html and "ag-cell-sub--mono" in html
+
+
+# ── Bloqueio depois da virada do Acessórias (ADR 0005) ───────────────────
+
+def test_rotas_da_carteira_passam_pelo_bloqueio_depois_da_virada(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import acessorias
+
+    chamadas = []
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: True)
+    monkeypatch.setattr(acessorias, "retirar", lambda uid, doc, por, email: chamadas.append(("retirar", uid, doc)) or True)
+    monkeypatch.setattr(acessorias, "desbloquear", lambda uid, docs: chamadas.append(("desbloquear", uid, list(docs))) or 1)
+    monkeypatch.setattr(acessorias, "bloqueios", lambda uid: [
+        {"documento": DOC_B, "bloqueado_por": "admin@x.com", "bloqueado_em": "2026-10-20T12:00:00+00:00"}])
+
+    r = client.delete(f"/api/carteira/u-fis/{DOC_A}", headers=_h(*ADMIN))
+    assert r.status_code == 200 and r.json()["bloqueado"] is True
+    r = client.post("/api/carteira", json={"user_id": "u-fis", "documentos": [DOC_B]}, headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert chamadas == [("retirar", "u-fis", DOC_A), ("desbloquear", "u-fis", [DOC_B])]
+
+    d = client.get("/api/carteira/u-fis", headers=_h(*ADMIN)).json()
+    assert [b["documento"] for b in d["bloqueios"]] == [DOC_B] and d["bloqueios"][0]["bloqueado_por"] == "admin@x.com"
+    # Antes da virada nada disso existe.
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: False)
+    assert client.get("/api/carteira/u-fis", headers=_h(*ADMIN)).json()["bloqueios"] == []
+
+
+def test_desfazer_bloqueio_sem_atribuir(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bloqueado que saiu do inventário: Atribuir recusa, então há uma rota
+    só para desfazer o bloqueio (a busca seguinte decide)."""
+    from app import acessorias
+
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: True)
+    monkeypatch.setattr(acessorias, "desbloquear", lambda uid, docs: 1 if list(docs) == [DOC_FORA] else 0)
+    assert client.delete(f"/api/carteira/u-fis/bloqueio/{DOC_FORA}", headers=_h(*ADMIN)).status_code == 200
+    assert client.delete(f"/api/carteira/u-fis/bloqueio/{DOC_A}", headers=_h(*ADMIN)).status_code == 404
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: False)
+    assert client.delete(f"/api/carteira/u-fis/bloqueio/{DOC_FORA}", headers=_h(*ADMIN)).status_code == 409
