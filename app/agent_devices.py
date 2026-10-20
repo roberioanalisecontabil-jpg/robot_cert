@@ -279,6 +279,26 @@ def esta_vivo(linha: Dict[str, Any], agora: Optional[datetime] = None) -> bool:
     return (agora or _agora()) - quando <= timedelta(seconds=JANELA_VIVO_SEG)
 
 
+def _versao_tupla(v: str) -> Optional[tuple]:
+    try:
+        partes = tuple(int(x) for x in v.split("."))
+    except ValueError:
+        return None
+    return partes if len(partes) == 3 else None
+
+
+def _desatualizada(instalada: str, esperada: str, publicada: Optional[str]) -> bool:
+    """A bandeja do Certguard Análise (`certguard-1.1.0`) se compara com a
+    versão publicada para a atualização automática, e só fica atrasada ABAIXO
+    dela: a estação de teste com a versão seguinte não é atrasada. Até 20/10/2026
+    ela se comparava com a versão do `agent/` do servidor (1.7.1) e toda
+    bandeja aparecia desatualizada. O resto segue a regra antiga."""
+    if instalada.startswith("certguard-"):
+        atual, alvo = _versao_tupla(instalada[len("certguard-"):]), _versao_tupla(publicada or "")
+        return bool(atual and alvo and atual < alvo)
+    return bool(instalada and esperada and instalada != esperada)
+
+
 def listar(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Dispositivos, com `vivo` já calculado. Sem `user_id`, devolve todos — quem
@@ -291,6 +311,9 @@ def listar(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     linhas = (q.execute()).data or []
     agora = _agora()
     esperada = (config.VERSAO_AGENTE_ESPERADA or "").strip()
+    from app import atualizacao_estacao
+
+    publicada = atualizacao_estacao.versao_publicada()
     saida = []
     for linha in linhas:
         item = _sem_segredo(linha)
@@ -300,7 +323,7 @@ def listar(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         # (agente anterior a esta coluna) não é atrasada: é desconhecida, e
         # marcá-la de vermelho mandaria alguém atualizar o que talvez já esteja
         # em dia.
-        item["desatualizado"] = bool(instalada and esperada and instalada != esperada)
+        item["desatualizado"] = _desatualizada(instalada, esperada, publicada)
         saida.append(item)
     saida.sort(key=lambda d: str(d.get("criado_em") or ""), reverse=True)
     return saida

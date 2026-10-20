@@ -32,6 +32,8 @@ agent_config.json
 *.orig
 *.swp
 data/
+# Versoes publicadas do Certguard Analise (app/atualizacao_estacao.py).
+atualizacoes/
 
 # PyInstaller / instalador (gerar com scripts/build_agent_installer.ps1)
 build/

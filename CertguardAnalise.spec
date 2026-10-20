@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Certguard Análise — o agente de certificados das estações (estacao/, ADR 0003).
-# Um exe só: sem argumento é a bandeja; --preparar-chave é o passo do instalador.
+# Um exe só: sem argumento é a bandeja; --preparar-chave é o passo do instalador;
+# --atualizacao e --atualizar são a atualização automática (estacao/tarefa.py).
 
 import os
 
@@ -22,6 +23,15 @@ a = Analysis(
         "estacao.instalador_certificado",
         "estacao.janela_login",
         "estacao.janela_status",
+        "estacao.manifesto",
+        "estacao.atualizador",
+        "estacao.tarefa",
+        "estacao.sessoes",
+        "win32ts",
+        "win32profile",
+        "win32process",
+        "win32con",
+        "cryptography.hazmat.primitives.asymmetric.ed25519",
         "pystray",
         "pystray._win32",
         "PIL.Image",

@@ -120,11 +120,11 @@ def test_o_servidor_tambem_exige_as_duas_coisas_para_dizer_atrasado() -> None:
     """
     from app import agent_devices
 
-    fonte = (RAIZ / "app" / "agent_devices.py").read_text(encoding="utf-8")
-    trecho = fonte[fonte.index('item["desatualizado"]'):]
-    trecho = trecho[: trecho.index("\n")]
-
-    assert "instalada and esperada" in trecho
+    # Desde 20/10/2026 a regra mora em `_desatualizada` (a bandeja certguard-*
+    # compara com a versão publicada): versão vazia nunca é atrasada.
+    assert agent_devices._desatualizada("", "1.7.1", "1.1.0") is False
+    assert agent_devices._desatualizada("2.1.4", "", None) is False
+    assert agent_devices._desatualizada("certguard-1.0.1", "1.7.1", None) is False
 
     linha_muda = {"versao": "", "visto_em": None, "revogado_em": None}
     assert agent_devices.esta_vivo(linha_muda) is False

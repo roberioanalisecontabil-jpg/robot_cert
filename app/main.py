@@ -719,6 +719,11 @@ from app.rotas.computadores import router as _rotas_computadores  # noqa: E402
 
 app.include_router(_rotas_computadores)
 
+# Atualização automática do Certguard Análise (1.1.0): app/rotas/atualizacao.py.
+from app.rotas.atualizacao import router as _rotas_atualizacao  # noqa: E402
+
+app.include_router(_rotas_atualizacao)
+
 
 
 

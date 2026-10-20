@@ -121,3 +121,27 @@ site, e a atualização automática dos dois agentes fica **por último**. O que
   dois → bandeja já entra logada → instala um certificado), antes de qualquer estação.
 
 O que o INVENT precisa tirar do Hardlyze está em `docs/separacao-agente-hardlyze.md`.
+
+## Adendo de 20/10/2026: atualização automática (1.1.0)
+
+Decidido com o usuário em 20/10/2026, depois da virada da carteira (ADR 0005):
+
+- **O portal de certificados entrega a versão**, não o INVENT: `GET /api/estacao/atualizacao`
+  (o pacote assinado, 204 sem publicação) e `GET /api/estacao/atualizacao/arquivo/{sha256}`,
+  **abertas**, com teto por endereço, como este ADR previa. A pasta é
+  `ATUALIZACOES_DIR/certificados` (padrão `C:\Apps\robot_cert\atualizacoes\certificados`), com
+  `vigente.json` e o instalador; publicar é copiar os dois (`deploy/publicar-certguard.ps1`).
+- **Chave própria do Certguard**, não a do Hardlyze: par Ed25519 principal (cifrado na máquina
+  de build) e reserva (fora do computador), gerados e usados por
+  `scripts/versoes_certguard.py`. O formato do manifesto veio do Hardlyze
+  (`estacao/manifesto.py`), mas só aceita o produto `certificados`.
+- **Sem serviço: tarefa agendada.** No lugar do serviço LocalSystem previsto acima, duas
+  tarefas SYSTEM (`Certguard Analise - atualizacao`, na partida com 5 min de atraso, e a
+  mesma com ` 6h`) rodam `certguard_analise.exe --atualizacao`. Elas fazem o papel do serviço
+  do Hardlyze (`estacao/atualizador.py`, `estacao/tarefa.py`): conferir, baixar, disparar o
+  atualizador, confirmar a versão nova depois de ela alcançar o portal e reabrir a bandeja
+  nas sessões. Volta automática em 10 min, como no Hardlyze. Windows Server não se atualiza.
+- **O evento** (`POST /api/estacao/atualizacao/evento`) leva a chave da máquina e só vai para o
+  log do portal; não há tabela nova.
+- **A 1.1.0 entra máquina a máquina**, pela TI: é a última instalação manual. A bandeja
+  `certguard-*` passa a se comparar com a versão publicada na aba Computadores.

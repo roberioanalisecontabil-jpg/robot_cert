@@ -17,7 +17,7 @@ function Rodar([string]$Exe, [string[]]$Argumentos) {
 }
 
 Write-Host "1/4 Testes do estacao/"
-Rodar $PythonExe @("-m", "pytest", "tests/test_estacao.py", "-q")
+Rodar $PythonExe @("-m", "pytest", "tests/test_estacao.py", "tests/test_estacao_manifesto.py", "tests/test_estacao_atualizador.py", "tests/test_estacao_atualizacao_automatica.py", "-q")
 
 Write-Host "2/4 PyInstaller"
 Rodar $PythonExe @("-m", "PyInstaller", "--noconfirm", "--clean", "--distpath", "dist_estacao", "--workpath", "build_estacao", "CertguardAnalise.spec")

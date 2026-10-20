@@ -16,6 +16,12 @@ CERT_EXPIRED_DIR = Path(
     os.getenv("CERT_EXPIRED_DIR", str(ROOT / "certificados_vencidos"))
 ).resolve()
 
+# Versões publicadas do Certguard Análise para a atualização automática
+# (app/atualizacao_estacao.py): <pasta>/certificados/vigente.json + o instalador.
+ATUALIZACOES_DIR = Path(
+    os.getenv("ATUALIZACOES_DIR", str(ROOT / "atualizacoes"))
+).resolve()
+
 # Banco (só no servidor): PostgreSQL, por `app.db_pg`. Ex.:
 #   postgresql://certguard:senha@127.0.0.1:5432/certguard
 # Até 05/09/2026 aqui moravam SUPABASE_URL/SUPABASE_SERVICE_KEY; o portal não
