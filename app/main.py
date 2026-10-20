@@ -234,12 +234,36 @@ async def lifespan(_app: FastAPI):
                 logger.error(f"Erro no aviso de certificados novos por hora: {e}")
                 await asyncio.sleep(60)
 
+    # Carteira sincronizada pelo Acessórias (ADR 0005): 5 min das 7h às 20h,
+    # 1 h no resto. Sem token no .env, não roda. A trava contra apagão e a
+    # confirmação do Administrador estão em app/acessorias.py.
+    async def acessorias_loop():
+        if not config.ACESSORIAS_API_TOKEN:
+            logger.info("Busca do Acessórias desligada: ACESSORIAS_API_TOKEN ausente.")
+            return
+        from app import acessorias
+
+        loop = asyncio.get_running_loop()
+        await asyncio.sleep(90)  # depois do boot e fora do primeiro disparo dos alertas
+        while True:
+            try:
+                r = await loop.run_in_executor(None, acessorias.buscar)
+                if r.get("estado") != "ok" or r.get("resumo", {}).get("entradas") or r.get("resumo", {}).get("saidas"):
+                    logger.info(f"Busca do Acessórias: {r.get('estado')} {r.get('resumo') or r.get('erro') or ''}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Erro na busca do Acessórias: {e}")
+            await asyncio.sleep(acessorias.proxima_espera(datetime.now()))
+
     tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
     tarefa_novos = asyncio.create_task(novos_por_hora_loop())
+    tarefa_acessorias = asyncio.create_task(acessorias_loop())
     try:
         yield
     finally:
         tarefa_novos.cancel()
+        tarefa_acessorias.cancel()
         # O `await` é limitado no tempo de propósito. Esperar a task sem prazo
         # significa que qualquer falha em encerrá-la (um cancel que não chega,
         # um run_in_executor preso num envio SMTP) trava o shutdown do processo
@@ -251,7 +275,7 @@ async def lifespan(_app: FastAPI):
         # pelo prazo cheio passava despercebida. `asyncio.wait` devolve a task
         # pendente sem levantar, e deixa passar um cancelamento externo.
         tarefa_alertas.cancel()
-        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos}, timeout=5)
+        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias}, timeout=5)
         if pendentes:
             logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
 
@@ -639,6 +663,11 @@ app.include_router(_rotas_instalador)
 from app.rotas.carteiras import router as _rotas_carteiras  # noqa: E402
 
 app.include_router(_rotas_carteiras)
+
+# Carteira sincronizada pelo Acessórias: app/rotas/acessorias.py (ADR 0005).
+from app.rotas.acessorias import router as _rotas_acessorias  # noqa: E402
+
+app.include_router(_rotas_acessorias)
 
 
 

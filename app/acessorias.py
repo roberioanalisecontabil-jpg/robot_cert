@@ -1,0 +1,561 @@
+"""
+Carteira sincronizada pelo Acessórias (ADR 0005, 18/10/2026).
+
+Quem é responsável por uma empresa no Acessórias ganha o certificado dela
+aqui, e quem deixa de ser perde, sem aprovação. Este módulo faz a busca, o
+cálculo do que muda e a aplicação.
+
+── As três etapas ─────────────────────────────────────────────────────────
+
+1. **Ler** (`ler_acessorias`): a busca é sempre completa — empresas com os
+   departamentos e responsáveis, usuários e departamentos. Só leitura; o
+   portal nunca escreve no Acessórias. No máximo 30 chamadas por minuto: o
+   limite de 100 é dividido com o DIARIO2.0.
+2. **Calcular** (`calcular_plano`): regra pura, sem banco. O que o Acessórias
+   dá menos os bloqueios, contra a carteira de hoje.
+3. **Aplicar** (`_aplicar`): numa transação só, refazendo o cálculo contra o
+   estado do momento. Cópia local, carteira e histórico mudam juntos.
+
+── A trava (`motivo_para_confirmar`) ──────────────────────────────────────
+
+Uma busca incompleta nunca é aplicada (estado `erro`). Uma completa espera a
+confirmação do Administrador (estado `aguardando`, dados guardados) quando é
+a primeira aplicação, quando tiraria mais de 10% dos acessos ou quando veio
+com bem menos empresas que a última aplicada. Uma busca nova substitui a que
+aguardava.
+
+── O que fica para as etapas seguintes do ADR ─────────────────────────────
+
+Criar, desativar e reativar contas; ligar departamentos pela chave "trazer";
+o novo alcance do Gestor. Aqui só se copiam os usuários e departamentos.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+
+import httpx
+from psycopg.rows import dict_row
+
+from app import config
+from app.cert_installer import so_digitos
+
+logger = logging.getLogger(__name__)
+
+# 100 por minuto divididos com o DIARIO2.0 (ADR 0005): o portal fica com 30.
+INTERVALO = 2.0
+TENTATIVAS_429 = 3
+LIMITE_SAIDAS = 0.10
+LIMITE_QUEDA_EMPRESAS = 0.90
+# Uma busca leva cerca de 1 minuto. 'rodando' mais velha que isto morreu com o
+# processo e não pode prender o índice de "uma rodando por vez".
+RODANDO_ABANDONADA = timedelta(minutes=15)
+
+AUTOR = "Acessórias (sincronização)"
+# Papéis que recebem carteira. Administrador alcança tudo e não precisa.
+PAPEIS_COM_CARTEIRA = ("user", "gestor")
+# Só um aplicador por vez, mesmo com a busca automática e o botão juntos.
+_TRAVA_APLICACAO = 20261018
+
+
+class ErroAcessorias(Exception):
+    pass
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 1. Leitura
+# ──────────────────────────────────────────────────────────────────────────
+
+class Api:
+    def __init__(self, token: str, url: str = "", http: Optional[httpx.Client] = None,
+                 dormir: Callable[[float], None] = time.sleep) -> None:
+        if not token:
+            raise ErroAcessorias("ACESSORIAS_API_TOKEN não configurado")
+        self._url = (url or config.ACESSORIAS_API_URL).rstrip("/")
+        self._http = http or httpx.Client(timeout=60)
+        self._cabecalhos = {"Authorization": f"Bearer {token}", "User-Agent": "certguard/acessorias"}
+        self._dormir = dormir
+        self.chamadas = 0
+
+    def _get(self, caminho: str, parametros: Dict[str, Any]) -> List[dict]:
+        for tentativa in range(TENTATIVAS_429 + 1):
+            self._dormir(INTERVALO)
+            self.chamadas += 1
+            r = self._http.get(self._url + caminho, params=parametros, headers=self._cabecalhos)
+            if r.status_code == 429:
+                self._dormir(15 * (tentativa + 1))
+                continue
+            if r.status_code == 204:
+                return []
+            if r.status_code == 401:
+                raise ErroAcessorias("token do Acessórias recusado (401)")
+            if r.status_code != 200:
+                raise ErroAcessorias(f"Acessórias respondeu {r.status_code} em {caminho}")
+            corpo = r.json() if r.content else []
+            if isinstance(corpo, dict):
+                if "Erro" in corpo:
+                    raise ErroAcessorias(f"Acessórias: {corpo['Erro']}")
+                return [corpo]
+            if not isinstance(corpo, list):
+                raise ErroAcessorias(f"resposta inesperada em {caminho}")
+            return corpo
+        raise ErroAcessorias("Acessórias continuou limitando as chamadas (429)")
+
+    def listar(self, caminho: str, parametros: Optional[Dict[str, Any]] = None) -> List[dict]:
+        """Todas as páginas, até a vazia. Erro em qualquer uma derruba a lista inteira."""
+        saida: List[dict] = []
+        pagina = 1
+        while True:
+            lote = self._get(caminho, {**(parametros or {}), "Pagina": pagina})
+            if not lote:
+                return saida
+            saida.extend(x for x in lote if isinstance(x, dict))
+            pagina += 1
+
+
+def _texto(v: Any) -> str:
+    return str(v or "").strip()
+
+
+def _inteiro(v: Any) -> Optional[int]:
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def converter_empresa(item: dict) -> Optional[dict]:
+    """Só CNPJ: CPF e CAEPF não vêm do Acessórias para a carteira (ADR 0005)."""
+    cnpj = so_digitos(item.get("Identificador"))
+    if len(cnpj) != 14:
+        return None
+    departamentos: Dict[int, dict] = {}
+    for d in item.get("Departamentos") or []:
+        if not isinstance(d, dict):
+            continue
+        dep_id = _inteiro(d.get("ID"))
+        if dep_id is None or dep_id in departamentos:
+            continue
+        departamentos[dep_id] = {
+            "id": dep_id,
+            "nome": _texto(d.get("Nome")),
+            "resp_nome": _texto(d.get("RespNome")),
+            "resp_email": _texto(d.get("RespEmail")).lower(),
+        }
+    return {
+        "cnpj": cnpj,
+        "razao": _texto(item.get("Razao")),
+        "ativa": _texto(item.get("Status")).lower().startswith("ativ"),
+        "departamentos": list(departamentos.values()),
+    }
+
+
+def converter_usuario(item: dict) -> Optional[dict]:
+    uid = _inteiro(item.get("id") if "id" in item else item.get("ID"))
+    if uid is None:
+        return None
+    return {
+        "id": uid,
+        "nome": _texto(item.get("nome") or item.get("Nome")),
+        "email": _texto(item.get("email") or item.get("Email")).lower(),
+        "ativo": _texto(item.get("status") or item.get("Status")).lower() == "ativo",
+    }
+
+
+def ler_acessorias(api: Api) -> dict:
+    """A busca inteira. Levanta ErroAcessorias se qualquer página falhar."""
+    empresas: Dict[str, dict] = {}
+    for item in api.listar("/companies/ListAll", {"departments": ""}):
+        e = converter_empresa(item)
+        if e and e["cnpj"] not in empresas:
+            empresas[e["cnpj"]] = e
+    usuarios: Dict[int, dict] = {}
+    for item in api.listar("/users/ListAll"):
+        u = converter_usuario(item)
+        if u:
+            usuarios[u["id"]] = u
+    departamentos: Dict[int, str] = {}
+    for item in api.listar("/departments/ListAll"):
+        dep_id = _inteiro(item.get("ID"))
+        if dep_id is not None:
+            departamentos[dep_id] = _texto(item.get("Nome"))
+    for e in empresas.values():
+        for d in e["departamentos"]:
+            departamentos.setdefault(d["id"], d["nome"])
+    if not empresas:
+        raise ErroAcessorias("a busca não trouxe nenhuma empresa")
+    return {
+        "empresas": list(empresas.values()),
+        "usuarios": list(usuarios.values()),
+        "departamentos": [{"id": k, "nome": v} for k, v in sorted(departamentos.items())],
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 2. Cálculo (puro)
+# ──────────────────────────────────────────────────────────────────────────
+
+def _dv_cnpj(base: str) -> str:
+    """Os dois dígitos verificadores de um CNPJ a partir dos 12 primeiros."""
+    def digito(numeros: str, pesos: List[int]) -> str:
+        resto = sum(int(n) * p for n, p in zip(numeros, pesos)) % 11
+        return "0" if resto < 2 else str(11 - resto)
+
+    d1 = digito(base, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    d2 = digito(base + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    return d1 + d2
+
+
+def cnpj_matriz(cnpj: str) -> str:
+    base = cnpj[:8] + "0001"
+    return base + _dv_cnpj(base)
+
+
+def documento_da_empresa(cnpj: str, com_certificado: Set[str]) -> str:
+    """CNPJ exato; se ele não tem certificado e a matriz tem, o da matriz.
+
+    Sem certificado nenhum, fica o exato: a carteira é por documento, então o
+    certificado que chegar depois já nasce com dono (ADR 0001).
+    """
+    if cnpj in com_certificado:
+        return cnpj
+    matriz = cnpj_matriz(cnpj)
+    if matriz != cnpj and matriz in com_certificado:
+        return matriz
+    return cnpj
+
+
+Par = Tuple[str, str]  # (user_id, documento)
+
+
+@dataclass
+class Estado:
+    """O que o cálculo precisa do banco, lido de uma vez."""
+    contas: Dict[str, dict]                     # e-mail em minúsculas -> {id, email, role, ativo}
+    carteira: Dict[Par, str]                    # par -> origem
+    bloqueios: Set[Par] = field(default_factory=set)
+    trazer: Set[int] = field(default_factory=set)
+    com_certificado: Set[str] = field(default_factory=set)
+    ja_aplicou: bool = False
+    empresas_ultima_aplicada: Optional[int] = None
+
+
+def calcular_plano(dados: dict, estado: Estado) -> dict:
+    desejado: Set[Par] = set()
+    for e in dados["empresas"]:
+        if not e["ativa"]:
+            continue
+        doc = documento_da_empresa(e["cnpj"], estado.com_certificado)
+        for d in e["departamentos"]:
+            if d["id"] not in estado.trazer or not d["resp_email"]:
+                continue
+            conta = estado.contas.get(d["resp_email"])
+            if conta and conta["ativo"] and conta["role"] in PAPEIS_COM_CARTEIRA:
+                desejado.add((conta["id"], doc))
+    desejado -= estado.bloqueios
+
+    atuais = estado.carteira
+    entradas = sorted(desejado - atuais.keys())
+    conversoes = sorted(p for p in desejado & atuais.keys() if atuais[p] != "acessorias")
+    # Na virada (primeira aplicação), a carteira manual que o Acessórias não
+    # confirma também sai (ADR 0005). Exceto e-CPF: ele nunca vem do
+    # Acessórias, e tirá-lo só obrigaria a liberar de novo à mão.
+    saidas = sorted(
+        p for p, origem in atuais.items()
+        if p not in desejado
+        and (origem == "acessorias" or (not estado.ja_aplicou and len(p[1]) == 14))
+    )
+    return {
+        "entradas": entradas,
+        "conversoes": conversoes,
+        "saidas": saidas,
+        "resumo": {
+            "empresas": len(dados["empresas"]),
+            "usuarios": len(dados["usuarios"]),
+            "acessos_atuais": len(atuais),
+            "entradas": len(entradas),
+            "saidas": len(saidas),
+            "conversoes": len(conversoes),
+            "pessoas_afetadas": len({p[0] for p in entradas} | {p[0] for p in saidas}),
+        },
+    }
+
+
+def motivo_para_confirmar(plano: dict, estado: Estado) -> str:
+    """Vazio = pode aplicar sozinha. Texto = espera o Administrador."""
+    r = plano["resumo"]
+    if not estado.ja_aplicou:
+        return "primeira aplicação"
+    atuais = r["acessos_atuais"]
+    if r["saidas"] and r["saidas"] > LIMITE_SAIDAS * max(atuais, 1):
+        return f"tiraria {r['saidas']} de {atuais} acessos (mais de 10%)"
+    anterior = estado.empresas_ultima_aplicada
+    if anterior and r["empresas"] < LIMITE_QUEDA_EMPRESAS * anterior:
+        return f"veio com {r['empresas']} empresas; a última aplicada tinha {anterior}"
+    return ""
+
+
+def proxima_espera(agora: datetime) -> float:
+    """Segundos até a próxima busca: 5 min das 7h às 20h, 1 h no resto."""
+    if 7 <= agora.hour < 20:
+        return 300.0
+    return 3600.0
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 3. Banco
+# ──────────────────────────────────────────────────────────────────────────
+
+def _cliente():
+    from app.settings_state import _banco
+
+    c = _banco()
+    # Transação e advisory lock pedem a conexão direta do db_pg; os clientes
+    # falsos dos testes só imitam a cadeia table().select().
+    if not c or not hasattr(c, "conexao"):
+        raise ErroAcessorias("banco não configurado")
+    return c
+
+
+def carregar_estado(cur) -> Estado:
+    cur.execute("SELECT id::text AS id, lower(email) AS email, role, ativo FROM public.users")
+    contas = {r["email"]: r for r in cur.fetchall()}
+    cur.execute("SELECT user_id::text AS user_id, documento, origem FROM public.carteira")
+    carteira = {(r["user_id"], r["documento"]): r["origem"] for r in cur.fetchall()}
+    cur.execute("SELECT user_id::text AS user_id, documento FROM public.carteira_bloqueio")
+    bloqueios = {(r["user_id"], r["documento"]) for r in cur.fetchall()}
+    cur.execute("SELECT id FROM public.acessorias_departamento WHERE conta_para_carteira")
+    trazer = {r["id"] for r in cur.fetchall()}
+    cur.execute(
+        "SELECT regexp_replace(coalesce(documento, ''), '\\D', '', 'g') AS d FROM public.cert_pfx_store "
+        "UNION SELECT regexp_replace(coalesce(documento_numero, ''), '\\D', '', 'g') FROM public.cert_history"
+    )
+    com_certificado = {r["d"] for r in cur.fetchall() if r["d"]}
+    cur.execute(
+        "SELECT empresas FROM public.acessorias_busca WHERE aplicada_em IS NOT NULL "
+        "ORDER BY aplicada_em DESC LIMIT 1"
+    )
+    ultima = cur.fetchone()
+    return Estado(
+        contas=contas, carteira=carteira, bloqueios=bloqueios, trazer=trazer,
+        com_certificado=com_certificado, ja_aplicou=ultima is not None,
+        empresas_ultima_aplicada=ultima["empresas"] if ultima else None,
+    )
+
+
+def _gravar_copia(cur, dados: dict) -> None:
+    """Cópia local do que foi aplicado: é o que as telas leem."""
+    agora = datetime.now(timezone.utc)
+    for d in dados["departamentos"]:
+        cur.execute(
+            "INSERT INTO public.acessorias_departamento (id, nome, visto_em) VALUES (%s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, visto_em = EXCLUDED.visto_em",
+            (d["id"], d["nome"], agora),
+        )
+    for e in dados["empresas"]:
+        cur.execute(
+            "INSERT INTO public.acessorias_empresa (cnpj, razao_social, ativa, vista_em) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (cnpj) DO UPDATE SET razao_social = EXCLUDED.razao_social, "
+            "ativa = EXCLUDED.ativa, vista_em = EXCLUDED.vista_em",
+            (e["cnpj"], e["razao"], e["ativa"], agora),
+        )
+    cnpjs = [e["cnpj"] for e in dados["empresas"]]
+    # Empresa que não veio numa busca inteira foi removida no Acessórias.
+    cur.execute("DELETE FROM public.acessorias_empresa WHERE NOT (cnpj = ANY(%s))", (cnpjs,))
+    cur.execute("DELETE FROM public.acessorias_responsavel")
+    for e in dados["empresas"]:
+        for d in e["departamentos"]:
+            if d["resp_email"] or d["resp_nome"]:
+                cur.execute(
+                    "INSERT INTO public.acessorias_responsavel (cnpj, departamento_acessorias_id, nome, email) "
+                    "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    (e["cnpj"], d["id"], d["resp_nome"], d["resp_email"]),
+                )
+    for u in dados["usuarios"]:
+        cur.execute(
+            "INSERT INTO public.acessorias_usuario (id, nome, email, ativo, vista_em) VALUES (%s, %s, %s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, email = EXCLUDED.email, "
+            "ativo = EXCLUDED.ativo, vista_em = EXCLUDED.vista_em",
+            (u["id"], u["nome"], u["email"], u["ativo"], agora),
+        )
+    ids = [u["id"] for u in dados["usuarios"]]
+    cur.execute("DELETE FROM public.acessorias_usuario WHERE NOT (id = ANY(%s))", (ids,))
+
+
+def _historico(cur, pares: Iterable[Par], movimento: str, emails: Dict[str, str], feito_por_email: str) -> None:
+    for uid, doc in pares:
+        cur.execute(
+            "INSERT INTO public.carteira_historico "
+            "(user_id, user_email, documento, movimento, origem, feito_por, feito_por_email) "
+            "VALUES (%s, %s, %s, %s, 'acessorias', NULL, %s)",
+            (uid, emails.get(uid, ""), doc, movimento, feito_por_email),
+        )
+
+
+def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
+    """Aplica numa transação, recalculando contra o estado do momento.
+
+    Recalcular, e não reaproveitar o plano da leitura, porque entre a leitura e
+    a confirmação do Administrador alguém pode ter bloqueado ou liberado à mão.
+    """
+    with conn.transaction(), conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (_TRAVA_APLICACAO,))
+        estado = carregar_estado(cur)
+        plano = calcular_plano(dados, estado)
+        emails = {c["id"]: c["email"] for c in estado.contas.values()}
+        _gravar_copia(cur, dados)
+        for uid, doc in plano["entradas"]:
+            cur.execute(
+                "INSERT INTO public.carteira (user_id, documento, atribuido_por, atribuido_por_email, origem) "
+                "VALUES (%s, %s, NULL, %s, 'acessorias') ON CONFLICT (user_id, documento) DO NOTHING",
+                (uid, doc, AUTOR),
+            )
+        for uid, doc in plano["conversoes"]:
+            cur.execute(
+                "UPDATE public.carteira SET origem = 'acessorias' WHERE user_id = %s AND documento = %s",
+                (uid, doc),
+            )
+        for uid, doc in plano["saidas"]:
+            cur.execute("DELETE FROM public.carteira WHERE user_id = %s AND documento = %s", (uid, doc))
+        _historico(cur, plano["entradas"], "entrada", emails, feito_por_email)
+        _historico(cur, plano["saidas"], "saida", emails, feito_por_email)
+    return plano["resumo"]
+
+
+def _abrir_busca(cur, origem: str, por_email: str) -> Optional[int]:
+    cur.execute(
+        "UPDATE public.acessorias_busca SET estado = 'erro', terminada_em = now(), "
+        "erro = 'interrompida (o processo parou durante a busca)' "
+        "WHERE estado = 'rodando' AND iniciada_em < now() - %s",
+        (RODANDO_ABANDONADA,),
+    )
+    cur.execute(
+        "INSERT INTO public.acessorias_busca (origem, disparada_por_email) VALUES (%s, %s) "
+        "ON CONFLICT DO NOTHING RETURNING id",
+        (origem, por_email),
+    )
+    linha = cur.fetchone()
+    return linha["id"] if linha else None
+
+
+def buscar(origem: str = "agendada", por_email: str = "", api: Optional[Api] = None) -> dict:
+    """Uma busca inteira: lê, calcula, aplica ou guarda para confirmação.
+
+    Devolve {"id", "estado", "resumo", "motivo"}; {"estado": "ocupada"} se já
+    há uma rodando.
+    """
+    cliente = _cliente()
+    # O pool é pequeno (6) e a leitura leva um minuto: a conexão não fica
+    # presa enquanto a API responde. O pool já trabalha em autocommit.
+    with cliente.conexao() as conn, conn.cursor(row_factory=dict_row) as cur:
+        busca_id = _abrir_busca(cur, origem, por_email)
+    if busca_id is None:
+        return {"estado": "ocupada"}
+    try:
+        api = api or Api(config.ACESSORIAS_API_TOKEN)
+        dados = ler_acessorias(api)
+        paginas = api.chamadas
+    except Exception as e:  # noqa: BLE001 — qualquer falha deixa a busca incompleta
+        msg = str(e)[:500] if isinstance(e, ErroAcessorias) else f"{type(e).__name__}: {str(e)[:400]}"
+        logger.warning("Busca do Acessórias %s incompleta: %s", busca_id, msg)
+        with cliente.conexao() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE public.acessorias_busca SET estado = 'erro', terminada_em = now(), erro = %s WHERE id = %s",
+                (msg, busca_id),
+            )
+        return {"id": busca_id, "estado": "erro", "erro": msg}
+
+    with cliente.conexao() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            estado = carregar_estado(cur)
+        plano = calcular_plano(dados, estado)
+        motivo = motivo_para_confirmar(plano, estado)
+        resumo = {**plano["resumo"], "motivo": motivo}
+        with conn.cursor() as cur:
+            # Uma busca nova, inteira, substitui a que aguardava: o Administrador
+            # confirma sempre o retrato mais recente do Acessórias.
+            cur.execute(
+                "UPDATE public.acessorias_busca SET estado = 'descartada', plano = '{}'::jsonb, "
+                "decidida_por_email = 'substituida', decidida_em = now() WHERE estado = 'aguardando'"
+            )
+            if motivo:
+                cur.execute(
+                    "UPDATE public.acessorias_busca SET estado = 'aguardando', terminada_em = now(), "
+                    "paginas = %s, empresas = %s, plano = %s, resumo = %s WHERE id = %s",
+                    (paginas, resumo["empresas"], json.dumps({"dados": dados}), json.dumps(resumo), busca_id),
+                )
+                return {"id": busca_id, "estado": "aguardando", "resumo": resumo, "motivo": motivo}
+
+        resumo_aplicado = _aplicar(conn, dados, AUTOR)
+        resumo = {**resumo_aplicado, "motivo": ""}
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE public.acessorias_busca SET estado = 'ok', terminada_em = now(), aplicada_em = now(), "
+                "paginas = %s, empresas = %s, resumo = %s WHERE id = %s",
+                (paginas, resumo["empresas"], json.dumps(resumo), busca_id),
+            )
+        return {"id": busca_id, "estado": "ok", "resumo": resumo, "motivo": ""}
+
+
+def confirmar(busca_id: int, por_email: str) -> dict:
+    """O Administrador confirma a busca que aguardava. Só a mais nova vale."""
+    cliente = _cliente()
+    with cliente.conexao() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT id, plano, estado FROM public.acessorias_busca WHERE id = %s", (busca_id,)
+            )
+            linha = cur.fetchone()
+        if not linha or linha["estado"] != "aguardando":
+            raise ErroAcessorias("esta busca não está aguardando confirmação (outra mais nova a substituiu?)")
+        dados = (linha["plano"] or {}).get("dados")
+        if not dados:
+            raise ErroAcessorias("a busca não guardou os dados; rode Buscar agora")
+        resumo = {**_aplicar(conn, dados, por_email), "motivo": ""}
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE public.acessorias_busca SET estado = 'ok', aplicada_em = now(), plano = '{}'::jsonb, "
+                "decidida_por_email = %s, decidida_em = now(), resumo = resumo || %s WHERE id = %s",
+                (por_email, json.dumps({"aplicado": resumo}), busca_id),
+            )
+        return {"id": busca_id, "estado": "ok", "resumo": resumo}
+
+
+def descartar(busca_id: int, por_email: str) -> None:
+    cliente = _cliente()
+    with cliente.conexao() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE public.acessorias_busca SET estado = 'descartada', plano = '{}'::jsonb, "
+                "decidida_por_email = %s, decidida_em = now() WHERE id = %s AND estado = 'aguardando'",
+                (por_email, busca_id),
+            )
+            if cur.rowcount == 0:
+                raise ErroAcessorias("esta busca não está aguardando confirmação")
+
+
+def situacao(limite: int = 10) -> dict:
+    """Para a tela: as últimas buscas (sem os dados guardados) e a que aguarda."""
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, origem, disparada_por_email, iniciada_em, terminada_em, estado, paginas, empresas, "
+            "erro, resumo, aplicada_em, decidida_por_email, decidida_em "
+            "FROM public.acessorias_busca ORDER BY iniciada_em DESC LIMIT %s",
+            (limite,),
+        )
+        buscas = cur.fetchall()
+    for b in buscas:
+        for k in ("iniciada_em", "terminada_em", "aplicada_em", "decidida_em"):
+            if b.get(k) is not None:
+                b[k] = b[k].isoformat()
+    return {
+        "configurado": bool(config.ACESSORIAS_API_TOKEN),
+        "buscas": buscas,
+        "aguardando": next((b for b in buscas if b["estado"] == "aguardando"), None),
+        "ultima_aplicada": next((b for b in buscas if b.get("aplicada_em")), None),
+    }

@@ -58,6 +58,11 @@ CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA = _env_bool("CLAIM_EXIGE_CREDENCIAL_DE_MAQUINA
 # ninguém com o app cadastrado (app/login_codigo.py).
 LOGIN_EXIGE_CODIGO = _env_bool("LOGIN_EXIGE_CODIGO", default=True)
 
+# Carteira sincronizada pelo Acessórias (ADR 0005). O token é o mesmo do
+# DIARIO2.0, só no .env do servidor. Sem token, a busca não roda.
+ACESSORIAS_API_TOKEN = (os.getenv("ACESSORIAS_API_TOKEN") or "").strip()
+ACESSORIAS_API_URL = (os.getenv("ACESSORIAS_API_URL") or "https://api.acessorias.com").strip()
+
 # Se `/docs`, `/redoc` e `/openapi.json` ficam públicos. Desligado por padrão:
 # em produção o schema das ~97 rotas só ajuda quem está mapeando a API — era o
 # único dado que um visitante anônimo levava do portal (levantamento de
