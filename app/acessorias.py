@@ -640,6 +640,10 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             cur.execute("DELETE FROM public.departamento_lider WHERE user_id = %s", (uid,))
             cur.execute("DELETE FROM public.carteira_excecao WHERE user_id = %s", (uid,))
 
+        # Virada (ADR 0005): o Gestor deixa de ser "tudo menos as Exceções".
+        if not estado.ja_aplicou:
+            cur.execute("DELETE FROM public.carteira_excecao")
+
         # Departamentos depois das contas: a conta nova já nasce no seu.
         deps = {**_ligar_departamentos(cur), **_distribuir_pessoas(cur, contar_responsabilidades(dados))}
 
@@ -813,6 +817,8 @@ def buscar(origem: str = "agendada", por_email: str = "", api: Optional[Api] = N
                 "paginas = %s, empresas = %s, resumo = %s WHERE id = %s",
                 (paginas, resumo["empresas"], json.dumps(resumo), busca_id),
             )
+    # Só depois do commit: virada que não gravou não vira o Gestor.
+    _sincronizado.update(valor=True)
     resumo["pos"] = depois_de_aplicar(depois)
     return {"id": busca_id, "estado": "ok", "resumo": resumo, "motivo": ""}
 
@@ -839,6 +845,7 @@ def confirmar(busca_id: int, por_email: str) -> dict:
                 "decidida_por_email = %s, decidida_em = now(), resumo = resumo || %s WHERE id = %s",
                 (por_email, json.dumps({"aplicado": resumo}), busca_id),
             )
+    _sincronizado.update(valor=True)
     resumo["pos"] = depois_de_aplicar(depois)
     return {"id": busca_id, "estado": "ok", "resumo": resumo}
 
@@ -1015,3 +1022,68 @@ def registrar_mudanca_manual(user_id: str, novo_departamento: str, por_email: st
         return
     except Exception:  # noqa: BLE001
         logger.exception("Mudança manual de departamento de %s não foi anotada para o Acessórias", user_id)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 5. Alcance do Gestor depois da virada (ADR 0005)
+# ──────────────────────────────────────────────────────────────────────────
+
+_sincronizado = {"valor": False, "em": -1e9}
+_com_certificado = {"valor": frozenset(), "em": -1e9}
+
+
+def sincronizado() -> bool:
+    """A virada já aconteceu (alguma busca foi aplicada)?
+
+    Antes dela vale o ADR 0001 (Gestor = tudo menos as Exceções); depois, o
+    ADR 0005. A virada é de mão única: verdadeiro uma vez, verdadeiro para
+    sempre no processo. Falso é conferido de novo a cada 30 s.
+
+    Sem a conexão direta do db_pg (os clientes falsos dos testes) responde
+    falso; erro do banco de verdade sobe, para o alcance virar 503 e nunca
+    cair no modelo mais largo por engano.
+    """
+    if _sincronizado["valor"]:
+        return True
+    if time.monotonic() - _sincronizado["em"] < 30:
+        return False
+    try:
+        cliente = _cliente()
+    except ErroAcessorias:
+        return False
+    with cliente.conexao() as conn, conn.cursor() as cur:
+        cur.execute("SELECT EXISTS (SELECT 1 FROM public.acessorias_busca WHERE aplicada_em IS NOT NULL)")
+        valor = bool(cur.fetchone()[0])
+    _sincronizado.update(valor=valor, em=time.monotonic())
+    return valor
+
+
+def _documentos_com_certificado(cur) -> frozenset:
+    if time.monotonic() - _com_certificado["em"] < 300:
+        return _com_certificado["valor"]
+    cur.execute(
+        "SELECT regexp_replace(coalesce(documento, ''), '\\D', '', 'g') AS d FROM public.cert_pfx_store "
+        "UNION SELECT regexp_replace(coalesce(documento_numero, ''), '\\D', '', 'g') FROM public.cert_history"
+    )
+    valor = frozenset(r[0] for r in cur.fetchall() if r[0])
+    _com_certificado.update(valor=valor, em=time.monotonic())
+    return valor
+
+
+def documentos_dos_departamentos(user_id: str) -> Set[str]:
+    """Empresas com responsável, no Acessórias, num departamento que esta
+    pessoa lidera (e que está com "trazer"), já como documento da carteira:
+    o mesmo CNPJ-ou-matriz da busca."""
+    cliente = _cliente()
+    with cliente.conexao() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT r.cnpj FROM public.departamento_lider l "
+            "JOIN public.acessorias_departamento a ON a.departamento_id = l.departamento_id AND a.conta_para_carteira "
+            "JOIN public.acessorias_responsavel r ON r.departamento_acessorias_id = a.id AND r.email <> '' "
+            "JOIN public.acessorias_empresa e ON e.cnpj = r.cnpj AND e.ativa "
+            "WHERE l.user_id = %s",
+            (user_id,),
+        )
+        cnpjs = [r[0] for r in cur.fetchall()]
+        com_cert = _documentos_com_certificado(cur) if cnpjs else frozenset()
+    return {documento_da_empresa(c, com_cert) for c in cnpjs}

@@ -691,10 +691,17 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     # lista é um link, e no celular a tela vira duas etapas — só a lista
     # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
     operador = (request.query_params.get("operador") or "").strip()[:64]
+    # Só muda o texto de abertura (ADR 0005); a regra vale nas rotas.
+    try:
+        from app import acessorias
+
+        sincronizado = acessorias.sincronizado()
+    except Exception:  # noqa: BLE001
+        sincronizado = False
     return templates.TemplateResponse(
         request=request,
         name="carteiras.html",
-        context={"pagina_ativa": "carteiras", "operador_id": operador},
+        context={"pagina_ativa": "carteiras", "operador_id": operador, "sincronizado": sincronizado},
     )
 
 

@@ -224,6 +224,33 @@ def test_sugestao_de_departamento_3_vezes_o_segundo():
     assert acessorias.sugestao_de_departamento({}, mapa) is None
 
 
+def test_alcance_do_gestor_antes_e_depois_da_virada(monkeypatch):
+    from app import cert_installer
+
+    monkeypatch.setattr(cert_installer, "listar_carteira", lambda uid: ["111"])
+    monkeypatch.setattr(cert_installer, "listar_excecoes", lambda uid: ["999"])
+    monkeypatch.setattr(acessorias, "documentos_dos_departamentos", lambda uid: {"222"})
+
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: False)
+    antes = cert_installer.documentos_ao_alcance("u-gil", "gestor")
+    assert isinstance(antes, cert_installer.TudoMenos) and "222" in antes and "999" not in antes
+
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: True)
+    assert cert_installer.documentos_ao_alcance("u-gil", "gestor") == {"111", "222"}
+    assert cert_installer.documentos_ao_alcance("u-ana", "user") == {"111"}
+
+    def quebrado():
+        raise RuntimeError("banco caiu")
+    monkeypatch.setattr(acessorias, "sincronizado", quebrado)
+    with pytest.raises(cert_installer.CarteiraIndisponivel):
+        cert_installer.documentos_ao_alcance("u-gil", "gestor")
+
+
+def test_sem_banco_direto_nao_e_virada():
+    acessorias._sincronizado.update(valor=False, em=-1e9)
+    assert acessorias.sincronizado() is False  # conftest zera DATABASE_URL
+
+
 def test_intervalo_da_busca():
     assert acessorias.proxima_espera(datetime(2026, 10, 20, 7, 0)) == 300
     assert acessorias.proxima_espera(datetime(2026, 10, 20, 19, 59)) == 300
@@ -269,10 +296,19 @@ def banco(monkeypatch):
             "VALUES ('a.pfx', %s, now())", (MATRIZ,)
         )
     monkeypatch.setattr(acessorias, "_cliente", lambda: cliente)
+    _zerar_caches()
     try:
         yield cliente, ids
     finally:
+        # A virada fica guardada no processo: sem isto, os testes seguintes
+        # (com banco falso) veriam o Gestor já no modelo do ADR 0005.
+        _zerar_caches()
         cliente.fechar()
+
+
+def _zerar_caches():
+    acessorias._sincronizado.update(valor=False, em=-1e9)
+    acessorias._com_certificado.update(valor=frozenset(), em=-1e9)
 
 
 def _api_com(*empresas):
@@ -419,6 +455,31 @@ def test_departamentos_pelo_acessorias(banco, monkeypatch):
     assert acessorias.departamentos_situacao()["portal_sem_par"][0]["arquivado"] is True
     with pytest.raises(acessorias.ErroAcessorias):
         acessorias.arquivar_departamento("nao-e-uuid", True)
+
+
+@integracao
+def test_virada_do_gestor(banco, monkeypatch):
+    cliente, ids = banco
+    monkeypatch.setattr(acessorias, "depois_de_aplicar", lambda d: {})
+    _linhas(cliente, "INSERT INTO public.carteira_excecao (user_id, documento, registrado_por_email) VALUES (%s, %s, 'x')",
+            ids["gil"], OUTRA)
+    emp = [_empresa_api(FILIAL, deps=[(1, "Contábil", "ana@teste-acessorias")]),
+           _empresa_api(OUTRA, deps=[(2, "Fiscal", "ana@teste-acessorias")])]
+    api = _api_falsa({"/companies/ListAll": [emp], "/users/ListAll": [[]],
+                      "/departments/ListAll": [[{"ID": "1", "Nome": "Contábil"}, {"ID": "2", "Nome": "Fiscal"}]]})
+    r = acessorias.buscar(api=api)
+    assert acessorias.sincronizado() is False  # aguardando: nada virou ainda
+    acessorias.confirmar(r["id"], "adm@teste-acessorias")
+    assert acessorias.sincronizado() is True
+    assert _linhas(cliente, "SELECT count(*) FROM public.carteira_excecao") == [(0,)]
+
+    contabil = _linhas(cliente, "SELECT departamento_id::text FROM public.acessorias_departamento WHERE id = 1")[0][0]
+    _linhas(cliente, "INSERT INTO public.departamento_lider (departamento_id, user_id) VALUES (%s, %s)", contabil, ids["gil"])
+    # Filial sem certificado: vale a matriz, como na carteira do Operador.
+    assert acessorias.documentos_dos_departamentos(ids["gil"]) == {MATRIZ}
+    # Só departamento com "trazer".
+    _linhas(cliente, "UPDATE public.acessorias_departamento SET conta_para_carteira = false WHERE id = 1")
+    assert acessorias.documentos_dos_departamentos(ids["gil"]) == set()
 
 
 @integracao

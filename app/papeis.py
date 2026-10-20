@@ -84,13 +84,29 @@ def derrubar_sessoes(sb: Any, user_id: str) -> bool:
         return False
 
 
+def _carteira_atravessa_a_troca(sb: Any, user_id: str) -> bool:
+    """Depois da virada do Acessórias (ADR 0005), Operador e Gestor têm o
+    mesmo tipo de carteira (Atribuições): virar Gestor ou deixar de ser não a
+    esvazia. Para Administrador, ou antes da virada, esvazia como sempre."""
+    from app import acessorias
+
+    if not acessorias.sincronizado():
+        return False
+    linhas = sb.table("users").select("role").eq("id", str(user_id)).limit(1).execute().data or []
+    papel = str((linhas[0].get("role") if linhas else "") or "").strip().lower()
+    return papel in (cert_installer.PAPEL_OPERADOR, cert_installer.PAPEL_GESTOR)
+
+
 def apos_troca_de_papel(sb: Any, user_id: str) -> Dict[str, Any]:
     """Esvazia a carteira, queima os tokens de instalação pendentes e derruba
     as sessões. Nunca levanta: a conta já foi gravada com o papel novo; falhar
     aqui vira aviso na resposta e no log."""
     saida: Dict[str, Any] = {}
     try:
-        saida.update(cert_installer.esvaziar_carteira(str(user_id)))
+        if _carteira_atravessa_a_troca(sb, user_id):
+            saida.update({"atribuicoes": 0, "excecoes": 0})
+        else:
+            saida.update(cert_installer.esvaziar_carteira(str(user_id)))
     except Exception as e:  # noqa: BLE001
         logger.exception("Papel de %s trocado, mas a carteira não foi esvaziada", user_id)
         saida["erro"] = "A conta foi salva, mas a carteira não pôde ser esvaziada. Confira em Carteiras."

@@ -34,6 +34,22 @@ logger = logging.getLogger("app.main")
 router = APIRouter()
 
 
+def _sincronizado() -> bool:
+    """Depois da virada do Acessórias (ADR 0005) a carteira do Gestor é de
+    Atribuições, como a do Operador; antes, de Exceções (ADR 0001)."""
+    from app import acessorias
+
+    try:
+        return acessorias.sincronizado()
+    except Exception:  # noqa: BLE001
+        logger.exception("Não foi possível saber se a carteira já segue o Acessórias")
+        raise HTTPException(status_code=503, detail="Não foi possível verificar as carteiras. Tente de novo.")
+
+
+def _carteira_de_excecoes(user_id: str) -> bool:
+    return _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR and not _sincronizado()
+
+
 def _exigir_documentos_no_inventario(documentos: List[str]) -> None:
     """Atribuição e Exceção são sobre Documentos do Inventário (GLOSSARY).
 
@@ -142,7 +158,8 @@ def listar_operadores(
     excecoes = Counter(str(c.get("user_id")) for c in exc)
     # O tamanho do inventário só interessa se houver Gestor na lista: a
     # carteira dele é "tudo menos N", e "tudo" é isto.
-    universo = len(cert_installer.universo_de_documentos()) if any(
+    sincronizado = _sincronizado()
+    universo = len(cert_installer.universo_de_documentos()) if not sincronizado and any(
         (u.get("role") or "").strip().lower() == cert_installer.PAPEL_GESTOR for u in visiveis
     ) else 0
     from app import texto as _texto
@@ -154,10 +171,10 @@ def listar_operadores(
         n_exc = excecoes.get(uid, 0)
         # Operador depende de Atribuições; Gestor tem tudo menos Exceções; o
         # administrador tem alcance sem carteira (ADR 0001).
-        if papel_u == cert_installer.PAPEL_GESTOR:
+        if papel_u == cert_installer.PAPEL_GESTOR and not sincronizado:
             tipo, n = "excecoes", max(universo - n_exc, 0)
             clientes = ("todos os clientes" if not n_exc else f"todos menos {_texto.plural(n_exc, 'exceção', 'exceções')}")
-        elif papel_u == cert_installer.PAPEL_OPERADOR:
+        elif papel_u in (cert_installer.PAPEL_OPERADOR, cert_installer.PAPEL_GESTOR):
             tipo, n = "atribuicoes", n_atrib
             clientes = _texto.plural(n, "cliente")
         else:
@@ -258,7 +275,7 @@ def obter_carteira(
     _exigir_alcance(token, user_id)
     nomes = {d["documento"]: d["nome"] for d in cert_installer.universo_de_documentos()}
 
-    if _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR:
+    if _carteira_de_excecoes(user_id):
         # Carteira de Exceções (ADR 0001): "na carteira" é o inventário menos
         # o que o administrador retirou; "disponíveis" são as Exceções. Os dois
         # painéis da tela continuam os mesmos — só o sinal inverte.
@@ -362,7 +379,7 @@ def atribuir_carteira(
     """
     _exigir_alcance(token, body.user_id)
     _exigir_documentos_no_inventario(body.documentos)
-    if _papel_do_alvo(body.user_id) == cert_installer.PAPEL_GESTOR:
+    if _carteira_de_excecoes(body.user_id):
         try:
             for doc in body.documentos:
                 cert_installer.remover_excecao(body.user_id, doc)
@@ -650,7 +667,7 @@ def remover_carteira(
     token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     _exigir_alcance(token, user_id)
-    if _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR:
+    if _carteira_de_excecoes(user_id):
         # Tirar um cliente da carteira de um Gestor é registrar uma Exceção
         # (ADR 0001). Só o administrador chega aqui com alvo Gestor.
         _exigir_documentos_no_inventario([documento])

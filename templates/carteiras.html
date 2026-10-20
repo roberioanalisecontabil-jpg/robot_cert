@@ -33,7 +33,11 @@
     <header class="ag-page__head ag-section-head">
       <div>
         <h1 class="ag-page__title">Carteiras</h1>
+        {% if sincronizado %}
+        <p class="ag-page__lead">Cada pessoa instala os certificados das empresas pelas quais é responsável no Acessórias, mais o que for atribuído aqui. O gestor vê também as empresas dos departamentos que lidera.</p>
+        {% else %}
         <p class="ag-page__lead">Defina quais clientes cada operador pode instalar. Operador sem carteira não consegue instalar nenhum certificado. O gestor vê todos os clientes; o administrador pode registrar exceções.</p>
+        {% endif %}
       </div>
       <div class="cg-cart-acoes-cab">
         <button type="button" id="btnAbrirImportar" class="ag-btn ag-btn--outline">
