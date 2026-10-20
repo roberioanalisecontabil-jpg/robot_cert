@@ -301,3 +301,32 @@ def test_uma_busca_por_vez_e_rodando_abandonada_e_liberada(banco):
     _linhas(cliente, "UPDATE public.acessorias_busca SET iniciada_em = now() - interval '1 hour'")
     assert acessorias.buscar(api=_api_com(_empresa_api(OUTRA)))["estado"] == "aguardando"
     assert ("erro",) in _linhas(cliente, "SELECT estado FROM public.acessorias_busca")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Tela e rotas
+# ──────────────────────────────────────────────────────────────────────────
+
+RAIZ = __import__("pathlib").Path(__file__).resolve().parent.parent
+
+
+def test_rotas_so_de_administrador():
+    fonte = (RAIZ / "app" / "rotas" / "acessorias.py").read_text(encoding="utf-8")
+    blocos = fonte.split("@router.")[1:]
+    assert len(blocos) == 4
+    for bloco in blocos:
+        assert "Depends(require_admin)" in bloco.split(") -> ")[0], bloco[:60]
+
+
+def test_painel_numa_linha_e_lista_descontada():
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
+    painel = html[html.index('<section id="acessPainel"'):html.index("</section>", html.index('<section id="acessPainel"'))]
+    # Os números da busca aguardando ficam no modal, não no painel: o painel
+    # empurrava a lista de pessoas para baixo da dobra em 1366x657.
+    assert "acessNumeros" not in painel and "ag-alert" not in painel
+    assert 'id="modalAcess"' in html and 'id="acessNumeros"' in html
+    assert 'classList.add("cg-com-acess")' in html
+    media = css[css.index("@media (min-width: 1025px)"):]
+    assert ".cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 30rem)); }" in media
+    assert "aguia-carteiras.css?v=acessorias-2026-10-20" in html

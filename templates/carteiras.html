@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=aguia-2026-09i" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=aguia-2026-09c" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=lista-rola-2026-10-15" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=acessorias-2026-10-20" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
        declara display, e display explícito vence o display:none que o
@@ -48,6 +48,27 @@
       <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
       <div class="ag-alert__corpo" id="cartMsgTexto"></div>
     </div>
+
+    <!-- Sincronização com o Acessórias (ADR 0005). Só o Administrador vê: a
+         rota devolve 403 aos outros e o painel fica escondido. Uma linha
+         quando não há nada a decidir; a confirmação com os números quando a
+         trava segurou a busca. -->
+    <!-- Uma linha sempre, até com busca aguardando (os números vão para o
+         modal): o painel não pode empurrar a lista de pessoas para baixo da
+         dobra em notebook. -->
+    <section id="acessPainel" class="ag-card cg-acess" aria-labelledby="tit-acess" hidden>
+      <div class="cg-acess__linha">
+        <div class="cg-acess__texto">
+          <h2 class="cg-acess__titulo" id="tit-acess">Acessórias</h2>
+          <span id="acessSelo" class="ag-badge ag-badge--warning" hidden>Aguardando confirmação</span>
+          <p class="cg-acess__situacao" id="acessSituacao" aria-live="polite"></p>
+        </div>
+        <div class="cg-acess__botoes">
+          <button type="button" id="btnAcessRevisar" class="ag-btn ag-btn--primary ag-btn--sm" hidden>Revisar</button>
+          <button type="button" id="btnAcessBuscar" class="ag-btn ag-btn--outline ag-btn--sm">Buscar agora</button>
+        </div>
+      </div>
+    </section>
 
     <div class="cg-cart-layout">
       <!-- Lista de pessoas com carteira: cada item é um link (?operador=),
@@ -155,6 +176,24 @@
   </main>
 
   <!-- Modal de importação: <dialog> nativo prende o foco e fecha com Esc. -->
+  <dialog class="ag-modal" id="modalAcess" aria-labelledby="tit-modal-acess">
+    <div class="ag-modal__head">
+      <h2 class="ag-modal__titulo" id="tit-modal-acess">Busca do Acessórias aguardando confirmação</h2>
+      <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar">
+        <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="ag-modal__body">
+      <p class="cg-acess__motivo" id="acessMotivo"></p>
+      <ul class="cg-acess__numeros" id="acessNumeros"></ul>
+      <p class="cg-acess__nota">Aplicar muda as carteiras na hora: quem perde o acesso deixa de ver e instalar esses certificados. O cálculo é refeito no momento de aplicar, então os números podem mudar um pouco se alguém mexeu numa carteira desde a busca. Descartar não muda nada; a próxima busca calcula de novo.</p>
+    </div>
+    <div class="ag-modal__foot">
+      <button type="button" id="btnAcessDescartar" class="ag-btn ag-btn--ghost">Descartar</button>
+      <button type="button" id="btnAcessAplicar" class="ag-btn ag-btn--primary">Aplicar</button>
+    </div>
+  </dialog>
+
   <dialog class="ag-modal ag-modal--lg" id="modalImportar" aria-labelledby="tit-importar">
     <form id="formImportar" method="dialog">
       <div class="ag-modal__head">
@@ -716,9 +755,159 @@
       }
     }
 
+    // ─── Acessórias (ADR 0005) ──────────────────────────────────────────
+
+    let _acessAguardando = null;
+    let _acessAcompanhando = null;
+
+    function quando(iso) {
+      if (!iso) return "—";
+      return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function plural(n, um, varios) { return `${n} ${n === 1 ? um : varios}`; }
+
+    function textoDaBusca(b) {
+      if (!b) return "";
+      if (b.estado === "rodando") return `Buscando no Acessórias desde ${quando(b.iniciada_em)}…`;
+      if (b.estado === "erro") return `A última busca (${quando(b.iniciada_em)}) não terminou: ${b.erro || "erro"}. Nada foi aplicado.`;
+      const r = b.resumo || {};
+      if (b.estado === "ok") {
+        const mudou = (r.entradas || 0) + (r.saidas || 0);
+        return `Última busca ${quando(b.terminada_em)}: ` +
+          (mudou ? `${plural(r.entradas || 0, "entrada", "entradas")} e ${plural(r.saidas || 0, "saída", "saídas")}.` : "sem mudanças.");
+      }
+      return `Última busca ${quando(b.terminada_em || b.iniciada_em)}.`;
+    }
+
+    function mostrarPainelAcess() {
+      document.getElementById("acessPainel").hidden = false;
+      // Desconta a altura do painel da lista de pessoas (aguia-carteiras.css).
+      document.body.classList.add("cg-com-acess");
+    }
+
+    function renderAcessorias(s) {
+      mostrarPainelAcess();
+      const btn = document.getElementById("btnAcessBuscar");
+      const sit = document.getElementById("acessSituacao");
+      const ultima = (s.buscas || [])[0];
+      const rodando = ultima && ultima.estado === "rodando";
+      btn.disabled = !s.configurado || rodando || !!_acessAcompanhando;
+      if (!s.configurado) {
+        sit.textContent = "Desligada: o token do Acessórias não está configurado no servidor.";
+      } else if (!ultima) {
+        sit.textContent = "Nenhuma busca ainda. A primeira roda alguns minutos depois de o portal iniciar.";
+      } else {
+        const aplicada = s.ultima_aplicada ? ` Carteiras sincronizadas em ${quando(s.ultima_aplicada.aplicada_em)}.` : " As carteiras ainda não foram sincronizadas.";
+        sit.textContent = textoDaBusca(ultima) + (ultima.estado === "aguardando" ? "" : aplicada);
+      }
+
+      _acessAguardando = s.aguardando || null;
+      document.getElementById("acessSelo").hidden = !_acessAguardando;
+      document.getElementById("btnAcessRevisar").hidden = !_acessAguardando;
+      if (!_acessAguardando) {
+        const modal = document.getElementById("modalAcess");
+        if (modal.open) modal.close();
+        return;
+      }
+      const r = _acessAguardando.resumo || {};
+      sit.textContent = `${plural(r.entradas || 0, "acesso entra", "acessos entram")}, ` +
+        `${plural(r.saidas || 0, "sai", "saem")}. Nada muda até você aplicar.`;
+      document.getElementById("acessMotivo").textContent =
+        `A busca de ${quando(_acessAguardando.terminada_em)} foi segurada: ${r.motivo || "pede confirmação"}.`;
+      const linhas = [
+        `${plural(r.entradas || 0, "acesso entra", "acessos entram")}`,
+        `${plural(r.saidas || 0, "acesso sai", "acessos saem")} (de ${r.acessos_atuais || 0} hoje)`,
+        `${plural(r.conversoes || 0, "liberação manual passa", "liberações manuais passam")} a seguir o Acessórias`,
+        `${plural(r.pessoas_afetadas || 0, "pessoa afetada", "pessoas afetadas")}, ${plural(r.empresas || 0, "empresa lida", "empresas lidas")}`,
+      ];
+      document.getElementById("acessNumeros").innerHTML = linhas.map((t) => `<li>${esc(t)}</li>`).join("");
+    }
+
+    async function carregarAcessorias() {
+      try {
+        const r = await fetch("/api/acessorias/situacao", { headers: getHeaders() });
+        if (r.status === 403 || r.status === 401) return null;  // não é Administrador
+        if (!r.ok) {
+          mostrarPainelAcess();
+          document.getElementById("acessSituacao").textContent = await mensagemCorpoErro(r);
+          return null;
+        }
+        const s = await r.json();
+        renderAcessorias(s);
+        return s;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // A busca roda em segundo plano (~1 min): a tela consulta a situação a
+    // cada 5 s até a mais nova sair de "rodando", por no máximo 4 min.
+    function acompanharBusca() {
+      const inicio = Date.now();
+      clearInterval(_acessAcompanhando);
+      _acessAcompanhando = setInterval(async () => {
+        const s = await carregarAcessorias();
+        const ultima = s && (s.buscas || [])[0];
+        const acabou = ultima && ultima.estado !== "rodando" && Date.parse(ultima.iniciada_em) >= inicio - 60000;
+        if (acabou || Date.now() - inicio > 240000) {
+          clearInterval(_acessAcompanhando);
+          _acessAcompanhando = null;
+          const s2 = await carregarAcessorias();
+          if (acabou && ultima.estado === "ok") carregarOperadores();
+          if (s2 && acabou) msg(textoDaBusca(ultima), ultima.estado === "erro" ? "error" : ultima.estado === "aguardando" ? "warning" : "success");
+        }
+      }, 5000);
+    }
+
+    async function buscarAcessorias() {
+      const btn = document.getElementById("btnAcessBuscar");
+      btn.disabled = true;
+      const r = await fetch("/api/acessorias/buscar", { method: "POST", headers: getHeaders() });
+      if (!r.ok) {
+        btn.disabled = false;
+        msg(await mensagemCorpoErro(r), "error");
+        return;
+      }
+      document.getElementById("acessSituacao").textContent = "Buscando no Acessórias… leva cerca de um minuto.";
+      acompanharBusca();
+    }
+
+    // O modal já é a confirmação: mostra os números e o que acontece.
+    async function decidirAcessorias(aplicar) {
+      const b = _acessAguardando;
+      if (!b) return;
+      const modal = document.getElementById("modalAcess");
+      const botoes = modal.querySelectorAll(".ag-modal__foot button");
+      botoes.forEach((x) => { x.disabled = true; });
+      const acao = aplicar ? "confirmar" : "descartar";
+      try {
+        const r = await fetch(`/api/acessorias/buscas/${encodeURIComponent(b.id)}/${acao}`, { method: "POST", headers: getHeaders() });
+        if (!r.ok) {
+          msg(await mensagemCorpoErro(r), "error");
+        } else {
+          msg((await r.json()).message || "Feito.", "success");
+          if (aplicar) carregarOperadores();
+        }
+      } finally {
+        botoes.forEach((x) => { x.disabled = false; });
+        modal.close();
+        carregarAcessorias();
+      }
+    }
+
     (function init() {
       // Sidebar por papel: ui-common.js (initSidebarPorPapel).
       _papel = localStorage.getItem("user_role");
+      if (_papel === "admin") {
+        carregarAcessorias();
+        document.getElementById("btnAcessBuscar").addEventListener("click", buscarAcessorias);
+        const modalAcess = document.getElementById("modalAcess");
+        document.getElementById("btnAcessRevisar").addEventListener("click", () => modalAcess.showModal());
+        modalAcess.querySelectorAll("[data-ag-modal-close]").forEach((x) => x.addEventListener("click", () => modalAcess.close()));
+        document.getElementById("btnAcessAplicar").addEventListener("click", () => decidirAcessorias(true));
+        document.getElementById("btnAcessDescartar").addEventListener("click", () => decidirAcessorias(false));
+      }
       if (_papel === "gestor") {
         document.getElementById("dicaImportarAlcance").textContent =
           "Só para operadores dos departamentos que você lidera, e só com clientes do seu alcance.";
