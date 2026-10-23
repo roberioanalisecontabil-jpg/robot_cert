@@ -64,6 +64,30 @@ tbody tr[data-det] { cursor: pointer; }
     .cg-det__item dt { font-size: var(--text-xs); }
 }
 
+/* Acima de 1024px, duas colunas e linhas mais baixas (23/10/2026): numa
+   coluna o conteúdo dava 911px e rolava até em 1920x953. Certificado à
+   esquerda; Responsável, No portal e SIEG à direita. */
+@media (min-width: 1025px) {
+    .cg-det.ag-modal--lg { width: min(62rem, calc(100vw - var(--space-8))); }
+    .cg-det .ag-modal__head { padding-block: var(--space-3); }
+    .cg-det .ag-modal__body {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+        column-gap: var(--space-8);
+        row-gap: var(--space-2);
+        align-items: start;
+        padding-block: var(--space-3);
+    }
+    .cg-det .ag-modal__body > section { grid-column: 2; }
+    .cg-det .ag-modal__body > section:first-child { grid-column: 1; grid-row: 1 / span 3; }
+    .cg-det__item { grid-template-columns: 8.5rem minmax(0, 1fr); padding: var(--space-1) 0; line-height: 1.45; }
+    .cg-det-sieg { padding-top: var(--space-3); }
+    .cg-det__secao { margin-bottom: var(--space-1); }
+    .cg-det__nota { margin-top: var(--space-1); }
+    /* O rodapé só tinha "Fechar", repetindo o X do cabeçalho (e o Esc). */
+    .cg-det .ag-modal__foot { display: none; }
+    .cg-det .ag-modal__body { padding-bottom: var(--space-5); }
+}
+
 /* ── SIEG (07/10/2026) ───────────────────────────────────────────────── */
 .cg-det-sieg { border-top: var(--bw-1) solid var(--border-subtle); padding-top: var(--space-4); }
 .cg-det-sieg__linha { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
