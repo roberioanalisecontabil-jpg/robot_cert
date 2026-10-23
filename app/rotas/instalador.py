@@ -605,8 +605,8 @@ def instalabilidade(
     `estacao` é a máquina da pessoa, onde o certificado vai ser instalado. Até
     30/09 a rota recebia um só, e para operador e gestor o vínculo
     pessoa↔estação era conferido contra o servidor da varredura — dava 403
-    sempre que a ponte com o Hardlyze estava de pé. Sem `estacao`, o vínculo é
-    conferido contra `machine_id`, como antes.
+    sempre que a ponte com o Hardlyze estava de pé. Sem `estacao` (bandeja
+    parada ou sem computador), não há vínculo a conferir.
     """
     user_id = _user_id_da_sessao(token)
     if not user_id:
@@ -619,14 +619,15 @@ def instalabilidade(
         logger.warning("Instalabilidade sem conseguir ler o alcance (%s): %s", machine_id, e)
         raise HTTPException(status_code=503, detail="Não foi possível verificar sua carteira. Tente de novo.")
 
-    meu = _computador_autorizado_da_pessoa(user_id) if not alcance_total else None
-    if meu and meu["autorizacao"] == computadores.AUTORIZADO:
-        if computadores.mac(estacao or machine_id) != computadores.mac(meu["machine_id"]):
-            raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
-    elif not alcance_total and (estacao or "").strip():
+    if not alcance_total and (estacao or "").strip():
         # A estação tem de ser a desta pessoa (achado #30). O vínculo mora
         # aqui desde 08/10/2026; sem computador autorizado, nenhuma estação.
-        raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
+        # Sem `estacao` (bandeja parada) não há o que conferir: os itens saem
+        # recortados pela carteira logo abaixo, e o prepare confere de novo.
+        meu = _computador_autorizado_da_pessoa(user_id)
+        if not (meu and meu["autorizacao"] == computadores.AUTORIZADO
+                and computadores.mac(estacao) == computadores.mac(meu["machine_id"])):
+            raise HTTPException(status_code=403, detail="Esta estação não está vinculada a você.")
 
     try:
         itens = cert_installer.estado_de_instalabilidade(machine_id, user_id, token.role)

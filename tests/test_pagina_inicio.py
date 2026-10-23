@@ -85,9 +85,13 @@ def test_instalabilidade_confere_o_vinculo_pela_estacao(client: TestClient, banc
     # Estação de outra pessoa: 403.
     r = client.get("/api/cert-installer/instalabilidade?machine_id=srv&estacao=pc-de-outro", headers=_h(*FISCAL_OP))
     assert r.status_code == 403
-    # Com computador autorizado e sem `estacao`, o vínculo é conferido contra
-    # `machine_id`, como antes (achado #30).
-    assert client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP)).status_code == 403
+    # Computador autorizado com a bandeja parada: o Início manda sem `estacao`.
+    # Não há estação a conferir; os itens já saem recortados pela carteira
+    # (achado #30). Até 23/10 comparava o servidor da varredura com o PC da
+    # pessoa, dava 403 e um aviso de erro no Início.
+    r = client.get("/api/cert-installer/instalabilidade?machine_id=srv", headers=_h(*FISCAL_OP))
+    assert r.status_code == 200, r.text
+    assert "a" * 64 in r.json()["itens"]
     # Sem computador nenhum: só o inventário do servidor da varredura,
     # recortado pela carteira (08/10/2026; antes perguntava ao Hardlyze).
     monkeypatch.setattr(instalador, "_computador_autorizado_da_pessoa", lambda uid: None)
