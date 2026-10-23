@@ -303,7 +303,7 @@
     {"id": "bandeja-icone", "modulo": "bandeja", "papel": "colaborador", "url": null,
      "passos": ["abrir a área de ícones ocultos da barra de tarefas (seta ^)", "capturar o ícone Certguard Análise"],
      "recorte": null, "ocultar": [], "manual": true,
-     "obs": "Captura do Windows, fora do navegador. Máquina de teste com a bandeja instalada."},
+     "obs": "Feito 23/10/2026 como réplica HTML da área de ícones ocultos do Windows 11 (barra de tarefas desta máquina se esconde sozinha e a captura pegaria os ícones do usuário), com o ico/certguard.png real; ícones vizinhos neutros. Renderizado pelo Playwright em 560x330 e recortado em 320x210."},
     {"id": "bandeja-login", "modulo": "bandeja", "papel": "colaborador", "url": null,
      "passos": ["botão direito no ícone", "clicar em Entrar no portal de certificados…", "capturar a janela com os campos vazios"],
      "recorte": null, "ocultar": ["identificador da máquina no rodapé da janela"], "manual": true,
