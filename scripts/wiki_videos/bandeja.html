@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Instalar pela bandeja — Wiki do Certguard</title>
+<link rel="icon" href="assets/logos/logo-analise.ico" sizes="any">
+<link rel="preload" href="assets/fonts/exo-700-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/inter-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-roteiro="bandeja">
+<noscript><p style="padding:2rem;font-family:sans-serif;color:#fff">Esta apresentação precisa de JavaScript habilitado.</p></noscript>
+
+<div class="player pausado" id="player">
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage" aria-label="Apresentação do produto" role="region">
+
+      <div class="bg" aria-hidden="true">
+        <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+        <div class="grid"></div>
+        <canvas id="particulas" width="1920" height="1080"></canvas>
+        <div class="vignette"></div>
+      </div>
+
+      <div class="layer intro" id="layer-intro"></div>
+
+      <div class="tilt" id="tilt">
+        <div class="camera" id="camera">
+          <div class="janela">
+            <div class="chrome"><i></i><i></i><i></i><span>certificado.analisegroup.cnt.br</span></div>
+            <div class="app" id="app">
+              <div id="appview"></div>
+              <div id="fxlayer">
+                <div class="ripple" id="ripple"></div>
+                <div class="cursor" id="cursor" aria-hidden="true">
+                  <svg viewBox="0 0 34 34"><path d="M4 3v22l6-5.5 4.2 9.5 4-1.8-4.2-9.3 8.3-.4z" fill="#212121" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer closing" id="layer-closing"></div>
+
+      <div class="hud" aria-live="off">
+        <div class="faixa" id="faixa"></div>
+        <div class="veil" id="veil"></div>
+        <div id="pops" class="pops"></div>
+        <div class="cartela" id="cartela"><div class="eyebrow"></div><div class="titulo"></div></div>
+        <div class="passos" id="passos"></div>
+        <div class="chamada" id="chamada">
+          <span class="ic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></span>
+          <div><b>Nova notificação</b><small>Padaria Pão Dourado · pedido #1042</small></div>
+        </div>
+        <div class="legenda" id="legenda"><span></span></div>
+        <div class="aviso-ficticio" id="aviso">Demonstração · dados fictícios</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="big-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+  <div class="msg" id="msg" role="status"></div>
+
+  <section class="start" id="start" aria-labelledby="start-titulo">
+    <div class="start__box">
+      <img class="hor" src="assets/logos/certguard.png" alt="Certguard" width="84" height="84">
+      <h1 id="start-titulo">Certguard<small id="start-sub">Apresentação do produto</small></h1>
+      <p id="start-desc"></p>
+      <div class="start__btns">
+        <button type="button" class="btn btn--ouro" id="btn-iniciar">Iniciar apresentação</button>
+        <button type="button" class="btn btn--borda" id="btn-iniciar-som">Iniciar com som</button>
+      </div>
+      <p class="start__dica"><span id="start-dur"></span> · <kbd>Espaço</kbd> pausa · <kbd>←</kbd> <kbd>→</kbd> navegam · <kbd>F</kbd> tela cheia</p>
+      <a class="start__outro" id="start-outro" href="#"></a>
+    </div>
+  </section>
+
+  <div class="controls" id="controls">
+    <div class="progress" id="progresso" role="slider" aria-label="Progresso da apresentação" aria-valuemin="0" aria-valuenow="0" tabindex="-1">
+      <div class="progress__trilho">
+        <div class="progress__fill" id="prog-fill"></div>
+        <div id="prog-marcas"></div>
+        <div class="progress__knob" id="prog-knob"></div>
+      </div>
+      <div class="progress__dica" id="prog-dica"></div>
+    </div>
+    <div class="ctl-row">
+      <button type="button" class="ctl" id="btn-play" aria-label="Reproduzir" title="Reproduzir / pausar (Espaço)"></button>
+      <button type="button" class="ctl" id="btn-reiniciar" aria-label="Reiniciar" title="Reiniciar (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+      <button type="button" class="ctl" id="btn-ant" aria-label="Cena anterior" title="Cena anterior (PageUp)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button type="button" class="ctl" id="btn-prox" aria-label="Próxima cena" title="Próxima cena (PageDown)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7L4 19z"/></svg></button>
+      <span class="tempo" id="tempo">00:00 / 00:00</span>
+      <span class="cena-nome" id="cena-nome"></span>
+      <label class="auto" title="Quando desligada, a apresentação pausa ao fim de cada cena (A)"><input type="checkbox" id="auto" checked><span>Reprodução automática das cenas</span></label>
+      <div class="vol">
+        <button type="button" class="ctl" id="btn-vol" aria-label="Ativar som" title="Som (M)"></button>
+        <input type="range" id="vol" min="0" max="100" value="60" aria-label="Volume">
+      </div>
+      <button type="button" class="ctl" id="btn-tela" aria-label="Tela cheia" title="Tela cheia (F)"></button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

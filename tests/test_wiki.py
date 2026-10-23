@@ -6,6 +6,7 @@ O que a página promete, e por isso o que se testa:
   permissões, e a URL de um módulo fora do alcance cai no índice;
 - todo módulo listado tem o seu arquivo de conteúdo.
 """
+import re
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -96,6 +97,27 @@ def test_cada_modulo_abre(client_wiki: TestClient, modulo: str) -> None:
     r = client_wiki.get(f"/wiki-certguard?modulo={modulo}", headers=_cabecalho("admin"))
     assert r.status_code == 200
     assert 'aria-current="page"' in r.text
+
+
+VIDEO = re.compile(r'video\("([\w-]+)"')
+
+
+def test_cada_video_embutido_tem_arquivo_e_capa() -> None:
+    """Um vídeo citado num tutorial sem o MP4 em static/wiki/ vira um player
+    quebrado na página, sem erro em lugar nenhum."""
+    estaticos = TEMPLATES.parent / "static" / "wiki"
+    ids = {i for f in (TEMPLATES / "wiki").glob("*.html") for i in VIDEO.findall(f.read_text(encoding="utf-8"))}
+    assert ids, "nenhum vídeo embutido nos tutoriais"
+    for i in ids:
+        assert (estaticos / f"{i}.mp4").is_file(), i
+        assert (estaticos / f"{i}.jpg").is_file(), i
+
+
+def test_pagina_com_video_mostra_o_player(client_wiki: TestClient) -> None:
+    r = client_wiki.get("/wiki-certguard?modulo=bandeja", headers=_cabecalho("admin"))
+    assert r.status_code == 200
+    assert '<video controls preload="none"' in r.text
+    assert 'src="/static/wiki/video-bandeja.mp4"' in r.text
 
 
 def test_permissoes_dos_modulos_existem_na_matriz() -> None:

@@ -1,7 +1,7 @@
 {#
   Peças dos tutoriais da wiki. Cada tutorial importa com contexto:
 
-    {% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+    {% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
 
   `prints` vem da rota: o manifesto static/wiki/prints.json, que o script de
   captura (scripts/wiki_capturas.py) escreve junto com as imagens. Ele dá a
@@ -22,6 +22,21 @@
   {%- else -%}
   <p class="wiki-print wiki-print--falta">Imagem em preparação: {{ alt }}</p>
   {%- endif -%}
+{%- endmacro %}
+
+{# Vídeo curto do tutorial: static/wiki/<id>.mp4, com a capa <id>.jpg.
+   Gravados de scripts/wiki_videos/ (réplicas com dados fictícios, sem som,
+   legendas na própria imagem). preload="none": a página não baixa o vídeo
+   até alguém dar o play. #}
+{% macro video(id, titulo) -%}
+  <figure class="wiki-video">
+    <video controls preload="none" playsinline width="1280" height="720"
+           poster="/static/wiki/{{ id }}.jpg" aria-label="Vídeo: {{ titulo }}">
+      <source src="/static/wiki/{{ id }}.mp4" type="video/mp4">
+      <a href="/static/wiki/{{ id }}.mp4">Baixar o vídeo: {{ titulo }}</a>
+    </video>
+    <figcaption>Vídeo: {{ titulo }}. Sem som, com legendas na tela.</figcaption>
+  </figure>
 {%- endmacro %}
 
 {# Quem usa o módulo: selos logo abaixo do título. #}

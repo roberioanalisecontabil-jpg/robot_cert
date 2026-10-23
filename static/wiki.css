@@ -63,6 +63,14 @@
   padding: var(--space-4); border: 1px dashed var(--border-default); border-radius: var(--radius-md);
   font-size: var(--text-sm); color: var(--text-secondary); background: var(--bg-surface-alt);
 }
+/* Vídeos: mesma moldura dos prints; a proporção fica reservada antes da capa chegar. */
+.wiki-video { margin: var(--space-5) 0 var(--space-6); }
+.wiki-video video {
+  display: block; width: 100%; height: auto; aspect-ratio: 16 / 9;
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm); background: var(--bg-surface-alt);
+}
+.wiki-video figcaption { font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-2); }
 .wiki-artigo table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; font-size: var(--text-sm); }
 .wiki-artigo th, .wiki-artigo td { text-align: left; vertical-align: top; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-subtle); }
 .wiki-artigo th { color: var(--text-secondary); font-weight: 600; }
