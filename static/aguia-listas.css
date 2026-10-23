@@ -150,6 +150,16 @@
 .cg-toolbar--compacta .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
 .cg-toolbar--compacta .cg-campo-busca { max-width: 28rem; }
 
+/* Histórico (23/10/2026): busca e Status na mesma linha — a busca até
+   28rem, o Status com a largura dele. No celular volta a empilhar. */
+.cg-toolbar--compacta .cg-toolbar__filtros--busca-status {
+    grid-template-columns: minmax(0, 28rem) auto;
+    justify-content: start;
+}
+@media (max-width: 640px) {
+    .cg-toolbar--compacta .cg-toolbar__filtros--busca-status { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* O <details> de exportar reaproveita o menu suspenso do portal; só o gatilho
    vira botão do DS. `summary` não herda display de botão: forçado aqui. */
 .cg-toolbar .menu-suspenso > summary.ag-btn {
