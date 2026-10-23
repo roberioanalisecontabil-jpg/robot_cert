@@ -2692,7 +2692,11 @@ body.sidebar-collapsed .sidebar-header { padding-bottom: 2.25rem; }
   outline: 2px solid var(--sidebar-text);
   outline-offset: 2px;
 }
-/* O menu já começa com 1.25rem de respiro (.sidebar-nav), onde o botão apoia a metade de baixo. */
+/* O botão desce 18px abaixo do fio; com o menu começando a 1.25rem, sobravam
+   2px até o primeiro item (23/10/2026). 2.25rem deixa 18px de folga. */
+@media (min-width: 769px) {
+  .sidebar-nav { padding-top: 2.25rem; }
+}
 /* No desktop só o da barra existe; o do topo é do celular. */
 .topbar-actions .sidebar-toggle-btn--mobile { display: none; }
 

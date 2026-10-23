@@ -116,10 +116,10 @@ def test_cache_busters_dos_arquivos_alterados_subiram() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
     assert "aguia-carteiras.css?v=acessorias-2026-10-20" in html
     assert "ui-common.js?v=compacto-2026-10-23b" in html
-    assert "style.css?v=compacto-2026-10-23b" in html
+    assert "style.css?v=menu-2026-10-23" in html
     for nome in ("index.html", "usuarios.html"):
         t = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
-        assert "ui-common.js?v=compacto-2026-10-23b" in t and "style.css?v=compacto-2026-10-23b" in t
+        assert "ui-common.js?v=compacto-2026-10-23b" in t and "style.css?v=menu-2026-10-23" in t
 
 
 # ── 4. Nomes em maiúsculas e Usuários com ativos por padrão (30/09, tarde) ──
