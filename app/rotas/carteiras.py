@@ -35,8 +35,8 @@ router = APIRouter()
 
 
 def _sincronizado() -> bool:
-    """Depois da virada do Acessórias (ADR 0005) a carteira do Gestor é de
-    Atribuições, como a do Operador; antes, de Exceções (ADR 0001)."""
+    """Depois da virada do Acessórias (ADR 0005) a carteira do Operador segue
+    o Acessórias e retirar vira bloqueio."""
     from app import acessorias
 
     try:
@@ -47,7 +47,8 @@ def _sincronizado() -> bool:
 
 
 def _carteira_de_excecoes(user_id: str) -> bool:
-    return _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR and not _sincronizado()
+    # Também depois da virada (adendo de 23/10 ao ADR 0005).
+    return _papel_do_alvo(user_id) == cert_installer.PAPEL_GESTOR
 
 
 def _desbloquear(user_id: str, documentos: List[str]) -> None:
@@ -171,8 +172,7 @@ def listar_operadores(
     excecoes = Counter(str(c.get("user_id")) for c in exc)
     # O tamanho do inventário só interessa se houver Gestor na lista: a
     # carteira dele é "tudo menos N", e "tudo" é isto.
-    sincronizado = _sincronizado()
-    universo = len(cert_installer.universo_de_documentos()) if not sincronizado and any(
+    universo = len(cert_installer.universo_de_documentos()) if any(
         (u.get("role") or "").strip().lower() == cert_installer.PAPEL_GESTOR for u in visiveis
     ) else 0
     from app import texto as _texto
@@ -184,10 +184,10 @@ def listar_operadores(
         n_exc = excecoes.get(uid, 0)
         # Operador depende de Atribuições; Gestor tem tudo menos Exceções; o
         # administrador tem alcance sem carteira (ADR 0001).
-        if papel_u == cert_installer.PAPEL_GESTOR and not sincronizado:
+        if papel_u == cert_installer.PAPEL_GESTOR:
             tipo, n = "excecoes", max(universo - n_exc, 0)
             clientes = ("todos os clientes" if not n_exc else f"todos menos {_texto.plural(n_exc, 'exceção', 'exceções')}")
-        elif papel_u in (cert_installer.PAPEL_OPERADOR, cert_installer.PAPEL_GESTOR):
+        elif papel_u == cert_installer.PAPEL_OPERADOR:
             tipo, n = "atribuicoes", n_atrib
             clientes = _texto.plural(n, "cliente")
         else:

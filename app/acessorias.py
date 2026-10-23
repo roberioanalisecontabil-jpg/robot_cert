@@ -640,10 +640,6 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             cur.execute("DELETE FROM public.departamento_lider WHERE user_id = %s", (uid,))
             cur.execute("DELETE FROM public.carteira_excecao WHERE user_id = %s", (uid,))
 
-        # Virada (ADR 0005): o Gestor deixa de ser "tudo menos as Exceções".
-        if not estado.ja_aplicou:
-            cur.execute("DELETE FROM public.carteira_excecao")
-
         # Departamentos depois das contas: a conta nova já nasce no seu.
         deps = {**_ligar_departamentos(cur), **_distribuir_pessoas(cur, contar_responsabilidades(dados))}
 
@@ -1025,18 +1021,18 @@ def registrar_mudanca_manual(user_id: str, novo_departamento: str, por_email: st
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 5. Alcance do Gestor depois da virada (ADR 0005)
+# 5. A virada (ADR 0005)
 # ──────────────────────────────────────────────────────────────────────────
 
 _sincronizado = {"valor": False, "em": -1e9}
-_com_certificado = {"valor": frozenset(), "em": -1e9}
 
 
 def sincronizado() -> bool:
     """A virada já aconteceu (alguma busca foi aplicada)?
 
-    Antes dela vale o ADR 0001 (Gestor = tudo menos as Exceções); depois, o
-    ADR 0005. A virada é de mão única: verdadeiro uma vez, verdadeiro para
+    Depois dela a carteira do Operador segue o Acessórias e retirar vira
+    bloqueio. O Gestor continua "tudo menos as Exceções" (adendo de 23/10 ao
+    ADR 0005). A virada é de mão única: verdadeiro uma vez, verdadeiro para
     sempre no processo. Falso é conferido de novo a cada 30 s.
 
     Sem a conexão direta do db_pg (os clientes falsos dos testes) responde
@@ -1056,37 +1052,6 @@ def sincronizado() -> bool:
         valor = bool(cur.fetchone()[0])
     _sincronizado.update(valor=valor, em=time.monotonic())
     return valor
-
-
-def _documentos_com_certificado(cur) -> frozenset:
-    if time.monotonic() - _com_certificado["em"] < 300:
-        return _com_certificado["valor"]
-    cur.execute(
-        "SELECT regexp_replace(coalesce(documento, ''), '\\D', '', 'g') AS d FROM public.cert_pfx_store "
-        "UNION SELECT regexp_replace(coalesce(documento_numero, ''), '\\D', '', 'g') FROM public.cert_history"
-    )
-    valor = frozenset(r[0] for r in cur.fetchall() if r[0])
-    _com_certificado.update(valor=valor, em=time.monotonic())
-    return valor
-
-
-def documentos_dos_departamentos(user_id: str) -> Set[str]:
-    """Empresas com responsável, no Acessórias, num departamento que esta
-    pessoa lidera (e que está com "trazer"), já como documento da carteira:
-    o mesmo CNPJ-ou-matriz da busca."""
-    cliente = _cliente()
-    with cliente.conexao() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT DISTINCT r.cnpj FROM public.departamento_lider l "
-            "JOIN public.acessorias_departamento a ON a.departamento_id = l.departamento_id AND a.conta_para_carteira "
-            "JOIN public.acessorias_responsavel r ON r.departamento_acessorias_id = a.id AND r.email <> '' "
-            "JOIN public.acessorias_empresa e ON e.cnpj = r.cnpj AND e.ativa "
-            "WHERE l.user_id = %s",
-            (user_id,),
-        )
-        cnpjs = [r[0] for r in cur.fetchall()]
-        com_cert = _documentos_com_certificado(cur) if cnpjs else frozenset()
-    return {documento_da_empresa(c, com_cert) for c in cnpjs}
 
 
 # ──────────────────────────────────────────────────────────────────────────

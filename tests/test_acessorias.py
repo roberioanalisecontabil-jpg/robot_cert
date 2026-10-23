@@ -224,24 +224,24 @@ def test_sugestao_de_departamento_3_vezes_o_segundo():
     assert acessorias.sugestao_de_departamento({}, mapa) is None
 
 
-def test_alcance_do_gestor_antes_e_depois_da_virada(monkeypatch):
+def test_alcance_do_gestor_e_tudo_menos_as_excecoes_mesmo_depois_da_virada(monkeypatch):
+    """Adendo de 23/10 ao ADR 0005: o Gestor instala qualquer certificado,
+    menos o que o Administrador retirou dele. O Acessórias não o recorta."""
     from app import cert_installer
 
     monkeypatch.setattr(cert_installer, "listar_carteira", lambda uid: ["111"])
     monkeypatch.setattr(cert_installer, "listar_excecoes", lambda uid: ["999"])
-    monkeypatch.setattr(acessorias, "documentos_dos_departamentos", lambda uid: {"222"})
 
-    monkeypatch.setattr(acessorias, "sincronizado", lambda: False)
-    antes = cert_installer.documentos_ao_alcance("u-gil", "gestor")
-    assert isinstance(antes, cert_installer.TudoMenos) and "222" in antes and "999" not in antes
+    for virada in (False, True):
+        monkeypatch.setattr(acessorias, "sincronizado", lambda: virada)
+        alcance = cert_installer.documentos_ao_alcance("u-gil", "gestor")
+        assert isinstance(alcance, cert_installer.TudoMenos)
+        assert "222" in alcance and "111" in alcance and "999" not in alcance
+        assert cert_installer.documentos_ao_alcance("u-ana", "user") == {"111"}
 
-    monkeypatch.setattr(acessorias, "sincronizado", lambda: True)
-    assert cert_installer.documentos_ao_alcance("u-gil", "gestor") == {"111", "222"}
-    assert cert_installer.documentos_ao_alcance("u-ana", "user") == {"111"}
-
-    def quebrado():
-        raise RuntimeError("banco caiu")
-    monkeypatch.setattr(acessorias, "sincronizado", quebrado)
+    def quebrado(uid):
+        raise cert_installer.CarteiraIndisponivel("banco caiu")
+    monkeypatch.setattr(cert_installer, "listar_excecoes", quebrado)
     with pytest.raises(cert_installer.CarteiraIndisponivel):
         cert_installer.documentos_ao_alcance("u-gil", "gestor")
 
@@ -471,15 +471,8 @@ def test_virada_do_gestor(banco, monkeypatch):
     assert acessorias.sincronizado() is False  # aguardando: nada virou ainda
     acessorias.confirmar(r["id"], "adm@teste-acessorias")
     assert acessorias.sincronizado() is True
-    assert _linhas(cliente, "SELECT count(*) FROM public.carteira_excecao") == [(0,)]
-
-    contabil = _linhas(cliente, "SELECT departamento_id::text FROM public.acessorias_departamento WHERE id = 1")[0][0]
-    _linhas(cliente, "INSERT INTO public.departamento_lider (departamento_id, user_id) VALUES (%s, %s)", contabil, ids["gil"])
-    # Filial sem certificado: vale a matriz, como na carteira do Operador.
-    assert acessorias.documentos_dos_departamentos(ids["gil"]) == {MATRIZ}
-    # Só departamento com "trazer".
-    _linhas(cliente, "UPDATE public.acessorias_departamento SET conta_para_carteira = false WHERE id = 1")
-    assert acessorias.documentos_dos_departamentos(ids["gil"]) == set()
+    # Adendo de 23/10: a virada não apaga mais as Exceções do Gestor.
+    assert _linhas(cliente, "SELECT count(*) FROM public.carteira_excecao") == [(1,)]
 
 
 @integracao

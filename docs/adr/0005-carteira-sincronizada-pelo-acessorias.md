@@ -102,3 +102,18 @@ departamentos.
 - O DIARIO2.0 muda num número (limite por minuto).
 - Ordem de entrega: correção do certificado renovado (separada) → este ADR → migration → busca
   e aplicação com trava → contas → tela de departamentos → bloqueio e liberação manual.
+
+## Adendo de 23/10/2026: o Gestor volta a ser "tudo menos as Exceções"
+
+Depois da virada, o Gestor só instalava a própria carteira mais as empresas dos departamentos
+que lidera. Na prática ele precisa instalar qualquer certificado. Decidido pelo usuário em
+23/10: o **Gestor alcança todo o inventário, menos as Exceções que o Administrador registrar**
+(o modelo do ADR 0001), antes e depois da virada.
+
+- O Acessórias continua mandando na carteira do Operador. Liderar departamento continua
+  decidindo só de QUEM o Gestor edita a carteira e bloqueia.
+- A virada não apaga mais `carteira_excecao`. As Exceções apagadas na virada de 20/10 não
+  voltam: o Administrador registra de novo o que quiser restringir.
+- As linhas do Gestor em `carteira` (ele também é responsável no Acessórias) ficam guardadas
+  sem efeito no alcance. Se ele deixar de ser Gestor, elas já são a carteira de Operador.
+  Mudar de papel apaga só as Exceções.

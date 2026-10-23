@@ -117,6 +117,27 @@ def test_devolver_o_cliente_tira_a_excecao(client: TestClient, banco: _Fake) -> 
     assert _ve(client, GESTOR) == TODOS
 
 
+def test_depois_da_virada_o_gestor_continua_tudo_menos_as_excecoes(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adendo de 23/10 ao ADR 0005: o Acessórias não recorta o Gestor. Ele
+    instala qualquer certificado, menos o que o administrador retirou; ao
+    deixar de ser Gestor, só as Exceções saem (as Atribuições seguem o
+    Acessórias)."""
+    from app import acessorias
+
+    monkeypatch.setattr(acessorias, "sincronizado", lambda: True)
+    assert _ve(client, GESTOR) == TODOS
+    r = client.delete(f"/api/carteira/u-lf/{DOC_B}", headers=_h(*ADMIN))
+    assert r.status_code == 200 and r.json()["tipo"] == "excecoes", r.text
+    assert _ve(client, GESTOR) == TODOS - {DOC_B}
+
+    r = client.put(f"/api/departamentos/{FISCAL}/lideres", json={"lideres": []}, headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert _u(banco, "u-lf")["role"] == "user"
+    assert _excecoes(banco, "u-lf") == set() and _atribuicoes(banco, "u-lf") == {DOC_L}
+
+
 def test_a_tela_mostra_a_carteira_do_gestor_como_inventario_menos_excecoes(client: TestClient, banco: _Fake) -> None:
     client.delete(f"/api/carteira/u-lf/{DOC_B}", headers=_h(*ADMIN))
     r = client.get("/api/carteira/u-lf", headers=_h(*ADMIN))

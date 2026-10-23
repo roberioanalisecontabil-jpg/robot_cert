@@ -85,9 +85,10 @@ def derrubar_sessoes(sb: Any, user_id: str) -> bool:
 
 
 def _carteira_atravessa_a_troca(sb: Any, user_id: str) -> bool:
-    """Depois da virada do Acessórias (ADR 0005), Operador e Gestor têm o
-    mesmo tipo de carteira (Atribuições): virar Gestor ou deixar de ser não a
-    esvazia. Para Administrador, ou antes da virada, esvazia como sempre."""
+    """Depois da virada do Acessórias (ADR 0005), as Atribuições de Operador
+    e Gestor seguem o Acessórias: virar Gestor ou deixar de ser não as
+    esvazia (só as Exceções saem). Para Administrador, ou antes da virada,
+    esvazia como sempre."""
     from app import acessorias
 
     if not acessorias.sincronizado():
@@ -104,7 +105,13 @@ def apos_troca_de_papel(sb: Any, user_id: str) -> Dict[str, Any]:
     saida: Dict[str, Any] = {}
     try:
         if _carteira_atravessa_a_troca(sb, user_id):
-            saida.update({"atribuicoes": 0, "excecoes": 0})
+            # As Atribuições seguem o Acessórias; as Exceções eram do Gestor
+            # (adendo de 23/10 ao ADR 0005) e não valem no papel novo.
+            r = sb.table(cert_installer.TABELA_EXCECOES).select("documento").eq("user_id", str(user_id)).execute()
+            n_exc = len(r.data or [])
+            if n_exc:
+                sb.table(cert_installer.TABELA_EXCECOES).delete().eq("user_id", str(user_id)).execute()
+            saida.update({"atribuicoes": 0, "excecoes": n_exc})
         else:
             saida.update(cert_installer.esvaziar_carteira(str(user_id)))
     except Exception as e:  # noqa: BLE001

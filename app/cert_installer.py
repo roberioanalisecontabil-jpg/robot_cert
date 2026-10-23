@@ -992,9 +992,8 @@ def documentos_ao_alcance(user_id: str, role: str) -> Alcance:
     — ele não depende da carteira de ninguém nem do setor que lidera; liderar
     decide a quem ele ATRIBUI, não o que ele vê.
 
-    Depois da primeira aplicação do Acessórias (ADR 0005), o Gestor passa a
-    ver a própria carteira mais as empresas que têm responsável, no Acessórias,
-    num departamento que ele lidera.
+    O Acessórias (ADR 0005) não recorta o Gestor: o adendo de 23/10 manteve o
+    "tudo menos as Exceções" depois da virada.
 
     Levanta `CarteiraIndisponivel` em vez de devolver vazio: "não consegui ler
     a carteira" não é "não tem carteira".
@@ -1005,18 +1004,6 @@ def documentos_ao_alcance(user_id: str, role: str) -> Alcance:
     if not user_id:
         return set()
     if papel == PAPEL_GESTOR:
-        # Depois da virada do Acessórias (ADR 0005): a própria carteira mais
-        # as empresas dos departamentos que lidera. Antes, o ADR 0001.
-        from app import acessorias
-
-        try:
-            if acessorias.sincronizado():
-                return set(listar_carteira(user_id)) | acessorias.documentos_dos_departamentos(user_id)
-        except CarteiraIndisponivel:
-            raise
-        except Exception as e:  # noqa: BLE001 — nunca cair no modelo mais largo
-            logger.exception("Falha ao calcular o alcance do Gestor pelo Acessórias")
-            raise CarteiraIndisponivel(str(e)) from e
         return TudoMenos(listar_excecoes(user_id))
     return set(listar_carteira(user_id))
 
