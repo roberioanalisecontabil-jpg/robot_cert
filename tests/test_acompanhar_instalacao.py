@@ -165,7 +165,7 @@ def test_a_tela_desiste_com_instrucao_em_vez_de_girar_para_sempre() -> None:
     barrinha.
     """
     corpo = _corpo_do_acompanhamento()
-    assert "Certguard Análise" in corpo, "a desistência tem de dizer onde olhar"
+    assert "CertGuard Análise" in corpo, "a desistência tem de dizer onde olhar"
 
 
 # ── 5. Máquina desligada = token morto ───────────────────────────────────
