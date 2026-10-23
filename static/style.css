@@ -537,18 +537,16 @@ h3 {
 .main-content {
   flex: 1;
   margin-left: 250px;
-  padding: 2.25rem 2.25rem;
+  padding: 1.5rem 1.5rem;
   min-height: 100vh;
   /* Item flex tem min-width:auto — o min-content de um filho (a tabela, a
      toolbar) empurrava o main além do viewport entre ~900 e ~1050px, criando
      scroll horizontal NA PÁGINA. Com 0, quem rola é o .table-scroll, que
      existe para isso. */
   min-width: 0;
-  /* Teto de largura: sem ele, num monitor largo o conteúdo estica até
-     ~2100px e as ações alinhadas à direita ficam a ~900px do título e do
-     dado a que se referem — o botão "afastado e pouco ergonômico". O teto
-     encurta essa distância em todas as telas de uma vez. */
-  max-width: 1280px;
+  /* Sem teto de largura (23/10/2026, pedido do Robério): o teto de 1280px
+     deixava uma faixa vazia à direita em monitor largo; o conteúdo ocupa a
+     largura toda ao lado do menu, com o mesmo respiro dos dois lados. */
 }
 
 .page-header {
@@ -2007,9 +2005,9 @@ ul.dup-doc-tooltip__lines li.dup-doc-tooltip__row:first-child {
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
-  /* 36px -> 44px (03 §9). Paginação é alvo frequente em uso por toque. */
-  min-height: 44px;
+  /* Compacto (23/10/2026): 36px com mouse; 44px no toque (03 §9). */
 }
+@media (pointer: coarse) { .cg-page-link { min-height: 44px; } }
 
 .cg-page-link:hover:not(:disabled) {
   background: var(--bg);

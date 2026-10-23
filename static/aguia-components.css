@@ -76,10 +76,10 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    padding: 11px 22px;
-    /* 44px: o padding da demonstração dá 40px em Inter; a altura mínima
-       fecha o alvo de toque sem mudar o desenho. */
-    min-height: 44px;
+    /* Compacto (23/10/2026): 36px com mouse; no toque volta a 44px (regra
+       pointer: coarse abaixo). */
+    padding: 8px 16px;
+    min-height: 36px;
     border-radius: var(--radius-pill);
     border: var(--bw-2) solid transparent;
     background: transparent;
@@ -133,7 +133,8 @@
 .ag-btn--ghost { background: transparent; color: var(--text-secondary); border-color: transparent; }
 .ag-btn--ghost:hover:not(:disabled) { background: var(--bg-surface-alt); color: var(--text-primary); }
 
-.ag-btn--sm { padding: 8px 16px; font-size: var(--text-xs); min-height: 36px; }
+.ag-btn--sm { padding: 6px 12px; font-size: var(--text-xs); min-height: 32px; }
+@media (pointer: coarse) { .ag-btn, .ag-btn--sm, .ag-input, .ag-select { min-height: 44px; } }
 
 .ag-btn .ag-icon { width: 16px; height: 16px; flex: 0 0 auto; }
 
@@ -186,8 +187,8 @@
     background: var(--bg-surface);
     border: var(--bw-1) solid var(--border-default);
     border-radius: var(--radius-md);
-    padding: 10px 14px;
-    min-height: 44px;
+    padding: 6px 12px;
+    min-height: 36px;
     width: 100%;
     min-width: 0;
     transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
@@ -508,20 +509,19 @@ html.dark .ag-badge--gold, :root[data-theme="dark"] .ag-badge--gold {
     letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
     color: var(--text-secondary);
-    padding: 12px 16px;
+    padding: 8px 12px;
     border: 0;
     line-height: 1.4;
     white-space: nowrap;
 }
 
 .ag-table td {
-    padding: 12px 16px;
+    /* Densidade compacta (23/10/2026): linha de ~36px. */
+    padding: 6px 12px;
     border: 0;
     border-top: var(--bw-1) solid var(--border-subtle);
     color: var(--text-primary);
     vertical-align: middle;
-    /* Densidade padrão (44px) coincide com o alvo de toque da linha. */
-    min-height: 44px;
     text-transform: none;
 }
 

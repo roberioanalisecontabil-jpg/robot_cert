@@ -11,7 +11,7 @@
 /* ── 2. Composição da página ──────────────────────────────────────────── */
 
 .cg-painel > * + * {
-    margin-top: var(--space-6);
+    margin-top: var(--space-4);
 }
 
 /* ── KPIs ────────────────────────────────────────────────────────────── */
@@ -94,7 +94,7 @@
 /* ── Card da tabela ──────────────────────────────────────────────────── */
 
 .cg-tabela-card {
-    padding: var(--space-5) var(--space-6) var(--space-6);
+    padding: var(--space-4) var(--space-4) var(--space-5);
     /* O overlay de carregamento e o banner se ancoram aqui. */
     position: relative;
     min-width: 0;
@@ -230,15 +230,21 @@
     text-align: left;
 }
 
-/* O botão de ordenar ocupa a altura inteira do cabeçalho: 44px de alvo
-   (regra 9 do DS) sem o cabeçalho crescer — o padding vertical sai do th e
-   entra no botão. */
-.cg-tabela thead th { padding-top: 0; padding-bottom: 0; height: 44px; }
-.cg-tabela thead .th-ordenar { min-height: 44px; }
-.cg-tabela thead .ag-check { min-height: 44px; }
+/* O botão de ordenar ocupa a altura inteira do cabeçalho sem o cabeçalho
+   crescer — o padding vertical sai do th e entra no botão. Compacto
+   (23/10/2026): 36px com mouse, 44px no toque (regra 9 do DS). */
+.cg-tabela thead th { padding-top: 0; padding-bottom: 0; height: 36px; }
+.cg-tabela thead .th-ordenar { min-height: 36px; }
+.cg-tabela thead .ag-check { min-height: 36px; }
 
-/* O seletor "por página" vem do portal com 38px; aqui sobe ao alvo mínimo. */
-.cg-painel .cg-page-perpage-select { min-height: 44px; }
+.cg-painel .cg-page-perpage-select { min-height: 36px; }
+
+@media (pointer: coarse) {
+    .cg-tabela thead th { height: 44px; }
+    .cg-tabela thead .th-ordenar,
+    .cg-tabela thead .ag-check,
+    .cg-painel .cg-page-perpage-select { min-height: 44px; }
+}
 .cg-tabela .th-ordenar:hover { color: var(--text-primary); }
 .cg-tabela .th-ordenar--ativa { color: var(--text-brand); }
 
@@ -360,7 +366,7 @@
    sem rolar na maioria dos nomes. */
 @media (max-width: 1024px) {
     .cg-tabela th,
-    .cg-tabela td { padding: 10px; }
+    .cg-tabela td { padding: 6px 10px; }
     .cg-tabela td.cg-col-data { font-size: var(--text-xs); }
     /* No modo de seleção a coluna do checkbox entra com 44px justos, senão
        a tabela passa da moldura por uma dúzia de pixels e ganha rolagem. */
