@@ -292,8 +292,8 @@ def banco(monkeypatch):
             )
             ids[nome] = cur.fetchone()[0]
         cur.execute(
-            "INSERT INTO public.cert_history (file_name, documento_numero, ultima_data_registrada) "
-            "VALUES ('a.pfx', %s, now())", (MATRIZ,)
+            "INSERT INTO public.cert_history (arquivo_chave, nome_publico, documento_numero, ultima_data_registrada) "
+            "VALUES (repeat('a', 64), 'a.pfx', %s, now())", (MATRIZ,)
         )
     monkeypatch.setattr(acessorias, "_cliente", lambda: cliente)
     _zerar_caches()
@@ -308,7 +308,6 @@ def banco(monkeypatch):
 
 def _zerar_caches():
     acessorias._sincronizado.update(valor=False, em=-1e9)
-    acessorias._com_certificado.update(valor=frozenset(), em=-1e9)
 
 
 def _api_com(*empresas):

@@ -20,4 +20,25 @@
 --
 -- Volta: scripts/migracao_lote3_nome_publico.py --volta (restaura das cópias
 -- cert_history_bkp_lote3 e cert_snapshots_bkp_lote3).
-select 1;
+--
+-- Banco novo (db/aplicar_schema.py): sem linhas para reescrever, o DDL roda
+-- aqui mesmo. Com linhas no formato antigo, recusa e manda para o script.
+-- No formato novo, não faz nada.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'cert_history' and column_name = 'file_name'
+  ) then
+    return;
+  end if;
+  if exists (select 1 from public.cert_history) then
+    raise exception 'cert_history tem linhas no formato antigo: rode scripts/migracao_lote3_nome_publico.py --ida';
+  end if;
+  alter table public.cert_history add column arquivo_chave char(64), add column nome_publico text;
+  alter table public.cert_history drop constraint cert_history_pkey;
+  alter table public.cert_history drop column file_name;
+  alter table public.cert_history alter column arquivo_chave set not null, alter column nome_publico set not null;
+  alter table public.cert_history add primary key (arquivo_chave);
+  create index if not exists cert_history_nome_publico_idx on public.cert_history (nome_publico);
+end $$;
