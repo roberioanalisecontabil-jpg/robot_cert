@@ -853,6 +853,9 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
     gap: var(--space-6);
     border-bottom: var(--bw-1) solid var(--border-subtle);
     overflow-x: auto;
+    /* O margin-bottom de -1px da aba (sobre o fio) passa a altura da barra
+       em 1px; com overflow-x:auto o navegador mostrava rolagem vertical. */
+    overflow-y: hidden;
 }
 .ag-abas__aba {
     display: inline-flex;

@@ -20,6 +20,10 @@
 }
 /* Sem cara de link no hover (08/10/2026): a linha inteira é o alvo, e o
    fundo dela já diz isso. O anel de foco fica, só para o teclado. */
+/* A regra global `button:hover` do style.css pintava uma pílula de --bg
+   atrás do nome (no escuro, uma faixa preta — print de 23/10/2026). */
+.cg-det-abrir:hover:not(:disabled),
+.cg-det-abrir:active:not(:disabled) { background: none; opacity: 1; transform: none; filter: none; }
 .cg-det-abrir:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-xs); }
 .cg-tabela-card tbody tr:not(.cg-state-row) { cursor: pointer; }
 .cg-tabela-card tbody td.cg-col-sel { cursor: default; }
