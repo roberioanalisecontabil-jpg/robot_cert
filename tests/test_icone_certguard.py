@@ -1,4 +1,4 @@
-"""Ícone do Certguard Análise: o C dourado (15/10/2026, estacao/icone.py)."""
+"""Ícone do CertGuard Análise: o C dourado (15/10/2026, estacao/icone.py)."""
 from pathlib import Path
 
 from PIL import Image

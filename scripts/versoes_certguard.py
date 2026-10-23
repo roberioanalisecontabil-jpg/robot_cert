@@ -1,7 +1,7 @@
-"""Chaves e publicação da atualização automática do Certguard Análise (1.1.0).
+"""Chaves e publicação da atualização automática do CertGuard Análise (1.1.0).
 
 Roda NA MÁQUINA DE BUILD, onde fica a chave principal (decidido em 20/10/2026:
-chave própria do Certguard, separada da do Hardlyze).
+chave própria do CertGuard, separada da do Hardlyze).
 
     python scripts/versoes_certguard.py gerar-chaves
         Cria o par PRINCIPAL e o par RESERVA em %USERPROFILE%\\.certguard-chaves

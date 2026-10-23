@@ -43,7 +43,7 @@ A zona `analisegroup.cnt.br` serve outros sites pelo proxy (a raiz, `bi.`, `gest
   - **SSL: Estrito (Full strict).** O Caddy tem certificado Let's Encrypt válido. "Flexível" mandaria tudo em HTTP até o servidor, e o portal redirecionaria em laço.
   - **Ofuscação de e-mail: desligada.** Ela injeta um script na página, que a política de segurança (CSP) do portal bloqueia.
   - **Rocket Loader: desligado**, pelo mesmo motivo.
-  - **Verificação de integridade do navegador: desligada.** Ela desafia clientes que não são navegador, e as bandejas das estações (Certguard Análise) e o Hardlyze 2.x são programas.
+  - **Verificação de integridade do navegador: desligada.** Ela desafia clientes que não são navegador, e as bandejas das estações (CertGuard Análise) e o Hardlyze 2.x são programas.
 - **Rules › Redirect Rules › `certificado-https`:** `http://certificado.analisegroup.cnt.br/*` → `https://certificado.analisegroup.cnt.br/${1}`, 301, preservando a consulta. Faz o papel do "Sempre usar HTTPS", que está desligado na zona.
 - **Security › Regras de segurança › Rate limiting › `login`** (o plano grátis permite uma regra), item 14:
   - Se: host `certificado.analisegroup.cnt.br` **e** caminho contém `/api/login` **e** método `POST`.

@@ -1,4 +1,4 @@
-"""Wiki do Certguard: tutoriais de uso, módulo por módulo (14/10/2026).
+"""Wiki do CertGuard: tutoriais de uso, módulo por módulo (14/10/2026).
 
 Diferente das outras páginas, esta confere a sessão NO SERVIDOR antes de
 renderizar. As telas de dados podem servir o HTML a qualquer um porque o HTML
@@ -69,7 +69,7 @@ MODULOS: tuple[ModuloWiki, ...] = (
                "Contas, departamentos, níveis de acesso e computadores.", "usuarios"),
     ModuloWiki("configuracao", "Configuração",
                "Pastas, alertas, comandos e integrações do portal.", "configuracao"),
-    ModuloWiki("bandeja", "Bandeja Certguard Análise",
+    ModuloWiki("bandeja", "Bandeja CertGuard Análise",
                "O programa das estações que instala os certificados pedidos no portal.", None),
 )
 

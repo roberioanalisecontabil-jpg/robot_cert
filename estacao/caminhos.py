@@ -1,4 +1,4 @@
-"""Onde o Certguard Análise guarda as coisas, e onde o Hardlyze guardava.
+"""Onde o CertGuard Análise guarda as coisas, e onde o Hardlyze guardava.
 
   máquina  %ProgramData%\\CertguardAnalise   chave da máquina (o instalador grava)
   pessoa   %LOCALAPPDATA%\\CertguardAnalise  conta do portal e o log da bandeja

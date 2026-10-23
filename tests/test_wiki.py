@@ -1,4 +1,4 @@
-"""Wiki do Certguard (app/rotas/wiki.py).
+"""Wiki do CertGuard (app/rotas/wiki.py).
 
 O que a página promete, e por isso o que se testa:
 - sem sessão, nada do conteúdo sai: vai para o login e volta depois;

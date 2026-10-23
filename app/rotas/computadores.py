@@ -178,7 +178,7 @@ def desvincular_computador(vinculo_id: str, token: auth.TokenData = Depends(requ
 
 # `POST /api/computadores/importar-do-hardlyze` saiu em 14/10/2026 com a
 # ponte: era a transição do ADR 0002, e as estações agora trazem a conta
-# do Hardlyze direto no Certguard Análise (ADR 0003).
+# do Hardlyze direto no CertGuard Análise (ADR 0003).
 
 
 # `GET /api/computadores/principais` saiu em 12/10/2026, por decisão do

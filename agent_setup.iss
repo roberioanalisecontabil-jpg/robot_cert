@@ -1,11 +1,11 @@
 ﻿; Instalador Analise CertiDigital Agent â€” AnaliseCertiDigital_Agent.exe (bandeja / tarefa agendada)
 
 [Setup]
-AppName=Analise CertiDigital Agent
+AppName=CertGuard Análise Servidor
 AppVersion=1.7.1
 AppId={{E2D4A8D2-9D26-4A0D-9AB2-7E2E8F4B0D17}
 DefaultDirName={autopf}\Analise CertiDigital Agent
-DefaultGroupName=Analise CertiDigital
+DefaultGroupName=CertGuard Análise
 WizardStyle=modern
 OutputDir=dist\installer
 OutputBaseFilename=Instalador_AnaliseCertiDigital_Agente
@@ -41,9 +41,14 @@ Source: "agent\agent_config.example.json"; DestDir: "{app}"; DestName: "agent_co
 ; tambem deixava o icone parado em cinza, porque o loop visual so era executado
 ; neste modo. O que o usuario quer ao clicar no atalho e a bandeja, nao um
 ; segundo agente.
-Name: "{group}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"
-Name: "{group}\Desinstalar Analise CertiDigital Agent"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Analise CertiDigital Agent"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Tasks: desktopicon
+Name: "{group}\CertGuard Análise Servidor"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"
+Name: "{group}\Desinstalar CertGuard Análise Servidor"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\CertGuard Análise Servidor"; Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Tasks: desktopicon
+
+[InstallDelete]
+; Atalhos com o nome antigo (antes de 23/10/2026): o nome exibido passou a CertGuard.
+Type: filesandordirs; Name: "{autoprograms}\Analise CertiDigital"
+Type: files; Name: "{autodesktop}\Analise CertiDigital Agent.lnk"
 
 [Run]
 Filename: "{app}\AnaliseCertiDigital_Agent.exe"; Parameters: "--tray-only"; Description: "Iniciar o agente em bandeja agora"; Flags: nowait postinstall skipifsilent unchecked; Check: OfferTrayAfterInstall
@@ -578,7 +583,7 @@ begin
   Cmd :=
     '/C sc create "' + ServiceName + '" ' +
     'binPath= "\"' + SvcExePath + '\"" ' +
-    'start= auto DisplayName= "Analise CertiDigital Agent Service"';
+    'start= auto DisplayName= "CertGuard Analise Servidor"';
   Log('Criando servico: ' + Cmd);
   if not Exec(ExpandConstant('{cmd}'), Cmd, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, RC) then
   begin
@@ -640,7 +645,7 @@ begin
     Exit;
   end;
 
-  Cmd := '/C sc description "' + ServiceName + '" "Servico Analise CertiDigital com operacoes administrativas em background."';
+  Cmd := '/C sc description "' + ServiceName + '" "Servico do CertGuard Analise com operacoes administrativas em background."';
   Exec(ExpandConstant('{cmd}'), Cmd, '', SW_HIDE, ewWaitUntilTerminated, RC);
 
   Cmd := '/C sc start "' + ServiceName + '"';
@@ -759,7 +764,7 @@ begin
     if not StopRunningAgent then
     begin
       MsgBox(
-        'Nao foi possivel encerrar o Analise CertiDigital Agent antes da instalacao.' + #13#10 +
+        'Nao foi possivel encerrar o CertGuard Analise Servidor antes da instalacao.' + #13#10 +
         LastOperationError,
         mbError, MB_OK
       );
@@ -823,7 +828,7 @@ begin
     if not StopRunningAgent then
     begin
       MsgBox(
-        'Nao foi possivel encerrar o Analise CertiDigital Agent antes da desinstalacao.' + #13#10 +
+        'Nao foi possivel encerrar o CertGuard Analise Servidor antes da desinstalacao.' + #13#10 +
         LastOperationError,
         mbError, MB_OK
       );

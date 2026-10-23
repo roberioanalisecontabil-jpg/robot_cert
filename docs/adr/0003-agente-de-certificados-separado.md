@@ -114,7 +114,7 @@ site, e a atualização automática dos dois agentes fica **por último**. O que
   sair). Nada de função nova: se algo quebrar, foi a separação.
 - **Nada no portal para distribuir** (passo 1 do plano adiado): o instalador fica numa pasta
   do ANALISESRV.
-- **Nome e lugar:** "Certguard Análise", `C:\Program Files\Certguard Analise`,
+- **Nome e lugar:** "CertGuard Análise", `C:\Program Files\Certguard Analise`,
   `%ProgramData%\CertguardAnalise`, `%LOCALAPPDATA%\CertguardAnalise`,
   `certguard_analise.exe`, versão 1.0.0, código em `estacao/`.
 - **Ensaio** na máquina de teste, na ordem real (Hardlyze logado → desinstala → instala os
@@ -131,7 +131,7 @@ Decidido com o usuário em 20/10/2026, depois da virada da carteira (ADR 0005):
   **abertas**, com teto por endereço, como este ADR previa. A pasta é
   `ATUALIZACOES_DIR/certificados` (padrão `C:\Apps\robot_cert\atualizacoes\certificados`), com
   `vigente.json` e o instalador; publicar é copiar os dois (`deploy/publicar-certguard.ps1`).
-- **Chave própria do Certguard**, não a do Hardlyze: par Ed25519 principal (cifrado na máquina
+- **Chave própria do CertGuard**, não a do Hardlyze: par Ed25519 principal (cifrado na máquina
   de build) e reserva (fora do computador), gerados e usados por
   `scripts/versoes_certguard.py`. O formato do manifesto veio do Hardlyze
   (`estacao/manifesto.py`), mas só aceita o produto `certificados`.

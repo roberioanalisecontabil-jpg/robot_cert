@@ -1,6 +1,6 @@
 """Atualização automática da bandeja — o lado da estação (1.1.0, 20/10/2026).
 
-Veio de `core/atualizador.py` do Hardlyze. A diferença: o Certguard Análise
+Veio de `core/atualizador.py` do Hardlyze. A diferença: o CertGuard Análise
 não tem serviço. O papel do serviço fica com uma TAREFA AGENDADA que roda como
 SYSTEM na partida do Windows e a cada 6 horas (`certguard_analise.exe
 --atualizacao`, criada pelo instalador). A bandeja roda como a pessoa, sem

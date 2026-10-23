@@ -8,7 +8,7 @@ precisa enviá-la); só SYSTEM e Administradores a alteram.
 
 ── Quem grava ─────────────────────────────────────────────────────────────
 
-No Hardlyze era o serviço. O Certguard Análise 1.0 não tem serviço (adendo de
+No Hardlyze era o serviço. O CertGuard Análise 1.0 não tem serviço (adendo de
 14/10/2026 ao ADR 0003): quem grava é o INSTALADOR, que já roda como
 administrador, chamando `certguard_analise.exe --preparar-chave`. Na troca, ele
 copia a chave do Hardlyze — o hash é o mesmo, então o vínculo já aprovado

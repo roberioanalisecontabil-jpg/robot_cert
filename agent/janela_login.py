@@ -121,7 +121,7 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
         LOGGER.warning("Sem interface gráfica disponível para a janela de login.")
         return
 
-    raiz.title("Analise CertiDigital Agent — Entrar")
+    raiz.title("CertGuard Análise Servidor — Entrar")
     raiz.configure(bg=_COR_FUNDO)
     raiz.resizable(False, False)
     raiz.geometry("440x330")

@@ -1,4 +1,4 @@
-"""A versão publicada do Certguard Análise, para a atualização automática (1.1.0).
+"""A versão publicada do CertGuard Análise, para a atualização automática (1.1.0).
 
 O portal só GUARDA e ENTREGA: o pacote vem assinado de
 `scripts/versoes_certguard.py` e quem confere a assinatura é a estação
@@ -50,7 +50,7 @@ def vigente() -> Optional[Dict[str, Any]]:
         if not (_RE_ARQUIVO.match(m["arquivo"]) and _RE_SHA256.match(m["sha256"]) and _RE_VERSAO.match(m["versao"])):
             raise ValueError("arquivo, sha256 ou versão malformado")
     except Exception as e:
-        logger.exception("vigente.json do Certguard ilegível; ninguém atualiza até corrigir.")
+        logger.exception("vigente.json do CertGuard ilegível; ninguém atualiza até corrigir.")
         raise PublicacaoIlegivel(str(e)) from None
     return pacote
 
@@ -62,7 +62,7 @@ def instalador(sha256: str) -> Optional[Path]:
         return None
     caminho = pasta() / pacote["manifesto"]["arquivo"]
     if not caminho.is_file():
-        logger.error("vigente.json do Certguard aponta para %s, que não está na pasta.", caminho.name)
+        logger.error("vigente.json do CertGuard aponta para %s, que não está na pasta.", caminho.name)
         raise PublicacaoIlegivel("instalador publicado não encontrado")
     return caminho
 

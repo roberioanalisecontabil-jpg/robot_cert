@@ -166,10 +166,10 @@ def _enviar_codigo_de_login(conta: dict, codigo: str) -> None:
         host=s.smtp_host, port=s.smtp_port, user=s.smtp_user, password_enc=s.smtp_password_encrypted,
         use_tls=s.smtp_use_tls, use_ssl=s.smtp_use_ssl, from_email=s.smtp_from_email,
         to_email=str(conta["email"]), settings=s,
-        subject="Código para entrar no portal de certificados",
+        subject="Código para entrar no CertGuard Análise",
         html_content=(
             f"<p>{nome},</p>"
-            "<p>Use o código abaixo para entrar no portal de certificados:</p>"
+            "<p>Use o código abaixo para entrar no CertGuard Análise:</p>"
             f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;margin:24px 0;">{codigo}</p>'
             f"<p>Ele vale por {senha_reset.VALIDADE_MIN} minutos e só pode ser usado uma vez.</p>"
             "<p><strong>Se não foi você que tentou entrar</strong>, alguém sabe a sua senha: "
@@ -1196,7 +1196,7 @@ def _enviar_codigo_por_email(conta: dict, codigo: str) -> None:
         html_content=(
             f"<p>{nome},</p>"
             "<p>Recebemos um pedido para redefinir a senha da sua conta no "
-            "Monitor de Certificados. Use o código abaixo:</p>"
+            "CertGuard Análise. Use o código abaixo:</p>"
             f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;'
             f'margin:24px 0;">{codigo}</p>'
             f"<p>Ele vale por {senha_reset.VALIDADE_MIN} minutos e só pode ser "

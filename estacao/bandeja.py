@@ -1,4 +1,4 @@
-"""A bandeja do Certguard Análise: entrar, ver a situação, receber e instalar.
+"""A bandeja do CertGuard Análise: entrar, ver a situação, receber e instalar.
 
 Veio da parte de certificados do `main.py` do Hardlyze 2.2.0 (tray-only):
 `certificados_loop`, `verificar_instalacoes_do_portal`, `on_login`,

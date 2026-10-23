@@ -1,5 +1,5 @@
 ---
-name: Analise CertiDigital
+name: CertGuard Análise
 description: Portal de custódia e instalação de certificados digitais sobre o Águia Design System — grafite quente sobre off-white, ouro só como acento, cor só para estado.
 colors:
   gold-500: "#C9A06A"

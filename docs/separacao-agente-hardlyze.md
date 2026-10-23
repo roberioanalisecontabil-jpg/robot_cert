@@ -1,13 +1,13 @@
 # Separação do agente: o que sai do Hardlyze e como trocar nas estações
 
 Par do adendo de 14/10/2026 ao ADR 0003. O agente de certificados das estações
-agora é o **Certguard Análise** (`estacao/` deste repositório, instalador
+agora é o **CertGuard Análise** (`estacao/` deste repositório, instalador
 `Instalador_CertguardAnalise_1.0.0.exe`). Esta nota é para a sessão do INVENT: o
 repositório do Hardlyze não é mexido daqui.
 
 ## 1. O que sai do Hardlyze (INVENT)
 
-O Certguard Análise 1.0 faz tudo o que a bandeja de certificados do Hardlyze
+O CertGuard Análise 1.0 faz tudo o que a bandeja de certificados do Hardlyze
 2.2.0 fazia. Numa versão do Hardlyze sem certificados (a numeração é de lá):
 
 - **Módulos** em `core/`: `conta_certificados.py`, `instalador_certificado.py`,
@@ -22,7 +22,7 @@ O Certguard Análise 1.0 faz tudo o que a bandeja de certificados do Hardlyze
   - o pedido automático de login na partida da bandeja;
   - `chave_maquina.garantir()` na partida do serviço: o Hardlyze **não gera mais**
     a `chave_certificados.dat`. Se continuasse, recriaria uma chave que ninguém usa
-    depois que o instalador do Certguard Análise apaga a original;
+    depois que o instalador do CertGuard Análise apaga a original;
   - `cert_portal_url` (recebido no agendamento) deixa de ter uso.
 - **`hardlyze.spec`**: os hiddenimports `core.conta_certificados`,
   `core.chave_maquina`, `core.janela_login`, `core.instalador_certificado`.
@@ -36,11 +36,11 @@ O Certguard Análise 1.0 faz tudo o que a bandeja de certificados do Hardlyze
 
 O desinstalador do Hardlyze **não** deve passar a apagar
 `%ProgramData%\InventAgent` nem `%LOCALAPPDATA%\InventAgent`: é de lá que o
-Certguard Análise copia a chave da máquina e a conta da pessoa.
+CertGuard Análise copia a chave da máquina e a conta da pessoa.
 
 ## 2. Troca em cada estação (manual)
 
-A ordem importa. Instalando o Certguard Análise com a bandeja antiga do Hardlyze
+A ordem importa. Instalando o CertGuard Análise com a bandeja antiga do Hardlyze
 ainda aberta, a conta da pessoa é trazida e apagada do Hardlyze, e a bandeja
 antiga passa a pedir login.
 

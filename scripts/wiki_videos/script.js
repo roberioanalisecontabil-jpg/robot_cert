@@ -17,8 +17,8 @@
 
 /* ------------------------------------------------------------------ 1. CONFIG */
 const CONFIG = {
-  produto: 'Certguard',                                  // nome grande da abertura e do encerramento
-  sistema: 'Wiki do Certguard',                          // linha pequena sob o nome
+  produto: 'CertGuard',                                  // nome grande da abertura e do encerramento
+  sistema: 'Wiki do CertGuard',                          // linha pequena sob o nome
   slogan: 'Contabilidade e Gestão Inteligente',
   logo: 'assets/logos/certguard.png',                    // o C dourado da bandeja (ico/certguard.png)
   logoPortal: 'assets/logos/certificado.png',            // o A do portal (static/logo.png)
@@ -65,7 +65,7 @@ const ic = (name, size = 18, cls = '') =>
 
 /* ------------------------------------------------------- 3. RÉPLICA DA INTERFACE */
 /*
-  Réplicas do portal Analise Certificado e da bandeja Certguard Análise, copiadas dos templates reais
+  Réplicas do portal Analise Certificado e da bandeja CertGuard Análise, copiadas dos templates reais
   (templates/index.html, vencidos.html, colaborador_certificados.html, login.html, static/ui-common.js e
   estacao/bandeja.py). Rótulos e mensagens são os do produto; empresas, documentos e e-mails são FICTÍCIOS.
 */
@@ -203,7 +203,7 @@ function htmlPaginas() {
     </div>
     <div class="p-toast info" id="t-pedido" style="opacity:0;visibility:hidden">${ic('info', 18)}<span>Pedido enviado. Acompanhando a instalação…</span><i>×</i></div>
     <div class="p-toast ok" id="t-ok" style="opacity:0;visibility:hidden">${ic('check-circle', 18)}<span>Certificado instalado em PC-EXEMPLO-01.</span><i>×</i></div>
-    <div class="w-toast" id="w-toast" style="opacity:0;visibility:hidden"><b>Certguard Análise</b><span>1 certificado(s) instalado(s).</span></div>
+    <div class="w-toast" id="w-toast" style="opacity:0;visibility:hidden"><b>CertGuard Análise</b><span>1 certificado(s) instalado(s).</span></div>
     <div class="m-veu" id="ds-veu"></div>
     <div class="m-modal ds" id="ds-modal">
       <div class="ds-head"><h2>Defina sua senha</h2><p>A senha atual foi definida por outra pessoa. Escolha uma que só você saiba para continuar usando o portal.</p></div>
@@ -355,7 +355,7 @@ const SCENES = [
 
   /* ============ 1. Instalar um certificado pela bandeja ============ */
   {
-    id: 'b-antes', tipo: 'app', semChrome: true, nome: 'Antes de começar', eyebrow: 'Bandeja Certguard Análise', dur: 14, cartela: true, cfx: 'zoom',
+    id: 'b-antes', tipo: 'app', semChrome: true, nome: 'Antes de começar', eyebrow: 'Bandeja CertGuard Análise', dur: 14, cartela: true, cfx: 'zoom',
     paginas: [[0, 'desktop']],
     camera: [
       { t: 0, x: 800, y: 450, z: 1 },
@@ -370,7 +370,7 @@ const SCENES = [
     ],
     spots: [{ t: 7.4, t2: 12.2, sel: '#dk-m-status', label: 'Conectada e autorizada', pad: 6 }],
     legendas: [
-      { t: 2.0, t2: 6.8, txt: 'Antes: a bandeja <b>Certguard Análise</b> aberta, perto do relógio' },
+      { t: 2.0, t2: 6.8, txt: 'Antes: a bandeja <b>CertGuard Análise</b> aberta, perto do relógio' },
       { t: 7.0, t2: 12.8, txt: 'No menu do ícone: <b>computador autorizado</b>' },
     ],
     fx: [A.win('#dk-menu', 4.8, 13.4, { fade: 0.2, y: 8 }), A.cls('#dk-ico', 'is-on', 4.7, 13.4)],
@@ -685,7 +685,7 @@ const modDa = (sc) => MODULOS_COR[MODULO_DA_CENA[sc.id] || 'portal'];
 /* ---- Três vídeos, um motor: cada um é um <body data-roteiro="nome"> num .html ---- */
 const ROTEIROS = {
   bandeja: {
-    titulo: 'Instalar pela bandeja', sub: 'Wiki do Certguard', sistema: 'Wiki do Certguard',
+    titulo: 'Instalar pela bandeja', sub: 'Wiki do CertGuard', sistema: 'Wiki do CertGuard',
     frase: 'Instalar um certificado <b>pela bandeja</b>',
     desc: 'Do pedido no Início ao aviso do Windows: como um certificado chega ao seu computador. Dados fictícios.',
     cenas: ['abertura', 'b-antes', 'b-selecionar', 'b-instalar', 'encerramento'],
@@ -697,7 +697,7 @@ const ROTEIROS = {
     fim: 'O certificado fica no seu usuário do Windows,<br><em>pronto para usar.</em>',
   },
   vencimentos: {
-    titulo: 'Acompanhar vencimentos', sub: 'Wiki do Certguard', sistema: 'Wiki do Certguard',
+    titulo: 'Acompanhar vencimentos', sub: 'Wiki do CertGuard', sistema: 'Wiki do CertGuard',
     frase: 'Acompanhar os <b>vencimentos</b>',
     desc: 'Expirando no Início, a página Vencidos e o Acompanhamento com aviso por e-mail. Dados fictícios.',
     cenas: ['abertura', 'v-inicio', 'v-vencidos', 'v-escolher', 'v-aviso', 'encerramento'],
@@ -709,7 +709,7 @@ const ROTEIROS = {
     fim: 'Nenhum vencimento<br><em>pega você de surpresa.</em>',
   },
   login: {
-    titulo: 'Primeiro acesso com código', sub: 'Wiki do Certguard', sistema: 'Wiki do Certguard',
+    titulo: 'Primeiro acesso com código', sub: 'Wiki do CertGuard', sistema: 'Wiki do CertGuard',
     frase: 'Primeiro acesso <b>com código</b>',
     desc: 'E-mail e senha, o código de 6 dígitos que chega por e-mail e a troca da senha provisória. Dados fictícios.',
     cenas: ['abertura', 'l-entrar', 'l-codigo', 'l-senha', 'encerramento'],
@@ -1153,7 +1153,7 @@ function montarEncerramento() {
         <div class="tit">${c.tit}</div><p>${c.p}</p></div>`).join('')}</div>
     <div class="final" id="ce-final">${ROTEIRO.fim}</div>
     <div class="fonte" id="ce-fonte">Demonstração · dados fictícios</div>
-    <div class="fecha" id="ce-fecha"><img src="${CONFIG.logo}" alt=""><b>Wiki do Certguard</b><small>${CONFIG.slogan.toUpperCase()}</small></div>`;
+    <div class="fecha" id="ce-fecha"><img src="${CONFIG.logo}" alt=""><b>Wiki do CertGuard</b><small>${CONFIG.slogan.toUpperCase()}</small></div>`;
   dom.ceTopo = $('#ce-topo'); dom.ceBenes = $$('#ce-grade .bene'); dom.ceFinal = $('#ce-final');
   dom.ceFonte = $('#ce-fonte'); dom.ceFecha = $('#ce-fecha'); dom.ceNums = $$('#ce-grade .num');
 }

@@ -1,4 +1,4 @@
-"""Rotas da atualização automática do Certguard Análise (1.1.0, 20/10/2026).
+"""Rotas da atualização automática do CertGuard Análise (1.1.0, 20/10/2026).
 
 Abertas, sem credencial, como o ADR 0003 decidiu: quem pede é a tarefa
 agendada da estação, que roda como SYSTEM e não tem a conta da pessoa. A
@@ -73,9 +73,9 @@ class EventoDeAtualizacao(BaseModel):
 
 
 _TEXTO = {
-    "atualizou": "Certguard Análise atualizado de {de} para {para}.",
-    "voltou": "Certguard Análise voltou para {para}: a versão {de} não subiu. {detalhe}",
-    "falhou": "Atualização do Certguard Análise para {para} falhou: {detalhe}",
+    "atualizou": "CertGuard Análise atualizado de {de} para {para}.",
+    "voltou": "CertGuard Análise voltou para {para}: a versão {de} não subiu. {detalhe}",
+    "falhou": "Atualização do CertGuard Análise para {para} falhou: {detalhe}",
 }
 
 

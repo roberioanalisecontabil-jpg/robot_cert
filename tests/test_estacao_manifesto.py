@@ -1,4 +1,4 @@
-"""Manifesto assinado da atualização automática do Certguard Análise (1.1.0).
+"""Manifesto assinado da atualização automática do CertGuard Análise (1.1.0).
 
 Vieram do Hardlyze (tests/test_manifesto_de_versao.py), com o produto e o
 script daqui. O que este arquivo prende:

@@ -364,8 +364,8 @@ def test_smtp_config(body: SmtpTestBody) -> dict:
             from_email=s.smtp_from_email,
             to_email=destino,
             settings=s,
-            subject="Monitor de Certificados - E-mail de Teste",
-            html_content=f"<p>Olá! Este é um e-mail de teste enviado a partir do seu <strong>Monitor de Certificados</strong> para validar o envio por {forma}.</p>"
+            subject="CertGuard Análise - E-mail de Teste",
+            html_content=f"<p>Olá! Este é um e-mail de teste enviado a partir do <strong>CertGuard Análise</strong> para validar o envio por {forma}.</p>"
         )
     # Uma mensagem fixa por CLASSE de falha (achado #35; item 91 da spec de
     # telas). O texto do servidor SMTP trazia o usuário, às vezes o endereço

@@ -1,4 +1,4 @@
-"""Atualização automática do Certguard Análise, lado da estação (1.1.0).
+"""Atualização automática do CertGuard Análise, lado da estação (1.1.0).
 
 Vieram do Hardlyze (tests/test_atualizador_do_agente.py); as versões dos
 exemplos (2.2.x) ficaram as de lá, só o produto e os nomes mudaram.

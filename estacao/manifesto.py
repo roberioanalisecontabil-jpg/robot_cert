@@ -1,6 +1,6 @@
 """Manifesto assinado da atualização automática da bandeja (1.1.0, 20/10/2026).
 
-Um manifesto diz: "a versão X do Certguard Análise é o instalador com este
+Um manifesto diz: "a versão X do CertGuard Análise é o instalador com este
 SHA-256". Ele é assinado com Ed25519 por `scripts/versoes_certguard.py` e
 conferido pela estação antes de baixar qualquer coisa. O portal só guarda e
 entrega: invadir o servidor não basta para publicar versão, porque a chave

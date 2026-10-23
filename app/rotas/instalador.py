@@ -666,7 +666,7 @@ def instalabilidade(
 # que segue abaixo.
 #
 # Desde 08/10/2026 ela enfileira de novo na fila deste portal, agora para a
-# bandeja da estação (ADR 0002; Certguard Análise desde o ADR 0003).
+# bandeja da estação (ADR 0002; CertGuard Análise desde o ADR 0003).
 
 
 def _computador_autorizado_da_pessoa(user_id: str) -> Optional[dict]:

@@ -113,9 +113,13 @@ combinar escopo antes.
 
 ## Brand Commitments
 
-- Nome exibido no portal: **Analise Certificado** / "Monitor de Certificados".
-  Nome do produto na documentação: **Analise CertiDigital** (anteriormente
-  *Robot Cert*, ainda o nome do repositório).
+- Nome do produto, em tudo que as pessoas veem (portal, e-mails, bandeja,
+  agente do servidor, instaladores): **CertGuard Análise** (decidido em
+  23/10/2026). Nomes antigos: *Analise Certificado* / *Monitor de Certificados*
+  (portal), *Analise CertiDigital* (agente do servidor), *Certguard Análise*
+  (bandeja), *Robot Cert* (ainda o nome do repositório). Serviço, executáveis,
+  pastas e tarefas agendadas mantêm os nomes antigos de propósito: trocá-los
+  exigiria reinstalar cada máquina.
 - Autoria: **Roberio França | AnaliseGroupTI**.
 - Marca visual existente: `static/logo.png` (512×512, quadrado), servido em
   36×36 na sidebar.

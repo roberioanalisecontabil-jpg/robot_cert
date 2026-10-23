@@ -689,10 +689,10 @@ def _enviar_convite(conta: dict, codigo: str) -> None:
         host=s.smtp_host, port=s.smtp_port, user=s.smtp_user, password_enc=s.smtp_password_encrypted,
         use_tls=s.smtp_use_tls, use_ssl=s.smtp_use_ssl, from_email=s.smtp_from_email,
         to_email=str(conta["email"]), settings=s,
-        subject="Seu acesso ao Monitor de Certificados",
+        subject="Seu acesso ao CertGuard Análise",
         html_content=(
             f"<p>{nome},</p>"
-            "<p>Sua conta no Monitor de Certificados foi criada a partir do seu cadastro no "
+            "<p>Sua conta no CertGuard Análise foi criada a partir do seu cadastro no "
             "Acessórias. Com ela você vê e instala os certificados das empresas pelas quais é "
             "responsável lá.</p>"
             "<p>Para definir sua senha, abra o portal em <strong>Esqueci minha senha › já tenho "

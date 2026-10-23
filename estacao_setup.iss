@@ -7,7 +7,7 @@
 ; conferem a versao publicada no portal (estacao/tarefa.py).
 ; Gravado em UTF-8 COM BOM: sem ele o ISCC le como ANSI e o "a" acentuado do
 ; nome vira lixo na tela. Mantenha o BOM ao editar.
-#define MyAppName "Certguard Análise"
+#define MyAppName "CertGuard Análise"
 #define MyInternalName "Certguard Analise"
 #define MyAppVersion "1.1.1"
 #define MyAppPublisher "Analise Group"

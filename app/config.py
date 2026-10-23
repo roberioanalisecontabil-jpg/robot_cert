@@ -16,7 +16,7 @@ CERT_EXPIRED_DIR = Path(
     os.getenv("CERT_EXPIRED_DIR", str(ROOT / "certificados_vencidos"))
 ).resolve()
 
-# Versões publicadas do Certguard Análise para a atualização automática
+# Versões publicadas do CertGuard Análise para a atualização automática
 # (app/atualizacao_estacao.py): <pasta>/certificados/vigente.json + o instalador.
 ATUALIZACOES_DIR = Path(
     os.getenv("ATUALIZACOES_DIR", str(ROOT / "atualizacoes"))
@@ -53,7 +53,7 @@ ACEITAR_API_KEY_COMPARTILHADA = _env_bool(
 )
 
 # /claim exige credencial de MÁQUINA deste portal? Quem resgata é a bandeja da
-# estação (Certguard Análise, ou o Hardlyze 2.x onde ainda não foi trocado),
+# estação (CertGuard Análise, ou o Hardlyze 2.x onde ainda não foi trocado),
 # que não tem credencial de máquina aqui — ela manda só o token. Ligar pararia
 # toda instalação. Desligada, o /claim confere o `X-Machine-Id` quando o agente o
 # manda e avisa no log quando não manda (janela do achado #21).
@@ -241,7 +241,7 @@ VERSAO_AGENTE_ESPERADA = "1.7.1"
 
 # A ponte com o INVENT (INVENT_API_URL, CERT_PORTAL_TOKEN) saiu em 14/10/2026:
 # a instalação vai pela fila deste portal desde 08/10, a bandeja das estações
-# é o Certguard Análise (ADR 0003), e a importação de logins do Hardlyze
+# é o CertGuard Análise (ADR 0003), e a importação de logins do Hardlyze
 # acabou com a transição. Variáveis que sobrarem no .env são ignoradas.
 
 

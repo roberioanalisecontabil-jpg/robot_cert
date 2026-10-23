@@ -1,4 +1,4 @@
-﻿# Vídeos da wiki do Certguard
+﻿# Vídeos da wiki do CertGuard
 
 Fonte dos três vídeos curtos de `/wiki-certguard`. Cada vídeo é uma página HTML que desenha réplicas das
 telas do portal e da bandeja em movimento (motor da skill `video-apresentacao`). Nada toca o sistema real:

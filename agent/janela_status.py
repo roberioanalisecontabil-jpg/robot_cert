@@ -249,7 +249,7 @@ def _rodar_janela(obter_estado, nome_servico, caminho_log,
         _janela_aberta.clear()
         return
 
-    raiz.title("Analise CertiDigital Agent — Status")
+    raiz.title("CertGuard Análise Servidor — Status")
     raiz.configure(bg=_COR_FUNDO)
     raiz.resizable(False, False)
     raiz.geometry("600x360")

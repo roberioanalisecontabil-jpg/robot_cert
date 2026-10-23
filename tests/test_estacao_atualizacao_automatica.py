@@ -1,4 +1,4 @@
-"""Atualização automática do Certguard Análise (1.1.0, 20/10/2026): o portal,
+"""Atualização automática do CertGuard Análise (1.1.0, 20/10/2026): o portal,
 a tarefa agendada e o instalador.
 
 O fluxo do atualizador e o formato do manifesto têm os próprios arquivos

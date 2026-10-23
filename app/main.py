@@ -285,7 +285,7 @@ async def lifespan(_app: FastAPI):
 # qualquer visitante anônimo, e era o único dado que uma visita sem sessão
 # levava do portal. O INVENT já nascia assim; isto é a paridade.
 app = FastAPI(
-    title="Monitor de certificados PFX",
+    title="CertGuard Análise",
     version="1.2.1",
     lifespan=lifespan,
     docs_url="/docs" if config.ENABLE_DOCS else None,
@@ -685,7 +685,7 @@ from app.rotas.dashboard import router as _rotas_dashboard  # noqa: E402
 
 app.include_router(_rotas_dashboard)
 
-# Wiki do Certguard (tutoriais por módulo): app/rotas/wiki.py, 14/10/2026.
+# Wiki do CertGuard (tutoriais por módulo): app/rotas/wiki.py, 14/10/2026.
 from app.rotas.wiki import router as _rotas_wiki  # noqa: E402
 
 app.include_router(_rotas_wiki)
@@ -725,7 +725,7 @@ from app.rotas.computadores import router as _rotas_computadores  # noqa: E402
 
 app.include_router(_rotas_computadores)
 
-# Atualização automática do Certguard Análise (1.1.0): app/rotas/atualizacao.py.
+# Atualização automática do CertGuard Análise (1.1.0): app/rotas/atualizacao.py.
 from app.rotas.atualizacao import router as _rotas_atualizacao  # noqa: E402
 
 app.include_router(_rotas_atualizacao)

@@ -75,9 +75,9 @@ except Exception as _exc:
 
 class AnaliseCertiDigitalAgentService(win32serviceutil.ServiceFramework):
     _svc_name_ = "AnaliseCertiDigitalAgent"
-    _svc_display_name_ = "Analise CertiDigital Agent"
+    _svc_display_name_ = "CertGuard Análise Servidor"
     _svc_description_ = (
-        "Monitoriza pastas de certificados PFX no Windows e envia inventário ao portal Analise CertiDigital."
+        "Monitoriza pastas de certificados PFX no Windows e envia inventário ao CertGuard Análise."
     )
 
     def __init__(self, args: tuple) -> None:

@@ -1,4 +1,4 @@
-"""Ícone do Certguard Análise: o C dourado (ico/certguard.png e .ico, 15/10/2026).
+"""Ícone do CertGuard Análise: o C dourado (ico/certguard.png e .ico, 15/10/2026).
 
 O mesmo desenho serve à bandeja, às janelas de login e de status, ao
 executável (CertguardAnalise.spec, `icon=`) e ao instalador

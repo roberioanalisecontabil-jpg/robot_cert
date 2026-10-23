@@ -1,4 +1,4 @@
-"""Certguard Análise (estacao/): a bandeja de certificados separada do Hardlyze.
+"""CertGuard Análise (estacao/): a bandeja de certificados separada do Hardlyze.
 
 Adendo de 14/10/2026 ao ADR 0003. Os testes da conta, da chave e das janelas
 vieram do Hardlyze junto com o código; os da TRANSIÇÃO são novos e são os que
@@ -337,7 +337,7 @@ def test_bandeja_pendente_nao_busca_instalacao(estacao: list, monkeypatch: pytes
 # ── Janelas: a parte que decide, sem Tk ──────────────────────────────────
 
 
-LOG = """2026-10-14 10:00:01,100 - INFO - Certguard Análise certguard-1.0.0 iniciado.
+LOG = """2026-10-14 10:00:01,100 - INFO - CertGuard Análise certguard-1.0.0 iniciado.
 2026-10-14 10:00:02,200 - WARNING - Portal de certificados indisponível agora: timeout
 2026-10-14 10:02:09,500 - INFO - Instalação pelo portal de certificados: 1 ok, 0 falha(s).
 2026-10-14 10:03:10,600 - ERROR - Falha ao instalar certificado vindo do portal

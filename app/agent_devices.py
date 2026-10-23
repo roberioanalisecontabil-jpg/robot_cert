@@ -288,7 +288,7 @@ def _versao_tupla(v: str) -> Optional[tuple]:
 
 
 def _desatualizada(instalada: str, esperada: str, publicada: Optional[str]) -> bool:
-    """A bandeja do Certguard Análise (`certguard-1.1.0`) se compara com a
+    """A bandeja do CertGuard Análise (`certguard-1.1.0`) se compara com a
     versão publicada para a atualização automática, e só fica atrasada ABAIXO
     dela: a estação de teste com a versão seguinte não é atrasada. Até 20/10/2026
     ela se comparava com a versão do `agent/` do servidor (1.7.1) e toda
