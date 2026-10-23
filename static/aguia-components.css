@@ -76,10 +76,10 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    /* Compacto (23/10/2026): 36px com mouse; no toque volta a 44px (regra
+    /* Compacto (23/10/2026): 32px com mouse; no toque volta a 44px (regra
        pointer: coarse abaixo). */
-    padding: 8px 16px;
-    min-height: 36px;
+    padding: 6px 14px;
+    min-height: 32px;
     border-radius: var(--radius-pill);
     border: var(--bw-2) solid transparent;
     background: transparent;
@@ -133,7 +133,7 @@
 .ag-btn--ghost { background: transparent; color: var(--text-secondary); border-color: transparent; }
 .ag-btn--ghost:hover:not(:disabled) { background: var(--bg-surface-alt); color: var(--text-primary); }
 
-.ag-btn--sm { padding: 6px 12px; font-size: var(--text-xs); min-height: 32px; }
+.ag-btn--sm { padding: 4px 10px; font-size: var(--text-xs); min-height: 28px; }
 @media (pointer: coarse) { .ag-btn, .ag-btn--sm, .ag-input, .ag-select { min-height: 44px; } }
 
 .ag-btn .ag-icon { width: 16px; height: 16px; flex: 0 0 auto; }
@@ -187,8 +187,8 @@
     background: var(--bg-surface);
     border: var(--bw-1) solid var(--border-default);
     border-radius: var(--radius-md);
-    padding: 6px 12px;
-    min-height: 36px;
+    padding: 5px 10px;
+    min-height: 32px;
     width: 100%;
     min-width: 0;
     transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
@@ -531,8 +531,10 @@ html.dark .ag-badge--gold, :root[data-theme="dark"] .ag-badge--gold {
     background: color-mix(in srgb, var(--gold-500) 6%, transparent);
 }
 
+/* No escuro o lavado dourado lia como sombra marrom sobre a linha
+   (23/10/2026, pedido do Robério): sem destaque no hover. */
 html.dark .ag-table tbody tr:hover, :root[data-theme="dark"] .ag-table tbody tr:hover {
-    background: color-mix(in srgb, var(--gold-500) 12%, transparent);
+    background: transparent;
 }
 
 .ag-table .num, .ag-table th.num { text-align: right; }

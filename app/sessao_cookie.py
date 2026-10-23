@@ -34,7 +34,7 @@ METODOS_SEGUROS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 # As páginas que o servidor guarda. /login fica de fora, e /static também.
 PAGINAS = frozenset({
-    "/", "/configuracao", "/usuarios", "/historico", "/vencidos", "/duplicidades",
+    "/", "/configuracao", "/usuarios", "/historico", "/duplicidades",
     "/acompanhamento", "/carteiras", "/dashboard", "/instalador", "/wiki-certguard",
 })
 

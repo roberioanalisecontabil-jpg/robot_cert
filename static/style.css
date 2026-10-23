@@ -544,9 +544,17 @@ h3 {
      scroll horizontal NA PÁGINA. Com 0, quem rola é o .table-scroll, que
      existe para isso. */
   min-width: 0;
-  /* Sem teto de largura (23/10/2026, pedido do Robério): o teto de 1280px
-     deixava uma faixa vazia à direita em monitor largo; o conteúdo ocupa a
-     largura toda ao lado do menu, com o mesmo respiro dos dois lados. */
+}
+
+/* Teto de 1440px CENTRADO no espaço ao lado do menu (23/10/2026, pedido do
+   Robério): o antigo teto de 1280px no próprio main encostava o conteúdo à
+   esquerda e sobrava faixa vazia só à direita; esticar até a borda também
+   não agradou. O teto vai nos filhos para a margem esquerda do main seguir
+   reservando o espaço do menu fixo. */
+.main-content > * {
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .page-header {
@@ -2668,7 +2676,12 @@ body.sidebar-collapsed .sidebar-header .sidebar-toggle-btn--lateral {
   left: 50%;
   margin-left: -18px;
 }
+/* Na barra estreita o botão fica sob a logo, e com o padding de 1.5rem ele
+   encostava 2px nela — a logo parecia cortada. O cabeçalho cresce o
+   bastante para os dois não se tocarem. */
+body.sidebar-collapsed .sidebar-header { padding-bottom: 2.25rem; }
 @media (min-width: 769px) and (max-width: 900px) {
+  .sidebar-header { padding-bottom: 2.25rem; }
   .sidebar-header .sidebar-toggle-btn--lateral {
     right: auto;
     left: 50%;

@@ -82,6 +82,12 @@
    gráfico), que empilham numa coluna abaixo de ~18rem cada. */
 .cg-kpis--largos { grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
 
+/* Início com quatro KPIs (Vencidos entrou em 23/10/2026): 4, 2 ou 1 por
+   linha — nunca 3 + 1 órfão, que o auto-fit dava entre ~620 e ~830px. */
+.cg-kpis--quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .cg-kpis--quatro { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .cg-kpis--quatro { grid-template-columns: minmax(0, 1fr); } }
+
 /* Rótulo do KPI quebra linha; nunca trunca com reticências. */
 .cg-kpi .ag-kpi__label { white-space: normal; }
 
@@ -103,12 +109,18 @@
 /* Toolbar numa linha: filtros à esquerda, ações à direita. A ação em ouro
    é "Selecionar para instalar" — o caminho que a tela existe para abrir;
    Exportar e Atualizar ficam em contorno, com ícone de traço do DS. */
+/* Flex com quebra entre filtros e ações (23/10/2026): na grade de duas
+   colunas a busca encolhia até 26px entre 1100 e 1280px e o "Selecionar"
+   ficava por cima dela. Com a base de 36rem nos filtros, quando não cabem
+   os dois a fila de ações desce inteira para a linha de baixo. */
 .cg-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
     gap: var(--space-3) var(--space-4);
 }
+.cg-toolbar > .cg-toolbar__filtros { flex: 1 1 36rem; }
+.cg-toolbar > .cg-toolbar__acoes { flex: 0 1 auto; margin-left: auto; justify-content: flex-end; }
 
 /* Grade, e não flex com quebra: com flex o campo de busca quebrava para
    baixo do select antes de a fila de ações quebrar, e a toolbar virava três
@@ -142,7 +154,7 @@
    vira botão do DS. `summary` não herda display de botão: forçado aqui. */
 .cg-toolbar .menu-suspenso > summary.ag-btn {
     list-style: none;
-    padding: 11px 18px 11px 22px;
+    padding: 6px 12px 6px 14px;
 }
 
 .cg-toolbar .menu-suspenso > summary.ag-btn::-webkit-details-marker { display: none; }
@@ -406,7 +418,7 @@
         gap: var(--space-2);
     }
     .cg-toolbar__acoes .ag-btn,
-    .cg-toolbar .menu-suspenso > summary.ag-btn { padding: 8px 14px; }
+    .cg-toolbar .menu-suspenso > summary.ag-btn { padding: 6px 12px; }
     /* Com algo marcado, o primário vai para o início como faixa inteira. */
     .cg-toolbar__acoes .ag-btn--primary { order: -1; flex: 1 0 100%; }
 }
@@ -432,6 +444,7 @@
     }
 
     .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
+    .cg-toolbar > .cg-toolbar__acoes { flex-basis: 100%; margin-left: 0; }
     .cg-toolbar__acoes {
         display: flex;
         flex-direction: column;

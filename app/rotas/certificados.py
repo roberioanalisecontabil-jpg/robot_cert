@@ -23,7 +23,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, db_pg, nome_publico, nomes, sieg, taxa
+from app import auth, db_pg, nome_publico, nomes, permissoes, sieg, taxa
 from app.alcance import (
     _documentos_ao_alcance,
     _marcar_instalaveis,
@@ -401,7 +401,7 @@ def listar_certificados(
     filtro_sieg: str = Query("todos", description="todos | incluindo | no_sieg | fora (SIEG, 07/10/2026)"),
     ocultar_vencidos: bool = Query(
         False,
-        description="Exclui vencidos da lista e da contagem; devolve `vencidos_ocultos` (o Início usa: vencido não se instala, e tem página própria)",
+        description="Exclui vencidos da lista e da contagem; devolve `vencidos_ocultos`",
     ),
     ordenar: Optional[str] = Query(
         None,
@@ -419,6 +419,10 @@ def listar_certificados(
     Sem esses parâmetros, mantém o comportamento antigo: lista completa em ``itens``.
     """
     e_admin = (token.role or "").strip().lower() == "admin"
+    # Vencidos entraram no Início em 23/10/2026 (a página Vencidos foi unida a
+    # ele). Quem a matriz deixa sem o módulo Vencidos continua sem vê-los.
+    if not e_admin and not permissoes.pode(token.role or "", "vencidos", permissoes.NIVEL_LER):
+        ocultar_vencidos = True
     # Ler o disco do servidor é do administrador (auditoria de 10/10/2026): a
     # varredura abre e decifra cada PFX da pasta, sem cache nem teto, e era
     # disparável por qualquer logado com `fonte=local`.
@@ -499,9 +503,8 @@ def listar_certificados(
             and not (ocultar_ilegiveis and _e_ilegivel(it))
             and _sieg_filtro_match(it, filtro_sieg)
         ]
-        # Vencidos fora do Início (decisão I1, 01/10/2026): vencido não se
-        # instala e tem página própria. A contagem vai junto, para a tela dizer
-        # "N vencidos não listados" em vez de sumir com eles em silêncio.
+        # Vencidos fora da lista para quem não tem o módulo Vencidos (ver o
+        # início da função); a contagem vai junto em `vencidos_ocultos`.
         vencidos_ocultos = 0
         if ocultar_vencidos:
             vencidos = [it for it in filtered if _e_vencido(it)]

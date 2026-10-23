@@ -554,7 +554,7 @@ def test_sino_tem_filtro_todos_novos_expirando_vencidos() -> None:
 
 
 def test_cartao_vencido_vai_para_vencidos_e_novo_vai_para_o_inicio() -> None:
-    assert re.search(r'"/vencidos\?busca="\s*\+\s*encodeURIComponent', UI)
+    assert re.search(r'"/\?status=vencidos&busca="\s*\+\s*encodeURIComponent', UI)
     assert re.search(r'"/\?busca="\s*\+\s*encodeURIComponent', UI)
     assert '"?tipo=" + encodeURIComponent(_filtroNotif)' in UI, "o chip pede ao servidor só aquele tipo"
     assert 'role", "link"' in UI or 'role="link"' in UI
@@ -569,9 +569,9 @@ def test_estilo_do_novo_e_busters() -> None:
     for t in (ROOT / "templates").glob("*.html"):
         s = t.read_text(encoding="utf-8")
         if "ui-common.js?v=" in s:
-            assert "ui-common.js?v=menu-rola-2026-10-15" in s, t.name  # 10a: Leva B (03/10)
+            assert "ui-common.js?v=compacto-2026-10-23b" in s, t.name  # 10a: Leva B (03/10)
         if "style.css?v=" in s:
-            assert "style.css?v=compacto-2026-10-23" in s, t.name
+            assert "style.css?v=compacto-2026-10-23b" in s, t.name
 
 
 def test_migration_da_primeira_data_existe_e_nao_sobrescreve_na_atualizacao() -> None:

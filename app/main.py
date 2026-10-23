@@ -493,11 +493,17 @@ def pagina_historico(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/vencidos", response_class=HTMLResponse)
-def pagina_vencidos(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request=request, name="vencidos.html", context={"pagina_ativa": "vencidos"}
-    )
+@app.get("/vencidos")
+def pagina_vencidos(request: Request) -> RedirectResponse:
+    # Unida ao Início em 23/10/2026: links antigos (e-mails, favoritos) caem
+    # no Início já filtrado, com a busca preservada.
+    from urllib.parse import quote
+
+    destino = "/?status=vencidos"
+    busca = (request.query_params.get("busca") or "").strip()
+    if busca:
+        destino += "&busca=" + quote(busca, safe="")
+    return RedirectResponse(url=destino, status_code=303)
 
 
 @app.get("/duplicidades", response_class=HTMLResponse)

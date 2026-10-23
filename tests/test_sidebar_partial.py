@@ -33,7 +33,6 @@ PAGINAS = [
     ("/dashboard", "dashboard", "/dashboard"),
     ("/carteiras", "carteiras", "/carteiras"),
     ("/historico", "historico", "/historico"),
-    ("/vencidos", "vencidos", "/vencidos"),
     ("/duplicidades", "duplicidades", "/duplicidades"),
     ("/acompanhamento", "acompanhamento", "/acompanhamento"),
     ("/instalador", "instalador", "/instalador"),

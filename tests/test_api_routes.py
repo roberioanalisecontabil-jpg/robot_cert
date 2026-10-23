@@ -105,11 +105,12 @@ def test_pagina_historico_200(client: TestClient) -> None:
     assert "Histórico de Certificados" in r.text
 
 
-def test_pagina_vencidos_200(client: TestClient) -> None:
-    r = client.get("/vencidos")
-    assert r.status_code == 200
-    # Sentence case desde a spec do Aguia DS (22/09/2026).
-    assert "Certificados vencidos" in r.text
+def test_pagina_vencidos_redireciona_ao_inicio_filtrado(client: TestClient) -> None:
+    """Vencidos foi unida ao Início em 23/10/2026: link antigo cai no filtro."""
+    r = client.get("/vencidos", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/?status=vencidos"
+    r = client.get("/vencidos?busca=Auto Pe%C3%A7as&x=1", follow_redirects=False)
+    assert r.headers["location"] == "/?status=vencidos&busca=Auto%20Pe%C3%A7as"
 
 
 def test_pagina_duplicidades_200(client: TestClient) -> None:

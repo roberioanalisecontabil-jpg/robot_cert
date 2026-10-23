@@ -64,8 +64,22 @@ def test_vencido_abre_o_modal_de_detalhes(client: TestClient, banco: _Fake) -> N
     r = client.get("/api/certificados/" + "d" * 64 + "/detalhes", headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert r.json()["documento_numero"] == DOC_L
-    html = (RAIZ / "templates" / "vencidos.html").read_text(encoding="utf-8")
+    # Desde 23/10/2026 o vencido é listado no Início, que abre o mesmo modal.
+    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     assert '{% include "_modal_detalhes.html" %}' in html and "cgDetalhes.abrir(" in html
+
+
+def test_inicio_so_lista_vencido_para_quem_tem_o_modulo(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """23/10/2026: Vencidos foi unida ao Início; a matriz continua decidindo."""
+    q = "/api/certificados?pagina=1&por_pagina=50&ocultar_ilegiveis=true"
+    d = client.get(q, headers=_h(*GESTOR)).json()
+    assert DOC_L in _docs(d["itens"]) and d["resumo"]["vencidos"] >= 1
+    real = permissoes.pode
+    monkeypatch.setattr(permissoes, "pode", lambda p, mod, n: False if mod == "vencidos" else real(p, mod, n))
+    d = client.get(q, headers=_h(*GESTOR)).json()
+    assert DOC_L not in _docs(d["itens"]) and d["vencidos_ocultos"] >= 1
 
 
 def test_dashboard_curva_pelo_cliente_vigente(banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,7 +168,7 @@ def test_403_diz_o_modulo_pelo_nome(client: TestClient, banco: _Fake, monkeypatc
 
 def test_telas_de_consulta_revisadas() -> None:
     dash = (RAIZ / "templates" / "dashboard.html").read_text(encoding="utf-8")
-    assert 'href="/?status=prestes_vencer"' in dash and 'href="/vencidos">Ver vencidos' in dash
+    assert 'href="/?status=prestes_vencer"' in dash and 'href="/?status=vencidos">Ver vencidos' in dash
     assert "Ver arquivos com erro" not in dash and "Ver varreduras" not in dash
     assert "erroEmTodosOsCards" in dash and "d.truncado" in dash
     assert "Clientes com certificado vencido" in dash
@@ -162,9 +176,8 @@ def test_telas_de_consulta_revisadas() -> None:
     assert "Planilha (CSV)" in hist and "snapshots" not in hist.lower()
     assert ">Status</th>" in hist and "badgeStatusHistorico" in hist
     assert "Sua carteira está vazia" in hist
-    venc = (RAIZ / "templates" / "vencidos.html").read_text(encoding="utf-8")
-    assert "Planilha (CSV)" in venc and "Empresa" not in venc and "suas empresas" not in venc
-    assert "Sua carteira está vazia" in venc and "sem data registrada" in venc
+    # vencidos.html saiu em 23/10/2026 (unida ao Início).
+    assert not (RAIZ / "templates" / "vencidos.html").exists()
     dup = (RAIZ / "templates" / "duplicidades.html").read_text(encoding="utf-8")
     assert "Empresa" not in dup and "homônimos" in dup
     assert "Copiar nome" in dup and "r.status === 403" in dup

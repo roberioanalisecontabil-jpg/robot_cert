@@ -882,7 +882,9 @@ def test_o_mapa_do_menu_cobre_todos_os_modulos() -> None:
     assert bloco, "o mapa de módulo para item de menu sumiu"
 
     mapeados = dict(re.findall(r'(\w+):\s*"([\w-]+)"', bloco.group(1)))
-    assert set(mapeados) == set(permissoes.MODULOS), (
+    # Vencidos foi unida ao Início em 23/10/2026: o módulo segue na matriz
+    # (decide se o Início lista os vencidos), mas não tem item de menu.
+    assert set(mapeados) == set(permissoes.MODULOS) - {"vencidos"}, (
         f"mapa cobre {sorted(mapeados)}, módulos são {sorted(permissoes.MODULOS)}"
     )
 

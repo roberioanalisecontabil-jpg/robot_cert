@@ -11,14 +11,14 @@
          portal vive na VPN, e uma estação sem internet cairia na fonte do
          sistema se dependesse do Google Fonts. -->
     <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
-    <link rel="stylesheet" href="/static/style.css?v=compacto-2026-10-23" />
+    <link rel="stylesheet" href="/static/style.css?v=compacto-2026-10-23b" />
     <!-- Ordem de adoção do DS (seção 41): tokens → componentes → o que é só
          desta tela. Esta é a primeira tela do portal no Águia; as outras
          continuam só com o style.css até serem levadas uma a uma. -->
     <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
-    <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23" />
+    <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23b" />
     <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
-    <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23" />
+    <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23b" />
     <link rel="stylesheet" href="/static/aguia-detalhes.css?v=aguia-2026-10e" />
   </head>
   <body class="cg-aguia">
@@ -58,7 +58,7 @@
       <!-- Resumo: três números, e só o terceiro pede ação — por isso só ele
            tem tratamento de aviso. O "—" inicial é "ainda não sei", que não é
            o mesmo que zero. -->
-      <section class="ag-kpi-row" aria-label="Resumo dos certificados">
+      <section class="ag-kpi-row cg-kpis--quatro" aria-label="Resumo dos certificados">
         <div class="ag-kpi cg-kpi">
           <div class="cg-kpi__texto">
             <p class="ag-kpi__label">Total</p>
@@ -96,6 +96,21 @@
           </span>
         </div>
 
+        <!-- Vencidos voltaram ao Início em 23/10/2026 (a página Vencidos
+             foi unida a esta): o card e o filtro "Vencido" substituem a
+             tela separada. -->
+        <div class="ag-kpi cg-kpi cg-kpi--perigo">
+          <div class="cg-kpi__texto">
+            <p class="ag-kpi__label">Vencidos</p>
+            <p class="ag-kpi__value" id="n-venc" aria-busy="true">—</p>
+            <p class="ag-kpi__delta">Precisam de renovação</p>
+          </div>
+          <span class="cg-kpi__icone" aria-hidden="true">
+            <!-- Lucide "triangle-alert" -->
+            <svg class="ag-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          </span>
+        </div>
+
         <!-- Os cards de Erro e de Falha (sem padrao) sairam daqui em 21/08.
 
           Nao e informacao para quem veio buscar um certificado: arquivo que o
@@ -118,6 +133,7 @@
                 <option value="todos">Todos</option>
                 <option value="validos">Ativo</option>
                 <option value="prestes_vencer">Expirando</option>
+                <option value="vencidos">Vencido</option>
               </select>
             </div>
             <div class="ag-field cg-campo-inline">
@@ -289,7 +305,7 @@
 
     {% include "_modal_detalhes.html" %}
 
-    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=menu-rola-2026-10-15"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=compacto-2026-10-23b"></script>
     <script nonce="{{ request.state.nonce }}" src="/static/detalhes-certificado.js?v=detalhes-2026-10-20"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
@@ -466,6 +482,7 @@
         definirKpi("n-tot", total);
         definirKpi("n-ok", okCount);
         definirKpi("n-exp-soon", expirandoCount);
+        definirKpi("n-venc", vencidosCount);
       }
 
       function atualizarCardsResumo(r) {
@@ -473,6 +490,7 @@
         definirKpi("n-tot", r.total ?? 0);
         definirKpi("n-ok", r.validos ?? 0);
         definirKpi("n-exp-soon", r.expirando ?? 0);
+        definirKpi("n-venc", r.vencidos ?? 0);
       }
 
 
@@ -992,9 +1010,6 @@
             // COM eles — e a divergencia so apareceria depois, na mao de quem
             // recebesse o arquivo.
             ocultar_ilegiveis: "true",
-            // Vencido nao se instala e tem pagina propria (decisao I1,
-            // 01/10/2026): sai daqui, e a linha de status diz quantos sao.
-            ocultar_vencidos: "true",
           });
           const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
           if (r.status === 401) {
@@ -1144,9 +1159,6 @@
             // cards. Vai ao servidor porque a paginacao e a contagem sao de la:
             // filtrar no cliente daria pagina de 100 com 91 linhas.
             ocultar_ilegiveis: "true",
-            // Vencido nao se instala e tem pagina propria (decisao I1,
-            // 01/10/2026): sai daqui, e a linha de status diz quantos sao.
-            ocultar_vencidos: "true",
             // Vazio significa "ordem de fabrica" (alfabetica por titular), e nao
             // "sem ordem": o servidor ja entrega ordenado sem este parametro.
             ordenar: ordenacao.coluna || "",
@@ -1203,11 +1215,6 @@
           }
           st.textContent = "Atualizado em " + new Date(d.atualizado_em).toLocaleString("pt-BR");
           _alcanceVazio = !!d.alcance_vazio;
-          if (d.vencidos_ocultos) {
-            const nv = Number(d.vencidos_ocultos);
-            st.innerHTML += " · " + nv + (nv === 1 ? " vencido não listado" : " vencidos não listados") +
-              " — <a href=\"/vencidos\">ver Vencidos</a>";
-          }
           const items = d.itens || [];
           if (d.paginacao) {
             paginaAtual = d.paginacao.pagina;
@@ -1417,7 +1424,7 @@
         // `?status=` vem do Dashboard ("Ver os que vencem em 30 dias"); só os
         // valores do filtro são aceitos.
         const statusDaUrl = (new URLSearchParams(location.search).get("status") || "").trim();
-        if (["validos", "prestes_vencer"].includes(statusDaUrl)) {
+        if (["validos", "prestes_vencer", "vencidos"].includes(statusDaUrl)) {
           const sel = document.getElementById("filtro-status");
           if (sel) sel.value = statusDaUrl;
         }

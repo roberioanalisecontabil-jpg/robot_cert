@@ -118,7 +118,9 @@ def test_tela_do_inicio_revisada() -> None:
     assert "Meus computadores" not in html and "carregarDispositivos" not in html, "I3"
     assert "nesta máquina" not in html, "I2: a estação da pessoa tem nome"
     assert "&estacao=" in html, "a instalabilidade vai com a estação da pessoa"
-    assert 'ocultar_vencidos: "true"' in html and "ver Vencidos" in html, "I1"
+    # I1 (01/10) foi revertida em 23/10/2026: vencidos voltaram ao Início,
+    # com card e filtro próprios.
+    assert "ocultar_vencidos" not in html and 'id="n-venc"' in html and 'value="vencidos"' in html
     assert "Sua carteira está vazia" in html
     assert "Planilha (CSV)" in html and "Planilha (Excel)" not in html
     assert "Nao foi possivel" not in html and "instalacao\"" not in html

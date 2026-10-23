@@ -675,7 +675,7 @@ def test_celula_csv_neutraliza_formula(celula: str, esperado: str) -> None:
     assert saida == esperado
 
 
-@pytest.mark.parametrize("template", ["index.html", "historico.html", "vencidos.html"])
+@pytest.mark.parametrize("template", ["index.html", "historico.html"])
 def test_exportacao_csv_usa_o_helper_compartilhado(template: str) -> None:
     html = (TEMPLATES / template).read_text(encoding="utf-8")
     assert "celulaCsv" in html

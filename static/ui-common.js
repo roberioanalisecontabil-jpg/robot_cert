@@ -115,7 +115,6 @@ function initSidebarPorPapel() {
     inicio: "nav-inicio",
     dashboard: "nav-dashboard",
     historico: "nav-historico",
-    vencidos: "nav-vencidos",
     duplicidades: "nav-duplicidades",
     acompanhamento: "nav-acompanhamento",
     carteiras: "nav-carteiras",
@@ -1378,7 +1377,7 @@ function _destinoDaNotificacao(it) {
   const doc = String(it.documento || "").replace(/\D/g, "");
   const termo = doc || String(it.nome || "").trim();
   if (!termo) return null;
-  if (it.tipo === "expired") return "/vencidos?busca=" + encodeURIComponent(termo);
+  if (it.tipo === "expired") return "/?status=vencidos&busca=" + encodeURIComponent(termo);
   return "/?busca=" + encodeURIComponent(termo);
 }
 
@@ -1659,7 +1658,7 @@ function _renderizarNotificacoes(data) {
     txt.textContent = `Mostrando ${data.exibidos} de ${data.total}`;
 
     const link = document.createElement("a");
-    link.href = _filtroNotif === "expired" ? "/vencidos" : _filtroNotif === "todos" ? "/vencidos" : "/";
+    link.href = _filtroNotif === "expired" ? "/?status=vencidos" : "/";
     link.className = "notif-footer__link";
     link.textContent = "Ver lista completa";
 
