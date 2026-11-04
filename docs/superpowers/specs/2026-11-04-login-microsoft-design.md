@@ -195,6 +195,22 @@ data no cofre do TI, troca um mês antes (passo 5 do roteiro do CRM).
   site, os quatro domínios já são obrigados à Microsoft desde a entrega 1.
   Quem é dos quatro domínios e não tem senha fica sem bandeja até a entrega 2.
 
+## Riscos cobertos (decidido pelo Robério, 04/11)
+
+- **Códigos `AADSTS` não testados:** a conferência nasce em simulação
+  (`MICROSOFT_CONFERENCIA=simular`): só avisa o TI quem seria desativado e
+  com qual código. Vira `aplicar` depois do aceite com conta de teste.
+- **Assinatura do token:** conferida pelas chaves públicas da Microsoft
+  (JWKS, cache 24 h). Sem atalho.
+- **Bandeja de quem nunca usou o botão:** conta de domínio liberado só
+  registra bandeja com senha se já estiver ligada à Microsoft (entrou uma vez
+  no site pelo botão). Bandeja já conectada não cai por isso. Fecha o buraco
+  da conferência na bandeja.
+- **MFA na Microsoft:** não exigido pelo CertGuard nem pré-requisito do
+  roteiro (decisão do Robério). Risco aceito: conta sem MFA no Microsoft 365
+  entra só com a senha do Outlook.
+- **Chave de renovação no banco:** mesma proteção dos PFX do cofre. Aceito.
+
 ## Deixado ao construtor
 
 Nomes de rotas, colunas e variáveis; biblioteca (`msal` ou `httpx` direto, já
