@@ -35,7 +35,7 @@ Segunda rodada (02/10/2026, agente 1.6.1), Q1–Q8:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -308,10 +308,13 @@ def correio(monkeypatch: pytest.MonkeyPatch) -> List[Dict[str, Any]]:
 
 
 def _ev(resultado: str, original: str, **extra: Any) -> Dict[str, Any]:
+    # Datas relativas: a tela de Movimentos só lista os últimos 30 dias.
+    agora = datetime.now(timezone.utc)
     return {"resultado": resultado, "arquivo_original": original, "arquivo_novo": extra.pop("novo", ""),
             "pasta_destino": "D:/PJ/A", "motivo": extra.pop("motivo", ""), "nome": "ALFA LTDA",
             "documento_numero": CNPJ, "documento_tipo": "cnpj", "fingerprint_sha256": "f" * 64,
-            "not_after": "2027-01-01T00:00:00+00:00", "quando": "2026-10-02T12:00:00+00:00", **extra}
+            "not_after": (agora + timedelta(days=365)).isoformat(),
+            "quando": (agora - timedelta(days=1)).isoformat(), **extra}
 
 
 def test_relatorio_grava_eventos_e_avisa_so_dos_pendentes_novos(client: TestClient, banco: _Fake, correio) -> None:
