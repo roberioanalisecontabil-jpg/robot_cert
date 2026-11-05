@@ -54,6 +54,13 @@
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
+    <!-- Aparece só se o servidor disse que este administrador não tem reserva
+         (ver `aviso_cadastrar_app` em /api/users/me/app-autenticador). -->
+    <div class="ag-alert ag-alert--warning" id="faixa-app-autenticador" role="status" hidden>
+      <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg>
+      <div class="ag-alert__corpo">Cadastre o app autenticador: é a sua entrada se a Microsoft falhar.</div>
+    </div>
+
     <!-- ── Usuários ─────────────────────────────────────────────────── -->
     <section class="ag-card cg-usu-aba" id="painel-usuarios" role="tabpanel" aria-labelledby="aba-usuarios" {% if aba != 'usuarios' %}hidden{% endif %}>
       <div class="cg-usu-corpo cg-usu-corpo--topo">
@@ -402,6 +409,17 @@
 
         function nomeDe(u) { return u.nome_exibicao || u.full_name || u.email || '—'; }
 
+        // Marcas da ligação com a Microsoft, sob o e-mail. Texto sempre escrito:
+        // a cor sozinha não diz o que falta.
+        function marcasMicrosoft(u) {
+            const m = [];
+            if (u.microsoft_ligada) m.push('<span class="ag-badge ag-badge--info">Microsoft</span>');
+            if (u.microsoft_ligada && u.microsoft_sem_conferencia) m.push('<span class="ag-badge ag-badge--warning">Sem conferência</span>');
+            if (u.nova_pela_microsoft) m.push('<span class="ag-badge ag-badge--warning">Nova pela Microsoft — falta configurar</span>');
+            if (u.desativada_pela_microsoft) m.push('<span class="ag-badge ag-badge--danger">Desativada: bloqueada na Microsoft</span>');
+            return m.length ? '<span class="ag-cell-sub">' + m.join(' ') + '</span>' : '';
+        }
+
         function celulaCarteira(u) {
             if (String(u.role || '').toLowerCase() !== 'user') return '—';
             const n = u.carteira || 0;
@@ -458,7 +476,7 @@
                 const nova = _novaId && (u.id === _novaId || (u.email || '').toLowerCase() === String(_novaId).toLowerCase());
                 return `
                 <tr role="row" class="${ativo ? '' : 'is-inativa'}${nova ? ' is-nova' : ''}" data-id="${esc(u.id)}">
-                    <td role="cell" class="cg-col-nome"><a href="#" data-action="editar" data-id="${esc(u.id)}"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nome)}</span><span class="ag-cell-sub">${esc(u.email || '')}</span></span></a></td>
+                    <td role="cell" class="cg-col-nome"><a href="#" data-action="editar" data-id="${esc(u.id)}"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(nome)}</span><span class="ag-cell-sub">${esc(u.email || '')}</span>${marcasMicrosoft(u)}</span></a></td>
                     <td role="cell" class="cg-col-nivel">${badgeNivel(u.role)}</td>
                     <td role="cell" class="cg-col-status">${ativo ? '<span class="ag-badge ag-badge--success">Ativo</span>' : '<span class="ag-badge ag-badge--neutral">Inativo</span>'}</td>
                     <td role="cell" class="cg-col-carteira">${celulaCarteira(u)}</td>
@@ -473,6 +491,7 @@
                                 <button type="button" class="ag-menu__item" role="menuitem" data-action="redefinir" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg> Redefinir senha</button>
                                 ${ativo ? `<button type="button" class="ag-menu__item" role="menuitem" data-action="codigo" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Enviar código de redefinição</button>` : ""}
                                 ${ativo ? `<button type="button" class="ag-menu__item" role="menuitem" data-action="tirar-app" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg> Remover app autenticador</button>` : ""}
+                                ${u.microsoft_ligada ? `<button type="button" class="ag-menu__item" role="menuitem" data-action="desligar-microsoft" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m18.84 12.25 1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71"/><line x1="2" x2="22" y1="2" y2="22"/></svg> Desfazer ligação com a Microsoft</button>` : ""}
                                 ${ativo
                                     ? `<button type="button" class="ag-menu__item ag-menu__item--perigo" role="menuitem" data-action="desativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Desativar</button>`
                                     : `<button type="button" class="ag-menu__item" role="menuitem" data-action="reativar" data-id="${esc(u.id)}"><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg> Reativar</button>`}
@@ -502,6 +521,7 @@
                 else if (act === 'tirar-app') removerAppAutenticador(id, btn);
                 else if (act === 'desativar') desativarUsuario(id);
                 else if (act === 'reativar') reativarUsuario(id);
+                else if (act === 'desligar-microsoft') desligarMicrosoft(id);
             };
         }
 
@@ -1450,6 +1470,24 @@
             }
         }
 
+        async function desligarMicrosoft(id) {
+            const u = usersCache.find((x) => x.id === id);
+            const ok = await confirmarAcao({
+                titulo: 'Desfazer ligação com a Microsoft',
+                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} deixa de estar ligado à conta da Microsoft. A senha e o nível de acesso ficam; no próximo acesso pela Microsoft a conta se liga de novo, a qualquer conta com o mesmo e-mail.`,
+                textoConfirmar: 'Desfazer ligação',
+                perigo: true,
+            });
+            if (!ok) return;
+            const r = await fetch(`/api/users/${id}/microsoft/desligar`, { method: 'POST', headers: getHeaders(true) });
+            if (!r.ok) {
+                showToast('Não foi possível desfazer a ligação: ' + (await mensagemCorpoErro(r)), 'error');
+                return;
+            }
+            await loadUsers();
+            showToast('Ligação com a Microsoft desfeita.', 'success');
+        }
+
         async function reativarUsuario(id) {
             const u = usersCache.find((x) => x.id === id);
             const nivel = roleLabel(u && u.role);
@@ -1591,6 +1629,12 @@
         // administrador é o `data-so-admin` do <body>, também em ui-common.js.
         // Os departamentos carregam junto: o modal de usuário precisa da
         // lista para montar o select.
+        // O servidor decide se a faixa aparece; aqui só se mostra.
+        fetch('/api/users/me/app-autenticador', { headers: getHeaders() })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d && d.aviso_cadastrar_app) document.getElementById('faixa-app-autenticador').hidden = false; })
+            .catch(() => {});
+
         loadUsers().then(loadDepartamentos).then(() => {
             if ('{{ aba }}' === 'permissoes') carregarPermissoes();
         });

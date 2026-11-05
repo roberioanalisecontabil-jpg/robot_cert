@@ -153,3 +153,104 @@ def test_abas_departamentos_e_niveis_sem_classes_legadas() -> None:
     assert "btn-action" not in html and "row-actions" not in html and "form-control" not in html
     assert "cg-tabela-dep" in html and "cg-tabela-perm" in html and "cg-perm-nota" in html
     assert "'🏢'" not in html
+
+
+# ── Login Microsoft na tela de Usuários (Task 8) ──────────────────────────
+
+MS_DOM = "x.com"
+
+
+def _liga_microsoft(monkeypatch: pytest.MonkeyPatch) -> None:
+    for nome, valor in (
+        ("MICROSOFT_TENANT_ID", "t-1"), ("MICROSOFT_CLIENT_ID", "c-1"),
+        ("MICROSOFT_CLIENT_SECRET", "s-1"), ("MICROSOFT_DOMINIOS", frozenset({MS_DOM})),
+        ("PORTAL_BASE_URL", "https://certificado.analisegroup.cnt.br"),
+    ):
+        monkeypatch.setattr(f"app.config.{nome}", valor, raising=False)
+
+
+def _ligada(banco: _Fake, uid: str, **extra) -> None:
+    _u(banco, uid).update(microsoft_oid="oid-1", microsoft_refresh_cifrado="segredo",
+                          microsoft_conferido_em="2026-11-05T10:00:00+00:00", **extra)
+
+
+def test_desligar_microsoft_so_admin(client: TestClient, banco: _Fake) -> None:
+    _ligada(banco, "u-fis")
+    for quem in (GESTOR, FISCAL_OP_H):
+        r = client.post("/api/users/u-fis/microsoft/desligar", headers=_h(*quem))
+        assert r.status_code == 403, r.text
+    assert _u(banco, "u-fis")["microsoft_oid"] == "oid-1"
+    r = client.post("/api/users/u-fis/microsoft/desligar", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    u = _u(banco, "u-fis")
+    assert u["microsoft_oid"] is None and u["microsoft_refresh_cifrado"] is None
+    assert u["microsoft_conferido_em"] is None and u["microsoft_sem_conferencia"] is False
+    assert client.post("/api/users/nao-existe/microsoft/desligar", headers=_h(*ADMIN)).status_code == 404
+
+
+FISCAL_OP_H = ("fis@x.com", "user")
+
+
+def test_desligar_permite_ligar_a_outro_oid(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app import microsoft_entra as me
+    from app.login_microsoft import Recusa, resolver_conta
+
+    _liga_microsoft(monkeypatch)
+    _ligada(banco, "u-fis")
+    ident = me.Identidade(oid="oid-2", tid="t-1", upn="fis@x.com", email="fis@x.com", nome="Fis", convidado=False)
+    assert resolver_conta(banco, ident, "rt") == Recusa("oid_diferente")
+    assert client.post("/api/users/u-fis/microsoft/desligar", headers=_h(*ADMIN)).status_code == 200
+    user, _ = resolver_conta(banco, ident, "rt")
+    assert user["microsoft_oid"] == "oid-2"
+
+
+def test_reativar_limpa_marca_da_microsoft(client: TestClient, banco: _Fake) -> None:
+    _u(banco, "u-inativo").update(desativada_pela_microsoft_em="2026-11-05T10:00:00+00:00")
+    assert client.post("/api/users/u-inativo/reactivate", headers=_h(*ADMIN)).status_code == 200
+    u = _u(banco, "u-inativo")
+    assert u["ativo"] is True and u["desativada_pela_microsoft_em"] is None
+
+
+def test_lista_traz_campos_microsoft(client: TestClient, banco: _Fake) -> None:
+    _ligada(banco, "u-fis", microsoft_sem_conferencia=True)
+    _u(banco, "u-sol").update(origem="microsoft")  # sem departamento
+    _u(banco, "u-inativo").update(desativada_pela_microsoft_em="2026-11-05T10:00:00+00:00")
+    r = client.get("/api/users", headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    por_id = {u["id"]: u for u in r.json()}
+    assert por_id["u-fis"]["microsoft_ligada"] is True and por_id["u-fis"]["microsoft_sem_conferencia"] is True
+    assert por_id["u-fis"]["nova_pela_microsoft"] is False
+    assert por_id["u-sol"]["microsoft_ligada"] is False and por_id["u-sol"]["nova_pela_microsoft"] is True
+    assert por_id["u-inativo"]["desativada_pela_microsoft"] is True
+    assert por_id["u-adm"]["desativada_pela_microsoft"] is False
+    assert "oid-1" not in r.text and "segredo" not in r.text
+    assert all("microsoft_oid" not in u and "microsoft_refresh_cifrado" not in u for u in por_id.values())
+
+
+def test_pagina_usuarios_tem_acao_desligar() -> None:
+    html = (RAIZ / "templates" / "usuarios.html").read_text(encoding="utf-8")
+    assert "data-action=\"desligar-microsoft\"" in html and "Desfazer ligação com a Microsoft" in html
+    assert "/microsoft/desligar" in html and "desligarMicrosoft" in html and "window.confirm(" not in html
+    assert "Nova pela Microsoft — falta configurar" in html
+    assert "bloqueada na Microsoft" in html
+    assert '<span class="ag-badge ag-badge--info">Microsoft</span>' in html, "selo na linha"
+    assert "Cadastre o app autenticador: é a sua entrada se a Microsoft falhar." in html
+
+
+def test_aviso_do_app_so_para_admin_de_dominio_liberado_sem_app(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def aviso(quem) -> bool:
+        r = client.get("/api/users/me/app-autenticador", headers=_h(*quem))
+        assert r.status_code == 200, r.text
+        return r.json()["aviso_cadastrar_app"]
+
+    assert aviso(ADMIN) is False, "Microsoft desligada: nada de aviso"
+    _liga_microsoft(monkeypatch)
+    assert aviso(ADMIN) is True
+    assert aviso(FISCAL_OP_H) is False, "só administrador"
+    _u(banco, "u-adm")["totp_ativado_em"] = "2026-11-05T10:00:00+00:00"
+    assert aviso(ADMIN) is False
+    _u(banco, "u-adm")["totp_ativado_em"] = None
+    _u(banco, "u-adm")["email"] = "admin@fora.com"
+    assert aviso(("admin@fora.com", "admin")) is False, "domínio não liberado"

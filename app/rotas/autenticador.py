@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import auth, login_codigo, taxa, totp
+from app import auth, login_codigo, microsoft_entra, taxa, totp
 from app.sessao import SESSAO_ENCERRADA, _sb_do_login, _user_id_da_sessao, require_admin, require_auth
 
 logger = logging.getLogger("app.main")
@@ -65,7 +65,16 @@ def _limpar(sb, uid: str) -> None:
 @router.get("/api/users/me/app-autenticador")
 def situacao(token: auth.TokenData = Depends(require_auth)) -> dict:
     _, user = _minha_conta(token)
-    return {"ativo": bool(user.get("totp_ativado_em")), "ativado_em": user.get("totp_ativado_em")}
+    # Faixa da tela de Usuários: admin de domínio liberado sem app não teria
+    # reserva se a Microsoft falhar. Calculado aqui, não no navegador.
+    aviso = (
+        microsoft_entra.configurado()
+        and str(user.get("role") or "").strip().lower() == "admin"
+        and microsoft_entra.dominio_liberado(user.get("email") or "")
+        and not user.get("totp_ativado_em")
+    )
+    return {"ativo": bool(user.get("totp_ativado_em")), "ativado_em": user.get("totp_ativado_em"),
+            "aviso_cadastrar_app": aviso}
 
 
 @router.post("/api/users/me/app-autenticador/iniciar")

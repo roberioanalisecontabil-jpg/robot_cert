@@ -383,7 +383,8 @@ def list_users() -> List[dict]:
     sb = _banco()
     if not sb: return []
     r = sb.table("users").select(
-        "id, email, full_name, role, ativo, departamento_id, created_at"
+        "id, email, full_name, role, ativo, departamento_id, created_at, origem, microsoft_oid, "
+        "microsoft_sem_conferencia, desativada_pela_microsoft_em"
     ).execute()
     usuarios = list(r.data or [])
     # Contagem da carteira por pessoa, numa consulta só: a coluna "Carteira"
@@ -402,6 +403,12 @@ def list_users() -> List[dict]:
         u["nome_exibicao"] = nomes.nome_pessoa(u.get("full_name")) or str(u.get("email") or "")
         u["carteira"] = n
         u["textos"] = {"carteira": _texto.plural(n, "cliente")}
+        # Só os sinais: o oid e o refresh token nunca saem do servidor.
+        u.pop("microsoft_refresh_cifrado", None)  # a consulta já não o pede; cinto e suspensório
+        u["microsoft_ligada"] = bool(u.pop("microsoft_oid", None))
+        u["microsoft_sem_conferencia"] = bool(u.get("microsoft_sem_conferencia"))
+        u["nova_pela_microsoft"] = u.pop("origem", None) == "microsoft" and not u.get("departamento_id")
+        u["desativada_pela_microsoft"] = bool(u.pop("desativada_pela_microsoft_em", None))
     return usuarios
 
 
@@ -1112,11 +1119,38 @@ def reactivate_user(user_id: str, ator: auth.TokenData = Depends(require_auth)) 
         raise HTTPException(status_code=503)
     _exigir_alcance_sobre_conta(sb, ator, user_id)
     try:
-        sb.table("users").update({"ativo": True}).eq("id", user_id).execute()
+        # A marca da Microsoft sai junto: o administrador decidiu, e a
+        # conferência não deve tratar a conta como bloqueada por ela.
+        sb.table("users").update({"ativo": True, "desativada_pela_microsoft_em": None}).eq("id", user_id).execute()
         return {"ok": True}
     except Exception:
         logger.exception("Falha ao reativar %s", user_id)
         raise HTTPException(status_code=400, detail="Não foi possível reativar a conta.")
+
+
+@router.post("/api/users/{user_id}/microsoft/desligar", dependencies=[Depends(require_admin)])
+def desligar_microsoft(user_id: str, ator: auth.TokenData = Depends(require_auth)) -> dict:
+    """Desfaz a ligação com a Microsoft: a conta deixa de ter oid e pode ser
+    ligada a outro (a pessoa trocou de conta no Entra ID). Senha e papel ficam."""
+    from app.settings_state import _banco
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503)
+    if not (sb.table("users").select("id").eq("id", user_id).limit(1).execute().data or []):
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    _exigir_alcance_sobre_conta(sb, ator, user_id)
+    try:
+        sb.table("users").update({
+            "microsoft_oid": None, "microsoft_refresh_cifrado": None,
+            "microsoft_conferido_em": None, "microsoft_sem_conferencia": False,
+        }).eq("id", user_id).execute()
+    except Exception:
+        logger.exception("Falha ao desligar a Microsoft de %s", user_id)
+        raise HTTPException(status_code=400, detail="Não foi possível desfazer a ligação com a Microsoft.")
+    # Sem evento novo em `user_activity` (CHECK fechado exigiria migration): fica
+    # no log do servidor, como a remoção do app autenticador pelo administrador.
+    logger.info("Ligação da conta %s com a Microsoft desfeita pelo administrador %s", user_id, ator.email)
+    return {"ok": True}
 
 
 # Nao ha DELETE /api/users/{id} (decisao de 01/10/2026, revisao da pagina
