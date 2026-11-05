@@ -131,13 +131,16 @@ def _hash_falso() -> str:
     return _HASH_FALSO
 
 
-def _abrir_sessao(user: Dict[str, Any], request: Request, response: Response, ip: Optional[str]) -> dict:
+def _abrir_sessao(
+    user: Dict[str, Any], request: Request, response: Response, ip: Optional[str], metodo: str = "senha",
+) -> dict:
     """A sessão do navegador: o último passo do login, com ou sem código."""
     atividade.registrar(
         atividade.EVENTO_LOGIN,
         user_id=str(user.get("id") or "") or None,
         user_email=user["email"],
         client_ip=ip,
+        contexto={"metodo": metodo},
     )
     token = auth.create_access_token({
         "sub": user["email"],
@@ -289,7 +292,7 @@ def entrar_com_codigo(body: LoginCodigoBody, request: Request, response: Respons
                             client_ip=ip, contexto={"motivo": "codigo_incorreto", "metodo": body.metodo})
         raise HTTPException(status_code=400, detail=CODIGO_DE_LOGIN_INVALIDO)
 
-    saida = _abrir_sessao(user, request, response, ip)
+    saida = _abrir_sessao(user, request, response, ip, "senha_e_app" if body.metodo == "app" else "senha")
     if body.lembrar:
         login_codigo.gravar_confianca(response, request, user)
     return saida

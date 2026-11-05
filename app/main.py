@@ -472,7 +472,13 @@ def pagina_configuracao(request: Request) -> HTMLResponse:
 @app.get("/login", response_class=HTMLResponse)
 def pagina_login(request: Request) -> HTMLResponse:
     # Sem sidebar: quem nao entrou ainda nao tem para onde navegar.
-    return templates.TemplateResponse(request=request, name="login.html")
+    from app import microsoft_entra
+
+    return templates.TemplateResponse(request=request, name="login.html", context={
+        "microsoft": microsoft_entra.configurado(),
+        # Chave fixa -> texto fixo: o que vem na URL nunca chega à página.
+        "erro_ms": _MENSAGENS_ERRO_MS.get(request.query_params.get("erro_ms") or ""),
+    })
 
 
 @app.get("/usuarios", response_class=HTMLResponse)
@@ -729,6 +735,11 @@ app.include_router(_rotas_computadores)
 from app.rotas.atualizacao import router as _rotas_atualizacao  # noqa: E402
 
 app.include_router(_rotas_atualizacao)
+
+# Entrar com a Microsoft (ida e volta do navegador): app/rotas/microsoft.py.
+from app.rotas.microsoft import MENSAGENS_ERRO as _MENSAGENS_ERRO_MS, router as _rotas_microsoft  # noqa: E402
+
+app.include_router(_rotas_microsoft)
 
 
 

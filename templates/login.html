@@ -126,6 +126,24 @@
            regra de duas telas dentro do <style> de uma delas é a forma como
            `esc()` acabou duplicada em seis arquivos. */
 
+        /* Botao da Microsoft: contorno, para o acesso principal (a senha) seguir
+           sendo o botão cheio. */
+        .login-ms {
+            display: block;
+            box-sizing: border-box;
+            width: 100%;
+            padding: 0.75rem 1.5rem;
+            margin-bottom: var(--sp-4);
+            border: 1px solid var(--accent-solid);
+            border-radius: var(--radius-pill);
+            color: var(--accent-text);
+            font-size: var(--fs-ui);
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+        }
+        .login-ms:hover { background-color: var(--accent-soft); }
+        #ms-erro { display: block; }
         .link-discreto {
             display: block;
             width: 100%;
@@ -182,6 +200,8 @@
 
         <!-- ── Entrar ────────────────────────────────────────────────── -->
         <section id="view-login">
+            {% if erro_ms %}<div id="ms-erro" class="msg-erro" role="alert" style="padding: var(--sp-3); border-radius: var(--radius-md); margin-bottom: var(--sp-4); text-align: center; font-weight: 500;">{{ erro_ms }}</div>{% endif %}
+            {% if microsoft %}<a class="login-ms" href="/entrar/microsoft">Entrar com a Microsoft</a>{% endif %}
             <div id="login-error" role="alert" aria-live="assertive">E-mail ou senha incorretos.</div>
 
             <form id="login-form">

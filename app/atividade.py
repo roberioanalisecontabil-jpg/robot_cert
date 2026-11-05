@@ -40,7 +40,25 @@ EVENTO_LOGIN_NEGADO = "login_negado"
 # trilha porque é o único caminho em que alguém troca a senha de uma conta sem
 # estar autenticado nela — se aparecer sem a pessoa ter pedido, é incidente.
 EVENTO_SENHA_REDEFINIDA = "senha_redefinida"
-EVENTOS_VALIDOS = (EVENTO_LOGIN, EVENTO_LOGIN_NEGADO, EVENTO_SENHA_REDEFINIDA)
+# Entrar com a Microsoft: conta nascida do primeiro acesso, e a conta que o
+# Entra ID bloqueou (o login da Microsoft recusado por isso).
+EVENTO_CONTA_CRIADA_MICROSOFT = "conta_criada_microsoft"
+EVENTO_DESATIVADA_MICROSOFT = "desativada_microsoft"
+EVENTOS_VALIDOS = (
+    EVENTO_LOGIN, EVENTO_LOGIN_NEGADO, EVENTO_SENHA_REDEFINIDA,
+    EVENTO_CONTA_CRIADA_MICROSOFT, EVENTO_DESATIVADA_MICROSOFT,
+)
+
+# Como a tela de Auditoria nomeia o login, conforme `contexto["metodo"]`.
+ROTULO_LOGIN_POR_METODO = {
+    "microsoft": "Entrou pela Microsoft",
+    "senha": "Entrou com a senha",
+    "senha_e_app": "Entrou com senha e app autenticador",
+}
+ROTULO_EVENTO = {
+    EVENTO_CONTA_CRIADA_MICROSOFT: "Conta criada pela Microsoft",
+    EVENTO_DESATIVADA_MICROSOFT: "Desativado: conta bloqueada na Microsoft",
+}
 
 
 def registrar(
