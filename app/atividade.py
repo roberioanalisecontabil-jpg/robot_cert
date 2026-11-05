@@ -44,9 +44,11 @@ EVENTO_SENHA_REDEFINIDA = "senha_redefinida"
 # Entra ID bloqueou (o login da Microsoft recusado por isso).
 EVENTO_CONTA_CRIADA_MICROSOFT = "conta_criada_microsoft"
 EVENTO_DESATIVADA_MICROSOFT = "desativada_microsoft"
+# O administrador desfez a ligacao da conta com a Microsoft (tela de Usuarios).
+EVENTO_MICROSOFT_DESLIGADA = "microsoft_desligada"
 EVENTOS_VALIDOS = (
     EVENTO_LOGIN, EVENTO_LOGIN_NEGADO, EVENTO_SENHA_REDEFINIDA,
-    EVENTO_CONTA_CRIADA_MICROSOFT, EVENTO_DESATIVADA_MICROSOFT,
+    EVENTO_CONTA_CRIADA_MICROSOFT, EVENTO_DESATIVADA_MICROSOFT, EVENTO_MICROSOFT_DESLIGADA,
 )
 
 # Como a tela de Auditoria nomeia o login, conforme `contexto["metodo"]`.
@@ -58,6 +60,7 @@ ROTULO_LOGIN_POR_METODO = {
 ROTULO_EVENTO = {
     EVENTO_CONTA_CRIADA_MICROSOFT: "Conta criada pela Microsoft",
     EVENTO_DESATIVADA_MICROSOFT: "Desativado: conta bloqueada na Microsoft",
+    EVENTO_MICROSOFT_DESLIGADA: "Ligação com a Microsoft desfeita",
 }
 
 

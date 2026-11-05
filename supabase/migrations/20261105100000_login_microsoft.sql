@@ -18,6 +18,8 @@
 --    conferencia bem-sucedida e marca de que ela nao foi possivel.
 -- 4. users.desativada_pela_microsoft_em: quando a conferencia desativou a conta.
 -- 5. users_origem_valida passa a aceitar 'microsoft'.
+-- 6. user_activity_evento_valido passa a aceitar os eventos da Microsoft e o
+--    que faltava (senha_redefinida): sem isso a gravacao falhava em silencio.
 -- ==========================================================================
 
 -- 1 a 4. Colunas ---------------------------------------------------------------
@@ -38,6 +40,22 @@ ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_origem_valida;
 ALTER TABLE public.users
   ADD CONSTRAINT users_origem_valida CHECK (origem IN ('manual', 'acessorias', 'microsoft'));
 
+-- 6. Eventos de atividade --------------------------------------------------------
+-- 6a. Conferencia ANTES: eventos ja gravados que a lista nova nao cobre.
+-- Esperado: nenhuma linha. Se aparecer alguma, pare e avise o TI: o ADD
+-- CONSTRAINT abaixo falharia.
+SELECT evento, count(*) FROM public.user_activity
+ WHERE evento NOT IN ('login', 'login_negado', 'senha_redefinida', 'conta_criada_microsoft',
+                      'desativada_microsoft', 'microsoft_desligada')
+ GROUP BY evento;
+
+-- 6b. A troca.
+ALTER TABLE public.user_activity DROP CONSTRAINT IF EXISTS user_activity_evento_valido;
+ALTER TABLE public.user_activity
+  ADD CONSTRAINT user_activity_evento_valido CHECK (evento IN (
+    'login', 'login_negado', 'senha_redefinida', 'conta_criada_microsoft',
+    'desativada_microsoft', 'microsoft_desligada'));
+
 -- Conferencia -------------------------------------------------------------------
 -- Esperado: 5 colunas em users; o indice unico; a restricao com 'microsoft'.
 SELECT column_name FROM information_schema.columns
@@ -46,4 +64,5 @@ SELECT column_name FROM information_schema.columns
                        'microsoft_sem_conferencia', 'desativada_pela_microsoft_em')
  ORDER BY 1;
 SELECT indexname FROM pg_indexes WHERE indexname = 'users_microsoft_oid_unico';
-SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'users_origem_valida';
+SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+ WHERE conname IN ('users_origem_valida', 'user_activity_evento_valido');

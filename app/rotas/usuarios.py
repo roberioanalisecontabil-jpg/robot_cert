@@ -1147,8 +1147,11 @@ def desligar_microsoft(user_id: str, ator: auth.TokenData = Depends(require_auth
     except Exception:
         logger.exception("Falha ao desligar a Microsoft de %s", user_id)
         raise HTTPException(status_code=400, detail="Não foi possível desfazer a ligação com a Microsoft.")
-    # Sem evento novo em `user_activity` (CHECK fechado exigiria migration): fica
-    # no log do servidor, como a remoção do app autenticador pelo administrador.
+    alvo = sb.table("users").select("email").eq("id", user_id).limit(1).execute().data or [{}]
+    atividade.registrar(
+        atividade.EVENTO_MICROSOFT_DESLIGADA, user_id=user_id, user_email=alvo[0].get("email") or "",
+        contexto={"por": ator.email},
+    )
     logger.info("Ligação da conta %s com a Microsoft desfeita pelo administrador %s", user_id, ator.email)
     return {"ok": True}
 

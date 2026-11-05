@@ -185,6 +185,9 @@ def test_desligar_microsoft_so_admin(client: TestClient, banco: _Fake) -> None:
     u = _u(banco, "u-fis")
     assert u["microsoft_oid"] is None and u["microsoft_refresh_cifrado"] is None
     assert u["microsoft_conferido_em"] is None and u["microsoft_sem_conferencia"] is False
+    ev = [a for a in banco.tabelas["user_activity"] if a["evento"] == "microsoft_desligada"]
+    assert len(ev) == 1 and ev[0]["user_id"] == "u-fis" and ev[0]["user_email"] == "fis@x.com"
+    assert ev[0]["contexto"] == {"por": "admin@x.com"}
     assert client.post("/api/users/nao-existe/microsoft/desligar", headers=_h(*ADMIN)).status_code == 404
 
 

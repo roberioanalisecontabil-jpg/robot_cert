@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.atividade import EVENTOS_VALIDOS
+
 RAIZ = Path(__file__).resolve().parent.parent
 SQL = RAIZ / "supabase" / "migrations" / "20261105100000_login_microsoft.sql"
 
@@ -46,3 +48,12 @@ def test_cabecalho_ascii_e_conferencia_no_fim():
     assert "COMO USAR" in texto
     ultimo = texto[texto.rindex("-- Conferencia"):]
     assert "SELECT" in ultimo
+
+
+def test_migration_refaz_o_check_de_eventos_com_todos_os_eventos():
+    sql = _sem_comentarios()
+    assert sql.index("DROP CONSTRAINT IF EXISTS user_activity_evento_valido") < sql.index(
+        "ADD CONSTRAINT user_activity_evento_valido")
+    for evento in EVENTOS_VALIDOS:
+        assert f"'{evento}'" in sql, f"evento {evento} fora da migration"
+    assert "NOT IN (" in sql, "conferencia previa dos eventos fora da lista"
