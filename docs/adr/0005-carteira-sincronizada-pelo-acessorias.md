@@ -118,7 +118,7 @@ que lidera. Na prática ele precisa instalar qualquer certificado. Decidido pelo
   sem efeito no alcance. Se ele deixar de ser Gestor, elas já são a carteira de Operador.
   Mudar de papel apaga só as Exceções.
 
-## Adendo de 04/11/2026: login pela Microsoft (conta adotada, desativação que vence, sem convite)
+## Adendo de 04/11/2026: login pela Microsoft (conta adotada, desativação que vence, convite só fora dos domínios)
 
 Com o login pela Microsoft (spec de 04/11), a sincronização muda em três pontos:
 
@@ -131,5 +131,9 @@ Com o login pela Microsoft (spec de 04/11), a sincronização muda em três pont
   aplicação ela já recebe a carteira e passa a ser desativada com o usuário de lá. Administrador
   nunca é adotado; sem e-mail correspondente, a conta continua como está; se o id do Acessórias
   já é de outra conta, não adota.
-- **Sem convite.** A conta nova continua nascendo sem senha, mas não há mais código de 7 dias
-  nem e-mail: a pessoa entra pela Microsoft. Saíram `_enviar_convite` e `CONVITE_MIN`.
+- **Convite só para fora dos domínios.** A conta nova continua nascendo sem senha. O código de
+  7 dias e o e-mail de convite (`_enviar_convite`, `CONVITE_MIN`) só saem quando **não** vale
+  `microsoft_entra.configurado() and dominio_liberado(email)`: com o login pela Microsoft
+  ligado, conta de um dos domínios liberados não recebe convite (entra pela Microsoft); conta
+  de fora recebe, como antes. Com o login desligado, toda conta nova recebe. (Decisão de
+  04/11/2026: o convite chegou a sair por inteiro e voltou só para esses casos.)

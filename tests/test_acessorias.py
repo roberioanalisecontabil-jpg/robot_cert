@@ -247,18 +247,42 @@ def test_desativada_pela_microsoft_nao_reativa():
     assert c["reativar"] == ["u-cris"]
 
 
-def test_conta_nova_nao_recebe_convite(monkeypatch):
-    from app import correio, senha_reset
+def _convites(monkeypatch, ligado):
+    """Liga ou desliga a Microsoft e grava quem recebeu código e convite."""
+    from app import microsoft_entra, senha_reset
 
-    def nao_pode(*a, **k):
-        raise AssertionError("convite ou código criado")
-
-    monkeypatch.setattr(correio, "send_smtp_email", nao_pode)
-    monkeypatch.setattr(senha_reset, "criar_codigo", nao_pode)
+    feitos = []
+    monkeypatch.setattr(microsoft_entra, "configurado", lambda: ligado)
+    monkeypatch.setattr("app.config.MICROSOFT_DOMINIOS", frozenset({"analisegroup.cnt.br"}))
+    monkeypatch.setattr(senha_reset, "criar_codigo", lambda uid, **k: feitos.append(("codigo", uid)) or "123456")
+    monkeypatch.setattr(acessorias, "_enviar_convite", lambda conta, codigo: feitos.append(("convite", conta["id"])),
+                        raising=False)
     monkeypatch.setattr("app.settings_state._banco", lambda: None)
-    r = acessorias.depois_de_aplicar({"novas": [{"id": "x", "email": "n@e.com", "full_name": "N"}], "desativadas": []})
-    assert r == {"falhas": 0}
-    assert not hasattr(acessorias, "_enviar_convite") and not hasattr(acessorias, "CONVITE_MIN")
+    return feitos
+
+
+def test_conta_nova_de_fora_dos_dominios_recebe_convite(monkeypatch):
+    feitos = _convites(monkeypatch, ligado=True)
+    r = acessorias.depois_de_aplicar({"novas": [{"id": "x", "email": "n@gmail.com", "full_name": "N"}],
+                                      "desativadas": []})
+    assert feitos == [("codigo", "x"), ("convite", "x")]
+    assert r == {"convites": 1, "falhas": 0}
+
+
+def test_conta_nova_de_dominio_com_microsoft_ligada_nao_recebe_convite(monkeypatch):
+    # Ela entra pela Microsoft: nem código (que valeria como senha) nem e-mail.
+    feitos = _convites(monkeypatch, ligado=True)
+    r = acessorias.depois_de_aplicar({"novas": [{"id": "x", "email": "N@AnaliseGroup.cnt.br", "full_name": "N"}],
+                                      "desativadas": []})
+    assert feitos == [] and r == {"convites": 0, "falhas": 0}
+
+
+def test_conta_nova_de_dominio_com_microsoft_desligada_recebe_convite(monkeypatch):
+    feitos = _convites(monkeypatch, ligado=False)
+    r = acessorias.depois_de_aplicar({"novas": [{"id": "x", "email": "n@analisegroup.cnt.br", "full_name": "N"}],
+                                      "desativadas": []})
+    assert feitos == [("codigo", "x"), ("convite", "x")]
+    assert r == {"convites": 1, "falhas": 0}
 
 
 def test_conta_nova_ja_recebe_carteira_e_desativada_perde_tudo():
@@ -463,7 +487,8 @@ def test_contas_pelo_acessorias(banco, monkeypatch):
     assert _linhas(cliente, "SELECT count(*) FROM public.carteira WHERE user_id = %s", ex) == [(0,)]
     assert _linhas(cliente, "SELECT count(*) FROM public.departamento_lider WHERE user_id = %s", ex) == [(0,)]
     assert ("desativacao",) in _linhas(cliente, "SELECT origem FROM public.carteira_historico WHERE user_id = %s", ex)
-    assert depois == [{"desativadas": [ex]}]
+    assert depois == [{"novas": [{"id": nova[0][0], "email": "nova@teste-acessorias", "full_name": "Nova Pessoa"}],
+                       "desativadas": [ex]}]
     # A senha da conta nova é um hash bcrypt de verdade, de um segredo que ninguém tem.
     h = _linhas(cliente, "SELECT password_hash FROM public.users WHERE id = %s", nova[0][0])[0][0]
     assert h.startswith("$2") and len(h) == 60
@@ -592,6 +617,7 @@ def test_convite_abre_direto_no_codigo_sem_pedir_outro():
     assert "get('definir')" in html and 'id="btn-ja-tenho"' in html
     trecho = html[html.index("function irParaCodigo"):html.index("$('btn-ja-tenho')")]
     assert "/api/senha/codigo" not in trecho
+    assert acessorias.CONVITE_MIN == 7 * 24 * 60
     import inspect
 
     from app import senha_reset

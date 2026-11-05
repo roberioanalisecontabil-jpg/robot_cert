@@ -26,8 +26,9 @@ aguardava.
 
 ── Contas (`calcular_contas`) ─────────────────────────────────────────────
 
-Usuário ativo do Acessórias sem conta ganha uma (Operador, sem senha e sem
-convite: a pessoa entra pela Microsoft); a conta vinda de lá é desativada e
+Usuário ativo do Acessórias sem conta ganha uma (Operador, sem senha, convite
+de 7 dias por e-mail, salvo e-mail de domínio da Microsoft com o login pela
+Microsoft ligado: essa pessoa entra por lá); a conta vinda de lá é desativada e
 reativada com ele, salvo a que a Microsoft desativou. Conta criada pelo login
 da Microsoft (`origem = microsoft`) é adotada quando o e-mail casa. Administrador
 e conta manual nunca mudam.
@@ -64,6 +65,8 @@ LIMITE_QUEDA_EMPRESAS = 0.90
 RODANDO_ABANDONADA = timedelta(minutes=15)
 
 AUTOR = "Acessórias (sincronização)"
+# Validade do código do convite da conta nova (ADR 0005).
+CONVITE_MIN = 7 * 24 * 60
 # Papéis que recebem carteira. Administrador alcança tudo e não precisa.
 PAPEIS_COM_CARTEIRA = ("user", "gestor")
 # Só um aplicador por vez, mesmo com a busca automática e o botão juntos.
@@ -620,7 +623,7 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
 
     Devolve o resumo e, em "_depois", o que precisa rodar fora da transação
     (`depois_de_aplicar`): sessões, bandeja e tokens de quem foi desativado,
-    papel de quem perdeu liderança.
+    papel de quem perdeu liderança, convite de quem ganhou conta.
     """
     hash_sem_senha = _hash_sem_senha()
     with conn.transaction(), conn.cursor(row_factory=dict_row) as cur:
@@ -633,6 +636,7 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
 
         # Contas novas primeiro: a carteira delas usa o id que nasce aqui.
         ids_novos: Dict[str, str] = {}
+        novas: List[dict] = []
         for u in contas["criar"]:
             cur.execute(
                 "INSERT INTO public.users (email, password_hash, full_name, role, ativo, origem, acessorias_id) "
@@ -643,6 +647,7 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             if linha:  # e-mail criado à mão no meio do caminho: fica para a próxima busca
                 ids_novos[f"{PREFIXO_NOVA}{u['id']}"] = linha["id"]
                 emails[linha["id"]] = u["email"]
+                novas.append({"id": linha["id"], "email": u["email"], "full_name": u["nome"]})
         for uid, aid in contas["ligar"]:
             cur.execute("UPDATE public.users SET acessorias_id = %s WHERE id = %s", (aid, uid))
         for uid, aid in contas["adotar"]:
@@ -682,7 +687,45 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             cur.execute("DELETE FROM public.carteira WHERE user_id = %s AND documento = %s", (uid, doc))
         _historico(cur, entradas, "entrada", emails, feito_por_email)
         _historico(cur, plano["saidas"], "saida", emails, feito_por_email, desativadas)
-    return {**plano["resumo"], **deps, "_depois": {"desativadas": sorted(desativadas)}}
+    return {**plano["resumo"], **deps, "_depois": {"novas": novas, "desativadas": sorted(desativadas)}}
+
+
+def _enviar_convite(conta: dict, codigo: str) -> None:
+    """E-mail "defina sua senha" da conta criada pelo Acessórias (ADR 0005)."""
+    import html
+    import os
+    from urllib.parse import quote
+
+    from app import correio
+    from app.settings_state import load_settings
+
+    s = load_settings()
+    if not correio.configurado(s):
+        raise RuntimeError("Envio de e-mail não configurado")
+    # Link só se o endereço vier de configuração, nunca do cabeçalho Host
+    # (mesma regra do código de senha em app/rotas/usuarios.py).
+    base = (os.getenv("PORTAL_BASE_URL") or "").strip().rstrip("/")
+    link = (f'<p style="margin:16px 0 0;"><a href="{base}/login?definir={quote(conta["email"])}">'
+            "Definir minha senha</a></p>") if base else ""
+    nome = html.escape(str(conta.get("full_name") or "").strip() or "Olá")
+    correio.send_smtp_email(
+        host=s.smtp_host, port=s.smtp_port, user=s.smtp_user, password_enc=s.smtp_password_encrypted,
+        use_tls=s.smtp_use_tls, use_ssl=s.smtp_use_ssl, from_email=s.smtp_from_email,
+        to_email=str(conta["email"]), settings=s,
+        subject="Seu acesso ao CertGuard Análise",
+        html_content=(
+            f"<p>{nome},</p>"
+            "<p>Sua conta no CertGuard Análise foi criada a partir do seu cadastro no "
+            "Acessórias. Com ela você vê e instala os certificados das empresas pelas quais é "
+            "responsável lá.</p>"
+            "<p>Para definir sua senha, abra o portal em <strong>Esqueci minha senha › já tenho "
+            "um código</strong> (ou use o link abaixo) e informe este código:</p>"
+            f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;margin:24px 0;">{codigo}</p>'
+            "<p>Ele vale por 7 dias e só pode ser usado uma vez. Depois disso, peça um novo em "
+            "<strong>Esqueci minha senha</strong>.</p>"
+            f"{link}"
+        ),
+    )
 
 
 def depois_de_aplicar(depois: dict) -> dict:
@@ -690,9 +733,10 @@ def depois_de_aplicar(depois: dict) -> dict:
 
     Desativadas: o mesmo que `deactivate_user` faz depois de gravar (sessões,
     bandeja da estação, tokens de instalação) e o papel rederivado sem as
-    lideranças. Conta nova não recebe convite: entra pela Microsoft.
+    lideranças. Novas: código de 7 dias e o e-mail de convite, salvo e-mail de
+    domínio liberado com a Microsoft ligada (essa pessoa entra pela Microsoft).
     """
-    from app import cert_installer, computadores, papeis
+    from app import cert_installer, computadores, microsoft_entra, papeis, senha_reset
     from app.settings_state import _banco
 
     sb = _banco()
@@ -706,7 +750,20 @@ def depois_de_aplicar(depois: dict) -> dict:
         except Exception:  # noqa: BLE001
             falhas += 1
             logger.exception("Conta %s desativada pelo Acessórias, mas a limpeza depois falhou", uid)
-    return {"falhas": falhas}
+    enviados = 0
+    for conta in depois.get("novas") or []:
+        if microsoft_entra.configurado() and microsoft_entra.dominio_liberado(conta["email"]):
+            continue
+        try:
+            codigo = senha_reset.criar_codigo(conta["id"], pelo_admin=True, validade_min=CONVITE_MIN)
+            _enviar_convite(conta, codigo)
+            enviados += 1
+        except Exception:  # noqa: BLE001
+            falhas += 1
+            # ERROR: a pessoa tem conta e não sabe. O Administrador reenvia
+            # pelo "Enviar código" da tela Usuários.
+            logger.exception("Conta %s criada pelo Acessórias, mas o convite NÃO foi enviado", conta["id"])
+    return {"convites": enviados, "falhas": falhas}
 
 
 def _abrir_busca(cur, origem: str, por_email: str) -> Optional[int]:
