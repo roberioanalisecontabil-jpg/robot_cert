@@ -193,7 +193,14 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=No
         _janela_aberta.clear()
         raiz.destroy()
 
+    # Um login por vez: Enter com os campos cheios não pode abrir uma entrada
+    # por senha enquanto a Microsoft espera o navegador (nem o contrário).
+    ocupado = False
+
     def _enviar(*_a: Any) -> None:
+        nonlocal ocupado
+        if ocupado:
+            return
         email = campo_email.get().strip()
         senha = campo_senha.get()
 
@@ -202,6 +209,7 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=No
             aviso.configure(text=problema, fg=_COR_ERRO)
             return
 
+        ocupado = True
         botao.configure(state="disabled", text="Entrando…")
         if botao_ms:
             botao_ms.configure(state="disabled")
@@ -226,20 +234,26 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=No
                 resposta = ao_registrar(email, senha_local)
             except BaseException as e:
                 LOGGER.warning("Registro do dispositivo recusado: %s", e)
-                raiz.after(0, _falhou, mensagem_de_falha(e))
+                with contextlib.suppress(Exception):  # janela já fechada
+                    raiz.after(0, _falhou, mensagem_de_falha(e))
                 return
             # O portal diz se o computador já está autorizado ou se aguarda
             # o administrador.
             texto = ""
             if isinstance(resposta, dict):
                 texto = str(resposta.get("mensagem") or "")
-            raiz.after(0, _conseguiu, texto)
+            with contextlib.suppress(Exception):
+                raiz.after(0, _conseguiu, texto)
 
         # Fora da thread do Tk: a chamada ao portal pode levar segundos, e
         # congelar a janela faria a pessoa clicar de novo.
         threading.Thread(target=_trabalho, args=(senha,), daemon=True).start()
 
     def _microsoft(*_a: Any) -> None:
+        nonlocal ocupado
+        if ocupado:
+            return
+        ocupado = True
         botao.configure(state="disabled")
         botao_ms.configure(state="disabled", text="  Aguardando o navegador…")
         aviso.configure(text="", fg=_COR_ERRO)
@@ -250,14 +264,18 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=No
                 resposta = ao_microsoft()
             except BaseException as e:
                 LOGGER.warning("Entrada pela Microsoft recusada: %s", e)
-                raiz.after(0, _falhou, mensagem_de_falha(e))
+                with contextlib.suppress(Exception):  # janela já fechada
+                    raiz.after(0, _falhou, mensagem_de_falha(e))
                 return
             texto = str(resposta.get("mensagem") or "") if isinstance(resposta, dict) else ""
-            raiz.after(0, _conseguiu, texto)
+            with contextlib.suppress(Exception):
+                raiz.after(0, _conseguiu, texto)
 
         threading.Thread(target=_trabalho_ms, daemon=True).start()
 
     def _falhou(texto: str) -> None:
+        nonlocal ocupado
+        ocupado = False
         aviso.configure(text=texto, fg=_COR_ERRO)
         botao.configure(state="normal", text="Entrar")
         if botao_ms:
