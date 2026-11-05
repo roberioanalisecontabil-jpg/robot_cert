@@ -207,6 +207,13 @@ def retorno_da_microsoft(request: Request, background: BackgroundTasks) -> Respo
         return _sai("desativada" if desativada else "recusada")
 
     user, criada = resultado
+    # Antes de emitir: a conta já existe, e o aviso não pode depender do código.
+    if criada:
+        atividade.registrar(
+            atividade.EVENTO_CONTA_CRIADA_MICROSOFT,
+            user_id=str(user.get("id") or "") or None, user_email=user["email"], client_ip=ip,
+        )
+        background.add_task(_avisar_admins, str(user.get("full_name") or user["email"]), user["email"])
     if band:
         try:
             cod = bandeja_codigo.emitir(str(user["id"]), band["desafio"])
@@ -222,10 +229,4 @@ def retorno_da_microsoft(request: Request, background: BackgroundTasks) -> Respo
     else:
         r = _volta(None, request, user)
         _abrir_sessao(user, request, r, ip, "microsoft")
-    if criada:
-        atividade.registrar(
-            atividade.EVENTO_CONTA_CRIADA_MICROSOFT,
-            user_id=str(user.get("id") or "") or None, user_email=user["email"], client_ip=ip,
-        )
-        background.add_task(_avisar_admins, str(user.get("full_name") or user["email"]), user["email"])
     return r

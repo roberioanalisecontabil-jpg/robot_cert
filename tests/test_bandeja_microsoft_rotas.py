@@ -10,7 +10,7 @@ from jose import jwt
 from app import microsoft_entra as me
 from app.rotas import microsoft as rm
 from tests.test_login_microsoft_rotas import (  # noqa: F401 — fixtures
-    STATE, _atividades, _entra_direto, _cookie, _ident, _retorno, banco, ligado, troca,
+    EMAIL, STATE, _atividades, _entra_direto, _cookie, _ident, _retorno, banco, ligado, troca,
 )
 
 D = "A" * 43
@@ -99,6 +99,28 @@ def test_retorno_da_bandeja_falha_ao_emitir(
     _cookie_bandeja(client)
     r = _retorno(client, code="abc", state=STATE)
     assert f"http://127.0.0.1:{PORTA}/?erro=falha" in r.text and "cg_sessao=" not in " ".join(r.headers.get_list("set-cookie"))
+
+
+@pytest.mark.parametrize("emitir_falha", [False, True])
+def test_retorno_da_bandeja_conta_criada_registra_e_avisa(
+    client: TestClient, banco_b: Any, troca: list, monkeypatch: pytest.MonkeyPatch, emitir_falha: bool,
+) -> None:
+    from app import login_microsoft
+
+    user = banco_b.tabelas["users"][0]
+    monkeypatch.setattr(login_microsoft, "resolver_conta", lambda *a, **k: (user, True))
+    avisos: list = []
+    monkeypatch.setattr(rm, "_avisar_admins", lambda *a: avisos.append(a))
+    if emitir_falha:
+        def _quebra(*a: Any, **k: Any) -> str:
+            raise RuntimeError("sem banco")
+
+        monkeypatch.setattr("app.bandeja_codigo.emitir", _quebra)
+    _cookie_bandeja(client)
+    r = _retorno(client, code="abc", state=STATE)
+    assert (f"?erro=falha" in r.text) == emitir_falha
+    assert [a for a in _atividades(banco_b) if a["evento"] == "conta_criada_microsoft"]
+    assert avisos == [("Ana", EMAIL)]
 
 
 def test_retorno_do_site_continua_abrindo_sessao(client: TestClient, banco_b: Any, troca: list) -> None:
