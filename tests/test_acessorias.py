@@ -198,6 +198,69 @@ def test_contas_criar_desativar_reativar_e_nunca_admin_nem_manual():
     assert ("u-ti", 3) in c["ligar"]
 
 
+def _conta_ms(i, email, **kw):
+    c = {"id": i, "email": email, "role": "user", "ativo": True, "origem": "microsoft", "acessorias_id": None,
+         "desativada_pela_microsoft_em": None}
+    c.update(kw)
+    return c
+
+
+def test_conta_microsoft_adotada_pelo_email():
+    contas = {"ana@e.com": _conta_ms("u-ana", "ana@e.com"), "adm@e.com": _conta_ms("u-adm", "adm@e.com", role="admin")}
+    # E-mail com caixa e espaços diferentes dos dois lados: casa pelo normalizado.
+    usuarios = [_u(1, "  Ana@E.com "), _u(4, "adm@e.com")]
+    c = acessorias.calcular_contas(usuarios, contas)
+    assert c["adotar"] == [("u-ana", 1)]
+    assert c["criar"] == [] and c["ligar"] == [("u-adm", 4)]   # admin só é ligado, nunca adotado
+
+    # O plano efetivo já a trata como do Acessórias: ela recebe a carteira na mesma aplicação.
+    est = _estado()
+    est.contas["ana@e.com"] = _conta_ms("u-ana", "ana@e.com")
+    p = calcular_plano({"empresas": [_emp(OUTRA, (1, "ana@e.com"))], "departamentos": [],
+                        "usuarios": [_u(1, "ana@e.com")]}, est)
+    assert p["entradas"] == [("u-ana", OUTRA)]
+    assert p["resumo"]["contas_adotadas"] == 1 and p["resumo"]["contas_novas"] == 0
+    # Adotada e inativa no Acessórias: desativa como qualquer outra.
+    c = acessorias.calcular_contas([_u(1, "ana@e.com", ativo=False)], {"ana@e.com": _conta_ms("u-ana", "ana@e.com")})
+    assert c["adotar"] == [("u-ana", 1)] and c["desativar"] == ["u-ana"]
+
+
+def test_conta_microsoft_sem_email_no_acessorias_fica_manual():
+    contas = {"ana@e.com": _conta_ms("u-ana", "ana@e.com")}
+    c = acessorias.calcular_contas([_u(2, "outra@e.com")], contas)
+    assert c["adotar"] == [] and c["desativar"] == [] and c["ligar"] == []
+    # Id do Acessórias já em uso por outra conta: não adota.
+    contas["bia@e.com"] = {"id": "u-bia", "email": "bia@e.com", "role": "user", "ativo": True,
+                           "origem": "acessorias", "acessorias_id": 2}
+    assert acessorias.calcular_contas([_u(2, "ana@e.com")], contas)["adotar"] == []
+
+
+def test_desativada_pela_microsoft_nao_reativa():
+    desativada = "2026-11-04T10:00:00+00:00"
+    contas = {
+        "bia@e.com": {"id": "u-bia", "email": "bia@e.com", "role": "user", "ativo": False, "origem": "acessorias",
+                      "acessorias_id": 2, "desativada_pela_microsoft_em": desativada},
+        "cris@e.com": {"id": "u-cris", "email": "cris@e.com", "role": "user", "ativo": False, "origem": "acessorias",
+                       "acessorias_id": 3, "desativada_pela_microsoft_em": None},
+    }
+    c = acessorias.calcular_contas([_u(2, "bia@e.com"), _u(3, "cris@e.com")], contas)
+    assert c["reativar"] == ["u-cris"]
+
+
+def test_conta_nova_nao_recebe_convite(monkeypatch):
+    from app import correio, senha_reset
+
+    def nao_pode(*a, **k):
+        raise AssertionError("convite ou código criado")
+
+    monkeypatch.setattr(correio, "send_smtp_email", nao_pode)
+    monkeypatch.setattr(senha_reset, "criar_codigo", nao_pode)
+    monkeypatch.setattr("app.settings_state._banco", lambda: None)
+    r = acessorias.depois_de_aplicar({"novas": [{"id": "x", "email": "n@e.com", "full_name": "N"}], "desativadas": []})
+    assert r == {"falhas": 0}
+    assert not hasattr(acessorias, "_enviar_convite") and not hasattr(acessorias, "CONVITE_MIN")
+
+
 def test_conta_nova_ja_recebe_carteira_e_desativada_perde_tudo():
     est = _estado({("u-ana", OUTRA): "manual", ("u-ana", "12345678901"): "manual"})
     est.contas["ana@e.com"].update(origem="acessorias", acessorias_id=1)
@@ -400,8 +463,7 @@ def test_contas_pelo_acessorias(banco, monkeypatch):
     assert _linhas(cliente, "SELECT count(*) FROM public.carteira WHERE user_id = %s", ex) == [(0,)]
     assert _linhas(cliente, "SELECT count(*) FROM public.departamento_lider WHERE user_id = %s", ex) == [(0,)]
     assert ("desativacao",) in _linhas(cliente, "SELECT origem FROM public.carteira_historico WHERE user_id = %s", ex)
-    assert depois == [{"novas": [{"id": nova[0][0], "email": "nova@teste-acessorias", "full_name": "Nova Pessoa"}],
-                       "desativadas": [ex]}]
+    assert depois == [{"desativadas": [ex]}]
     # A senha da conta nova é um hash bcrypt de verdade, de um segredo que ninguém tem.
     h = _linhas(cliente, "SELECT password_hash FROM public.users WHERE id = %s", nova[0][0])[0][0]
     assert h.startswith("$2") and len(h) == 60
@@ -530,7 +592,6 @@ def test_convite_abre_direto_no_codigo_sem_pedir_outro():
     assert "get('definir')" in html and 'id="btn-ja-tenho"' in html
     trecho = html[html.index("function irParaCodigo"):html.index("$('btn-ja-tenho')")]
     assert "/api/senha/codigo" not in trecho
-    assert acessorias.CONVITE_MIN == 7 * 24 * 60
     import inspect
 
     from app import senha_reset

@@ -26,9 +26,11 @@ aguardava.
 
 ── Contas (`calcular_contas`) ─────────────────────────────────────────────
 
-Usuário ativo do Acessórias sem conta ganha uma (Operador, sem senha, convite
-de 7 dias por e-mail); a conta vinda de lá é desativada e reativada com ele.
-Administrador e conta manual nunca mudam.
+Usuário ativo do Acessórias sem conta ganha uma (Operador, sem senha e sem
+convite: a pessoa entra pela Microsoft); a conta vinda de lá é desativada e
+reativada com ele, salvo a que a Microsoft desativou. Conta criada pelo login
+da Microsoft (`origem = microsoft`) é adotada quando o e-mail casa. Administrador
+e conta manual nunca mudam.
 
 ── O que fica para as etapas seguintes do ADR ─────────────────────────────
 
@@ -62,8 +64,6 @@ LIMITE_QUEDA_EMPRESAS = 0.90
 RODANDO_ABANDONADA = timedelta(minutes=15)
 
 AUTOR = "Acessórias (sincronização)"
-# Validade do código do convite da conta nova (ADR 0005).
-CONVITE_MIN = 7 * 24 * 60
 # Papéis que recebem carteira. Administrador alcança tudo e não precisa.
 PAPEIS_COM_CARTEIRA = ("user", "gestor")
 # Só um aplicador por vez, mesmo com a busca automática e o botão juntos.
@@ -261,7 +261,11 @@ def calcular_contas(usuarios: List[dict], contas: Dict[str, dict]) -> dict:
 
     - Usuário ativo lá sem conta aqui: conta nova (Operador, sem senha).
     - Conta que veio do Acessórias (`origem = acessorias`): desativa quando o
-      usuário fica inativo ou some de lá, reativa quando volta.
+      usuário fica inativo ou some de lá, reativa quando volta, exceto a que a
+      Microsoft desativou (`desativada_pela_microsoft_em`): essa só o
+      Administrador reativa.
+    - Conta criada pelo login da Microsoft (`origem = microsoft`, não admin)
+      com o e-mail de um usuário de lá: adotada (vira `acessorias`).
     - Administrador e conta manual nunca mudam; só ganham o id do Acessórias
       quando o e-mail casa, para a tela mostrar a ligação.
     """
@@ -270,24 +274,31 @@ def calcular_contas(usuarios: List[dict], contas: Dict[str, dict]) -> dict:
     desativar: List[str] = []
     reativar: List[str] = []
     ligar: List[Tuple[str, int]] = []
+    adotar: List[Tuple[str, int]] = []
     ids_em_uso = {c.get("acessorias_id") for c in contas.values() if c.get("acessorias_id") is not None}
     vistos: Set[str] = set()
+    por_email = {e.strip().lower(): c for e, c in contas.items()}
     for u in usuarios:
-        if not u["email"] or u["email"] in vistos:
+        email = (u["email"] or "").strip().lower()
+        if not email or email in vistos:
             continue
-        vistos.add(u["email"])
-        conta = contas.get(u["email"])
+        vistos.add(email)
+        conta = por_email.get(email)
         if conta is None:
             if u["ativo"]:
                 criar.append(u)
             continue
+        adotada = conta.get("origem") == "microsoft" and conta["role"] != "admin"
         if conta.get("acessorias_id") != u["id"] and u["id"] not in ids_em_uso:
-            ligar.append((conta["id"], u["id"]))
+            (adotar if adotada else ligar).append((conta["id"], u["id"]))
             ids_em_uso.add(u["id"])
-        if conta.get("origem") != "acessorias" or conta["role"] == "admin":
+        elif adotada and conta.get("acessorias_id") != u["id"]:
+            continue  # o id deles já é de outra conta: esta fica como está
+        if (conta.get("origem") != "acessorias" and not adotada) or conta["role"] == "admin":
             continue
         if u["ativo"] and not conta["ativo"]:
-            reativar.append(conta["id"])
+            if not conta.get("desativada_pela_microsoft_em"):
+                reativar.append(conta["id"])
         elif not u["ativo"] and conta["ativo"]:
             desativar.append(conta["id"])
     # Conta vinda do Acessórias cujo usuário sumiu de lá (busca inteira):
@@ -297,7 +308,8 @@ def calcular_contas(usuarios: List[dict], contas: Dict[str, dict]) -> dict:
         if (c.get("origem") == "acessorias" and c["ativo"] and c["role"] != "admin"
                 and aid is not None and aid not in por_id and c["id"] not in desativar):
             desativar.append(c["id"])
-    return {"criar": criar, "desativar": sorted(desativar), "reativar": sorted(reativar), "ligar": ligar}
+    return {"criar": criar, "desativar": sorted(desativar), "reativar": sorted(reativar), "ligar": ligar,
+            "adotar": adotar}
 
 
 def calcular_plano(dados: dict, estado: Estado) -> dict:
@@ -310,6 +322,8 @@ def calcular_plano(dados: dict, estado: Estado) -> dict:
         por_id[uid]["ativo"] = False
     for uid in contas["reativar"]:
         por_id[uid]["ativo"] = True
+    for uid, _ in contas["adotar"]:
+        por_id[uid]["origem"] = "acessorias"
     for u in contas["criar"]:
         efetivas[u["email"]] = {"id": f"{PREFIXO_NOVA}{u['id']}", "email": u["email"], "role": "user",
                                 "ativo": True, "origem": "acessorias", "acessorias_id": u["id"]}
@@ -349,6 +363,7 @@ def calcular_plano(dados: dict, estado: Estado) -> dict:
             "contas_novas": len(contas["criar"]),
             "contas_desativadas": len(contas["desativar"]),
             "contas_reativadas": len(contas["reativar"]),
+            "contas_adotadas": len(contas["adotar"]),
             "empresas": len(dados["empresas"]),
             "usuarios": len(dados["usuarios"]),
             "acessos_atuais": len(atuais),
@@ -436,7 +451,8 @@ def _cliente():
 
 def carregar_estado(cur) -> Estado:
     cur.execute(
-        "SELECT id::text AS id, lower(email) AS email, role, ativo, origem, acessorias_id FROM public.users"
+        "SELECT id::text AS id, lower(email) AS email, role, ativo, origem, acessorias_id, "
+        "desativada_pela_microsoft_em FROM public.users"
     )
     contas = {r["email"]: r for r in cur.fetchall()}
     cur.execute("SELECT user_id::text AS user_id, documento, origem FROM public.carteira")
@@ -604,7 +620,7 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
 
     Devolve o resumo e, em "_depois", o que precisa rodar fora da transação
     (`depois_de_aplicar`): sessões, bandeja e tokens de quem foi desativado,
-    papel de quem perdeu liderança, convite de quem ganhou conta.
+    papel de quem perdeu liderança.
     """
     hash_sem_senha = _hash_sem_senha()
     with conn.transaction(), conn.cursor(row_factory=dict_row) as cur:
@@ -617,7 +633,6 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
 
         # Contas novas primeiro: a carteira delas usa o id que nasce aqui.
         ids_novos: Dict[str, str] = {}
-        novas: List[dict] = []
         for u in contas["criar"]:
             cur.execute(
                 "INSERT INTO public.users (email, password_hash, full_name, role, ativo, origem, acessorias_id) "
@@ -628,11 +643,14 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             if linha:  # e-mail criado à mão no meio do caminho: fica para a próxima busca
                 ids_novos[f"{PREFIXO_NOVA}{u['id']}"] = linha["id"]
                 emails[linha["id"]] = u["email"]
-                novas.append({"id": linha["id"], "email": u["email"], "full_name": u["nome"]})
         for uid, aid in contas["ligar"]:
             cur.execute("UPDATE public.users SET acessorias_id = %s WHERE id = %s", (aid, uid))
+        for uid, aid in contas["adotar"]:
+            cur.execute("UPDATE public.users SET origem = 'acessorias', acessorias_id = %s "
+                        "WHERE id = %s AND origem = 'microsoft'", (aid, uid))
         for uid in contas["reativar"]:
-            cur.execute("UPDATE public.users SET ativo = true WHERE id = %s", (uid,))
+            cur.execute("UPDATE public.users SET ativo = true WHERE id = %s "
+                        "AND desativada_pela_microsoft_em IS NULL", (uid,))
         for uid in contas["desativar"]:
             # O resto da desativação manual (deactivate_user): lideranças e
             # exceções saem aqui; sessões, bandeja e tokens em depois_de_aplicar.
@@ -664,45 +682,7 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             cur.execute("DELETE FROM public.carteira WHERE user_id = %s AND documento = %s", (uid, doc))
         _historico(cur, entradas, "entrada", emails, feito_por_email)
         _historico(cur, plano["saidas"], "saida", emails, feito_por_email, desativadas)
-    return {**plano["resumo"], **deps, "_depois": {"novas": novas, "desativadas": sorted(desativadas)}}
-
-
-def _enviar_convite(conta: dict, codigo: str) -> None:
-    """E-mail "defina sua senha" da conta criada pelo Acessórias (ADR 0005)."""
-    import html
-    import os
-    from urllib.parse import quote
-
-    from app import correio
-    from app.settings_state import load_settings
-
-    s = load_settings()
-    if not correio.configurado(s):
-        raise RuntimeError("Envio de e-mail não configurado")
-    # Link só se o endereço vier de configuração, nunca do cabeçalho Host
-    # (mesma regra do código de senha em app/rotas/usuarios.py).
-    base = (os.getenv("PORTAL_BASE_URL") or "").strip().rstrip("/")
-    link = (f'<p style="margin:16px 0 0;"><a href="{base}/login?definir={quote(conta["email"])}">'
-            "Definir minha senha</a></p>") if base else ""
-    nome = html.escape(str(conta.get("full_name") or "").strip() or "Olá")
-    correio.send_smtp_email(
-        host=s.smtp_host, port=s.smtp_port, user=s.smtp_user, password_enc=s.smtp_password_encrypted,
-        use_tls=s.smtp_use_tls, use_ssl=s.smtp_use_ssl, from_email=s.smtp_from_email,
-        to_email=str(conta["email"]), settings=s,
-        subject="Seu acesso ao CertGuard Análise",
-        html_content=(
-            f"<p>{nome},</p>"
-            "<p>Sua conta no CertGuard Análise foi criada a partir do seu cadastro no "
-            "Acessórias. Com ela você vê e instala os certificados das empresas pelas quais é "
-            "responsável lá.</p>"
-            "<p>Para definir sua senha, abra o portal em <strong>Esqueci minha senha › já tenho "
-            "um código</strong> (ou use o link abaixo) e informe este código:</p>"
-            f'<p style="font-size:28px;letter-spacing:6px;font-weight:700;margin:24px 0;">{codigo}</p>'
-            "<p>Ele vale por 7 dias e só pode ser usado uma vez. Depois disso, peça um novo em "
-            "<strong>Esqueci minha senha</strong>.</p>"
-            f"{link}"
-        ),
-    )
+    return {**plano["resumo"], **deps, "_depois": {"desativadas": sorted(desativadas)}}
 
 
 def depois_de_aplicar(depois: dict) -> dict:
@@ -710,9 +690,9 @@ def depois_de_aplicar(depois: dict) -> dict:
 
     Desativadas: o mesmo que `deactivate_user` faz depois de gravar (sessões,
     bandeja da estação, tokens de instalação) e o papel rederivado sem as
-    lideranças. Novas: código de 7 dias e o e-mail de convite.
+    lideranças. Conta nova não recebe convite: entra pela Microsoft.
     """
-    from app import cert_installer, computadores, papeis, senha_reset
+    from app import cert_installer, computadores, papeis
     from app.settings_state import _banco
 
     sb = _banco()
@@ -726,18 +706,7 @@ def depois_de_aplicar(depois: dict) -> dict:
         except Exception:  # noqa: BLE001
             falhas += 1
             logger.exception("Conta %s desativada pelo Acessórias, mas a limpeza depois falhou", uid)
-    enviados = 0
-    for conta in depois.get("novas") or []:
-        try:
-            codigo = senha_reset.criar_codigo(conta["id"], pelo_admin=True, validade_min=CONVITE_MIN)
-            _enviar_convite(conta, codigo)
-            enviados += 1
-        except Exception:  # noqa: BLE001
-            falhas += 1
-            # ERROR: a pessoa tem conta e não sabe. O Administrador reenvia
-            # pelo "Enviar código" da tela Usuários.
-            logger.exception("Conta %s criada pelo Acessórias, mas o convite NÃO foi enviado", conta["id"])
-    return {"convites": enviados, "falhas": falhas}
+    return {"falhas": falhas}
 
 
 def _abrir_busca(cur, origem: str, por_email: str) -> Optional[int]:

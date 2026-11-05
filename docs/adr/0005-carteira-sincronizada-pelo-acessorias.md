@@ -117,3 +117,19 @@ que lidera. Na prática ele precisa instalar qualquer certificado. Decidido pelo
 - As linhas do Gestor em `carteira` (ele também é responsável no Acessórias) ficam guardadas
   sem efeito no alcance. Se ele deixar de ser Gestor, elas já são a carteira de Operador.
   Mudar de papel apaga só as Exceções.
+
+## Adendo de 04/11/2026: login pela Microsoft (conta adotada, desativação que vence, sem convite)
+
+Com o login pela Microsoft (spec de 04/11), a sincronização muda em três pontos:
+
+- **A desativação pela Microsoft vence.** Conta com `desativada_pela_microsoft_em` preenchido
+  nunca entra em "reativar", mesmo que o usuário volte a ficar ativo no Acessórias. Só o
+  Administrador a reativa, pela tela Usuários.
+- **Conta `microsoft` é adotada pelo e-mail.** Conta criada pelo login (`origem = microsoft`,
+  Operador, sem departamento) cujo e-mail, normalizado (minúsculas, sem espaços) dos dois lados,
+  é o de um usuário do Acessórias vira `origem = acessorias` e ganha o `acessorias_id`. Na mesma
+  aplicação ela já recebe a carteira e passa a ser desativada com o usuário de lá. Administrador
+  nunca é adotado; sem e-mail correspondente, a conta continua como está; se o id do Acessórias
+  já é de outra conta, não adota.
+- **Sem convite.** A conta nova continua nascendo sem senha, mas não há mais código de 7 dias
+  nem e-mail: a pessoa entra pela Microsoft. Saíram `_enviar_convite` e `CONVITE_MIN`.
