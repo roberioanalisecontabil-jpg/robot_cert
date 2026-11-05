@@ -113,9 +113,18 @@ conexões com o banco de produção, e levaria a parar a produção.
 
 ## 2. Aplicativo no Entra
 
-Aplicativo **novo, só do CertGuard**. Não reaproveitar o do CRM nem o do envio
-de e-mail (`docs/envio-microsoft-365.md`): aquele tem `Mail.Send` de
-aplicativo, e este não deve herdar nada disso.
+**Decisão do Robério (05/11/2026): o login usa o mesmo app do envio de e-mail**,
+`Analise CertiDigital - envio de e-mail` (cliente
+`b51ca893-20b3-464c-a9dc-23b1fd124913`, diretório
+`0951afb2-5e7b-4b07-98d2-db282cde7b2f`), compartilhado com Hardlyze, DIÁRIO 2.0
+e CRM. Foram acrescentados nele a URI Web abaixo, `User.Read` + `offline_access`
+delegadas, a declaração `acct` (token de ID) e o segredo próprio
+`certguard-login`. Custo aceito: **desativar esse app derruba o e-mail dos
+quatro sistemas e o login do CertGuard juntos** (operadores sem porta reserva);
+a tela da Microsoft mostra o nome do app de e-mail. Trocar ou apagar só o
+segredo `certguard-login` não afeta o envio.
+
+As instruções abaixo valem para um app novo, se um dia o login for separado.
 
 Entra admin center → Identidade → Aplicativos → **Registros de aplicativo** →
 Novo registro:
