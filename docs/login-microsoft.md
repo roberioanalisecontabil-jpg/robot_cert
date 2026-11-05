@@ -21,19 +21,23 @@ aplicativo existir no Entra.
 
 A ordem importa. Cada passo tem o seu detalhe adiante.
 
-1. **Antes de tudo (opcional, recomendado):** ensaiar a migration numa cópia do
-   banco e rodar a conferência 6a em produção (passo 1).
+1. **Antes de tudo (obrigatório):** ensaiar a migration numa cópia do banco e
+   rodar a conferência 6a em produção (passo 1).
 2. **Cadastrar o aplicativo no Entra** (passo 2) e **os administradores
    cadastrarem o app autenticador** (passo 3).
 3. **Push + `atualizar-portal.ps1`** no ANALISESRV (passo 4). O código e a
    migration vão **juntos**: ninguém roda o `.sql` à mão.
-4. **Variáveis** no serviço (passo 5), com `MICROSOFT_CONFERENCIA=simular`.
-5. **Reiniciar** o serviço (passo 6) e conferir.
-6. **Aceite** em simulação (passo 7).
-7. **Avisar as pessoas** dos quatro domínios (passo 8).
+4. **Avisar as pessoas** dos quatro domínios (passo 5).
+5. **Variáveis** no serviço (passo 6), com `MICROSOFT_CONFERENCIA=simular`.
+6. **Reiniciar** o serviço (passo 7) e conferir.
+7. **Aceite** em simulação (passo 8).
 8. **Virar para `aplicar`** (passos 9 e 10).
 
-Os passos 7 e 8 podem andar juntos. O aviso deve sair antes da virada.
+**O aviso sai antes das variáveis.** A proibição da senha no site para os
+quatro domínios começa no reinício com as variáveis (passo 7), e não na virada
+para `aplicar`: `simular` só afeta a conferência de 5 minutos (desativar ou
+não quem foi bloqueado no Entra). Desde o reinício, e-mail e senha dessas
+contas no site recebem "Entre pela Microsoft.".
 
 ## 1. Antes do deploy: ensaio e conferência
 
@@ -66,10 +70,13 @@ Tem de voltar **nenhuma linha**. Se voltar alguma, o `ADD CONSTRAINT` falharia, 
 deploy abortaria sem reiniciar o serviço: **avise o desenvolvimento antes de
 seguir**.
 
-### 1b. Ensaio numa cópia (opcional)
+### 1b. Ensaio numa cópia (obrigatório)
 
-**Estado em 04/11/2026: a migration ainda não foi ensaiada** (a máquina de
-desenvolvimento não tinha Postgres funcionando). Recomenda-se fazer.
+**Estado em 04/11/2026: nada desta entrega rodou contra um Postgres de
+verdade** (a máquina de desenvolvimento não tinha Postgres funcionando): nem a
+migration, nem a trava da conferência (advisory lock), nem o SQL novo do
+`_aplicar`. O design pede a migration "ensaiada antes numa cópia". **Não siga
+para o passo 4 sem este ensaio.**
 
 O `psql` não está no PATH do servidor: use os caminhos completos abaixo (a
 pasta `C:\Program Files\PostgreSQL\17\bin` é a usual do PostgreSQL 17; confirme no
@@ -94,6 +101,10 @@ conexões com o banco de produção, e levaria a parar a produção.
 5. A primeira execução mostra `  ok   20261105100000_login_microsoft.sql`. A
    **segunda** tem de terminar sem erro e dizer `Pronto: 0 arquivo(s)
    aplicado(s)` (o resto da linha traz quantas já estavam).
+
+   Depois da segunda execução, **não inicie mais nada** contra a cópia (nem
+   portal, nem serviço, nem outro script): o ensaio é só as duas execuções e a
+   limpeza do item 6.
 6. Apagar a cópia **e o arquivo**, que tem dados de produção:
    `& "C:\Program Files\PostgreSQL\17\bin\dropdb.exe" -h 127.0.0.1 -p 5433 -U postgres certguard_ensaio`
    (equivale a `DROP DATABASE certguard_ensaio;`) e
@@ -125,6 +136,10 @@ do administrador (a pessoa consente ao entrar na primeira vez, ou a tela pode
 ser pré-aprovada com "Conceder consentimento do administrador", que também
 vale).
 
+**Configuração de token** → Adicionar declaração opcional → tipo de token
+**ID** → marcar **`acct`**. Com ela o portal também reconhece convidado pela
+declaração (`acct = 1`), além do `#EXT#` no nome de usuário.
+
 **Certificados e segredos** → Novo segredo do cliente → descrição "portal
 certificado", validade **24 meses**. Copiar o **Valor** na hora (não aparece de
 novo). Guardar o Valor e a **data de validade** no cofre do TI e marcar a troca
@@ -154,6 +169,8 @@ administrador pelo botão, o app autenticador deve estar cadastrado antes.
 
 Ramo `feat/login-microsoft` revisado e mesclado, push, e então o
 `atualizar-portal.ps1` no ANALISESRV, como em qualquer atualização do portal.
+É o `C:\Apps\atualizar-portal.ps1`; o cabeçalho da migration o chama de
+`atualizacao_push.ps1`, mas é o mesmo script.
 Ele traz o código e aplica a migration (por `db/aplicar_schema.py`). Se a
 migration falhar, o deploy aborta sem reiniciar o serviço e o portal segue como
 estava.
@@ -162,7 +179,24 @@ Neste ponto nada muda para ninguém: sem as variáveis o botão não aparece. Ao
 fim, conferir na saída do script a linha
 `  ok   20261105100000_login_microsoft.sql`.
 
-## 5. Variáveis no ambiente do serviço
+## 5. Avisar as pessoas
+
+**Antes das variáveis (passo 6)**, avisar quem tem conta nos quatro domínios
+(por e-mail ou pelo canal da empresa), com a data do reinício. A proibição da
+senha no site começa nesse reinício, mesmo com `MICROSOFT_CONFERENCIA=simular`:
+
+- No site, a entrada passa a ser **pelo botão "Entrar com a Microsoft"**. E-mail
+  e senha no site deixam de funcionar para essas contas.
+- **Quem usa a bandeja:** a bandeja já conectada segue funcionando, com a senha
+  de hoje. Para **conectar uma bandeja nova**, a pessoa precisa antes **entrar
+  uma vez no site pela Microsoft**; sem isso, a bandeja responde "Entre uma vez
+  no site pela Microsoft para liberar a bandeja.". Contas dos quatro domínios
+  continuam usando a senha na bandeja até a entrega 2.
+- Quem não tinha conta no CertGuard terá uma criada na primeira entrada:
+  Operador, sem departamento, sem carteira. Os administradores recebem aviso e
+  configuram.
+
+## 6. Variáveis no ambiente do serviço
 
 No ANALISESRV, no serviço `AnaliseCertiDigital` (nome do GUIA_MIGRACAO; confirme
 com `nssm status AnaliseCertiDigital`). As variáveis ficam no ambiente do
@@ -197,7 +231,7 @@ variável, é `simular`.
 O segredo fica no ambiente do serviço, nunca no repositório nem no `.env`
 versionado.
 
-## 6. Reiniciar e conferir
+## 7. Reiniciar e conferir
 
 ```powershell
 nssm restart AnaliseCertiDigital
@@ -211,9 +245,11 @@ nssm restart AnaliseCertiDigital
 - Auditoria registra "Entrou pela Microsoft".
 
 A conferência de 5 minutos usa uma trava no Postgres por rodada, então é segura
-com 1 ou 2 processos (workers) do uvicorn. Nada a fazer.
+com 1 ou 2 processos (workers) do uvicorn. Nada a fazer. Com `--workers 2`, os
+e-mails ao TI e os de simulação podem chegar **em dobro**: a memória de "já
+avisei" é de cada processo. É inofensivo.
 
-## 7. Testes de aceite, ainda em simulação
+## 8. Testes de aceite, ainda em simulação
 
 Com uma **conta de teste** que tenha entrado pelo botão uma vez:
 
@@ -224,36 +260,34 @@ Com uma **conta de teste** que tenha entrado pelo botão uma vez:
    desativadas", com a conta e o código `AADSTS50057`. A conta **continua
    ativa** no CertGuard.
 2. **Senha trocada.** Desbloqueie a conta, entre pelo botão de novo e troque a
-   senha dela no Microsoft 365. A conta **não** deve aparecer na lista de
-   simulação: ela só fica marcada "sem conferência" em Usuários, até a pessoa
-   entrar pela Microsoft de novo. Trocar a senha do Outlook jamais pode
-   desativar alguém.
-3. Registrar o resultado. Só com os dois resultados certos siga para o
+   senha dela no Microsoft 365. O mais provável é **nada mudar**: a troca de
+   senha não revoga a chave de renovação de um aplicativo com segredo
+   (confidencial), e a conferência segue dando "ok". Pode também aparecer a
+   marca "sem conferência" em Usuários, até a pessoa entrar pela Microsoft de
+   novo; as duas coisas estão certas. O que **não** pode é a conta aparecer na
+   lista de simulação: trocar a senha do Outlook jamais pode desativar alguém.
+3. **Bloquear entrada + Revogar sessões.** Entre pelo botão de novo e, no
+   Entra, na mesma conta, faça "Bloquear entrada" e "Revogar sessões". O
+   esperado é o e-mail de simulação com `AADSTS50057`, como no caso 1. A
+   simulação avisa cada conta uma vez por dia: use uma segunda conta de teste,
+   ou faça este caso no dia seguinte ao caso 1.
+
+   **Se em vez disso a conta ficar "sem conferência" em Usuários e não entrar na
+   lista de simulação** (no log, `AADSTS50173`), **pare e avise o TI antes de
+   `aplicar`**: a revogação apaga a chave antes de o bloqueio ser visto, e a
+   conta bloqueada não seria desativada. Nesse caso o desligamento de alguém
+   passa a ser **só "Bloquear entrada", sem revogar antes**, ou o código tem de
+   ser revisto.
+4. Registrar o resultado. Só com os três resultados certos siga para o
    passo 9.
 
 O limite de segurança vale também em simulação: com mais de 5 contas
 bloqueadas numa rodada, ou com erro do próprio aplicativo (segredo vencido,
 ID errado), o serviço não simula nem desativa nada e avisa o TI.
 
-## 8. Avisar as pessoas
-
-Antes da virada, avisar quem tem conta nos quatro domínios (por e-mail ou
-pelo canal da empresa):
-
-- No site, a entrada passa a ser **pelo botão "Entrar com a Microsoft"**. E-mail
-  e senha no site deixam de funcionar para essas contas.
-- **Quem usa a bandeja:** a bandeja já conectada segue funcionando, com a senha
-  de hoje. Para **conectar uma bandeja nova**, a pessoa precisa antes **entrar
-  uma vez no site pela Microsoft**; sem isso, a bandeja responde "Entre uma vez
-  no site pela Microsoft para liberar a bandeja.". Contas dos quatro domínios
-  continuam usando a senha na bandeja até a entrega 2.
-- Quem não tinha conta no CertGuard terá uma criada na primeira entrada:
-  Operador, sem departamento, sem carteira. Os administradores recebem aviso e
-  configuram.
-
 ## 9. Virar para `aplicar`
 
-Só depois do aceite do passo 7 e do aviso do passo 8: `nssm edit
+Só depois do aceite do passo 8 (o aviso do passo 5 já saiu): `nssm edit
 AnaliseCertiDigital`, aba **Environment**, trocar a linha
 `MICROSOFT_CONFERENCIA=simular` por `MICROSOFT_CONFERENCIA=aplicar`, **Edit
 service**, e conferir com `nssm get AnaliseCertiDigital AppEnvironmentExtra`.
@@ -278,7 +312,23 @@ nssm restart AnaliseCertiDigital
 
 A desativação pela Microsoft vence o Acessórias: o sincronismo não reativa a
 conta. O último administrador ativo nunca é desativado; nesse caso só o TI é
-avisado.
+avisado. **Atenção:** esse administrador, bloqueado no Entra, continua ativo no
+CertGuard e mantém a porta reserva (senha + app autenticador). O TI resolve à
+mão: nomear outro administrador ativo; a rodada seguinte da conferência
+desativa este (ou desative-o em Usuários).
+
+## Conta duplicada na primeira entrada
+
+Se o UPN **e** o e-mail da Microsoft forem diferentes do e-mail da conta no
+CertGuard (ex.: `joao.silva@` no CertGuard e `jsilva@` na Microsoft), a
+primeira entrada pelo botão **cria uma conta nova de operador** em vez de usar
+a antiga. Não existe rota para apagar conta. Para corrigir, em Usuários:
+
+1. Na conta duplicada (a nova, "Nova pela Microsoft"): **Desfazer ligação com a
+   Microsoft**, trocar o e-mail dela por um que não seja usado (ex.:
+   `duplicada.jsilva@...`) e **desativar**.
+2. Na conta antiga: trocar o e-mail para o UPN da Microsoft (`jsilva@...`).
+3. Pedir à pessoa que entre pelo botão de novo: a conta antiga se liga.
 
 ## Cloudflare e Caddy
 
