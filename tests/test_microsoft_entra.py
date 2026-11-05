@@ -230,10 +230,66 @@ def test_jwks_em_cache_24h(monkeypatch):
     assert falso.buscas_jwks == 3
 
 
+def test_jwks_vencido_e_fora_do_ar_mantem_a_chave_conhecida(monkeypatch, caplog):
+    agora = [1000.0]
+    monkeypatch.setattr(me, "_relogio", lambda: agora[0])
+    falso = Falso()
+    me.trocar_codigo("cod", "verif", NONCE, cliente=falso.cliente())
+
+    class Fora(Falso):
+        def __call__(self, req):
+            if req.url.path.endswith("/keys"):
+                self.buscas_jwks += 1
+                return httpx.Response(503)
+            return super().__call__(req)
+
+    # Passadas 24 h com a Microsoft fora do ar: a chave já conhecida continua
+    # valendo; só kid desconhecido é recusado.
+    agora[0] += 24 * 3600 + 1
+    fora = Fora()
+    with caplog.at_level("WARNING", logger="app.microsoft_entra"):
+        ident, _ = me.trocar_codigo("cod", "verif", NONCE, cliente=fora.cliente())
+    assert ident.oid == "oid-da-pessoa" and fora.buscas_jwks == 1
+    assert any(r.levelname == "WARNING" for r in caplog.records)
+    with pytest.raises(me.FalhaMicrosoft):
+        me.trocar_codigo("cod", "verif", NONCE, cliente=Fora(id_token=_id_token(kid="k9")).cliente())
+
+
+@pytest.mark.parametrize("adiante, aceito", [(60, True), (300, False)])
+def test_relogio_do_servidor_atrasado_tolera_dois_minutos(adiante, aceito):
+    agora = int(time.time())
+    tok = _id_token(_claims(nbf=agora + adiante, iat=agora + adiante))
+    if aceito:
+        me.trocar_codigo("cod", "verif", NONCE, cliente=Falso(id_token=tok).cliente())
+    else:
+        with pytest.raises(me.FalhaMicrosoft):
+            me.trocar_codigo("cod", "verif", NONCE, cliente=Falso(id_token=tok).cliente())
+
+
 def test_convidado_detectado():
     tok = _id_token(_claims(preferred_username="bruno_gmail.com#EXT#@analisegroup.onmicrosoft.com"))
     ident, _ = me.trocar_codigo("cod", "verif", NONCE, cliente=Falso(id_token=tok).cliente())
     assert ident.convidado is True
+
+
+@pytest.mark.parametrize("acct, convidado", [(1, True), (0, False)])
+def test_convidado_pela_claim_acct(acct, convidado):
+    ident, _ = me.trocar_codigo("cod", "verif", NONCE, cliente=Falso(id_token=_id_token(_claims(acct=acct))).cliente())
+    assert ident.convidado is convidado
+
+
+def test_tenant_id_da_variavel_vira_minusculo_sem_espacos():
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    env = {**os.environ, "MICROSOFT_TENANT_ID": "  AAAA-BBBB  "}
+    r = subprocess.run(
+        [sys.executable, "-c", "from app import config; print(repr(config.MICROSOFT_TENANT_ID))"],
+        env=env, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[1], check=True,
+    )
+    assert r.stdout.strip() == "'aaaa-bbbb'"
 
 
 def _erro(codigo, error="invalid_grant", status=400):

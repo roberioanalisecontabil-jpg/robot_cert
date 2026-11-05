@@ -77,6 +77,7 @@ def _entra_direto(r: Any) -> None:
     assert r.status_code == 200 and "location" not in r.headers
     assert '<meta http-equiv="refresh" content="0;url=/">' in r.text and 'href="/"' in r.text
     assert "<script" not in r.text
+    assert r.headers.get("cache-control") == "no-store", "a página que grava cg_sessao não vai para cache"
     cabs = " ".join(r.headers.get_list("set-cookie"))
     assert "cg_sessao=" in cabs and "cg_csrf=" in cabs and "cg_ms=" in cabs
 
@@ -186,6 +187,25 @@ def test_falha_da_microsoft_e_erro_de_banco_viram_falha(
     assert _retorno(client, code="abc", state=STATE).headers["location"] == "/login?erro_ms=falha"
 
 
+def test_erro_de_banco_nao_poe_o_oid_no_log(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.db_pg import DbError
+
+    def _db(*_a: Any, **_k: Any):
+        raise DbError("duplicate key. Key (microsoft_oid)=(oid-secreto) already exists.", "23505")
+
+    monkeypatch.setattr(me, "trocar_codigo", lambda *a, **k: (_ident(), "rt"))
+    monkeypatch.setattr("app.login_microsoft.resolver_conta", _db)
+    _cookie(client)
+    with caplog.at_level("WARNING", logger="app.main"):
+        assert _retorno(client, code="abc", state=STATE).headers["location"] == "/login?erro_ms=falha"
+    regs = [r for r in caplog.records if "Microsoft" in r.getMessage()]
+    assert regs and all(r.exc_info is None for r in regs)
+    texto = " ".join(r.getMessage() for r in regs)
+    assert "oid-secreto" not in texto and "DbError" in texto and "23505" in texto
+
+
 def test_recusa_e_desativada_mapeadas(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(me, "trocar_codigo", lambda *a, **k: (_ident(upn="x@gmail.com", email="x@gmail.com"), "rt"))
     _cookie(client)
@@ -196,7 +216,10 @@ def test_recusa_e_desativada_mapeadas(client: TestClient, banco: _Fake, monkeypa
     monkeypatch.setattr(me, "trocar_codigo", lambda *a, **k: (_ident(), "rt"))
     _cookie(client)
     assert _retorno(client, code="abc", state=STATE).headers["location"] == "/login?erro_ms=desativada"
-    assert [a["evento"] for a in _atividades(banco)] == ["login_negado", "desativada_microsoft"]
+    # Conta inativa recusada aqui não é "bloqueada na Microsoft": pode ter
+    # sido desativada à mão ou pelo Acessórias. desativada_microsoft é só da conferência.
+    assert [a["evento"] for a in _atividades(banco)] == ["login_negado", "login_negado"]
+    assert _atividades(banco)[1]["contexto"] == {"motivo": "conta_desativada", "metodo": "microsoft"}
     assert not client.cookies.get("cg_sessao")
 
 

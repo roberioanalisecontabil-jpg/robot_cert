@@ -24,6 +24,7 @@ from jose import jwt
 from jose.exceptions import JOSEError
 
 from app import alert_state, atividade, auth, correio, login_microsoft, microsoft_entra, sessao_cookie
+from app.db_pg import DbError
 from app.rotas.usuarios import _abrir_sessao
 from app.sessao import _ip_do_cliente, _sb_do_login
 from app.settings_state import load_settings
@@ -58,7 +59,8 @@ def _volta(erro: Optional[str], request: Request) -> RedirectResponse:
         r = HTMLResponse(
             '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
             '<meta http-equiv="refresh" content="0;url=/"><title>Entrando</title></head>'
-            '<body><p><a href="/">Continuar</a></p></body></html>'
+            '<body><p><a href="/">Continuar</a></p></body></html>',
+            headers={"Cache-Control": "no-store"},  # grava cg_sessao
         )
     r.delete_cookie(COOKIE, path="/", secure=sessao_cookie._https(request), httponly=True, samesite="lax")
     return r
@@ -135,18 +137,26 @@ def retorno_da_microsoft(request: Request, background: BackgroundTasks) -> Respo
         ident, refresh = microsoft_entra.trocar_codigo(codigo, pedido["verificador"], pedido["nonce"])
         resultado: Any = login_microsoft.resolver_conta(_sb_do_login(), ident, refresh)
     except Exception as e:  # noqa: BLE001 — FalhaMicrosoft, DbError, banco ausente: tudo é "falha", nunca 500
-        # FalhaMicrosoft é esperada; o resto (banco, bug) precisa de traço.
-        logger.warning("Entrada pela Microsoft falhou: %s", e,
-                       exc_info=not isinstance(e, microsoft_entra.FalhaMicrosoft))
+        if isinstance(e, DbError):
+            # O texto do banco traz o valor da chave ("Key (microsoft_oid)=(...)"):
+            # só a classe e o SQLSTATE vão para o log.
+            logger.warning("Entrada pela Microsoft falhou: DbError %s", e.code)
+        else:
+            # FalhaMicrosoft é esperada; o resto (bug) precisa de traço.
+            logger.warning("Entrada pela Microsoft falhou: %s", e,
+                           exc_info=not isinstance(e, microsoft_entra.FalhaMicrosoft))
         return _volta("falha", request)
 
     ip = _ip_do_cliente(request)
     if isinstance(resultado, login_microsoft.Recusa):
         desativada = resultado.motivo == "desativada"
+        # Conta inativa não é "bloqueada na Microsoft" (pode ter sido desativada à
+        # mão ou pelo Acessórias): desativada_microsoft é só da conferência.
         atividade.registrar(
-            atividade.EVENTO_DESATIVADA_MICROSOFT if desativada else atividade.EVENTO_LOGIN_NEGADO,
+            atividade.EVENTO_LOGIN_NEGADO,
             user_id=None, user_email=ident.upn or ident.email, client_ip=ip,
-            contexto={"motivo": f"microsoft_{resultado.motivo}"},
+            contexto={"motivo": "conta_desativada", "metodo": "microsoft"} if desativada
+            else {"motivo": f"microsoft_{resultado.motivo}"},
         )
         return _volta("desativada" if desativada else "recusada", request)
 

@@ -1493,7 +1493,10 @@
             const nivel = roleLabel(u && u.role);
             const ok = await confirmarAcao({
                 titulo: 'Reativar usuário',
-                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} volta a entrar no portal como ${nivel}.`,
+                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} volta a entrar no portal como ${nivel}.`
+                    + (u && u.desativada_pela_microsoft
+                        ? ' A conta foi desativada por estar bloqueada na Microsoft: ela será desativada de novo em até 5 minutos, a menos que seja desbloqueada no Entra ou que antes se faça "Desfazer ligação com a Microsoft".'
+                        : ''),
                 textoConfirmar: 'Reativar',
             });
             if (!ok) return;

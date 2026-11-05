@@ -62,6 +62,15 @@ def test_upn_e_email_em_contas_diferentes_recusa_ambiguo() -> None:
     assert "microsoft_oid" not in sb.tabelas["users"][0]
 
 
+def test_email_fora_do_dominio_nao_liga_a_conta_que_tem_esse_email() -> None:
+    # Membro do locatário com upn no domínio e `email` pessoal: a conta do
+    # CertGuard com o gmail é de outra pessoa (ou de ninguém do locatário).
+    sb = _banco({"email": "ana@gmail.com"})
+    user, criada = resolver_conta(sb, _ident(email="ana@gmail.com"), "rt")
+    assert criada is True and user["email"] == f"ana@{DOM}" and user["id"] != "u0"
+    assert "microsoft_oid" not in sb.tabelas["users"][0]
+
+
 def test_oid_diferente_recusa() -> None:
     sb = _banco({"email": f"ana@{DOM}", "microsoft_oid": "outro"})
     assert resolver_conta(sb, _ident(), "rt") == Recusa("oid_diferente")

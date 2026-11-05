@@ -153,6 +153,13 @@ def _chave(kid: str, cliente: Optional[httpx.Client]) -> dict:
         r.raise_for_status()
         novas = {k["kid"]: k for k in r.json()["keys"] if k.get("kid")}
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+        with _trava:
+            guardada = _chaves.get(kid)
+        if guardada is not None:
+            # Cache vencido e Microsoft fora: a chave conhecida ainda vale, e o
+            # login não cai por isso. A próxima chamada tenta buscar de novo.
+            logger.warning("Microsoft: chaves públicas não renovadas (%s); usando as guardadas", type(e).__name__)
+            return guardada
         logger.error("Microsoft: falha ao baixar as chaves públicas: %s", type(e).__name__)
         raise FalhaMicrosoft("JWKS indisponível") from None
     with _trava:
@@ -176,7 +183,9 @@ def _conferir(id_token: str, nonce: str, access_token: Optional[str], cliente: O
         claims = jwt.decode(
             id_token, chave, algorithms=["RS256"], audience=config.MICROSOFT_CLIENT_ID,
             issuer=f"{AUTORIDADE}/{config.MICROSOFT_TENANT_ID}/v2.0", access_token=access_token,
-            options={"require_exp": True, "require_aud": True, "require_iss": True},
+            # leeway: relógio do servidor um pouco atrasado não pode barrar
+            # todo login pelo nbf/iat (python-jose 3.5 lê de `options`).
+            options={"require_exp": True, "require_aud": True, "require_iss": True, "leeway": 120},
         )
     except JOSEError as e:
         raise FalhaMicrosoft(f"id_token recusado: {type(e).__name__}") from None
@@ -205,7 +214,8 @@ def trocar_codigo(
     upn = str(c.get("preferred_username") or "")
     ident = Identidade(
         oid=str(c["oid"]), tid=str(c["tid"]), upn=upn, email=str(c.get("email") or upn),
-        nome=str(c.get("name") or ""), convidado="#EXT#" in upn.upper(),
+        # `acct` (claim opcional do registro do app): 1 = convidado, 0 = membro.
+        nome=str(c.get("name") or ""), convidado="#EXT#" in upn.upper() or c.get("acct") == 1,
     )
     return ident, str(corpo.get("refresh_token") or "")
 

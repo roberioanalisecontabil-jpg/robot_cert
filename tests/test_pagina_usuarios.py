@@ -214,6 +214,24 @@ def test_reativar_limpa_marca_da_microsoft(client: TestClient, banco: _Fake) -> 
     assert u["ativo"] is True and u["desativada_pela_microsoft_em"] is None
 
 
+def test_editar_ativando_limpa_marca_da_microsoft(client: TestClient, banco: _Fake) -> None:
+    u = _u(banco, "u-inativo")
+    u.update(desativada_pela_microsoft_em="2026-11-05T10:00:00+00:00")
+    r = client.put("/api/users/u-inativo", json={"email": u["email"], "full_name": "INATIVO", "role": "user",
+                                                 "ativo": True}, headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    u = _u(banco, "u-inativo")
+    assert u["ativo"] is True and u["desativada_pela_microsoft_em"] is None
+
+
+def test_reativar_bloqueada_na_microsoft_avisa_que_volta_a_desativar() -> None:
+    html = (RAIZ / "templates" / "usuarios.html").read_text(encoding="utf-8")
+    corpo = html.split("async function reativarUsuario(id)", 1)[1].split("\n        }\n", 1)[0]
+    assert "u.desativada_pela_microsoft" in corpo and "confirmarAcao(" in corpo
+    assert "será desativada de novo em até 5 minutos" in corpo
+    assert "Desfazer ligação com a Microsoft" in corpo
+
+
 def test_lista_traz_campos_microsoft(client: TestClient, banco: _Fake) -> None:
     _ligada(banco, "u-fis", microsoft_sem_conferencia=True)
     _u(banco, "u-sol").update(origem="microsoft")  # sem departamento

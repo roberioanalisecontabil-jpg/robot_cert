@@ -890,6 +890,9 @@ def update_user(user_id: str, body: UserUpdateBody, ator: auth.TokenData = Depen
         campos["role"] = role
     if ativo is not None:
         campos["ativo"] = bool(ativo)
+    if ativo:
+        # Como em reactivate_user: o administrador decidiu reativar.
+        campos["desativada_pela_microsoft_em"] = None
     if body.departamento_id is not None:
         # String vazia já não tira ninguém do setor: departamento é
         # obrigatório (ADR 0001). Para mudar de setor, escolhe-se outro.

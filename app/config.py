@@ -72,7 +72,8 @@ ACESSORIAS_API_URL = (os.getenv("ACESSORIAS_API_URL") or "https://api.acessorias
 # Entrar com a Microsoft (app/microsoft_entra.py). Faltando qualquer uma, ou
 # PORTAL_BASE_URL, o botão não aparece e o login é o de hoje. DOMINIOS: só
 # e-mails desses domínios (exatos, sem subdomínio) entram pela Microsoft.
-MICROSOFT_TENANT_ID = (os.getenv("MICROSOFT_TENANT_ID") or "").strip()
+# Minúsculo: o tid e o iss do id_token são comparados exatamente com ele.
+MICROSOFT_TENANT_ID = (os.getenv("MICROSOFT_TENANT_ID") or "").strip().lower()
 MICROSOFT_CLIENT_ID = (os.getenv("MICROSOFT_CLIENT_ID") or "").strip()
 MICROSOFT_CLIENT_SECRET = (os.getenv("MICROSOFT_CLIENT_SECRET") or "").strip()
 MICROSOFT_DOMINIOS = frozenset(

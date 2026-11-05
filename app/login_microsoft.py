@@ -68,7 +68,10 @@ def resolver_conta(sb: Any, ident: Identidade, refresh: str) -> Union[tuple[Dict
     criada = False
     user = _um(sb, "microsoft_oid", ident.oid)
     if user is None:
-        a, b = _por_email(sb, upn), _por_email(sb, email)
+        # Só endereço em domínio liberado liga conta: o `email` de um membro
+        # pode ser pessoal (gmail) e casar com a conta de outra pessoa.
+        a = _por_email(sb, upn) if dominio_liberado(upn) else None
+        b = _por_email(sb, email) if dominio_liberado(email) else None
         if a and b and str(a.get("id")) != str(b.get("id")):
             return Recusa("ambiguo")
         user = a or b
