@@ -1883,6 +1883,29 @@ function initSidebarDicas() {
   window.addEventListener("resize", esconder);
 }
 
+// ─── Aviso do app autenticador (05/11/2026) ──────────────────────────────────
+// Admin de domínio da Microsoft sem app autenticador fica sem entrada se a
+// Microsoft cair. O servidor decide (`aviso_cadastrar_app`); aqui só se mostra,
+// uma vez por aba, logo depois de entrar, em qualquer página.
+function avisarAppAutenticador() {
+  if (localStorage.getItem("user_role") !== "admin" || window.location.pathname.startsWith("/login")) return;
+  try { if (sessionStorage.getItem("cg_aviso_app")) return; sessionStorage.setItem("cg_aviso_app", "1"); } catch (_e) {}
+  fetch("/api/users/me/app-autenticador", { headers: getHeaders() })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (!d || !d.aviso_cadastrar_app) return;
+      const t = showToast("Cadastre o app autenticador: é a sua entrada se a Microsoft falhar.", "warning", 0);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ag-btn ag-btn--outline";
+      b.dataset.action = "app-autenticador";
+      b.textContent = "Cadastrar agora";
+      b.addEventListener("click", () => removeToast(t));
+      t.insertBefore(b, t.querySelector(".toast-close"));
+    })
+    .catch(() => {});
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     initSidebarPorPapel();
@@ -1892,6 +1915,7 @@ if (document.readyState === "loading") {
     initNotifications();
     initRegioesRolaveis();
     _consumirToastPendente();
+    avisarAppAutenticador();
   });
 } else {
   initSidebarPorPapel();
@@ -1901,6 +1925,7 @@ if (document.readyState === "loading") {
   initNotifications();
   initRegioesRolaveis();
   _consumirToastPendente();
+  avisarAppAutenticador();
 }
 
 // ─── Paginador reutilizável ───────────────────────────────────────────────────
