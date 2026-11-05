@@ -92,9 +92,10 @@ conexões com o banco de produção, e levaria a parar a produção.
 3. Restaurar nela:
    `& "C:\Program Files\PostgreSQL\17\bin\pg_restore.exe" -h 127.0.0.1 -p 5433 -U postgres -d certguard_ensaio C:\Temp\certguard_ensaio.dump`
    (avisos de dono/papel inexistente na restauração são esperados na cópia).
-4. Na pasta do portal, rodar **duas vezes**, com a DSN da cópia **escrita por
-   inteiro** no comando:
-   `.venv\Scripts\python.exe db\aplicar_schema.py postgresql://<usuário>:<senha>@127.0.0.1:5433/certguard_ensaio`
+4. Antes do deploy a pasta do portal ainda não tem a migration nova: baixar o
+   código novo à parte (`git clone --depth 1 <repo> C:\Temp\certguard_codigo`) e
+   rodar **duas vezes**, com a DSN da cópia **escrita por inteiro** no comando:
+   `C:\Apps\robot_cert\.venv\Scripts\python.exe C:\Temp\certguard_codigo\db\aplicar_schema.py postgresql://<usuário>:<senha>@127.0.0.1:5433/certguard_ensaio`
 
    **A DSN da cópia é obrigatória: sem o argumento ele usa o banco de
    produção** (`DATABASE_URL`) e aplicaria a migration lá, à mão. Não omita.
@@ -198,16 +199,16 @@ senha no site começa nesse reinício, mesmo com `MICROSOFT_CONFERENCIA=simular`
 
 ## 6. Variáveis no ambiente do serviço
 
-No ANALISESRV, no serviço `AnaliseCertiDigital` (nome do GUIA_MIGRACAO; confirme
-com `nssm status AnaliseCertiDigital`). As variáveis ficam no ambiente do
+No ANALISESRV, no serviço `certguard` (conferido em 05/11/2026; o
+`AnaliseCertiDigital` do GUIA_MIGRACAO é nome antigo). As variáveis ficam no ambiente do
 serviço (NSSM), não no repositório.
 
 1. Ver o que já existe (e se `PORTAL_BASE_URL` já está lá):
-   `nssm get AnaliseCertiDigital AppEnvironmentExtra`
-2. Abrir o editor: `nssm edit AnaliseCertiDigital` (PowerShell como
+   `nssm get certguard AppEnvironmentExtra`
+2. Abrir o editor: `nssm edit certguard` (PowerShell como
    administrador), aba **Environment**. Acrescentar **uma linha por variável**,
    sem apagar as que já estão, e clicar em **Edit service**.
-3. Conferir de novo com `nssm get AnaliseCertiDigital AppEnvironmentExtra`.
+3. Conferir de novo com `nssm get certguard AppEnvironmentExtra`.
 
 `PORTAL_BASE_URL=https://certificado.analisegroup.cnt.br` (sem barra no fim).
 O convite do Acessórias já usava essa variável. Se ela existe com esse valor,
@@ -234,7 +235,7 @@ versionado.
 ## 7. Reiniciar e conferir
 
 ```powershell
-nssm restart AnaliseCertiDigital
+nssm restart certguard
 ```
 
 - A tela de login mostra o botão "Entrar com a Microsoft".
@@ -288,13 +289,13 @@ ID errado), o serviço não simula nem desativa nada e avisa o TI.
 ## 9. Virar para `aplicar`
 
 Só depois do aceite do passo 8 (o aviso do passo 5 já saiu): `nssm edit
-AnaliseCertiDigital`, aba **Environment**, trocar a linha
+certguard`, aba **Environment**, trocar a linha
 `MICROSOFT_CONFERENCIA=simular` por `MICROSOFT_CONFERENCIA=aplicar`, **Edit
-service**, e conferir com `nssm get AnaliseCertiDigital AppEnvironmentExtra`.
+service**, e conferir com `nssm get certguard AppEnvironmentExtra`.
 Depois:
 
 ```powershell
-nssm restart AnaliseCertiDigital
+nssm restart certguard
 ```
 
 ## 10. Aceite depois de `aplicar`
@@ -359,7 +360,7 @@ Apagar as variáveis `MICROSOFT_*` (`nssm edit`, aba Environment; ou só `MICROS
 reiniciar:
 
 ```powershell
-nssm restart AnaliseCertiDigital
+nssm restart certguard
 ```
 
 O botão some e o login volta a ser o de hoje para todos, inclusive a obrigação
