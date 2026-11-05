@@ -129,7 +129,10 @@
         /* Botao da Microsoft: contorno, para o acesso principal (a senha) seguir
            sendo o botão cheio. */
         .login-ms {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--sp-2);
             box-sizing: border-box;
             width: 100%;
             padding: 0.75rem 1.5rem;
@@ -201,7 +204,7 @@
         <!-- ── Entrar ────────────────────────────────────────────────── -->
         <section id="view-login">
             {% if erro_ms %}<div id="ms-erro" class="msg-erro" role="alert" style="padding: var(--sp-3); border-radius: var(--radius-md); margin-bottom: var(--sp-4); text-align: center; font-weight: 500;">{{ erro_ms }}</div>{% endif %}
-            {% if microsoft %}<a class="login-ms" href="/entrar/microsoft">Entrar com a Microsoft</a>{% endif %}
+            {% if microsoft %}<a class="login-ms" href="/entrar/microsoft"><svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true" focusable="false"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg><span>Entrar com a Microsoft</span></a>{% endif %}
             <div id="login-error" role="alert" aria-live="assertive">E-mail ou senha incorretos.</div>
 
             <form id="login-form">
