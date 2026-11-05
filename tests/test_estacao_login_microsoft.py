@@ -9,6 +9,7 @@ from __future__ import annotations
 import socket
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -88,6 +89,34 @@ def test_prazo_esgota_e_fecha_a_porta() -> None:
         lm.entrar(PORTAL, abrir=abrir, prazo_s=0.5)
     with pytest.raises(OSError):
         socket.create_connection(("127.0.0.1", portas[0]), timeout=1)
+
+
+def test_conexao_muda_nao_segura_o_prazo() -> None:
+    """Um socket que conecta e não envia nada (preconnect, outro processo) não trava a espera."""
+    socks: list[socket.socket] = []
+    saida: list = []
+
+    def abrir(url: str) -> None:
+        porta = int(parse_qs(urlparse(url).query)["porta"][0])
+        socks.append(socket.create_connection(("127.0.0.1", porta), timeout=3))
+
+    def _rodar() -> None:
+        try:
+            lm.entrar(PORTAL, abrir=abrir, prazo_s=1)
+        except RuntimeError as e:
+            saida.append(str(e))
+
+    t0 = time.monotonic()
+    t = threading.Thread(target=_rodar, daemon=True)  # daemon + join: nunca trava a suíte
+    t.start()
+    try:
+        t.join(10)
+        assert not t.is_alive(), "a espera travou na conexão muda"
+        assert saida == [lm.MENSAGENS["prazo"]]
+        assert time.monotonic() - t0 < 10
+    finally:
+        for s in socks:
+            s.close()
 
 
 class _Sessao:

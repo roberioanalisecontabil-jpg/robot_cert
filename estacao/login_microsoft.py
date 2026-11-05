@@ -38,6 +38,9 @@ def novo_verificador() -> tuple[str, str]:
 
 
 class _Pedido(BaseHTTPRequestHandler):
+    # Sem isso uma conexão muda (preconnect do navegador) trava o laço de uma thread só.
+    timeout = 5
+
     def log_message(self, *_a: Any) -> None:  # sem log de acesso
         pass
 
@@ -80,7 +83,10 @@ class Ouvinte:
                 self._servidor.handle_request()
             return self._servidor.resultado or {"erro": "prazo"}  # type: ignore[attr-defined]
         finally:
-            self._servidor.server_close()
+            self.fechar()
+
+    def fechar(self) -> None:
+        self._servidor.server_close()
 
 
 def url_de_entrada(portal: str, porta: int, desafio: str) -> str:
@@ -95,7 +101,7 @@ def entrar(portal: str, abrir: Callable[[str], Any] = webbrowser.open,
     try:
         abrir(url_de_entrada(portal, ouvinte.porta, desafio))
     except BaseException:
-        ouvinte._servidor.server_close()
+        ouvinte.fechar()
         raise
     resultado = ouvinte.esperar()
     if "codigo" not in resultado:
