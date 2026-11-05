@@ -79,6 +79,9 @@ MICROSOFT_DOMINIOS = frozenset(
     d.strip().lower() for d in (os.getenv("MICROSOFT_DOMINIOS") or "").split(",") if d.strip()
 )
 PORTAL_BASE_URL = (os.getenv("PORTAL_BASE_URL") or "").strip().rstrip("/")
+# `aplicar` desativa de verdade quem a Microsoft bloqueou; qualquer outro valor
+# (inclusive ausente) só simula e avisa o TI.
+MICROSOFT_CONFERENCIA = (os.getenv("MICROSOFT_CONFERENCIA") or "").strip().lower()
 
 # Se `/docs`, `/redoc` e `/openapi.json` ficam públicos. Desligado por padrão:
 # em produção o schema das ~97 rotas só ajuda quem está mapeando a API — era o

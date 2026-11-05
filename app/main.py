@@ -256,14 +256,39 @@ async def lifespan(_app: FastAPI):
                 logger.error(f"Erro na busca do Acessórias: {e}")
             await asyncio.sleep(acessorias.proxima_espera(datetime.now()))
 
+    # Conferência da Microsoft (app/microsoft_conferencia.py): a cada 5 min,
+    # renova a chave de cada conta ligada. Desligada se a Microsoft não está
+    # configurada.
+    async def microsoft_loop():
+        from app import microsoft_entra
+
+        if not microsoft_entra.configurado():
+            logger.info("Conferência da Microsoft desligada: variáveis MICROSOFT_* ausentes.")
+            return
+        from app import microsoft_conferencia
+
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                await asyncio.sleep(300)
+                r = await loop.run_in_executor(None, microsoft_conferencia.conferir_todas)
+                if r.get("bloqueadas") or r.get("falhas") or r.get("travado"):
+                    logger.info(f"Conferência da Microsoft: {r}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Erro na conferência da Microsoft: {e}")
+
     tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
     tarefa_novos = asyncio.create_task(novos_por_hora_loop())
     tarefa_acessorias = asyncio.create_task(acessorias_loop())
+    tarefa_microsoft = asyncio.create_task(microsoft_loop())
     try:
         yield
     finally:
         tarefa_novos.cancel()
         tarefa_acessorias.cancel()
+        tarefa_microsoft.cancel()
         # O `await` é limitado no tempo de propósito. Esperar a task sem prazo
         # significa que qualquer falha em encerrá-la (um cancel que não chega,
         # um run_in_executor preso num envio SMTP) trava o shutdown do processo
@@ -275,7 +300,7 @@ async def lifespan(_app: FastAPI):
         # pelo prazo cheio passava despercebida. `asyncio.wait` devolve a task
         # pendente sem levantar, e deixa passar um cancelamento externo.
         tarefa_alertas.cancel()
-        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias}, timeout=5)
+        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias, tarefa_microsoft}, timeout=5)
         if pendentes:
             logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
 
