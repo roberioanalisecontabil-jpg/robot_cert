@@ -57,11 +57,11 @@ def troca(monkeypatch: pytest.MonkeyPatch) -> List[tuple]:
     return chamadas
 
 
-def _cookie(client: TestClient, state: str = STATE, exp_min: int = 10) -> None:
+def _cookie(client: TestClient, state: str = STATE, exp_min: int = 10, typ: Optional[str] = "cg_ms") -> None:
     from app import auth
 
     token = jwt.encode(
-        {"state": state, "nonce": "n-1", "verificador": "v-1",
+        {**({"typ": typ} if typ else {}), "state": state, "nonce": "n-1", "verificador": "v-1",
          "exp": datetime.now(timezone.utc) + timedelta(minutes=exp_min)},
         auth._get_secret_key(), algorithm="HS256",
     )
@@ -70,6 +70,15 @@ def _cookie(client: TestClient, state: str = STATE, exp_min: int = 10) -> None:
 
 def _retorno(client: TestClient, **q: str):
     return client.get("/entrar/microsoft/retorno", params=q, follow_redirects=False)
+
+
+def _entra_direto(r: Any) -> None:
+    """Sucesso é 200 com meta refresh (não 302): ver `_volta` em rotas/microsoft.py."""
+    assert r.status_code == 200 and "location" not in r.headers
+    assert '<meta http-equiv="refresh" content="0;url=/">' in r.text and 'href="/"' in r.text
+    assert "<script" not in r.text
+    cabs = " ".join(r.headers.get_list("set-cookie"))
+    assert "cg_sessao=" in cabs and "cg_csrf=" in cabs and "cg_ms=" in cabs
 
 
 def _atividades(banco: _Fake) -> List[Dict[str, Any]]:
@@ -94,14 +103,14 @@ def test_inicio_grava_cookie_e_redireciona(client: TestClient) -> None:
     cab = r.headers["set-cookie"].lower()
     assert "cg_ms=" in cab and "httponly" in cab and "samesite=lax" in cab and "max-age=600" in cab
     dados = jwt.decode(client.cookies.get("cg_ms"), auth._get_secret_key(), algorithms=["HS256"])
-    assert dados["state"] == q["state"][0] and dados["nonce"] == q["nonce"][0]
+    assert dados["typ"] == "cg_ms" and dados["state"] == q["state"][0] and dados["nonce"] == q["nonce"][0]
     assert dados["verificador"] and dados["exp"]
 
 
 def test_retorno_abre_sessao_e_audita_metodo_microsoft(client: TestClient, banco: _Fake, troca: list) -> None:
     _cookie(client)
     r = _retorno(client, code="abc", state=STATE)
-    assert r.status_code == 302 and r.headers["location"] == "/"
+    _entra_direto(r)
     assert troca == [("abc", "v-1", "n-1")]
     assert client.cookies.get("cg_sessao")
     assert 'cg_ms="";' in r.headers["set-cookie"] or "cg_ms=;" in r.headers["set-cookie"]
@@ -116,7 +125,8 @@ def test_retorno_sem_codigo_pedido_mesmo_se_LOGIN_EXIGE_CODIGO(
     monkeypatch.setattr("app.config.LOGIN_EXIGE_CODIGO", True, raising=False)
     _cookie(client)
     r = _retorno(client, code="abc", state=STATE)
-    assert r.headers["location"] == "/" and client.cookies.get("cg_sessao")
+    _entra_direto(r)
+    assert client.cookies.get("cg_sessao")
 
 
 def test_state_diferente_falha(client: TestClient, banco: _Fake, troca: list) -> None:
@@ -134,6 +144,18 @@ def test_cookie_ausente_ou_vencido_falha_sem_gravar(client: TestClient, banco: _
     assert r.headers["location"] == "/login?erro_ms=falha"
     assert troca == [] and not client.cookies.get("cg_sessao")
     assert banco.tabelas["users"][0].get("microsoft_oid") is None and _atividades(banco) == []
+
+
+def test_jwt_de_sessao_nao_serve_de_pedido(client: TestClient, banco: _Fake, troca: list) -> None:
+    from app import auth
+
+    token = auth.create_access_token({"sub": EMAIL, "role": "user", "state": STATE,
+                                      "nonce": "n-1", "verificador": "v-1"})
+    client.cookies.set("cg_ms", token)
+    r = _retorno(client, code="abc", state=STATE)
+    assert r.headers["location"] == "/login?erro_ms=falha" and troca == []
+    _cookie(client, typ=None)
+    assert _retorno(client, code="abc", state=STATE).headers["location"] == "/login?erro_ms=falha"
 
 
 def test_access_denied_cancelada(client: TestClient, banco: _Fake, troca: list) -> None:
@@ -195,7 +217,8 @@ def test_conta_criada_avisa_admins(client: TestClient, banco: _Fake, monkeypatch
         _ident(oid="oid-2", upn=f"bia@{DOM}", email=f"bia@{DOM}", nome="<Bia>"), "rt"))
     _cookie(client)
     r = _retorno(client, code="abc", state=STATE)
-    assert r.headers["location"] == "/" and client.cookies.get("cg_sessao")
+    _entra_direto(r)
+    assert client.cookies.get("cg_sessao")
     assert [e["to_email"] for e in enviados] == ["a1@x.com", "a2@x.com"]
     assert enviados[0]["subject"] == "Conta nova pela Microsoft: <Bia>"
     assert "&lt;Bia&gt;" in enviados[0]["html_content"]

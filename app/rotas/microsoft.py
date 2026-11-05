@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from jose import jwt
 from jose.exceptions import JOSEError
 
@@ -47,7 +47,19 @@ def _ligado() -> None:
 
 
 def _volta(erro: Optional[str], request: Request) -> RedirectResponse:
-    r = RedirectResponse("/login?erro_ms=" + erro if erro else "/", status_code=302)
+    if erro:
+        r: Response = RedirectResponse("/login?erro_ms=" + erro, status_code=302)
+    else:
+        # Não é 302 de propósito: a volta da Microsoft é navegação de outro site, e
+        # a cadeia de redirecionamentos dela herda isso — o "/" chegaria sem o
+        # cookie de sessão (SameSite=Strict) e cairia em /login. Uma página que
+        # navega por conta própria (meta refresh) começa uma navegação do mesmo
+        # site, e o cookie vai. A CSP não restringe meta refresh.
+        r = HTMLResponse(
+            '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+            '<meta http-equiv="refresh" content="0;url=/"><title>Entrando</title></head>'
+            '<body><p><a href="/">Continuar</a></p></body></html>'
+        )
     r.delete_cookie(COOKIE, path="/", secure=sessao_cookie._https(request), httponly=True, samesite="lax")
     return r
 
@@ -58,7 +70,7 @@ def entrar_com_a_microsoft(request: Request) -> Response:
     state, nonce, verificador = (secrets.token_urlsafe(32) for _ in range(3))
     r = RedirectResponse(microsoft_entra.url_de_autorizacao(state, nonce, verificador), status_code=302)
     token = jwt.encode(
-        {"state": state, "nonce": nonce, "verificador": verificador,
+        {"typ": "cg_ms", "state": state, "nonce": nonce, "verificador": verificador,
          "exp": datetime.now(timezone.utc) + timedelta(seconds=VALIDADE_S)},
         auth._get_secret_key(), algorithm=auth.ALGORITHM,
     )
@@ -70,9 +82,11 @@ def entrar_com_a_microsoft(request: Request) -> Response:
 
 def _pedido(request: Request) -> Optional[dict]:
     try:
-        return jwt.decode(request.cookies.get(COOKIE) or "", auth._get_secret_key(), algorithms=[auth.ALGORITHM])
+        dados = jwt.decode(request.cookies.get(COOKIE) or "", auth._get_secret_key(), algorithms=[auth.ALGORITHM])
     except JOSEError:
         return None
+    # Mesma chave assina o JWT de sessão: sem o `typ`, ele serviria de pedido.
+    return dados if dados.get("typ") == "cg_ms" else None
 
 
 def _avisar_admins(nome: str, email: str) -> None:
@@ -121,7 +135,9 @@ def retorno_da_microsoft(request: Request, background: BackgroundTasks) -> Respo
         ident, refresh = microsoft_entra.trocar_codigo(codigo, pedido["verificador"], pedido["nonce"])
         resultado: Any = login_microsoft.resolver_conta(_sb_do_login(), ident, refresh)
     except Exception as e:  # noqa: BLE001 — FalhaMicrosoft, DbError, banco ausente: tudo é "falha", nunca 500
-        logger.warning("Entrada pela Microsoft falhou: %s", e)
+        # FalhaMicrosoft é esperada; o resto (banco, bug) precisa de traço.
+        logger.warning("Entrada pela Microsoft falhou: %s", e,
+                       exc_info=not isinstance(e, microsoft_entra.FalhaMicrosoft))
         return _volta("falha", request)
 
     ip = _ip_do_cliente(request)
