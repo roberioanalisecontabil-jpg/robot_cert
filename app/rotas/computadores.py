@@ -9,12 +9,13 @@ pendente até o administrador autorizar) mora em `app/computadores.py`.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import agent_devices, cert_installer, computadores, nomes
+from app import agent_devices, bandeja_virada, cert_installer, computadores, microsoft_entra, nomes
 from app.sessao import _erro_sem_banco, _sb_do_login, conta_ativa, require_admin, require_auth
 from app import auth
 
@@ -128,6 +129,18 @@ def listar_computadores() -> dict:
         v["vivo"] = bool(d and d.get("vivo"))
         v["versao"] = (d or {}).get("versao") or ""
     resumo = {"pendentes": sum(1 for v in vinculos if v["estado"] == computadores.PENDENTE)}
+    if microsoft_entra.configurado():
+        # Quem segura a virada: bandeja recente ainda abaixo da versão nova.
+        segurando = bandeja_virada.situacao(dispositivos, datetime.now(timezone.utc))["segurando"]
+        resumo["bandeja"] = {
+            "desligada_em": bandeja_virada.desligada_em(),
+            "segurando": [
+                {"nome": d.get("nome") or d["machine_id"], "machine_id": d["machine_id"],
+                 "versao": d.get("versao") or "",
+                 "email": pessoas.get(str(d["user_id"]), {}).get("email", "")}
+                for d in segurando
+            ],
+        }
     return {"itens": vinculos, "resumo": resumo}
 
 

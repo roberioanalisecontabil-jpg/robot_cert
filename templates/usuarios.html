@@ -193,6 +193,10 @@
         <p class="cg-usu-cab__lead">A pessoa entra na bandeja do agente com a conta deste portal; o computador só recebe certificado depois de autorizado aqui. <strong>Principal</strong> é a máquina de trabalho; <strong>Empréstimo</strong> vale até o prazo ou até a pessoa voltar para a principal.</p>
       </div>
       <div class="cg-usu-corpo">
+        <div class="ag-alert ag-alert--info" id="comp-virada" role="status" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div class="ag-alert__corpo" id="comp-virada-corpo"></div>
+        </div>
         <div class="cg-usu-filtros">
           <label class="ag-check"><input type="checkbox" id="comp-historico" /> Mostrar histórico (encerrados e recusados)</label>
           <p class="cg-usu-contagem" id="comp-resumo" aria-live="polite"></p>
@@ -580,6 +584,23 @@
                     : 'Nenhum computador ainda. Quando alguém entrar na bandeja do agente com a conta deste portal, o pedido aparece aqui.') + '</td></tr>';
         }
 
+        function desenharViradaBandeja(b) {
+            const faixa = document.getElementById('comp-virada');
+            faixa.hidden = !b;
+            if (!b) return;
+            const corpo = document.getElementById('comp-virada-corpo');
+            if (b.desligada_em) {
+                const dt = new Date(b.desligada_em);
+                corpo.textContent = 'Senha da bandeja desligada em ' + (isNaN(dt) ? b.desligada_em : dt.toLocaleDateString('pt-BR')) + '.';
+            } else if (!(b.segurando || []).length) {
+                corpo.textContent = 'Aguardando a primeira bandeja na versão 1.2.0.';
+            } else {
+                corpo.innerHTML = 'A senha da bandeja dos domínios desliga quando estes computadores chegarem à versão 1.2.0:<ul>'
+                    + b.segurando.map((x) => '<li>' + esc(x.nome) + (x.email ? ' · ' + esc(x.email) : '') + ' · ' + esc(x.versao) + '</li>').join('')
+                    + '</ul>';
+            }
+        }
+
         async function carregarComputadores() {
             try {
                 const r = await fetch('/api/computadores', { headers: getHeaders() });
@@ -591,6 +612,7 @@
                 const ativos = _compItens.filter((v) => v.estado === 'ativo').length;
                 document.getElementById('comp-resumo').textContent =
                     (pend ? pend + (pend === 1 ? ' aguardando · ' : ' aguardando · ') : '') + ativos + (ativos === 1 ? ' vínculo ativo' : ' vínculos ativos');
+                desenharViradaBandeja((d.resumo || {}).bandeja);
                 desenharComputadores();
             } catch (e) {
                 document.getElementById('comp-corpo').innerHTML = '<tr class="cg-state-row"><td colspan="5" class="ag-table__vazio">Não foi possível carregar: ' + esc(e.message) + '</td></tr>';
