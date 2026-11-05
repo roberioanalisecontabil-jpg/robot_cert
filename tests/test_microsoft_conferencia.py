@@ -213,3 +213,149 @@ def test_aplicar_desativa(ctx: _Ctx) -> None:
     _dar_refresh(ctx, "u1")
     r = mc.conferir_todas(ctx.sb, _renovar(u1=_bloq()))
     assert r["simulado"] is False and ctx.user("u1")["ativo"] is False
+
+
+# ── Fix round 1 ──────────────────────────────────────────────────────────
+
+class _Cur:
+    def __init__(self, conn: "_Conn") -> None:
+        self.conn = conn
+
+    def __enter__(self) -> "_Cur":
+        return self
+
+    def __exit__(self, *a: Any) -> None:
+        return None
+
+    def execute(self, sql: str, params: Any = None) -> None:
+        self.conn.chamadas.append((sql, params))
+
+    def fetchone(self) -> Any:
+        return (self.conn.obtem,)
+
+
+class _Conn:
+    def __init__(self, obtem: bool) -> None:
+        self.obtem, self.chamadas = obtem, []
+
+    def cursor(self) -> _Cur:
+        return _Cur(self)
+
+    def __enter__(self) -> "_Conn":
+        return self
+
+    def __exit__(self, *a: Any) -> None:
+        return None
+
+
+class _FakeComTrava(_Fake):
+    def __init__(self, tabelas: Dict[str, Any], obtem: bool) -> None:
+        super().__init__(tabelas)
+        self.conn = _Conn(obtem)
+
+    def conexao(self) -> _Conn:
+        return self.conn
+
+
+def _com_trava(ctx: _Ctx, obtem: bool) -> _FakeComTrava:
+    sb = _FakeComTrava(ctx.sb.tabelas, obtem)
+    ctx.sb = sb
+    return sb
+
+
+def test_trava_ocupada_pula_a_rodada(ctx: _Ctx) -> None:
+    sb = _com_trava(ctx, obtem=False)
+    _dar_refresh(ctx, "u1")
+    chamadas: List[str] = []
+
+    def renovar(refresh: str, cliente: Any = None) -> Renovacao:
+        chamadas.append(refresh)
+        return _bloq()
+
+    r = mc.conferir_todas(sb, renovar)
+    assert r["pulada"] is True and chamadas == [] and ctx.avisos == []
+    assert ctx.user("u1")["ativo"] is True
+    assert [c[0] for c in sb.conn.chamadas] == ["SELECT pg_try_advisory_lock(%s)"]  # sem unlock: não é nossa
+
+
+def test_trava_solta_no_fim_e_apos_excecao(ctx: _Ctx, monkeypatch: pytest.MonkeyPatch) -> None:
+    sb = _com_trava(ctx, obtem=True)
+    mc.conferir_todas(sb, _renovar())
+    sqls = [c[0] for c in sb.conn.chamadas]
+    assert sqls == ["SELECT pg_try_advisory_lock(%s)", "SELECT pg_advisory_unlock(%s)"]
+    assert sb.conn.chamadas[0][1] == (mc._TRAVA_CONFERENCIA,)
+
+    sb.conn.chamadas.clear()
+    monkeypatch.setattr(mc, "_rodada", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    with pytest.raises(RuntimeError):
+        mc.conferir_todas(sb, _renovar())
+    assert [c[0] for c in sb.conn.chamadas][-1] == "SELECT pg_advisory_unlock(%s)"
+
+
+def test_aviso_de_falha_nao_diz_que_ninguem_foi_desativado(ctx: _Ctx) -> None:
+    _dar_refresh(ctx, "u1", "adm")
+    mc.conferir_todas(ctx.sb, _renovar(u1=_bloq(), adm=Renovacao("falha", None, None)))
+    assert ctx.user("u1")["ativo"] is False
+    texto = " ".join([ctx.avisos[0]["assunto"], *ctx.avisos[0]["linhas"]]).lower()
+    assert "ninguém foi desativado" not in texto and "falha não desativa" in texto
+
+
+def test_ok_sem_refresh_novo_mantem_o_antigo(ctx: _Ctx) -> None:
+    _dar_refresh(ctx, "u1")
+    antes = ctx.user("u1")["microsoft_refresh_cifrado"]
+    mc.conferir_todas(ctx.sb, _renovar(u1=Renovacao("ok", None, None)))
+    u = ctx.user("u1")
+    assert u["microsoft_refresh_cifrado"] == antes and u["microsoft_conferido_em"]
+    r = mc.conferir_todas(ctx.sb, _renovar())
+    assert r["ok"] == 1  # ainda entra nas próximas rodadas
+
+
+def test_503_na_guarda_nao_desativa_e_nao_diz_ultimo_admin(ctx: _Ctx, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi import HTTPException
+
+    def guarda(*a: Any, **k: Any) -> None:
+        raise HTTPException(status_code=503, detail="x")
+
+    monkeypatch.setattr("app.rotas.usuarios._garantir_que_sobra_admin", guarda)
+    _dar_refresh(ctx, "u1")
+    mc.conferir_todas(ctx.sb, _renovar(u1=_bloq()))
+    assert ctx.user("u1")["ativo"] is True and ctx.saidas == []
+    assert len(ctx.avisos) == 1 and "último administrador" not in ctx.avisos[0]["assunto"].lower()
+
+
+def test_falha_na_lideranca_nao_poupa_a_excecao(ctx: _Ctx, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx.sb.tabelas["carteira_excecao"].append({"user_id": "u1", "documento": "1"})
+    original = ctx.sb.table
+
+    def table(nome: str) -> Any:
+        if nome == "departamento_lider":
+            raise RuntimeError("fora do ar")
+        return original(nome)
+
+    monkeypatch.setattr(ctx.sb, "table", table)
+    mc.desativar_pela_microsoft(ctx.sb, "u1")
+    assert ctx.sb.tabelas["carteira_excecao"] == [] and ctx.user("u1")["ativo"] is False
+
+
+def test_dois_admins_bloqueados_so_um_cai(ctx: _Ctx) -> None:
+    ctx.sb.tabelas["users"][:] = [_conta("a1", "rt-a1", role="admin"), _conta("a2", "rt-a2", role="admin")]
+    r = mc.conferir_todas(ctx.sb, _renovar(a1=_bloq(), a2=_bloq()))
+    ativos = [u["id"] for u in ctx.sb.tabelas["users"] if u["ativo"]]
+    assert ativos == ["a2"] and r["bloqueadas"] == 2
+    assert len(ctx.avisos) == 1 and "administrador" in ctx.avisos[0]["assunto"].lower()
+
+
+def test_excecao_ao_desativar_nao_para_a_proxima(ctx: _Ctx, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx.sb.tabelas["users"] += [_conta("b1", "rt-b1"), _conta("b2", "rt-b2")]
+    import app.papeis as papeis
+
+    original = papeis.derrubar_sessoes
+
+    def derrubar(sb: Any, uid: str) -> bool:
+        if uid == "b1":
+            raise RuntimeError("boom")
+        return original(sb, uid)
+
+    monkeypatch.setattr(papeis, "derrubar_sessoes", derrubar)
+    mc.conferir_todas(ctx.sb, _renovar(b1=_bloq(), b2=_bloq()))
+    assert ctx.user("b2")["ativo"] is False

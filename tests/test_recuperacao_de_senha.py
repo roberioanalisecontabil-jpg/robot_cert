@@ -70,6 +70,9 @@ class _Query:
     def limit(self, _n: int) -> "_Query":
         return self
 
+    def order(self, *_a: Any, **_k: Any) -> "_Query":
+        return self
+
     def _casa(self, r: Dict[str, Any]) -> bool:
         for c, op, v in self._f:
             a = r.get(c)

@@ -12,9 +12,10 @@ memória do processo: reiniciar repete o aviso, o que é aceitável.
 from __future__ import annotations
 
 import html
+from contextlib import contextmanager
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from fastapi import HTTPException
 
@@ -24,6 +25,7 @@ from app.smtp_service import decrypt_password, encrypt_password
 logger = logging.getLogger(__name__)
 
 MAX_DESATIVACOES_POR_RODADA = 5
+_TRAVA_CONFERENCIA = 20261105  # advisory lock; distinta da _TRAVA_APLICACAO do acessorias
 _INTERVALO_AVISO = timedelta(hours=1)
 # Erro do aplicativo, não da pessoa (os mesmos códigos de microsoft_entra).
 _ERRO_DO_APP = {"AADSTS7000215", "AADSTS7000222", "AADSTS700016"}
@@ -97,18 +99,22 @@ def desativar_pela_microsoft(sb: Any, user_id: str) -> None:
         _garantir_que_sobra_admin(sb, uid, novo_ativo=False)
     except HTTPException as e:
         logger.warning("Conta %s bloqueada na Microsoft, mas não foi desativada: %s", uid, e.detail)
-        _avisar_ti(f"ultimo_admin:{uid}", "Último administrador bloqueado na Microsoft: não foi desativado",
-                   [_linha(conta, None)])
+        if e.status_code == 409:  # a regra do último administrador
+            _avisar_ti(f"ultimo_admin:{uid}", "Último administrador bloqueado na Microsoft: não foi desativado",
+                       [_linha(conta, None)])
+        else:  # 503: não deu para ler os usuários; a conta segue ativa e a próxima rodada tenta de novo
+            _avisar_ti(f"nao_verificou:{uid}", "Conta bloqueada na Microsoft não pôde ser desativada agora",
+                       [_linha(conta, None)])
         return
 
     sb.table("users").update({"ativo": False, "desativada_pela_microsoft_em": _agora().isoformat()}).eq("id", uid).execute()
     papeis.derrubar_sessoes(sb, uid)
     # Cada passo abaixo é higiene: a conta já caiu e nenhum deles a desfaz.
-    try:
-        sb.table("departamento_lider").delete().eq("user_id", uid).execute()
-        sb.table(cert_installer.TABELA_EXCECOES).delete().eq("user_id", uid).execute()
-    except Exception:  # noqa: BLE001
-        logger.exception("Conta %s desativada, mas lideranças/exceções não foram removidas", uid)
+    for tabela in ("departamento_lider", cert_installer.TABELA_EXCECOES):
+        try:  # separados: falhar numa tabela não pode poupar a outra
+            sb.table(tabela).delete().eq("user_id", uid).execute()
+        except Exception:  # noqa: BLE001
+            logger.exception("Conta %s desativada, mas %s não foi esvaziada", uid, tabela)
     papeis.rederivar(sb, [uid])
     computadores.sair_de_tudo(uid, "conta bloqueada na Microsoft")
     try:
@@ -118,18 +124,55 @@ def desativar_pela_microsoft(sb: Any, user_id: str) -> None:
     atividade.registrar(atividade.EVENTO_DESATIVADA_MICROSOFT, uid, str(conta.get("email") or ""))
 
 
+@contextmanager
+def _trava(sb: Any) -> Iterator[bool]:
+    """Trava de sessão do Postgres para a rodada inteira: com mais de um worker,
+    duas rodadas juntas poderiam desativar, cada uma, um administrador diferente
+    e deixar o portal sem nenhum (a regra do último admin é verificar-e-agir).
+    Devolve False se outro processo está conferindo. Cliente sem `conexao`
+    (os falsos dos testes) segue sem trava."""
+    if not hasattr(sb, "conexao"):
+        yield True
+        return
+    with sb.conexao() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s)", (_TRAVA_CONFERENCIA,))
+            obteve = bool(cur.fetchone()[0])
+        try:
+            yield obteve
+        finally:
+            if obteve:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT pg_advisory_unlock(%s)", (_TRAVA_CONFERENCIA,))
+                except Exception:  # noqa: BLE001
+                    # Conexão que volta ao pool ainda segurando a trava bloquearia
+                    # toda rodada futura: fechar a solta.
+                    logger.exception("Trava da conferência da Microsoft não foi solta; fechando a conexão")
+                    conn.close()
+
+
 def conferir_todas(sb: Any = None, renovar: Callable[..., Any] = microsoft_entra.renovar) -> Dict[str, Any]:
     if sb is None:
         from app.settings_state import _banco
 
         sb = _banco()
     r: Dict[str, Any] = {"ok": 0, "bloqueadas": 0, "sem_conferencia": 0, "falhas": 0,
-                         "travado": False, "simulado": _simulando()}
+                         "travado": False, "simulado": _simulando(), "pulada": False}
     if not sb:
         return r
+    with _trava(sb) as obteve:
+        if not obteve:
+            r["pulada"] = True
+            return r
+        return _rodada(sb, renovar, r)
+
+
+def _rodada(sb: Any, renovar: Callable[..., Any], r: Dict[str, Any]) -> Dict[str, Any]:
     from app.auth import conta_ativa
 
-    contas = sb.table("users").select("id, email, full_name, role, ativo, microsoft_refresh_cifrado").execute().data or []
+    contas = (sb.table("users").select("id, email, full_name, role, ativo, microsoft_refresh_cifrado")
+              .order("id").execute().data or [])
     bloqueadas: List[tuple] = []
     erro_do_app = False
     for u in contas:
@@ -142,11 +185,11 @@ def conferir_todas(sb: Any = None, renovar: Callable[..., Any] = microsoft_entra
                 raise ValueError("chave de renovação ilegível")
             res = renovar(refresh)
             if res.resultado == "ok":
-                sb.table("users").update({
-                    "microsoft_refresh_cifrado": encrypt_password(res.refresh_novo),
-                    "microsoft_conferido_em": _agora().isoformat(),
-                    "microsoft_sem_conferencia": False,
-                }).eq("id", uid).execute()
+                dados = {"microsoft_conferido_em": _agora().isoformat(), "microsoft_sem_conferencia": False}
+                # Sem chave nova, fica a antiga: gravar "" tiraria a conta das próximas rodadas.
+                if res.refresh_novo:
+                    dados["microsoft_refresh_cifrado"] = encrypt_password(res.refresh_novo)
+                sb.table("users").update(dados).eq("id", uid).execute()
                 r["ok"] += 1
             elif res.resultado == "sem_conferencia":
                 sb.table("users").update({"microsoft_sem_conferencia": True}).eq("id", uid).execute()
@@ -169,8 +212,9 @@ def conferir_todas(sb: Any = None, renovar: Callable[..., Any] = microsoft_entra
         _avisar_ti("travado", f"Conferência da Microsoft travada: {motivo}. Ninguém foi desativado",
                    lista or ["Nenhuma conta bloqueada nesta rodada."])
     elif r["falhas"]:
-        _avisar_ti("falha", "Conferência da Microsoft com falhas: ninguém foi desativado",
-                   [f"{r['falhas']} conta(s) não puderam ser conferidas nesta rodada."])
+        _avisar_ti("falha", "Conferência da Microsoft com falhas",
+                   [f"{r['falhas']} conta(s) não puderam ser conferidas nesta rodada; "
+                    "falha não desativa ninguém."])
     if r["travado"]:
         return r
 
