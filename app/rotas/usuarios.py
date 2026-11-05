@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
-from app import atividade, auth, cert_installer, computadores, correio, login_codigo, nomes, papeis, permissoes, senha_reset, sessao_cookie, taxa
+from app import atividade, auth, cert_installer, computadores, correio, login_codigo, login_microsoft, microsoft_entra, nomes, papeis, permissoes, senha_reset, sessao_cookie, taxa
 from app.alcance import _papel_da_conta
 from app.comum import ERRO_INTERNO_VEJA_LOG, ERRO_LINHAS_DEMAIS, MAX_LINHAS_IMPORT, _ler_upload_limitado, _norm_header
 from app.rotas.departamentos import _nome_de_departamento
@@ -115,6 +115,7 @@ def _conferir_credenciais(email: str, senha: str, ip: Optional[str]) -> dict:
 
 
 CREDENCIAL_INVALIDA = "E-mail ou senha incorretos."
+ENTRE_PELA_MICROSOFT = "Entre pela Microsoft."
 
 _HASH_FALSO: Optional[str] = None
 
@@ -188,16 +189,20 @@ def _enviar_codigo_de_login_em_segundo_plano(conta: dict, codigo: str) -> None:
         logger.exception("Código de login gerado mas NÃO enviado — a pessoa vai esperar um e-mail que não chega.")
 
 
-def _pedir_codigo(user: Dict[str, Any], request: Request, background: BackgroundTasks) -> dict:
+def _pedir_codigo(
+    user: Dict[str, Any], request: Request, background: BackgroundTasks, so_app: bool = False,
+) -> dict:
     """Passo 1 sem navegador lembrado: código por e-mail e o desafio do passo 2.
-    Sem sessão aqui — só a senha não abre o portal (10/10/2026)."""
+    Sem sessão aqui — só a senha não abre o portal (10/10/2026). `so_app`: a
+    reserva dos admins de domínio da Microsoft, sem e-mail."""
     tem_app = bool(user.get("totp_ativado_em"))
     enviado = False
     try:
-        codigo = senha_reset.criar_codigo(str(user["id"]), client_ip=_ip_do_cliente(request),
-                                          proposito=senha_reset.LOGIN)
-        background.add_task(_enviar_codigo_de_login_em_segundo_plano, user, codigo)
-        enviado = True
+        if not so_app:
+            codigo = senha_reset.criar_codigo(str(user["id"]), client_ip=_ip_do_cliente(request),
+                                              proposito=senha_reset.LOGIN)
+            background.add_task(_enviar_codigo_de_login_em_segundo_plano, user, codigo)
+            enviado = True
     except senha_reset.LimiteDePedidos:
         if not tem_app:
             raise HTTPException(status_code=429, detail="Muitos códigos pedidos para esta conta. Aguarde alguns minutos.")
@@ -207,7 +212,7 @@ def _pedir_codigo(user: Dict[str, Any], request: Request, background: Background
             raise HTTPException(status_code=503, detail="Não foi possível enviar o código agora. Tente de novo em instantes.")
     return {
         "etapa": "codigo",
-        "desafio": login_codigo.criar_desafio(user),
+        "desafio": login_codigo.criar_desafio(user, so_app=so_app),
         "email": login_codigo.mascarar_email(user.get("email") or "") if enviado else None,
         "app_autenticador": tem_app,
         "validade_min": senha_reset.VALIDADE_MIN,
@@ -234,6 +239,19 @@ def login(body: LoginBody, request: Request, response: Response, background: Bac
         # Login local: `users` + bcrypt + JWT deste portal. (Até 05/09/2026 o
         # Supabase Auth era tentado primeiro, como "lista única de pessoas" da
         # fase 3; o portal não roda mais no Supabase e esse caminho saiu.)
+        if microsoft_entra.configurado() and microsoft_entra.dominio_liberado(body.email):
+            # Conta de domínio liberado só entra pela Microsoft. O bcrypt roda
+            # sempre e a resposta é a mesma para senha errada, conta inexistente
+            # e senha certa sem direito à reserva: nada revela qual foi.
+            try:
+                user = _conferir_credenciais(body.email, body.password, ip)
+            except HTTPException as e:
+                if e.status_code != 401:
+                    raise
+                raise HTTPException(status_code=403, detail=ENTRE_PELA_MICROSOFT)
+            if not login_microsoft.pode_usar_reserva(user):
+                raise HTTPException(status_code=403, detail=ENTRE_PELA_MICROSOFT)
+            return _pedir_codigo(user, request, background, so_app=True)
         user = _conferir_credenciais(body.email, body.password, ip)
         # Segundo passo (10/10/2026): sem o navegador lembrado, a senha só
         # pede o código. A sessão sai em `/api/login/codigo`.
@@ -283,6 +301,9 @@ def entrar_com_codigo(body: LoginCodigoBody, request: Request, response: Respons
         raise HTTPException(status_code=429, detail="Muitas tentativas nesta conta. Aguarde alguns minutos.")
 
     ip = request.client.host if request and request.client else None
+    so_app = login_codigo.desafio_so_app(body.desafio)
+    if so_app and body.metodo != "app":
+        raise HTTPException(status_code=400, detail=CODIGO_DE_LOGIN_INVALIDO)
     if body.metodo == "app":
         ok = login_codigo.conferir_totp(sb, user, body.codigo)
     else:
@@ -293,7 +314,7 @@ def entrar_com_codigo(body: LoginCodigoBody, request: Request, response: Respons
         raise HTTPException(status_code=400, detail=CODIGO_DE_LOGIN_INVALIDO)
 
     saida = _abrir_sessao(user, request, response, ip, "senha_e_app" if body.metodo == "app" else "senha")
-    if body.lembrar:
+    if body.lembrar and not so_app:
         login_codigo.gravar_confianca(response, request, user)
     return saida
 

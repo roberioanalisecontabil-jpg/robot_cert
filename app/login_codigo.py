@@ -82,8 +82,16 @@ def _vale_para(claims: Optional[dict], user: Dict[str, Any], *, mesma_sessao: bo
 
 # ── Desafio entre os passos ─────────────────────────────────────────────
 
-def criar_desafio(user: Dict[str, Any]) -> str:
-    return auth.criar_token_de(auth.AUD_DESAFIO_DE_LOGIN, str(user["id"]), VALIDADE_DESAFIO, sv=_versao(user))
+def criar_desafio(user: Dict[str, Any], so_app: bool = False) -> str:
+    # `so_app`: reserva dos admins de domínio da Microsoft; o passo 2 só aceita o app.
+    extras = {"so_app": True} if so_app else {}
+    return auth.criar_token_de(auth.AUD_DESAFIO_DE_LOGIN, str(user["id"]), VALIDADE_DESAFIO,
+                               sv=_versao(user), **extras)
+
+
+def desafio_so_app(desafio: Optional[str]) -> bool:
+    claims = auth.ler_token_de(auth.AUD_DESAFIO_DE_LOGIN, desafio)
+    return bool(claims and claims.get("so_app"))
 
 
 def user_id_do_desafio(desafio: Optional[str]) -> Optional[str]:

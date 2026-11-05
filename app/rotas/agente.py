@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app import agent_devices, auth, computadores, machine_credentials, taxa
+from app import agent_devices, atividade, auth, computadores, machine_credentials, microsoft_entra, taxa
 from app import entrada as entrada_certificados
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.rotas.computadores import _texto_da_situacao
@@ -174,6 +174,19 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
             detail="Troque a senha no portal antes de registrar o agente.",
             headers={"X-Senha-Provisoria": "1"},
         )
+
+    # Conta de domínio da Microsoft nunca ligada: bandeja nova só depois de
+    # entrar uma vez no site pela Microsoft (a senha sozinha não a prova).
+    if microsoft_entra.configurado() and microsoft_entra.dominio_liberado(user["email"]) \
+            and not user.get("microsoft_oid"):
+        atividade.registrar(
+            atividade.EVENTO_LOGIN_NEGADO,
+            user_id=str(user.get("id") or "") or None,
+            user_email=user["email"],
+            client_ip=ip,
+            contexto={"motivo": "microsoft_nao_ligada"},
+        )
+        raise HTTPException(status_code=403, detail="Entre uma vez no site pela Microsoft para liberar a bandeja.")
 
     machine_id = computadores.mac(body.machine_id)
     if not machine_id:
