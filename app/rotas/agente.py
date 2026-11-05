@@ -168,15 +168,10 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
 
     user = _conferir_credenciais(body.email, body.password, ip)
 
-    if bool(user.get("deve_trocar_senha")):
-        raise HTTPException(
-            status_code=403,
-            detail="Troque a senha no portal antes de registrar o agente.",
-            headers={"X-Senha-Provisoria": "1"},
-        )
-
     # Conta de domínio da Microsoft nunca ligada: bandeja nova só depois de
     # entrar uma vez no site pela Microsoft (a senha sozinha não a prova).
+    # Antes da senha provisória: o portal já recusa essa senha, então "troque
+    # a senha" mandaria a pessoa para um beco.
     if microsoft_entra.configurado() and microsoft_entra.dominio_liberado(user["email"]) \
             and not user.get("microsoft_oid"):
         atividade.registrar(
@@ -187,6 +182,13 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
             contexto={"motivo": "microsoft_nao_ligada"},
         )
         raise HTTPException(status_code=403, detail="Entre uma vez no site pela Microsoft para liberar a bandeja.")
+
+    if bool(user.get("deve_trocar_senha")):
+        raise HTTPException(
+            status_code=403,
+            detail="Troque a senha no portal antes de registrar o agente.",
+            headers={"X-Senha-Provisoria": "1"},
+        )
 
     machine_id = computadores.mac(body.machine_id)
     if not machine_id:

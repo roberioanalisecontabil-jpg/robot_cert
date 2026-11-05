@@ -7,9 +7,9 @@ from typing import Any, Dict
 import pytest
 from fastapi.testclient import TestClient
 
-from app import auth, login_codigo, totp
+from app import auth, login_codigo, senha_reset, totp
 from app.rotas.usuarios import ENTRE_PELA_MICROSOFT
-from tests.test_recuperacao_de_senha import _Fake
+from tests.test_recuperacao_de_senha import TABELA, _Fake
 
 DOM = "analisegroup.cnt.br"
 SENHA = "senha-boa-123"
@@ -51,6 +51,7 @@ def banco(monkeypatch: pytest.MonkeyPatch) -> _Fake:
             _u("u-novo", SEM_LIGACAO),
         ],
         "user_activity": [],
+        TABELA: [],
     })
     fake.segredo = segredo
     monkeypatch.setattr("app.settings_state._banco", lambda: fake)
@@ -99,11 +100,43 @@ def test_admin_reserva_pede_so_app_sem_email(client: TestClient, banco: _Fake, l
     assert not banco.enviados
 
 
+def _passo2(client: TestClient, desafio: str, codigo: str, metodo: str):
+    return client.post("/api/login/codigo", json={"desafio": desafio, "codigo": codigo, "metodo": metodo})
+
+
 def test_admin_reserva_metodo_email_recusado(client: TestClient, banco: _Fake, ligado: None) -> None:
     desafio = _login(client, ADM).json()["desafio"]
-    r = client.post("/api/login/codigo", json={"desafio": desafio, "codigo": "123456", "metodo": "email"})
+    # Código de e-mail REAL e válido: só a guarda do método o barra.
+    codigo = senha_reset.criar_codigo("u-adm", client_ip="1.1.1.1", proposito=senha_reset.LOGIN)
+    r = _passo2(client, desafio, codigo, "email")
     assert r.status_code == 400 and r.json()["detail"] == "Código inválido ou expirado."
     assert not client.cookies.get("cg_sessao")
+    assert [e["contexto"]["motivo"] for e in _eventos(banco, "login_negado")][-1] == "metodo_nao_permitido"
+    # Não foi consumido: ainda vale.
+    assert senha_reset.consumir("u-adm", codigo, proposito=senha_reset.LOGIN) is True
+
+
+def test_desafio_comum_de_dominio_nao_conclui(client: TestClient, banco: _Fake, ligado: None) -> None:
+    """Desafio emitido antes do deploy / com o recurso desligado."""
+    desafio = auth.criar_token_de(auth.AUD_DESAFIO_DE_LOGIN, "u-adm", timedelta(minutes=5), sv=0)
+    codigo = totp.codigo(banco.segredo, totp.passo_atual())
+    r = _passo2(client, desafio, codigo, "app")
+    assert r.status_code == 400 and not client.cookies.get("cg_sessao")
+
+
+@pytest.mark.parametrize("campo,valor", [("role", "user"), ("totp_ativado_em", None)])
+def test_reserva_reconferida_no_passo_2(client: TestClient, banco: _Fake, ligado: None, campo: str, valor: Any) -> None:
+    desafio = _login(client, ADM).json()["desafio"]
+    banco.tabelas["users"][1][campo] = valor
+    codigo = totp.codigo(banco.segredo, totp.passo_atual())
+    r = _passo2(client, desafio, codigo, "app")
+    assert r.status_code == 400 and not client.cookies.get("cg_sessao")
+
+
+def test_dominio_desativada_senha_certa_403_igual(client: TestClient, banco: _Fake, ligado: None) -> None:
+    banco.tabelas["users"][0]["ativo"] = False
+    r = _login(client, OP)
+    assert r.status_code == 403 and r.json() == {"detail": ENTRE_PELA_MICROSOFT}
 
 
 def test_admin_reserva_ignora_navegador_lembrado(client: TestClient, banco: _Fake, ligado: None) -> None:
@@ -161,6 +194,14 @@ def test_bandeja_registrar_dominio_nunca_ligado_recusa(
     assert r.status_code == 403 and r.json()["detail"] == MSG_BANDEJA
     ev = _eventos(banco, "login_negado")
     assert ev and ev[-1]["contexto"]["motivo"] == "microsoft_nao_ligada"
+
+
+def test_bandeja_senha_provisoria_de_dominio_nao_ligado_ve_a_mensagem_da_microsoft(
+    client: TestClient, banco: _Fake, ligado: None, entrar_falso: None,
+) -> None:
+    banco.tabelas["users"][5]["deve_trocar_senha"] = True
+    r = _registrar(client, SEM_LIGACAO)
+    assert r.status_code == 403 and r.json()["detail"] == MSG_BANDEJA
 
 
 def test_bandeja_gmail_continua(client: TestClient, banco: _Fake, ligado: None, entrar_falso: None) -> None:

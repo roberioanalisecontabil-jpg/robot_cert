@@ -302,7 +302,19 @@ def entrar_com_codigo(body: LoginCodigoBody, request: Request, response: Respons
 
     ip = request.client.host if request and request.client else None
     so_app = login_codigo.desafio_so_app(body.desafio)
-    if so_app and body.metodo != "app":
+    # Domínio da Microsoft só conclui por desafio da reserva (cobre desafio
+    # emitido antes do deploy ou com o recurso desligado); a reserva é
+    # reconferida aqui: admin rebaixado ou sem app entre os passos não termina.
+    motivo = None
+    if microsoft_entra.configurado() and microsoft_entra.dominio_liberado(user.get("email") or "") and not so_app:
+        motivo = "desafio_fora_da_reserva"
+    elif so_app and not login_microsoft.pode_usar_reserva(user):
+        motivo = "reserva_indisponivel"
+    elif so_app and body.metodo != "app":
+        motivo = "metodo_nao_permitido"
+    if motivo:
+        atividade.registrar(atividade.EVENTO_LOGIN_NEGADO, user_id=uid, user_email=user.get("email") or "",
+                            client_ip=ip, contexto={"motivo": motivo, "metodo": body.metodo})
         raise HTTPException(status_code=400, detail=CODIGO_DE_LOGIN_INVALIDO)
     if body.metodo == "app":
         ok = login_codigo.conferir_totp(sb, user, body.codigo)
