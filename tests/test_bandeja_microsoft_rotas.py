@@ -59,7 +59,9 @@ def test_retorno_da_bandeja_emite_codigo_sem_sessao(client: TestClient, banco_b:
     assert r.status_code == 200 and r.headers.get("cache-control") == "no-store"
     alvo = f"http://127.0.0.1:{PORTA}/?codigo="
     assert f'content="0;url={alvo}' in r.text and f'href="{alvo}' in r.text
-    assert "<script" not in r.text and "Pronto, pode voltar para a bandeja." in r.text
+    assert "<script" not in r.text and "Concluindo a entrada na bandeja" in r.text
+    # Não manda fechar: fechar antes do meta refresh perderia o código.
+    assert "pode fechar" not in r.text
     cabs = " ".join(r.headers.get_list("set-cookie"))
     assert "cg_sessao=" not in cabs and "cg_ms=" in cabs
     linhas = banco_b.tabelas["bandeja_codigo"]

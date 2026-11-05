@@ -164,3 +164,10 @@ def test_registrar_pela_microsoft_recusa_vira_erro() -> None:
     s = _Sessao(post=_Resp(401, {"detail": "Código expirado."}))
     with pytest.raises(RuntimeError, match="Código expirado."):
         cc.registrar_pela_microsoft(s, PORTAL, "cod", "ver", MAQUINA)
+
+
+def test_pagina_final_tem_logo_e_manda_fechar():
+    p = lm.pagina(lm.PRONTO, "detalhe")
+    assert "Pronto, pode fechar esta página." in p
+    # Logo embutido: o portal manda CORP same-origin, e 127.0.0.1 não carregaria o dele.
+    assert 'src="data:image/png;base64,' in p and "<script" not in p

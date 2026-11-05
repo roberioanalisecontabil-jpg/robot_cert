@@ -76,16 +76,27 @@ def _volta_bandeja(porta: int, request: Request, codigo: Optional[str] = None,
                    erro: Optional[str] = None) -> HTMLResponse:
     """Devolve o navegador ao ouvinte da bandeja (só 127.0.0.1). Sem script (a CSP
     barra): meta refresh e, se o navegador não seguir, um link para o mesmo lugar."""
+    # Não diz "pode fechar": fechar antes de o navegador seguir perderia o código.
+    # O "Pronto, pode fechar esta página." é da página da própria bandeja.
     if codigo:
-        alvo, texto = f"http://127.0.0.1:{int(porta)}/?codigo=" + quote(codigo), "Pronto, pode voltar para a bandeja."
+        alvo, texto = f"http://127.0.0.1:{int(porta)}/?codigo=" + quote(codigo), "Concluindo a entrada na bandeja…"
     else:
         erro = erro if erro in MENSAGENS_ERRO else "falha"
         alvo, texto = f"http://127.0.0.1:{int(porta)}/?erro=" + quote(erro), MENSAGENS_ERRO[erro]
     a = html.escape(alvo)
     r = HTMLResponse(
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
-        f'<meta http-equiv="refresh" content="0;url={a}"><title>CertGuard Análise</title></head>'
-        f'<body><p>{html.escape(texto)}</p><p><a href="{a}">Voltar para a bandeja</a></p></body></html>',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f'<meta http-equiv="refresh" content="0;url={a}"><title>CertGuard Análise</title><style>'
+        "body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F3EFE7;"
+        "font-family:'Segoe UI',system-ui,sans-serif;color:#212121}"
+        "main{background:#fff;border-radius:16px;padding:40px 36px;max-width:380px;margin:16px;"
+        "text-align:center;box-shadow:0 8px 30px rgba(154,106,61,.15)}"
+        "img{width:72px;height:72px}h1{font-size:20px;margin:16px 0 8px;font-weight:600}"
+        "p{margin:0;color:#52504C;font-size:14px;line-height:1.5}a{color:#9A6A3D}"
+        '</style></head><body><main><img src="/static/logo.png" alt="Análise Group">'
+        f'<h1>{html.escape(texto)}</h1><p><a href="{a}">Se nada acontecer, clique aqui.</a></p>'
+        "</main></body></html>",
         headers={"Cache-Control": "no-store"},
     )
     r.delete_cookie(COOKIE, path="/", secure=sessao_cookie._https(request), httponly=True, samesite="lax")
