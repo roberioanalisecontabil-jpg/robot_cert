@@ -411,3 +411,37 @@ de falha técnica), sem trava.
 
 Sintoma sem código: **todo login falha com "Não foi possível entrar com a
 Microsoft agora."** Conferir se `MICROSOFT_TENANT_ID` é o GUID e não o domínio.
+
+## Entrega 2: bandeja pela Microsoft
+
+A bandeja 1.2.0 ganha o botão "Entrar com a Microsoft" na janela de login. O
+navegador abre a Microsoft, volta para um ouvinte em `127.0.0.1` (porta
+aleatória, um retorno, 300 s) e a bandeja troca o código de uso único (120 s)
+pelo registro do computador. A URI de retorno no Entra **não muda**. Depois que
+todas as bandejas ativas estiverem na 1.2.0, a senha deixa de valer na bandeja
+para os quatro domínios (a "virada").
+
+Ordem de produção:
+
+1. **Push + `atualizar-portal`.** Aplica `20261106100000_bandeja_pela_microsoft.sql`
+   (pelo `db/aplicar_schema.py`; nunca à mão). Conferir na saída
+   `  ok   20261106100000_bandeja_pela_microsoft.sql`. Nada muda para ninguém: a
+   virada só vale com a Microsoft configurada e com dispositivos na 1.2.0.
+2. **Publicar a 1.2.0** pelo Robério, na máquina de build, com
+   `scripts/versoes_certguard.py publicar --instalador dist_estacao\Instalador_CertguardAnalise_1.2.0.exe`
+   e depois `deploy\publicar-certguard.ps1`. A atualização automática leva as
+   bandejas à 1.2.0. Na primeira estação, conferir à mão que a janela abre com o
+   botão e que, num portal sem as variáveis `MICROSOFT_*`, o botão some.
+3. **Acompanhar Usuários › Computadores.** Ver as versões `certguard-x.y.z`
+   subindo. Só contam dispositivos não revogados vistos nos últimos 30 dias.
+4. **A virada acontece sozinha** quando nenhum dispositivo desses estiver abaixo
+   da 1.2.0 (e houver ao menos um na nova). O portal manda e-mail ao TI. Daí em
+   diante, e-mail dos domínios na bandeja recebe 403 "Use Entrar com a
+   Microsoft.", com a senha certa ou errada.
+5. **Voltar a senha para todos:** tirar as variáveis `MICROSOFT_*` e reiniciar, a
+   mesma chave geral da entrega 1. Com as variáveis de volta, a virada volta a
+   valer.
+
+Limite do loopback: o ouvinte atende só estações com a pessoa na própria sessão
+do Windows, uma pessoa por sessão. Servidor de terminal com várias sessões
+simultâneas não é caso suportado.

@@ -180,11 +180,27 @@ class Bandeja:
                         chave_maquina=chave_maquina.ler(),
                     )
 
+            def _microsoft() -> dict:
+                from estacao.login_microsoft import entrar
+
+                codigo, verificador = entrar(portal)
+                with httpx.Client() as http:
+                    return conta.registrar_pela_microsoft(
+                        http, portal, codigo, verificador, mid,
+                        nome=os.getenv("COMPUTERNAME") or mid,
+                        chave_maquina=chave_maquina.ler(),
+                    )
+
             def _pronto() -> None:
                 logger.info("Conta do portal de certificados conectada (máquina %s).", mid)
                 threading.Thread(target=self.verificar, daemon=True).start()
 
-            abrir_janela(ao_registrar=_registrar, portal=portal, machine_id=mid, ao_concluir=_pronto)
+            with httpx.Client() as http:
+                ms = conta.microsoft_ligada(http, portal)
+            abrir_janela(
+                ao_registrar=_registrar, portal=portal, machine_id=mid, ao_concluir=_pronto,
+                ao_microsoft=_microsoft if ms else None,
+            )
         except Exception:
             logger.exception("Falha ao abrir a janela de login")
 
