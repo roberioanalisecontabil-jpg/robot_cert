@@ -71,16 +71,33 @@ seguir**.
 **Estado em 04/11/2026: a migration ainda não foi ensaiada** (a máquina de
 desenvolvimento não tinha Postgres funcionando). Recomenda-se fazer.
 
-1. Quem tem o papel `postgres` cria a cópia (o banco precisa estar sem outras
-   conexões durante a cópia):
-   `CREATE DATABASE certguard_ensaio TEMPLATE <banco de produção>;`
-   (`<banco de produção>` é o nome do banco no `DATABASE_URL` do servidor).
-2. No servidor, na pasta do portal, apontar o script para a cópia e rodar **duas
-   vezes** (a DSN vai como argumento, ou em `DATABASE_URL`):
-   `.venv\Scripts\python.exe db\aplicar_schema.py <DSN da cópia>`
-3. A primeira aplica a migration. A **segunda** tem de dizer que aplicou **0** e
-   terminar sem erro.
-4. Apagar a cópia: `DROP DATABASE certguard_ensaio;`
+O `psql` não está no PATH do servidor: use os caminhos completos abaixo (a
+pasta `C:\Program Files\PostgreSQL\17\bin` é a usual do PostgreSQL 17; confirme no
+servidor). `<banco de produção>` é o nome do banco no `DATABASE_URL` do portal;
+a porta é a **5433**. Quem tem o papel `postgres` faz os passos 1 a 3 e 6.
+`CREATE DATABASE ... TEMPLATE` **não serve**: falha enquanto o portal mantém
+conexões com o banco de produção, e levaria a parar a produção.
+
+1. Despejar a produção num arquivo (não bloqueia o portal):
+   `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" -h 127.0.0.1 -p 5433 -U postgres -Fc -f C:\Temp\certguard_ensaio.dump <banco de produção>`
+2. Criar a cópia vazia:
+   `& "C:\Program Files\PostgreSQL\17\bin\createdb.exe" -h 127.0.0.1 -p 5433 -U postgres certguard_ensaio`
+3. Restaurar nela:
+   `& "C:\Program Files\PostgreSQL\17\bin\pg_restore.exe" -h 127.0.0.1 -p 5433 -U postgres -d certguard_ensaio C:\Temp\certguard_ensaio.dump`
+   (avisos de dono/papel inexistente na restauração são esperados na cópia).
+4. Na pasta do portal, rodar **duas vezes**, com a DSN da cópia **escrita por
+   inteiro** no comando:
+   `.venv\Scripts\python.exe db\aplicar_schema.py postgresql://<usuário>:<senha>@127.0.0.1:5433/certguard_ensaio`
+
+   **A DSN da cópia é obrigatória: sem o argumento ele usa o banco de
+   produção** (`DATABASE_URL`) e aplicaria a migration lá, à mão. Não omita.
+5. A primeira execução mostra `  ok   20261105100000_login_microsoft.sql`. A
+   **segunda** tem de terminar sem erro e dizer `Pronto: 0 arquivo(s)
+   aplicado(s)` (o resto da linha traz quantas já estavam).
+6. Apagar a cópia **e o arquivo**, que tem dados de produção:
+   `& "C:\Program Files\PostgreSQL\17\bin\dropdb.exe" -h 127.0.0.1 -p 5433 -U postgres certguard_ensaio`
+   (equivale a `DROP DATABASE certguard_ensaio;`) e
+   `Remove-Item C:\Temp\certguard_ensaio.dump`.
 
 ## 2. Aplicativo no Entra
 
@@ -142,8 +159,8 @@ migration falhar, o deploy aborta sem reiniciar o serviço e o portal segue como
 estava.
 
 Neste ponto nada muda para ninguém: sem as variáveis o botão não aparece. Ao
-fim, conferir na saída do script que a migration
-`20261105100000_login_microsoft.sql` foi aplicada.
+fim, conferir na saída do script a linha
+`  ok   20261105100000_login_microsoft.sql`.
 
 ## 5. Variáveis no ambiente do serviço
 
@@ -327,8 +344,10 @@ No `logs\portal_stderr.log` do serviço, linhas `Microsoft: ...` com o código:
 | `AADSTS700016` | Aplicativo não encontrado no diretório | Conferir `MICROSOFT_CLIENT_ID` e `MICROSOFT_TENANT_ID` |
 | `AADSTS50057` / `AADSTS50034` | Conta bloqueada ou inexistente: é o que a conferência trata como "desativar" | Esperado no aceite; fora dele, conferir a conta no Entra |
 
-Os três de aplicativo (`7000215`, `7000222`, `700016`) travam a conferência por
-completo: ninguém é desativado até corrigir.
+Na conferência de 5 minutos (`renovar`), os três de aplicativo (`7000215`,
+`7000222`, `700016`) travam a rodada por completo: ninguém é desativado até
+corrigir. No login pelo botão eles aparecem só como falha da entrada (a mensagem
+de falha técnica), sem trava.
 
 Sintoma sem código: **todo login falha com "Não foi possível entrar com a
 Microsoft agora."** Conferir se `MICROSOFT_TENANT_ID` é o GUID e não o domínio.
