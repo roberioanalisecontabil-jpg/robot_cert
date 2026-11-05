@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app import agent_devices, atividade, auth, computadores, machine_credentials, microsoft_entra, taxa
+from app import agent_devices, atividade, auth, bandeja_virada, computadores, machine_credentials, microsoft_entra, taxa
 from app import entrada as entrada_certificados
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.rotas.computadores import _texto_da_situacao
@@ -165,6 +165,18 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
     email_alvo = (body.email or "").strip().lower()
     if not taxa.permitir(f"senha:{email_alvo}:{ip}", 10, 300) or not taxa.permitir(f"senha:{email_alvo}", 50, 300):
         raise HTTPException(status_code=429, detail="Muitas tentativas nesta conta. Aguarde alguns minutos.")
+
+    # Depois da virada (app/bandeja_virada.py) a senha não vale para os domínios
+    # da Microsoft; o 403 vem antes de conferi-la, igual para qualquer e-mail.
+    if bandeja_virada.senha_bloqueada(email_alvo):
+        atividade.registrar(
+            atividade.EVENTO_LOGIN_NEGADO,
+            user_id=None,
+            user_email=email_alvo,
+            client_ip=ip,
+            contexto={"motivo": "bandeja_so_microsoft"},
+        )
+        raise HTTPException(status_code=403, detail="Use Entrar com a Microsoft.")
 
     user = _conferir_credenciais(body.email, body.password, ip)
 

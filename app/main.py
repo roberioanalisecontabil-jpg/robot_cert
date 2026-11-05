@@ -265,7 +265,7 @@ async def lifespan(_app: FastAPI):
         if not microsoft_entra.configurado():
             logger.info("Conferência da Microsoft desligada: variáveis MICROSOFT_* ausentes.")
             return
-        from app import microsoft_conferencia
+        from app import bandeja_virada, microsoft_conferencia
 
         loop = asyncio.get_running_loop()
         while True:
@@ -278,6 +278,12 @@ async def lifespan(_app: FastAPI):
                 raise
             except Exception as e:
                 logger.error(f"Erro na conferência da Microsoft: {e}")
+            try:
+                await loop.run_in_executor(None, bandeja_virada.conferir)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Erro na virada da bandeja: {e}")
 
     tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
     tarefa_novos = asyncio.create_task(novos_por_hora_loop())
