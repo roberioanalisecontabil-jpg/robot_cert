@@ -1886,10 +1886,10 @@ function initSidebarDicas() {
 // ─── Aviso do app autenticador (05/11/2026) ──────────────────────────────────
 // Admin de domínio da Microsoft sem app autenticador fica sem entrada se a
 // Microsoft cair. O servidor decide (`aviso_cadastrar_app`); aqui só se mostra,
-// uma vez por aba, logo depois de entrar, em qualquer página.
+// logo depois de entrar, em qualquer página, até a pessoa fechar ou cadastrar.
 function avisarAppAutenticador() {
   if (localStorage.getItem("user_role") !== "admin" || window.location.pathname.startsWith("/login")) return;
-  try { if (sessionStorage.getItem("cg_aviso_app")) return; sessionStorage.setItem("cg_aviso_app", "1"); } catch (_e) {}
+  try { if (sessionStorage.getItem("cg_aviso_app")) return; } catch (_e) {}
   fetch("/api/users/me/app-autenticador", { headers: getHeaders() })
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => {
@@ -1902,6 +1902,11 @@ function avisarAppAutenticador() {
       b.textContent = "Cadastrar agora";
       b.addEventListener("click", () => removeToast(t));
       t.insertBefore(b, t.querySelector(".toast-close"));
+      // Só some de vez quando a pessoa age: o limite de 3 toasts ou uma troca
+      // de página não podem engolir o aviso.
+      for (const el of t.querySelectorAll("button")) {
+        el.addEventListener("click", () => { try { sessionStorage.setItem("cg_aviso_app", "1"); } catch (_e) {} });
+      }
     })
     .catch(() => {});
 }
