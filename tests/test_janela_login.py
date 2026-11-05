@@ -195,3 +195,30 @@ def test_o_envio_passa_a_senha_por_parametro() -> None:
     assert "del " not in ast.unparse(trabalho), (
         "`del` sobre a senha torna o nome local e quebra a leitura anterior"
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 4. Bandeja pela Microsoft (estacao): as mensagens do portal passam intactas
+# ──────────────────────────────────────────────────────────────────────────
+
+from app import agent_devices, bandeja_virada  # noqa: E402
+from estacao import VERSAO_REPORTADA, login_microsoft  # noqa: E402
+from estacao.janela_login import mensagem_de_falha as mensagem_da_estacao  # noqa: E402
+
+
+def test_mensagem_use_microsoft_passa_intacta():
+    assert (
+        mensagem_da_estacao(RuntimeError("Use Entrar com a Microsoft."))
+        == "Use Entrar com a Microsoft."
+    )
+
+
+@pytest.mark.parametrize("texto", list(login_microsoft.MENSAGENS.values()))
+def test_mensagens_da_microsoft_passam_intactas(texto):
+    assert mensagem_da_estacao(RuntimeError(texto)) == texto
+
+
+def test_versao_reportada_e_a_nova():
+    # A bandeja e a virada não podem divergir.
+    assert VERSAO_REPORTADA == "certguard-1.2.0"
+    assert agent_devices._versao_tupla("1.2.0") == bandeja_virada.VERSAO_NOVA

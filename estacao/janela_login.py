@@ -83,6 +83,7 @@ def abrir_janela(
     portal: str,
     machine_id: str,
     ao_concluir: Callable[[], None] | None = None,
+    ao_microsoft: Callable[[], Any] | None = None,
 ) -> None:
     """
     Abre o login numa thread própria. Chamada repetida enquanto aberta não faz nada.
@@ -90,13 +91,16 @@ def abrir_janela(
     `ao_registrar(email, senha)` é injetada pelo agente — é ela que fala
     com o portal. Manter a chamada fora daqui é o que permite testar a janela
     sem rede e o registro sem Tk.
+
+    `ao_microsoft()` só vem quando o portal tem a Microsoft ligada; sem ela,
+    a janela é a de sempre. Bloqueia até 300 s, por isso roda em thread.
     """
     if _janela_aberta.is_set():
         return
     _janela_aberta.set()
     threading.Thread(
         target=_rodar_janela,
-        args=(ao_registrar, portal, machine_id, ao_concluir),
+        args=(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft),
         name="CertguardJanelaLogin",
         daemon=True,
     ).start()
@@ -105,7 +109,7 @@ def abrir_janela(
 _janela_aberta = threading.Event()
 
 
-def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
+def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=None) -> None:
     import tkinter as tk
 
     try:
@@ -123,22 +127,35 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
     icone.aplicar_na_janela(raiz)
     raiz.configure(bg=_COR_FUNDO)
     raiz.resizable(False, False)
-    raiz.geometry("440x330")
+    raiz.geometry("440x400" if ao_microsoft else "440x330")
 
     tk.Label(
         raiz, text="Entrar no portal de certificados", bg=_COR_FUNDO,
         font=("Segoe UI", 13, "bold"), anchor="w",
     ).pack(fill="x", padx=22, pady=(20, 2))
 
+    apoio = (
+        "E-mail da empresa: use Entrar com a Microsoft. Os demais: e-mail e senha do portal."
+        if ao_microsoft else
+        "Use seu e-mail e senha do portal de certificados. O administrador\n"
+        "autoriza este computador; a senha não é guardada aqui."
+    )
     tk.Label(
-        raiz,
-        text=(
-            "Use seu e-mail e senha do portal de certificados. O administrador\n"
-            "autoriza este computador; a senha não é guardada aqui."
-        ),
-        bg=_COR_FUNDO, fg=_COR_SUAVE, font=("Segoe UI", 9),
-        anchor="w", justify="left",
+        raiz, text=apoio, bg=_COR_FUNDO, fg=_COR_SUAVE, font=("Segoe UI", 9),
+        anchor="w", justify="left", wraplength=396,
     ).pack(fill="x", padx=22, pady=(0, 12))
+
+    botao_ms = None
+    if ao_microsoft:
+        botao_ms = tk.Button(raiz, text="  Entrar com a Microsoft", compound="left",
+                             font=("Segoe UI", 10), padx=8)
+        # Logo de quatro quadrados, desenhado: sem arquivo de imagem para empacotar.
+        logo = tk.Canvas(botao_ms, width=14, height=14, highlightthickness=0, bd=0)
+        for cor, (x, y) in zip(("#f25022", "#7fba00", "#00a4ef", "#ffb900"),
+                               ((0, 0), (8, 0), (0, 8), (8, 8)), strict=True):
+            logo.create_rectangle(x, y, x + 6, y + 6, fill=cor, outline=cor)
+        logo.place(x=10, rely=0.5, anchor="w")
+        botao_ms.pack(fill="x", padx=22, pady=(0, 12), ipady=3)
 
     corpo = tk.Frame(raiz, bg=_COR_FUNDO)
     corpo.pack(fill="x", padx=22)
@@ -176,7 +193,14 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
         _janela_aberta.clear()
         raiz.destroy()
 
+    # Um login por vez: Enter com os campos cheios não pode abrir uma entrada
+    # por senha enquanto a Microsoft espera o navegador (nem o contrário).
+    ocupado = False
+
     def _enviar(*_a: Any) -> None:
+        nonlocal ocupado
+        if ocupado:
+            return
         email = campo_email.get().strip()
         senha = campo_senha.get()
 
@@ -185,7 +209,10 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
             aviso.configure(text=problema, fg=_COR_ERRO)
             return
 
+        ocupado = True
         botao.configure(state="disabled", text="Entrando…")
+        if botao_ms:
+            botao_ms.configure(state="disabled")
         aviso.configure(text="", fg=_COR_ERRO)
         raiz.update_idletasks()
 
@@ -207,22 +234,52 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
                 resposta = ao_registrar(email, senha_local)
             except BaseException as e:
                 LOGGER.warning("Registro do dispositivo recusado: %s", e)
-                raiz.after(0, _falhou, mensagem_de_falha(e))
+                with contextlib.suppress(Exception):  # janela já fechada
+                    raiz.after(0, _falhou, mensagem_de_falha(e))
                 return
             # O portal diz se o computador já está autorizado ou se aguarda
             # o administrador.
             texto = ""
             if isinstance(resposta, dict):
                 texto = str(resposta.get("mensagem") or "")
-            raiz.after(0, _conseguiu, texto)
+            with contextlib.suppress(Exception):
+                raiz.after(0, _conseguiu, texto)
 
         # Fora da thread do Tk: a chamada ao portal pode levar segundos, e
         # congelar a janela faria a pessoa clicar de novo.
         threading.Thread(target=_trabalho, args=(senha,), daemon=True).start()
 
+    def _microsoft(*_a: Any) -> None:
+        nonlocal ocupado
+        if ocupado:
+            return
+        ocupado = True
+        botao.configure(state="disabled")
+        botao_ms.configure(state="disabled", text="  Aguardando o navegador…")
+        aviso.configure(text="", fg=_COR_ERRO)
+
+        # `ao_microsoft` bloqueia até 300 s esperando o navegador: fora do Tk.
+        def _trabalho_ms() -> None:
+            try:
+                resposta = ao_microsoft()
+            except BaseException as e:
+                LOGGER.warning("Entrada pela Microsoft recusada: %s", e)
+                with contextlib.suppress(Exception):  # janela já fechada
+                    raiz.after(0, _falhou, mensagem_de_falha(e))
+                return
+            texto = str(resposta.get("mensagem") or "") if isinstance(resposta, dict) else ""
+            with contextlib.suppress(Exception):
+                raiz.after(0, _conseguiu, texto)
+
+        threading.Thread(target=_trabalho_ms, daemon=True).start()
+
     def _falhou(texto: str) -> None:
+        nonlocal ocupado
+        ocupado = False
         aviso.configure(text=texto, fg=_COR_ERRO)
         botao.configure(state="normal", text="Entrar")
+        if botao_ms:
+            botao_ms.configure(state="normal", text="  Entrar com a Microsoft")
         campo_senha.delete(0, "end")
         campo_senha.focus_set()
 
@@ -238,6 +295,8 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir) -> None:
         raiz.after(3500 if texto else 1200, _fechar)
 
     botao.configure(command=_enviar)
+    if botao_ms:
+        botao_ms.configure(command=_microsoft)
     raiz.bind("<Return>", _enviar)
     raiz.protocol("WM_DELETE_WINDOW", _fechar)
     campo_email.focus_set()

@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app import agent_devices, atividade, auth, computadores, machine_credentials, microsoft_entra, taxa
+from app import agent_devices, atividade, auth, bandeja_codigo, bandeja_virada, computadores, machine_credentials, microsoft_entra, taxa
 from app import entrada as entrada_certificados
 from app.command_queue import COMMANDS, enqueue, list_pending, pop_next_for_agent
 from app.rotas.computadores import _texto_da_situacao
@@ -22,6 +22,7 @@ from app.sessao import (
     _erro_sem_banco,
     _ip_do_cliente,
     _machine_da_credencial,
+    _sb_do_login,
     _user_id_da_sessao,
     require_admin,
     require_agent_or_admin,
@@ -166,6 +167,18 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
     if not taxa.permitir(f"senha:{email_alvo}:{ip}", 10, 300) or not taxa.permitir(f"senha:{email_alvo}", 50, 300):
         raise HTTPException(status_code=429, detail="Muitas tentativas nesta conta. Aguarde alguns minutos.")
 
+    # Depois da virada (app/bandeja_virada.py) a senha não vale para os domínios
+    # da Microsoft; o 403 vem antes de conferi-la, igual para qualquer e-mail.
+    if bandeja_virada.senha_bloqueada(email_alvo):
+        atividade.registrar(
+            atividade.EVENTO_LOGIN_NEGADO,
+            user_id=None,
+            user_email=email_alvo,
+            client_ip=ip,
+            contexto={"motivo": "bandeja_so_microsoft"},
+        )
+        raise HTTPException(status_code=403, detail="Use Entrar com a Microsoft.")
+
     user = _conferir_credenciais(body.email, body.password, ip)
 
     # Conta de domínio da Microsoft nunca ligada: bandeja nova só depois de
@@ -190,7 +203,12 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
             headers={"X-Senha-Provisoria": "1"},
         )
 
-    machine_id = computadores.mac(body.machine_id)
+    return _concluir_registro(user, body.machine_id, body.nome, body.chave_maquina)
+
+
+def _concluir_registro(user: dict, machine_id_bruto: str, nome: Optional[str], chave_maquina: Optional[str]) -> dict:
+    """Do vínculo ao segredo: o que `registrar` e `registrar-microsoft` têm em comum."""
+    machine_id = computadores.mac(machine_id_bruto)
     if not machine_id:
         raise HTTPException(status_code=400, detail="Informe a máquina do agente.")
 
@@ -198,7 +216,7 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
         # ADR 0002: um acesso por vez e vínculo autorizado pelo administrador;
         # adendo de 10/10/2026: reconexão só com a chave da máquina.
         segredo, situacao = computadores.entrar(
-            str(user["id"]), machine_id, body.nome or machine_id, body.chave_maquina
+            str(user["id"]), machine_id, nome or machine_id, chave_maquina
         )
     except (agent_devices.SemBanco, computadores.SemBanco) as e:
         raise _erro_sem_banco(e)
@@ -228,6 +246,48 @@ def registrar_dispositivo(body: RegistrarDispositivoBody, request: Request) -> d
         "role": user["role"],
         **_texto_da_situacao(situacao),
     }
+
+
+@router.get("/api/agent/microsoft")
+def bandeja_microsoft_ligada() -> dict:
+    """A bandeja pergunta antes de mostrar o botão. Desligada responde 200, não 404."""
+    return {"ligado": microsoft_entra.configurado()}
+
+
+class RegistrarPelaMicrosoftBody(BaseModel):
+    codigo: str = Field(max_length=128)
+    verificador: str = Field(max_length=128)
+    machine_id: str = Field(max_length=128)
+    nome: Optional[str] = Field(default=None, max_length=128)
+    chave_maquina: Optional[str] = Field(default=None, max_length=256)
+
+
+@router.post("/api/agent/dispositivos/registrar-microsoft")
+def registrar_dispositivo_pela_microsoft(body: RegistrarPelaMicrosoftBody, request: Request) -> dict:
+    """Mesmo resultado de `registrar`, com o código de uso único que a Microsoft
+    liberou no navegador no lugar da senha (que aqui não entra)."""
+    if not microsoft_entra.configurado():
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not taxa.permitir(f"login:{_ip_do_cliente(request)}", 20, 60):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde um minuto.")
+    try:
+        user_id = bandeja_codigo.queimar(body.codigo, body.verificador)
+        linhas = (
+            _sb_do_login().table("users").select("*").eq("id", user_id).limit(1).execute().data
+            if user_id else []
+        )
+    except Exception:  # noqa: BLE001 — banco fora do ar não é código inválido
+        logger.exception("Falha ao conferir o código da bandeja")
+        raise HTTPException(status_code=503, detail="Não foi possível concluir agora. Tente de novo.")
+    if not linhas:
+        raise HTTPException(
+            status_code=401,
+            detail="A entrada pela Microsoft expirou. Clique de novo em Entrar com a Microsoft.",
+        )
+    user = linhas[0]
+    if not auth.conta_ativa(user):
+        raise HTTPException(status_code=403, detail="Esta conta está desativada. Procure um administrador.")
+    return _concluir_registro(user, body.machine_id, body.nome, body.chave_maquina)
 
 
 @router.post("/api/agent/dispositivos/token", status_code=410)

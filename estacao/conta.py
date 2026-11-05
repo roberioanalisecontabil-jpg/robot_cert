@@ -155,11 +155,37 @@ def registrar(sessao, portal: str, email: str, senha: str, machine_id: str, nome
     if chave_maquina:
         corpo["chave_maquina"] = chave_maquina
     r = sessao.post(f"{base}/api/agent/dispositivos/registrar", json=corpo, timeout=30)
+    return _guardar_resposta(r, base, email, machine_id)
+
+
+def _guardar_resposta(r, base: str, email: str, machine_id: str) -> dict[str, Any]:
     if r.status_code != 200:
         raise RuntimeError(_detalhe(r) or f"O portal de certificados recusou o login ({r.status_code}).")
     dados = r.json()
     guardar(dados["segredo"], base, dados.get("email") or email, dados.get("machine_id") or machine_id)
     return {"email": dados.get("email"), "autorizacao": dados.get("autorizacao"), "mensagem": dados.get("mensagem")}
+
+
+def microsoft_ligada(sessao, portal: str) -> bool:
+    """O portal oferece a entrada pela Microsoft? Qualquer falha vale não."""
+    try:
+        base = (portal or PORTAL_PADRAO).strip().rstrip("/")
+        r = sessao.get(f"{base}/api/agent/microsoft", timeout=5)
+        return r.status_code == 200 and bool((r.json() or {}).get("ligado"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def registrar_pela_microsoft(sessao, portal: str, codigo: str, verificador: str, machine_id: str,
+                             nome: str = "", chave_maquina: str | None = None) -> dict[str, Any]:
+    """O código de uso único da Microsoft (com o verificador) vira segredo de dispositivo.
+    Mesmo retorno de `registrar`."""
+    base = (portal or PORTAL_PADRAO).strip().rstrip("/")
+    corpo = {"codigo": codigo, "verificador": verificador, "machine_id": machine_id, "nome": nome or machine_id}
+    if chave_maquina:
+        corpo["chave_maquina"] = chave_maquina
+    r = sessao.post(f"{base}/api/agent/dispositivos/registrar-microsoft", json=corpo, timeout=30)
+    return _guardar_resposta(r, base, "", machine_id)
 
 
 def _get(sessao, rota: str, versao: str) -> dict[str, Any]:
