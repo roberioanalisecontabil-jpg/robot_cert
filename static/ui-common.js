@@ -2172,3 +2172,12 @@ function abrirModal(id) {
     window.location.replace("/");
   } catch (_e) { /* sem storage: a API recusa de qualquer forma */ }
 })();
+
+// Fundo com parallax (05/11/2026): todas as telas que carregam este arquivo,
+// ou seja, todas menos o login. O desenho e o movimento moram em
+// fundo-parallax.js/.css; aqui só o carregamento, depois do resto da página.
+(function carregarFundoParallax() {
+  const s = document.createElement("script");
+  s.src = "/static/fundo-parallax.js?v=fundo-2026-11-05b";
+  document.body.appendChild(s);
+})();

@@ -1,0 +1,87 @@
+/* Fundo com parallax, variante "Montanhas" (05/11/2026).
+   Quatro serras no pé da janela; cada uma com névoa no pé, que é o que dá
+   a profundidade (perspectiva atmosférica). Atrás de tudo (z-index -1 no
+   contexto da raiz) e sem clique. Cartões seguem opacos por cima. */
+.cg-fundo {
+  --fundo-serra-4: rgba(122, 83, 48, .045);
+  --fundo-serra-3: rgba(82, 80, 76, .06);
+  --fundo-serra-2: rgba(61, 59, 56, .075);
+  --fundo-serra-1: rgba(33, 33, 33, .095);
+  --fundo-nevoa: rgba(247, 244, 238, .85);
+  --fundo-astro: transparent; /* sem sol no claro (Roberio, 05/11); a lua do escuro fica */
+  --fundo-ceu: rgba(201, 160, 106, .08);
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  background: linear-gradient(to top, var(--fundo-ceu), transparent 60%);
+  animation: cg-fundo-entra .6s ease-out both;
+}
+html.dark .cg-fundo, :root[data-theme="dark"] .cg-fundo {
+  --fundo-serra-4: rgba(247, 244, 238, .025);
+  --fundo-serra-3: rgba(0, 0, 0, .14);
+  --fundo-serra-2: rgba(0, 0, 0, .24);
+  --fundo-serra-1: rgba(0, 0, 0, .34);
+  --fundo-nevoa: rgba(28, 28, 30, .6);
+  --fundo-astro: rgba(247, 244, 238, .14);
+  --fundo-ceu: rgba(201, 160, 106, .04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cg-fundo {
+    --fundo-serra-4: rgba(247, 244, 238, .025);
+    --fundo-serra-3: rgba(0, 0, 0, .14);
+    --fundo-serra-2: rgba(0, 0, 0, .24);
+    --fundo-serra-1: rgba(0, 0, 0, .34);
+    --fundo-nevoa: rgba(28, 28, 30, .6);
+    --fundo-astro: rgba(247, 244, 238, .14);
+    --fundo-ceu: rgba(201, 160, 106, .04);
+  }
+}
+@keyframes cg-fundo-entra { from { opacity: 0; } }
+
+/* Lua (só no escuro): um disco suave, acima da serra de longe. */
+.cg-fundo__astro {
+  position: absolute;
+  display: block;
+  width: 22vmin;
+  height: 22vmin;
+  right: 5vw;
+  bottom: 28vh;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--fundo-astro) 55%, transparent);
+  will-change: transform;
+}
+
+.cg-fundo__serra {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  will-change: transform;
+}
+.cg-fundo__serra svg { display: block; width: 100%; height: 100%; }
+/* névoa no pé de cada serra: some no que está atrás dela */
+.cg-fundo__serra::after {
+  content: "";
+  position: absolute;
+  inset: 55% 0 0 0;
+  background: linear-gradient(to top, var(--fundo-nevoa), transparent);
+  opacity: .5;
+}
+.cg-fundo__serra--1::after { display: none; }
+.cg-fundo__serra--4 { height: 52vh; }
+.cg-fundo__serra--3 { height: 42vh; }
+.cg-fundo__serra--2 { height: 32vh; }
+.cg-fundo__serra--1 { height: 20vh; }
+.cg-fundo__serra--4 path { fill: var(--fundo-serra-4); }
+.cg-fundo__serra--3 path { fill: var(--fundo-serra-3); }
+.cg-fundo__serra--2 path { fill: var(--fundo-serra-2); }
+.cg-fundo__serra--1 path { fill: var(--fundo-serra-1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cg-fundo { animation: none; }
+  .cg-fundo__serra, .cg-fundo__astro { transform: none !important; }
+}
+@media print { .cg-fundo { display: none; } }
