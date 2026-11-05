@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional, Union
 
 from app import auth
+from app.db_pg import DbError
 from app.microsoft_entra import Identidade, dominio_liberado
 from app.smtp_service import encrypt_password
 
@@ -32,9 +33,12 @@ def _por_email(sb: Any, email: str) -> Optional[Dict[str, Any]]:
     return _um(sb, "email", email) if email else None
 
 
-def _criar(sb: Any, ident: Identidade, email: str) -> Dict[str, Any]:
+def _criar(sb: Any, ident: Identidade, email: str) -> tuple[Dict[str, Any], bool]:
+    """Devolve (conta, criada_aqui). `criada_aqui` é False se outra requisição
+    venceu a corrida: quem avisa os admins só pode ser quem criou de fato."""
     from app.acessorias import _hash_sem_senha
 
+    criada = True
     try:
         sb.table("users").insert({
             "email": email,
@@ -44,11 +48,13 @@ def _criar(sb: Any, ident: Identidade, email: str) -> Dict[str, Any]:
             "origem": "microsoft",
             "password_hash": _hash_sem_senha(),
         }).execute()
-    except Exception:
+    except DbError as e:
+        if e.code != "23505":  # só violação de unicidade; o resto propaga
+            raise
         # Corrida: outra requisição criou a mesma conta entre a busca e o
         # insert (e-mail único). Equivale a ON CONFLICT DO NOTHING: relê.
-        pass
-    return _por_email(sb, email) or {}
+        criada = False
+    return _por_email(sb, email) or {}, criada
 
 
 def resolver_conta(sb: Any, ident: Identidade, refresh: str) -> Union[tuple[Dict[str, Any], bool], Recusa]:
@@ -69,8 +75,9 @@ def resolver_conta(sb: Any, ident: Identidade, refresh: str) -> Union[tuple[Dict
         if user is not None and user.get("microsoft_oid"):
             return Recusa("oid_diferente")
         if user is None:
-            user = _criar(sb, ident, email or upn)
-            criada = True
+            # O e-mail da conta é o que está em domínio liberado: senão a
+            # busca futura por ele não casaria com o UPN.
+            user, criada = _criar(sb, ident, upn if dominio_liberado(upn) else email)
             if not user:
                 return Recusa("ambiguo")
 

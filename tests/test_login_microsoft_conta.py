@@ -5,6 +5,7 @@ from typing import Any, Dict
 import pytest
 
 from app import auth
+from app.db_pg import DbError
 from app.login_microsoft import Recusa, pode_usar_reserva, resolver_conta
 from app.microsoft_entra import Identidade
 from app.smtp_service import decrypt_password
@@ -91,8 +92,7 @@ def test_duas_chamadas_seguidas_criam_uma_conta() -> None:
     assert criada is False and len(sb.tabelas["users"]) == 1
 
 
-def test_insert_que_perde_a_corrida_relê_a_conta_do_outro(monkeypatch: pytest.MonkeyPatch) -> None:
-    sb = _banco()
+def _insert_falha(sb: _Fake, erro: Exception, vencedor: bool) -> None:
     real = sb.table
 
     def table(nome: str):
@@ -101,16 +101,36 @@ def test_insert_que_perde_a_corrida_relê_a_conta_do_outro(monkeypatch: pytest.M
 
         def execute():
             if q._op == "insert":
-                sb.tabelas["users"].append({"id": "vencedor", "email": f"ana@{DOM}", "role": "user", "ativo": True})
-                raise RuntimeError("duplicate key")
+                if vencedor:
+                    sb.tabelas["users"].append({"id": "vencedor", "email": f"ana@{DOM}", "role": "user", "ativo": True})
+                raise erro
             return orig()
 
         q.execute = execute
         return q
 
     sb.table = table  # type: ignore[assignment]
-    user, _ = resolver_conta(sb, _ident(), "rt")
+
+
+def test_insert_que_perde_a_corrida_relê_a_conta_do_outro_e_nao_conta_como_criada() -> None:
+    sb = _banco()
+    _insert_falha(sb, DbError("duplicate key", "23505"), vencedor=True)
+    user, criada = resolver_conta(sb, _ident(), "rt")
     assert user["id"] == "vencedor" and len(sb.tabelas["users"]) == 1
+    assert criada is False
+
+
+def test_erro_do_insert_que_nao_e_duplicidade_propaga() -> None:
+    sb = _banco()
+    _insert_falha(sb, DbError("permission denied", "42501"), vencedor=False)
+    with pytest.raises(DbError):
+        resolver_conta(sb, _ident(), "rt")
+
+
+def test_cria_com_o_upn_quando_so_ele_esta_em_dominio_liberado() -> None:
+    sb = _banco()
+    user, criada = resolver_conta(sb, _ident(email="ana@varejoconectado.com.br"), "rt")
+    assert criada is True and user["email"] == f"ana@{DOM}"
 
 
 def test_refresh_gravado_cifrado() -> None:
