@@ -325,6 +325,75 @@
         .lg-cartao:nth-child(3) { animation-delay: 640ms; }
         /* A senha que aparece no segundo passo entra do mesmo jeito. */
         #grupo-senha:not([hidden]), #view-login > #btn-esqueci:not([hidden]) { animation: lg-sobe 0.4s var(--ease-standard) both; }
+        /* ── Ondas (05/11/2026): clareira aberta em volta do formulário ──
+           A onda cobre a tela inteira menos uma meia-oval em volta do cartão,
+           aberta para cima e para a direita: abraça pela esquerda e por baixo.
+           Quem desenha é o próprio cartão (::before = onda 2, ::after = onda 1)
+           com uma sombra sólida maior que a tela; a forma é medida em relação
+           ao cartão, então acompanha a altura dele (com ou sem o botão da
+           Microsoft). O painel e o rodapé ficam sobre a onda. */
+        body { background-color: #F3EFE7; background-image: none; }
+        /* Sobre a onda o cinza "muted" fica em 3,8:1; o secundário passa de 5:1. */
+        .lg-sobre, .login-rodape { color: var(--text-secondary); }
+        /* overflow-x: clip corta só na horizontal: a forma passa da borda direita
+           sem criar rolagem, e a sombra continua descendo até o rodapé. */
+        .lg-pagina { overflow-x: clip; }
+        .login-card { position: relative; }
+        .login-card::before,
+        .login-card::after {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .login-card::before { box-shadow: 0 0 0 300vmax rgba(201, 167, 131, .20); }
+        .login-card::after { box-shadow: 0 0 0 300vmax rgba(154, 106, 61, .12); }
+        /* O rodapé fica fora da .lg-pagina: sem subir de camada, a sombra passaria por cima do texto. */
+        .lg-rodape { position: relative; z-index: 1; }
+        @media (min-width: 901px) {
+            /* Duas metades: o painel na da esquerda, o cartão no meio da direita (3/4). */
+            .lg-pagina { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; padding: 56px 0; }
+            .lg-info { margin: 0 4rem 0 clamp(20px, 8vw, 128px); }
+            .login-card { justify-self: center; width: calc(100% - 40px); max-width: 420px; }
+            /* Raios em % da própria caixa: a curva da esquerda tem 0,84L x 0,72A
+               (L e A = largura e altura do cartão) e contém o canto do cartão. */
+            .login-card::before {
+                top: -200%; right: -60%; bottom: -22%; left: -34%;
+                border-radius: 0 0 56.7% 43.3% / 0 0 22.4% 22.4%;
+            }
+            .login-card::after {
+                top: -200%; right: -75%; bottom: -34%; left: -48%;
+                border-radius: 0 0 56.1% 43.9% / 0 0 25.1% 25.1%;
+            }
+        }
+        @media (min-width: 901px) and (max-width: 1199px) {
+            /* Metade esquerda estreita: a borda chega mais perto do cartão (0,18L em
+               vez de 0,34L) e desce um pouco mais, para o canto continuar dentro. */
+            .login-card::before {
+                right: -60%; bottom: -30%; left: -18%;
+                border-radius: 0 0 52.8% 47.2% / 0 0 21.8% 21.8%;
+            }
+            .login-card::after {
+                right: -75%; bottom: -38%; left: -28%;
+                border-radius: 0 0 51.7% 48.3% / 0 0 24.9% 24.9%;
+            }
+        }
+        @media (max-width: 900px) {
+            /* Pilha: formulário em cima, painel embaixo. A onda é uma tira na
+               margem esquerda que faz a curva por baixo do cartão e segue até a
+               borda direita; o painel e o rodapé, abaixo, ficam sobre ela.
+               O vão entre cartão e painel cresce de 48 para 60px para a curva
+               (raio 80px) passar inteira antes do painel. */
+            .lg-pagina { gap: 60px; }
+            .login-card::before {
+                top: -100vh; right: -100vw; bottom: -52px; left: -6px;
+                border-bottom-left-radius: 80px;
+            }
+            .login-card::after {
+                top: -100vh; right: -100vw; bottom: -56px; left: -10px;
+                border-bottom-left-radius: 90px;
+            }
+        }
     </style>
 </head>
 <body>
