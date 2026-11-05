@@ -270,6 +270,15 @@ def test_pagina_login_mostra_botao_so_configurado(client: TestClient, monkeypatc
     assert "Entrar com a Microsoft" not in client.get("/login").text
 
 
+def test_login_leva_os_dominios_e_a_reserva_so_configurado(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """E-mail dos domínios vai direto para a Microsoft; o admin tem o botão da senha (05/11/2026)."""
+    html = client.get("/login").text
+    assert f'data-ms-dominios="{DOM}"' in html and 'id="btn-com-senha"' in html
+    monkeypatch.setattr("app.config.PORTAL_BASE_URL", "", raising=False)
+    html = client.get("/login").text
+    assert 'data-ms-dominios=""' in html and 'id="btn-com-senha"' not in html
+
+
 @pytest.mark.parametrize("chave", sorted(rm.MENSAGENS_ERRO))
 def test_erro_ms_mostra_texto_fixo(client: TestClient, chave: str) -> None:
     texto = rm.MENSAGENS_ERRO[chave]

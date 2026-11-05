@@ -172,10 +172,18 @@ def test_templates_so_usam_tokens_que_existem() -> None:
     definidos = set(re.findall(r"(--[a-z0-9-]+)\s*:", css))
     assert definidos, "nenhum token encontrado no style.css"
 
+    # Página que carrega o Águia DS (login desde 05/11/2026) também conta os
+    # tokens dele e os que ela mesma define.
+    aguia = set(re.findall(r"(--[a-z0-9-]+)\s*:", (RAIZ / "static" / "aguia-tokens.css").read_text(encoding="utf-8")))
+
     faltando = {}
     for f in sorted(TEMPLATES.glob("*.html")):
-        usados = set(re.findall(r"var\((--[a-z0-9-]+)", f.read_text(encoding="utf-8")))
-        fora = sorted(usados - definidos)
+        texto = f.read_text(encoding="utf-8")
+        usados = set(re.findall(r"var\((--[a-z0-9-]+)", texto))
+        validos = definidos
+        if "aguia-tokens.css" in texto:
+            validos = definidos | aguia | set(re.findall(r"(--[a-z0-9-]+)\s*:", texto))
+        fora = sorted(usados - validos)
         if fora:
             faltando[f.name] = fora
     assert not faltando, f"tokens usados e nunca definidos: {faltando}"

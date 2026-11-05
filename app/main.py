@@ -501,6 +501,8 @@ def pagina_login(request: Request) -> HTMLResponse:
 
     return templates.TemplateResponse(request=request, name="login.html", context={
         "microsoft": microsoft_entra.configurado(),
+        # E-mail destes domínios vai direto para a Microsoft no primeiro passo.
+        "microsoft_dominios": ",".join(sorted(config.MICROSOFT_DOMINIOS)) if microsoft_entra.configurado() else "",
         # Chave fixa -> texto fixo: o que vem na URL nunca chega à página.
         "erro_ms": _MENSAGENS_ERRO_MS.get(request.query_params.get("erro_ms") or ""),
     })

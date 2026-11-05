@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,212 +10,347 @@
          externa (nem vazar o acesso para um terceiro). -->
     <link rel="stylesheet" href="/static/aguia-fontes.css">
     <link rel="stylesheet" href="/static/style.css?v=menu-2026-10-23">
+    <!-- Águia DS por cima do legado, como nas telas que já adotaram. -->
+    <link rel="stylesheet" href="/static/aguia-tokens.css">
     <style>
+        /* ── Base comum às variantes: controles no padrão do CRM ── */
+        *, *::before, *::after { box-sizing: border-box; }
+        /* O :focus-visible global do style.css usa --accent com !important;
+           aqui ele vira dourado em vez do azul do portal legado. */
+        :root { --accent: var(--gold-600); }
         body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background-color: var(--bg);
-            margin: 0;
-            padding: var(--sp-4);
-        }
-        .login-card {
-            background: var(--surface);
-            padding: var(--sp-8);
-            border-radius: var(--radius-lg);
-            border: 0.5px solid var(--border);
-            box-shadow: var(--shadow-lg);
-            width: 100%;
-            max-width: 400px;
-            transition: transform var(--duration-normal) var(--ease-spring);
-        }
-        .login-header {
-            text-align: center;
-            margin-bottom: var(--sp-6);
-        }
-        .login-logo {
+            /* O style.css faz do body um flex em linha (shell com menu). */
             display: block;
-            width: 80px;
-            height: 80px;
-            margin: 0 auto var(--sp-4);
-            object-fit: contain;
+            margin: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            font-family: var(--font-body);
         }
         .login-header h1 {
-            font-size: var(--fs-section);
-            font-weight: 600;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: var(--text-3xl);
+            line-height: var(--lh-tight);
             letter-spacing: -0.02em;
-            margin-bottom: var(--sp-2);
-            color: var(--text);
+            color: var(--text-primary);
+            margin: 0 0 var(--space-2);
         }
-        .login-header p {
-            color: var(--text-muted);
-            font-size: var(--fs-ui);
+        #subtitulo {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+            line-height: var(--lh-normal);
         }
-        .form-group {
-            margin-bottom: var(--sp-4);
-        }
+        .form-group { margin-bottom: var(--space-4); }
         .form-group label {
             display: block;
-            margin-bottom: var(--sp-2);
+            margin-bottom: var(--space-2);
+            font-family: var(--font-display);
             font-weight: 600;
-            font-size: var(--fs-ui-sm);
-            color: var(--text);
+            font-size: var(--text-sm);
+            color: var(--text-primary);
         }
         .form-group input {
             width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1.5px solid var(--border);
-            border-radius: var(--radius-md);
-            font-size: var(--fs-ui);
-            background-color: var(--bg);
-            color: var(--text);
+            min-height: 48px;
+            padding: 10px 14px;
+            border: var(--bw-1) solid var(--border-default);
+            border-radius: var(--radius-lg);
+            font-family: var(--font-body);
+            font-size: var(--text-base);
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
             outline: none;
-            transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+            transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
         }
-        .form-group input:focus {
-            border-color: var(--border-focus);
-            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
-        }
+        .form-group input::placeholder { color: var(--text-muted); }
+        .form-group input:focus { border-color: var(--border-brand); box-shadow: var(--focus-ring); }
+        .campo-senha input { padding-right: 3rem; }
         .login-btn {
             width: 100%;
-            padding: 0.75rem 1.5rem;
-            background-color: var(--accent-solid);
-            color: white;
-            border: none;
-            border-radius: var(--radius-pill);
-            font-size: var(--fs-ui);
-            font-weight: 600;
+            min-height: 52px;
+            padding: 14px 30px;
+            background-color: var(--gold-500);
+            color: var(--ink-900);
+            border: 1px solid transparent;
+            border-radius: var(--radius-lg);
+            font-family: var(--font-display);
+            font-size: var(--text-base);
+            font-weight: 700;
             cursor: pointer;
-            transition: all var(--duration-fast) var(--ease-out);
+            transition: background-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
         }
-        .login-btn:hover {
-            background-color: var(--accent-hover);
-            opacity: 0.95;
-        }
-        .login-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        .login-btn:hover { background-color: var(--gold-400); box-shadow: var(--shadow-gold); }
+        .login-btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
         #login-error,
         #rec-msg,
         #lc-msg {
-            padding: var(--sp-3);
+            padding: var(--space-3);
             border-radius: var(--radius-md);
-            margin-bottom: var(--sp-4);
-            font-size: var(--fs-ui);
+            margin-bottom: var(--space-4);
+            font-size: var(--text-sm);
             display: none;
             text-align: center;
             font-weight: 500;
         }
         #login-error,
-        .msg-erro {
-            color: var(--expired-text);
-            background-color: var(--expired-bg);
-        }
-        /* Sucesso e erro precisam diferir por mais do que a cor: quem não
-           distingue vermelho de verde leria as duas do mesmo jeito. O texto de
-           cada mensagem já diz o que aconteceu, e o ícone reforça. */
-        .msg-ok {
-            color: var(--ok-text);
-            background-color: var(--ok-bg);
-        }
-
-        /* `.campo-senha` e `.btn-olho` migraram para o style.css global em
-           18/08: a redefinição de senha em /usuarios passou a usá-las, e
-           regra de duas telas dentro do <style> de uma delas é a forma como
-           `esc()` acabou duplicada em seis arquivos. */
-
-        /* Botao da Microsoft: contorno, para o acesso principal (a senha) seguir
-           sendo o botão cheio. */
+        .msg-erro { color: var(--danger-700); background-color: var(--danger-50); }
+        /* Sucesso e erro diferem também pelo texto, não só pela cor. */
+        .msg-ok { color: var(--success-700); background-color: var(--success-50); }
+        /* Microsoft: contorno, como no CRM; a senha segue sendo o botão cheio. */
         .login-ms {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: var(--sp-2);
-            box-sizing: border-box;
+            gap: var(--space-2);
             width: 100%;
-            padding: 0.75rem 1.5rem;
-            margin-bottom: var(--sp-4);
-            border: 1px solid var(--accent-solid);
-            border-radius: var(--radius-pill);
-            color: var(--accent-text);
-            font-size: var(--fs-ui);
-            font-weight: 600;
-            text-align: center;
+            min-height: 44px;
+            padding: 11px 22px;
+            margin-bottom: var(--space-3);
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-lg);
+            color: var(--text-primary);
+            font-family: var(--font-display);
+            font-size: var(--text-sm);
+            font-weight: 700;
             text-decoration: none;
+            transition: background-color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
         }
-        .login-ms:hover { background-color: var(--accent-soft); }
+        .login-ms:hover { background-color: var(--bg-surface-alt); border-color: var(--border-brand); }
+        .login-ou {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin: 0 0 var(--space-3);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+        }
+        .login-ou::before, .login-ou::after { content: ""; flex: 1; height: 1px; background: var(--border-subtle); }
         #ms-erro { display: block; }
         .link-discreto {
             display: block;
             width: 100%;
-            margin-top: var(--sp-4);
-            padding: var(--sp-2);
+            min-height: 44px;
+            margin-top: var(--space-2);
+            padding: var(--space-2);
             background: none;
             border: none;
-            color: var(--accent-text);
-            font-size: var(--fs-ui-sm);
-            font-weight: 500;
+            border-radius: var(--radius-md);
+            color: var(--text-brand);
+            font-family: var(--font-body);
+            font-size: var(--text-sm);
+            font-weight: 600;
             cursor: pointer;
             text-align: center;
         }
         .link-discreto:hover { text-decoration: underline; }
-
+        .login-btn:focus-visible,
+        .login-ms:focus-visible,
+        .link-discreto:focus-visible,
+        .btn-olho:focus-visible,
+        .lembrar input:focus-visible { outline: 2px solid var(--gold-600); outline-offset: 2px; }
         #campo-codigo,
         #lc-codigo {
             text-align: center;
-            font-size: var(--fs-section);
+            font-family: var(--font-mono);
+            font-size: var(--text-xl);
             letter-spacing: 0.5em;
             font-weight: 600;
-            /* O letter-spacing empurra o texto para a direita; o padding
-               compensa para o número parecer centrado de verdade. */
+            /* O letter-spacing empurra o texto para a direita; o padding compensa. */
             padding-left: 0.5em;
         }
         .passo-dica {
-            color: var(--text-muted);
-            font-size: var(--fs-ui-sm);
-            margin: 0 0 var(--sp-4);
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+            margin: 0 0 var(--space-4);
             text-align: center;
-            line-height: 1.5;
+            line-height: var(--lh-normal);
         }
         .lembrar {
             display: flex;
             align-items: center;
-            gap: var(--sp-2);
-            margin: 0 0 var(--sp-4);
-            font-size: var(--fs-ui-sm);
-            color: var(--text-muted);
+            gap: var(--space-2);
+            min-height: 44px;
+            margin: 0 0 var(--space-3);
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
             cursor: pointer;
         }
-        .lembrar input { width: auto; margin: 0; }
+        .lembrar input { width: 18px; height: 18px; margin: 0; accent-color: var(--gold-600); }
+        .login-rodape {
+            margin: var(--space-5) 0 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: var(--text-caption);
+            line-height: var(--lh-normal);
+        }
         [hidden] { display: none !important; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; animation: none !important; }
+        }
+
+        /* ── Base A: V3 com o painel de informações à esquerda ── */
+        body {
+            position: relative;
+            overflow-x: hidden;
+            background-image:
+                radial-gradient(40% 55% at 0% 40%, var(--color-gold-glow), transparent 70%),
+                radial-gradient(35% 35% at 100% 100%, rgba(61, 59, 56, 0.06), transparent 70%);
+            background-attachment: fixed;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--grad-gold);
+            z-index: 1;
+        }
+        /* Coluna: a página ocupa a altura e o rodapé fica embaixo, centrado. */
+        body { display: flex; flex-direction: column; }
+        .lg-pagina {
+            position: relative;
+            isolation: isolate;
+            flex: 1 0 auto;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+            align-items: center;
+            gap: 4rem;
+            padding: 56px clamp(20px, 8vw, 128px);
+        }
+        .login-card { width: 100%; }
+        .login-header { margin-bottom: var(--space-8); }
+        .login-logo { display: block; width: 48px; height: 48px; margin-bottom: var(--space-6); object-fit: contain; }
+        .login-header h1 { font-size: var(--text-5xl); line-height: 1.02; }
+        /* Cor chapada: o degradê claro não chega a 3:1 sobre o creme. */
+        .login-header h1 span { display: block; color: var(--text-brand); }
+        #subtitulo { font-size: var(--text-base); margin-top: var(--space-3); }
+        .lg-rodape { padding: 0 20px 24px; }
+        .lg-rodape .login-rodape { margin: 0; text-align: center; }
+        /* Informações: à esquerda só na tela; no DOM o formulário vem antes. */
+        .lg-info { order: -1; max-width: 600px; }
+        .lg-titulo {
+            margin: 0;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: var(--text-5xl);
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+        .lg-acento { color: var(--text-brand); }
+        .lg-lead {
+            margin: var(--space-4) 0 0;
+            max-width: 44ch;
+            color: var(--text-secondary);
+            font-size: var(--text-lg);
+            line-height: var(--lh-normal);
+        }
+        .lg-sobre {
+            margin: var(--space-10) 0 var(--space-3);
+            font-size: var(--text-overline);
+            font-weight: 600;
+            letter-spacing: var(--tracking-caps);
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .lg-cartoes {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .lg-cartao {
+            position: relative;
+            overflow: hidden;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-sm);
+            padding: 18px;
+        }
+        .lg-icone {
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-md);
+            background: var(--gold-100);
+            color: var(--gold-700);
+        }
+        .lg-cartao h2 {
+            margin: var(--space-3) 0 6px;
+            font-family: var(--font-display);
+            font-size: var(--text-sm);
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .lg-cartao p { margin: 0; font-size: var(--text-xs); line-height: 1.45; color: var(--text-secondary); }
+        @media (max-width: 1100px) {
+            .lg-cartoes { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 900px) {
+            .lg-pagina { grid-template-columns: minmax(0, 1fr); padding: 40px 20px; gap: 48px; align-items: start; }
+            .lg-info { order: 0; max-width: 420px; margin: 0 auto; width: 100%; }
+            .login-card { max-width: 420px; margin: 0 auto; }
+            .login-header h1 { font-size: var(--text-4xl); }
+            .lg-titulo { font-size: var(--text-3xl); }
+            .lg-lead { font-size: var(--text-base); }
+        }
+
+        /* ── A1: cascata — cada bloco sobe e aparece em sequência ── */
+        @keyframes lg-sobe { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+        .lg-titulo, .lg-lead, .lg-sobre, .lg-cartao,
+        .login-header > *, #view-login > * { animation: lg-sobe 0.6s var(--ease-standard) both; }
+        .login-header > :nth-child(2) { animation-delay: 80ms; }
+        .login-header > :nth-child(3) { animation-delay: 160ms; }
+        #view-login > :nth-child(1) { animation-delay: 220ms; }
+        #view-login > :nth-child(2) { animation-delay: 280ms; }
+        #view-login > :nth-child(3) { animation-delay: 340ms; }
+        #view-login > :nth-child(4) { animation-delay: 400ms; }
+        #view-login > :nth-child(5) { animation-delay: 460ms; }
+        .lg-titulo { animation-delay: 120ms; }
+        .lg-lead { animation-delay: 240ms; }
+        .lg-sobre { animation-delay: 360ms; }
+        .lg-cartao:nth-child(1) { animation-delay: 440ms; }
+        .lg-cartao:nth-child(2) { animation-delay: 540ms; }
+        .lg-cartao:nth-child(3) { animation-delay: 640ms; }
+        /* A senha que aparece no segundo passo entra do mesmo jeito. */
+        #grupo-senha:not([hidden]), #view-login > #btn-esqueci:not([hidden]) { animation: lg-sobe 0.4s var(--ease-standard) both; }
     </style>
 </head>
 <body>
-    <main class="login-container" id="main-content" style="width: 100%; display: flex; justify-content: center; align-items: center;">
+    <main class="lg-pagina" id="main-content">
     <div class="login-card">
         <div class="login-header">
-            <img src="/static/logo.png?v=brand-gold-v1" alt="CertGuard Análise" class="login-logo" width="80" height="80">
-            <h1>CertGuard Análise</h1>
+            <img src="/static/logo.png?v=brand-gold-v1" alt="CertGuard Análise" class="login-logo" width="48" height="48">
+            <h1>CertGuard <span>Análise</span></h1>
             <p id="subtitulo">Faça login para acessar o monitor</p>
         </div>
 
         <!-- ── Entrar ────────────────────────────────────────────────── -->
         <section id="view-login">
             {% if erro_ms %}<div id="ms-erro" class="msg-erro" role="alert" style="padding: var(--sp-3); border-radius: var(--radius-md); margin-bottom: var(--sp-4); text-align: center; font-weight: 500;">{{ erro_ms }}</div>{% endif %}
-            {% if microsoft %}<a class="login-ms" href="/entrar/microsoft"><svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true" focusable="false"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg><span>Entrar com a Microsoft</span></a>{% endif %}
+            {% if microsoft %}<a class="login-ms" href="/entrar/microsoft"><svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true" focusable="false"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg><span>Entrar com a Microsoft</span></a><div class="login-ou" aria-hidden="true">ou</div>{% endif %}
             <div id="login-error" role="alert" aria-live="assertive">E-mail ou senha incorretos.</div>
 
-            <form id="login-form">
+            <form id="login-form" data-ms-dominios="{{ microsoft_dominios }}">
                 <div class="form-group">
                     <label for="email">E-mail</label>
                     <input type="email" id="email" required autocomplete="username" placeholder="exemplo@email.com">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="grupo-senha" hidden>
                     <label for="password">Senha</label>
                     <div class="campo-senha">
-                        <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+                        <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
                         <button type="button" class="btn-olho" id="btn-olho"
                                 aria-controls="password" aria-pressed="false"
                                 aria-label="Mostrar senha">👁</button>
@@ -224,7 +359,8 @@
                 <button type="submit" class="login-btn" id="btn-entrar">Acessar o painel</button>
             </form>
 
-            <button type="button" class="link-discreto" id="btn-esqueci">Esqueci minha senha</button>
+            <button type="button" class="link-discreto" id="btn-esqueci" hidden>Esqueci minha senha</button>
+            {% if microsoft %}<button type="button" class="link-discreto" id="btn-com-senha">Administrador: entrar com senha</button>{% endif %}
         </section>
 
         <!-- ── Segundo passo do login (10/10/2026) ───────────────────── -->
@@ -294,7 +430,20 @@
             <button type="button" class="link-discreto" id="btn-voltar">Voltar para o login</button>
         </section>
     </div>
+    <section class="lg-info" aria-label="Sobre o portal">
+        <p class="lg-titulo">Certificados digitais<br> <span class="lg-acento">sob controle</span></p>
+        <p class="lg-lead">Vencimentos, cofre de arquivos e entregas de todos os clientes em um único lugar.</p>
+        <p class="lg-sobre">O que você encontra no portal</p>
+        <ul class="lg-cartoes">
+                <li class="lg-cartao"><span class="lg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h2>Vencimentos</h2><p>Aviso antes de cada certificado expirar.</p></li>
+                <li class="lg-cartao"><span class="lg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><h2>Cofre de PFX</h2><p>Arquivos e senhas guardados cifrados.</p></li>
+                <li class="lg-cartao"><span class="lg-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></span><h2>Entregas</h2><p>Quem pediu, quem recebeu e quando.</p></li>
+        </ul>
+    </section>
     </main>
+    <footer class="lg-rodape">
+    <p class="login-rodape">Não consegue entrar? Procure o TI.<br>© Análise Group — uso interno restrito</p>
+    </footer>
 
     <script nonce="{{ request.state.nonce }}">
         // Onde o JWT morava até a Leva D (09/10/2026); só para apagar o de antes.
@@ -385,8 +534,33 @@
         ligarOlho('btn-olho-nova', 'nova-senha');
 
         // ── Entrar ─────────────────────────────────────────────────────
+        let senhaReserva = false;
+        if ($('btn-com-senha')) $('btn-com-senha').addEventListener('click', () => {
+            senhaReserva = true;
+            $('btn-com-senha').hidden = true;
+            $('grupo-senha').hidden = false;
+            $('btn-esqueci').hidden = false;
+            $('password').required = true;
+            ($('email').value ? $('password') : $('email')).focus();
+        });
         $('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            // Primeiro passo: o navegador já validou o e-mail; só abre a senha.
+            if ($('grupo-senha').hidden) {
+                // Quatro domínios entram no site só pela Microsoft: vai direto,
+                // salvo a porta reserva dos administradores (botão abaixo).
+                const dominio = $('email').value.trim().toLowerCase().split('@')[1] || '';
+                const dominiosMs = ($('login-form').dataset.msDominios || '').split(',').filter(Boolean);
+                if (!senhaReserva && dominiosMs.includes(dominio)) {
+                    window.location.href = '/entrar/microsoft';
+                    return;
+                }
+                $('grupo-senha').hidden = false;
+                $('btn-esqueci').hidden = false;
+                $('password').required = true;
+                $('password').focus();
+                return;
+            }
             // Normalizado aqui também: o servidor compara em minúsculas desde
             // 17/08, e guardar "Ana@X.com" no localStorage faria a tela e a
             // sessão discordarem sobre quem está logado.
