@@ -47,7 +47,7 @@ def _ligado() -> None:
         raise HTTPException(status_code=404, detail="Not Found")
 
 
-def _volta(erro: Optional[str], request: Request) -> RedirectResponse:
+def _volta(erro: Optional[str], request: Request, user: Optional[dict] = None) -> RedirectResponse:
     if erro:
         r: Response = RedirectResponse("/login?erro_ms=" + erro, status_code=302)
     else:
@@ -58,6 +58,10 @@ def _volta(erro: Optional[str], request: Request) -> RedirectResponse:
         # site, e o cookie vai. A CSP não restringe meta refresh.
         r = HTMLResponse(
             '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+            # Grava papel e e-mail no navegador, como o login por senha faz.
+            '<script src="/static/entrou-microsoft.js" data-role="'
+            + html.escape(str((user or {}).get("role") or ""))
+            + '" data-email="' + html.escape(str((user or {}).get("email") or "")) + '"></script>'
             '<meta http-equiv="refresh" content="0;url=/"><title>Entrando</title></head>'
             '<body><p><a href="/">Continuar</a></p></body></html>',
             headers={"Cache-Control": "no-store"},  # grava cg_sessao
@@ -161,7 +165,7 @@ def retorno_da_microsoft(request: Request, background: BackgroundTasks) -> Respo
         return _volta("desativada" if desativada else "recusada", request)
 
     user, criada = resultado
-    r = _volta(None, request)
+    r = _volta(None, request, user)
     _abrir_sessao(user, request, r, ip, "microsoft")
     if criada:
         atividade.registrar(

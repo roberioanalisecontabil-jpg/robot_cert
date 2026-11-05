@@ -76,7 +76,10 @@ def _entra_direto(r: Any) -> None:
     """Sucesso é 200 com meta refresh (não 302): ver `_volta` em rotas/microsoft.py."""
     assert r.status_code == 200 and "location" not in r.headers
     assert '<meta http-equiv="refresh" content="0;url=/">' in r.text and 'href="/"' in r.text
-    assert "<script" not in r.text
+    # Papel e e-mail vão para o localStorage, como no login por senha: sem eles
+    # o menu trata o admin como operador (05/11/2026).
+    assert '<script src="/static/entrou-microsoft.js" data-role="' in r.text
+    assert r.text.index("entrou-microsoft.js") < r.text.index('http-equiv="refresh"')
     assert r.headers.get("cache-control") == "no-store", "a página que grava cg_sessao não vai para cache"
     cabs = " ".join(r.headers.get_list("set-cookie"))
     assert "cg_sessao=" in cabs and "cg_csrf=" in cabs and "cg_ms=" in cabs
@@ -118,6 +121,8 @@ def test_retorno_abre_sessao_e_audita_metodo_microsoft(client: TestClient, banco
     ev = [a for a in _atividades(banco) if a["evento"] == "login"]
     assert ev and ev[0]["contexto"]["metodo"] == "microsoft"
     assert banco.tabelas["users"][0]["microsoft_oid"] == "oid-1"
+    conta = banco.tabelas["users"][0]
+    assert f'data-role="{conta["role"]}" data-email="{conta["email"]}"' in r.text
 
 
 def test_retorno_sem_codigo_pedido_mesmo_se_LOGIN_EXIGE_CODIGO(
