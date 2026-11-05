@@ -21,44 +21,66 @@ aplicativo existir no Entra.
 
 A ordem importa. Cada passo tem o seu detalhe adiante.
 
-1. **Ensaiar a migration numa cópia do banco** (passo 1). Antes de qualquer
-   coisa no servidor.
+1. **Antes de tudo (opcional, recomendado):** ensaiar a migration numa cópia do
+   banco e rodar a conferência 6a em produção (passo 1).
 2. **Cadastrar o aplicativo no Entra** (passo 2) e **os administradores
    cadastrarem o app autenticador** (passo 3).
-3. **Código no servidor**: `atualizar-portal.ps1` (passo 4).
-4. **Migration** no psql do ANALISESRV (passo 5).
-5. **Variáveis** no serviço (passo 6), com `MICROSOFT_CONFERENCIA=simular`.
-6. **Reiniciar** o serviço (passo 7) e conferir.
-7. **Aceite** em simulação (passo 8).
-8. **Avisar as pessoas** dos quatro domínios (passo 9).
-9. **Virar para `aplicar`** (passos 10 e 11).
+3. **Push + `atualizar-portal.ps1`** no ANALISESRV (passo 4). O código e a
+   migration vão **juntos**: ninguém roda o `.sql` à mão.
+4. **Variáveis** no serviço (passo 5), com `MICROSOFT_CONFERENCIA=simular`.
+5. **Reiniciar** o serviço (passo 6) e conferir.
+6. **Aceite** em simulação (passo 7).
+7. **Avisar as pessoas** dos quatro domínios (passo 8).
+8. **Virar para `aplicar`** (passos 9 e 10).
 
-Os passos 8 e 9 podem andar juntos. O aviso deve sair antes da virada.
+Os passos 7 e 8 podem andar juntos. O aviso deve sair antes da virada.
 
-## 1. Ensaiar a migration numa cópia
+## 1. Antes do deploy: ensaio e conferência
 
 Arquivo: `supabase/migrations/20261105100000_login_microsoft.sql`. Ela é
-aditiva (colunas novas, nulas ou com valor padrão), e o código de hoje não
-conhece nenhuma delas. Mesmo assim, ela troca duas restrições (`users_origem_valida`
-e `user_activity_evento_valido`), e uma restrição que não aceita o que já está
-gravado falha no servidor, não na cópia errada.
+aditiva (colunas novas, nulas ou com valor padrão) e idempotente, mas troca duas
+restrições (`users_origem_valida` e `user_activity_evento_valido`). Se o banco
+tiver dado que a restrição nova não aceita, o `ADD CONSTRAINT` falha.
 
-Na máquina de desenvolvimento ou numa cópia do banco do ANALISESRV (`pg_dump`
-do banco de produção, restaurado num banco de teste):
+**A migration não é aplicada à mão.** Quem a aplica é o `atualizar-portal.ps1`
+(passo 4), por meio do `db/aplicar_schema.py`: cada arquivo novo roda numa
+transação própria, com o dono certo do banco, e fica registrado em
+`public.schema_migrations`. Se um arquivo falha, a transação desfaz e o deploy
+**aborta sem reiniciar o serviço**. Rodar o `.sql` à mão como `postgres` deixa
+tabelas com dono e permissões errados e não o registra, e o deploy o rodaria de
+novo.
 
-1. Rodar a migration **duas vezes seguidas**. A segunda tem de terminar sem
-   erro (ela é idempotente).
-2. No passo **6a** (o `SELECT evento, count(*) ...`), o resultado tem de ser
-   **nenhuma linha**. Se aparecer alguma, algum evento já gravado não está na
-   lista nova e o `ADD CONSTRAINT` do 6b falharia. Na cópia isso mostra o
-   problema sem custo. No servidor, pare e avise o desenvolvimento.
-3. Rodar os três `SELECT` da seção "Conferência" no fim do arquivo: 5 colunas
-   em `users`, o índice `users_microsoft_oid_unico`, e as duas restrições com
-   os valores novos (`microsoft` em `users_origem_valida`).
+### 1a. Conferência 6a, em produção (somente leitura)
 
-**Estado em 04/11/2026: o ensaio ainda não foi feito.** A máquina de
-desenvolvimento não tinha Postgres funcionando. Não aplique no servidor antes
-de ele ser feito.
+É o `SELECT` do passo 6a do arquivo. Pode ser rodado a qualquer hora, sem
+alterar nada:
+
+```sql
+SELECT evento, count(*) FROM public.user_activity
+ WHERE evento NOT IN ('login', 'login_negado', 'senha_redefinida', 'conta_criada_microsoft',
+                      'desativada_microsoft', 'microsoft_desligada')
+ GROUP BY evento;
+```
+
+Tem de voltar **nenhuma linha**. Se voltar alguma, o `ADD CONSTRAINT` falharia, o
+deploy abortaria sem reiniciar o serviço: **avise o desenvolvimento antes de
+seguir**.
+
+### 1b. Ensaio numa cópia (opcional)
+
+**Estado em 04/11/2026: a migration ainda não foi ensaiada** (a máquina de
+desenvolvimento não tinha Postgres funcionando). Recomenda-se fazer.
+
+1. Quem tem o papel `postgres` cria a cópia (o banco precisa estar sem outras
+   conexões durante a cópia):
+   `CREATE DATABASE certguard_ensaio TEMPLATE <banco de produção>;`
+   (`<banco de produção>` é o nome do banco no `DATABASE_URL` do servidor).
+2. No servidor, na pasta do portal, apontar o script para a cópia e rodar **duas
+   vezes** (a DSN vai como argumento, ou em `DATABASE_URL`):
+   `.venv\Scripts\python.exe db\aplicar_schema.py <DSN da cópia>`
+3. A primeira aplica a migration. A **segunda** tem de dizer que aplicou **0** e
+   terminar sem erro.
+4. Apagar a cópia: `DROP DATABASE certguard_ensaio;`
 
 ## 2. Aplicativo no Entra
 
@@ -111,53 +133,35 @@ A porta reserva também só vale para o administrador que **já entrou pela
 Microsoft ao menos uma vez**. Por isso, na primeira entrada de cada
 administrador pelo botão, o app autenticador deve estar cadastrado antes.
 
-## 4. Código: atualizar-portal.ps1
+## 4. Push e atualizar-portal.ps1 (código e migration juntos)
 
-Ramo `feat/login-microsoft` revisado e mesclado, depois o `atualizar-portal.ps1`
-no ANALISESRV, como em qualquer atualização do portal.
+Ramo `feat/login-microsoft` revisado e mesclado, push, e então o
+`atualizar-portal.ps1` no ANALISESRV, como em qualquer atualização do portal.
+Ele traz o código e aplica a migration (por `db/aplicar_schema.py`). Se a
+migration falhar, o deploy aborta sem reiniciar o serviço e o portal segue como
+estava.
 
-Neste ponto nada muda para ninguém: sem as variáveis o botão não aparece. **Não teste o botão** antes da migration (passo 5): o código novo lê colunas
-que ainda não existem.
+Neste ponto nada muda para ninguém: sem as variáveis o botão não aparece. Ao
+fim, conferir na saída do script que a migration
+`20261105100000_login_microsoft.sql` foi aplicada.
 
-## 5. Migration no ANALISESRV
+## 5. Variáveis no ambiente do serviço
 
-Só o Robério aplica. No psql do servidor (porta 5433; fora do PATH, usar o
-caminho completo do `psql.exe`), **em passos**, colando o arquivo em blocos:
+No ANALISESRV, no serviço `AnaliseCertiDigital` (nome do GUIA_MIGRACAO; confirme
+com `nssm status AnaliseCertiDigital`). As variáveis ficam no ambiente do
+serviço (NSSM), não no repositório.
 
-1. Colunas, índice e comentário (seções 1 a 4 do arquivo).
-2. Origem `microsoft` (seção 5).
-3. Eventos de atividade: **6a primeiro**. Tem de voltar **sem linhas**. Se
-   voltar alguma, pare e não rode o 6b. Só então o **6b**.
-4. Os `SELECT` da seção "Conferência". Conferir: 5 colunas em `users`; o
-   índice `users_microsoft_oid_unico`; `users_origem_valida` com `microsoft`;
-   `user_activity_evento_valido` com `conta_criada_microsoft`,
-   `desativada_microsoft` e `microsoft_desligada`.
-
-O cabeçalho do arquivo diz que o `atualizacao_push.ps1` aplica as migrations.
-Vale para o fluxo antigo; para esta, o combinado é o psql, em passos, depois
-do ensaio (passo 1).
-
-## 6. Variáveis no ambiente do serviço
-
-No ANALISESRV, no serviço `AnaliseCertiDigital` (NSSM). Em PowerShell como
-administrador, **uma linha de cada vez**. O `+` acrescenta ao ambiente que já
-existe; sem ele o NSSM **troca tudo** e o portal perde as outras variáveis.
-
-```powershell
-nssm get AnaliseCertiDigital AppEnvironmentExtra     # ver o que já existe (e se PORTAL_BASE_URL já está lá)
-nssm set AnaliseCertiDigital AppEnvironmentExtra +MICROSOFT_TENANT_ID=<ID do diretório, o GUID>
-nssm set AnaliseCertiDigital AppEnvironmentExtra +MICROSOFT_CLIENT_ID=<ID do aplicativo>
-nssm set AnaliseCertiDigital AppEnvironmentExtra +MICROSOFT_CLIENT_SECRET=<Valor do segredo>
-nssm set AnaliseCertiDigital AppEnvironmentExtra +MICROSOFT_DOMINIOS=analisegroup.cnt.br,analisecontabil.cnt.br,ndevolution.com.br,analisegestao.com.br
-nssm set AnaliseCertiDigital AppEnvironmentExtra +MICROSOFT_CONFERENCIA=simular
-nssm get AnaliseCertiDigital AppEnvironmentExtra     # conferir
-```
+1. Ver o que já existe (e se `PORTAL_BASE_URL` já está lá):
+   `nssm get AnaliseCertiDigital AppEnvironmentExtra`
+2. Abrir o editor: `nssm edit AnaliseCertiDigital` (PowerShell como
+   administrador), aba **Environment**. Acrescentar **uma linha por variável**,
+   sem apagar as que já estão, e clicar em **Edit service**.
+3. Conferir de novo com `nssm get AnaliseCertiDigital AppEnvironmentExtra`.
 
 `PORTAL_BASE_URL=https://certificado.analisegroup.cnt.br` (sem barra no fim).
-O convite do Acessórias já usava essa variável: veja na saída do primeiro
-`nssm get` se ela existe. Se existe com esse valor, não acrescente de novo; se
-tem outro valor, **pare e avise o desenvolvimento**, porque o retorno da
-Microsoft é montado a partir dela.
+O convite do Acessórias já usava essa variável. Se ela existe com esse valor,
+não repita; se tem outro valor, **pare e avise o desenvolvimento**, porque o
+retorno da Microsoft é montado a partir dela.
 
 | Variável | Valor |
 |---|---|
@@ -176,7 +180,7 @@ variável, é `simular`.
 O segredo fica no ambiente do serviço, nunca no repositório nem no `.env`
 versionado.
 
-## 7. Reiniciar e conferir
+## 6. Reiniciar e conferir
 
 ```powershell
 nssm restart AnaliseCertiDigital
@@ -192,7 +196,7 @@ nssm restart AnaliseCertiDigital
 A conferência de 5 minutos usa uma trava no Postgres por rodada, então é segura
 com 1 ou 2 processos (workers) do uvicorn. Nada a fazer.
 
-## 8. Testes de aceite, ainda em simulação
+## 7. Testes de aceite, ainda em simulação
 
 Com uma **conta de teste** que tenha entrado pelo botão uma vez:
 
@@ -208,13 +212,13 @@ Com uma **conta de teste** que tenha entrado pelo botão uma vez:
    entrar pela Microsoft de novo. Trocar a senha do Outlook jamais pode
    desativar alguém.
 3. Registrar o resultado. Só com os dois resultados certos siga para o
-   passo 10.
+   passo 9.
 
 O limite de segurança vale também em simulação: com mais de 5 contas
 bloqueadas numa rodada, ou com erro do próprio aplicativo (segredo vencido,
 ID errado), o serviço não simula nem desativa nada e avisa o TI.
 
-## 9. Avisar as pessoas
+## 8. Avisar as pessoas
 
 Antes da virada, avisar quem tem conta nos quatro domínios (por e-mail ou
 pelo canal da empresa):
@@ -230,22 +234,19 @@ pelo canal da empresa):
   Operador, sem departamento, sem carteira. Os administradores recebem aviso e
   configuram.
 
-## 10. Virar para `aplicar`
+## 9. Virar para `aplicar`
 
-Só depois do aceite do passo 8 e do aviso do passo 9:
-
-O NSSM não troca uma variável isolada. O jeito simples: ler a lista com
-`nssm get AnaliseCertiDigital AppEnvironmentExtra`, remover a linha
-`MICROSOFT_CONFERENCIA=simular` e regravar tudo com o `nssm set ...
-AppEnvironmentExtra "linha1" "linha2" ...`, com `MICROSOFT_CONFERENCIA=aplicar`
-no lugar. Ou, pela interface: `nssm edit AnaliseCertiDigital`, aba
-**Environment**, trocar a linha. Depois:
+Só depois do aceite do passo 7 e do aviso do passo 8: `nssm edit
+AnaliseCertiDigital`, aba **Environment**, trocar a linha
+`MICROSOFT_CONFERENCIA=simular` por `MICROSOFT_CONFERENCIA=aplicar`, **Edit
+service**, e conferir com `nssm get AnaliseCertiDigital AppEnvironmentExtra`.
+Depois:
 
 ```powershell
 nssm restart AnaliseCertiDigital
 ```
 
-## 11. Aceite depois de `aplicar`
+## 10. Aceite depois de `aplicar`
 
 1. **Administrador** entra pelo botão da Microsoft.
 2. **Operador de um dos quatro domínios**, com e-mail e senha, recebe "Entre
@@ -287,7 +288,7 @@ e sem desafio da Cloudflare.
 
 ## Caminho de volta
 
-Apagar as variáveis `MICROSOFT_*` (ou só `MICROSOFT_CLIENT_SECRET`) e
+Apagar as variáveis `MICROSOFT_*` (`nssm edit`, aba Environment; ou só `MICROSOFT_CLIENT_SECRET`) e
 reiniciar:
 
 ```powershell
