@@ -356,7 +356,7 @@
                                 aria-label="Mostrar senha">👁</button>
                     </div>
                 </div>
-                <button type="submit" class="login-btn" id="btn-entrar">Acessar o painel</button>
+                <button type="submit" class="login-btn" id="btn-entrar">Continuar</button>
             </form>
 
             <button type="button" class="link-discreto" id="btn-esqueci" hidden>Esqueci minha senha</button>
@@ -535,13 +535,18 @@
 
         // ── Entrar ─────────────────────────────────────────────────────
         let senhaReserva = false;
-        if ($('btn-com-senha')) $('btn-com-senha').addEventListener('click', () => {
-            senhaReserva = true;
-            $('btn-com-senha').hidden = true;
+        // Segundo passo do e-mail: abre a senha e o botão passa a entrar.
+        function mostrarSenha() {
             $('grupo-senha').hidden = false;
             $('btn-esqueci').hidden = false;
             $('password').required = true;
+            $('btn-entrar').textContent = 'Acessar o painel';
+            if ($('btn-com-senha')) $('btn-com-senha').hidden = true;
             ($('email').value ? $('password') : $('email')).focus();
+        }
+        if ($('btn-com-senha')) $('btn-com-senha').addEventListener('click', () => {
+            senhaReserva = true;
+            mostrarSenha();
         });
         $('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -555,10 +560,7 @@
                     window.location.href = '/entrar/microsoft';
                     return;
                 }
-                $('grupo-senha').hidden = false;
-                $('btn-esqueci').hidden = false;
-                $('password').required = true;
-                $('password').focus();
+                mostrarSenha();
                 return;
             }
             // Normalizado aqui também: o servidor compara em minúsculas desde
@@ -842,6 +844,10 @@
                     // A mensagem vai para a caixa da tela de login, que é a que
                     // fica visível depois de `trocarView(false)`.
                     trocarView(false);
+                    // Acabou de definir a senha: volta já no passo da senha.
+                    $('email').value = $('rec-email').value;
+                    senhaReserva = true;
+                    mostrarSenha();
                     const el = document.getElementById("login-error");
                     if (el) { el.textContent = 'Senha alterada. Entre com a nova senha.'; el.style.display = 'block'; }
                 }
