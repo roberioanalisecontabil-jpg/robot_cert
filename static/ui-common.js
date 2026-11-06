@@ -15,7 +15,9 @@ const KEY_STORAGE = "cert_robot_api_key";
 const FONT_STORAGE = "cert_robot_data_fonte";
 // Formato: {email, modulos}. Ver `initSidebarPorPapel` para o porque do e-mail.
 const MENU_CACHE_STORAGE = "cg_menu_modulos";
-const SIDEBAR_COLLAPSED_STORAGE = "analise_certidigital_sidebar_collapsed";
+// _v2 (06/11/2026): a escolha antiga é ignorada uma vez, para todo mundo ver
+// o menu em ícones abaixo de 1600px (spec 2026-11-06-fluidez-design.md).
+const SIDEBAR_COLLAPSED_STORAGE = "analise_certidigital_sidebar_collapsed_v2";
 
 // A fonte dos dados é sempre "auto" (decisão L3, 01/10/2026): o seletor da
 // Configuração valia só para o navegador do administrador, e "local" era o
@@ -211,7 +213,10 @@ async function health() {
 
 function applySidebarState() {
   if (window.innerWidth > 768) {
-    const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE) === "1";
+    let salvo = null;
+    try { salvo = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE); } catch (e) { /* sem armazenamento: vale a largura */ }
+    // Sem escolha da pessoa, o notebook (< 1600px úteis) começa só com ícones.
+    const collapsed = salvo === null ? window.innerWidth < 1600 : salvo === "1";
     document.body.classList.toggle("sidebar-collapsed", collapsed);
   }
 }
@@ -231,7 +236,7 @@ function toggleSidebar() {
     }
   } else {
     const collapsed = document.body.classList.toggle("sidebar-collapsed");
-    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE, collapsed ? "1" : "0");
+    try { localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE, collapsed ? "1" : "0"); } catch (e) { /* só não lembra */ }
   }
 }
 
