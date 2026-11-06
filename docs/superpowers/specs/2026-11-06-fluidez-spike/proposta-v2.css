@@ -1,0 +1,147 @@
+/* Proposta de layout fluido (spike, 05/11/2026). Carregada DEPOIS dos CSS do
+   portal; nao muda cor, borda, raio nem sombra do Aguia DS. As curvas clamp()
+   foram calculadas para dar ~o valor de hoje em 1920px e encolher ate 1536px:
+   inclinacao = (valor1920 - valor1536) / 384px. */
+
+:root {
+  /* Respiro do main: 24px hoje -> ~16px em 1536, ~22px em 1920 */
+  --pp-pad: clamp(.75rem, 1.6vw - .5rem, 1.5rem);
+  /* Distancia entre blocos da pagina: 16px hoje -> ~12px em 1536 */
+  --pp-gap: clamp(.625rem, 1.04vw - .25rem, 1rem);
+  /* Menu: 250px em 1920, 212px (piso) em 1536 */
+  --pp-menu: clamp(212px, 13.02vw, 250px);
+}
+
+/* 1. Menu mais estreito em tela de notebook (o recolhido e o celular seguem
+      como hoje: body.sidebar-collapsed tem especificidade maior). */
+@media (min-width: 901px) {
+  .sidebar { width: var(--pp-menu); }
+  .main-content { margin-left: var(--pp-menu); }
+  .sidebar-header { padding-inline: .875rem; }
+  .sidebar-nav { padding-inline: .5rem; }
+  .sidebar-nav a { padding-inline: .75rem; gap: .625rem; }
+  /* marca numa linha so, mesmo com o menu a 212px */
+  .brand-text h2 { font-size: clamp(.9375rem, .52vw + 7px, 1.125rem); white-space: nowrap; }
+  .brand-text span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* 2. Respiro fluido e sino/tema na linha do titulo (sem fila propria). */
+.main-content {
+  padding: var(--pp-pad);
+  position: relative;
+}
+.cg-painel > * + * { margin-top: var(--pp-gap); }
+.main-content > .topbar-actions {
+  position: absolute;
+  top: var(--pp-pad);
+  /* acompanha a borda direita da coluna de 1440px centrada */
+  right: max(var(--pp-pad), calc((100% - 1440px) / 2));
+  margin: 0;
+  max-width: none;
+}
+/* o cabecalho reserva o lugar do sino e do tema (2 botoes de 44px + gap) */
+.main-content > .ag-page__head { padding-right: 7.5rem; margin-top: 0; margin-bottom: var(--pp-gap); }
+.main-content > .topbar-actions + * { margin-top: 0; }
+.ag-page__title { font-size: clamp(1.375rem, 1.5625vw + 2px, 2rem); margin-bottom: .25rem; }
+.ag-page__lead { max-width: 90ch; }
+
+/* 3. KPI compacto: numero ao lado do texto, metade da altura, mesmas cores. */
+.ag-kpi-row { gap: var(--pp-gap); }
+.ag-kpi { padding: clamp(.75rem, 1.04vw, 1.25rem) clamp(.875rem, 1.3vw, 1.5rem); }
+.cg-kpi { align-items: center; }
+.cg-kpi .cg-kpi__texto {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: .75rem;
+  align-items: baseline;
+}
+.cg-kpi .ag-kpi__label { grid-column: 1 / -1; margin-bottom: .125rem; }
+.ag-kpi__value { font-size: clamp(1.375rem, 1.5625vw, 1.875rem); }
+.cg-kpi .ag-kpi__delta { margin: 0; }
+.cg-kpi__icone { width: 32px; height: 32px; }
+.cg-kpi__icone .ag-icon { width: 18px; height: 18px; }
+/* 4 KPIs em linha ate o conteudo ficar estreito de verdade */
+@media (max-width: 1100px) and (min-width: 769px) {
+  .cg-kpis--quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cg-kpi .ag-kpi__delta { grid-column: 1 / -1; }
+}
+
+/* 4. Tabela: linha mais baixa, letra levemente menor no notebook. */
+.ag-table { font-size: clamp(.8125rem, .52vw + 5.4px, .875rem); }
+.ag-table td { padding: clamp(4px, .52vw - 4px, 6px) clamp(8px, 1.04vw - 8px, 12px); }
+.ag-table th { padding: clamp(6px, .52vw - 2px, 8px) clamp(8px, 1.04vw - 8px, 12px); }
+.cg-tabela-card { padding: clamp(.625rem, 1.04vw - .25rem, 1rem); }
+.cg-tabela-card .cg-status { margin-top: .5rem; margin-bottom: .5rem; }
+/* Paginacao numa linha so: contagem a esquerda, paginas a direita (era
+   coluna centrada de ~80px de altura). */
+.cg-page-nav.is-visible { flex-direction: row; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; margin-top: .5rem; }
+.cg-page-nav .cg-page-link { min-height: 2rem; }
+
+
+/* 5. A tabela usa a altura que sobra da janela: so ela rola, a pagina nao.
+      Inicio e Historico (o cartao da lista e o ultimo filho do main).
+      Piso de 18rem: em janela muito baixa volta a rolar a pagina. */
+@media (min-width: 769px) and (min-height: 560px) {
+  .main-content:has(> .cg-tabela-card) {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    min-height: 0;
+  }
+  .main-content:has(> .cg-tabela-card) > * { flex: none; width: 100%; }
+  .main-content > .cg-tabela-card {
+    flex: 1 1 auto;
+    min-height: 18rem;
+    display: flex;
+    flex-direction: column;
+  }
+  .cg-tabela-card > .table-scroll-anchor,
+  .cg-tabela-card .ag-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .cg-tabela-card > .ag-table-wrap { flex: 1 1 auto; min-height: 0; }
+  .cg-tabela-card .ag-table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    max-height: none;
+  }
+  .cg-tabela-card > :not(.table-scroll-anchor):not(.ag-table-wrap) { flex: none; }
+  .cg-tabela-card .ag-table thead th { position: sticky; top: 0; z-index: 1; }
+}
+
+/* 6. Carteiras: lista de pessoas mais larga e da altura da janela. */
+.cg-cart-layout { grid-template-columns: minmax(20rem, 30%) minmax(0, 1fr); gap: var(--pp-gap); }
+@media (min-width: 1025px) {
+  .cg-op-rolagem,
+  .cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 21rem)); }
+}
+/* item da lista: o selo e a contagem descem para baixo do nome quando nao
+   cabem, em vez de espremer o nome em tres linhas */
+.cg-op-item { flex-wrap: wrap; row-gap: .25rem; padding: .5rem 1rem; }
+.cg-op-item > .ag-cell-stack { flex: 1 1 14rem; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   v2 (06/11/2026): "um pouco dos dois". A largura sai do MENU, nao da
+   tabela: abaixo de 1600px o menu comeca recolhido (trilho de icones, 72px;
+   o nome aparece no balao ao passar o mouse e no title). O botao de recolher
+   continua expandindo. Metade do espaco liberado vira respiro lateral, a
+   outra metade alarga a tabela. Nenhuma letra cresce.
+   O "comeca recolhido" e uma linha em static/ui-common.js:214 (ver
+   proposta-v2.js); o CSS abaixo so ajusta o trilho e o respiro.
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* respiro lateral do main: ~46px em 1536, 56px (teto) em 1920 */
+  --pp-pad-x: clamp(2rem, 3vw, 3.5rem);
+}
+@media (min-width: 769px) {
+  body.sidebar-collapsed .sidebar { width: 72px; }
+  body.sidebar-collapsed .main-content { margin-left: 72px; }
+}
+.main-content { padding-inline: var(--pp-pad-x); }
+.main-content > .topbar-actions { right: max(var(--pp-pad-x), calc((100% - 1440px) / 2)); }
+/* moldura da tabela com um pouco mais de ar por dentro: ~20px em 1536 */
+.cg-tabela-card { padding: clamp(.625rem, 1.04vw - .25rem, 1rem) clamp(1rem, 1.3vw, 1.5rem); }
