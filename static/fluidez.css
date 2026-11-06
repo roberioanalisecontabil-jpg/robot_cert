@@ -114,6 +114,10 @@
     min-height: 0;
     overflow: auto;
     max-height: none;
+    /* bloco de contencao do .cg-sr-only das linhas: sem isto ele se ancora no
+       .table-scroll-anchor, fora do recorte, e a PAGINA cresce com 50/100 por
+       pagina (mesmo defeito do comentario em style.css .table-scroll td) */
+    position: relative;
   }
   .cg-tabela-card > :not(.table-scroll-anchor):not(.ag-table-wrap) { flex: none; }
   .cg-tabela-card .ag-table thead th { position: sticky; top: 0; z-index: 1; }
