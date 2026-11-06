@@ -238,7 +238,8 @@ def test_tela_tem_as_colunas_novas_e_sem_ultima_verificacao() -> None:
     thead = HTML[HTML.index("<thead"):HTML.index("</thead>")]
     cabecalhos = re.findall(r">([^<>]+)</th>", thead)
     assert [c.strip() for c in cabecalhos] == ["Nome", "CNPJ / CPF", "Entrou em", "Saiu em", "Vencimento", "Status"]
-    assert "antes de 30/09" in HTML
+    assert "antes de 30/09" not in HTML
+    assert 'ENTRADA_SEM_DATA = "2026-09-30T12:00:00Z"' in HTML
 
 
 def test_tela_tem_o_select_de_situacao() -> None:

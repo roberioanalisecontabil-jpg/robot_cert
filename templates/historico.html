@@ -255,10 +255,12 @@
       return abre + "<time datetime='" + esc(iso) + "' title='" + esc(fmtDataUtc(iso)) + "'>" + esc(texto) + "</time></td>";
     }
 
-    // Entrou: o acervo anterior a 30/09 não tem a data (primeira_data_registrada NULL).
+    // Entrou: o acervo anterior a 30/09 não tem a data (primeira_data_registrada
+    // NULL); mostra 30/09/2026, quando o registro começou (Robério, 06/11: só a
+    // data, sem texto). Meio-dia UTC para não virar 29/09 por fuso.
+    const ENTRADA_SEM_DATA = "2026-09-30T12:00:00Z";
     function celulaEntrada(it) {
-      if (it.primeira_data_registrada) return celulaData(it.primeira_data_registrada, "cg-col-emissao", "Entrou");
-      return "<td role='cell' class='cg-col-data cg-col-emissao' data-prefixo='Entrou'>antes de 30/09</td>";
+      return celulaData(it.primeira_data_registrada || ENTRADA_SEM_DATA, "cg-col-emissao", "Entrou");
     }
     // Saiu: vazio (sem prefixo) enquanto o arquivo está nas pastas.
     function celulaSaida(it) {
@@ -266,7 +268,7 @@
       return "<td role='cell' class='cg-col-data cg-col-saida'></td>";
     }
     function textoEntrada(it) {
-      return it.primeira_data_registrada ? fmtDataUtc(it.primeira_data_registrada) : "antes de 30/09";
+      return it.primeira_data_registrada ? fmtDataUtc(it.primeira_data_registrada) : fmtSoData(ENTRADA_SEM_DATA);
     }
     function textoSaida(it) {
       return it.ausente_desde ? fmtDataUtc(it.ausente_desde) : "";
