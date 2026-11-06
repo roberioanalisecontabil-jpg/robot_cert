@@ -3,6 +3,10 @@
    Carregado por ULTIMO nas paginas internas (nao no Dashboard, no login nem
    na Wiki). Desfazer = tirar o <link> deste arquivo e o de fluidez nos
    templates. Nao muda cor, borda, raio nem sombra do Aguia DS. */
+/* Celular (ate 768px) fica como antes: as regras de telefone de style.css,
+   aguia-listas.css e aguia-carteiras.css continuam valendo. */
+@media (min-width: 769px) {
+
 :root {
   /* Respiro do main: 24px hoje -> ~16px em 1536, ~22px em 1920 */
   --pp-pad: clamp(.75rem, 1.6vw - .5rem, 1.5rem);
@@ -116,7 +120,10 @@
 }
 
 /* 6. Carteiras: lista de pessoas mais larga e da altura da janela. */
-.cg-cart-layout { grid-template-columns: minmax(20rem, 30%) minmax(0, 1fr); gap: var(--pp-gap); }
+/* so com as duas colunas lado a lado; ate 1024px a tela vira duas etapas */
+@media (min-width: 1025px) {
+  .cg-cart-layout { grid-template-columns: minmax(20rem, 30%) minmax(0, 1fr); gap: var(--pp-gap); }
+}
 @media (min-width: 1025px) {
   .cg-op-rolagem,
   .cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 21rem)); }
@@ -147,3 +154,5 @@
 .main-content:has(> .ag-page__head) > .topbar-actions { right: max(var(--pp-pad-x), calc((100% - 1440px) / 2)); }
 /* moldura da tabela com um pouco mais de ar por dentro: ~20px em 1536 */
 .cg-tabela-card { padding: clamp(.625rem, 1.04vw - .25rem, 1rem) clamp(1rem, 1.3vw, 1.5rem); }
+
+}  /* @media (min-width: 769px) */
