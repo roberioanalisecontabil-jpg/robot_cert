@@ -24,7 +24,7 @@
   <main class="main-content cg-painel" id="main-content">
     <header class="ag-page__head">
       <h1 class="ag-page__title">Histórico de Certificados</h1>
-      <p class="ag-page__lead">Certificados já mapeados em algum momento e a última data verificada.</p>
+      <p class="ag-page__lead">Certificados já mapeados em algum momento, quando entraram nas pastas e quando saíram.</p>
     </header>
 
     <section class="ag-card cg-tabela-card" id="table-container-hist" aria-label="Histórico de certificados">
@@ -51,6 +51,15 @@
               <option value="fora_do_padrao">Fora do padrão</option>
               <option value="expirado">Expirados</option>
               <option value="ok">Ativos</option>
+            </select>
+          </div>
+          <!-- O arquivo ainda está nas pastas ou já saiu (06/11/2026). -->
+          <div class="ag-field cg-campo-inline">
+            <label class="ag-label" for="filtro-situacao-hist">Situação</label>
+            <select class="ag-select" id="filtro-situacao-hist">
+              <option value="todos">Todos</option>
+              <option value="nas_pastas">Nas pastas</option>
+              <option value="sairam">Saíram</option>
             </select>
           </div>
         </div>
@@ -95,7 +104,8 @@
                 <tr role="row">
                   <th role="columnheader" class="ag-th--estatico">Nome</th>
                   <th role="columnheader" class="ag-th--estatico cg-col-doc">CNPJ / CPF</th>
-                  <th role="columnheader" class="ag-th--estatico">Última verificação</th>
+                  <th role="columnheader" class="ag-th--estatico">Entrou em</th>
+                  <th role="columnheader" class="ag-th--estatico">Saiu em</th>
                   <th role="columnheader" class="ag-th--estatico">Vencimento</th>
                   <th role="columnheader" class="ag-th--estatico">Status</th>
                 </tr>
@@ -187,6 +197,13 @@
         carregarHistorico();
       });
     })();
+    function situacaoHistorico() {
+      return document.getElementById("filtro-situacao-hist")?.value || "todos";
+    }
+    document.getElementById("filtro-situacao-hist").addEventListener("change", () => {
+      paginaAtualHist = 1;
+      carregarHistorico();
+    });
     let debounceHist = null;
     let itensVisiveis = [];
 
@@ -236,6 +253,23 @@
       const abre = "<td role='cell' class='cg-col-data " + classe + "' data-prefixo='" + esc(prefixo) + "'>";
       if (texto === "—") return abre + "—</td>";
       return abre + "<time datetime='" + esc(iso) + "' title='" + esc(fmtDataUtc(iso)) + "'>" + esc(texto) + "</time></td>";
+    }
+
+    // Entrou: o acervo anterior a 30/09 não tem a data (primeira_data_registrada NULL).
+    function celulaEntrada(it) {
+      if (it.primeira_data_registrada) return celulaData(it.primeira_data_registrada, "cg-col-emissao", "Entrou");
+      return "<td role='cell' class='cg-col-data cg-col-emissao' data-prefixo='Entrou'>antes de 30/09</td>";
+    }
+    // Saiu: vazio (sem prefixo) enquanto o arquivo está nas pastas.
+    function celulaSaida(it) {
+      if (it.ausente_desde) return celulaData(it.ausente_desde, "cg-col-saida", "Saiu");
+      return "<td role='cell' class='cg-col-data cg-col-saida'></td>";
+    }
+    function textoEntrada(it) {
+      return it.primeira_data_registrada ? fmtDataUtc(it.primeira_data_registrada) : "antes de 30/09";
+    }
+    function textoSaida(it) {
+      return it.ausente_desde ? fmtDataUtc(it.ausente_desde) : "";
     }
 
     // Mesma regra de exibição do Início: o nome vem em CAIXA ALTA do arquivo
@@ -305,7 +339,7 @@
         if (!busca && st) {
           const sel = document.getElementById("filtro-status-hist");
           const rotulo = sel.options[sel.selectedIndex].textContent.trim().toLowerCase();
-          renderEmptyRow(tb, 5, {
+          renderEmptyRow(tb, 6, {
             icon: "",
             title: "Nenhum arquivo com status " + rotulo,
             description: "Nada com esse status na última verificação.",
@@ -317,8 +351,20 @@
               carregarHistorico();
             },
           });
+        } else if (!busca && situacaoHistorico() !== "todos") {
+          renderEmptyRow(tb, 6, {
+            icon: "",
+            title: situacaoHistorico() === "sairam" ? "Nenhum arquivo saiu das pastas" : "Nenhum arquivo nas pastas",
+            description: "Nada nessa situação na última verificação.",
+            actionText: "Ver todos",
+            onAction: () => {
+              document.getElementById("filtro-situacao-hist").value = "todos";
+              paginaAtualHist = 1;
+              carregarHistorico();
+            },
+          });
         } else if (busca) {
-          renderEmptyRow(tb, 5, {
+          renderEmptyRow(tb, 6, {
             icon: "",
             title: "Nada encontrado para “" + busca + "”",
             description: "Tente outro nome, CNPJ ou CPF, ou volte à lista inteira.",
@@ -330,7 +376,7 @@
             },
           });
         } else {
-          renderEmptyRow(tb, 5, _alcanceVazio ? {
+          renderEmptyRow(tb, 6, _alcanceVazio ? {
             icon: "",
             title: "Sua carteira está vazia",
             description:
@@ -361,7 +407,8 @@
             "</div>" +
             "</td>" +
             "<td role='cell' class='cg-col-doc td-doc'>" + celulaDocumento(it.documento) + "</td>" +
-            celulaData(it.ultima_data_registrada, "cg-col-emissao", "Verificado") +
+            celulaEntrada(it) +
+            celulaSaida(it) +
             celulaData(it.vencimento_certificado, "cg-col-vencimento", "Vence") +
             "<td role='cell' class='cg-col-status'>" + badgeStatusHistorico(it) + "</td>" +
             "</tr>"
@@ -377,6 +424,7 @@
         const params = new URLSearchParams({
           busca: document.getElementById("busca-historico").value || "",
           status: statusHistorico(),
+          situacao: situacaoHistorico(),
           todas_filtradas: "true",
         });
         const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
@@ -405,10 +453,12 @@
           "warning"
         );
       }
-      const headers = ["Nome", "CNPJ/CPF", "Última data verificada", "Vencimento do certificado"];
+      const headers = ["Nome", "CNPJ/CPF", "Entrou em", "Saiu em", "Última data verificada", "Vencimento do certificado"];
       const rows = d.itens.map((it) => [
         it.nome || "",
         it.documento || "",
+        textoEntrada(it),
+        textoSaida(it),
         fmtDataUtc(it.ultima_data_registrada),
         fmtDataUtc(it.vencimento_certificado),
       ]);
@@ -443,6 +493,8 @@
           <tr>
             <td>${esc(it.nome || "")}</td>
             <td>${esc(it.documento || "")}</td>
+            <td>${esc(textoEntrada(it))}</td>
+            <td>${esc(textoSaida(it))}</td>
             <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
             <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
             <td>${esc(rotuloStatusHistorico(it))}</td>
@@ -476,7 +528,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nome</th><th>CNPJ/CPF</th><th>Última data verificada</th><th>Vencimento do certificado</th><th>Status</th>
+                  <th>Nome</th><th>CNPJ/CPF</th><th>Entrou em</th><th>Saiu em</th><th>Última data verificada</th><th>Vencimento do certificado</th><th>Status</th>
                 </tr>
               </thead>
               <tbody>${linhas}</tbody>
@@ -495,7 +547,7 @@
       const st = document.getElementById("status-msg");
       st.textContent = "Carregando…";
       if (primeiroCarregamentoHist) {
-        renderSkeletonRows("tbody-historico", Math.min(porPaginaHist(), 10), 4);
+        renderSkeletonRows("tbody-historico", Math.min(porPaginaHist(), 10), 6);
       } else {
         toggleLoading(true, "Carregando histórico...");
       }
@@ -505,6 +557,7 @@
           por_pagina: String(porPaginaHist()),
           busca: document.getElementById("busca-historico").value || "",
           status: statusHistorico(),
+          situacao: situacaoHistorico(),
         });
         const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
         if (r.status === 401) {
@@ -515,7 +568,7 @@
           const detalhe = await mensagemCorpoErro(r);
           st.textContent = `Erro ${r.status}`;
           showToast("Não foi possível carregar o histórico: " + detalhe, "error");
-          renderEmptyRow("tbody-historico", 4, {
+          renderEmptyRow("tbody-historico", 6, {
             icon: "",
             title: "Erro ao carregar o histórico",
             description: detalhe || `O servidor respondeu com erro ${r.status}.`,
@@ -543,7 +596,7 @@
       } catch (e) {
         st.textContent = "Falha de conexão.";
         showToast("Falha de conexão com o servidor: " + e, "error");
-        renderEmptyRow("tbody-historico", 4, {
+        renderEmptyRow("tbody-historico", 6, {
           icon: "",
           title: "Sem conexão com o servidor",
           description: "Verifique se o portal está em execução e tente novamente.",

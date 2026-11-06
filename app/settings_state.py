@@ -571,6 +571,39 @@ def _instante(valor: Any) -> Optional[datetime]:
     return dt
 
 
+def _marcar_ausencias(client: Any, machine_id: str, chaves: List[str]) -> None:
+    """Mantém `cert_history.ausente_desde` (migration 20261106120000): as
+    chaves deste inventário voltam a NULL; as presentes que esta máquina viu
+    por último e que não vieram recebem now(). Três consultas, nunca uma por
+    linha.
+
+    Inventário parcial (menos da metade do que esta máquina tinha presente,
+    p. ex. pasta de rede caída) não marca ninguém. Chave de outra máquina
+    nunca é marcada. Falha aqui só vai ao log: o ingest segue. Só contagens
+    no log — o nome do arquivo pode conter a senha.
+    """
+    try:
+        (client.table("cert_history").update({"ausente_desde": None})
+         .in_("arquivo_chave", chaves).is_("ausente_desde", "not.null").execute())
+        r = (client.table("cert_history").select("arquivo_chave")
+             .is_("ausente_desde", "null").eq("machine_id", machine_id).execute())
+        presentes = {str(x.get("arquivo_chave")) for x in (r.data or [])}
+        if len(chaves) * 2 < len(presentes):
+            logger.warning(
+                "cert_history: inventário de %s com %d chave(s) para %d presente(s); "
+                "menos da metade, ninguém marcado como ausente.",
+                machine_id, len(chaves), len(presentes),
+            )
+            return
+        faltam = sorted(presentes - set(chaves))
+        if faltam:
+            (client.table("cert_history").update({"ausente_desde": datetime.now(timezone.utc).isoformat()})
+             .in_("arquivo_chave", faltam).is_("ausente_desde", "null").eq("machine_id", machine_id).execute())
+            logger.info("cert_history: %d chave(s) de %s saíram das pastas.", len(faltam), machine_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao marcar ausências em cert_history; o ingest segue.")
+
+
 def upsert_cert_history(
     machine_id: str,
     scanned_iso: str,
@@ -594,7 +627,10 @@ def upsert_cert_history(
     from app.nome_publico import sanitizar_item
 
     client = _banco()
-    if not client or not items:
+    if not client:
+        return []
+    if not items:
+        logger.warning("cert_history: inventário vazio de %s; ninguém marcado como ausente.", machine_id)
         return []
 
     rows = []
@@ -633,6 +669,7 @@ def upsert_cert_history(
         })
 
     if not rows:
+        logger.warning("cert_history: inventário de %s sem item válido; ninguém marcado como ausente.", machine_id)
         return []
 
     # A mesma chave duas vezes no lote faz o Postgres rejeitá-lo inteiro
@@ -665,6 +702,8 @@ def upsert_cert_history(
                 i // BATCH + 1,
                 (len(rows) + BATCH - 1) // BATCH,
             )
+
+    _marcar_ausencias(client, machine_id, chaves)
 
     if existentes is None or falhou:
         return []

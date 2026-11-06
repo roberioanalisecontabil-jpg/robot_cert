@@ -1149,6 +1149,24 @@ def _historico_filtrar_status(itens: List[dict], aceitos: Optional[tuple]) -> Li
     return [it for it in itens if str(it.get("status_ultimo") or "").lower() in aceitos]
 
 
+# Situação nas pastas (06/11/2026): `ausente_desde` NULL = está nas pastas.
+SITUACOES_HISTORICO = ("todos", "nas_pastas", "sairam")
+
+
+def _historico_situacao(valor: Optional[str]) -> str:
+    v = str(valor or "").strip().lower() or "todos"
+    if v not in SITUACOES_HISTORICO:
+        raise HTTPException(status_code=422, detail="Situação desconhecida. Use: " + ", ".join(SITUACOES_HISTORICO))
+    return v
+
+
+def _historico_filtrar_situacao(itens: List[dict], situacao: str) -> List[dict]:
+    if situacao == "todos":
+        return itens
+    saiu = situacao == "sairam"
+    return [it for it in itens if bool(it.get("ausente_desde")) == saiu]
+
+
 def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
     q = str(busca_raw or "").strip().lower()
     if not q:
@@ -1217,7 +1235,8 @@ def _cert_history_fetch_all(sb: Any) -> List[dict[str, Any]]:
     """Lê todas as linhas de cert_history (PostgREST limita ~1000 por pedido sem range)."""
     cols = (
         "nome_publico, nome, documento, status_ultimo, "
-        "vencimento_certificado, ultima_data_registrada"
+        "vencimento_certificado, ultima_data_registrada, "
+        "primeira_data_registrada, ausente_desde"
     )
     batch = 1000
     out: List[dict[str, Any]] = []
@@ -1245,6 +1264,7 @@ def historico_certificados(
     limit: Optional[int] = None,
     busca: Optional[str] = None,
     status: Optional[str] = None,
+    situacao: Optional[str] = None,
 ) -> dict:
     """
     Lista certificados já mapeados em algum momento, com a última data registrada.
@@ -1259,6 +1279,7 @@ def historico_certificados(
     page_limit = int(limit) if pagination else None
     busca_txt = str(busca).strip() if busca else ""
     status_aceitos = _historico_status_aceitos(status)
+    situacao_v = _historico_situacao(situacao)
 
     def _normalize_rows(rows_raw: List[dict[str, Any]]) -> List[dict[str, Any]]:
         return [
@@ -1269,6 +1290,8 @@ def historico_certificados(
                 "status_ultimo":          row.get("status_ultimo"),
                 "vencimento_certificado": row.get("vencimento_certificado"),
                 "ultima_data_registrada": row.get("ultima_data_registrada"),
+                "primeira_data_registrada": row.get("primeira_data_registrada"),
+                "ausente_desde":          row.get("ausente_desde"),
             }
             for row in rows_raw
         ]
@@ -1276,6 +1299,8 @@ def historico_certificados(
     def _apply_cert_history_or_busca(qb: Any) -> Any:
         if status_aceitos:
             qb = qb.in_("status_ultimo", list(status_aceitos))
+        if situacao_v != "todos":
+            qb = qb.is_("ausente_desde", "null" if situacao_v == "nas_pastas" else "not.null")
         if not busca_txt:
             return qb
         return qb.or_(_filtro_or_da_busca(busca_txt))
@@ -1292,12 +1317,13 @@ def historico_certificados(
                 c_r = qc.execute()
                 total_count = c_r.count if c_r.count is not None else 0
 
-                if total_count > 0 or busca_txt or status_aceitos:
+                if total_count > 0 or busca_txt or status_aceitos or situacao_v != "todos":
                     qp = _apply_cert_history_or_busca(
                         sb.table("cert_history")
                         .select(
                             "nome_publico, nome, documento, status_ultimo, "
-                            "vencimento_certificado, ultima_data_registrada",
+                            "vencimento_certificado, ultima_data_registrada, "
+                            "primeira_data_registrada, ausente_desde",
                         )
                         .order("ultima_data_registrada", desc=True)
                     )
@@ -1332,6 +1358,7 @@ def historico_certificados(
             # A busca vale também aqui (achado #54): este é o caminho da
             # exportação, e ele lia a tabela inteira ignorando o filtro.
             itens = _historico_filtrar_status(_historico_filtrar_busca(_normalize_rows(rows_non_paginated), busca_txt), status_aceitos)
+            itens = _historico_filtrar_situacao(itens, situacao_v)
             return {
                 "itens": itens,
                 "total": len(itens),
@@ -1344,6 +1371,7 @@ def historico_certificados(
     agregados, snapshots_lidos = _historico_carregar_agregados(limite_snapshots)
     itens = _historico_itens_visualizacao(agregados)
     itens = _historico_filtrar_status(_historico_filtrar_busca(itens, busca_txt), status_aceitos)
+    itens = _historico_filtrar_situacao(itens, situacao_v)
 
     if pagination and page_limit is not None:
         total_f = len(itens)
@@ -1391,11 +1419,17 @@ def historico_certificados_http(
         max_length=20,
         description="Status da última verificação: ilegivel, erro, fora_do_padrao, ok ou expirado",
     ),
+    situacao: Optional[str] = Query(
+        None,
+        max_length=20,
+        description="todos (padrão), nas_pastas ou sairam",
+    ),
     token: auth.TokenData = Depends(require_auth),
 ) -> dict:
     b = busca.strip() if busca else None
     st = status.strip().lower() if status else None
     _historico_status_aceitos(st)  # 422 antes de tocar o banco
+    sit = _historico_situacao(situacao)
     alcance = _documentos_ao_alcance(token)
     # A tela mostra "Atualizado em" e distingue carteira vazia de histórico
     # vazio; os dois campos faltavam na resposta (revisão de 01/10/2026).
@@ -1404,7 +1438,7 @@ def historico_certificados_http(
         "atualizado_em": (get_latest_snapshot() or {}).get("scanned_at") or datetime.now(timezone.utc).isoformat(),
     }
     if todas_filtradas:
-        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b, status=st)
+        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b, status=st, situacao=sit)
         itens = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
         lista_truncada = len(itens) > LISTAGEM_EXPORT_MAX
         return {
@@ -1421,7 +1455,7 @@ def historico_certificados_http(
         # Com recorte, a página é cortada DEPOIS do recorte, aqui: paginar no
         # banco e recortar depois daria páginas com buracos e um total que
         # conta o que a pessoa não pode ver (#5).
-        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b, status=st)
+        raw = historico_certificados(limite_snapshots, offset=None, limit=None, busca=b, status=st, situacao=sit)
         recortados = _recortar_pela_carteira(list(raw.get("itens") or []), alcance)
         raw = {**raw, "itens": recortados[off: off + por_pagina], "total": len(recortados),
                "offset": off, "limit": por_pagina}
@@ -1432,6 +1466,7 @@ def historico_certificados_http(
             limit=por_pagina,
             busca=b,
             status=st,
+            situacao=sit,
         )
     total = int(raw.get("total") or 0)
     total_pags = max(1, (total + por_pagina - 1) // por_pagina) if total else 1

@@ -149,7 +149,9 @@ class _Query:
                 return False
             if op == "neq" and a == v:
                 return False
-            if op == "is" and not (v == "null" and a is None):
+            if op == "is" and v == "not.null" and a is None:
+                return False
+            if op == "is" and v != "not.null" and not (v == "null" and a is None):
                 return False
             if op == "gt" and not (a is not None and str(a) > str(v)):
                 return False
