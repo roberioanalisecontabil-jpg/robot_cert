@@ -150,6 +150,24 @@
         "rule": "design-system-color",
         "value": "#000",
         "createdAt": "2026-09-24T15:56:01.753Z"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": ".9375rem",
+        "files": [
+          "static/fluidez.css"
+        ],
+        "createdAt": "2026-11-06T12:58:55.312Z",
+        "reason": "Robério aprovou a prévia v2 (06/11): pisos de clamp() fluidos, sempre menores que o tamanho de hoje"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.375rem",
+        "files": [
+          "static/fluidez.css"
+        ],
+        "createdAt": "2026-11-06T12:58:55.404Z",
+        "reason": "Robério aprovou a prévia v2 (06/11): pisos de clamp() fluidos, sempre menores que o tamanho de hoje"
       }
     ]
   }
