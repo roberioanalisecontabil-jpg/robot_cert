@@ -169,6 +169,12 @@ class _Query:
         if self._op == "insert":
             novas = self._p if isinstance(self._p, list) else [self._p]
             saida = []
+            if self._on_conflict:
+                # Como o Postgres (SQLSTATE 21000): o mesmo comando nao pode
+                # tocar a mesma linha duas vezes; o lote inteiro e rejeitado.
+                vistas = [tuple(p.get(c) for c in self._on_conflict) for p in novas]
+                if len(vistas) != len(set(vistas)):
+                    raise RuntimeError("ON CONFLICT DO UPDATE command cannot affect row a second time")
             for p in novas:
                 linha = dict(p)
                 if self._on_conflict:

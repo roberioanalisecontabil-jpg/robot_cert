@@ -635,6 +635,15 @@ def upsert_cert_history(
     if not rows:
         return []
 
+    # A mesma chave duas vezes no lote faz o Postgres rejeitá-lo inteiro
+    # (21000); vale a última ocorrência. Só a contagem vai ao log: o nome do
+    # arquivo pode conter senha.
+    unicas = list({r["arquivo_chave"]: r for r in rows}.values())
+    if len(unicas) != len(rows):
+        logger.warning("cert_history: %d linha(s) duplicada(s) por arquivo_chave descartada(s) antes do upsert",
+                       len(rows) - len(unicas))
+    rows = unicas
+
     # O que já existia, ANTES de gravar: depois do upsert está tudo lá.
     chaves = sorted({str(r["arquivo_chave"]) for r in rows})
     existentes = _chaves_ja_no_historico(client, chaves)

@@ -93,6 +93,25 @@ def test_upsert_devolve_so_os_que_nao_estavam_no_historico(historico: _Fake) -> 
     assert len(historico.tabelas["cert_history"]) == 2
 
 
+def test_upsert_com_chave_repetida_grava_tudo_e_vale_a_ultima(historico: _Fake, caplog: pytest.LogCaptureFixture) -> None:
+    """Producao 06/11: a mesma `arquivo_chave` duas vezes no inventario fazia o
+    Postgres rejeitar o lote inteiro (21000) e o Historico congelava."""
+    primeira = _item("ALFA", "fp-a")
+    ultima = dict(primeira, status="vencido")
+    novo = _item("BETA", "fp-b", DOC_B)
+
+    with caplog.at_level("WARNING"):
+        novos = ss.upsert_cert_history("srv", "2026-09-30T10:00:00+00:00", [primeira, novo, ultima])
+
+    linhas = {r["arquivo_chave"]: r for r in historico.tabelas["cert_history"]}
+    assert set(linhas) == {primeira["arquivo_chave"], novo["arquivo_chave"]}
+    assert linhas[primeira["arquivo_chave"]]["status_ultimo"] == "vencido"
+    assert novo["arquivo_chave"] in {n["arquivo_chave"] for n in novos}
+    avisos = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("1" in a and "duplicad" in a for a in avisos)
+    assert not any(primeira["arquivo_chave"] in a or "ALFA" in a for a in avisos)
+
+
 def test_upsert_nao_envia_a_primeira_data_o_banco_e_quem_preenche(historico: _Fake) -> None:
     """Se o upsert mandasse a coluna, cada ingestão diária a sobrescreveria e
     todo certificado seria "novo" para sempre."""
