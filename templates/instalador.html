@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
   <link rel="stylesheet" href="/static/aguia-instalador.css?v=aguia-2026-10d" />
-  <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-06b" />
+  <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-06c" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -555,7 +555,7 @@
             <td role="cell" class="cg-col-quando">${l.solicitado_em ? tempo(l.solicitado_em, fmtQuando(l.solicitado_em)) : "—"}</td>
             <td role="cell" class="cg-col-sieg-msg">
               <details class="ag-accordion cg-sieg-det" data-fp="${esc(l.fingerprint)}">
-                <summary class="ag-accordion__topo"><span>${esc(l.mensagem || "Ver tentativas")}</span><span class="ag-accordion__seta" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></summary>
+                <summary class="ag-accordion__topo"><span title="${esc(l.mensagem || "")}">${esc(l.mensagem || "Ver tentativas")}</span><span class="ag-accordion__seta" aria-hidden="true"><svg class="ag-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></summary>
                 <div class="cg-sieg-trilha">Carregando…</div>
               </details>
             </td>
@@ -1106,7 +1106,7 @@
         return `<li class="ag-etapas__item ${cls}">${feita ? CHECK : CIRCULO}${rotulo}</li>`;
       }).join("");
       const sr = MARCOS.map(([m, rotulo]) => rotulo + (nomes.has(m) ? " feito" : " pendente")).join(", ") + (falhou ? ", falhou" : "") + ".";
-      return `<ol class="ag-etapas" aria-hidden="true">${itens}</ol><span class="cg-sr-only">${esc(sr)}</span>`;
+      return `<ol class="ag-etapas" aria-hidden="true" title="${esc(sr)}">${itens}</ol><span class="cg-sr-only">${esc(sr)}</span>`;
     }
 
     function badgeDesfecho(d) {

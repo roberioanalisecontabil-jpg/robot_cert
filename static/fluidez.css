@@ -159,4 +159,47 @@
 /* moldura da tabela com um pouco mais de ar por dentro: ~20px em 1536 */
 .cg-tabela-card { padding: clamp(.625rem, 1.04vw - .25rem, 1rem) clamp(1rem, 1.3vw, 1.5rem); }
 
+/* 7. Colunas apertadas: Trilha, SIEG e Computadores. A moldura rola por
+      dentro (os "overflow: visible" de aguia-instalador.css e
+      aguia-usuarios.css miram .ag-table-scroll DENTRO da tabela e nunca
+      casam; aqui fica explicito) e e o conteiner das regras de largura.
+      position: relative prende o .cg-sr-only do cabecalho "Acoes": sem
+      isso ele se ancora fora do recorte e a PAGINA rola de lado (1093 com
+      o menu aberto: 113px). Nenhuma celula tem menu suspenso ou balao; o
+      acordeao do SIEG abre para baixo, dentro da propria linha. */
+#aba-trilha .ag-table-scroll,
+#aba-sieg .ag-table-scroll,
+#painel-computadores .ag-table-scroll {
+  overflow-x: auto;
+  position: relative;
+  container-type: inline-size;
+}
+/* Trilha: etapas numa linha so; o "+ N outros" fica ao lado do documento */
+.cg-tabela-trilha .ag-etapas { flex-wrap: nowrap; gap: var(--space-2); }
+.cg-tabela-trilha .cg-col-cert .ag-cell-stack { flex-flow: row wrap; column-gap: .5rem; }
+.cg-tabela-trilha .cg-col-cert .ag-cell-main { flex-basis: 100%; }
+/* motivo da falha ao lado do selo, e nao numa terceira linha embaixo */
+.cg-tabela-trilha .cg-col-desfecho .cg-inst-motivo { display: inline; margin: 0 0 0 .375rem; }
+/* SIEG: a ultima resposta cede primeiro, cortada com reticencias (o texto
+   inteiro vai no title e no acordeao) */
+.cg-tabela-sieg .cg-col-sieg-msg { min-width: 0; }
+.cg-sieg-det > .ag-accordion__topo > span:first-child {
+  min-width: 0;
+  max-width: 26cqi;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cg-sieg-det[open] > .ag-accordion__topo > span:first-child { white-space: normal; }
+/* moldura estreita: etapas so com o icone (o nome fica no title) */
+@container (max-width: 1000px) {
+  .cg-tabela-trilha .ag-etapas__item { font-size: 0; gap: 0; }
+}
+/* Computadores: com a moldura estreita os botoes quebram linha, dois em
+   cima e o terceiro embaixo (286px viram ~200px) */
+@container (max-width: 960px) {
+  .cg-tabela-comp .cg-col-acoes { white-space: normal; }
+  .cg-comp-acoes { flex-wrap: wrap; min-width: 12.5rem; }
+}
+
 }  /* @media (min-width: 769px) */
