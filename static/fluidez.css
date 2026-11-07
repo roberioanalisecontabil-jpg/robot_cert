@@ -191,9 +191,10 @@
   white-space: nowrap;
 }
 .cg-sieg-det[open] > .ag-accordion__topo > span:first-child { white-space: normal; }
-/* moldura estreita: etapas so com o icone (o nome fica no title) */
+/* moldura estreita: etapas so com o icone (o nome fica no title); a etapa
+   que falhou mantem o nome, porque toque e teclado nao mostram o title */
 @container (max-width: 1000px) {
-  .cg-tabela-trilha .ag-etapas__item { font-size: 0; gap: 0; }
+  .cg-tabela-trilha .ag-etapas__item:not(.is-falha) { font-size: 0; gap: 0; }
 }
 /* Computadores: com a moldura estreita os botoes quebram linha, dois em
    cima e o terceiro embaixo (286px viram ~200px) */

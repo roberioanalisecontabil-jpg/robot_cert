@@ -36,6 +36,8 @@ def test_trilha_sieg_e_computadores_rolam_dentro_da_moldura():
 
 def test_colunas_secundarias_cedem_por_container():
     assert re.search(r"@container \(max-width: \d+px\) \{\s*\.cg-tabela-trilha \.ag-etapas__item", FLUIDEZ)
+    # a etapa que falhou nao perde o nome: toque e teclado nao mostram o title
+    assert ".cg-tabela-trilha .ag-etapas__item:not(.is-falha) { font-size: 0" in FLUIDEZ
     assert re.search(r"@container \(max-width: \d+px\) \{\s*\.cg-tabela-comp \.cg-col-acoes", FLUIDEZ)
     assert "flex-wrap: nowrap" in _bloco(FLUIDEZ, ".cg-tabela-trilha .ag-etapas")
     msg = _bloco(FLUIDEZ, ".cg-sieg-det > .ag-accordion__topo > span:first-child")
@@ -57,4 +59,4 @@ def test_versao_do_fluidez_nos_templates():
     usam = [p for p in (RAIZ / "templates").glob("*.html") if "/static/fluidez.css" in p.read_text(encoding="utf-8")]
     assert len(usam) == 8
     for p in usam:
-        assert "fluidez.css?v=fluidez-2026-11-06c" in p.read_text(encoding="utf-8"), p.name
+        assert "fluidez.css?v=fluidez-2026-11-07" in p.read_text(encoding="utf-8"), p.name
