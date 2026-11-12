@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-dashboard.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-dashboard.css?v=widgets-2026-11-12" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -31,7 +31,10 @@
          select recarrega os dados sem sair da página; sem JS, "Aplicar"
          recarrega com ?dias=. "Atualizar" só reconsulta: contorno. -->
     <form class="cg-dash-barra" id="form-periodo" method="get" action="/dashboard">
-      <p class="cg-dash-barra__status" id="dashStatus" aria-live="polite"></p>
+      <div class="cg-dash-barra__esq">
+        <p class="cg-dash-saude" id="dashSaude" hidden><span class="cg-dash-saude__ponto" aria-hidden="true"></span><span id="dashSaudeTexto"></span></p>
+        <p class="cg-dash-barra__status" id="dashStatus" aria-live="polite"></p>
+      </div>
       <div class="cg-dash-barra__controles">
         <div class="ag-field">
           <label class="ag-label cg-sr-only" for="dashDias">Período</label>
@@ -250,10 +253,75 @@
     };
 
     // Estado escrito no cabeçalho; vem do backend. Sem estado, sem badge.
+    // Guardado também para a linha de saúde do topo.
+    const ESTADO_ATUAL = {};
     function estado(id, valor) {
       const el = document.getElementById("e-" + id);
       const e = ESTADOS[valor];
       el.innerHTML = e ? `<span class="ag-badge ${e[0]}">${e[1]}</span>` : "";
+      ESTADO_ATUAL[id] = valor;
+    }
+
+    // Linha de saúde: o pior estado entre os cartões, com os nomes de quem o tem.
+    function renderSaude() {
+      const el = document.getElementById("dashSaude");
+      const nomes = (v) => Object.keys(ESTADO_ATUAL).filter((id) => ESTADO_ATUAL[id] === v)
+        .map((id) => document.getElementById("t-" + id).textContent);
+      const atencao = nomes("atencao");
+      const acompanhar = nomes("acompanhar");
+      let cls, texto;
+      if (atencao.length) { cls = "atencao"; texto = "Pedem atenção: " + atencao.join(", ") + "."; }
+      else if (acompanhar.length) { cls = "acompanhar"; texto = "Para acompanhar: " + acompanhar.join(", ") + "."; }
+      else if (nomes("ok").length) { cls = "ok"; texto = "Tudo em dia."; }
+      else { el.hidden = true; return; }
+      el.className = "cg-dash-saude cg-dash-saude--" + cls;
+      document.getElementById("dashSaudeTexto").textContent = texto;
+      el.hidden = false;
+    }
+
+    // Métricas curtas lado a lado (valor em cima, rótulo embaixo).
+    function metricas(itens) {
+      return `<ul class="cg-metricas">` + itens.map((it) =>
+        `<li class="cg-metricas__item"><span class="cg-metricas__valor${it.valor ? "" : " cg-metricas__valor--zero"}">${esc(num(it.valor))}</span><span class="cg-metricas__rotulo">${esc(it.rotulo)}</span></li>`
+      ).join("") + `</ul>`;
+    }
+
+    // Colunas por faixa; a altura é relativa à maior. O rótulo completo vai
+    // para leitor de tela, o curto fica à vista. Item `foraDaEscala` mostra
+    // só o número: com ele na conta, o "+90d" (centenas) achatava as faixas
+    // de risco (dezenas) a risquinhos.
+    function colunas(itens) {
+      const max = Math.max(1, ...itens.filter((it) => !it.foraDaEscala).map((it) => it.valor || 0));
+      return `<ul class="cg-colunas">` + itens.map((it) => {
+        const v = it.valor || 0;
+        const trilho = it.foraDaEscala
+          ? `<span class="cg-colunas__trilho cg-colunas__trilho--fora" aria-hidden="true"></span>`
+          : `<span class="cg-colunas__trilho" aria-hidden="true"><span class="cg-colunas__barra${v ? "" : " cg-colunas__barra--zero"}" style="height:${Math.round(100 * v / max)}%"></span></span>`;
+        return `<li class="cg-colunas__item${it.risco ? " cg-colunas__item--risco" : ""}">` +
+          `<span class="cg-colunas__valor${v ? "" : " cg-colunas__valor--zero"}">${esc(num(it.valor))}</span>` +
+          trilho +
+          `<span class="cg-colunas__rotulo" aria-hidden="true">${esc(it.curto)}</span><span class="cg-sr-only">${esc(it.rotulo)}</span></li>`;
+      }).join("") + `</ul>`;
+    }
+
+    // Anel de proporção (0–100) com o texto do centro e a explicação ao lado.
+    function anel(pct, centro, sub) {
+      const p = Math.max(0, Math.min(100, Number(pct) || 0));
+      return `<div class="cg-anel-bloco"><div class="cg-anel">` +
+        `<svg viewBox="0 0 36 36" aria-hidden="true"><circle class="cg-anel__trilho" cx="18" cy="18" r="15.9155"/>` +
+        (p ? `<circle class="cg-anel__arco" cx="18" cy="18" r="15.9155" stroke-dasharray="${p} 100"/>` : "") +
+        `</svg><span class="cg-anel__centro">${esc(centro)}</span></div>` +
+        `<p class="cg-numerao__sub">${esc(sub)}</p></div>`;
+    }
+
+    // Barras horizontais do Águia (.ag-barchart), largura relativa à maior.
+    function barras(itens) {
+      const max = Math.max(1, ...itens.map((it) => it.valor || 0));
+      return `<div class="ag-barchart">` + itens.map((it) =>
+        `<div class="ag-barchart__row"><span class="ag-barchart__label">${esc(it.rotulo)}</span>` +
+        `<span class="ag-barchart__track" aria-hidden="true"><span class="ag-barchart__fill" style="display:block;--barra:${Math.round(100 * (it.valor || 0) / max)}%"></span></span>` +
+        `<span class="ag-barchart__value">${esc(num(it.valor))}</span></div>`
+      ).join("") + `</div>`;
     }
 
     function corpo(id, html) { document.getElementById(id).innerHTML = html; }
@@ -284,13 +352,13 @@
       const t = d.textos || {};
       corpo("pVencimento",
         numerao(num(d.proximos_30_dias), t.proximos_30 || "vencem nos próximos 30 dias") +
-        lista([
-          { rotulo: "Clientes com certificado vencido", valor: v.vencido, aviso: true },
-          { rotulo: "Em até 7 dias", valor: v.ate_7_dias, aviso: true },
-          { rotulo: "8 a 30 dias", valor: v.ate_30_dias },
-          { rotulo: "31 a 60 dias", valor: v.ate_60_dias },
-          { rotulo: "61 a 90 dias", valor: v.ate_90_dias },
-          { rotulo: "Acima de 90 dias", valor: v.acima_de_90 },
+        colunas([
+          { curto: "Vencido", rotulo: "Clientes com certificado vencido", valor: v.vencido, risco: true },
+          { curto: "7d", rotulo: "Em até 7 dias", valor: v.ate_7_dias, risco: true },
+          { curto: "30d", rotulo: "8 a 30 dias", valor: v.ate_30_dias },
+          { curto: "60d", rotulo: "31 a 60 dias", valor: v.ate_60_dias },
+          { curto: "90d", rotulo: "61 a 90 dias", valor: v.ate_90_dias },
+          { curto: "+90d", rotulo: "Acima de 90 dias", valor: v.acima_de_90, foraDaEscala: true },
         ]));
       nota("nVencimento", d.sem_data_de_vencimento ? (t.sem_data || (d.sem_data_de_vencimento + " sem data de vencimento registrada")) + "." : "");
     }
@@ -313,9 +381,11 @@
       const t = d.textos || {};
       const semCarteira = (d.operadores || 0) - (d.operadores_com_carteira || 0);
       const papeis = (d.por_papel_rotulado || []).map((p) => ({ rotulo: p.rotulo, valor: p.quantidade }));
+      const comCarteira = d.operadores ? Math.round(100 * (d.operadores_com_carteira || 0) / d.operadores) : null;
       corpo("pAcesso",
         numerao(num(semCarteira), t.sem_carteira || "operadores sem carteira, que não conseguem instalar", semCarteira && t.quem ? "Sem carteira: " + t.quem : "") +
-        lista([{ rotulo: "Usuários ativos", valor: d.usuarios_ativos }]
+        (comCarteira === null ? "" : anel(comCarteira, num(comCarteira) + "%", num(d.operadores_com_carteira) + " de " + num(d.operadores) + " operadores com carteira")) +
+        metricas([{ rotulo: "Usuários ativos", valor: d.usuarios_ativos }]
           .concat(papeis)
           .concat([{ rotulo: "Documentos atribuídos", valor: d.documentos_atribuidos }])
           .slice(0, 6)));
@@ -355,8 +425,8 @@
       const t = d.textos || {};
       const pct = d.cobertura_pct;
       corpo("pCofre",
-        numerao(pct === null || pct === undefined ? "—" : num(pct) + "%", t.subtitulo || (num(d.guardados) + " de " + num(d.inventario) + " arquivos do inventário estão no cofre")) +
-        `<div class="ag-barra" role="img" aria-label="${esc(num(pct))}% do inventário no cofre"><span class="ag-barra__fill" style="width:${Math.min(100, pct || 0)}%"></span></div>`);
+        anel(pct, pct === null || pct === undefined ? "—" : num(pct) + "%", t.subtitulo || (num(d.guardados) + " de " + num(d.inventario) + " arquivos do inventário estão no cofre")) +
+        metricas([{ rotulo: "No cofre", valor: d.guardados }, { rotulo: "No inventário", valor: d.inventario }]));
       nota("nCofre", "Inventário: arquivos na pasta na última varredura. Só o que está no cofre é instalável pelo portal.");
     }
 
@@ -389,7 +459,7 @@
       const ref = fmtData(d.referencia);
       corpo("pRenovacoes",
         numerao(num(d.renovados), (t.renovados || "documentos com validade estendida") + " desde " + ref) +
-        lista([
+        metricas([
           { rotulo: "Novos no acervo", valor: d.novos },
           { rotulo: "Saíram do acervo", valor: d.sairam },
           { rotulo: "Documentos distintos hoje", valor: d.documentos_hoje },
@@ -402,7 +472,7 @@
       if (d.erro) { nota("nAlertas", ""); return erroCard("pAlertas", d.erro); }
       const t = d.textos || {};
       const tipos = (d.por_tipo_agregado || []).slice(0, 6).map((x) => ({ rotulo: x.rotulo, valor: x.quantidade }));
-      corpo("pAlertas", numerao(num(d.total), t.resumo || "alertas enviados no período") + (tipos.length ? lista(tipos) : `<p class="cg-dash-card__vazio">Nenhum alerta enviado no período.</p>`));
+      corpo("pAlertas", numerao(num(d.total), t.resumo || "alertas enviados no período") + (tipos.length ? barras(tipos) : `<p class="cg-dash-card__vazio">Nenhum alerta enviado no período.</p>`));
       nota("nAlertas", t.lacunas || "");
     }
 
@@ -482,12 +552,14 @@
         renderAgente(d.agente || {});
         renderAlertas(d.alertas || {});
         renderAtividade(d.atividade || {});
+        renderSaude();
         const g = new Date(d.gerado_em);
         st.textContent = "Atualizado em " + g.toLocaleDateString("pt-BR") + " às " + fmtHora(g);
       } catch (e) {
         st.textContent = "Não foi possível atualizar. O que está na tela é a carga anterior.";
         showToast("Não foi possível carregar o dashboard: " + e.message, "error");
         erroEmTodosOsCards(e.message);
+        document.getElementById("dashSaude").hidden = true;
       } finally {
         setCarregando(false);
       }
