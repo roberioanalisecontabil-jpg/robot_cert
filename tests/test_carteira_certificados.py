@@ -94,3 +94,21 @@ def test_lote_com_id_inexistente_nao_grava_nada(client: TestClient, banco: _Fake
     assert r.status_code == 404, r.text
     assert banco.tabelas["carteira"] == antes
     assert not banco.tabelas.get("carteira_historico")
+
+
+def test_lote_acima_de_200_ids_e_422(client: TestClient, banco: _Fake) -> None:
+    r = client.post(f"/api/carteira/certificados/{DOC_C}/pessoas", json={"user_ids": [f"u{i}" for i in range(201)]}, headers=_h(*ADMIN))
+    assert r.status_code == 422, r.text
+
+
+def test_inicio_no_futuro_queima_tokens_pendentes(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    from app import cert_installer
+    chamadas: list = []
+    monkeypatch.setattr(cert_installer, "revogar_tokens_pendentes", lambda uid: chamadas.append(uid) or 0)
+    futuro = (date.today() + timedelta(days=5)).isoformat()
+    r = client.post(f"/api/carteira/certificados/{DOC_C}/pessoas", json={"user_ids": ["u-fis"], "valido_desde": futuro}, headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    assert chamadas == ["u-fis"]
+    chamadas.clear()
+    r = client.post(f"/api/carteira/certificados/{DOC_C}/pessoas", json={"user_ids": ["u-fis"]}, headers=_h(*ADMIN))
+    assert r.status_code == 200 and chamadas == []

@@ -570,3 +570,8 @@ def test_script_da_aba_carrega_com_cache_buster(html: str) -> None:
 def test_teto_de_700_dias_na_tela() -> None:
     js = (Path(__file__).resolve().parents[1] / "static" / "carteiras-certificados.js").read_text(encoding="utf-8")
     assert "700" in js
+
+
+def test_datas_ocultas_ficam_desabilitadas_fora_do_periodo() -> None:
+    js = (Path(__file__).resolve().parents[1] / "static" / "carteiras-certificados.js").read_text(encoding="utf-8")
+    assert '$("prazoDesde").disabled = !periodo' in js and '$("prazoAte").disabled = !periodo' in js

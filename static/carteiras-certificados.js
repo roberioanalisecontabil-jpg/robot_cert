@@ -142,7 +142,13 @@
     $("prazoAte").min = desde;
     $("prazoAte").max = mais(desde, TETO_DIAS);
   }
-  function mostrarPeriodo() { $("prazoCampos").hidden = tipoPrazo() !== "periodo"; }
+  function mostrarPeriodo() {
+    const periodo = tipoPrazo() === "periodo";
+    $("prazoCampos").hidden = !periodo;
+    // Campo oculto e inválido bloquearia o submit sem o usuário ver o porquê.
+    $("prazoDesde").disabled = !periodo;
+    $("prazoAte").disabled = !periodo;
+  }
 
   async function abrirModal(p) {
     alvo = p ? p.user_id : null;

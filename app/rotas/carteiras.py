@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import auth, cert_installer, nomes, permissoes
 from app.alcance import _documentos_ao_alcance, _exigir_alcance, _papel_do_alvo, require_admin_ou_gestor
@@ -391,7 +391,7 @@ def detalhar_certificado(
 
 
 class PessoasDoCertificadoRequest(BaseModel):
-    user_ids: List[str]
+    user_ids: List[str] = Field(..., max_length=200)
     valido_desde: Optional[date] = None
     valido_ate: Optional[date] = None
 
@@ -609,7 +609,7 @@ def _atribuir_um(
     _exigir_documentos_ao_alcance(token, documentos)
     _desbloquear(user_id, documentos)
     try:
-        return cert_installer.atribuir_carteira(
+        gravados = cert_installer.atribuir_carteira(
             user_id=user_id,
             documentos=documentos,
             atribuido_por=_user_id_da_sessao(token),
@@ -617,6 +617,10 @@ def _atribuir_um(
             valido_desde=desde,
             valido_ate=ate,
         )
+        if desde and desde > date.today():
+            # /claim não reconfere a carteira: token já emitido instalaria antes do início.
+            cert_installer.revogar_tokens_pendentes(user_id)
+        return gravados
     except cert_installer.PrazoInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:

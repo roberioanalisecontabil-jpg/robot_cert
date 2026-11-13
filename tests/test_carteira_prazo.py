@@ -183,3 +183,41 @@ def test_falha_numa_linha_nao_para_as_outras(g, monkeypatch):
     monkeypatch.setattr(type(g.table("carteira")), "execute", execute)
     assert ci.expirar_prazos(H) == 1
     assert [l["documento"] for l in g.tabelas["carteira"]] == ["111"]
+
+
+def test_renovada_entre_select_e_delete_nao_sai(g, monkeypatch):
+    rev = _venc(g, monkeypatch, [
+        {"user_id": "u1", "documento": "111", "origem": "manual", "valido_ate": str(H - timedelta(days=1))},
+    ])
+    orig = g.table
+
+    def table(n):
+        q = orig(n)
+        od = q.delete
+
+        def delete():
+            g.tabelas["carteira"][0]["valido_ate"] = str(H + timedelta(days=30))  # renovada agora
+            return od()
+
+        q.delete = delete
+        return q
+
+    monkeypatch.setattr(g, "table", table)
+    assert ci.expirar_prazos(H) == 0
+    assert len(g.tabelas["carteira"]) == 1
+    assert g.tabelas["carteira_historico"] == [] and rev == []
+
+
+def test_nao_manual_com_prazo_vencido_fica(g, monkeypatch):
+    rev = _venc(g, monkeypatch, [
+        {"user_id": "u1", "documento": "111", "origem": "acessorias", "valido_ate": str(H - timedelta(days=1))},
+    ])
+    assert ci.expirar_prazos(H) == 0
+    assert len(g.tabelas["carteira"]) == 1 and rev == []
+
+
+def test_origem_nao_manual_nunca_some_por_prazo(banco):
+    banco.carteira = [{"user_id": "u1", "documento": "111", "origem": "acessorias", "valido_desde": "2020-01-01", "valido_ate": "2020-02-01"}]
+    assert ci.listar_carteira("u1") == {"111"}
+    assert ci.vigente({"origem": "acessorias", "valido_ate": "2020-02-01"}, H)
+    assert not ci.vigente({"origem": "manual", "valido_ate": "2020-02-01"}, H)

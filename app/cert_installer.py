@@ -845,6 +845,8 @@ def _como_data(v: Any) -> Optional[date]:
 
 def vigente(linha: Dict[str, Any], hoje: date) -> bool:
     """Chave ausente vale (linha anterior à migration); fim é inclusivo."""
+    if (linha.get("origem") or "manual") != "manual":
+        return True  # prazo só vale para liberação manual
     desde, ate = _como_data(linha.get("valido_desde")), _como_data(linha.get("valido_ate"))
     return (desde is None or desde <= hoje) and (ate is None or ate >= hoje)
 
@@ -862,7 +864,7 @@ def listar_carteira(user_id: str) -> Set[str]:
     try:
         r = (
             client.table("carteira")
-            .select("documento, valido_desde, valido_ate")
+            .select("documento, origem, valido_desde, valido_ate")
             .eq("user_id", user_id)
             .execute()
         )
@@ -1372,16 +1374,20 @@ def expirar_prazos(hoje: Optional[date] = None) -> int:
         return 0
     hoje = hoje or date.today()
     rows = (client.table("carteira").select("user_id, documento, valido_ate")
-            .is_("valido_ate", "not.null").execute().data or [])
+            .eq("origem", "manual").is_("valido_ate", "not.null").execute().data or [])
     saiu: Dict[str, List[str]] = {}
     for r in rows:
         ate = _como_data(r.get("valido_ate"))
         if ate is None or ate >= hoje:
             continue
         try:
-            client.table("carteira").delete().eq("user_id", r["user_id"]).eq("documento", r["documento"]).execute()
+            # Refiltra no DELETE: se renovaram entre o select e aqui, nada some.
+            apagou = (client.table("carteira").delete().eq("user_id", r["user_id"]).eq("documento", r["documento"])
+                      .eq("origem", "manual").lt("valido_ate", hoje.isoformat()).execute().data)
         except Exception:
             logger.exception("Falha ao expirar %s de %s", r["documento"], r["user_id"])
+            continue
+        if not apagou:
             continue
         saiu.setdefault(r["user_id"], []).append(r["documento"])
     for uid, docs in saiu.items():
