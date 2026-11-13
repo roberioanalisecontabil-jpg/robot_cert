@@ -141,3 +141,45 @@ def test_planilha_preserva_manual_com_prazo(g):
     assert ci.atribuir_carteira("u1", ["111", "222"], "a", "a@x", hoje=H, preservar_existentes=True) == 1
     assert g.tabelas["carteira"][0] == antes[0]
     assert [x["documento"] for x in g.tabelas["carteira_historico"]] == ["111", "222"]
+
+
+# ── Laço de vencimento ───────────────────────────────────────────────────
+
+def _venc(g, monkeypatch, linhas):
+    g.tabelas["carteira"] = linhas
+    chamadas: List[str] = []
+    monkeypatch.setattr(ci, "revogar_tokens_pendentes", lambda uid: chamadas.append(uid) or 0)
+    return chamadas
+
+
+def test_vencida_sai_com_historico_e_tokens(g, monkeypatch):
+    rev = _venc(g, monkeypatch, [
+        {"user_id": "u1", "documento": "111", "origem": "manual", "valido_ate": str(H - timedelta(days=1))},
+        {"user_id": "u1", "documento": "222", "origem": "manual", "valido_ate": str(H)},
+        {"user_id": "u1", "documento": "333", "origem": "acessorias", "valido_ate": None},
+    ])
+    assert ci.expirar_prazos(H) == 1
+    assert [l["documento"] for l in g.tabelas["carteira"]] == ["222", "333"]
+    h = g.tabelas["carteira_historico"]
+    assert [(x["movimento"], x["origem"], x["documento"], x["feito_por"], x["feito_por_email"]) for x in h] == [
+        ("saida", "prazo", "111", None, "prazo")
+    ]
+    assert rev == ["u1"]
+
+
+def test_falha_numa_linha_nao_para_as_outras(g, monkeypatch):
+    ontem = str(H - timedelta(days=1))
+    _venc(g, monkeypatch, [
+        {"user_id": "u1", "documento": "111", "origem": "manual", "valido_ate": ontem},
+        {"user_id": "u1", "documento": "222", "origem": "manual", "valido_ate": ontem},
+    ])
+    exec_orig = type(g.table("carteira")).execute
+
+    def execute(self):
+        if self._op == "delete" and ("documento", "eq", "111") in self._f:
+            raise RuntimeError("falha")
+        return exec_orig(self)
+
+    monkeypatch.setattr(type(g.table("carteira")), "execute", execute)
+    assert ci.expirar_prazos(H) == 1
+    assert [l["documento"] for l in g.tabelas["carteira"]] == ["111"]

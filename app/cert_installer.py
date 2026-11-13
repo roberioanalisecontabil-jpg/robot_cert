@@ -1265,7 +1265,7 @@ def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, s
 
 def _historico_manual(
     client: Any, user_id: str, documentos: List[str], movimento: str,
-    por_id: Optional[str], por_email: str,
+    por_id: Optional[str], por_email: str, origem: str = "manual",
 ) -> None:
     """Registra a movimentação manual. Falha aqui não desfaz a carteira: a
     mudança já feita é o que o usuário pediu; o erro fica no log."""
@@ -1276,7 +1276,7 @@ def _historico_manual(
         email = ((r.data or [{}])[0].get("email")) or ""
         client.table("carteira_historico").insert([
             {"user_id": user_id, "user_email": email, "documento": d, "movimento": movimento,
-             "origem": "manual", "feito_por": por_id, "feito_por_email": por_email}
+             "origem": origem, "feito_por": por_id, "feito_por_email": por_email}
             for d in documentos
         ]).execute()
     except Exception:
@@ -1344,6 +1344,32 @@ def remover_da_carteira(user_id: str, documento: str, por_id: Optional[str] = No
     r = client.table("carteira").delete().eq("user_id", user_id).eq("documento", d).execute()
     if r.data:
         _historico_manual(client, user_id, [d], "saida", por_id, por_email)
+
+
+def expirar_prazos(hoje: Optional[date] = None) -> int:
+    """Apaga as liberações manuais cujo prazo acabou (fim inclusivo) e queima
+    os tokens pendentes de quem perdeu algo. Erro numa linha não para as outras."""
+    client = _banco()
+    if not client:
+        return 0
+    hoje = hoje or date.today()
+    rows = (client.table("carteira").select("user_id, documento, valido_ate")
+            .is_("valido_ate", "not.null").execute().data or [])
+    saiu: Dict[str, List[str]] = {}
+    for r in rows:
+        ate = _como_data(r.get("valido_ate"))
+        if ate is None or ate >= hoje:
+            continue
+        try:
+            client.table("carteira").delete().eq("user_id", r["user_id"]).eq("documento", r["documento"]).execute()
+        except Exception:
+            logger.exception("Falha ao expirar %s de %s", r["documento"], r["user_id"])
+            continue
+        saiu.setdefault(r["user_id"], []).append(r["documento"])
+    for uid, docs in saiu.items():
+        _historico_manual(client, uid, docs, "saida", None, "prazo", origem="prazo")
+        revogar_tokens_pendentes(uid)
+    return sum(len(d) for d in saiu.values())
 
 
 # ──────────────────────────────────────────────────────────────────────────
