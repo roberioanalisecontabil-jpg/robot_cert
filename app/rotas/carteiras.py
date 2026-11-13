@@ -417,7 +417,9 @@ def incluir_pessoas_no_certificado(
         cert_installer.validar_prazo(body.valido_desde or hoje, body.valido_ate, hoje)
     except cert_installer.PrazoInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
-    gravados = sum(_atribuir_um(token, uid, [doc], body.valido_desde, body.valido_ate) for uid in ids)
+    # Também valida o alvo (404 inexistente, 422 Admin) antes da primeira gravação.
+    excecao = {uid: _carteira_de_excecoes(uid) for uid in ids}
+    gravados = sum(_atribuir_um(token, uid, [doc], body.valido_desde, body.valido_ate, excecao[uid]) for uid in ids)
     return {"status": "ok", "gravados": gravados}
 
 
@@ -580,20 +582,22 @@ def atribuir_carteira(
     """
     _exigir_alcance(token, body.user_id)
     _exigir_documentos_no_inventario(body.documentos)
-    tipo = "excecoes" if _carteira_de_excecoes(body.user_id) else "atribuicoes"
-    gravados = _atribuir_um(token, body.user_id, body.documentos, body.valido_desde, body.valido_ate)
+    excecao = _carteira_de_excecoes(body.user_id)
+    tipo = "excecoes" if excecao else "atribuicoes"
+    gravados = _atribuir_um(token, body.user_id, body.documentos, body.valido_desde, body.valido_ate, excecao)
     return {"status": "ok", "gravados": gravados, "tipo": tipo}
 
 
 def _atribuir_um(
     token: auth.TokenData, user_id: str, documentos: List[str],
-    desde: Optional[date], ate: Optional[date],
+    desde: Optional[date], ate: Optional[date], excecao: bool,
 ) -> int:
     """
     Caminho de uma pessoa, comum à rota por pessoa e à aba Certificados.
-    Quem chama já conferiu `_exigir_alcance` e o inventário.
+    Quem chama já conferiu `_exigir_alcance`, o inventário e o papel do alvo
+    (`excecao`), para que nada falhe por pessoa no meio de um lote.
     """
-    if _carteira_de_excecoes(user_id):
+    if excecao:
         try:
             for doc in documentos:
                 cert_installer.remover_excecao(user_id, doc)

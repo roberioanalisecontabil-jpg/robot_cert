@@ -86,3 +86,11 @@ def test_vencimentos_por_documento_pega_o_maior(banco: _Fake) -> None:
         {"id": "x2", "documento": DOC_A, "not_after": "2026-06-01T00:00:00+00:00"},
     ]
     assert ci.vencimentos_por_documento()[DOC_A] == "2027-01-01T00:00:00+00:00"
+
+
+def test_lote_com_id_inexistente_nao_grava_nada(client: TestClient, banco: _Fake) -> None:
+    antes = [dict(l) for l in banco.tabelas["carteira"]]
+    r = client.post(f"/api/carteira/certificados/{DOC_C}/pessoas", json={"user_ids": ["u-fis", "nao-existe"]}, headers=_h(*ADMIN))
+    assert r.status_code == 404, r.text
+    assert banco.tabelas["carteira"] == antes
+    assert not banco.tabelas.get("carteira_historico")
