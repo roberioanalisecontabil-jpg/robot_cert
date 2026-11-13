@@ -535,3 +535,38 @@ def test_documento_fora_do_inventario_continua_removivel(html: str) -> None:
     ninguém conseguiria tirar um acesso que continua valendo.
     """
     assert "for (const doc of _carteiraAtual)" in html
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Abas Pessoas / Certificados (carteira por certificado, 13/11)
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_abas_pessoas_e_certificados(html: str) -> None:
+    assert 'class="ag-abas' in html
+    for aba, painel in (("pessoas", "sec-pessoas"), ("certificados", "sec-certificados")):
+        assert f'data-aba="{aba}"' in html
+        assert f'aria-controls="{painel}"' in html
+        assert f'id="{painel}"' in html
+
+
+def _abas_selecionadas(texto: str) -> list:
+    return re.findall(r'data-aba="(\w+)" aria-selected="true"', texto)
+
+
+def test_pagina_aceita_aba(html: str) -> None:
+    from fastapi.testclient import TestClient as TC
+    import app.config as cfg
+    cfg.API_KEY = ""
+    c = TC(m.app)
+    assert _abas_selecionadas(c.get("/carteiras?aba=certificados").text) == ["certificados"]
+    assert _abas_selecionadas(c.get("/carteiras?aba=xyz").text) == ["pessoas"]
+    assert _abas_selecionadas(c.get("/carteiras").text) == ["pessoas"]
+
+
+def test_script_da_aba_carrega_com_cache_buster(html: str) -> None:
+    assert "/static/carteiras-certificados.js?v=certificados-2026-11-13" in html
+
+
+def test_teto_de_700_dias_na_tela() -> None:
+    js = (Path(__file__).resolve().parents[1] / "static" / "carteiras-certificados.js").read_text(encoding="utf-8")
+    assert "700" in js

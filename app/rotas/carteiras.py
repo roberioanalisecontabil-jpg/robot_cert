@@ -483,6 +483,7 @@ def obter_carteira(
                 "atribuido_por": l.get("atribuido_por_email"),
                 "atribuido_em": l.get("atribuido_em"),
                 "origem": l.get("origem") or "manual",
+                "valido_desde": l.get("valido_desde"), "valido_ate": l.get("valido_ate"),
             }
             for l in linhas
         ],

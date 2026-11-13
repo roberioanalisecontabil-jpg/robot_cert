@@ -755,6 +755,9 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     # lista é um link, e no celular a tela vira duas etapas — só a lista
     # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
     operador = (request.query_params.get("operador") or "").strip()[:64]
+    aba = request.query_params.get("aba")
+    aba = aba if aba in ("pessoas", "certificados") else "pessoas"
+    certificado = "".join(c for c in (request.query_params.get("certificado") or "") if c.isdigit())[:20]
     # Só muda o texto de abertura (ADR 0005); a regra vale nas rotas.
     try:
         from app import acessorias
@@ -765,7 +768,10 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="carteiras.html",
-        context={"pagina_ativa": "carteiras", "operador_id": operador, "sincronizado": sincronizado},
+        context={
+            "pagina_ativa": "carteiras", "operador_id": operador, "sincronizado": sincronizado,
+            "aba": aba, "certificado_id": certificado,
+        },
     )
 
 
