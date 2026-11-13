@@ -1263,48 +1263,85 @@ def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, s
     ]
 
 
+def _historico_manual(
+    client: Any, user_id: str, documentos: List[str], movimento: str,
+    por_id: Optional[str], por_email: str,
+) -> None:
+    """Registra a movimentação manual. Falha aqui não desfaz a carteira: a
+    mudança já feita é o que o usuário pediu; o erro fica no log."""
+    if not documentos:
+        return
+    try:
+        r = client.table("users").select("email").eq("id", user_id).execute()
+        email = ((r.data or [{}])[0].get("email")) or ""
+        client.table("carteira_historico").insert([
+            {"user_id": user_id, "user_email": email, "documento": d, "movimento": movimento,
+             "origem": "manual", "feito_por": por_id, "feito_por_email": por_email}
+            for d in documentos
+        ]).execute()
+    except Exception:
+        logger.exception("Falha ao gravar o histórico da carteira")
+
+
 def atribuir_carteira(
     user_id: str,
     documentos: List[str],
     atribuido_por: Optional[str],
     atribuido_por_email: str,
+    valido_desde: Optional[date] = None,
+    valido_ate: Optional[date] = None,
+    hoje: Optional[date] = None,
 ) -> int:
-    """Acrescenta documentos à carteira. Devolve quantos foram gravados."""
+    """Acrescenta documentos à carteira. Devolve quantos foram gravados.
+
+    Linha que já veio de outra origem (Acessórias) não é regravada: o prazo
+    manual não pode virar vencimento de uma liberação sincronizada.
+    """
     client = _banco()
     if not client:
         raise RuntimeError("Banco não configurado")
 
-    linhas = []
-    for doc in documentos:
-        d = so_digitos(doc)
-        if not d:
-            continue
-        linhas.append(
+    hoje = hoje or date.today()
+    desde = valido_desde or hoje
+    validar_prazo(desde, valido_ate, hoje)
+
+    docs = [d for d in dict.fromkeys(so_digitos(x) for x in documentos) if d]
+    if not docs:
+        return 0
+    existentes = {
+        l["documento"]: (l.get("origem") or "manual")
+        for l in (client.table("carteira").select("documento,origem").eq("user_id", user_id).execute().data or [])
+    }
+    docs = [d for d in docs if existentes.get(d, "manual") == "manual"]
+    if not docs:
+        return 0
+
+    client.table("carteira").upsert(
+        [
             {
                 "user_id": user_id,
                 "documento": d,
                 "atribuido_por": atribuido_por,
                 "atribuido_por_email": atribuido_por_email,
+                "valido_desde": desde.isoformat(),
+                "valido_ate": valido_ate.isoformat() if valido_ate else None,
             }
-        )
-    if not linhas:
-        return 0
+            for d in docs
+        ],
+        on_conflict="user_id,documento",
+    ).execute()
+    _historico_manual(client, user_id, [d for d in docs if d not in existentes], "entrada", atribuido_por, atribuido_por_email)
+    return len(docs)
 
-    client.table("carteira").upsert(linhas, on_conflict="user_id,documento").execute()
-    return len(linhas)
 
-
-def remover_da_carteira(user_id: str, documento: str) -> None:
+def remover_da_carteira(user_id: str, documento: str, por_id: Optional[str] = None, por_email: str = "") -> None:
     client = _banco()
     if not client:
         raise RuntimeError("Banco não configurado")
-    (
-        client.table("carteira")
-        .delete()
-        .eq("user_id", user_id)
-        .eq("documento", so_digitos(documento))
-        .execute()
-    )
+    d = so_digitos(documento)
+    r = client.table("carteira").delete().eq("user_id", user_id).eq("documento", d).execute()
+    if r.data:
+        _historico_manual(client, user_id, [d], "saida", por_id, por_email)
 
 
 # ──────────────────────────────────────────────────────────────────────────

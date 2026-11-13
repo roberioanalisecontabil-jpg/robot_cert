@@ -663,3 +663,36 @@ def test_retirar_depois_da_virada_bloqueia_o_que_veio_do_acessorias(banco, monke
     assert acessorias.desbloquear(ids["ana"], [MATRIZ]) == 1
     assert acessorias.bloqueios(ids["ana"]) == []
     assert acessorias.buscar(api=_api_com(emp))["resumo"]["entradas"] == 1
+
+
+def test_conversao_descarta_prazo(monkeypatch):
+    import inspect
+    src = inspect.getsource(acessorias)
+    assert "SET origem = 'acessorias', valido_ate = NULL" in src
+    assert "LEAST(valido_desde, current_date)" in src
+
+
+def test_retirar_manual_grava_historico(monkeypatch):
+    chamadas = []
+
+    class _Cur:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, sql, params=()): chamadas.append((sql, params)); self._u = sql
+        def fetchone(self):
+            return ("manual",) if "RETURNING" in self._u else ("ana@x",)
+
+    class _Conn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def transaction(self): return self
+        def cursor(self): return _Cur()
+
+    class _Cli:
+        def conexao(self): return _Conn()
+
+    monkeypatch.setattr(acessorias, "_cliente", lambda: _Cli())
+    assert acessorias.retirar("u1", OUTRA, "adm", "adm@x") is False
+    ins = [p for s, p in chamadas if "carteira_historico" in s]
+    assert ins == [("u1", "ana@x", OUTRA, "manual", "adm", "adm@x")]
+    assert not any("carteira_bloqueio" in s for s, _ in chamadas)

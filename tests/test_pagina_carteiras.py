@@ -20,6 +20,7 @@ Escritos antes da implementação; falhavam em 4847248.
 from __future__ import annotations
 
 import io
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -228,3 +229,16 @@ def test_desfazer_bloqueio_sem_atribuir(client: TestClient, banco: _Fake, monkey
     assert client.delete(f"/api/carteira/u-fis/bloqueio/{DOC_A}", headers=_h(*ADMIN)).status_code == 404
     monkeypatch.setattr(acessorias, "sincronizado", lambda: False)
     assert client.delete(f"/api/carteira/u-fis/bloqueio/{DOC_FORA}", headers=_h(*ADMIN)).status_code == 409
+
+
+def test_prazo_invalido_vira_400(client: TestClient, banco: _Fake) -> None:
+    antes = len(banco.tabelas["carteira"])
+    hoje = date.today()
+    r = client.post(
+        "/api/carteira",
+        json={"user_id": "u-fis", "documentos": [DOC_A], "valido_desde": hoje.isoformat(),
+              "valido_ate": (hoje + timedelta(days=701)).isoformat()},
+        headers=_h(*ADMIN),
+    )
+    assert r.status_code == 400, r.text
+    assert len(banco.tabelas["carteira"]) == antes

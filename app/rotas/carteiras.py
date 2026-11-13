@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -106,6 +106,8 @@ def _exigir_documentos_ao_alcance(token: auth.TokenData, documentos: List[str]) 
 class CarteiraRequest(BaseModel):
     user_id: str
     documentos: List[str]
+    valido_desde: Optional[date] = None
+    valido_ate: Optional[date] = None
 
 
 # Modulo `carteiras` na matriz desde 20/08, com os DOIS eixos declarados: a
@@ -448,8 +450,12 @@ def atribuir_carteira(
             documentos=body.documentos,
             atribuido_por=_user_id_da_sessao(token),
             atribuido_por_email=token.email or "desconhecido",
+            valido_desde=body.valido_desde,
+            valido_ate=body.valido_ate,
         )
         return {"status": "ok", "gravados": gravados, "tipo": "atribuicoes"}
+    except cert_installer.PrazoInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         # O texto vinha do cofre/banco e podia trazer nome de chave de
         # ambiente ou de tabela (achado #35). Fica no log, com a rota.
@@ -748,7 +754,7 @@ def remover_carteira(
             raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
         return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "atribuicoes", "bloqueado": bloqueou}
     try:
-        cert_installer.remover_da_carteira(user_id, documento)
+        cert_installer.remover_da_carteira(user_id, documento, _user_id_da_sessao(token), token.email or "desconhecido")
         # O token já pedido levava este cliente e o resgate não confere a
         # carteira de novo (auditoria de 10/10/2026). A pessoa pede outra vez
         # o que ainda é dela.

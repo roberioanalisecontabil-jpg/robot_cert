@@ -82,3 +82,54 @@ def test_vencida_nao_instala_e_vigente_sim(banco):
         {"user_id": "u1", "documento": "222", "valido_desde": "2020-01-01", "valido_ate": None},
     ]
     assert ci.listar_carteira("u1") == {"222"}
+
+
+# ── Escritas manuais: prazo e histórico ──────────────────────────────────
+
+from tests.test_seguranca_lote1 import _Fake as _Grande  # noqa: E402
+
+
+@pytest.fixture
+def g(monkeypatch: pytest.MonkeyPatch) -> _Grande:
+    fake = _Grande({"carteira": [], "carteira_historico": [], "users": [{"id": "u1", "email": "u1@x"}]})
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
+    return fake
+
+
+def test_atribuir_com_prazo_grava_e_historico(g):
+    assert ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=30), hoje=H) == 1
+    assert g.tabelas["carteira"][0]["valido_ate"] == "2026-12-13"
+    h = g.tabelas["carteira_historico"]
+    assert [(x["movimento"], x["origem"], x["documento"], x["user_email"], x["feito_por_email"]) for x in h] == [
+        ("entrada", "manual", "111", "u1@x", "a@x")
+    ]
+
+
+def test_prazo_nao_toca_linha_do_acessorias(g):
+    g.tabelas["carteira"] = [{"user_id": "u1", "documento": "111", "origem": "acessorias", "valido_ate": None}]
+    assert ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=30), hoje=H) == 0
+    assert g.tabelas["carteira"] == [{"user_id": "u1", "documento": "111", "origem": "acessorias", "valido_ate": None}]
+    assert g.tabelas["carteira_historico"] == []
+
+
+def test_reatribuir_manual_muda_prazo_sem_historico_novo(g):
+    ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=30), hoje=H)
+    ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=60), hoje=H)
+    assert g.tabelas["carteira"][0]["valido_ate"] == "2027-01-12" and len(g.tabelas["carteira"]) == 1
+    assert len(g.tabelas["carteira_historico"]) == 1
+
+
+def test_remover_manual_grava_saida(g):
+    ci.atribuir_carteira("u1", ["111"], "a", "a@x", hoje=H)
+    ci.remover_da_carteira("u1", "111", "adm", "adm@x")
+    ci.remover_da_carteira("u1", "111", "adm", "adm@x")  # já não existe: sem 2a saída
+    assert g.tabelas["carteira"] == []
+    assert [(x["movimento"], x["origem"], x["feito_por"]) for x in g.tabelas["carteira_historico"]][1:] == [
+        ("saida", "manual", "adm")
+    ]
+
+
+def test_prazo_invalido_nao_grava(g):
+    with pytest.raises(ci.PrazoInvalido):
+        ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=701), hoje=H)
+    assert g.tabelas["carteira"] == []
