@@ -1218,6 +1218,24 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
     return linhas
 
 
+def vencimentos_por_documento() -> Dict[str, str]:
+    """documento -> maior `not_after` (ISO) do cofre. Falha devolve {}."""
+    client = _banco()
+    if not client:
+        return {}
+    try:
+        linhas = client.table("cert_pfx_store").select("documento, not_after").execute().data or []
+    except Exception:
+        logger.exception("Falha ao ler os vencimentos do cofre")
+        return {}
+    saida: Dict[str, str] = {}
+    for l in linhas:
+        d, v = so_digitos(l.get("documento")), l.get("not_after")
+        if d and v and str(v) > saida.get(d, ""):
+            saida[d] = str(v)
+    return saida
+
+
 def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, str]]:
     """
     Documentos que existem para atribuir, com o nome do titular.
