@@ -1291,11 +1291,13 @@ def atribuir_carteira(
     valido_desde: Optional[date] = None,
     valido_ate: Optional[date] = None,
     hoje: Optional[date] = None,
+    preservar_existentes: bool = False,
 ) -> int:
     """Acrescenta documentos à carteira. Devolve quantos foram gravados.
 
     Linha que já veio de outra origem (Acessórias) não é regravada: o prazo
     manual não pode virar vencimento de uma liberação sincronizada.
+    `preservar_existentes` (planilha, que não traz prazo) pula também as manuais.
     """
     client = _banco()
     if not client:
@@ -1312,7 +1314,7 @@ def atribuir_carteira(
         l["documento"]: (l.get("origem") or "manual")
         for l in (client.table("carteira").select("documento,origem").eq("user_id", user_id).execute().data or [])
     }
-    docs = [d for d in docs if existentes.get(d, "manual") == "manual"]
+    docs = [d for d in docs if d not in existentes] if preservar_existentes else [d for d in docs if existentes.get(d, "manual") == "manual"]
     if not docs:
         return 0
 

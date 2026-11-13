@@ -133,3 +133,11 @@ def test_prazo_invalido_nao_grava(g):
     with pytest.raises(ci.PrazoInvalido):
         ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=701), hoje=H)
     assert g.tabelas["carteira"] == []
+
+
+def test_planilha_preserva_manual_com_prazo(g):
+    ci.atribuir_carteira("u1", ["111"], "a", "a@x", H, H + timedelta(days=30), hoje=H)
+    antes = [dict(l) for l in g.tabelas["carteira"]]
+    assert ci.atribuir_carteira("u1", ["111", "222"], "a", "a@x", hoje=H, preservar_existentes=True) == 1
+    assert g.tabelas["carteira"][0] == antes[0]
+    assert [x["documento"] for x in g.tabelas["carteira_historico"]] == ["111", "222"]

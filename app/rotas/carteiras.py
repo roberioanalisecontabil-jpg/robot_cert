@@ -706,6 +706,7 @@ async def importar_carteiras(
                 documentos=sorted(docs),
                 atribuido_por=ator,
                 atribuido_por_email=token.email or "desconhecido",
+                preservar_existentes=True,
             )
             pessoas += 1
         except Exception:
