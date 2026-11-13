@@ -19,7 +19,7 @@ import re
 import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -818,12 +818,43 @@ def so_digitos(documento: Optional[str]) -> str:
     return "".join(c for c in str(documento or "") if c.isdigit())
 
 
+PRAZO_MAX_DIAS = 700
+
+
+class PrazoInvalido(ValueError):
+    """Prazo recusado; a mensagem vai para a tela."""
+
+
+def validar_prazo(desde: date, ate: Optional[date], hoje: date) -> None:
+    if desde < hoje:
+        raise PrazoInvalido("O início não pode ser anterior a hoje.")
+    if ate is not None:
+        if ate < desde:
+            raise PrazoInvalido("O fim não pode ser anterior ao início.")
+        if (ate - desde).days > PRAZO_MAX_DIAS:
+            raise PrazoInvalido(f"O prazo não pode passar de {PRAZO_MAX_DIAS} dias.")
+
+
+def _como_data(v: Any) -> Optional[date]:
+    if not v:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
+
+
+def vigente(linha: Dict[str, Any], hoje: date) -> bool:
+    """Chave ausente vale (linha anterior à migration); fim é inclusivo."""
+    desde, ate = _como_data(linha.get("valido_desde")), _como_data(linha.get("valido_ate"))
+    return (desde is None or desde <= hoje) and (ate is None or ate >= hoje)
+
+
 def listar_carteira(user_id: str) -> Set[str]:
     """
     Documentos que este usuário pode instalar.
 
     Levanta `CarteiraIndisponivel` se a consulta falhar, em vez de devolver
-    vazio — ver a docstring da exceção.
+    vazio — ver a docstring da exceção. Só conta liberação dentro do período.
     """
     client = _banco()
     if not client:
@@ -831,11 +862,16 @@ def listar_carteira(user_id: str) -> Set[str]:
     try:
         r = (
             client.table("carteira")
-            .select("documento")
+            .select("documento, valido_desde, valido_ate")
             .eq("user_id", user_id)
             .execute()
         )
-        return {so_digitos(row.get("documento")) for row in (r.data or []) if row.get("documento")}
+        hoje = date.today()
+        return {
+            so_digitos(row.get("documento"))
+            for row in (r.data or [])
+            if row.get("documento") and vigente(row, hoje)
+        }
     except Exception as e:
         logger.exception("Falha ao listar carteira de %s", user_id)
         raise CarteiraIndisponivel(str(e)) from e
@@ -1169,7 +1205,7 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
     try:
         r = (
             client.table("carteira")
-            .select("documento, atribuido_por_email, atribuido_em, origem")
+            .select("documento, atribuido_por_email, atribuido_em, origem, valido_desde, valido_ate")
             .eq("user_id", user_id)
             .execute()
         )
