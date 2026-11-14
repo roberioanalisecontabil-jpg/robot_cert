@@ -379,7 +379,7 @@ def test_configuracao_tem_a_forma_de_envio_e_o_bloco_do_graph() -> None:
     assert 'id="sel-email-transporte"' in html and 'value="graph"' in html
     for campo in ("inp-graph-tenant", "inp-graph-client", "inp-graph-secret", "inp-graph-validade", "inp-graph-remetente", "inp-graph-reply-to"):
         assert f'id="{campo}"' in html, campo
-    assert html.count("...corpoGraph(),") == 3, "os três PUT da tela mandam o bloco do Graph"
+    assert html.count("...corpoGraph(),") == 4, "os quatro PUT da tela mandam o bloco do Graph (o da Remoção entrou em 14/11)"
     assert "docs/envio-microsoft-365.md" in html
     assert (RAIZ / "docs" / "envio-microsoft-365.md").is_file()
     assert (RAIZ / "supabase" / "migrations" / "20261003120000_envio_microsoft_graph.sql").is_file()
