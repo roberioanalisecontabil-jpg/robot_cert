@@ -794,6 +794,11 @@ from app.rotas.atualizacao import router as _rotas_atualizacao  # noqa: E402
 
 app.include_router(_rotas_atualizacao)
 
+# Remoção de certificados nas estações (Frente B): app/rotas/remocao.py.
+from app.rotas.remocao import router as _rotas_remocao  # noqa: E402
+
+app.include_router(_rotas_remocao)
+
 # Entrar com a Microsoft (ida e volta do navegador): app/rotas/microsoft.py.
 from app.rotas.microsoft import MENSAGENS_ERRO as _MENSAGENS_ERRO_MS, router as _rotas_microsoft  # noqa: E402
 
