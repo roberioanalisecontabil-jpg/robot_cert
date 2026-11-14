@@ -691,16 +691,29 @@
         document.getElementById("disp-expired").textContent = s.effective_expired || emptyHint;
       }
 
+      // So vira true no fim de uma carga bem-sucedida. Todo Salvar manda o corpo
+      // lido do DOM: antes disso o DOM esta vazio (e os modos de remocao em
+      // "desligado"), e um clique gravaria isso por cima da configuracao.
+      let _carregado = false;
+      let _cargaFalhou = false;
+      function avisoNaoCarregado() {
+        return _cargaFalhou
+          ? "Não foi possível carregar a configuração; recarregue a página antes de salvar."
+          : "Aguarde a configuração carregar antes de salvar.";
+      }
+
       async function loadSettingsToForm() {
         const st = document.getElementById("cfg-msg");
         st.textContent = "A carregar…";
         try {
           const r = await fetch("/api/settings", { headers: getHeaders() });
           if (r.status === 401) {
+            _cargaFalhou = true;
             st.textContent = "A sessão expirou. Entre de novo no portal.";
             return;
           }
           if (!r.ok) {
+            _cargaFalhou = true;
             st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
             return;
           }
@@ -742,7 +755,9 @@
           const cmi = document.getElementById("cmd-machine-id");
           if (cmi) cmi.value = midG;
           st.textContent = "";
+          _carregado = true;
         } catch (e) {
+          _cargaFalhou = true;
           st.textContent = "Erro: " + e;
         }
       }
@@ -845,6 +860,7 @@
       // ── Salvar pastas ────────────────────────────────────────────────────────
       document.getElementById("btn-save-cfg").addEventListener("click", async () => {
         const st = document.getElementById("cfg-msg");
+        if (!_carregado) { st.textContent = avisoNaoCarregado(); return; }
         st.textContent = "A guardar…";
         try {
           const body = {
@@ -879,6 +895,7 @@
       // modos. O que o PUT preserva quando omitido não vai.
       async function salvarRemocao() {
         const st = document.getElementById("remocao-msg");
+        if (!_carregado) { st.textContent = avisoNaoCarregado(); return; }
         st.textContent = "A guardar…";
         try {
           const body = {
@@ -963,6 +980,7 @@
 
       document.getElementById("btn-save-smtp").addEventListener("click", async () => {
         const st = document.getElementById("smtp-msg");
+        if (!_carregado) { st.textContent = ""; erroCfg(avisoNaoCarregado()); return; }
         st.textContent = "Salvando…";
         try {
           const body = {
@@ -1144,6 +1162,7 @@
 
       document.getElementById("form-email").addEventListener("submit", async (ev) => {
         ev.preventDefault();
+        if (!_carregado) { erroEmail(avisoNaoCarregado()); return; }
         const btn = document.getElementById("em-salvar");
         btn.disabled = true;
         erroEmail("");

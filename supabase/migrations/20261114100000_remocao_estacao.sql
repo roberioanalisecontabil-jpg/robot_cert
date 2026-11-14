@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.remocao_estacao (
   id              bigserial PRIMARY KEY,
   machine_id      text NOT NULL,
   usuario_windows text NOT NULL,
-  user_id         uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+  user_id         uuid NULL REFERENCES public.users(id) ON DELETE SET NULL,
   fingerprint     char(64) NOT NULL,
   documento       text,
   regra           text NOT NULL CHECK (regra IN ('carteira', 'desativada', 'vinculo', 'emprestimo', 'sem_login')),

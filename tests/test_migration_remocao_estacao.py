@@ -42,6 +42,12 @@ def test_indices_idempotentes():
     assert "(user_id)" in s
 
 
+def test_fk_user_id_qualificada_com_public():
+    s = _sem_comentarios()
+    assert "REFERENCES public.users(id)" in s
+    assert not re.search(r"REFERENCES\s+users\(", s)
+
+
 def test_sem_begin_commit_e_so_ascii():
     assert not re.search(r"^\s*(BEGIN|COMMIT)\s*;", _sql(), re.M)
     _sql().encode("ascii")

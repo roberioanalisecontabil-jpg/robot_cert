@@ -47,6 +47,26 @@ def test_rotulos_de_estado_e_regra() -> None:
         assert rotulo in js
 
 
+def test_salvar_recusa_antes_da_configuracao_carregar() -> None:
+    # Sem a carga, o DOM esta vazio e os modos em "desligado": salvar apagaria
+    # pastas/SMTP/Graph. A flag so vira true no fim de loadSettingsToForm.
+    assert "let _carregado = false;" in TEMPLATE
+    carga = re.search(r"async function loadSettingsToForm\(\).*?\n      \}\n", TEMPLATE, re.S).group(0)
+    assert "_carregado = true;" in carga
+    assert carga.index("_carregado = true;") > carga.index("st.textContent = \"\";")
+    assert "Aguarde a configuração carregar antes de salvar." in TEMPLATE
+    assert "recarregue a página antes de salvar." in TEMPLATE
+    # Todo handler que faz PUT /api/settings confere a flag antes de montar o corpo.
+    puts = list(re.finditer(r'fetch\("/api/settings",\s*\{\s*method: "PUT"', TEMPLATE))
+    assert len(puts) == 4
+    for m in puts:
+        antes = TEMPLATE[: m.start()]
+        inicio = max(antes.rfind('addEventListener("click"'), antes.rfind('addEventListener("submit"'),
+                     antes.rfind("async function salvarRemocao"))
+        assert "if (!_carregado)" in antes[inicio:], antes[inicio:inicio + 120]
+    assert "api/settings\", { method: \"PUT\"" not in JS.read_text(encoding="utf-8")
+
+
 def test_salvar_manda_so_os_dois_modos_alem_do_corpo_base() -> None:
     # O PUT remonta os campos "próprios" a partir do corpo; por isso vai o corpo
     # base das outras abas. Dos campos que o PUT preserva quando omitidos
