@@ -629,7 +629,7 @@ def test_aba_acessorias_na_configuracao():
     css = (RAIZ / "static" / "aguia-config.css").read_text(encoding="utf-8")
     main = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
     assert 'id="sec-acessorias"' in html and 'acessorias: "sec-acessorias"' in html
-    assert '"sieg", "acessorias")' in main
+    assert '"sieg", "acessorias", "remocao")' in main
     # A tabela com seletor passava de 390px e a página inteira rolava de lado.
     assert "#sec-acessorias .ag-table-scroll { overflow-x: auto;" in css
     assert "aguia-config.css?v=acessorias-2026-10-20" in html

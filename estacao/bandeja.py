@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
+from datetime import date
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -19,6 +21,7 @@ from estacao import NOME, VERSAO_REPORTADA, caminhos
 logger = logging.getLogger("estacao")
 
 INTERVALO = 20  # segundos entre as perguntas ao portal, como no Hardlyze
+INTERVALO_CONFERENCIA = 300  # segundos entre as conferências de remoção (Frente B)
 
 
 def configurar_log() -> Path:
@@ -86,6 +89,9 @@ class Bandeja:
         self._parar = threading.Event()
         self._autorizacao_anterior = None
         self._mid = None
+        self._pendentes: list[dict] = []  # resultados de remoção a mandar na próxima conferência
+        self._ultima_conferencia: float | None = None
+        self._conferindo = threading.Lock()
 
     # ── portal ──────────────────────────────────────────────────────────
 
@@ -98,10 +104,32 @@ class Bandeja:
 
     def laco(self) -> None:
         """Pergunta ao portal, a cada 20 s, se há instalação para esta máquina.
-        As chamadas também mantêm a bandeja "Conectada" na aba Computadores."""
+        As chamadas também mantêm a bandeja "Conectada" na aba Computadores.
+        A conferência de remoção roda na partida e depois a cada 300 s."""
         while not self._parar.is_set():
             self.verificar()
+            if (self._ultima_conferencia is None
+                    or time.monotonic() - self._ultima_conferencia >= INTERVALO_CONFERENCIA):
+                self.conferir()
             self._parar.wait(INTERVALO)
+
+    def conferir(self) -> None:
+        """Uma conferência de remoção; se outra já está rodando, não faz nada."""
+        if not self._conferindo.acquire(blocking=False):
+            return
+        try:
+            import httpx
+
+            from estacao import conferencia
+
+            with httpx.Client() as http:
+                self._pendentes = conferencia.conferir(http, VERSAO_REPORTADA, self._avisar, date.today(),
+                                                       self._pendentes, self._machine_id())
+        except Exception:
+            logger.exception("Falha na conferência de remoção")
+        finally:
+            self._ultima_conferencia = time.monotonic()
+            self._conferindo.release()
 
     def verificar(self) -> None:
         import httpx
@@ -193,7 +221,11 @@ class Bandeja:
 
             def _pronto() -> None:
                 logger.info("Conta do portal de certificados conectada (máquina %s).", mid)
-                threading.Thread(target=self.verificar, daemon=True).start()
+                def _depois_do_login() -> None:
+                    self.verificar()
+                    self.conferir()  # o login novo muda quem decide: confere já
+
+                threading.Thread(target=_depois_do_login, daemon=True).start()
 
             with httpx.Client() as http:
                 ms = conta.microsoft_ligada(http, portal)

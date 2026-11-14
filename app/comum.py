@@ -153,5 +153,7 @@ def _settings_dict(s: PortalSettings) -> dict:
         "pasta_pf": s.pasta_pf,
         "alertas_novos_enabled": s.alertas_novos_enabled,
         "alertas_novos_modo": s.alertas_novos_modo,
+        "remocao_carteira_modo": s.remocao_carteira_modo,
+        "remocao_sem_login_modo": s.remocao_sem_login_modo,
         "alertas_novos_modo_efetivo": alertas_config.modo_novos_efetivo(s.alertas_novos_modo),
     }

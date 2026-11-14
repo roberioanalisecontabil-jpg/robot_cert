@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from app import alertas_config, atividade, auth, cert_installer, correio, email_modelo, graph_mail, smtp_service
 from app.alert_state import previa_do_resumo, trigger_all_alerts
 from app.comum import LISTAGEM_EXPORT_MAX, _settings_dict
+from app.remocao import MODOS as MODOS_REMOCAO
 from app.notification_service import build_notifications_payload
 from app.rotas.usuarios import _EMAIL_PLAUSIVEL, _validar_email
 from app.sessao import (
@@ -99,6 +100,9 @@ class SettingsBody(BaseModel):
     pasta_pf: Optional[str] = Field(default=None, max_length=1024)
     alertas_novos_enabled: Optional[bool] = Field(default=None)
     alertas_novos_modo: Optional[str] = Field(default=None, max_length=16)
+    # Remoção nas estações (Frente B): `None` preserva; "" volta ao padrão.
+    remocao_carteira_modo: Optional[str] = Field(default=None, max_length=16)
+    remocao_sem_login_modo: Optional[str] = Field(default=None, max_length=16)
 
 
 # Mao dupla: a tela de Configuracao le daqui, e o agente tambem — e o que diz
@@ -155,6 +159,12 @@ def put_settings(body: SettingsBody) -> dict:
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    modos_remocao = {}
+    for campo in ("remocao_carteira_modo", "remocao_sem_login_modo"):
+        valor = getattr(old, campo) if getattr(body, campo) is None else getattr(body, campo).strip()
+        if valor not in ("", *MODOS_REMOCAO):
+            raise HTTPException(status_code=422, detail="Modo de remoção: use desligado, relatorio ou ligado.")
+        modos_remocao[campo] = valor
     novos_ligado = old.alertas_novos_enabled if body.alertas_novos_enabled is None else bool(body.alertas_novos_enabled)
 
     ttl = int(
@@ -304,6 +314,7 @@ def put_settings(body: SettingsBody) -> dict:
         pasta_pf=pasta_pf,
         alertas_novos_enabled=novos_ligado,
         alertas_novos_modo=modo_novos,
+        **modos_remocao,
         **{coluna: modelo[campo] for campo, coluna in email_modelo.CAMPO_COLUNA.items()},
     )
     # 503, e não 200: o valor foi para o arquivo local, mas `load_settings`

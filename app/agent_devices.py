@@ -197,6 +197,21 @@ def registrar(user_id: str, machine_id: str, nome: str = "") -> str:
     return segredo
 
 
+def dono_do_segredo(segredo: str) -> Optional[Dict[str, Any]]:
+    """A linha dona deste segredo, revogada ou não, sem carimbar `visto_em`.
+
+    Só para a conferência de remoção do último dono do perfil (Frente B): o
+    segredo revogado ali só serve para mandar remover. Não autentica nada.
+    """
+    if not (segredo or "").strip():
+        return None
+    alvo = _hash(segredo)
+    linhas = _exigir_banco().table(TABELA).select("*").eq("segredo_hash", alvo).limit(1).execute().data or []
+    if not linhas or not hmac.compare_digest(str(linhas[0].get("segredo_hash") or ""), alvo):
+        return None
+    return linhas[0]
+
+
 def autenticar(segredo: str, versao: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Devolve o dispositivo dono deste segredo, ou None.

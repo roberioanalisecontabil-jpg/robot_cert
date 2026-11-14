@@ -88,6 +88,11 @@ class PortalSettings:
     alertas_novos_enabled: bool = True
     alertas_novos_modo: str = ""
 
+    # ── Remoção nas estações (Frente B) ────────────────────────────────────
+    # "desligado" | "relatorio" | "ligado"; vazio vale "relatorio" (ver app/remocao.py).
+    remocao_carteira_modo: str = ""
+    remocao_sem_login_modo: str = ""
+
     def effective_source(self) -> Path:
         return _pasta_efetiva(self.source_folder, "Pasta de origem", config.CERT_SOURCE_DIR)
 
@@ -225,6 +230,8 @@ def _from_row(row: dict) -> PortalSettings:
             row.get("alertas_novos_enabled") if row.get("alertas_novos_enabled") is not None else True
         ),
         alertas_novos_modo=str(row.get("alertas_novos_modo", "") or ""),
+        remocao_carteira_modo=str(row.get("remocao_carteira_modo", "") or ""),
+        remocao_sem_login_modo=str(row.get("remocao_sem_login_modo", "") or ""),
     )
 
 
@@ -265,6 +272,8 @@ def _load_file() -> Optional[PortalSettings]:
             alerta_email_recado=str(raw.get("alerta_email_recado", "") or ""),
             install_token_ttl_min=int(raw.get("install_token_ttl_min", 0) or 0),
             trilha_retencao_dias=int(raw.get("trilha_retencao_dias", 0) or 0),
+            remocao_carteira_modo=str(raw.get("remocao_carteira_modo", "") or ""),
+            remocao_sem_login_modo=str(raw.get("remocao_sem_login_modo", "") or ""),
         )
     except (json.JSONDecodeError, OSError):
         return None
@@ -413,6 +422,8 @@ def save_settings(s: PortalSettings, *, exigir_banco: bool = False) -> bool:
         "pasta_pf": s.pasta_pf,
         "alertas_novos_enabled": s.alertas_novos_enabled,
         "alertas_novos_modo": s.alertas_novos_modo,
+        "remocao_carteira_modo": s.remocao_carteira_modo,
+        "remocao_sem_login_modo": s.remocao_sem_login_modo,
         "updated_at": now,
     }
     try:

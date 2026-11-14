@@ -46,6 +46,7 @@
       <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
       <a class="ag-abas__aba" role="tab" id="tab-sieg" href="?aba=sieg" aria-controls="sec-sieg" data-aba="sieg" aria-selected="{{ 'true' if aba == 'sieg' else 'false' }}" {% if aba != 'sieg' %}tabindex="-1"{% endif %}>SIEG</a>
       <a class="ag-abas__aba" role="tab" id="tab-acessorias" href="?aba=acessorias" aria-controls="sec-acessorias" data-aba="acessorias" aria-selected="{{ 'true' if aba == 'acessorias' else 'false' }}" {% if aba != 'acessorias' %}tabindex="-1"{% endif %}>Acessórias</a>
+      <a class="ag-abas__aba" role="tab" id="tab-remocao" href="?aba=remocao" aria-controls="sec-remocao" data-aba="remocao" aria-selected="{{ 'true' if aba == 'remocao' else 'false' }}" {% if aba != 'remocao' %}tabindex="-1"{% endif %}>Remoção nas estações</a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
@@ -417,6 +418,68 @@
         </div>
       </div>
     </section>
+
+    <!-- ── Remoção nas estações (Frente B, 14/11/2026) ────────────────
+         Os dois modos e o relatório do que sairia ou saiu. O texto da tabela
+         vem da estação: o JS só usa textContent. -->
+    <section class="ag-card cg-cfg-aba" id="sec-remocao" role="tabpanel" aria-labelledby="tab-remocao" {% if aba != 'remocao' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">Desligado: não confere. Só relatório: lista o que sairia, sem remover. Ligado: remove nas estações, com aviso quando houver prazo.</p>
+        <div class="ag-field">
+          <label class="ag-label" for="sel-remocao-carteira">Certificados de quem saiu da carteira</label>
+          <select id="sel-remocao-carteira" class="ag-select">
+            <option value="desligado">Desligado</option>
+            <option value="relatorio">Só relatório</option>
+            <option value="ligado">Ligado</option>
+          </select>
+        </div>
+        <div class="ag-field">
+          <label class="ag-label" for="sel-remocao-sem-login">Perfil do Windows sem login no portal</label>
+          <select id="sel-remocao-sem-login" class="ag-select">
+            <option value="desligado">Desligado</option>
+            <option value="relatorio">Só relatório</option>
+            <option value="ligado">Ligado</option>
+          </select>
+        </div>
+        <div class="ag-form-actions">
+          <button type="button" id="btn-remocao-salvar" class="ag-btn ag-btn--primary">Salvar</button>
+          <span class="ag-ajuda" id="remocao-msg" role="status"></span>
+        </div>
+
+        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">O que sairia, e o que saiu</h3></div>
+        <div class="ag-field">
+          <label class="ag-label" for="sel-remocao-estado">Estado</label>
+          <select id="sel-remocao-estado" class="ag-select">
+            <option value="">Todos</option>
+            <option value="removeria">Removeria (relatório)</option>
+            <option value="aviso">Em aviso</option>
+            <option value="remover">Remoção pendente</option>
+            <option value="removido">Removido</option>
+            <option value="falhou">Falhou</option>
+          </select>
+        </div>
+        <div class="ag-table-scroll" role="region" aria-label="Relatório de remoção">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row">
+              <th role="columnheader" class="ag-th--estatico">Quando</th>
+              <th role="columnheader" class="ag-th--estatico">Máquina</th>
+              <th role="columnheader" class="ag-th--estatico">Usuário do Windows</th>
+              <th role="columnheader" class="ag-th--estatico">Pessoa</th>
+              <th role="columnheader" class="ag-th--estatico">Certificado</th>
+              <th role="columnheader" class="ag-th--estatico">Regra</th>
+              <th role="columnheader" class="ag-th--estatico">Motivo</th>
+              <th role="columnheader" class="ag-th--estatico">Estado</th>
+            </tr></thead>
+            <tbody role="rowgroup" id="remocao-linhas"><tr class="cg-state-row"><td colspan="8" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="ag-form-actions">
+          <button type="button" id="btn-remocao-anterior" class="ag-btn ag-btn--outline" disabled>Anterior</button>
+          <button type="button" id="btn-remocao-proxima" class="ag-btn ag-btn--outline" disabled>Próxima</button>
+          <span class="ag-ajuda" id="remocao-pagina" role="status"></span>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Confirmação do disparo. -->
@@ -467,6 +530,7 @@
   </dialog>
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=fundo-2026-11-05"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/configuracao-remocao.js?v=remocao-2026-11-14"></script>
   <script nonce="{{ request.state.nonce }}">
       // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `health`,
       // `getDataFonte`, `setDataFonte`, `KEY_STORAGE` e `showToastAfterRedirect`
@@ -477,8 +541,8 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias" };
-      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias" };
+      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao" };
+      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
@@ -496,6 +560,7 @@
         if (aba === "comandos") void refreshCommandQueue();
         if (aba === "sieg") void carregarSieg();
         if (aba === "acessorias") void carregarAcessoriasCfg();
+        if (aba === "remocao" && window.carregarRemocao) void window.carregarRemocao();
       }
       ORDEM.forEach((a) => {
         const t = document.getElementById(TAB_IDS[a]);
@@ -626,16 +691,29 @@
         document.getElementById("disp-expired").textContent = s.effective_expired || emptyHint;
       }
 
+      // So vira true no fim de uma carga bem-sucedida. Todo Salvar manda o corpo
+      // lido do DOM: antes disso o DOM esta vazio (e os modos de remocao em
+      // "desligado"), e um clique gravaria isso por cima da configuracao.
+      let _carregado = false;
+      let _cargaFalhou = false;
+      function avisoNaoCarregado() {
+        return _cargaFalhou
+          ? "Não foi possível carregar a configuração; recarregue a página antes de salvar."
+          : "Aguarde a configuração carregar antes de salvar.";
+      }
+
       async function loadSettingsToForm() {
         const st = document.getElementById("cfg-msg");
         st.textContent = "A carregar…";
         try {
           const r = await fetch("/api/settings", { headers: getHeaders() });
           if (r.status === 401) {
+            _cargaFalhou = true;
             st.textContent = "A sessão expirou. Entre de novo no portal.";
             return;
           }
           if (!r.ok) {
+            _cargaFalhou = true;
             st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r));
             return;
           }
@@ -677,7 +755,9 @@
           const cmi = document.getElementById("cmd-machine-id");
           if (cmi) cmi.value = midG;
           st.textContent = "";
+          _carregado = true;
         } catch (e) {
+          _cargaFalhou = true;
           st.textContent = "Erro: " + e;
         }
       }
@@ -748,6 +828,9 @@
       }
 
       function preencherAlertas(s) {
+        // Vazio guardado = "Só relatório" (o padrão do servidor).
+        document.getElementById("sel-remocao-carteira").value = s.remocao_carteira_modo || "relatorio";
+        document.getElementById("sel-remocao-sem-login").value = s.remocao_sem_login_modo || "relatorio";
         document.getElementById("chk-alertas-novos").checked = s.alertas_novos_enabled !== false;
         document.getElementById("sel-alertas-novos-modo").value = s.alertas_novos_modo || "";
         document.getElementById("inp-entrada").value = s.pasta_entrada || "";
@@ -777,6 +860,7 @@
       // ── Salvar pastas ────────────────────────────────────────────────────────
       document.getElementById("btn-save-cfg").addEventListener("click", async () => {
         const st = document.getElementById("cfg-msg");
+        if (!_carregado) { st.textContent = avisoNaoCarregado(); return; }
         st.textContent = "A guardar…";
         try {
           const body = {
@@ -805,6 +889,40 @@
           st.textContent = "Falha: " + e;
         }
       });
+
+      // ── Salvar remoção ───────────────────────────────────────────────────────
+      // Corpo base (o PUT remonta pastas, SMTP e Graph a partir dele) + os dois
+      // modos. O que o PUT preserva quando omitido não vai.
+      async function salvarRemocao() {
+        const st = document.getElementById("remocao-msg");
+        if (!_carregado) { st.textContent = avisoNaoCarregado(); return; }
+        st.textContent = "A guardar…";
+        try {
+          const body = {
+            source_folder: document.getElementById("inp-source").value,
+            expired_folder: document.getElementById("inp-exp").value,
+            machine_id: document.getElementById("inp-machine").value || "default",
+            smtp_host: document.getElementById("inp-smtp-host").value || "",
+            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
+            smtp_user: document.getElementById("inp-smtp-user").value || "",
+            smtp_password: null,
+            ...seguranca(),
+            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
+            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
+            ...corpoGraph(),
+            remocao_carteira_modo: document.getElementById("sel-remocao-carteira").value,
+            remocao_sem_login_modo: document.getElementById("sel-remocao-sem-login").value,
+          };
+          const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
+          if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
+          if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
+          st.textContent = "Guardado.";
+          await loadSettingsToForm();
+        } catch (e) {
+          st.textContent = "Falha: " + e;
+        }
+      }
+      document.getElementById("btn-remocao-salvar").addEventListener("click", salvarRemocao);
 
       document.getElementById("btn-download-agent-json").addEventListener("click", () => {
         const source = (document.getElementById("inp-source").value || "").trim();
@@ -862,6 +980,7 @@
 
       document.getElementById("btn-save-smtp").addEventListener("click", async () => {
         const st = document.getElementById("smtp-msg");
+        if (!_carregado) { st.textContent = ""; erroCfg(avisoNaoCarregado()); return; }
         st.textContent = "Salvando…";
         try {
           const body = {
@@ -1043,6 +1162,7 @@
 
       document.getElementById("form-email").addEventListener("submit", async (ev) => {
         ev.preventDefault();
+        if (!_carregado) { erroEmail(avisoNaoCarregado()); return; }
         const btn = document.getElementById("em-salvar");
         btn.disabled = true;
         erroEmail("");
@@ -1287,6 +1407,7 @@
         await refreshCommandQueue();
         if (new URLSearchParams(location.search).get("aba") === "sieg") void carregarSieg();
         if (new URLSearchParams(location.search).get("aba") === "acessorias") void carregarAcessoriasCfg();
+        if (new URLSearchParams(location.search).get("aba") === "remocao" && window.carregarRemocao) void window.carregarRemocao();
       })();
 
       // ── Acessórias (ADR 0005) ───────────────────────────────────────────

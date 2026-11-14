@@ -52,7 +52,10 @@ def _gravar(dados: dict[str, Any]) -> Path:
     conteudo = json.dumps(dados, ensure_ascii=False).encode("utf-8")
     destino = caminho()
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(proteger(conteudo, _ENTROPIA))
+    # Grava ao lado e troca de uma vez: queda no meio não pode perder o último dono.
+    temporario = destino.with_name(destino.name + ".tmp")
+    temporario.write_bytes(proteger(conteudo, _ENTROPIA))
+    os.replace(temporario, destino)
     return destino
 
 
@@ -78,7 +81,23 @@ def _ler_de(origem: Path, entropia: bytes) -> dict[str, Any] | None:
 
 
 def ler() -> dict[str, Any] | None:
-    return _ler_de(caminho(), _ENTROPIA)
+    """A conta ativa; a encerrada não vale (é só o último dono do perfil)."""
+    dados = _ler_de(caminho(), _ENTROPIA)
+    return None if not dados or dados.get("encerrada") else dados
+
+
+def ultimo_dono() -> dict[str, Any] | None:
+    """A conta encerrada deste perfil, ou None (ativa ou nunca houve)."""
+    dados = _ler_de(caminho(), _ENTROPIA)
+    return dados if dados and dados.get("encerrada") else None
+
+
+def encerrar() -> None:
+    """A sessão caiu ou a pessoa saiu: a conta deixa de valer, mas fica gravada
+    como último dono. Apagar jogaria o perfil na regra do perfil sem login."""
+    dados = _ler_de(caminho(), _ENTROPIA)
+    if dados and not dados.get("encerrada"):
+        _gravar({**dados, "encerrada": True})
 
 
 def apagar() -> bool:
@@ -121,7 +140,7 @@ def esta_conectado() -> bool:
 
 
 def portal_da_conta() -> str:
-    g = ler()
+    g = ler() or ultimo_dono()
     return ((g or {}).get("portal") or os.getenv("CERT_PORTAL_URL") or PORTAL_PADRAO).strip().rstrip("/")
 
 
@@ -190,9 +209,10 @@ def registrar_pela_microsoft(sessao, portal: str, codigo: str, verificador: str,
 
 def _get(sessao, rota: str, versao: str) -> dict[str, Any]:
     r = sessao.get(portal_da_conta() + rota, headers=cabecalhos(versao), timeout=20)
-    if r.status_code == 401:
-        # O portal derrubou esta sessão: a credencial não volta a valer.
-        apagar()
+    if r.status_code in (401, 403):
+        # O portal derrubou esta sessão: a credencial não volta a valer, mas
+        # fica como último dono do perfil (spec, "Último dono do perfil").
+        encerrar()
         raise SessaoEncerrada(_detalhe(r) or "Sessão encerrada pelo portal de certificados.")
     if r.status_code != 200:
         raise RuntimeError(_detalhe(r) or f"Portal de certificados respondeu {r.status_code}.")
@@ -210,11 +230,12 @@ def instalacoes_pendentes(sessao, versao: str = "") -> list[str]:
 
 
 def sair(sessao, versao: str = "") -> None:
-    """A pessoa saiu da bandeja: avisa o portal e apaga a credencial local."""
+    """A pessoa saiu da bandeja: avisa o portal e encerra a credencial local
+    (ela fica como último dono do perfil)."""
     try:
         if esta_conectado():
             sessao.post(portal_da_conta() + "/api/estacao/sair", headers=cabecalhos(versao), timeout=15)
     except Exception:  # noqa: BLE001 — sair localmente não depende do portal responder
         LOGGER.warning("Não foi possível avisar o portal da saída", exc_info=True)
     finally:
-        apagar()
+        encerrar()

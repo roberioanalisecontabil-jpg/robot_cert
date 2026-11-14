@@ -512,7 +512,7 @@ def painel(request: Request) -> HTMLResponse:
 def pagina_configuracao(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
     aba = request.query_params.get("aba") or "chave"
-    if aba not in ("chave", "pastas", "alertas", "comandos", "sieg", "acessorias"):
+    if aba not in ("chave", "pastas", "alertas", "comandos", "sieg", "acessorias", "remocao"):
         aba = "chave"
     return templates.TemplateResponse(
         request=request, name="configuracao.html", context={"pagina_ativa": "configuracao", "aba": aba}
@@ -794,6 +794,11 @@ app.include_router(_rotas_computadores)
 from app.rotas.atualizacao import router as _rotas_atualizacao  # noqa: E402
 
 app.include_router(_rotas_atualizacao)
+
+# Remoção de certificados nas estações (Frente B): app/rotas/remocao.py.
+from app.rotas.remocao import router as _rotas_remocao  # noqa: E402
+
+app.include_router(_rotas_remocao)
 
 # Entrar com a Microsoft (ida e volta do navegador): app/rotas/microsoft.py.
 from app.rotas.microsoft import MENSAGENS_ERRO as _MENSAGENS_ERRO_MS, router as _rotas_microsoft  # noqa: E402
