@@ -591,7 +591,8 @@ def favicon() -> Response:
     Serve o favicon do projeto quando disponível.
     Fallback 204 para evitar ruído de 404 no log em dev.
     """
-    icon_path = ROOT / "ico" / "icone.ico"
+    # O C dourado do CertGuard (o mesmo da bandeja); o icone.ico é o A da Análise.
+    icon_path = ROOT / "ico" / "certguard.ico"
     if icon_path.is_file():
         return FileResponse(path=icon_path, media_type="image/x-icon")
     return Response(status_code=204)
