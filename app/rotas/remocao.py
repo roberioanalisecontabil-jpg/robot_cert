@@ -72,28 +72,28 @@ def _nomes_por(coluna: str, valores: List[str]) -> Dict[str, str]:
 
 def _conferir(machine_id: str, corpo: Conferencia, user: Optional[Dict[str, Any]], modo: str,
               decidir: Callable[[], list], com_vencendo: bool) -> dict:
-    """Registra a rodada anterior, decide e aplica, nesta ordem. Qualquer falha
-    vira 503: nunca uma resposta com listas pela metade."""
+    """Registra a rodada anterior, decide e aplica, nesta ordem. Toda leitura vem
+    antes de `aplicar`: se ela falha, o 503 sai sem relógio de aviso começado.
+    Qualquer falha vira 503: nunca uma resposta com listas pela metade."""
     uid = str(user["id"]) if user else None
     try:
         remocao.registrar_resultado(machine_id, corpo.usuario_windows, uid, (user or {}).get("email"),
                                     [r.model_dump() for r in corpo.resultados])
         decisoes = decidir() if modo != "desligado" else []
+        por_fp = _nomes_por("fingerprint", [d.fingerprint.strip().lower() for d in decisoes])
+        vence = remocao.vencendo(uid, date.today()) if com_vencendo and modo == "ligado" else []
+        por_doc = _nomes_por("documento", [str(v["documento"]) for v in vence])
         saida = remocao.aplicar(machine_id, corpo.usuario_windows, uid, decisoes, modo,
                                 datetime.now(timezone.utc))
-        itens = saida["remover"] + saida["avisos"]
-        por_fp = _nomes_por("fingerprint", [i["fingerprint"] for i in itens])
-        for i in itens:
-            i["nome"] = por_fp.get(i["fingerprint"]) or i.get("documento") or ""
-        resposta = {"remover": saida["remover"], "avisos": saida["avisos"]}
-        if com_vencendo:
-            vence = remocao.vencendo(uid, date.today()) if modo == "ligado" else []
-            por_doc = _nomes_por("documento", [str(v["documento"]) for v in vence])
-            resposta["vencendo"] = [{**v, "nome": por_doc.get(str(v["documento"])) or v["documento"]}
-                                    for v in vence]
     except Exception:  # noqa: BLE001
         logger.exception("Remoção: conferência de %s falhou", computadores.mac(machine_id))
         raise HTTPException(status_code=503, detail=_FORA) from None
+    for i in saida["remover"] + saida["avisos"]:
+        i["nome"] = por_fp.get(i["fingerprint"]) or i.get("documento") or ""
+    resposta = {"remover": saida["remover"], "avisos": saida["avisos"]}
+    if com_vencendo:
+        resposta["vencendo"] = [{**v, "nome": por_doc.get(str(v["documento"])) or v["documento"]}
+                                for v in vence]
     return {**resposta, "proxima_em": PROXIMA_EM}
 
 

@@ -147,6 +147,21 @@ def test_banco_fora_503_e_nada_gravado(client: TestClient, banco: _Fake, ligado:
     assert not [g for g in banco.gravados if g[0] == "remocao_estacao"]
 
 
+def test_nomes_fora_503_antes_de_aplicar(client: TestClient, banco: _Fake, ligado: None, monkeypatch) -> None:
+    import app.rotas.remocao as rotas
+
+    def _fora(*_a):
+        raise RuntimeError("cofre fora do ar")
+
+    monkeypatch.setattr(rotas, "_nomes_por", _fora)
+    seg = _entrar(client, "fis@x.com", PC_FIS)["segredo"]
+    assert client.post("/api/estacao/conferencia", headers=_bandeja(seg), json=_corpo()).status_code == 503
+    assert _sem_conta(client, PC_SOL).status_code == 503
+    # Nenhum relógio de aviso começou sem a bandeja ter visto o aviso.
+    assert banco.tabelas.get("remocao_estacao", []) == []
+    assert not [g for g in banco.gravados if g[0] == "remocao_estacao"]
+
+
 def test_fingerprint_malformado_422(client: TestClient, banco: _Fake) -> None:
     for certs in (["A" * 64], ["a" * 63], ["z" * 64]):
         r = client.post("/api/estacao/conferencia/sem-conta",
