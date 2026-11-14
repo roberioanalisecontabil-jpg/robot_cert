@@ -148,15 +148,17 @@ def test_situacao_instalacoes_e_sessao_encerrada(estacao: list) -> None:
     portal.encerrada = True
     with pytest.raises(cc.SessaoEncerrada):
         cc.situacao(portal)
-    assert not cc.esta_conectado(), "o portal derrubou: a credencial local some"
+    assert not cc.esta_conectado(), "o portal derrubou: a credencial deixa de valer"
+    assert cc.ultimo_dono()["segredo"] == "seg-123", "mas fica como último dono do perfil"
 
 
 @so_windows
-def test_sair_avisa_o_portal_e_apaga(estacao: list) -> None:
+def test_sair_avisa_o_portal_e_encerra(estacao: list) -> None:
     portal = _Portal()
     cc.registrar(portal, PORTAL, "ana@x.com", "certa", MAQUINA)
     cc.sair(portal)
     assert not cc.esta_conectado()
+    assert cc.ultimo_dono()["email"] == "ana@x.com"
     assert portal.chamadas[-1][1].endswith("/api/estacao/sair")
     with pytest.raises(cc.NaoConectado):
         cc.cabecalhos()
