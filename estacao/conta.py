@@ -52,7 +52,10 @@ def _gravar(dados: dict[str, Any]) -> Path:
     conteudo = json.dumps(dados, ensure_ascii=False).encode("utf-8")
     destino = caminho()
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(proteger(conteudo, _ENTROPIA))
+    # Grava ao lado e troca de uma vez: queda no meio não pode perder o último dono.
+    temporario = destino.with_name(destino.name + ".tmp")
+    temporario.write_bytes(proteger(conteudo, _ENTROPIA))
+    os.replace(temporario, destino)
     return destino
 
 
@@ -137,7 +140,7 @@ def esta_conectado() -> bool:
 
 
 def portal_da_conta() -> str:
-    g = ler()
+    g = ler() or ultimo_dono()
     return ((g or {}).get("portal") or os.getenv("CERT_PORTAL_URL") or PORTAL_PADRAO).strip().rstrip("/")
 
 

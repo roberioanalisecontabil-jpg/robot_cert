@@ -32,8 +32,8 @@ SEM_LOGIN = ("Entre na bandeja do CertGuard. Sem login, os certificados da empre
 AVISO = "O certificado {nome} será retirado deste computador em {N} dias: {motivo}."
 VENCIMENTO = "O acesso ao certificado {nome} vence em {N} dias. Fale com seu gestor."
 
-# documento -> dia do último aviso de vencimento (no máximo um por dia).
-_AVISADO_EM: dict[str, date] = {}
+# (tipo, ...) -> dia do último aviso: prazo e vencimento, no máximo um por dia.
+_AVISADO_EM: dict[tuple, date] = {}
 
 
 def _usuario_windows() -> str:
@@ -79,32 +79,51 @@ def conferir(sessao, versao: str, avisar: Callable[[str], None], hoje: date,
         return pendentes
 
     resultados: list[dict] = []
-    for ordem in resposta.get("remover") or []:
+    remover = resposta.get("remover") if isinstance(resposta, dict) else None
+    for ordem in remover if isinstance(remover, list) else []:
+        if not isinstance(ordem, dict):
+            continue
         item = por_sha.pop(str(ordem.get("fingerprint") or "").lower(), None)
         if item is None:  # o portal mandou o que esta rodada não viu: ignora
             continue
         ok, erro = repositorio.remover(item)
-        resultados.append({"fingerprint": item.sha256.lower(), "ok": ok, "erro": (erro or "")[:500]})
+        resultados.append({"fingerprint": item.sha256.lower(), "ok": ok, "erro": str(erro or "")[:500]})
         LOGGER.info("Remoção de %s (%s): %s", item.thumbprint, ordem.get("motivo"), "ok" if ok else erro)
         if ok:
             texto = REMOVIDO.format(nome=ordem.get("nome") or item.nome)
             avisar(texto if conectado else texto + REMOVIDO_SEM_CONTA)
 
+    try:
+        _avisos(resposta, sem_login, hoje, avisar)
+    except Exception:  # noqa: BLE001 — aviso malformado não pode perder os resultados acima
+        LOGGER.exception("Conferência de remoção: avisos ilegíveis na resposta")
+    return resultados
+
+
+def _uma_vez_por_dia(chave: tuple, hoje: date) -> bool:
+    if _AVISADO_EM.get(chave) == hoje:
+        return False
+    _AVISADO_EM[chave] = hoje
+    return True
+
+
+def _avisos(resposta: dict, sem_login: bool, hoje: date, avisar: Callable[[str], None]) -> None:
+    """Prazo e vencimento: cada aviso no máximo uma vez por dia."""
     avisos = resposta.get("avisos") or []
     if sem_login and avisos:
-        avisar(SEM_LOGIN.format(N=max(int(a.get("dias") or 0) for a in avisos)))
-    elif avisos:
+        if _uma_vez_por_dia(("sem_login",), hoje):
+            avisar(SEM_LOGIN.format(N=max(int(a.get("dias") or 0) for a in avisos)))
+    else:
         for a in avisos:
-            avisar(AVISO.format(nome=a.get("nome") or a.get("documento"), N=a.get("dias"), motivo=a.get("motivo")))
+            if _uma_vez_por_dia(("aviso", str(a.get("motivo")), str(a.get("documento"))), hoje):
+                avisar(AVISO.format(nome=a.get("nome") or a.get("documento"), N=a.get("dias"),
+                                    motivo=a.get("motivo")))
 
     for v in resposta.get("vencendo") or []:
         doc = str(v.get("documento"))
-        if _AVISADO_EM.get(doc) == hoje:
-            continue
         try:
             dias = (date.fromisoformat(str(v.get("vence_em"))[:10]) - hoje).days
         except ValueError:
             continue
-        _AVISADO_EM[doc] = hoje
-        avisar(VENCIMENTO.format(nome=v.get("nome") or doc, N=dias))
-    return resultados
+        if _uma_vez_por_dia(("vencendo", doc), hoje):
+            avisar(VENCIMENTO.format(nome=v.get("nome") or doc, N=dias))

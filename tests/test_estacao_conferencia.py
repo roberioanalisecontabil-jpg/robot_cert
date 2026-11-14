@@ -286,3 +286,70 @@ def test_conferir_ocupado_nao_roda_de_novo(tmp_path) -> None:
     b._conferindo.acquire()
     b.conferir()
     assert b._ultima_conferencia is None
+
+
+# ── Rodada 1 de correções da revisão ─────────────────────────────────────
+
+
+@so_windows
+def test_aviso_sem_login_uma_vez_por_dia(estacao: list, repo: dict) -> None:
+    resp = _vazia(avisos=[{"fingerprint": FP_A, "documento": "1", "motivo": "perfil sem login na bandeja",
+                           "dias": 6, "nome": "A"}])
+    http = _Http(resp, resp, resp)
+    avisos: list = []
+    _conferir(http, avisos)
+    _conferir(http, avisos)
+    assert len(avisos) == 1
+    _conferir(http, avisos, hoje=date(2026, 11, 15))
+    assert len(avisos) == 2
+
+
+@so_windows
+def test_outro_aviso_uma_vez_por_dia(estacao: list, repo: dict) -> None:
+    cc.guardar("seg-1", PORTAL, "ana@x.com", MAQUINA)
+    resp = _vazia(avisos=[{"fingerprint": FP_A, "documento": "1", "motivo": "vínculo recusado",
+                           "dias": 4, "nome": "EMPRESA A"}])
+    http = _Http(resp, resp, resp)
+    avisos: list = []
+    _conferir(http, avisos)
+    _conferir(http, avisos)
+    assert len(avisos) == 1
+    _conferir(http, avisos, hoje=date(2026, 11, 15))
+    assert len(avisos) == 2
+
+
+@so_windows
+def test_aviso_malformado_nao_perde_resultados(estacao: list, repo: dict) -> None:
+    resp = _vazia(remover=[{"fingerprint": FP_A, "documento": "1", "motivo": "x", "nome": "A"}, "lixo"],
+                  avisos=[{"dias": "muitos"}, "lixo"], vencendo=["lixo"])
+    assert _conferir(_Http(resp), []) == [{"fingerprint": FP_A, "ok": True, "erro": ""}]
+    assert repo["removidos"] == [FP_A]
+
+
+@so_windows
+def test_gravacao_troca_o_arquivo_de_uma_vez(estacao: list, monkeypatch: pytest.MonkeyPatch) -> None:
+    cc.guardar("seg-1", PORTAL, "ana@x.com", MAQUINA)
+
+    def _falha(*_a: Any) -> None:
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(cc.os, "replace", _falha)
+    with pytest.raises(OSError):
+        cc.encerrar()
+    assert cc.ler()["segredo"] == "seg-1", "a falha na gravação deixa o conta.dat antigo legível"
+
+
+@so_windows
+def test_portal_da_conta_usa_o_do_ultimo_dono(estacao: list, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CERT_PORTAL_URL", raising=False)
+    cc.guardar("seg-1", "https://outro.portal/", "ana@x.com", MAQUINA)
+    cc.encerrar()
+    assert cc.portal_da_conta() == "https://outro.portal"
+
+
+@so_windows
+def test_sem_dono_e_maquina_desconhecida_nao_confere(estacao: list, repo: dict) -> None:
+    http = _Http()
+    pendentes = [{"fingerprint": FP_C, "ok": True, "erro": ""}]
+    assert conferencia.conferir(http, "v", [].append, HOJE, pendentes, "unknown") == pendentes
+    assert http.chamadas == []
