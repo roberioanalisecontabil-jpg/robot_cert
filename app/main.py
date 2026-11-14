@@ -285,7 +285,25 @@ async def lifespan(_app: FastAPI):
             except Exception as e:
                 logger.error(f"Erro na virada da bandeja: {e}")
 
+    # Vencimento das liberações manuais com prazo (carteira.valido_ate).
+    async def prazos_loop():
+        from app import cert_installer
+
+        loop = asyncio.get_running_loop()
+        await asyncio.sleep(120)
+        while True:
+            try:
+                n = await loop.run_in_executor(None, cert_installer.expirar_prazos)
+                if n > 0:
+                    logger.info(f"Prazos vencidos: {n} liberação(ões) saíram da carteira.")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Erro no vencimento de prazos: {e}")
+            await asyncio.sleep(300)
+
     tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
+    tarefa_prazos = asyncio.create_task(prazos_loop())
     tarefa_novos = asyncio.create_task(novos_por_hora_loop())
     tarefa_acessorias = asyncio.create_task(acessorias_loop())
     tarefa_microsoft = asyncio.create_task(microsoft_loop())
@@ -295,6 +313,7 @@ async def lifespan(_app: FastAPI):
         tarefa_novos.cancel()
         tarefa_acessorias.cancel()
         tarefa_microsoft.cancel()
+        tarefa_prazos.cancel()
         # O `await` é limitado no tempo de propósito. Esperar a task sem prazo
         # significa que qualquer falha em encerrá-la (um cancel que não chega,
         # um run_in_executor preso num envio SMTP) trava o shutdown do processo
@@ -306,7 +325,7 @@ async def lifespan(_app: FastAPI):
         # pelo prazo cheio passava despercebida. `asyncio.wait` devolve a task
         # pendente sem levantar, e deixa passar um cancelamento externo.
         tarefa_alertas.cancel()
-        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias, tarefa_microsoft}, timeout=5)
+        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias, tarefa_microsoft, tarefa_prazos}, timeout=5)
         if pendentes:
             logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
 
@@ -736,6 +755,9 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     # lista é um link, e no celular a tela vira duas etapas — só a lista
     # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
     operador = (request.query_params.get("operador") or "").strip()[:64]
+    aba = request.query_params.get("aba")
+    aba = aba if aba in ("pessoas", "certificados") else "pessoas"
+    certificado = "".join(c for c in (request.query_params.get("certificado") or "") if c.isdigit())[:20]
     # Só muda o texto de abertura (ADR 0005); a regra vale nas rotas.
     try:
         from app import acessorias
@@ -746,7 +768,10 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="carteiras.html",
-        context={"pagina_ativa": "carteiras", "operador_id": operador, "sincronizado": sincronizado},
+        context={
+            "pagina_ativa": "carteiras", "operador_id": operador, "sincronizado": sincronizado,
+            "aba": aba, "certificado_id": certificado,
+        },
     )
 
 

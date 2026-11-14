@@ -11,12 +11,12 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import auth, cert_installer, nomes, permissoes
 from app.alcance import _documentos_ao_alcance, _exigir_alcance, _papel_do_alvo, require_admin_ou_gestor
@@ -106,6 +106,8 @@ def _exigir_documentos_ao_alcance(token: auth.TokenData, documentos: List[str]) 
 class CarteiraRequest(BaseModel):
     user_id: str
     documentos: List[str]
+    valido_desde: Optional[date] = None
+    valido_ate: Optional[date] = None
 
 
 # Modulo `carteiras` na matriz desde 20/08, com os DOIS eixos declarados: a
@@ -273,6 +275,154 @@ def listar_documentos_atribuiveis(
     return {"total": len(todos), "documentos": saida}
 
 
+# --- Aba Certificados: um documento, muitas pessoas. Declaradas ANTES de
+# `/api/carteira/{user_id}`, senão "certificados" vira user_id. ---
+
+def _tipo_do_documento(doc: str) -> str:
+    return "e-CNPJ" if len(doc) == 14 else "e-CPF" if len(doc) == 11 else ""
+
+
+def _linhas_por_documento(token: auth.TokenData) -> Dict[str, List[dict]]:
+    """
+    Linhas da carteira por documento, só de quem o ator pode gerir
+    (Administrador: todas; Gestor: Operadores dos departamentos que lidera).
+    Cada linha ganha `nome`, `email` e `vigente`.
+    """
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    try:
+        us = {str(u["id"]): u for u in (sb.table("users").select(
+            "id, email, full_name, role, departamento_id").execute().data or [])}
+        cart = sb.table("carteira").select("*").execute().data or []
+    except Exception:
+        logger.exception("Falha ao ler a carteira por documento")
+        raise HTTPException(status_code=503, detail="Não foi possível ler a carteira.")
+    if (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        gerivel = None
+    else:
+        try:
+            meus = cert_installer.departamentos_que_lidera(_user_id_da_sessao(token) or "")
+        except cert_installer.AlcanceIndisponivel:
+            raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
+        gerivel = {
+            i for i, u in us.items()
+            if (u.get("role") or "").strip().lower() == cert_installer.PAPEL_OPERADOR
+            and u.get("departamento_id") and str(u["departamento_id"]) in meus
+        }
+    hoje = date.today()
+    saida: Dict[str, List[dict]] = {}
+    for l in cart:
+        uid = str(l.get("user_id"))
+        if uid not in us or (gerivel is not None and uid not in gerivel):
+            continue
+        u = us[uid]
+        saida.setdefault(cert_installer.so_digitos(l.get("documento")), []).append({
+            **l, "user_id": uid, "email": u.get("email") or "",
+            "nome": nomes.nome_exibicao(u.get("full_name")) or str(u.get("email") or ""),
+            "vigente": cert_installer.vigente(l, hoje),
+        })
+    return saida
+
+
+@router.get("/api/carteira/certificados", dependencies=[Depends(require_modulo("carteiras"))])
+def listar_certificados(
+    q: Optional[str] = Query(None, max_length=120),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """Certificados ao alcance de quem pergunta, com quantas pessoas o usam hoje."""
+    todos = cert_installer.universo_de_documentos()
+    alcance = _documentos_ao_alcance(token)
+    if alcance is not None:
+        todos = [d for d in todos if d["documento"] in alcance]
+    termo = (q or "").strip().lower()
+    if termo:
+        digitos = cert_installer.so_digitos(termo)
+        todos = [
+            d for d in todos
+            if termo in (d["nome"] or "").lower() or (digitos and digitos in d["documento"])
+        ]
+    linhas = _linhas_por_documento(token)
+    venc = cert_installer.vencimentos_por_documento()
+    return {"total": len(todos), "certificados": [
+        {
+            "documento": d["documento"],
+            "documento_formatado": _documento_formatado(d["documento"]),
+            "nome": d["nome"],
+            "tipo": _tipo_do_documento(d["documento"]),
+            "vence_em": venc.get(d["documento"]),
+            "pessoas": sum(1 for l in linhas.get(d["documento"], []) if l["vigente"]),
+        }
+        for d in todos
+    ]}
+
+
+@router.get("/api/carteira/certificados/{documento}", dependencies=[Depends(require_modulo("carteiras"))])
+def detalhar_certificado(
+    documento: str,
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """Quem tem este certificado, com o prazo de cada um. Só quem o ator gere."""
+    doc = cert_installer.so_digitos(documento)
+    _exigir_documentos_ao_alcance(token, [doc])
+    nome = {d["documento"]: d["nome"] for d in cert_installer.universo_de_documentos()}.get(doc)
+    if nome is None:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+    pessoas = sorted(_linhas_por_documento(token).get(doc, []), key=lambda l: l["nome"].lower())
+    return {
+        "documento": doc,
+        "documento_formatado": _documento_formatado(doc),
+        "nome": nome,
+        "tipo": _tipo_do_documento(doc),
+        "vence_em": cert_installer.vencimentos_por_documento().get(doc),
+        "pessoas": [
+            {
+                "user_id": l["user_id"], "nome": l["nome"], "email": l["email"],
+                "origem": l.get("origem") or "manual",
+                "atribuido_por": l.get("atribuido_por_email"), "atribuido_em": l.get("atribuido_em"),
+                "valido_desde": l.get("valido_desde"), "valido_ate": l.get("valido_ate"),
+                "vigente": l["vigente"],
+            }
+            for l in pessoas
+        ],
+    }
+
+
+class PessoasDoCertificadoRequest(BaseModel):
+    user_ids: List[str] = Field(..., max_length=200)
+    valido_desde: Optional[date] = None
+    valido_ate: Optional[date] = None
+
+
+@router.post("/api/carteira/certificados/{documento}/pessoas", dependencies=[Depends(require_modulo("carteiras", permissoes.NIVEL_EDITAR))])
+def incluir_pessoas_no_certificado(
+    documento: str,
+    body: PessoasDoCertificadoRequest,
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """
+    Dá (ou muda o prazo de) um certificado a várias pessoas. Tudo ou nada:
+    alcance de TODAS e o prazo são conferidos antes de gravar a primeira.
+    """
+    doc = cert_installer.so_digitos(documento)
+    ids = list(dict.fromkeys(body.user_ids))
+    for uid in ids:
+        _exigir_alcance(token, uid)
+    _exigir_documentos_no_inventario([doc])
+    _exigir_documentos_ao_alcance(token, [doc])
+    hoje = date.today()
+    try:
+        cert_installer.validar_prazo(body.valido_desde or hoje, body.valido_ate, hoje)
+    except cert_installer.PrazoInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # Também valida o alvo (404 inexistente, 422 Admin) antes da primeira gravação.
+    excecao = {uid: _carteira_de_excecoes(uid) for uid in ids}
+    gravados = sum(_atribuir_um(token, uid, [doc], body.valido_desde, body.valido_ate, excecao[uid]) for uid in ids)
+    return {"status": "ok", "gravados": gravados}
+
+
 @router.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])
 def obter_carteira(
     user_id: str,
@@ -333,6 +483,7 @@ def obter_carteira(
                 "atribuido_por": l.get("atribuido_por_email"),
                 "atribuido_em": l.get("atribuido_em"),
                 "origem": l.get("origem") or "manual",
+                "valido_desde": l.get("valido_desde"), "valido_ate": l.get("valido_ate"),
             }
             for l in linhas
         ],
@@ -432,24 +583,46 @@ def atribuir_carteira(
     """
     _exigir_alcance(token, body.user_id)
     _exigir_documentos_no_inventario(body.documentos)
-    if _carteira_de_excecoes(body.user_id):
+    excecao = _carteira_de_excecoes(body.user_id)
+    tipo = "excecoes" if excecao else "atribuicoes"
+    gravados = _atribuir_um(token, body.user_id, body.documentos, body.valido_desde, body.valido_ate, excecao)
+    return {"status": "ok", "gravados": gravados, "tipo": tipo}
+
+
+def _atribuir_um(
+    token: auth.TokenData, user_id: str, documentos: List[str],
+    desde: Optional[date], ate: Optional[date], excecao: bool,
+) -> int:
+    """
+    Caminho de uma pessoa, comum à rota por pessoa e à aba Certificados.
+    Quem chama já conferiu `_exigir_alcance`, o inventário e o papel do alvo
+    (`excecao`), para que nada falhe por pessoa no meio de um lote.
+    """
+    if excecao:
         try:
-            for doc in body.documentos:
-                cert_installer.remover_excecao(body.user_id, doc)
+            for doc in documentos:
+                cert_installer.remover_excecao(user_id, doc)
         except Exception:
             logger.exception("Erro ao remover exceção")
             raise HTTPException(status_code=500, detail="Erro interno ao devolver o cliente ao gestor")
-        return {"status": "ok", "gravados": len(body.documentos), "tipo": "excecoes"}
-    _exigir_documentos_ao_alcance(token, body.documentos)
-    _desbloquear(body.user_id, body.documentos)
+        return len(documentos)
+    _exigir_documentos_ao_alcance(token, documentos)
+    _desbloquear(user_id, documentos)
     try:
         gravados = cert_installer.atribuir_carteira(
-            user_id=body.user_id,
-            documentos=body.documentos,
+            user_id=user_id,
+            documentos=documentos,
             atribuido_por=_user_id_da_sessao(token),
             atribuido_por_email=token.email or "desconhecido",
+            valido_desde=desde,
+            valido_ate=ate,
         )
-        return {"status": "ok", "gravados": gravados, "tipo": "atribuicoes"}
+        if desde and desde > date.today():
+            # /claim não reconfere a carteira: token já emitido instalaria antes do início.
+            cert_installer.revogar_tokens_pendentes(user_id)
+        return gravados
+    except cert_installer.PrazoInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         # O texto vinha do cofre/banco e podia trazer nome de chave de
         # ambiente ou de tabela (achado #35). Fica no log, com a rota.
@@ -700,6 +873,7 @@ async def importar_carteiras(
                 documentos=sorted(docs),
                 atribuido_por=ator,
                 atribuido_por_email=token.email or "desconhecido",
+                preservar_existentes=True,
             )
             pessoas += 1
         except Exception:
@@ -748,7 +922,7 @@ def remover_carteira(
             raise HTTPException(status_code=500, detail="Erro interno ao remover da carteira")
         return {"status": "ok", "user_id": user_id, "documento": documento, "tipo": "atribuicoes", "bloqueado": bloqueou}
     try:
-        cert_installer.remover_da_carteira(user_id, documento)
+        cert_installer.remover_da_carteira(user_id, documento, _user_id_da_sessao(token), token.email or "desconhecido")
         # O token já pedido levava este cliente e o resgate não confere a
         # carteira de novo (auditoria de 10/10/2026). A pessoa pede outra vez
         # o que ainda é dela.

@@ -75,6 +75,13 @@
       </div>
     </section>
 
+    <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Carteiras por pessoa ou por certificado">
+      <a class="ag-abas__aba" role="tab" id="tab-pessoas" href="?aba=pessoas" aria-controls="sec-pessoas" data-aba="pessoas" aria-selected="{{ 'true' if aba == 'pessoas' else 'false' }}" {% if aba != 'pessoas' %}tabindex="-1"{% endif %}>Pessoas</a>
+      <a class="ag-abas__aba" role="tab" id="tab-certificados" href="?aba=certificados" aria-controls="sec-certificados" data-aba="certificados" aria-selected="{{ 'true' if aba == 'certificados' else 'false' }}" {% if aba != 'certificados' %}tabindex="-1"{% endif %}>Certificados</a>
+    </div>
+    <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
+
+    <div id="sec-pessoas" role="tabpanel" aria-labelledby="tab-pessoas" {% if aba != 'pessoas' %}hidden{% endif %}>
     <div class="cg-cart-layout">
       <!-- Lista de pessoas com carteira: cada item é um link (?operador=),
            com rolagem própria (.cg-op-rolagem); sem carteira primeiro. -->
@@ -178,7 +185,80 @@
         </div>
       </section>
     </div>
+    </div>
+
+    <!-- Aba Certificados: um certificado por vez, com quem pode usá-lo.
+         O comportamento vive em static/carteiras-certificados.js. -->
+    <div id="sec-certificados" role="tabpanel" aria-labelledby="tab-certificados" {% if aba != 'certificados' %}hidden{% endif %}>
+      <div class="cg-cart-layout">
+        <section class="ag-card cg-cart-lista" aria-labelledby="tit-certs">
+          <div class="cg-cart-cab"><h2 class="ag-card__title" id="tit-certs">Certificados</h2><p class="cg-cart-resumo" id="certResumo"></p></div>
+          <form class="cg-cart-busca" role="search" onsubmit="return false">
+            <label for="buscaCert" class="cg-sr-only">Buscar certificado</label>
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="search" id="buscaCert" class="ag-input" placeholder="Nome, CNPJ ou CPF" autocomplete="off" />
+          </form>
+          <div class="cg-op-rolagem" tabindex="0" aria-label="Lista de certificados">
+            <ul id="listaCerts" class="cg-op-lista"><li class="cg-op-vazio">Carregando…</li></ul>
+          </div>
+        </section>
+        <section class="ag-card cg-cart-detalhe" aria-live="polite">
+          <div id="certSemSelecao" class="ag-vazio cg-cart-vazio">
+            <h2 class="ag-vazio__titulo">Nenhum certificado selecionado</h2>
+            <p class="ag-vazio__texto">Escolha um certificado na lista para ver quem pode usá-lo.</p>
+          </div>
+          <div id="certDetalhe" hidden>
+            <div class="ag-section-head">
+              <div>
+                <h2 class="ag-card__title" id="certTitulo"></h2>
+                <p class="ag-page__lead" id="certSub"></p>
+              </div>
+              <button type="button" class="ag-btn ag-btn--primary" id="btnIncluirPessoas">Incluir pessoas</button>
+            </div>
+            <div class="ag-table-wrap"><div class="ag-table-scroll" role="region" aria-label="Pessoas com este certificado" tabindex="0">
+              <table class="ag-table">
+                <thead><tr><th scope="col">Pessoa</th><th scope="col">Origem</th><th scope="col"><span class="cg-sr-only">Ações</span></th></tr></thead>
+                <tbody id="certPessoas"></tbody>
+              </table>
+            </div></div>
+          </div>
+        </section>
+      </div>
+    </div>
   </main>
+
+  <dialog class="ag-modal ag-modal--lg" id="modalIncluir" aria-labelledby="tit-incluir">
+    <form id="formIncluir" method="dialog">
+      <div class="ag-modal__head">
+        <h2 class="ag-modal__titulo" id="tit-incluir">Incluir pessoas</h2>
+        <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar">
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="ag-modal__body">
+        <div id="incluirPessoasBloco">
+          <label for="buscaIncluir" class="cg-sr-only">Buscar pessoa</label>
+          <input type="search" id="buscaIncluir" class="ag-input" placeholder="Buscar pessoa" autocomplete="off" />
+          <div class="cg-op-rolagem" tabindex="0" aria-label="Pessoas disponíveis"><ul id="listaIncluir" class="cg-op-lista"></ul></div>
+          <p class="cg-cart-importar__formato">Gestores não aparecem: já acessam todos os certificados do alcance deles, menos as exceções, e prazo não vale para eles.</p>
+        </div>
+        <fieldset class="cg-cert-prazo">
+          <legend>Prazo</legend>
+          <label><input type="radio" name="prazoTipo" value="sem" checked /> Sem prazo</label>
+          <label><input type="radio" name="prazoTipo" value="periodo" /> Período</label>
+          <div id="prazoCampos" hidden>
+            <label for="prazoDesde">Início</label> <input type="date" id="prazoDesde" class="ag-input" />
+            <label for="prazoAte">Fim</label> <input type="date" id="prazoAte" class="ag-input" />
+            <p class="cg-cart-importar__formato">O período vai até 700 dias a partir do início.</p>
+          </div>
+        </fieldset>
+      </div>
+      <div class="ag-modal__foot">
+        <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Cancelar</button>
+        <button type="submit" class="ag-btn ag-btn--primary" id="btnConfirmarIncluir">Salvar</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Modal de importação: <dialog> nativo prende o foco e fecha com Esc. -->
   <dialog class="ag-modal" id="modalAcess" aria-labelledby="tit-modal-acess">
@@ -252,6 +332,7 @@
     let _universoTruncado = 0;   // >0 se a rota cortou a lista
     let _trilha = {};            // documento -> quem atribuiu e quando
     const OPERADOR_INICIAL = {{ operador_id | tojson }};
+    const CERTIFICADO_INICIAL = {{ certificado_id | tojson }};
 
     // Sucesso vai no toast; erro fica num alerta em bloco E no toast — o
     // toast some, e um erro que só passou não foi lido.
@@ -565,6 +646,14 @@
           (t.no_inventario === false ? " · fora do inventário atual" : "");
       } else if (x.fora_do_inventario) {
         trilha = "Fora do inventário atual";
+      }
+      // Prazo da linha manual (valido_desde/valido_ate, só em Atribuições).
+      if (t && t.origem !== "acessorias") {
+        const dm = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("pt-BR");
+        const hojeIso = new Date().toLocaleDateString("sv-SE");
+        const prazo = t.valido_desde && t.valido_desde > hojeIso ? "começa em " + dm(t.valido_desde)
+          : (t.valido_ate ? "até " + dm(t.valido_ate) : "");
+        if (prazo) trilha += (trilha ? " · " : " ") + esc(prazo);
       }
       // A LINHA é o alvo de seleção; a ação vive no rodapé do painel.
       return `<div class="cg-transfer__item" role="option" aria-selected="false" tabindex="0" data-doc="${esc(x.documento)}">
@@ -1032,5 +1121,6 @@
       });
     })();
   </script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-2026-11-13"></script>
 </body>
 </html>

@@ -19,7 +19,7 @@ import re
 import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -818,12 +818,45 @@ def so_digitos(documento: Optional[str]) -> str:
     return "".join(c for c in str(documento or "") if c.isdigit())
 
 
+PRAZO_MAX_DIAS = 700
+
+
+class PrazoInvalido(ValueError):
+    """Prazo recusado; a mensagem vai para a tela."""
+
+
+def validar_prazo(desde: date, ate: Optional[date], hoje: date) -> None:
+    if desde < hoje:
+        raise PrazoInvalido("O início não pode ser anterior a hoje.")
+    if ate is not None:
+        if ate < desde:
+            raise PrazoInvalido("O fim não pode ser anterior ao início.")
+        if (ate - desde).days > PRAZO_MAX_DIAS:
+            raise PrazoInvalido(f"O prazo não pode passar de {PRAZO_MAX_DIAS} dias.")
+
+
+def _como_data(v: Any) -> Optional[date]:
+    if not v:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
+
+
+def vigente(linha: Dict[str, Any], hoje: date) -> bool:
+    """Chave ausente vale (linha anterior à migration); fim é inclusivo."""
+    if (linha.get("origem") or "manual") != "manual":
+        return True  # prazo só vale para liberação manual
+    desde, ate = _como_data(linha.get("valido_desde")), _como_data(linha.get("valido_ate"))
+    return (desde is None or desde <= hoje) and (ate is None or ate >= hoje)
+
+
 def listar_carteira(user_id: str) -> Set[str]:
     """
     Documentos que este usuário pode instalar.
 
     Levanta `CarteiraIndisponivel` se a consulta falhar, em vez de devolver
-    vazio — ver a docstring da exceção.
+    vazio — ver a docstring da exceção. Só conta liberação dentro do período.
     """
     client = _banco()
     if not client:
@@ -831,11 +864,16 @@ def listar_carteira(user_id: str) -> Set[str]:
     try:
         r = (
             client.table("carteira")
-            .select("documento")
+            .select("documento, origem, valido_desde, valido_ate")
             .eq("user_id", user_id)
             .execute()
         )
-        return {so_digitos(row.get("documento")) for row in (r.data or []) if row.get("documento")}
+        hoje = date.today()
+        return {
+            so_digitos(row.get("documento"))
+            for row in (r.data or [])
+            if row.get("documento") and vigente(row, hoje)
+        }
     except Exception as e:
         logger.exception("Falha ao listar carteira de %s", user_id)
         raise CarteiraIndisponivel(str(e)) from e
@@ -1169,7 +1207,7 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
     try:
         r = (
             client.table("carteira")
-            .select("documento, atribuido_por_email, atribuido_em, origem")
+            .select("documento, atribuido_por_email, atribuido_em, origem, valido_desde, valido_ate")
             .eq("user_id", user_id)
             .execute()
         )
@@ -1180,6 +1218,24 @@ def detalhar_carteira(user_id: str) -> List[Dict[str, Any]]:
 
     linhas.sort(key=lambda l: str(l.get("atribuido_em") or ""), reverse=True)
     return linhas
+
+
+def vencimentos_por_documento() -> Dict[str, str]:
+    """documento -> maior `not_after` (ISO) do cofre. Falha devolve {}."""
+    client = _banco()
+    if not client:
+        return {}
+    try:
+        linhas = client.table("cert_pfx_store").select("documento, not_after").execute().data or []
+    except Exception:
+        logger.exception("Falha ao ler os vencimentos do cofre")
+        return {}
+    saida: Dict[str, str] = {}
+    for l in linhas:
+        d, v = so_digitos(l.get("documento")), l.get("not_after")
+        if d and v and str(v) > saida.get(d, ""):
+            saida[d] = str(v)
+    return saida
 
 
 def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, str]]:
@@ -1227,48 +1283,117 @@ def universo_de_documentos(machine_id: Optional[str] = None) -> List[Dict[str, s
     ]
 
 
+def _historico_manual(
+    client: Any, user_id: str, documentos: List[str], movimento: str,
+    por_id: Optional[str], por_email: str, origem: str = "manual",
+) -> None:
+    """Registra a movimentação manual. Falha aqui não desfaz a carteira: a
+    mudança já feita é o que o usuário pediu; o erro fica no log."""
+    if not documentos:
+        return
+    try:
+        r = client.table("users").select("email").eq("id", user_id).execute()
+        email = ((r.data or [{}])[0].get("email")) or ""
+        client.table("carteira_historico").insert([
+            {"user_id": user_id, "user_email": email, "documento": d, "movimento": movimento,
+             "origem": origem, "feito_por": por_id, "feito_por_email": por_email}
+            for d in documentos
+        ]).execute()
+    except Exception:
+        logger.exception("Falha ao gravar o histórico da carteira")
+
+
 def atribuir_carteira(
     user_id: str,
     documentos: List[str],
     atribuido_por: Optional[str],
     atribuido_por_email: str,
+    valido_desde: Optional[date] = None,
+    valido_ate: Optional[date] = None,
+    hoje: Optional[date] = None,
+    preservar_existentes: bool = False,
 ) -> int:
-    """Acrescenta documentos à carteira. Devolve quantos foram gravados."""
+    """Acrescenta documentos à carteira. Devolve quantos foram gravados.
+
+    Linha que já veio de outra origem (Acessórias) não é regravada: o prazo
+    manual não pode virar vencimento de uma liberação sincronizada.
+    `preservar_existentes` (planilha, que não traz prazo) pula também as manuais.
+    """
     client = _banco()
     if not client:
         raise RuntimeError("Banco não configurado")
 
-    linhas = []
-    for doc in documentos:
-        d = so_digitos(doc)
-        if not d:
-            continue
-        linhas.append(
+    hoje = hoje or date.today()
+    desde = valido_desde or hoje
+    validar_prazo(desde, valido_ate, hoje)
+
+    docs = [d for d in dict.fromkeys(so_digitos(x) for x in documentos) if d]
+    if not docs:
+        return 0
+    existentes = {
+        l["documento"]: (l.get("origem") or "manual")
+        for l in (client.table("carteira").select("documento,origem").eq("user_id", user_id).execute().data or [])
+    }
+    docs = [d for d in docs if d not in existentes] if preservar_existentes else [d for d in docs if existentes.get(d, "manual") == "manual"]
+    if not docs:
+        return 0
+
+    client.table("carteira").upsert(
+        [
             {
                 "user_id": user_id,
                 "documento": d,
                 "atribuido_por": atribuido_por,
                 "atribuido_por_email": atribuido_por_email,
+                "valido_desde": desde.isoformat(),
+                "valido_ate": valido_ate.isoformat() if valido_ate else None,
             }
-        )
-    if not linhas:
-        return 0
+            for d in docs
+        ],
+        on_conflict="user_id,documento",
+    ).execute()
+    _historico_manual(client, user_id, [d for d in docs if d not in existentes], "entrada", atribuido_por, atribuido_por_email)
+    return len(docs)
 
-    client.table("carteira").upsert(linhas, on_conflict="user_id,documento").execute()
-    return len(linhas)
 
-
-def remover_da_carteira(user_id: str, documento: str) -> None:
+def remover_da_carteira(user_id: str, documento: str, por_id: Optional[str] = None, por_email: str = "") -> None:
     client = _banco()
     if not client:
         raise RuntimeError("Banco não configurado")
-    (
-        client.table("carteira")
-        .delete()
-        .eq("user_id", user_id)
-        .eq("documento", so_digitos(documento))
-        .execute()
-    )
+    d = so_digitos(documento)
+    r = client.table("carteira").delete().eq("user_id", user_id).eq("documento", d).execute()
+    if r.data:
+        _historico_manual(client, user_id, [d], "saida", por_id, por_email)
+
+
+def expirar_prazos(hoje: Optional[date] = None) -> int:
+    """Apaga as liberações manuais cujo prazo acabou (fim inclusivo) e queima
+    os tokens pendentes de quem perdeu algo. Erro numa linha não para as outras."""
+    client = _banco()
+    if not client:
+        return 0
+    hoje = hoje or date.today()
+    rows = (client.table("carteira").select("user_id, documento, valido_ate")
+            .eq("origem", "manual").is_("valido_ate", "not.null").execute().data or [])
+    saiu: Dict[str, List[str]] = {}
+    for r in rows:
+        ate = _como_data(r.get("valido_ate"))
+        if ate is None or ate >= hoje:
+            continue
+        try:
+            # Refiltra no DELETE: se renovaram entre o select e aqui, nada some.
+            apagou = (client.table("carteira").delete().eq("user_id", r["user_id"]).eq("documento", r["documento"])
+                      .eq("origem", "manual").lt("valido_ate", hoje.isoformat()).execute().data)
+        except Exception:
+            logger.exception("Falha ao expirar %s de %s", r["documento"], r["user_id"])
+            continue
+        if not apagou:
+            continue
+        saiu.setdefault(r["user_id"], []).append(r["documento"])
+    for uid, docs in saiu.items():
+        _historico_manual(client, uid, docs, "saida", None, "prazo", origem="prazo")
+        revogar_tokens_pendentes(uid)
+    return sum(len(d) for d in saiu.values())
 
 
 # ──────────────────────────────────────────────────────────────────────────

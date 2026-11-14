@@ -680,7 +680,8 @@ def _aplicar(conn, dados: dict, feito_por_email: str) -> dict:
             )
         for uid, doc in plano["conversoes"]:
             cur.execute(
-                "UPDATE public.carteira SET origem = 'acessorias' WHERE user_id = %s AND documento = %s",
+                "UPDATE public.carteira SET origem = 'acessorias', valido_ate = NULL, "
+                "valido_desde = LEAST(valido_desde, current_date) WHERE user_id = %s AND documento = %s",
                 (uid, doc),
             )
         for uid, doc in plano["saidas"]:
@@ -1100,22 +1101,24 @@ def retirar(user_id: str, documento: str, por_id: Optional[str], por_email: str)
             (user_id, doc),
         )
         linha = cur.fetchone()
-        if not linha or linha[0] != "acessorias":
+        if not linha:
             return False
-        cur.execute(
-            "INSERT INTO public.carteira_bloqueio (user_id, documento, bloqueado_por, bloqueado_por_email) "
-            "VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, documento) DO NOTHING",
-            (user_id, doc, por_id, por_email),
-        )
+        bloqueia = linha[0] == "acessorias"
+        if bloqueia:
+            cur.execute(
+                "INSERT INTO public.carteira_bloqueio (user_id, documento, bloqueado_por, bloqueado_por_email) "
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, documento) DO NOTHING",
+                (user_id, doc, por_id, por_email),
+            )
         cur.execute("SELECT email FROM public.users WHERE id = %s", (user_id,))
         email = (cur.fetchone() or [""])[0] or ""
         cur.execute(
             "INSERT INTO public.carteira_historico "
             "(user_id, user_email, documento, movimento, origem, feito_por, feito_por_email) "
-            "VALUES (%s, %s, %s, 'saida', 'bloqueio', %s, %s)",
-            (user_id, email, doc, por_id, por_email),
+            "VALUES (%s, %s, %s, 'saida', %s, %s, %s)",
+            (user_id, email, doc, "bloqueio" if bloqueia else "manual", por_id, por_email),
         )
-    return True
+    return bloqueia
 
 
 def desbloquear(user_id: str, documentos: Iterable[str]) -> int:
