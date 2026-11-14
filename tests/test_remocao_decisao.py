@@ -203,6 +203,19 @@ def test_carteira_indisponivel_propaga(monkeypatch, regra):
         DO_ACERVO(["f1"])
 
 
+def test_sem_role_levanta_em_vez_de_virar_operador(regra):
+    regra(set())
+    with pytest.raises(ci.CarteiraIndisponivel):
+        _decidir({"id": "u1", "ativo": True})
+
+
+def test_agora_sem_fuso_conta_como_utc(monkeypatch):
+    fim = datetime(2026, 11, 11, 23, 59, 59, tzinfo=timezone.utc)
+    _vinculos(monkeypatch, [{"estado": "ativo", "tipo": "emprestimo", "decidido_em": "2026-11-08T08:00:00+00:00",
+                             "expira_em": fim.isoformat(), "encerrado_em": None}])
+    assert SITUACAO("u1", MID, AGORA.replace(tzinfo=None)) == ("emprestimo", fim)
+
+
 def test_sem_login_tira_todo_o_acervo(regra):
     ds = rem.decidir_sem_login(["f1", "f3", "fx"])
     assert [(d.fingerprint, d.regra, d.motivo, d.remover_em) for d in ds] == [

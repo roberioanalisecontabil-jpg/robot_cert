@@ -122,6 +122,7 @@ def situacao_do_vinculo(user_id: str, machine_id: str, agora: datetime) -> Tuple
     Calcula a vigência aqui em vez de `computadores._vigente`, que encerra o
     empréstimo vencido: este caminho só lê.
     """
+    agora = comp._quando(agora)  # sem fuso conta como UTC
     vs = comp._vinculos(user_id=str(user_id), machine_id=comp.mac(machine_id))
 
     def vencido(v: Dict[str, Any]) -> bool:
@@ -173,7 +174,8 @@ def decidir_pessoa(user: Dict[str, Any], machine_id: str, fingerprints: List[str
     situacao, desde = situacao_do_vinculo(str(user["id"]), machine_id, agora)
     if situacao in _POR_SITUACAO:
         return _todos(acervo, situacao, _POR_SITUACAO[situacao], desde + AVISO)
-    alcance = ci.documentos_ao_alcance(str(user["id"]), user.get("role") or "")
+    # `role` obrigatório: ausente viraria Operador e um Admin perderia tudo.
+    alcance = ci.documentos_ao_alcance(str(user["id"]), user["role"])
     if alcance is None:
         return []
     return [Decisao(fp, doc, "carteira", motivo_da_saida(str(user["id"]), doc), None)
