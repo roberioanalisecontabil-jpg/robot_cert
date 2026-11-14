@@ -9,6 +9,7 @@ acervo saem de um perfil.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
@@ -197,3 +198,81 @@ def vencendo(user_id: str, hoje: date) -> List[Dict[str, Any]]:
         if ate is not None and hoje <= ate <= hoje + timedelta(days=3):
             saida.append({"documento": r.get("documento"), "vence_em": ate})
     return saida
+
+
+# ── Estado por estação ───────────────────────────────────────────────────
+#
+# Uma linha por (máquina, usuário Windows, certificado). Escrita que falha
+# propaga: nunca se manda remover o que não ficou registrado.
+
+_FIM = ("removido", "falhou")
+
+
+def _dias(falta: timedelta) -> int:
+    return max(1, math.ceil(falta / timedelta(days=1)))
+
+
+def aplicar(machine_id: str, usuario_windows: str, user_id: Optional[str],
+            decisoes: List[Decisao], modo: str, agora: datetime) -> Dict[str, List[Dict[str, Any]]]:
+    saida: Dict[str, List[Dict[str, Any]]] = {"remover": [], "avisos": []}
+    if modo not in ("relatorio", "ligado"):
+        return saida
+    agora = comp._quando(agora)  # sem fuso conta como UTC
+    mid = comp.mac(machine_id)
+    client = _cliente()
+    tabela = "remocao_estacao"
+    existentes = {str(r.get("fingerprint") or "").strip().lower(): r
+                  for r in (client.table(tabela).select("*").eq("machine_id", mid)
+                            .eq("usuario_windows", usuario_windows).execute().data or [])}
+    por_fp = {d.fingerprint.strip().lower(): d for d in decisoes}
+    linhas = []
+    for fp, d in por_fp.items():
+        estado, aviso_desde = "removeria", None
+        if modo == "ligado":
+            antiga = existentes.get(fp) or {}
+            # Só `ligado` grava aviso_desde: semanas de relatório não contam como aviso.
+            aviso_desde = (antiga.get("regra") == d.regra and comp._quando(antiga.get("aviso_desde"))) or agora
+            remover_em = aviso_desde + AVISO if d.regra == "sem_login" else d.remover_em
+            item = {"fingerprint": fp, "documento": d.documento, "motivo": d.motivo}
+            if remover_em is not None and remover_em > agora:
+                estado = "aviso"
+                saida["avisos"].append({**item, "dias": _dias(remover_em - agora)})
+            else:
+                estado = "remover"
+                saida["remover"].append(item)
+        linhas.append({
+            "machine_id": mid, "usuario_windows": usuario_windows, "user_id": user_id,
+            "fingerprint": fp, "documento": d.documento, "regra": d.regra, "motivo": d.motivo,
+            "estado": estado, "aviso_desde": aviso_desde.isoformat() if aviso_desde else None,
+            "detalhe": "", "atualizado_em": agora.isoformat(),
+        })
+    if linhas:
+        client.table(tabela).upsert(linhas, on_conflict="machine_id,usuario_windows,fingerprint").execute()
+    # A situação se resolveu: o aviso some. O que já foi removido ou falhou fica.
+    sobras = [r.get("fingerprint") for fp, r in existentes.items()
+              if fp not in por_fp and r.get("estado") not in _FIM]
+    if sobras:
+        (client.table(tabela).delete().eq("machine_id", mid).eq("usuario_windows", usuario_windows)
+         .in_("fingerprint", sobras).execute())
+    return saida
+
+
+def registrar_resultado(machine_id: str, usuario_windows: str, user_id: Optional[str],
+                        user_email: Optional[str], resultados: List[Dict[str, Any]]) -> None:
+    """O que a bandeja fez. Só vale para linha que estava em `remover`."""
+    mid = comp.mac(machine_id)
+    client = _cliente()
+    agora = datetime.now(timezone.utc).isoformat()
+    for r in resultados:
+        fp = str(r.get("fingerprint") or "").strip().lower()
+        if not fp:
+            continue
+        ok = bool(r.get("ok"))
+        mudou = (client.table("remocao_estacao")
+                 .update({"estado": "removido" if ok else "falhou",
+                          "detalhe": "" if ok else str(r.get("erro") or ""), "atualizado_em": agora})
+                 .eq("machine_id", mid).eq("usuario_windows", usuario_windows)
+                 .eq("fingerprint", fp).eq("estado", "remover").execute().data or [])
+        if ok and user_id and mudou:
+            ci.log_event("REMOVIDO", user_id, user_email, fingerprint=fp, target_machine=mid,
+                         status="OK", detail=mudou[0].get("motivo"))
