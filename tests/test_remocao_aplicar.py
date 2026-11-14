@@ -44,6 +44,36 @@ def test_desligado_nao_grava_nem_devolve(banco):
     assert _aplicar([Decisao(F1, "111", "carteira", "x", None)], "desligado") == {"remover": [], "avisos": []}
     assert banco.tabelas["remocao_estacao"] == []
     assert banco.gravados == []
+    # Só zera o relógio do que estava pendente; o resto fica como está.
+    _aplicar([Decisao(F1, "111", "carteira", "x", None), _sem_login(F2)], "ligado")
+    banco.tabelas["remocao_estacao"].append({"machine_id": MID.lower(), "usuario_windows": USU,
+                                             "fingerprint": "c" * 64, "estado": "removido"})
+    banco.tabelas["remocao_estacao"].append({"machine_id": MID.lower(), "usuario_windows": "outro",
+                                             "fingerprint": "d" * 64, "estado": "aviso",
+                                             "aviso_desde": AGORA.isoformat()})
+    assert _aplicar([Decisao("e" * 64, "333", "carteira", "x", None)], "desligado") == {"remover": [], "avisos": []}
+    estados = {(r["usuario_windows"], r["fingerprint"][0]): (r["estado"], r.get("aviso_desde"))
+               for r in banco.tabelas["remocao_estacao"]}
+    assert estados == {("ana", "a"): ("removeria", None), ("ana", "b"): ("removeria", None),
+                       ("ana", "c"): ("removido", None), ("outro", "d"): ("aviso", AGORA.isoformat())}
+
+
+def test_desligado_zera_relogio_pendente(banco):
+    _aplicar([_sem_login()], "ligado", AGORA - timedelta(days=5))
+    assert _aplicar([_sem_login()], "ligado")["avisos"][0]["dias"] == 2
+    _aplicar([_sem_login()], "desligado")
+    assert _aplicar([_sem_login()], "ligado")["avisos"][0]["dias"] == 7
+
+
+@pytest.mark.parametrize("fim", ["removido", "falhou"])
+def test_sem_login_reinstalado_ganha_aviso_novo(banco, fim):
+    _aplicar([_sem_login()], "ligado", AGORA - timedelta(days=10))
+    assert _aplicar([_sem_login()], "ligado", AGORA - timedelta(days=2))["remover"]
+    rem.registrar_resultado(MID, USU, None, None, [{"fingerprint": F1, "ok": fim == "removido", "erro": "e"}])
+    assert _linhas(banco)[F1]["estado"] == fim
+    saida = _aplicar([_sem_login()], "ligado")
+    assert saida["remover"] == [] and saida["avisos"][0]["dias"] == 7
+    assert _linhas(banco)[F1]["estado"] == "aviso"
 
 
 def test_relatorio_grava_removeria_e_nao_manda_remover(banco):

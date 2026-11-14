@@ -206,6 +206,7 @@ def vencendo(user_id: str, hoje: date) -> List[Dict[str, Any]]:
 # propaga: nunca se manda remover o que não ficou registrado.
 
 _FIM = ("removido", "falhou")
+_PENDENTE = ("aviso", "remover")
 
 
 def _dias(falta: timedelta) -> int:
@@ -215,12 +216,20 @@ def _dias(falta: timedelta) -> int:
 def aplicar(machine_id: str, usuario_windows: str, user_id: Optional[str],
             decisoes: List[Decisao], modo: str, agora: datetime) -> Dict[str, List[Dict[str, Any]]]:
     saida: Dict[str, List[Dict[str, Any]]] = {"remover": [], "avisos": []}
-    if modo not in ("relatorio", "ligado"):
-        return saida
     agora = comp._quando(agora)  # sem fuso conta como UTC
     mid = comp.mac(machine_id)
     client = _cliente()
     tabela = "remocao_estacao"
+    if modo not in ("relatorio", "ligado"):
+        # Desligado zera o relógio pendente: ao religar, o aviso prometido volta inteiro.
+        (client.table(tabela).update({"estado": "removeria", "aviso_desde": None,
+                                      "atualizado_em": agora.isoformat()})
+         .eq("machine_id", mid).eq("usuario_windows", usuario_windows)
+         .in_("estado", list(_PENDENTE)).execute())
+        return saida
+    # shortcut: lê e grava sem trava; duas chamadas simultâneas podem voltar um
+    # `removido` recém-gravado para `remover` (se corrige no ciclo seguinte).
+    # Trocar por transação/trava de linha se duas bandejas por perfil virarem realidade.
     existentes = {str(r.get("fingerprint") or "").strip().lower(): r
                   for r in (client.table(tabela).select("*").eq("machine_id", mid)
                             .eq("usuario_windows", usuario_windows).execute().data or [])}
@@ -231,7 +240,9 @@ def aplicar(machine_id: str, usuario_windows: str, user_id: Optional[str],
         if modo == "ligado":
             antiga = existentes.get(fp) or {}
             # Só `ligado` grava aviso_desde: semanas de relatório não contam como aviso.
-            aviso_desde = (antiga.get("regra") == d.regra and comp._quando(antiga.get("aviso_desde"))) or agora
+            # Só herda de um aviso em curso: o reinstalado após removido/falhou ganha aviso novo.
+            herda = antiga.get("regra") == d.regra and antiga.get("estado") in _PENDENTE
+            aviso_desde = (herda and comp._quando(antiga.get("aviso_desde"))) or agora
             remover_em = aviso_desde + AVISO if d.regra == "sem_login" else d.remover_em
             item = {"fingerprint": fp, "documento": d.documento, "motivo": d.motivo}
             if remover_em is not None and remover_em > agora:
