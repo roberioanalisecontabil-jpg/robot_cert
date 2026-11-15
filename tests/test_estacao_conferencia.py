@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from estacao import chave_maquina, conferencia, repositorio
+from estacao import chave_maquina, conferencia, conteineres, repositorio
 from estacao import conta as cc
 from estacao.repositorio import Item
 from tests.test_estacao import MAQUINA, PORTAL, _Portal, _Resp, estacao, so_windows  # noqa: F401
@@ -51,6 +51,8 @@ def repo(monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setattr(repositorio, "listar", lambda: list(estado["itens"]))
     monkeypatch.setattr(repositorio, "remover", _remover)
     monkeypatch.setattr(chave_maquina, "ler", lambda: "chave-da-maquina")
+    monkeypatch.setattr(conteineres, "conteineres", lambda: {})
+    monkeypatch.setattr(conteineres, "sid_atual", lambda: "")
     conferencia._AVISADO_EM.clear()
     return estado
 
@@ -262,6 +264,27 @@ def test_outros_avisos_dizem_motivo_e_dias(estacao: list, repo: dict) -> None:
     _conferir(http, avisos)
     assert len(avisos) == 1 and "EMPRESA A" in avisos[0] and "vínculo recusado" in avisos[0]
     assert "4 dias" in avisos[0]
+
+
+@so_windows
+def test_conferencia_manda_sid_e_conteineres(estacao: list, repo: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    cc.guardar("seg-1", PORTAL, "ana@x.com", MAQUINA)
+    monkeypatch.setattr(conteineres, "sid_atual", lambda: "S-1-5-21-1-2-3-1001")
+    monkeypatch.setattr(conteineres, "conteineres", lambda: {FP_A: "cont-a", FP_C: "cont-c"})
+    http = _Http(_vazia())
+    _conferir(http, [])
+    corpo = http.chamadas[0][1]
+    assert corpo["sid"] == "S-1-5-21-1-2-3-1001"
+    assert corpo["conteineres"] == {FP_A: "cont-a"}, "FP_C não vai em certificados: fica de fora"
+
+
+@so_windows
+def test_falha_nos_conteineres_nao_impede_conferencia(estacao: list, repo: dict) -> None:
+    cc.guardar("seg-1", PORTAL, "ana@x.com", MAQUINA)
+    http = _Http(_vazia())
+    assert _conferir(http, []) == []
+    corpo = http.chamadas[0][1]
+    assert corpo["conteineres"] == {} and sorted(corpo["certificados"]) == [FP_A, FP_B]
 
 
 def test_versao_1_3_1() -> None:

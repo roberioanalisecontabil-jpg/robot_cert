@@ -29,6 +29,7 @@ a = Analysis(
         "estacao.sessoes",
         "estacao.conferencia",
         "estacao.repositorio",
+        "estacao.conteineres",
         "win32ts",
         "win32profile",
         "win32process",
