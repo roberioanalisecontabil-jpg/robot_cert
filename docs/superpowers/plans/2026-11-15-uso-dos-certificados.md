@@ -24,7 +24,7 @@
   - só o evento **5061**, do provedor `Microsoft Software Key Storage Provider`, com `ReturnCode` `0x0`;
   - o 5058 não entra.
 - **Auditoria:**
-  - subcategoria "Other System Events" pelo GUID `{0CCE9214-69AE-11D9-BED3-505054503030}`, com `/success:enable /failure:enable`;
+  - subcategoria "System Integrity" pelo GUID `{0CCE9212-69AE-11D9-BED3-505054503030}` (e nela que fica o 5061; o 0CCE9214 da primeira versao deste plano estava errado), com `/success:enable /failure:enable`;
   - nunca pelo nome, porque o Windows está em pt-BR.
 - **Primeira coleta de uma máquina:** os últimos **7 dias**.
 - **Hora cheia:** horário de Brasília, com deslocamento fixo de **-03:00**. O Brasil não tem horário de verão desde 2019.
@@ -218,7 +218,7 @@
     - devolve o total enviado.
 
 - [ ] **Step 1: Testes**, com executor e http falsos no estilo de `tests/test_estacao_conferencia.py`:
-  - `test_liga_auditoria_pelo_guid`: o comando contém `{0CCE9214-69AE-11D9-BED3-505054503030}` e não contém "Other System Events".
+  - `test_liga_auditoria_pelo_guid`: o comando contém `{0CCE9212-69AE-11D9-BED3-505054503030}` e não contém o nome traduzido.
   - `test_auditoria_lida_por_posicao_em_portugues`: uma saída com os cabeçalhos em português e "Êxito e Falha" dá `"ligada"`.
   - `test_so_avanca_marcador_depois_do_200`: com o portal respondendo 503, o marcador não muda.
   - `test_lotes_de_2000`: 4500 eventos viram 3 POSTs.

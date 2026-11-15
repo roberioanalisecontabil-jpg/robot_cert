@@ -187,7 +187,7 @@ A sessão cai com a conta ativa em vários casos. Se o perfil virasse "sem login
 
 **Desenho**
 - **Quem coleta:** a tarefa SYSTEM que já existe (atualização automática, na partida do Windows e a cada 6 h). A cada rodada ela:
-  - liga a subcategoria "Other System Events" (GUID `{0CCE9214-69AE-11D9-BED3-505054503030}`, sucesso e falha) com `auditpol`, para que a regra valha em toda estação sem passo manual;
+  - liga a subcategoria "System Integrity" (GUID `{0CCE9212-69AE-11D9-BED3-505054503030}`, sucesso e falha) com `auditpol`, para que a regra valha em toda estação sem passo manual. É nela que fica o 5061; a "Other System Events" (`{0CCE9214-…}`), ligada na prova, só traz o 5058/5059 (correção da revisão, 15/11);
   - lê os 5061 do log de Segurança desde o último `EventRecordID` enviado, guardado em `ProgramData` (na primeira vez, desde 7 dias antes), só do provedor "Microsoft Software Key Storage Provider";
   - agrupa por usuário do Windows (SID e nome), contêiner da chave e hora cheia, com primeiro uso, último uso e quantidade;
   - envia ao portal com a chave da máquina (`_maquina_provada`, como o evento de atualização). Só avança o marcador depois que o portal aceita.
