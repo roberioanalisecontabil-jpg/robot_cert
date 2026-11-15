@@ -3,7 +3,7 @@
 // _operadores, operadoresVisiveis, carregarOperadores (carteiras.html).
 // Na URL o documento vai SÓ com dígitos: CNPJ formatado tem "/" e quebra a rota.
 (function () {
-  const ABAS = { pessoas: "sec-pessoas", certificados: "sec-certificados" };
+  const ABAS = { pessoas: "sec-pessoas", certificados: "sec-certificados", uso: "sec-uso" };
   const TETO_DIAS = 700; // mesmo teto do servidor (validar_prazo)
   let certs = [];
   let atual = null;      // detalhe do certificado aberto
@@ -28,6 +28,7 @@
     history.replaceState(null, "", u.pathname + u.search);
     if (anunciar) $("abas-anuncio").textContent = "Aba " + $("tab-" + aba).textContent.trim() + " aberta.";
     if (aba === "certificados") iniciar();
+    if (aba === "uso" && window.carregarUso) void window.carregarUso();
   }
   Object.keys(ABAS).forEach((a) => {
     const t = $("tab-" + a);
@@ -35,7 +36,8 @@
     t.addEventListener("keydown", (ev) => {
       if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
       ev.preventDefault();
-      const outra = a === "pessoas" ? "certificados" : "pessoas";
+      const nomes = Object.keys(ABAS);
+      const outra = nomes[(nomes.indexOf(a) + (ev.key === "ArrowRight" ? 1 : nomes.length - 1)) % nomes.length];
       trocarAba(outra, true);
       $("tab-" + outra).focus();
     });

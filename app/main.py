@@ -757,7 +757,7 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
     operador = (request.query_params.get("operador") or "").strip()[:64]
     aba = request.query_params.get("aba")
-    aba = aba if aba in ("pessoas", "certificados") else "pessoas"
+    aba = aba if aba in ("pessoas", "certificados", "uso") else "pessoas"
     certificado = "".join(c for c in (request.query_params.get("certificado") or "") if c.isdigit())[:20]
     # Só muda o texto de abertura (ADR 0005); a regra vale nas rotas.
     try:

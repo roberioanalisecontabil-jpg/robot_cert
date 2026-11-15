@@ -78,6 +78,7 @@
     <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Carteiras por pessoa ou por certificado">
       <a class="ag-abas__aba" role="tab" id="tab-pessoas" href="?aba=pessoas" aria-controls="sec-pessoas" data-aba="pessoas" aria-selected="{{ 'true' if aba == 'pessoas' else 'false' }}" {% if aba != 'pessoas' %}tabindex="-1"{% endif %}>Pessoas</a>
       <a class="ag-abas__aba" role="tab" id="tab-certificados" href="?aba=certificados" aria-controls="sec-certificados" data-aba="certificados" aria-selected="{{ 'true' if aba == 'certificados' else 'false' }}" {% if aba != 'certificados' %}tabindex="-1"{% endif %}>Certificados</a>
+      <a class="ag-abas__aba" role="tab" id="tab-uso" href="?aba=uso" aria-controls="sec-uso" data-aba="uso" aria-selected="{{ 'true' if aba == 'uso' else 'false' }}" {% if aba != 'uso' %}tabindex="-1"{% endif %}>Uso</a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
@@ -186,6 +187,36 @@
       </section>
     </div>
     </div>
+
+    <!-- Aba Uso: quando cada certificado foi usado e por quem (Frente C). O texto
+         das células vem da estação: static/carteiras-uso.js só usa textContent. -->
+    <section class="ag-card" id="sec-uso" role="tabpanel" aria-labelledby="tab-uso" {% if aba != 'uso' %}hidden{% endif %}>
+      <div class="ag-form-cols">
+        <div class="ag-field"><label class="ag-label" for="uso-desde">De</label><input type="date" id="uso-desde" class="ag-input" /></div>
+        <div class="ag-field"><label class="ag-label" for="uso-ate">Até</label><input type="date" id="uso-ate" class="ag-input" /></div>
+        <div class="ag-field"><label class="ag-label" for="uso-pessoa">Pessoa</label><select id="uso-pessoa" class="ag-select"><option value="">Todas</option></select></div>
+        <div class="ag-field"><label class="ag-label" for="uso-documento">Certificado (CNPJ/CPF)</label><input type="search" id="uso-documento" class="ag-input" inputmode="numeric" autocomplete="off" /></div>
+      </div>
+      <div class="ag-table-scroll" role="region" aria-label="Uso dos certificados">
+        <table class="ag-table" role="table">
+          <thead role="rowgroup"><tr role="row">
+            <th role="columnheader" class="ag-th--estatico">Quando</th>
+            <th role="columnheader" class="ag-th--estatico">Pessoa</th>
+            <th role="columnheader" class="ag-th--estatico">Máquina</th>
+            <th role="columnheader" class="ag-th--estatico">Certificado</th>
+            <th role="columnheader" class="ag-th--estatico">Usos</th>
+          </tr></thead>
+          <tbody role="rowgroup" id="uso-linhas"><tr class="cg-state-row"><td colspan="5" class="ag-table__vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="ag-form-actions">
+        <button type="button" id="uso-anterior" class="ag-btn ag-btn--outline" disabled>Anterior</button>
+        <button type="button" id="uso-proxima" class="ag-btn ag-btn--outline" disabled>Próxima</button>
+        <span class="ag-ajuda" id="uso-pagina" role="status"></span>
+      </div>
+      <h3 class="ag-form-subhead__titulo">Última coleta por máquina</h3>
+      <ul id="uso-coletas" class="cg-op-lista"></ul>
+    </section>
 
     <!-- Aba Certificados: um certificado por vez, com quem pode usá-lo.
          O comportamento vive em static/carteiras-certificados.js. -->
@@ -1122,5 +1153,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-2026-11-13"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=uso-2026-11-15"></script>
 </body>
 </html>

@@ -423,6 +423,102 @@ def incluir_pessoas_no_certificado(
     return {"status": "ok", "gravados": gravados}
 
 
+POR_PAGINA_USO = 50
+
+
+def _intervalo_uso(desde: Optional[date], ate: Optional[date]) -> tuple:
+    """Datas de Brasília (ate inclusive) -> limites UTC para a coluna `hora`."""
+    from app import uso
+
+    ini = datetime.combine(desde or (datetime.now(uso.BRASILIA).date() - timedelta(days=7)),
+                           datetime.min.time(), tzinfo=uso.BRASILIA)
+    fim = datetime.combine(ate, datetime.min.time(), tzinfo=uso.BRASILIA) + timedelta(days=1) if ate else None
+    return uso._iso(ini), uso._iso(fim) if fim else None
+
+
+# Antes de /api/carteira/{user_id}: senão "uso" casaria como user_id.
+@router.get("/api/carteira/uso", dependencies=[Depends(require_modulo("carteiras"))])
+def listar_uso(
+    desde: Optional[date] = None,
+    ate: Optional[date] = None,
+    user_id: str = Query("", max_length=64),
+    documento: str = Query("", max_length=20),
+    pagina: int = Query(1, ge=1, le=10000),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """Uso dos certificados (Frente C): quando, por quem, em qual máquina.
+
+    Admin vê tudo, inclusive perfil sem login; Gestor só pessoas dos
+    departamentos que lidera. user_id de fora do alcance dá lista vazia.
+    """
+    from app.rotas.remocao import _nomes_por
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    ini, fim = _intervalo_uso(desde, ate)
+    papel = (token.role or "").strip().lower()
+    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False}
+    try:
+        us = sb.table("users").select("id, email, full_name, departamento_id").execute().data or []
+        permitidos: Optional[List[str]] = None
+        if papel not in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+            meus = cert_installer.departamentos_que_lidera(_user_id_da_sessao(token) or "")
+            permitidos = [str(u["id"]) for u in us if u.get("departamento_id") and str(u["departamento_id"]) in meus]
+            if not permitidos or (user_id and user_id not in permitidos):
+                return vazio
+        q = sb.table("uso_certificado").select("*").is_("fingerprint", "not.null").gte("hora", ini)
+        if fim:
+            q = q.lt("hora", fim)
+        if user_id:
+            q = q.eq("user_id", user_id)
+        elif permitidos is not None:
+            q = q.in_("user_id", permitidos)
+        if documento:
+            q = q.eq("documento", "".join(c for c in documento if c.isdigit()))
+        ini_p = (pagina - 1) * POR_PAGINA_USO
+        # Um a mais que a página (range é inclusivo): é o que diz se há próxima.
+        achadas = q.order("hora", desc=True).range(ini_p, ini_p + POR_PAGINA_USO).execute().data or []
+        tem_mais, achadas = len(achadas) > POR_PAGINA_USO, achadas[:POR_PAGINA_USO]
+        maquinas = sorted({str(l["machine_id"]) for l in achadas})
+        # Admin vê a coleta de todas as máquinas (é como se descobre a auditoria desligada);
+        # shortcut: Gestor só as das linhas da página, trocar se pedirem o quadro dele inteiro.
+        cq = sb.table("uso_coleta").select("machine_id, ultima_em, auditoria")
+        if permitidos is not None:
+            cq = cq.in_("machine_id", maquinas or [""])
+        coletas = cq.execute().data or []
+        nomes_pc = {}
+        if maquinas:
+            for d in sorted(sb.table("agent_devices").select("machine_id, nome, visto_em")
+                            .in_("machine_id", maquinas).execute().data or [],
+                            key=lambda d: str(d.get("visto_em") or "")):
+                if d.get("nome"):
+                    nomes_pc[str(d["machine_id"])] = d["nome"]
+        titulares = _nomes_por("documento", [str(l["documento"]) for l in achadas if l.get("documento")])
+    except cert_installer.AlcanceIndisponivel:
+        raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
+    except Exception:
+        logger.exception("Falha ao listar o uso dos certificados")
+        raise HTTPException(status_code=503, detail="Não foi possível ler o uso dos certificados agora.")
+    por_id = {str(u["id"]): u for u in us}
+    linhas = []
+    for l in achadas:
+        u = por_id.get(str(l.get("user_id"))) if l.get("user_id") else None
+        linhas.append({
+            "hora": l["hora"], "primeiro_em": l["primeiro_em"], "ultimo_em": l["ultimo_em"],
+            "quantidade": l["quantidade"],
+            "pessoa": (nomes.nome_pessoa(u.get("full_name")) or u.get("email") or "") if u else "",
+            "email": (u.get("email") or "") if u else "",
+            "usuario_windows": l.get("usuario_windows") or "", "sem_login": not l.get("user_id"),
+            "maquina": l["machine_id"], "nome_maquina": nomes_pc.get(str(l["machine_id"])) or l["machine_id"],
+            "documento": l.get("documento") or "", "titular": titulares.get(str(l.get("documento"))) or "",
+        })
+    return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
+                                          for c in coletas},
+            "pagina": pagina, "tem_mais": tem_mais}
+
+
 @router.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])
 def obter_carteira(
     user_id: str,
