@@ -12,7 +12,7 @@ from estacao import atualizador, chave_maquina, tarefa, uso
 CSV_PT = (
     '"Nome do Computador","Destino da Política","Subcategoria","GUID de Subcategoria",'
     '"Configuração de Inclusão","Configuração de Exclusão"\n'
-    'PC01,Sistema,Outros Eventos do Sistema,{0CCE9214-69AE-11D9-BED3-505054503030},Êxito e Falha,\n'
+    'PC01,Sistema,Integridade do Sistema,{0CCE9212-69AE-11D9-BED3-505054503030},Êxito e Falha,\n'
 )
 
 
@@ -75,8 +75,9 @@ def _marcador(pasta) -> int:
 def test_liga_auditoria_pelo_guid() -> None:
     ex = _Executor()
     uso.ligar_auditoria(ex)
-    assert "{0CCE9214-69AE-11D9-BED3-505054503030}" in ex.comandos[0]
-    assert all("Other System Events" not in c for c in ex.comandos)
+    assert "{0CCE9212-69AE-11D9-BED3-505054503030}" in ex.comandos[0]
+    assert "/success:enable /failure:enable" in ex.comandos[0]
+    assert all("0CCE9214" not in c and "System Integrity" not in c for c in ex.comandos)
 
 
 def test_auditoria_lida_por_posicao_em_portugues() -> None:
@@ -95,6 +96,25 @@ def test_so_avanca_marcador_depois_do_200(ambiente) -> None:
         uso.coletar(_Http(503), ex)
     assert _marcador(ambiente) == 0
     assert uso.coletar(_Http(200), ex) == 3
+    assert _marcador(ambiente) == 3
+
+
+def test_sem_eventos_manda_um_lote_vazio_com_a_auditoria(ambiente) -> None:
+    http = _Http()
+    assert uso.coletar(http, _Executor(maior=5, csv=CSV_PT.replace("Êxito e Falha", "Sem Auditoria"))) == 0
+    assert len(http.posts) == 1
+    assert http.posts[0][1]["eventos"] == [] and http.posts[0][1]["auditoria"] == "desligada"
+    assert _marcador(ambiente) == 0
+
+
+def test_evento_invalido_sai_do_lote_mas_o_marcador_passa(ambiente) -> None:
+    eventos = _eventos(3)
+    eventos[1]["conteiner"] = None
+    eventos[2]["usuario"] = None
+    http = _Http()
+    assert uso.coletar(http, _Executor(maior=50, eventos=eventos)) == 2
+    enviados = http.posts[0][1]["eventos"]
+    assert [e["record_id"] for e in enviados] == [1, 3] and enviados[1]["usuario"] == ""
     assert _marcador(ambiente) == 3
 
 

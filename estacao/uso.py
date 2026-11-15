@@ -1,6 +1,6 @@
 """Coleta do uso dos certificados (Frente C), na tarefa SYSTEM.
 
-Liga a auditoria "Other System Events", lê os eventos 5061 novos do log de
+Liga a auditoria "System Integrity", lê os eventos 5061 novos do log de
 Segurança e manda ao portal. O marcador (maior EventRecordID aceito) fica na
 pasta trancada da atualização: uma pessoa comum não pode editá-lo para
 esconder um uso. Nunca abre a chave privada: o contêiner vem do próprio evento.
@@ -19,7 +19,8 @@ from estacao.repositorio import _powershell
 
 logger = logging.getLogger("estacao.uso")
 
-GUID_AUDITORIA = "{0CCE9214-69AE-11D9-BED3-505054503030}"
+# "System Integrity": é a subcategoria que emite o 5061 ("Other System Events" só traz 5058/5059).
+GUID_AUDITORIA = "{0CCE9212-69AE-11D9-BED3-505054503030}"
 PROVEDOR = "Microsoft Software Key Storage Provider"
 LOTE = 2000
 _SEM_AUDITORIA = ("no auditing", "sem auditoria")
@@ -112,11 +113,16 @@ def coletar(http, executar=_powershell) -> int:
         desde = 0
     eventos = ler_eventos(desde, executar)
     enviados = 0
-    for i in range(0, len(eventos), LOTE):
-        lote = eventos[i:i + LOTE]
+    # Sem eventos ainda se manda um lote vazio: é ele que conta ao portal o estado da auditoria.
+    for i in range(0, max(len(eventos), 1), LOTE):
+        lido = eventos[i:i + LOTE]
+        # Evento sem sid ou contêiner faria o portal responder 422 para sempre: sai daqui,
+        # mas o marcador passa por ele.
+        lote = [{**e, "usuario": e.get("usuario") or ""} for e in lido if e.get("sid") and e.get("conteiner")]
         r = http.post(f"{portal()}/api/estacao/uso", json={
             "machine_id": bandeja.machine_id(), "chave": chave, "auditoria": auditoria, "eventos": lote})
         r.raise_for_status()
         enviados += len(lote)
-        _gravar_marcador(lote[-1]["record_id"])
+        if lido:
+            _gravar_marcador(lido[-1]["record_id"])
     return enviados
