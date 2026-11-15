@@ -175,7 +175,9 @@ def decidir_pessoa(user: Dict[str, Any], machine_id: str, fingerprints: List[str
     situacao, desde = situacao_do_vinculo(str(user["id"]), machine_id, agora)
     if situacao in _POR_SITUACAO:
         return _todos(acervo, situacao, _POR_SITUACAO[situacao], desde + AVISO)
-    # `role` obrigatório: ausente viraria Operador e um Admin perderia tudo.
+    # `role` obrigatório: ausente ou vazio viraria Operador e um Admin perderia tudo.
+    if not str(user.get("role") or "").strip():
+        raise ci.CarteiraIndisponivel("conta sem papel definido")
     alcance = ci.documentos_ao_alcance(str(user["id"]), user["role"])
     if alcance is None:
         return []

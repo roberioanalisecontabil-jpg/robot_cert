@@ -64,6 +64,6 @@ def test_remover_thumbprint_invalido_nao_executa():
     def nao_deve(script):
         raise AssertionError("executou")
 
-    for t in ("", "ZZ" * 20, THUMB + '"; calc', "A" * 39):
+    for t in ("", "ZZ" * 20, THUMB + '"; calc', "A" * 39, THUMB + "\n"):
         item = repositorio.Item(sha256="x", thumbprint=t, nome="n")
         assert repositorio.remover(item, nao_deve) == (False, "thumbprint inválido")

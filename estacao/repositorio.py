@@ -88,7 +88,7 @@ def listar(executar=_powershell) -> list[Item]:
 def remover(item: Item, executar=_powershell) -> tuple[bool, str]:
     """Remove o certificado e a chave privada dele do repositorio do usuario."""
     thumb = (item.thumbprint or "").upper()
-    if not _THUMB.match(thumb):  # nunca entra em comando sem passar daqui
+    if not _THUMB.fullmatch(thumb):  # nunca entra em comando sem passar daqui
         return False, "thumbprint inválido"
     try:
         r = executar(
