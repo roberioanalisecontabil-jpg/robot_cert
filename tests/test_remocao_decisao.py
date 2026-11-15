@@ -209,6 +209,13 @@ def test_sem_role_levanta_em_vez_de_virar_operador(regra):
         _decidir({"id": "u1", "ativo": True})
 
 
+@pytest.mark.parametrize("role", [None, "", "  "])
+def test_role_vazio_levanta_em_vez_de_virar_operador(regra, role):
+    regra(set())
+    with pytest.raises(ci.CarteiraIndisponivel):
+        _decidir({"id": "u1", "role": role, "ativo": True})
+
+
 def test_agora_sem_fuso_conta_como_utc(monkeypatch):
     fim = datetime(2026, 11, 11, 23, 59, 59, tzinfo=timezone.utc)
     _vinculos(monkeypatch, [{"estado": "ativo", "tipo": "emprestimo", "decidido_em": "2026-11-08T08:00:00+00:00",

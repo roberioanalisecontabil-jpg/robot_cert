@@ -425,6 +425,7 @@
     <section class="ag-card cg-cfg-aba" id="sec-remocao" role="tabpanel" aria-labelledby="tab-remocao" {% if aba != 'remocao' %}hidden{% endif %}>
       <div class="cg-cfg-corpo">
         <p class="cg-cfg-lead">Desligado: não confere. Só relatório: lista o que sairia, sem remover. Ligado: remove nas estações, com aviso quando houver prazo.</p>
+        <div class="ag-form-cols">
         <div class="ag-field">
           <label class="ag-label" for="sel-remocao-carteira">Certificados de quem saiu da carteira</label>
           <select id="sel-remocao-carteira" class="ag-select">
@@ -440,6 +441,7 @@
             <option value="relatorio">Só relatório</option>
             <option value="ligado">Ligado</option>
           </select>
+        </div>
         </div>
         <div class="ag-form-actions">
           <button type="button" id="btn-remocao-salvar" class="ag-btn ag-btn--primary">Salvar</button>
