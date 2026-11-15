@@ -479,7 +479,7 @@ def listar_uso(
             q = q.eq("documento", "".join(c for c in documento if c.isdigit()))
         ini_p = (pagina - 1) * POR_PAGINA_USO
         # Um a mais que a página (range é inclusivo): é o que diz se há próxima.
-        achadas = q.order("hora", desc=True).range(ini_p, ini_p + POR_PAGINA_USO).execute().data or []
+        achadas = q.order("hora", desc=True).order("id", desc=True).range(ini_p, ini_p + POR_PAGINA_USO).execute().data or []
         tem_mais, achadas = len(achadas) > POR_PAGINA_USO, achadas[:POR_PAGINA_USO]
         maquinas = sorted({str(l["machine_id"]) for l in achadas})
         # Admin vê a coleta de todas as máquinas (é como se descobre a auditoria desligada);

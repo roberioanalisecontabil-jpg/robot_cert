@@ -88,3 +88,14 @@ def test_aba_uso_existe_e_abre_pelo_link(client: TestClient) -> None:
 
 def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
     assert "innerHTML" not in JS.read_text(encoding="utf-8")
+
+
+def test_paginas_com_a_mesma_hora_nao_repetem_nem_perdem_linhas(client: TestClient, banco) -> None:
+    # hora é balde de uma hora: empate é a regra, e o desempate pelo id mantém as páginas disjuntas.
+    banco.tabelas["uso_certificado"] = [_uso("u-fis", DOC_A, id=i, quantidade=i) for i in range(1, 76)]
+    ids = []
+    for p in (1, 2):
+        j = _get(client, ADMIN, f"&pagina={p}").json()
+        ids += [l["quantidade"] for l in j["linhas"]]
+    assert sorted(ids) == list(range(1, 76))  # sem repetir nem perder
+    assert ids[:3] == [75, 74, 73]
