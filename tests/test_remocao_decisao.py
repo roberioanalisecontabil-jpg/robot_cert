@@ -15,7 +15,7 @@ MID = "aa:bb:cc:dd:ee:ff"
 ACERVO = {"f1": "111", "f2": "222", "f3": None}
 
 # As verdadeiras, antes de qualquer monkeypatch.
-DO_ACERVO, SITUACAO, MOTIVO = rem.do_acervo, rem.situacao_do_vinculo, rem.motivo_da_saida
+DO_ACERVO, SITUACAO, MOTIVOS = rem.do_acervo, rem.situacao_do_vinculo, rem.motivos_da_saida
 
 
 def _user(role: str = "user", ativo: bool = True) -> dict:
@@ -27,7 +27,7 @@ def regra(monkeypatch: pytest.MonkeyPatch):
     """Acervo fixo, vínculo em vigor; cada teste ajusta o alcance."""
     monkeypatch.setattr(rem, "do_acervo", lambda fps: {f: d for f, d in ACERVO.items() if f in fps})
     monkeypatch.setattr(rem, "situacao_do_vinculo", lambda u, m, a: ("carteira", None))
-    monkeypatch.setattr(rem, "motivo_da_saida", lambda u, d: f"motivo de {d}")
+    monkeypatch.setattr(rem, "motivos_da_saida", lambda u, ds: {d: f"motivo de {d}" for d in ds})
 
     def alcance(valor):
         monkeypatch.setattr(ci, "documentos_ao_alcance", lambda uid, role: valor)
@@ -62,8 +62,11 @@ def test_operador_perde_fora_da_carteira_com_motivo_do_historico(monkeypatch, re
          "feito_por_email": None, "feito_em": "2026-11-12T10:00:00+00:00"},
     ]})
     monkeypatch.setattr(ci, "_banco", lambda: fake)
-    monkeypatch.setattr(rem, "motivo_da_saida", MOTIVO)
-    motivo = MOTIVO
+    monkeypatch.setattr(rem, "motivos_da_saida", MOTIVOS)
+
+    def motivo(u, d):
+        return MOTIVOS(u, [d])[d]
+
     [d] = _decidir()
     assert (d.fingerprint, d.regra, d.motivo, d.remover_em) == ("f2", "carteira", "retirado por g@x", None)
     # As outras traduções da última saída.
@@ -75,6 +78,22 @@ def test_operador_perde_fora_da_carteira_com_motivo_do_historico(monkeypatch, re
             "feito_por_email": "g@x", "feito_em": f"2026-11-1{len(fake.tabelas['carteira_historico'])}T10:00:00+00:00"})
         assert motivo("u1", "222") == texto
     assert motivo("u1", "999") == "fora da carteira"
+
+
+def test_motivos_numa_consulta_so(monkeypatch):
+    fake = _Fake({"carteira_historico": [
+        {"user_id": "u1", "documento": "111", "movimento": "saida", "origem": "prazo",
+         "feito_por_email": None, "feito_em": "2026-11-01T10:00:00+00:00"},
+        {"user_id": "u1", "documento": "111", "movimento": "saida", "origem": "acessorias",
+         "feito_por_email": None, "feito_em": "2026-11-09T10:00:00+00:00"},
+        {"user_id": "u1", "documento": "222", "movimento": "saida", "origem": "manual",
+         "feito_por_email": "g@x", "feito_em": "2026-11-05T10:00:00+00:00"},
+    ]})
+    monkeypatch.setattr(ci, "_banco", lambda: fake)
+    assert MOTIVOS("u1", ["111", "222", "333"]) == {
+        "111": "saiu no Acessórias", "222": "retirado por g@x", "333": "fora da carteira"}
+    assert fake.consultas == ["carteira_historico"]
+    assert MOTIVOS("u1", []) == {}
 
 
 def test_documento_nulo_nunca_sai(regra):
@@ -194,7 +213,7 @@ def test_carteira_indisponivel_propaga(monkeypatch, regra):
     fake = _Fake({})
     fake.quebrado.update({"cert_pfx_store": True, "carteira_historico": True, "carteira": True})
     monkeypatch.setattr(ci, "_banco", lambda: fake)
-    for chamada in (lambda: DO_ACERVO(["f1"]), lambda: MOTIVO("u1", "111"),
+    for chamada in (lambda: DO_ACERVO(["f1"]), lambda: MOTIVOS("u1", ["111"]),
                     lambda: rem.vencendo("u1", date(2026, 11, 14))):
         with pytest.raises(ci.CarteiraIndisponivel):
             chamada()
