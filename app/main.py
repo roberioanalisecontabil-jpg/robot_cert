@@ -757,7 +757,7 @@ def pagina_carteiras(request: Request) -> HTMLResponse:
     # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
     operador = (request.query_params.get("operador") or "").strip()[:64]
     aba = request.query_params.get("aba")
-    aba = aba if aba in ("pessoas", "certificados") else "pessoas"
+    aba = aba if aba in ("pessoas", "certificados", "uso") else "pessoas"
     certificado = "".join(c for c in (request.query_params.get("certificado") or "") if c.isdigit())[:20]
     # Só muda o texto de abertura (ADR 0005); a regra vale nas rotas.
     try:
@@ -799,6 +799,11 @@ app.include_router(_rotas_atualizacao)
 from app.rotas.remocao import router as _rotas_remocao  # noqa: E402
 
 app.include_router(_rotas_remocao)
+
+# Coleta do uso dos certificados pela bandeja (Frente C): app/rotas/uso_estacao.py.
+from app.rotas.uso_estacao import router as _rotas_uso_estacao  # noqa: E402
+
+app.include_router(_rotas_uso_estacao)
 
 # Entrar com a Microsoft (ida e volta do navegador): app/rotas/microsoft.py.
 from app.rotas.microsoft import MENSAGENS_ERRO as _MENSAGENS_ERRO_MS, router as _rotas_microsoft  # noqa: E402

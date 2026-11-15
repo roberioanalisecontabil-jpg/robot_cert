@@ -19,6 +19,7 @@ from datetime import date
 from typing import Any, Callable
 
 from estacao import chave_maquina, repositorio
+from estacao import conteineres as cont
 from estacao import conta as cc
 
 LOGGER = logging.getLogger(__name__)
@@ -51,8 +52,12 @@ def conferir(sessao, versao: str, avisar: Callable[[str], None], hoje: date,
         return pendentes
     por_sha = {i.sha256.lower(): i for i in itens}
     # shortcut: acima de 500 certificados no perfil, o resto fica de fora da rodada.
-    corpo: dict[str, Any] = {"usuario_windows": _usuario_windows(),
-                             "certificados": sorted(por_sha)[:TETO], "resultados": pendentes[:TETO]}
+    enviados = sorted(por_sha)[:TETO]
+    # Falha na leitura vira {}: o mapa de uso some, a conferência da remoção não.
+    mapa = cont.conteineres()
+    corpo: dict[str, Any] = {"usuario_windows": _usuario_windows(), "sid": cont.sid_atual(),
+                             "certificados": enviados, "resultados": pendentes[:TETO],
+                             "conteineres": {s: mapa[s] for s in enviados if s in mapa}}
     conectado = cc.esta_conectado()
     sem_login = False
     if conectado:

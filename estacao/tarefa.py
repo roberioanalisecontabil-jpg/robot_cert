@@ -228,6 +228,14 @@ def rodar_tarefa() -> int:
         return 0
     p = pastas()
     with _cliente() as http:
+        if e_estacao():
+            # Isolada: a coleta falhar não impede a atualização, e vice-versa.
+            try:
+                from estacao import uso
+
+                logger.info("Uso dos certificados: %d evento(s) enviado(s).", uso.coletar(http))
+            except Exception:
+                logger.exception("Coleta do uso dos certificados falhou.")
         try:
             pacote = buscar_pacote(http)
         except Exception as e:

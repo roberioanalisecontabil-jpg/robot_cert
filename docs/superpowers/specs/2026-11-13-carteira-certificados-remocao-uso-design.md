@@ -175,11 +175,47 @@ A sessão cai com a conta ativa em vários casos. Se o perfil virasse "sem login
 2. Isso exige a chave no provedor CNG ("Microsoft Software Key Storage Provider")? O `certutil -importpfx` de hoje usa o provedor antigo, que não é auditado? Importar com `-csp "Microsoft Software Key Storage Provider"` quebra algum programa que eles usam?
 3. Quantos eventos por dia uma estação gera? O volume define a coleta: resumo por hora ou evento a evento.
 
-**Depois da prova** (desenho a fechar com o resultado)
-- A bandeja lê os eventos, liga o nome da chave ao certificado instalado e envia ao portal o resumo: pessoa, máquina, certificado, programa, início e fim, quantidade.
-- Tela "Uso do certificado": Admin vê todos, Gestor vê os colaboradores dele.
-- Limite conhecido: no navegador o registro mostra o programa (chrome.exe), não o site.
-- Ligar a auditoria nas estações exige privilégio: a tarefa SYSTEM de atualização pode fazer isso. Isso entra no desenho depois da prova.
+**Resultado da prova** (15/11/2026, máquina TI-002, script `prova-uso.ps1` rodado como admin pelo usuário)
+1. Aparecem. O e-CAC no Chrome (ADRIELLE 13:06:51, ARACAJU 13:07:48) e uma assinatura no Adobe (NEUZETE LTDA 13:16:25) geraram cada um um par 5058 (abrir a chave) + 5061 (operação), com `ReturnCode 0x0`. Campos úteis: hora, `SubjectUserSid`, `SubjectUserName`, `SubjectLogonId`, `ProviderName`, `KeyName`, `Operation`. **Não há o programa**: o processo do evento é sempre o `lsass`.
+2. Não precisa do provedor CNG. Chaves importadas pelo `certutil -importpfx` de hoje (provedor antigo, "Microsoft Enhanced Cryptographic Provider v1.0") também geram evento, que chega como "Microsoft Software Key Storage Provider". Ninguém reinstala nada.
+3. Volume baixo: 30 a 80 eventos 5058+5061 por dia nesta máquina (11 a 15/11), contando chaves que não são do acervo (Windows Hello, TPM, conta Microsoft).
+- O `KeyName` do evento é o "Contêiner da chave" do certificado (`certutil -user -store My`). Às vezes é o nome da empresa (`SUPERMERCADO ADRIELLE LTDA:06081592000108`), às vezes um GUID (`{4FCA1542-…}`). É por ele que o evento se liga ao certificado.
+- O log de Segurança só é legível por SYSTEM, Administradores e "Leitores de Log de Eventos" (`channelAccess` do canal). A bandeja roda como o usuário e não lê.
+- O tamanho padrão do log é 20 MB e sobrescreve os mais antigos.
+
+**Decidido pelo usuário (15/11):** o programa não importa. Importa saber **que** o certificado foi usado, **quando** e **por quem**.
+
+**Desenho**
+- **Quem coleta:** a tarefa SYSTEM que já existe (atualização automática, na partida do Windows e a cada 6 h). A cada rodada ela:
+  - liga a subcategoria "System Integrity" (GUID `{0CCE9212-69AE-11D9-BED3-505054503030}`, sucesso e falha) com `auditpol`, para que a regra valha em toda estação sem passo manual. É nela que fica o 5061; a "Other System Events" (`{0CCE9214-…}`), ligada na prova, só traz o 5058/5059 (correção da revisão, 15/11);
+  - lê os 5061 do log de Segurança desde o último `EventRecordID` enviado, guardado em `ProgramData` (na primeira vez, desde 7 dias antes), só do provedor "Microsoft Software Key Storage Provider";
+  - agrupa por usuário do Windows (SID e nome), contêiner da chave e hora cheia, com primeiro uso, último uso e quantidade;
+  - envia ao portal com a chave da máquina (`_maquina_provada`, como o evento de atualização). Só avança o marcador depois que o portal aceita.
+- **Coleta isolada:** a coleta roda em bloco próprio dentro da `rodar_tarefa`, antes da conferência de versão e com o próprio `try`. Portal fora do ar na atualização não pula a coleta, e erro na coleta não impede a atualização. Só coleta em estação (`e_estacao()`).
+- **Contêiner para certificado (trabalho novo):** hoje a conferência da Frente B manda só o SHA-256 de cada certificado e o `usuario_windows` (DOMÍNIO\usuário). Ela passa a mandar também:
+  - o contêiner da chave de cada certificado, lido no `_LISTAR` do `repositorio`;
+  - o SID do usuário.
+  O portal guarda o mapa máquina + SID + contêiner → fingerprint, atualizado em toda conferência, **qualquer que seja o modo das chaves da Frente B**: a remoção desligada não desliga o registro de uso.
+- **Uso ainda sem mapa (minha escolha):** o portal guarda todo uso recebido com o contêiner e o SID, e resolve certificado e pessoa na hora de mostrar, pelo mapa. Um uso que chega antes da primeira conferência daquele perfil aparece assim que o mapa chega, sem se perder. Uso cujo contêiner não vira certificado do acervo em 30 dias é apagado (é chave de fora do CertGuard).
+- **Casamento de usuário:** pelo SID, que vem no evento (`SubjectUserSid`) e na conferência.
+- **Rota nova:** lote com teto de linhas e limite de taxa por IP, no padrão de `/api/estacao/atualizacao/evento`. A primeira rodada pega 7 dias para trás.
+- **Fuso:** a "hora cheia" é em horário de Brasília. Os eventos vêm em UTC.
+- **Quem usou:** o usuário do Windows da máquina, ligado à pessoa do portal pela conta da bandeja naquele perfil. Sem conta no perfil, a tela mostra o usuário do Windows com a marca "sem login".
+- **Tela "Uso do certificado":**
+  - colunas: data e hora (primeiro e último uso da hora), pessoa (ou usuário do Windows), máquina, certificado (titular e documento) e quantidade;
+  - filtros por período, pessoa e certificado;
+  - Admin vê tudo, Gestor vê os colaboradores dele, Operador não vê a tela.
+- **Limites conhecidos:**
+  - não mostra o programa nem o site;
+  - máquina sem chave fixada não consegue mandar;
+  - se o log de Segurança encher entre duas rodadas, os usos mais antigos se perdem, o que é improvável com 6 h e o volume medido;
+  - auditoria desligada por política de domínio prevalece sobre o `auditpol` local.
+- **Escolhas minhas** (o builder pode rever):
+  - uma linha por SID, máquina, contêiner e hora, gravada como upsert para reenvio não duplicar;
+  - os 5058 não entram, porque cada uso real já gera um 5061.
+- **Escolhas minhas no lugar do usuário** (perguntadas em 15/11 e sem resposta; ele pode trocar):
+  - **o registro é informação, não prova.** A tela não tem painel de cobertura. Para não induzir a "não usou", ela mostra por máquina a hora da última coleta recebida;
+  - **guarda de 5 anos** (prazo usual de guarda contábil e fiscal), num valor só no código. Usos mais antigos são apagados. Só o Admin exporta.
 
 ## O que fica com o builder
 

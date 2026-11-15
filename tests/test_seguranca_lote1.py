@@ -73,7 +73,7 @@ class _Query:
         self._head = False
         self._range: Optional[tuple] = None
         self._on_conflict: Optional[List[str]] = None
-        self._order: Optional[tuple] = None
+        self._order: List[tuple] = []
         self._limit: Optional[int] = None
 
     def select(self, *_c: str, **kw: Any) -> "_Query":
@@ -139,7 +139,7 @@ class _Query:
         """Ordena de verdade: `get_latest_snapshot` é `order(scanned_at,
         desc).limit(1)`, e um fake que ignorasse os dois devolveria sempre a
         primeira linha — o cache das duplicidades pareceria nunca invalidar."""
-        self._order = (coluna, bool(desc))
+        self._order.append((coluna, bool(desc)))
         return self
 
     def _casa(self, r: Dict[str, Any]) -> bool:
@@ -207,8 +207,11 @@ class _Query:
         self._b.consultas.append(self._n)
         rows = [dict(r) for r in self._l if self._casa(r)]
         if self._order:
-            col, desc = self._order
-            rows.sort(key=lambda r: (r.get(col) is None, str(r.get(col) or "")), reverse=desc)
+            # Ordem em colunas: ordena da última para a primeira (sort estável).
+            for col, desc in reversed(self._order):
+                rows.sort(key=lambda r: (r.get(col) is None,
+                                         r[col] if isinstance(r.get(col), int) else str(r.get(col) or "")),
+                          reverse=desc)
         total = len(rows)
         if self._range:
             a, b = self._range

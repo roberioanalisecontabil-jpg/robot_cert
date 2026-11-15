@@ -9,7 +9,7 @@
 ; nome vira lixo na tela. Mantenha o BOM ao editar.
 #define MyAppName "CertGuard Análise"
 #define MyInternalName "Certguard Analise"
-#define MyAppVersion "1.3.1"
+#define MyAppVersion "1.4.0"
 #define MyAppPublisher "Analise Group"
 #define MyAppURL "https://certificado.analisegroup.cnt.br/"
 #define MyAppExeName "certguard_analise.exe"
