@@ -800,6 +800,11 @@ from app.rotas.remocao import router as _rotas_remocao  # noqa: E402
 
 app.include_router(_rotas_remocao)
 
+# Coleta do uso dos certificados pela bandeja (Frente C): app/rotas/uso_estacao.py.
+from app.rotas.uso_estacao import router as _rotas_uso_estacao  # noqa: E402
+
+app.include_router(_rotas_uso_estacao)
+
 # Entrar com a Microsoft (ida e volta do navegador): app/rotas/microsoft.py.
 from app.rotas.microsoft import MENSAGENS_ERRO as _MENSAGENS_ERRO_MS, router as _rotas_microsoft  # noqa: E402
 

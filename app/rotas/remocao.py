@@ -23,7 +23,7 @@ from typing import Annotated, Any, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, StringConstraints
 
-from app import agent_devices, cert_installer as ci, computadores, nomes, remocao
+from app import agent_devices, cert_installer as ci, computadores, nomes, remocao, uso
 from app.rotas.atualizacao import _limitar
 from app.rotas.computadores import _dispositivo_da_requisicao
 from app.sessao import _sb_do_login, require_admin
@@ -52,6 +52,10 @@ class Conferencia(BaseModel):
                                                       min_length=1, max_length=256)]
     certificados: List[Fingerprint] = Field(max_length=500)
     resultados: List[Resultado] = Field(default_factory=list, max_length=500)
+    # Frente C: SID do usuário e {fingerprint: contêiner da chave}. Vazios na bandeja 1.3.x.
+    sid: str = Field(default="", max_length=184)
+    conteineres: Dict[Fingerprint, Annotated[str, StringConstraints(min_length=1, max_length=512)]] = Field(
+        default_factory=dict, max_length=500)
 
 
 class ConferenciaSemConta(Conferencia):
@@ -76,6 +80,14 @@ def _conferir(machine_id: str, corpo: Conferencia, user: Optional[Dict[str, Any]
     antes de `aplicar`: se ela falha, o 503 sai sem relógio de aviso começado.
     Qualquer falha vira 503: nunca uma resposta com listas pela metade."""
     uid = str(user["id"]) if user else None
+    if corpo.sid:
+        # Só os certificados que a estação conferiu agora; a falha aqui não derruba a remoção.
+        mapa = {c: fp for fp, c in corpo.conteineres.items() if fp in corpo.certificados}
+        try:
+            uso.registrar_mapa(machine_id, corpo.sid, corpo.usuario_windows, uid, mapa,
+                               datetime.now(timezone.utc))
+        except Exception:  # noqa: BLE001
+            logger.exception("Uso: mapa de contêineres de %s falhou", computadores.mac(machine_id))
     try:
         remocao.registrar_resultado(machine_id, corpo.usuario_windows, uid, (user or {}).get("email"),
                                     [r.model_dump() for r in corpo.resultados])
