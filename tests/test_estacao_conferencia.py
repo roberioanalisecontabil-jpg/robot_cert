@@ -105,6 +105,23 @@ def test_login_novo_substitui_ultimo_dono(estacao: list) -> None:
 
 
 @so_windows
+def test_conta_sem_temporario_sobrando(estacao: list, monkeypatch: pytest.MonkeyPatch) -> None:
+    portal = _Portal()
+    cc.registrar(portal, PORTAL, "ana@x.com", "certa", MAQUINA)
+    cc.registrar(portal, PORTAL, "bia@x.com", "certa", MAQUINA)
+    pasta = cc.caminho().parent
+    assert cc.ler()["email"] == "bia@x.com" and not list(pasta.glob("*.tmp"))
+
+    def _falha(*a):
+        raise OSError("disco")
+
+    monkeypatch.setattr(cc.os, "replace", _falha)
+    with pytest.raises(OSError):
+        cc.registrar(portal, PORTAL, "caio@x.com", "certa", MAQUINA)
+    assert cc.ler()["email"] == "bia@x.com" and not list(pasta.glob("*.tmp"))
+
+
+@so_windows
 def test_sair_vira_ultimo_dono(estacao: list) -> None:
     portal = _Portal()
     cc.registrar(portal, PORTAL, "ana@x.com", "certa", MAQUINA)
@@ -247,13 +264,23 @@ def test_outros_avisos_dizem_motivo_e_dias(estacao: list, repo: dict) -> None:
     assert "4 dias" in avisos[0]
 
 
-def test_versao_1_3_0() -> None:
+def test_versao_1_3_1() -> None:
     from estacao import VERSAO, VERSAO_REPORTADA
 
-    assert VERSAO == "1.3.0" and VERSAO_REPORTADA == "certguard-1.3.0"
+    assert VERSAO == "1.3.1" and VERSAO_REPORTADA == "certguard-1.3.1"
 
 
 # ── Laço da bandeja ──────────────────────────────────────────────────────
+
+
+class _ThreadNaHora:
+    """Roda o alvo no start(), para o teste ver a ordem sem esperar thread."""
+
+    def __init__(self, target, daemon=None) -> None:
+        self._alvo = target
+
+    def start(self) -> None:
+        self._alvo()
 
 
 def test_laco_confere_na_partida_e_a_cada_300_s(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -266,6 +293,7 @@ def test_laco_confere_na_partida_e_a_cada_300_s(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(b, "verificar", lambda: feitas.append("verificar"))
     monkeypatch.setattr(conferencia, "conferir", lambda *a: feitas.append("conferir") or [])
     monkeypatch.setattr(b, "_machine_id", lambda: MAQUINA)
+    monkeypatch.setattr(bandeja.threading, "Thread", _ThreadNaHora)
 
     def _esperar(segundos: float) -> bool:
         relogio["t"] += segundos
@@ -277,6 +305,30 @@ def test_laco_confere_na_partida_e_a_cada_300_s(monkeypatch: pytest.MonkeyPatch,
     b.laco()
     assert feitas.count("verificar") == 16, "instalações seguem a cada 20 s"
     assert feitas.count("conferir") == 2 and feitas[:2] == ["verificar", "conferir"]
+
+
+def test_conferencia_lenta_nao_segura_as_instalacoes(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import threading
+
+    from estacao import bandeja
+
+    solta, entrou = threading.Event(), threading.Event()
+    verificacoes: list = []
+    b = bandeja.Bandeja(tmp_path / "x.log")
+    monkeypatch.setattr(b, "verificar", lambda: verificacoes.append(1))
+    monkeypatch.setattr(b, "_machine_id", lambda: MAQUINA)
+    monkeypatch.setattr(conferencia, "conferir", lambda *a: (entrou.set(), solta.wait(5)) and [])
+
+    def _esperar(segundos: float) -> bool:
+        if len(verificacoes) >= 3:
+            b._parar.set()
+        return b._parar.is_set()
+
+    monkeypatch.setattr(b._parar, "wait", _esperar)
+    b.laco()
+    assert entrou.wait(5), "a conferência começou"
+    assert len(verificacoes) == 3 and b._conferindo.locked(), "instalações seguiram com a conferência presa"
+    solta.set()
 
 
 def test_conferir_ocupado_nao_roda_de_novo(tmp_path) -> None:

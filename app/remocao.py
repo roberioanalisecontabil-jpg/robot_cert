@@ -146,14 +146,26 @@ def situacao_do_vinculo(user_id: str, machine_id: str, agora: datetime) -> Tuple
 
 
 @_leitura
-def motivo_da_saida(user_id: str, documento: str) -> str:
-    """A última saída do histórico para o par, em texto para a trilha."""
-    linhas = (_cliente().table("carteira_historico").select("origem, feito_por_email, feito_em")
-              .eq("user_id", str(user_id)).eq("documento", ci.so_digitos(documento))
-              .eq("movimento", "saida").order("feito_em", desc=True).limit(1).execute().data or [])
-    if not linhas:
+def motivos_da_saida(user_id: str, documentos: List[str]) -> Dict[str, str]:
+    """A última saída do histórico de cada documento, em texto para a trilha.
+
+    Uma consulta só para a lista inteira (antes era uma por documento)."""
+    por_digitos = {ci.so_digitos(d): d for d in documentos}
+    ultima: Dict[str, Dict[str, Any]] = {}
+    if por_digitos:
+        linhas = (_cliente().table("carteira_historico")
+                  .select("documento, origem, feito_por_email, feito_em")
+                  .eq("user_id", str(user_id)).in_("documento", list(por_digitos))
+                  .eq("movimento", "saida").order("feito_em", desc=True).execute().data or [])
+        for linha in linhas:  # mais nova primeiro: fica a primeira de cada documento
+            ultima.setdefault(str(linha.get("documento")), linha)
+    return {doc: _texto_da_saida(ultima.get(dig)) for dig, doc in por_digitos.items()}
+
+
+def _texto_da_saida(linha: Optional[Dict[str, Any]]) -> str:
+    if not linha:
         return "fora da carteira"
-    origem, email = linhas[0].get("origem"), linhas[0].get("feito_por_email")
+    origem, email = linha.get("origem"), linha.get("feito_por_email")
     if origem in ("manual", "bloqueio"):
         return f"retirado por {email}" if email else "retirado"
     return _SAIDA.get(origem, "fora da carteira")
@@ -181,8 +193,9 @@ def decidir_pessoa(user: Dict[str, Any], machine_id: str, fingerprints: List[str
     alcance = ci.documentos_ao_alcance(str(user["id"]), user["role"])
     if alcance is None:
         return []
-    return [Decisao(fp, doc, "carteira", motivo_da_saida(str(user["id"]), doc), None)
-            for fp, doc in acervo.items() if doc not in alcance]
+    fora = {fp: doc for fp, doc in acervo.items() if doc not in alcance}
+    motivos = motivos_da_saida(str(user["id"]), sorted(set(fora.values())))
+    return [Decisao(fp, doc, "carteira", motivos[doc], None) for fp, doc in fora.items()]
 
 
 def decidir_sem_login(fingerprints: List[str]) -> List[Decisao]:

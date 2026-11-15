@@ -110,7 +110,10 @@ class Bandeja:
             self.verificar()
             if (self._ultima_conferencia is None
                     or time.monotonic() - self._ultima_conferencia >= INTERVALO_CONFERENCIA):
-                self.conferir()
+                # Thread próprio: conferência lenta (portal, PowerShell) não atrasa as
+                # instalações. O relógio só anda quando ela roda de fato (conferir() o
+                # marca); ocupada pelo login, o laço tenta de novo em 20 s, não em 300 s.
+                threading.Thread(target=self.conferir, daemon=True).start()
             self._parar.wait(INTERVALO)
 
     def conferir(self) -> None:

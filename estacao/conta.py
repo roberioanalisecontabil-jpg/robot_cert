@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -53,9 +54,17 @@ def _gravar(dados: dict[str, Any]) -> Path:
     destino = caminho()
     destino.parent.mkdir(parents=True, exist_ok=True)
     # Grava ao lado e troca de uma vez: queda no meio não pode perder o último dono.
-    temporario = destino.with_name(destino.name + ".tmp")
-    temporario.write_bytes(proteger(conteudo, _ENTROPIA))
-    os.replace(temporario, destino)
+    # Nome único: duas gravações juntas não pisam no temporário uma da outra.
+    cifrado = proteger(conteudo, _ENTROPIA)
+    with tempfile.NamedTemporaryFile(dir=destino.parent, prefix=destino.name + ".", suffix=".tmp",
+                                     delete=False) as f:
+        temporario = Path(f.name)
+    try:
+        temporario.write_bytes(cifrado)
+        os.replace(temporario, destino)
+    except BaseException:
+        temporario.unlink(missing_ok=True)
+        raise
     return destino
 
 
