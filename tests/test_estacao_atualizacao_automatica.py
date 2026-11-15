@@ -116,6 +116,7 @@ def test_tarefa_nao_confirma_sem_portal(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(tarefa, "configurar_log", lambda nome: None)
     monkeypatch.setattr(tarefa, "_unica", lambda: True)  # a trava é do processo, e o pytest é um só
     monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(tmp_path)))
+    monkeypatch.setattr(tarefa, "e_estacao", lambda: False)  # sem coleta de uso (PowerShell de verdade)
     atualizador.gravar_json(str(tmp_path / "pedido.json"), {"estado": atualizador.INSTALADO, "para": tarefa.VERSAO})
 
     def sem_portal(http):
@@ -135,6 +136,7 @@ def test_tarefa_confirma_e_confere(tmp_path, monkeypatch) -> None:
     atualizador.gravar_json(str(tmp_path / "pedido.json"),
                             {"estado": atualizador.INSTALADO, "de": "1.0.1", "para": tarefa.VERSAO})
     contados = []
+    monkeypatch.setattr(tarefa, "e_estacao", lambda: False)  # sem coleta de uso (PowerShell de verdade)
     monkeypatch.setattr(tarefa, "buscar_pacote", lambda http: None)
     monkeypatch.setattr(tarefa, "contar_ao_portal", lambda http, *a: contados.append(a))
     assert tarefa.rodar_tarefa() == 0

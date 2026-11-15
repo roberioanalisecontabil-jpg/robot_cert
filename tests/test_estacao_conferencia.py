@@ -287,10 +287,10 @@ def test_falha_nos_conteineres_nao_impede_conferencia(estacao: list, repo: dict)
     assert corpo["conteineres"] == {} and sorted(corpo["certificados"]) == [FP_A, FP_B]
 
 
-def test_versao_1_3_1() -> None:
+def test_versao_1_4_0() -> None:
     from estacao import VERSAO, VERSAO_REPORTADA
 
-    assert VERSAO == "1.3.1" and VERSAO_REPORTADA == "certguard-1.3.1"
+    assert VERSAO == "1.4.0" and VERSAO_REPORTADA == "certguard-1.4.0"
 
 
 # ── Laço da bandeja ──────────────────────────────────────────────────────
