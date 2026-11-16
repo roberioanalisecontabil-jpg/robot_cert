@@ -24,7 +24,7 @@
     const tr = document.createElement("tr");
     tr.className = "cg-state-row";
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.className = "ag-table__vazio";
     td.textContent = texto;
     tr.appendChild(td);
@@ -81,6 +81,9 @@
           celula(tr, l.sem_login ? l.usuario_windows + " (sem login)" : [l.pessoa, l.email]);
           celula(tr, l.nome_maquina);
           celula(tr, [l.titular, l.documento]);
+          // Sistema/Página: reservada; a API ainda não manda o campo.
+          celula(tr, l.sistema || "—");
+          if (!l.sistema) tr.lastChild.className = "cg-uso-futuro";
           celula(tr, l.quantidade);
           return tr;
         }));
