@@ -444,6 +444,7 @@ def listar_uso(
     user_id: str = Query("", max_length=64),
     documento: str = Query("", max_length=20),
     pagina: int = Query(1, ge=1, le=10000),
+    por_pagina: int = Query(POR_PAGINA_USO, ge=10, le=100),
     token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
     """Uso dos certificados (Frente C): quando, por quem, em qual máquina.
@@ -459,7 +460,8 @@ def listar_uso(
         raise HTTPException(status_code=503, detail="Banco não configurado")
     ini, fim = _intervalo_uso(desde, ate)
     papel = (token.role or "").strip().lower()
-    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False}
+    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False,
+             "total_itens": 0, "total_paginas": 1}
     try:
         us = sb.table("users").select("id, email, full_name, departamento_id").execute().data or []
         permitidos: Optional[List[str]] = None
@@ -468,7 +470,7 @@ def listar_uso(
             permitidos = [str(u["id"]) for u in us if u.get("departamento_id") and str(u["departamento_id"]) in meus]
             if not permitidos or (user_id and user_id not in permitidos):
                 return vazio
-        q = sb.table("uso_certificado").select("*").is_("fingerprint", "not.null").gte("hora", ini)
+        q = sb.table("uso_certificado").select("*", count="exact").is_("fingerprint", "not.null").gte("hora", ini)
         if fim:
             q = q.lt("hora", fim)
         if user_id:
@@ -477,10 +479,11 @@ def listar_uso(
             q = q.in_("user_id", permitidos)
         if documento:
             q = q.eq("documento", "".join(c for c in documento if c.isdigit()))
-        ini_p = (pagina - 1) * POR_PAGINA_USO
-        # Um a mais que a página (range é inclusivo): é o que diz se há próxima.
-        achadas = q.order("hora", desc=True).order("id", desc=True).range(ini_p, ini_p + POR_PAGINA_USO).execute().data or []
-        tem_mais, achadas = len(achadas) > POR_PAGINA_USO, achadas[:POR_PAGINA_USO]
+        ini_p = (pagina - 1) * por_pagina
+        # count="exact" conta o filtro inteiro, ignorando o range: é o total da barra de páginas.
+        r = q.order("hora", desc=True).order("id", desc=True).range(ini_p, ini_p + por_pagina - 1).execute()
+        achadas, total_itens = r.data or [], r.count or 0
+        tem_mais = ini_p + len(achadas) < total_itens
         maquinas = sorted({str(l["machine_id"]) for l in achadas})
         # Admin vê a coleta de todas as máquinas (é como se descobre a auditoria desligada);
         # shortcut: Gestor só as das linhas da página, trocar se pedirem o quadro dele inteiro.
@@ -516,7 +519,8 @@ def listar_uso(
         })
     return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
                                           for c in coletas},
-            "pagina": pagina, "tem_mais": tem_mais}
+            "pagina": pagina, "tem_mais": tem_mais,
+            "total_itens": total_itens, "total_paginas": max(1, -(-total_itens // por_pagina))}
 
 
 @router.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])

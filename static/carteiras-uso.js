@@ -3,7 +3,6 @@
 // montada com createElement/textContent, nunca com HTML em texto.
 (function () {
   let pagina = 1;
-  let temMais = false;
   let carregouPessoas = false;
   const $ = (id) => document.getElementById(id);
 
@@ -60,15 +59,16 @@
 
   async function carregarUso() {
     void carregarPessoas();
-    const q = new URLSearchParams({ pagina: String(pagina) });
+    const q = new URLSearchParams({ pagina: String(pagina), por_pagina: $("uso-por-pagina").value });
     [["desde", "uso-desde"], ["ate", "uso-ate"], ["user_id", "uso-pessoa"], ["documento", "uso-documento"]]
       .forEach(([k, id]) => { if ($(id).value) q.set(k, $(id).value); });
     mensagem("Carregando…");
+    let pg = null;
     try {
       const r = await fetch("/api/carteira/uso?" + q, { headers: getHeaders() });
-      if (!r.ok) { mensagem(await mensagemCorpoErro(r)); return; }
+      if (!r.ok) { mensagem(await mensagemCorpoErro(r)); paginacao(null); return; }
       const j = await r.json();
-      temMais = !!j.tem_mais;
+      pg = j;
       const nomes = {};
       if (!j.linhas.length) {
         mensagem("Nenhum uso no período.");
@@ -92,15 +92,25 @@
     } catch (e) {
       mensagem("Erro de conexão com o servidor.");
     }
-    $("uso-anterior").disabled = pagina <= 1;
-    $("uso-proxima").disabled = !temMais;
-    $("uso-pagina").textContent = "Página " + pagina;
+    paginacao(pg);
+  }
+
+  // Mesma barra do Início (index.html, atualizarPaginacaoUI).
+  function paginacao(pg) {
+    cgPageNavRefresh({
+      bar: "uso-paginacao", meta: "uso-pagina", ul: "uso-pag-ul", liNext: "uso-pag-li-next",
+      prev: "uso-anterior", next: "uso-proxima", pg: pg,
+      metaFormatter: (p) => "Página " + p.pagina + " de " + p.total_paginas + " · " + p.total_itens + " linhas",
+      hideWhenSingle: true,
+      goToPage: (n) => { pagina = n; void carregarUso(); },
+      maxButtons: 5,
+    });
   }
 
   window.carregarUso = carregarUso;
   const refiltrar = () => { pagina = 1; void carregarUso(); };
-  ["uso-desde", "uso-ate", "uso-pessoa", "uso-documento"].forEach((id) => $(id).addEventListener("change", refiltrar));
-  $("uso-anterior").addEventListener("click", () => { pagina -= 1; void carregarUso(); });
+  ["uso-desde", "uso-ate", "uso-pessoa", "uso-documento", "uso-por-pagina"].forEach((id) => $(id).addEventListener("change", refiltrar));
+  $("uso-anterior").addEventListener("click", () => { if (pagina > 1) { pagina -= 1; void carregarUso(); } });
   $("uso-proxima").addEventListener("click", () => { pagina += 1; void carregarUso(); });
   if ($("tab-uso").getAttribute("aria-selected") === "true") void carregarUso();
 })();

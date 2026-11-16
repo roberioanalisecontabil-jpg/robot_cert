@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=uso-2026-11-16" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=uso-2026-11-16b" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -210,11 +210,25 @@
           <tbody role="rowgroup" id="uso-linhas"><tr class="cg-state-row"><td colspan="6" class="ag-table__vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
-      <div class="ag-form-actions">
-        <button type="button" id="uso-anterior" class="ag-btn ag-btn--outline" disabled>Anterior</button>
-        <button type="button" id="uso-proxima" class="ag-btn ag-btn--outline" disabled>Próxima</button>
-        <span class="ag-ajuda" id="uso-pagina" role="status"></span>
-      </div>
+      <!-- Mesma barra do Início: preenchida por cgPageNavRefresh (ui-common.js). -->
+      <nav id="uso-paginacao" class="cg-page-nav" aria-label="Navegação por páginas do uso">
+        <div id="uso-pagina" class="cg-page-nav__meta" role="status"></div>
+        <div class="cg-page-nav__row">
+          <ul id="uso-pag-ul" class="cg-page-nav__ul" role="list">
+            <li><button type="button" id="uso-anterior" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button></li>
+            <li id="uso-pag-li-next"><button type="button" id="uso-proxima" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button></li>
+          </ul>
+          <div>
+            <label for="uso-por-pagina" class="cg-sr-only">Registros por página</label>
+            <select id="uso-por-pagina" class="cg-page-perpage-select" title="Itens por página">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50" selected>50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
+          </div>
+        </div>
+      </nav>
       <h3 class="ag-form-subhead__titulo">Última coleta por máquina</h3>
       <ul id="uso-coletas" class="cg-op-lista"></ul>
     </section>
@@ -1154,6 +1168,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-2026-11-13"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=uso-2026-11-16"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=uso-2026-11-16b"></script>
 </body>
 </html>
