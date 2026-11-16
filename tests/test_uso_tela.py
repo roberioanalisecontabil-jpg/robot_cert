@@ -79,6 +79,15 @@ def test_filtros_e_paginacao(client: TestClient, banco) -> None:
     assert _get(client, ADMIN, "&pagina=2").json()["tem_mais"] is False
 
 
+def test_paginacao_traz_total_como_no_inicio(client: TestClient, banco) -> None:
+    # Barra numerada igual à do Início: precisa do total, não só de "tem mais".
+    banco.tabelas["uso_certificado"] += [_uso("u-fis", DOC_A) for _ in range(60)]
+    j = _get(client, ADMIN, "&por_pagina=25&pagina=3").json()
+    assert (j["total_itens"], j["total_paginas"], j["pagina"]) == (63, 3, 3)
+    assert len(j["linhas"]) == 13 and j["tem_mais"] is False
+    assert _get(client, ADMIN, "&por_pagina=500").status_code == 422
+
+
 def test_aba_uso_existe_e_abre_pelo_link(client: TestClient) -> None:
     html = client.get("/carteiras?aba=uso").text
     assert 'id="sec-uso"' in html and "/static/carteiras-uso.js" in html
