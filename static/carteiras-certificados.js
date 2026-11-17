@@ -83,7 +83,12 @@
       const r = await fetch("/api/carteira/certificados/" + encodeURIComponent(doc), { headers: getHeaders() });
       if (!r.ok) throw new Error(await mensagemCorpoErro(r));
       atual = await r.json();
-    } catch (e) { msg(e.message, "error"); return; }
+    } catch (e) {
+      // Sem detalhe carregado, o celular volta para a lista em vez de um detalhe vazio.
+      if (!atual) $("sec-certificados").classList.remove("cg-tem-cert");
+      msg(e.message, "error");
+      return;
+    }
     renderLista();
     renderDetalhe();
   }
@@ -100,6 +105,7 @@
   }
 
   function renderDetalhe() {
+    $("sec-certificados").classList.add("cg-tem-cert"); // até 1024px troca a lista pelo detalhe
     $("certSemSelecao").hidden = true;
     $("certDetalhe").hidden = false;
     $("certTitulo").textContent = atual.nome || "(sem nome)";

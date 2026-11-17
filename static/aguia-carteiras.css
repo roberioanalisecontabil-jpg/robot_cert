@@ -40,6 +40,8 @@
     /* O painel do Acessórias (só Administrador) soma 62px + margem acima da
        lista: sem descontar, o fim dela passava 60px da tela (20/10/2026). */
     .cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 30rem)); }
+    /* O "Voltar" do certificado só existe no celular: sem ele o cabeçalho vazio sobrava. */
+    #sec-certificados .cg-cart-detalhe > .cg-cart-cab { display: none; }
 }
 .cg-op-rolagem:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
 
@@ -238,9 +240,25 @@
 @media (max-width: 1024px) {
     .cg-cart-layout { grid-template-columns: minmax(0, 1fr); }
     /* Sem operador na URL: só a lista. Com operador: só o detalhe. */
-    body:not(.cg-tem-operador) .cg-cart-detalhe { display: none; }
-    body.cg-tem-operador .cg-cart-lista { display: none; }
+    body:not(.cg-tem-operador) #sec-pessoas .cg-cart-detalhe { display: none; }
+    body.cg-tem-operador #sec-pessoas .cg-cart-lista { display: none; }
+    /* Aba Certificados (17/11/2026): a regra acima, sem o #sec-pessoas,
+       escondia o detalhe do certificado e ele nunca abria no celular. */
+    #sec-certificados:not(.cg-tem-cert) .cg-cart-detalhe { display: none; }
+    #sec-certificados.cg-tem-cert .cg-cart-lista { display: none; }
 }
+
+/* Modal Incluir pessoas (17/11/2026): a lista herdava a altura da lista da
+   página (sem teto no celular) e empurrava o prazo e o Salvar para fora da
+   tela — no celular, 7 mil pixels abaixo. */
+#modalIncluir .cg-op-rolagem { max-height: min(40vh, 22rem); overscroll-behavior: contain; margin-top: var(--space-2); }
+.cg-cert-prazo { border: 0; margin: var(--space-4) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.cg-cert-prazo legend { padding: 0; margin-bottom: var(--space-2); font-size: var(--text-sm); font-weight: 600; }
+.cg-cert-prazo input[type="radio"] { accent-color: var(--gold-500); }
+#prazoCampos:not([hidden]) { display: grid; gap: var(--space-2); }
+/* O rótulo oculto "Ações" (absolute) escapava da rolagem da tabela e alargava
+   a página no celular em ~100px. */
+#certDetalhe .ag-table-scroll { position: relative; }
 @media (max-width: 640px) {
     .cg-cart-cab, .cg-cart-op, .cg-cart-corpo { padding-inline: var(--space-4); }
     .cg-acess { padding-inline: var(--space-4); }
