@@ -563,6 +563,17 @@ def test_pagina_aceita_aba(html: str) -> None:
     assert _abas_selecionadas(c.get("/carteiras").text) == ["pessoas"]
 
 
+def test_certificado_na_url_abre_o_detalhe_no_celular(html: str) -> None:
+    # Até 1024px o CSS só mostra o detalhe com esta classe no painel.
+    from fastapi.testclient import TestClient as TC
+    import app.config as cfg
+    cfg.API_KEY = ""
+    c = TC(m.app)
+    assert 'id="sec-certificados" role="tabpanel" aria-labelledby="tab-certificados" class="cg-tem-cert"' in \
+        c.get("/carteiras?aba=certificados&certificado=43173916000156").text
+    assert 'class="cg-tem-cert"' not in c.get("/carteiras?aba=certificados").text
+
+
 def test_script_da_aba_carrega_com_cache_buster(html: str) -> None:
     assert "/static/carteiras-certificados.js?v=certificados-celular-2026-11-17" in html
 
