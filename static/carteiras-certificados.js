@@ -100,6 +100,7 @@
   }
 
   function renderDetalhe() {
+    $("sec-certificados").classList.add("cg-tem-cert"); // até 1024px troca a lista pelo detalhe
     $("certSemSelecao").hidden = true;
     $("certDetalhe").hidden = false;
     $("certTitulo").textContent = atual.nome || "(sem nome)";

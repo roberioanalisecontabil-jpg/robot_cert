@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=uso-2026-11-16b" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=certificados-celular-2026-11-17" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -235,7 +235,7 @@
 
     <!-- Aba Certificados: um certificado por vez, com quem pode usá-lo.
          O comportamento vive em static/carteiras-certificados.js. -->
-    <div id="sec-certificados" role="tabpanel" aria-labelledby="tab-certificados" {% if aba != 'certificados' %}hidden{% endif %}>
+    <div id="sec-certificados" role="tabpanel" aria-labelledby="tab-certificados" {% if certificado_id %}class="cg-tem-cert" {% endif %}{% if aba != 'certificados' %}hidden{% endif %}>
       <div class="cg-cart-layout">
         <section class="ag-card cg-cart-lista" aria-labelledby="tit-certs">
           <div class="cg-cart-cab"><h2 class="ag-card__title" id="tit-certs">Certificados</h2><p class="cg-cart-resumo" id="certResumo"></p></div>
@@ -249,6 +249,9 @@
           </div>
         </section>
         <section class="ag-card cg-cart-detalhe" aria-live="polite">
+          {% with voltar_href="/carteiras?aba=certificados", voltar_texto="Voltar para certificados" %}
+          <div class="cg-cart-cab">{% include "_voltar.html" %}</div>
+          {% endwith %}
           <div id="certSemSelecao" class="ag-vazio cg-cart-vazio">
             <h2 class="ag-vazio__titulo">Nenhum certificado selecionado</h2>
             <p class="ag-vazio__texto">Escolha um certificado na lista para ver quem pode usá-lo.</p>
@@ -1167,7 +1170,7 @@
       });
     })();
   </script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-2026-11-13"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-celular-2026-11-17"></script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=uso-2026-11-16b"></script>
 </body>
 </html>
