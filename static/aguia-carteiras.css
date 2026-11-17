@@ -40,8 +40,9 @@
     /* O painel do Acessórias (só Administrador) soma 62px + margem acima da
        lista: sem descontar, o fim dela passava 60px da tela (20/10/2026). */
     .cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 30rem)); }
-    /* O "Voltar" do certificado só existe no celular: sem ele o cabeçalho vazio sobrava. */
-    #sec-certificados .cg-cart-detalhe > .cg-cart-cab { display: none; }
+    /* O "Voltar" das duas abas só existe no celular: sem ele o cabeçalho vazio
+       virava uma faixa em branco acima do detalhe (Pessoas desde 24/09). */
+    .cg-cart-detalhe > .cg-cart-cab { display: none; }
 }
 .cg-op-rolagem:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
 
