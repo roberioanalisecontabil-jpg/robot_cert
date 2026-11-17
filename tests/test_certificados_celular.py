@@ -29,5 +29,11 @@ def test_lista_do_modal_tem_teto():
     assert "#modalIncluir .cg-op-rolagem { max-height:" in CSS
 
 
+def test_cabecalho_do_voltar_some_no_desktop_nas_duas_abas():
+    desktop = CSS[CSS.index("@media (min-width: 1025px)"):CSS.index("@media (max-width: 1024px)")]
+    assert ".cg-cart-detalhe > .cg-cart-cab { display: none; }" in desktop
+    assert "#sec-certificados .cg-cart-detalhe > .cg-cart-cab" not in CSS
+
+
 def test_rotulo_oculto_da_tabela_nao_alarga_a_pagina():
     assert "#certDetalhe .ag-table-scroll { position: relative; }" in CSS
