@@ -99,6 +99,72 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
     assert "innerHTML" not in JS.read_text(encoding="utf-8")
 
 
+def _janela(uso_id, record_id, ordem, programa, titulo) -> dict:
+    return {"uso_id": uso_id, "machine_id": "m1", "record_id": record_id, "ordem": ordem,
+            "quando": HORA, "programa": programa, "titulo": titulo}
+
+
+@pytest.fixture
+def com_janelas(banco):
+    banco.tabelas["uso_certificado"] = [_uso("u-fis", DOC_A, id=1), _uso("u-fis", DOC_A, id=2),
+                                        _uso("u-fis", DOC_A, id=3)]
+    banco.tabelas["uso_janela"] = [
+        _janela(1, 10, 0, "chrome.exe", "Portal A"),
+        _janela(1, 12, 0, "outlook.exe", "Caixa"),   # maior record_id: dá o `sistema`
+        _janela(1, 12, 1, "chrome.exe", "Antes"),    # ordem 1 não conta
+        _janela(1, 11, 0, "chrome.exe", "Portal A"), # par repetido não soma
+        _janela(2, 20, 0, "chrome.exe", "Portal B"),
+    ]
+    return banco
+
+
+def test_admin_recebe_sistema_e_outras(client: TestClient, com_janelas) -> None:
+    j = _get(client, ADMIN).json()
+    assert j["mostra_sistema"] is True
+    por_id = {l["id"]: l for l in j["linhas"]}
+    assert por_id[1]["sistema"] == "outlook.exe · Caixa" and por_id[1]["outras"] == 1
+    assert por_id[2]["sistema"] == "chrome.exe · Portal B" and por_id[2]["outras"] == 0
+
+
+def test_linha_sem_janela_sai_vazia(client: TestClient, com_janelas) -> None:
+    l3 = {l["id"]: l for l in _get(client, ADMIN).json()["linhas"]}[3]
+    assert l3["sistema"] == "" and l3["outras"] == 0
+
+
+def test_gestor_nao_recebe_janela_nem_id(client: TestClient, com_janelas) -> None:
+    j = _get(client, GESTOR).json()
+    assert j["mostra_sistema"] is False and j["linhas"]
+    assert all(not ({"id", "sistema", "outras"} & set(l)) for l in j["linhas"])
+
+
+def test_detalhe_so_admin(client: TestClient, com_janelas) -> None:
+    assert client.get("/api/carteira/uso/1/janelas", headers=_h(*GESTOR)).status_code == 403
+    assert client.get("/api/carteira/uso/1/janelas", headers=_h(*FISCAL_OP)).status_code == 403
+    r = client.get("/api/carteira/uso/1/janelas", headers=_h(*ADMIN))
+    assert r.status_code == 200
+    usos = r.json()["usos"]
+    assert [u["record_id"] for u in usos] == [10, 11, 12]
+    assert [(w["ordem"], w["programa"], w["titulo"]) for w in usos[2]["janelas"]] == [
+        (0, "outlook.exe", "Caixa"), (1, "chrome.exe", "Antes")]
+    assert usos[0]["janelas"][0]["quando"] == HORA
+
+
+def test_detalhe_inexistente_404(client: TestClient, com_janelas) -> None:
+    assert client.get("/api/carteira/uso/999/janelas", headers=_h(*ADMIN)).status_code == 404
+
+
+def test_detalhe_com_banco_fora_503(client: TestClient, com_janelas, monkeypatch) -> None:
+    original = com_janelas.table
+
+    def _quebra(nome, *a, **k):
+        if nome == "uso_janela":  # a sessão usa o mesmo banco; só a leitura das janelas cai
+            raise RuntimeError("fora")
+        return original(nome, *a, **k)
+    monkeypatch.setattr(com_janelas, "table", _quebra)
+    r = client.get("/api/carteira/uso/1/janelas", headers=_h(*ADMIN))
+    assert r.status_code == 503 and "uso" in r.json()["detail"].lower()
+
+
 def test_paginas_com_a_mesma_hora_nao_repetem_nem_perdem_linhas(client: TestClient, banco) -> None:
     # hora é balde de uma hora: empate é a regra, e o desempate pelo id mantém as páginas disjuntas.
     banco.tabelas["uso_certificado"] = [_uso("u-fis", DOC_A, id=i, quantidade=i) for i in range(1, 76)]

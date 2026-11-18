@@ -28,7 +28,7 @@ from app.comum import (
     _ler_upload_limitado,
     _norm_header,
 )
-from app.sessao import _user_id_da_sessao, require_modulo
+from app.sessao import _user_id_da_sessao, require_admin, require_modulo
 
 logger = logging.getLogger("app.main")
 router = APIRouter()
@@ -460,7 +460,7 @@ def listar_uso(
         raise HTTPException(status_code=503, detail="Banco não configurado")
     ini, fim = _intervalo_uso(desde, ate)
     papel = (token.role or "").strip().lower()
-    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False,
+    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False, "mostra_sistema": False,
              "total_itens": 0, "total_paginas": 1}
     try:
         us = sb.table("users").select("id, email, full_name, departamento_id").execute().data or []
@@ -499,6 +499,15 @@ def listar_uso(
                 if d.get("nome"):
                     nomes_pc[str(d["machine_id"])] = d["nome"]
         titulares = _nomes_por("documento", [str(l["documento"]) for l in achadas if l.get("documento")])
+        # Programa e janela só para o admin; o gestor nem dispara a consulta.
+        mostra_sistema = papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL
+        ids = [l["id"] for l in achadas if l.get("id") is not None]
+        janelas: Dict[Any, List[dict]] = {}
+        if mostra_sistema and ids:
+            for w in (sb.table("uso_janela").select("uso_id, record_id, ordem, programa, titulo")
+                      .in_("uso_id", ids).execute().data or []):
+                if w.get("ordem") == 0:
+                    janelas.setdefault(w["uso_id"], []).append(w)
     except cert_installer.AlcanceIndisponivel:
         raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
     except Exception:
@@ -517,10 +526,46 @@ def listar_uso(
             "maquina": l["machine_id"], "nome_maquina": nomes_pc.get(str(l["machine_id"])) or l["machine_id"],
             "documento": l.get("documento") or "", "titular": titulares.get(str(l.get("documento"))) or "",
         })
+        if mostra_sistema:
+            ws = janelas.get(l.get("id"), [])
+            ultima = max(ws, key=lambda w: w["record_id"], default=None)
+            linhas[-1].update({
+                "id": l.get("id"),
+                "sistema": f"{ultima['programa']} · {ultima['titulo']}" if ultima else "",
+                "outras": max(0, len({(w["programa"], w["titulo"]) for w in ws}) - 1),
+            })
     return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
                                           for c in coletas},
-            "pagina": pagina, "tem_mais": tem_mais,
+            "pagina": pagina, "tem_mais": tem_mais, "mostra_sistema": mostra_sistema,
             "total_itens": total_itens, "total_paginas": max(1, -(-total_itens // por_pagina))}
+
+
+@router.get("/api/carteira/uso/{uso_id}/janelas",
+            dependencies=[Depends(require_modulo("carteiras")), Depends(require_admin)])
+def janelas_do_uso(uso_id: int) -> dict:
+    """Programa e título da janela de cada registro de uma linha de uso (só admin)."""
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    try:
+        if not (sb.table("uso_certificado").select("id").eq("id", uso_id).limit(1).execute().data or []):
+            existe = False
+        else:
+            existe = True
+            ws = (sb.table("uso_janela").select("record_id, ordem, quando, programa, titulo")
+                  .eq("uso_id", uso_id).execute().data or [])
+    except Exception:
+        logger.exception("Falha ao ler as janelas do uso %s", uso_id)
+        raise HTTPException(status_code=503, detail="Não foi possível ler as janelas do uso agora.")
+    if not existe:
+        raise HTTPException(status_code=404, detail="Uso não encontrado.")
+    por_record: Dict[Any, List[dict]] = {}
+    for w in sorted(ws, key=lambda w: (w["record_id"], w["ordem"])):
+        por_record.setdefault(w["record_id"], []).append(
+            {k: w[k] for k in ("ordem", "quando", "programa", "titulo")})
+    return {"usos": [{"record_id": r, "janelas": js} for r, js in por_record.items()]}
 
 
 @router.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])
