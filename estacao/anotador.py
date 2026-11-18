@@ -12,8 +12,12 @@ mexer no que ele grava; a pasta é trancada (só SYSTEM e Administradores).
 Superfície mínima: não abre janela, não lê arquivo da pasta da pessoa e não
 recebe comando de fora (nenhum socket, pipe ou arquivo de entrada).
 
-As partes puras (`passo`, `laco`, `sessoes_sem_anotador`) não tocam no Win32,
-para os testes rodarem sem privilégio.
+Um por vez: cada um trava um arquivo dentro da pasta trancada
+(`vigia.lock`, `anotador-<sessao>.lock`). Mutex em `Global\\` não serve: a
+pessoa sem admin pode criar o nome antes e calar o anotador para sempre.
+
+As partes puras (`passo`, `laco`, `volta`, `sessoes_sem_anotador`) não tocam
+no Win32, para os testes rodarem sem privilégio.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ import re
 import sys
 import time
 from ctypes import wintypes
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from estacao import janelas, tarefa
 
@@ -34,18 +38,28 @@ logger = logging.getLogger("estacao.anotador")
 WTS_ACTIVE = 0  # win32ts.WTSActive
 WTS_DISCONNECTED = 4  # win32ts.WTSDisconnected
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-SYNCHRONIZE = 0x00100000
-ERRO_JA_EXISTE = 183  # ERROR_ALREADY_EXISTS
-MUTEX_VIGIA = "Global\\CertguardVigia"
-CONFERIR_SESSAO = timedelta(seconds=30)
-PODAR = timedelta(hours=1)
-AVISAR = timedelta(minutes=1)
+TRAVA_VIGIA = "vigia.lock"
+# Em segundos de `time.monotonic()`: acertar o relógio do Windows não mexe neles.
+CONFERIR_SESSAO = 30
+PODAR = 3600
+AVISAR = 60
 _SID = re.compile(r"S-1(-\d+)+")
-_MUTEXES = []  # handles vivos até o processo sair: soltar o mutex é sair
+_TRAVAS = []  # travas presas até o processo sair: o Windows solta quando ele morre
+_AVISOS: dict = {}
 
 
-def mutex_do_anotador(sessao: int) -> str:
-    return f"Global\\CertguardAnotador-{sessao}"
+def trava_do_anotador(raiz: str, sessao: int) -> str:
+    return os.path.join(raiz, f"anotador-{sessao}.lock")
+
+
+def _avisar(tipo: str, texto: str, *args, agora: float | None = None) -> None:
+    """`logger.warning` com o traceback, no máximo um por minuto de cada `tipo`:
+    estes laços rodam para sempre e um erro que se repete não pode encher o log."""
+    agora = time.monotonic() if agora is None else agora
+    if tipo in _AVISOS and agora - _AVISOS[tipo] < AVISAR:
+        return
+    _AVISOS[tipo] = agora
+    logger.warning(texto, *args, exc_info=True)
 
 
 # ── Partes puras ────────────────────────────────────────────────────────
@@ -62,27 +76,27 @@ def passo(estado: dict, agora: datetime, lida, gravar) -> None:
     estado["ultima"] = lida
 
 
-def laco(raiz: str, sid: str, dormir, ler, relogio, viva) -> None:
+def laco(raiz: str, sid: str, dormir, ler, relogio, viva, monotonico=time.monotonic) -> None:
     """O laço do anotador: termina só quando `viva()` diz que a sessão acabou.
     Qualquer erro de uma volta vai ao log (no máximo um por minuto) e o laço
-    segue: um título estranho ou o disco ocupado não derrubam o anotador."""
+    segue: um título estranho ou o disco ocupado não derrubam o anotador.
+    `relogio` (UTC) só carimba a janela; os intervalos contam em `monotonico`."""
     estado: dict = {}
-    conferida = podada = avisada = None
+    conferida = podada = None
     while True:
-        agora = relogio()
+        m = monotonico()
         try:
-            if conferida is None or agora - conferida >= CONFERIR_SESSAO:
-                conferida = agora
+            if conferida is None or m - conferida >= CONFERIR_SESSAO:
+                conferida = m
                 if not viva():
                     return
-            if podada is None or agora - podada >= PODAR:
-                podada = agora
+            agora = relogio()
+            if podada is None or m - podada >= PODAR:
+                podada = m
                 janelas.podar(raiz, agora)
             passo(estado, agora, ler(), lambda q, p, t: janelas.anotar(raiz, sid, q, p, t))
         except Exception:
-            if avisada is None or agora - avisada >= AVISAR:
-                avisada = agora
-                logger.exception("Falha numa volta do anotador; segue.")
+            _avisar("anotador", "Falha numa volta do anotador; segue.", agora=m)
         dormir(1)
 
 
@@ -92,6 +106,54 @@ def sessoes_sem_anotador(sessoes: list[dict], vivos: dict) -> list[int]:
         s["SessionId"] for s in sessoes
         if s.get("State") == WTS_ACTIVE and (s["SessionId"] not in vivos or vivos[s["SessionId"]].poll() is not None)
     ]
+
+
+def volta(sessoes: list[dict], vivos: dict, coberta, lancar) -> None:
+    """Uma volta da vigia. Tira de `vivos` (fechando o handle) quem morreu ou
+    cuja sessão sumiu; lança o anotador nas sessões ativas sem um. `coberta`
+    pega o anotador de uma vigia anterior, que não está em `vivos`."""
+    listadas = {s["SessionId"] for s in sessoes}
+    for s, processo in list(vivos.items()):
+        if s not in listadas or processo.poll() is not None:
+            del vivos[s]
+            processo.fechar()
+    for s in sessoes_sem_anotador(sessoes, vivos):
+        if coberta(s):
+            continue
+        processo = lancar(s)
+        if processo is not None:
+            vivos[s] = processo
+
+
+# ── Travas (arquivo na pasta trancada) ──────────────────────────────────
+
+
+def _travar(caminho: str) -> int | None:
+    """Descritor com o 1º byte de `caminho` travado; None se outro já trava."""
+    import msvcrt
+
+    os.makedirs(os.path.dirname(caminho), exist_ok=True)
+    fd = os.open(caminho, os.O_RDWR | os.O_CREAT)
+    try:
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        return fd
+    except OSError:
+        os.close(fd)
+        return None
+
+
+def _ocupada(caminho: str) -> bool:
+    """Alguém trava `caminho`? Se não, solta na hora o que acabou de pegar."""
+    import msvcrt
+
+    fd = _travar(caminho)
+    if fd is None:
+        return True
+    try:
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    finally:
+        os.close(fd)
+    return False
 
 
 # ── Win32 ───────────────────────────────────────────────────────────────
@@ -130,26 +192,10 @@ def janela_em_foco() -> tuple[str, str] | None:
     return programa, titulo.value
 
 
-def _mutex(nome: str) -> bool:
-    """True se este processo é o primeiro com `nome`. Criar em `Global\\` exige
-    SeCreateGlobalPrivilege, que a pessoa sem admin não tem: ela não ocupa o nome."""
-    try:
-        _MUTEXES.append(ctypes.windll.kernel32.CreateMutexW(None, False, nome))
-        return ctypes.windll.kernel32.GetLastError() != ERRO_JA_EXISTE
-    except Exception:
-        return True
-
-
-def _mutex_existe(nome: str) -> bool:
-    h = ctypes.windll.kernel32.OpenMutexW(SYNCHRONIZE, False, nome)
-    if h:
-        ctypes.windll.kernel32.CloseHandle(h)
-    return bool(h)
-
-
-def _minha_sessao() -> int:
+def _minha_sessao() -> int | None:
     sessao = wintypes.DWORD()
-    ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(sessao))
+    if not ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(sessao)):
+        return None
     return sessao.value
 
 
@@ -178,6 +224,9 @@ class _Processo:
             return None
         return win32process.GetExitCodeProcess(self.handle)
 
+    def fechar(self) -> None:
+        self.handle.Close()
+
 
 def lancar_na_sessao(sessao: int, exe: str) -> _Processo | None:
     """Sobe `exe --anotador --sid <dono da sessão>` como SYSTEM na sessão.
@@ -195,7 +244,7 @@ def lancar_na_sessao(sessao: int, exe: str) -> _Processo | None:
     try:
         sid = win32security.ConvertSidToStringSid(win32security.GetTokenInformation(usuario, win32security.TokenUser)[0])
     except Exception:
-        logger.warning("Não foi possível ler o SID da sessão %s.", sessao, exc_info=True)
+        _avisar("sid", "Não foi possível ler o SID da sessão %s.", sessao)
         return None
     finally:
         usuario.Close()
@@ -219,7 +268,7 @@ def lancar_na_sessao(sessao: int, exe: str) -> _Processo | None:
         finally:
             proprio.Close()
     except Exception:
-        logger.warning("Não foi possível subir o anotador na sessão %s.", sessao, exc_info=True)
+        _avisar("lancar", "Não foi possível subir o anotador na sessão %s.", sessao)
         return None
 
 
@@ -228,16 +277,23 @@ def lancar_na_sessao(sessao: int, exe: str) -> _Processo | None:
 
 def rodar_anotador(sid: str, dormir=time.sleep, ler=janela_em_foco,
                    relogio=lambda: datetime.now(timezone.utc)) -> int:
-    tarefa.configurar_log("anotador.log")
+    sessao = _minha_sessao()
+    # Um log por sessão: vários processos girando o mesmo RotatingFileHandler falham no Windows.
+    tarefa.configurar_log("anotador.log" if sessao is None else f"anotador-{sessao}.log")
+    if sessao is None:
+        logger.error("ProcessIdToSessionId falhou; encerrando.")
+        return 1
     if not _SID.fullmatch(sid):
         logger.error("SID inválido no --sid; encerrando.")  # vira nome de pasta: nada de `..`
         return 2
-    sessao = _minha_sessao()
-    if not _mutex(mutex_do_anotador(sessao)):
+    raiz = tarefa.pastas().raiz
+    trava = _travar(trava_do_anotador(raiz, sessao))
+    if trava is None:
         logger.info("Já há anotador na sessão %s; encerrando este.", sessao)
         return 0
+    _TRAVAS.append(trava)
     logger.info("Anotador na sessão %s.", sessao)
-    laco(tarefa.pastas().raiz, sid, dormir, ler, relogio, lambda: _sessao_viva(sessao))
+    laco(raiz, sid, dormir, ler, relogio, lambda: _sessao_viva(sessao))
     logger.info("Sessão %s encerrada; anotador sai.", sessao)
     return 0
 
@@ -247,24 +303,28 @@ def rodar_vigia(intervalo: int = 5) -> int:
     if not getattr(sys, "frozen", False):
         logger.warning("Fora do executável (desenvolvimento): vigia não roda.")
         return 1
-    if not _mutex(MUTEX_VIGIA):
+    raiz = tarefa.pastas().raiz
+    # De novo aqui, como SYSTEM: as travas só valem numa pasta que a pessoa não escreve.
+    if not tarefa.proteger_pasta(raiz):
+        logger.error("Pasta %s não pôde ser trancada; vigia não roda.", raiz)
+        return 1
+    trava = _travar(os.path.join(raiz, TRAVA_VIGIA))
+    if trava is None:
         logger.info("Outra vigia já está rodando; encerrando esta.")
         return 0
+    _TRAVAS.append(trava)
     import win32ts
 
     vivos: dict = {}
     while True:
         try:
             sessoes = win32ts.WTSEnumerateSessions(win32ts.WTS_CURRENT_SERVER_HANDLE)
-            for s in sessoes_sem_anotador(sessoes, vivos):
-                # Anotador de uma vigia anterior (sem handle aqui): o mutex dele prova que vive.
-                if _mutex_existe(mutex_do_anotador(s)):
-                    continue
-                processo = lancar_na_sessao(s, sys.executable)
-                if processo is None:
-                    vivos.pop(s, None)
-                else:
-                    vivos[s] = processo
         except Exception:
-            logger.exception("Falha numa volta da vigia; segue.")
+            _avisar("sessoes", "Não foi possível listar as sessões.")
+        else:
+            try:
+                volta(sessoes, vivos, lambda s: _ocupada(trava_do_anotador(raiz, s)),
+                      lambda s: lancar_na_sessao(s, sys.executable))
+            except Exception:
+                _avisar("volta", "Falha numa volta da vigia; segue.")
         time.sleep(intervalo)
