@@ -531,7 +531,7 @@ def listar_uso(
             ultima = max(ws, key=lambda w: w["record_id"], default=None)
             linhas[-1].update({
                 "id": l.get("id"),
-                "sistema": f"{ultima['programa']} · {ultima['titulo']}" if ultima else "",
+                "sistema": " · ".join(p for p in (ultima["programa"], ultima["titulo"]) if p) if ultima else "",
                 "outras": max(0, len({(w["programa"], w["titulo"]) for w in ws}) - 1),
             })
     return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
@@ -554,7 +554,7 @@ def janelas_do_uso(uso_id: int) -> dict:
             existe = False
         else:
             existe = True
-            ws = (sb.table("uso_janela").select("record_id, ordem, quando, programa, titulo")
+            ws = (sb.table("uso_janela").select("record_id, ordem, evento_em, quando, programa, titulo")
                   .eq("uso_id", uso_id).execute().data or [])
     except Exception:
         logger.exception("Falha ao ler as janelas do uso %s", uso_id)
@@ -562,10 +562,12 @@ def janelas_do_uso(uso_id: int) -> dict:
     if not existe:
         raise HTTPException(status_code=404, detail="Uso não encontrado.")
     por_record: Dict[Any, List[dict]] = {}
+    evento_em: Dict[Any, Any] = {}
     for w in sorted(ws, key=lambda w: (w["record_id"], w["ordem"])):
+        evento_em.setdefault(w["record_id"], w.get("evento_em"))
         por_record.setdefault(w["record_id"], []).append(
             {k: w[k] for k in ("ordem", "quando", "programa", "titulo")})
-    return {"usos": [{"record_id": r, "janelas": js} for r, js in por_record.items()]}
+    return {"usos": [{"record_id": r, "evento_em": evento_em[r], "janelas": js} for r, js in por_record.items()]}
 
 
 @router.get("/api/carteira/{user_id}", dependencies=[Depends(require_modulo("carteiras"))])

@@ -77,12 +77,14 @@ def registrar_mapa(machine_id: str, sid: str, usuario_windows: str, user_id: Opt
 
 def _gravar_janelas(client, mid: str, uso_id, eventos: List[Evento]) -> None:
     # Também dos eventos já contados: o reenvio completa o que faltou, sem duplicar.
+    # Chave por linha de uso: o record_id recomeça quando o log de Segurança é limpo.
     linhas = [{"uso_id": uso_id, "machine_id": mid, "record_id": e.record_id, "ordem": i,
-               "quando": _iso(j["quando"]), "programa": j["programa"], "titulo": j["titulo"]}
+               "evento_em": _iso(e.quando), "quando": _iso(j["quando"]),
+               "programa": j["programa"], "titulo": j["titulo"]}
               for e in eventos for i, j in enumerate(e.janelas)]
     if linhas:
         client.table("uso_janela").upsert(
-            linhas, on_conflict="machine_id,record_id,ordem", ignore_duplicates=True).execute()
+            linhas, on_conflict="uso_id,record_id,ordem", ignore_duplicates=True).execute()
 
 
 def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora: datetime) -> int:

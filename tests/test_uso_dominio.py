@@ -108,6 +108,21 @@ def test_reenvio_nao_duplica_janelas(banco):
     assert len(_janelas(banco)) == 2 and _usos(banco)[0]["quantidade"] == 1
 
 
+def test_janela_leva_a_hora_do_evento(banco):
+    uso.registrar_usos(M, [_ev_j(10, [_jan(5), _jan(4)], minuto=6)], "ligada", AGORA)
+    assert {j["evento_em"] for j in _janelas(banco)} == {datetime(2026, 11, 15, 16, 6, tzinfo=UTC).isoformat()}
+
+
+def test_mesmo_record_id_em_outra_linha_de_uso_e_gravado(banco):
+    # Log de Segurança limpo: o record_id recomeça, mas a linha de uso (outra hora) é outra.
+    uso.registrar_usos(M, [_ev_j(10, [_jan(5, "a.exe")], minuto=6)], "ligada", AGORA)
+    outra = Evento(10, datetime(2026, 11, 16, 10, 6, tzinfo=UTC), "S-1", "ana", "C1", [_jan(5, "b.exe")])
+    uso.registrar_usos(M, [outra], "ligada", AGORA)
+    assert len(_usos(banco)) == 2
+    assert sorted(j["programa"] for j in _janelas(banco)) == ["a.exe", "b.exe"]
+    assert len({j["uso_id"] for j in _janelas(banco)}) == 2
+
+
 def test_janela_de_evento_ja_contado_e_gravada(banco):
     uso.registrar_usos(M, [_ev(10)], "ligada", AGORA)
     assert "uso_janela" not in banco.tabelas or _janelas(banco) == []

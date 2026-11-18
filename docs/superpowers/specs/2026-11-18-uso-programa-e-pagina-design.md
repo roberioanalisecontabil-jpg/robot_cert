@@ -55,8 +55,8 @@ Script `Desktop\prova-uso\prova-uso-programa.ps1`, rodado pelo usuário como adm
 ### No portal
 
 - `POST /api/estacao/uso` passa a aceitar, em cada evento, uma lista opcional `janelas` com `quando`, `programa` e `titulo`, no máximo 3 itens, nos tamanhos acima. A bandeja antiga não manda o campo e continua funcionando.
-- **Gravação.** `uso_certificado` agrega por (máquina, SID, contêiner, hora). Várias janelas cabem numa linha agregada, então elas vão para uma **tabela nova**, `uso_janela`, ligada à linha de `uso_certificado`, com `quando`, `programa`, `titulo` e o `record_id` do evento.
-  - O reenvio do mesmo lote não duplica: a chave é `machine_id` + `record_id` + a ordem da janela, porque o `record_id` só é único dentro do log de uma máquina (escolha do construtor, anotada no design).
+- **Gravação.** `uso_certificado` agrega por (máquina, SID, contêiner, hora). Várias janelas cabem numa linha agregada, então elas vão para uma **tabela nova**, `uso_janela`, ligada à linha de `uso_certificado`, com `quando` (a hora da janela), `evento_em` (a hora do evento), `programa`, `titulo` e o `record_id` do evento.
+  - O reenvio do mesmo lote não duplica: a chave é `uso_id` + `record_id` + a ordem da janela. Por linha de uso, e não por máquina, porque o `record_id` recomeça quando o log de Segurança é limpo e a chave por máquina descartaria as janelas novas para sempre (revisão final, 18/11).
   - A guarda é a mesma de `uso_certificado`: `GUARDA` de 5 anos em `app/uso.py`, e a limpeza apaga as duas juntas.
 - A migration vai em `supabase/migrations/`, aplicada pelo deploy (`db/aplicar_schema.py`), nunca à mão.
 
@@ -98,6 +98,6 @@ Script `Desktop\prova-uso\prova-uso-programa.ps1`, rodado pelo usuário como adm
 ## Escolhas do autor do design (não do Robério)
 
 - Conferência da janela a cada 1 s; guarda local de 48 h; até 2 janelas anteriores dentro de 30 s, 3 no total por evento; título até 300 caracteres.
-- Chave contra duplicação: `machine_id` + `record_id` + ordem da janela.
+- Chave contra duplicação: `uso_id` + `record_id` + ordem da janela (era `machine_id`; trocada na revisão final porque o `record_id` recomeça com o log limpo).
 - Vigia como tarefa agendada SYSTEM residente, em vez de serviço do Windows, para seguir o caminho de instalação que já existe.
 - Registro na pasta já trancada do marcador.

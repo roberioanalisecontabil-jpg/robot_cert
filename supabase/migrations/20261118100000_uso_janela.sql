@@ -3,8 +3,11 @@
 -- Idempotente: pode rodar de novo sem efeito.
 --
 -- uso_janela: ate 3 janelas por evento de uso (ordem 0 = a vigente), vindas do
---   anotador da estacao. (machine_id, record_id, ordem) identifica o evento 5061
---   e torna o reenvio do lote inofensivo. Apagar o uso apaga as janelas.
+--   anotador da estacao. (uso_id, record_id, ordem) torna o reenvio do lote
+--   inofensivo; e por linha de uso, e nao por maquina, porque o record_id
+--   recomeca quando o log de Seguranca e limpo. O UNIQUE ja serve de indice
+--   por uso_id. evento_em e a hora do evento 5061 (quando e a da janela).
+--   Apagar o uso apaga as janelas.
 
 CREATE TABLE IF NOT EXISTS public.uso_janela (
   id         bigserial PRIMARY KEY,
@@ -12,11 +15,9 @@ CREATE TABLE IF NOT EXISTS public.uso_janela (
   machine_id text NOT NULL,
   record_id  bigint NOT NULL,
   ordem      smallint NOT NULL CHECK (ordem BETWEEN 0 AND 2),
+  evento_em  timestamptz NOT NULL,
   quando     timestamptz NOT NULL,
   programa   text NOT NULL,
   titulo     text NOT NULL,
-  UNIQUE (machine_id, record_id, ordem)
+  UNIQUE (uso_id, record_id, ordem)
 );
-
-CREATE INDEX IF NOT EXISTS uso_janela_uso_idx
-  ON public.uso_janela (uso_id, record_id);

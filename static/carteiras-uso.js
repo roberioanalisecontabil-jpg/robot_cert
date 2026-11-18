@@ -55,7 +55,9 @@
       if (!usos.length) texto(lista, "p", "Sem janelas registradas para este uso.");
       usos.forEach((u) => {
         const ordem0 = u.janelas.find((w) => w.ordem === 0);
-        texto(lista, "h3", ordem0 ? dataHora(ordem0.quando) : "Uso");
+        // A hora do uso (evento_em), não a da janela que ganhou o foco antes dele.
+        const quando = u.evento_em || (ordem0 && ordem0.quando);
+        texto(lista, "h3", quando ? dataHora(quando) : "Uso");
         const ul = document.createElement("ul");
         u.janelas.forEach((w) => texto(ul, "li", [w.programa, w.titulo].filter(Boolean).join(" · ") +
           (w.ordem === 0 ? " (no momento)" : "")));

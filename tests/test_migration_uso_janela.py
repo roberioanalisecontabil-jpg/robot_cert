@@ -21,9 +21,12 @@ def test_migration_uso_janela():
     s = re.sub(r"\s+", " ", _sem_comentarios())
     assert "CREATE TABLE IF NOT EXISTS public.uso_janela" in s
     assert "uso_id bigint NOT NULL REFERENCES public.uso_certificado(id) ON DELETE CASCADE" in s
-    assert "UNIQUE (machine_id, record_id, ordem)" in s
+    # Por linha de uso: o record_id recomeça quando o log de Segurança é limpo.
+    assert "UNIQUE (uso_id, record_id, ordem)" in s
+    assert "UNIQUE (machine_id" not in s and "CREATE INDEX" not in s  # o UNIQUE já indexa por uso_id
+    assert "machine_id text NOT NULL" in s
+    assert "evento_em timestamptz NOT NULL" in s
     assert "ordem smallint NOT NULL CHECK (ordem BETWEEN 0 AND 2)" in s
-    assert "CREATE INDEX IF NOT EXISTS" in s and "(uso_id, record_id)" in s
     assert "NAO rode a mao" in _sql()
 
 
