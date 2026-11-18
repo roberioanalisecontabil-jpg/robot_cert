@@ -18,7 +18,7 @@
 - Cada evento leva no máximo **3** janelas: a vigente no instante do evento (ordem 0) e até **2** anteriores dentro de **30 s** (ordem 1, 2).
 - O registro fica sob `tarefa.pastas().raiz`, a pasta trancada para SYSTEM e Administradores por `atualizador.proteger_pasta`.
 - A bandeja **não** anota janelas. O anotador e o vigia rodam como SYSTEM.
-- Chave contra duplicação no portal: `machine_id` + `record_id` + `ordem`.
+- Chave contra duplicação no portal: `uso_id` + `record_id` + `ordem` (revisão final de 18/11: o `record_id` recomeça quando o log de Segurança é limpo, e a chave por `machine_id` descartaria as janelas novas). Cada janela guarda também `evento_em`, a hora do uso.
 - A guarda das janelas é a mesma do uso, `GUARDA` de 5 anos (`app/uso.py`). As janelas são apagadas junto com a linha de uso, por `ON DELETE CASCADE`.
 - Janelas só para o papel `admin`, conferido no servidor. O gestor não recebe janela e não vê a coluna.
 - Texto do aviso no detalhe: "É a janela que estava na tela no momento do uso. Um programa em segundo plano não aparece aqui."
@@ -357,5 +357,7 @@ Cada passo no servidor e a publicação da bandeja **só com a autorização do 
   - Conferir no `vigia.log` e no `Get-Process -IncludeUserName`: um anotador SYSTEM por sessão.
   - Fazer um uso no e-CAC e um no Acrobat e rodar a tarefa (`schtasks /Run`).
   - A coluna deve mostrar `chrome · …` e `Acrobat · …`.
+  - Conferir também: tela bloqueada, logoff e novo logon, troca rápida de usuário. Sem administrador, `Stop-Process` no anotador deve dar "Acesso negado".
+  - Contar as pastas `_MEI*` em `C:\Windows\SystemTemp` e `C:\Windows\Temp` depois de 3 reinícios. Se crescerem, limpar as velhas na subida do vigia ou gerar o exe em onedir.
 - [ ] **Step 5: Publicar a 1.5.0** com `lancar-certguard.ps1`.
 - [ ] **Step 6: Atualizar a memória** `robot-cert-carteira-certificados.md`.
