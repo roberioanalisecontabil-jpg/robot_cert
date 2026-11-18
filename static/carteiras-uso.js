@@ -74,7 +74,7 @@
     if (l.sistema) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "ag-btn ag-btn--ghost";
+      b.className = "ag-btn ag-btn--ghost cg-uso-sistema";
       b.textContent = l.sistema + (l.outras > 0 ? " +" + l.outras : "");
       // O nome acessível contém o texto visível (WCAG 2.5.3).
       b.setAttribute("aria-label", "Ver janelas do uso: " + b.textContent);

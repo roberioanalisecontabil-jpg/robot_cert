@@ -128,6 +128,13 @@ def test_modal_importar_manteve_o_espaco_do_atributo() -> None:
     assert 'id="modalImportar" aria-labelledby=' in html
 
 
+def test_css_do_botao_de_sistema_quebra_linha_e_limita_largura() -> None:
+    css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
+    m = re.search(r"\.cg-uso-sistema\s*\{([^}]*)\}", css)
+    assert m and "white-space: normal" in m.group(1) and "max-width" in m.group(1)
+    assert "cg-uso-sistema" in JS.read_text(encoding="utf-8") and "cg-uso-futuro" not in css
+
+
 def _janela(uso_id, record_id, ordem, programa, titulo) -> dict:
     return {"uso_id": uso_id, "machine_id": "m1", "record_id": record_id, "ordem": ordem,
             "quando": HORA, "programa": programa, "titulo": titulo}
