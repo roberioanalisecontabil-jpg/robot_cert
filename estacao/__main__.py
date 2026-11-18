@@ -8,6 +8,10 @@
                      guarda o instalador para voltar atrás e cria as tarefas
   --atualizacao      a tarefa agendada (SYSTEM) da atualização automática
   --atualizar <p>    o atualizador, rodando de uma cópia do exe (estacao/tarefa)
+  --vigia            a tarefa agendada (SYSTEM) que sobe um anotador em cada
+                     sessão ativa (estacao/anotador)
+  --anotador --sid <S>
+                     SYSTEM na sessão da pessoa: anota a janela em foco
 """
 
 from __future__ import annotations
@@ -58,6 +62,15 @@ def main(argv: list[str]) -> int:
 
         i = argv.index("--atualizar")
         return tarefa.rodar_atualizador(argv[i + 1]) if i + 1 < len(argv) else 2
+    if "--vigia" in argv:
+        from estacao import anotador
+
+        return anotador.rodar_vigia()
+    if "--anotador" in argv:
+        from estacao import anotador
+
+        i = argv.index("--sid") if "--sid" in argv else len(argv)
+        return anotador.rodar_anotador(argv[i + 1]) if i + 1 < len(argv) else 2
     from estacao import bandeja
 
     return bandeja.main()
