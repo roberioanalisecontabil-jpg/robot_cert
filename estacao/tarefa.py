@@ -188,6 +188,63 @@ def comandos_das_tarefas(exe: str) -> list[list[str]]:
     ]
 
 
+NOME_VIGIA = NOME_TAREFA.replace("atualizacao", "vigia")
+
+
+def xml_do_vigia(exe: str) -> str:
+    """A tarefa do vigia (`--vigia`, SYSTEM) em XML: o `schtasks` sem XML não
+    desliga o limite de 72 h nem repete a tarefa que cai."""
+    from xml.sax.saxutils import escape
+
+    return f"""<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+    <Hidden>true</Hidden>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{escape(exe)}</Command>
+      <Arguments>--vigia</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"""
+
+
+def religar_vigia(executar=None) -> int:
+    """`schtasks /Run` do vigia a cada rodada: conserta a tarefa que alguém
+    parou; com `IgnoreNew`, se já roda, não duplica. Falha só vai ao log."""
+    executar = executar or (lambda c: subprocess.run(c, capture_output=True, timeout=30, creationflags=_SEM_JANELA).returncode)
+    try:
+        codigo = executar(["schtasks", "/Run", "/TN", NOME_VIGIA])
+    except Exception as e:
+        logger.warning("Não foi possível religar o vigia: %s", e)
+        return 1
+    if codigo != 0:
+        logger.warning("schtasks /Run do vigia devolveu %s.", codigo)
+    return 0 if codigo == 0 else 1
+
+
 def preparar_atualizacao(instalador: str, exe: str, executar=None) -> int:
     """Chamado pelo instalador (admin) no fim de toda instalação:
 
@@ -211,7 +268,18 @@ def preparar_atualizacao(instalador: str, exe: str, executar=None) -> int:
     else:
         logger.warning("Instalador %s não encontrado; sem cópia para voltar atrás.", instalador)
         codigo = 1
-    for comando in comandos_das_tarefas(exe):
+    comandos = comandos_das_tarefas(exe)
+    try:
+        # UTF-16 com BOM: o que o `schtasks /XML` espera. A pasta já está trancada.
+        os.makedirs(p.raiz, exist_ok=True)
+        arquivo = os.path.join(p.raiz, "vigia.xml")
+        with open(arquivo, "w", encoding="utf-16", newline="") as f:
+            f.write(xml_do_vigia(exe))
+        comandos.append(["schtasks", "/Create", "/F", "/TN", NOME_VIGIA, "/XML", arquivo])
+    except OSError:
+        logger.exception("Não foi possível gravar o XML da tarefa %s.", NOME_VIGIA)
+        codigo = 1
+    for comando in comandos:
         if executar(comando) != 0:
             logger.error("Não foi possível criar a tarefa %s.", comando[4])
             codigo = 1
@@ -227,6 +295,10 @@ def rodar_tarefa() -> int:
         logger.info("Outra rodada da atualização já está em curso; encerrando esta.")
         return 0
     p = pastas()
+    try:
+        religar_vigia()
+    except Exception:
+        logger.exception("Religar o vigia falhou.")
     with _cliente() as http:
         if e_estacao():
             # Isolada: a coleta falhar não impede a atualização, e vice-versa.
