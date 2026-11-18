@@ -19,11 +19,69 @@
   function data(iso) { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("pt-BR"); }
   function hm(iso) { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
 
+  // Só o admin recebe a coluna Sistema/Página (a API manda mostra_sistema).
+  let mostraSistema = false;
+
+  function dataHora(iso) {
+    const d = new Date(iso);
+    return isNaN(d) ? "" : d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR");
+  }
+
+  function texto(el, tag, t, cls) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    n.textContent = t;
+    el.appendChild(n);
+    return n;
+  }
+
+  async function abrirJanelas(id) {
+    const lista = $("usoJanelasLista");
+    lista.replaceChildren();
+    texto(lista, "p", "Carregando…");
+    $("modalUsoJanelas").showModal();
+    try {
+      const r = await fetch("/api/carteira/uso/" + encodeURIComponent(id) + "/janelas", { headers: getHeaders() });
+      if (!r.ok) { lista.replaceChildren(); texto(lista, "p", await mensagemCorpoErro(r)); return; }
+      const usos = (await r.json()).usos;
+      lista.replaceChildren();
+      if (!usos.length) texto(lista, "p", "Sem janelas registradas para este uso.");
+      usos.forEach((u) => {
+        const ordem0 = u.janelas.find((w) => w.ordem === 0);
+        texto(lista, "h3", ordem0 ? dataHora(ordem0.quando) : "Uso");
+        const ul = document.createElement("ul");
+        u.janelas.forEach((w) => texto(ul, "li", (w.programa || "") + (w.titulo ? " · " + w.titulo : "") +
+          (w.ordem === 0 ? " (no momento)" : "")));
+        lista.appendChild(ul);
+      });
+    } catch (e) {
+      lista.replaceChildren();
+      texto(lista, "p", "Erro de conexão com o servidor.");
+    }
+  }
+
+  function celulaSistema(tr, l) {
+    const td = document.createElement("td");
+    td.setAttribute("role", "cell");
+    if (l.sistema) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ag-btn ag-btn--ghost";
+      b.setAttribute("aria-label", "Ver janelas do uso");
+      b.textContent = l.sistema + (l.outras > 0 ? " +" + l.outras : "");
+      b.addEventListener("click", () => { void abrirJanelas(l.id); });
+      td.appendChild(b);
+    } else {
+      td.appendChild(document.createTextNode("—"));
+    }
+    tr.appendChild(td);
+  }
+
   function mensagem(texto) {
     const tr = document.createElement("tr");
     tr.className = "cg-state-row";
     const td = document.createElement("td");
-    td.colSpan = 6;
+    td.colSpan = mostraSistema ? 6 : 5;
     td.className = "ag-table__vazio";
     td.textContent = texto;
     tr.appendChild(td);
@@ -69,6 +127,8 @@
       if (!r.ok) { mensagem(await mensagemCorpoErro(r)); paginacao(null); return; }
       const j = await r.json();
       pg = j;
+      mostraSistema = j.mostra_sistema === true;
+      $("uso-th-sistema").hidden = !mostraSistema;
       const nomes = {};
       if (!j.linhas.length) {
         mensagem("Nenhum uso no período.");
@@ -81,9 +141,7 @@
           celula(tr, l.sem_login ? l.usuario_windows + " (sem login)" : [l.pessoa, l.email]);
           celula(tr, l.nome_maquina);
           celula(tr, [l.titular, l.documento]);
-          // Sistema/Página: reservada; a API ainda não manda o campo.
-          celula(tr, l.sistema || "—");
-          if (!l.sistema) tr.lastChild.className = "cg-uso-futuro";
+          if (mostraSistema) celulaSistema(tr, l);
           celula(tr, l.quantidade);
           return tr;
         }));
@@ -107,6 +165,8 @@
     });
   }
 
+  $("modalUsoJanelas").querySelectorAll("[data-ag-modal-close]").forEach((b) =>
+    b.addEventListener("click", () => $("modalUsoJanelas").close()));
   window.carregarUso = carregarUso;
   const refiltrar = () => { pagina = 1; void carregarUso(); };
   ["uso-desde", "uso-ate", "uso-pessoa", "uso-documento", "uso-por-pagina"].forEach((id) => $(id).addEventListener("change", refiltrar));

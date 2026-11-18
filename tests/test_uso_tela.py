@@ -99,6 +99,23 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
     assert "innerHTML" not in JS.read_text(encoding="utf-8")
 
 
+def test_js_mostra_sistema_e_abre_detalhe() -> None:
+    js = JS.read_text(encoding="utf-8")
+    assert "mostra_sistema" in js and "/janelas" in js and "modalUsoJanelas" in js
+    assert "innerHTML" not in js and "cg-uso-futuro" not in js
+
+
+def test_modal_tem_o_aviso() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert "É a janela que estava na tela no momento do uso. Um programa em segundo plano não aparece aqui." in html
+    assert 'id="modalUsoJanelas"' in html and 'id="uso-th-sistema"' in html
+
+
+def test_cache_buster_do_js_subiu() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert "carteiras-uso.js?v=janelas-2026-11-18" in html
+
+
 def _janela(uso_id, record_id, ordem, programa, titulo) -> dict:
     return {"uso_id": uso_id, "machine_id": "m1", "record_id": record_id, "ordem": ordem,
             "quando": HORA, "programa": programa, "titulo": titulo}
