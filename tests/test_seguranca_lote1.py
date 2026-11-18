@@ -49,7 +49,24 @@ RAIZ = Path(__file__).resolve().parent.parent
 UI_COMMON = RAIZ / "static" / "ui-common.js"
 TEMPLATES = RAIZ / "templates"
 NODE = shutil.which("node")
-SH = shutil.which("sh") or shutil.which("bash")
+def _sh() -> Optional[str]:
+    """O `sh` que o Git usa para rodar o hook. No Windows fora do Git Bash o
+    `bash` do PATH é o C:\\Windows\\System32\\bash.exe do WSL, que falha sem
+    distribuição instalada; o do Git fica em <Git>\\bin\\sh.exe."""
+    sh = shutil.which("sh")
+    if sh:
+        return sh
+    git = shutil.which("git")
+    if git:
+        for pai in Path(git).resolve().parents[:2]:
+            candidato = pai / "bin" / "sh.exe"
+            if candidato.is_file():
+                return str(candidato)
+    bash = shutil.which("bash")
+    return bash if bash and "system32" not in bash.lower() else None
+
+
+SH = _sh()
 
 SENHA = "senha-de-teste-123"
 
