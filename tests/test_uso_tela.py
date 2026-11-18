@@ -116,6 +116,18 @@ def test_cache_buster_do_js_subiu() -> None:
     assert "carteiras-uso.js?v=janelas-2026-11-18" in html
 
 
+def test_js_descarta_resposta_antiga_e_rotulo_contem_texto_visivel() -> None:
+    js = JS.read_text(encoding="utf-8")
+    assert "const meu = ++seqJanelas;" in js and js.count("if (meu !== seqJanelas) return;") >= 3
+    assert '"Ver janelas do uso: " + b.textContent' in js
+    assert '[w.programa, w.titulo].filter(Boolean).join(" · ")' in js
+
+
+def test_modal_importar_manteve_o_espaco_do_atributo() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert 'id="modalImportar" aria-labelledby=' in html
+
+
 def _janela(uso_id, record_id, ordem, programa, titulo) -> dict:
     return {"uso_id": uso_id, "machine_id": "m1", "record_id": record_id, "ordem": ordem,
             "quando": HORA, "programa": programa, "titulo": titulo}

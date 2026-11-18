@@ -35,26 +35,34 @@
     return n;
   }
 
+  let seqJanelas = 0; // descarta a resposta de um clique antigo se outro já abriu o modal
   async function abrirJanelas(id) {
+    const meu = ++seqJanelas;
     const lista = $("usoJanelasLista");
     lista.replaceChildren();
     texto(lista, "p", "Carregando…");
     $("modalUsoJanelas").showModal();
     try {
       const r = await fetch("/api/carteira/uso/" + encodeURIComponent(id) + "/janelas", { headers: getHeaders() });
-      if (!r.ok) { lista.replaceChildren(); texto(lista, "p", await mensagemCorpoErro(r)); return; }
+      if (!r.ok) {
+        const msg = await mensagemCorpoErro(r);
+        if (meu !== seqJanelas) return;
+        lista.replaceChildren(); texto(lista, "p", msg); return;
+      }
       const usos = (await r.json()).usos;
+      if (meu !== seqJanelas) return;
       lista.replaceChildren();
       if (!usos.length) texto(lista, "p", "Sem janelas registradas para este uso.");
       usos.forEach((u) => {
         const ordem0 = u.janelas.find((w) => w.ordem === 0);
         texto(lista, "h3", ordem0 ? dataHora(ordem0.quando) : "Uso");
         const ul = document.createElement("ul");
-        u.janelas.forEach((w) => texto(ul, "li", (w.programa || "") + (w.titulo ? " · " + w.titulo : "") +
+        u.janelas.forEach((w) => texto(ul, "li", [w.programa, w.titulo].filter(Boolean).join(" · ") +
           (w.ordem === 0 ? " (no momento)" : "")));
         lista.appendChild(ul);
       });
     } catch (e) {
+      if (meu !== seqJanelas) return;
       lista.replaceChildren();
       texto(lista, "p", "Erro de conexão com o servidor.");
     }
@@ -67,8 +75,9 @@
       const b = document.createElement("button");
       b.type = "button";
       b.className = "ag-btn ag-btn--ghost";
-      b.setAttribute("aria-label", "Ver janelas do uso");
       b.textContent = l.sistema + (l.outras > 0 ? " +" + l.outras : "");
+      // O nome acessível contém o texto visível (WCAG 2.5.3).
+      b.setAttribute("aria-label", "Ver janelas do uso: " + b.textContent);
       b.addEventListener("click", () => { void abrirJanelas(l.id); });
       td.appendChild(b);
     } else {
