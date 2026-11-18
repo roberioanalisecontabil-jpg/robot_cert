@@ -43,6 +43,8 @@ TRAVA_VIGIA = "vigia.lock"
 CONFERIR_SESSAO = 30
 PODAR = 3600
 AVISAR = 60
+MORTE_PRECOCE = 30  # anotador que morre antes disso depois de subir...
+PAUSA = 60  # ...não é relançado nessa sessão por este tempo (o onefile extrai a cada subida)
 _SID = re.compile(r"S-1(-\d+)+")
 _TRAVAS = []  # travas presas até o processo sair: o Windows solta quando ele morre
 _AVISOS: dict = {}
@@ -108,20 +110,29 @@ def sessoes_sem_anotador(sessoes: list[dict], vivos: dict) -> list[int]:
     ]
 
 
-def volta(sessoes: list[dict], vivos: dict, coberta, lancar) -> None:
+def volta(sessoes: list[dict], vivos: dict, coberta, lancar, agora: float = 0.0,
+          pausa: dict | None = None) -> None:
     """Uma volta da vigia. Tira de `vivos` (fechando o handle) quem morreu ou
     cuja sessão sumiu; lança o anotador nas sessões ativas sem um. `coberta`
-    pega o anotador de uma vigia anterior, que não está em `vivos`."""
+    pega o anotador de uma vigia anterior, que não está em `vivos`.
+    `agora` é monotônico; `pausa` (sessão -> até quando) guarda, entre as
+    voltas, as sessões cujo anotador morreu logo depois de subir."""
+    pausa = {} if pausa is None else pausa
     listadas = {s["SessionId"] for s in sessoes}
     for s, processo in list(vivos.items()):
-        if s not in listadas or processo.poll() is not None:
+        morreu = processo.poll() is not None
+        if s not in listadas or morreu:
             del vivos[s]
             processo.fechar()
+            lancado = getattr(processo, "lancado", None)
+            if morreu and lancado is not None and agora - lancado < MORTE_PRECOCE:
+                pausa[s] = agora + PAUSA
     for s in sessoes_sem_anotador(sessoes, vivos):
-        if coberta(s):
+        if pausa.get(s, agora) > agora or coberta(s):
             continue
         processo = lancar(s)
         if processo is not None:
+            processo.lancado = agora
             vivos[s] = processo
 
 
@@ -316,6 +327,7 @@ def rodar_vigia(intervalo: int = 5) -> int:
     import win32ts
 
     vivos: dict = {}
+    pausa: dict = {}
     while True:
         try:
             sessoes = win32ts.WTSEnumerateSessions(win32ts.WTS_CURRENT_SERVER_HANDLE)
@@ -324,7 +336,7 @@ def rodar_vigia(intervalo: int = 5) -> int:
         else:
             try:
                 volta(sessoes, vivos, lambda s: _ocupada(trava_do_anotador(raiz, s)),
-                      lambda s: lancar_na_sessao(s, sys.executable))
+                      lambda s: lancar_na_sessao(s, sys.executable), time.monotonic(), pausa)
             except Exception:
                 _avisar("volta", "Falha numa volta da vigia; segue.")
         time.sleep(intervalo)

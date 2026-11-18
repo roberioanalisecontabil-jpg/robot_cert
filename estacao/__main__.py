@@ -53,15 +53,8 @@ def main(argv: list[str]) -> int:
         except Exception:
             logging.exception("Não foi possível preparar a atualização automática")
             return 1
-    if "--atualizacao" in argv:
-        from estacao import tarefa
-
-        return tarefa.rodar_tarefa()
-    if "--atualizar" in argv:
-        from estacao import tarefa
-
-        i = argv.index("--atualizar")
-        return tarefa.rodar_atualizador(argv[i + 1]) if i + 1 < len(argv) else 2
+    # Vigia e anotador antes do `--atualizar`: a tarefa do vigia leva os dois
+    # (estacao/tarefa.py, xml_do_vigia).
     if "--vigia" in argv:
         from estacao import anotador
 
@@ -71,6 +64,15 @@ def main(argv: list[str]) -> int:
 
         i = argv.index("--sid") if "--sid" in argv else len(argv)
         return anotador.rodar_anotador(argv[i + 1]) if i + 1 < len(argv) else 2
+    if "--atualizacao" in argv:
+        from estacao import tarefa
+
+        return tarefa.rodar_tarefa()
+    if "--atualizar" in argv:
+        from estacao import tarefa
+
+        i = argv.index("--atualizar")
+        return tarefa.rodar_atualizador(argv[i + 1]) if i + 1 < len(argv) else 2
     from estacao import bandeja
 
     return bandeja.main()

@@ -22,7 +22,6 @@ assinatura, conferida aqui. Só o evento leva a chave da máquina.
 
 from __future__ import annotations
 
-import ctypes
 import logging
 import os
 import shutil
@@ -37,7 +36,7 @@ logger = logging.getLogger("estacao.tarefa")
 
 NOME_TAREFA = "Certguard Analise - atualizacao"
 EXE = "certguard_analise.exe"
-_MUTEX = None
+_TRAVA = None  # descritor preso até o processo sair: o Windows solta quando ele morre
 _SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -78,12 +77,20 @@ def e_estacao() -> bool:
 def _unica() -> bool:
     """Uma rodada por vez na máquina: a da partida e a do fim da instalação
     podem coincidir, e duas baixariam o mesmo instalador no mesmo arquivo."""
-    global _MUTEX
-    try:
-        _MUTEX = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\CertguardAnaliseAtualizacao")
-        return ctypes.windll.kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
-    except Exception:
-        return True
+    global _TRAVA
+    # Arquivo travado na pasta trancada, como o vigia: um mutex global a pessoa
+    # sem admin cria antes e cala a coleta, o vigia e a atualização.
+    from estacao import anotador  # aqui dentro: o anotador importa este módulo
+
+    raiz = pastas().raiz
+    if not proteger_pasta(raiz):
+        logger.error("Pasta %s não pôde ser trancada; a trava da rodada não vale.", raiz)
+        return False
+    fd = anotador._travar(os.path.join(raiz, "atualizacao.lock"))
+    if fd is None:
+        return False
+    _TRAVA = fd
+    return True
 
 
 # ── Portal ──────────────────────────────────────────────────────────────
@@ -193,7 +200,11 @@ NOME_VIGIA = NOME_TAREFA.replace("atualizacao", "vigia")
 
 def xml_do_vigia(exe: str) -> str:
     """A tarefa do vigia (`--vigia`, SYSTEM) em XML: o `schtasks` sem XML não
-    desliga o limite de 72 h nem repete a tarefa que cai."""
+    desliga o limite de 72 h nem repete a tarefa que cai.
+
+    O `--atualizar` sobra de propósito: na volta para a 1.4.0, que não conhece
+    `--vigia`, ela cai no `--atualizar` sem pedido e sai com 2, em vez de abrir
+    uma bandeja SYSTEM na sessão 0."""
     from xml.sax.saxutils import escape
 
     return f"""<?xml version="1.0" encoding="UTF-16"?>
@@ -224,7 +235,7 @@ def xml_do_vigia(exe: str) -> str:
   <Actions Context="Author">
     <Exec>
       <Command>{escape(exe)}</Command>
-      <Arguments>--vigia</Arguments>
+      <Arguments>--vigia --atualizar</Arguments>
     </Exec>
   </Actions>
 </Task>

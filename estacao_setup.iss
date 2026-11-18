@@ -108,10 +108,13 @@ begin
   // A chave em ProgramData fica: reinstalar mantem o vinculo ja aprovado.
   if CurUninstallStep = usUninstall then
   begin
-    FecharBandejas;
+    // O vigia sai antes do taskkill: senao relanca o anotador no meio.
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/End /TN "{#NomeVigia}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "{#NomeVigia}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    FecharBandejas;
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "{#NomeTarefa}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "{#NomeTarefa} 6h"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Os titulos de janela anotados (ate 48 h) nao ficam na maquina.
+    DelTree(ExpandConstant('{commonappdata}\CertguardAnalise\atualizacoes\janelas'), True, True, True);
   end;
 end;

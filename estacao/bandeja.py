@@ -321,6 +321,13 @@ class Bandeja:
 
 def main() -> int:
     caminho_log = configurar_log()
+    from estacao import conteineres
+
+    # A bandeja é da pessoa: como SYSTEM (sessão 0, tarefa agendada) instalaria
+    # o certificado no repositório errado.
+    if conteineres.sid_atual() == "S-1-5-18":
+        logger.error("Rodando como SYSTEM; a bandeja não sobe.")
+        return 1
     if not instancia_unica():
         logger.info("Já existe uma bandeja aberta nesta sessão; encerrando esta.")
         return 0

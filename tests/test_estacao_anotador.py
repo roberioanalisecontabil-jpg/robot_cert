@@ -69,6 +69,36 @@ def test_volta_nao_guarda_lancamento_que_falhou():
     assert vivos == {}
 
 
+def _lancador(lancados, codigo):
+    def lancar(s):
+        lancados.append(s)
+        return SimpleNamespace(poll=lambda: codigo[0], fechar=lambda: None)
+    return lancar
+
+
+def test_anotador_que_morre_logo_depois_de_subir_espera_60_s():
+    lancados, vivos, pausa, codigo = [], {}, {}, [None]
+    sessoes = [{"SessionId": 1, "State": ACTIVE}]
+    lancar = _lancador(lancados, codigo)
+    anotador.volta(sessoes, vivos, lambda s: False, lancar, agora=100.0, pausa=pausa)
+    codigo[0] = 1  # morreu 5 s depois de subir
+    for agora in (105.0, 110.0, 164.0):
+        anotador.volta(sessoes, vivos, lambda s: False, lancar, agora=agora, pausa=pausa)
+    assert lancados == [1]
+    anotador.volta(sessoes, vivos, lambda s: False, lancar, agora=166.0, pausa=pausa)
+    assert lancados == [1, 1]
+
+
+def test_anotador_que_morre_depois_de_30_s_volta_na_hora():
+    lancados, vivos, pausa, codigo = [], {}, {}, [None]
+    sessoes = [{"SessionId": 1, "State": ACTIVE}]
+    lancar = _lancador(lancados, codigo)
+    anotador.volta(sessoes, vivos, lambda s: False, lancar, agora=100.0, pausa=pausa)
+    codigo[0] = 1
+    anotador.volta(sessoes, vivos, lambda s: False, lancar, agora=131.0, pausa=pausa)
+    assert lancados == [1, 1]
+
+
 def test_trava_de_arquivo_e_exclusiva_e_solta_ao_fechar(tmp_path):
     caminho = str(tmp_path / "sub" / "anotador-1.lock")
     fd = anotador._travar(caminho)
@@ -149,6 +179,33 @@ def test_main_despacha_vigia_e_anotador(monkeypatch):
     assert main(["--anotador", "--sid", "S"]) == 0
     assert main(["--anotador"]) == 2
     assert chamadas == ["vigia", ("anotador", "S")]
+
+
+def test_main_vigia_com_atualizar_vai_ao_vigia(monkeypatch):
+    # A tarefa do vigia passa `--vigia --atualizar`: a 1.4.0 (volta atrás) cai no
+    # `--atualizar` sem pedido e sai com 2, em vez de abrir uma bandeja SYSTEM.
+    from estacao import tarefa
+    from estacao.__main__ import main
+
+    chamadas = []
+    monkeypatch.setattr(anotador, "rodar_vigia", lambda: chamadas.append("vigia") or 0)
+    monkeypatch.setattr(anotador, "rodar_anotador", lambda sid: chamadas.append(("anotador", sid)) or 0)
+    monkeypatch.setattr(tarefa, "rodar_atualizador", lambda p: chamadas.append("atualizador") or 0)
+    assert main(["--vigia", "--atualizar"]) == 0
+    assert main(["--anotador", "--sid", "S", "--atualizar"]) == 0
+    assert chamadas == ["vigia", ("anotador", "S")]
+
+
+def test_bandeja_nao_sobe_como_system(monkeypatch):
+    import pytest
+
+    from estacao import bandeja, conteineres
+
+    monkeypatch.setattr(bandeja, "configurar_log", lambda: Path("x.log"))
+    monkeypatch.setattr(bandeja, "instancia_unica", lambda: pytest.fail("pegou a trava"))
+    monkeypatch.setattr(bandeja, "Bandeja", lambda *a: pytest.fail("subiu a bandeja"))
+    monkeypatch.setattr(conteineres, "sid_atual", lambda: "S-1-5-18")
+    assert bandeja.main() == 1
 
 
 def test_spec_inclui_win32security():

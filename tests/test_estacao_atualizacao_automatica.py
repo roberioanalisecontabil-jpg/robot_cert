@@ -210,7 +210,7 @@ def test_xml_do_vigia_sem_limite_e_sem_duplicar() -> None:
 
     x = tarefa.xml_do_vigia(r"C:\Program Files\CertGuard & Cia\certguard_analise.exe")
     for trecho in ("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>", "<MultipleInstancesPolicy>IgnoreNew",
-                   "<UserId>S-1-5-18</UserId>", "<BootTrigger>", "<Arguments>--vigia</Arguments>",
+                   "<UserId>S-1-5-18</UserId>", "<BootTrigger>", "<Arguments>--vigia --atualizar</Arguments>",
                    "<RestartOnFailure>", "<Count>999</Count>", "<RunLevel>HighestAvailable</RunLevel>",
                    "<DisallowStartIfOnBatteries>false", "<StopIfGoingOnBatteries>false", "<Hidden>true",
                    "CertGuard &amp; Cia"):
@@ -280,6 +280,40 @@ def test_instalador_liga_e_desliga_o_vigia() -> None:
     assert f'#define NomeVigia "{tarefa.NOME_VIGIA}"' in iss and tarefa.NOME_VIGIA == "Certguard Analise - vigia"
     for acao in ('/Run /TN "{#NomeVigia}"', '/End /TN "{#NomeVigia}"', '/Delete /F /TN "{#NomeVigia}"'):
         assert acao in iss, acao
+
+
+def test_desinstalar_para_o_vigia_antes_de_fechar_e_apaga_as_janelas() -> None:
+    iss = (RAIZ / "estacao_setup.iss").read_text(encoding="utf-8-sig")
+    desinstalar = iss[iss.index("procedure CurUninstallStepChanged"):]
+    fechar = desinstalar.index("FecharBandejas;")
+    # Antes do taskkill: senão o vigia relança o anotador no meio.
+    assert desinstalar.index('/End /TN "{#NomeVigia}"') < fechar
+    assert desinstalar.index('/Delete /F /TN "{#NomeVigia}"') < fechar
+    assert r"DelTree(ExpandConstant('{commonappdata}\CertguardAnalise\atualizacoes\janelas'), True, True, True);" in desinstalar
+    assert desinstalar.index("DelTree(") > fechar
+    assert desinstalar.isascii()
+
+
+def test_unica_trava_arquivo_na_pasta_trancada(tmp_path, monkeypatch) -> None:
+    import os
+
+    from estacao import atualizador, tarefa
+
+    raiz = tmp_path / "atualizacoes"
+    monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(raiz)))
+    protegidas = []
+    monkeypatch.setattr(tarefa, "proteger_pasta", lambda r: protegidas.append(r) or True)
+    monkeypatch.setattr(tarefa, "_TRAVA", None)
+    assert tarefa._unica() is True
+    assert (raiz / "atualizacao.lock").exists() and protegidas == [str(raiz)]
+    assert tarefa._unica() is False  # outra rodada
+    os.close(tarefa._TRAVA)  # o Windows solta quando o processo sai
+    assert tarefa._unica() is True
+    os.close(tarefa._TRAVA)
+    monkeypatch.setattr(tarefa, "proteger_pasta", lambda r: False)
+    assert tarefa._unica() is False  # trava em pasta que a pessoa escreve não vale
+    fonte = (RAIZ / "estacao" / "tarefa.py").read_text(encoding="utf-8")
+    assert "CreateMutexW" not in fonte
 
 
 def test_versao_1_5_0() -> None:
