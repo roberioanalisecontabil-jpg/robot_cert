@@ -219,6 +219,6 @@ def test_mensagens_da_microsoft_passam_intactas(texto):
 
 
 def test_versao_reportada_e_a_nova():
-    # A bandeja e a virada não podem divergir: a 1.4.0 (uso) conta como já virada.
-    assert VERSAO_REPORTADA == "certguard-1.4.0"
-    assert agent_devices._versao_tupla("1.4.0") >= bandeja_virada.VERSAO_NOVA == (1, 2, 0)
+    # A bandeja e a virada não podem divergir: a 1.5.0 (vigia) conta como já virada.
+    assert VERSAO_REPORTADA == "certguard-1.5.0"
+    assert agent_devices._versao_tupla("1.5.0") >= bandeja_virada.VERSAO_NOVA == (1, 2, 0)

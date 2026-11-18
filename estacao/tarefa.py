@@ -22,7 +22,6 @@ assinatura, conferida aqui. Só o evento leva a chave da máquina.
 
 from __future__ import annotations
 
-import ctypes
 import logging
 import os
 import shutil
@@ -37,7 +36,7 @@ logger = logging.getLogger("estacao.tarefa")
 
 NOME_TAREFA = "Certguard Analise - atualizacao"
 EXE = "certguard_analise.exe"
-_MUTEX = None
+_TRAVA = None  # descritor preso até o processo sair: o Windows solta quando ele morre
 _SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -78,12 +77,20 @@ def e_estacao() -> bool:
 def _unica() -> bool:
     """Uma rodada por vez na máquina: a da partida e a do fim da instalação
     podem coincidir, e duas baixariam o mesmo instalador no mesmo arquivo."""
-    global _MUTEX
-    try:
-        _MUTEX = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\CertguardAnaliseAtualizacao")
-        return ctypes.windll.kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
-    except Exception:
-        return True
+    global _TRAVA
+    # Arquivo travado na pasta trancada, como o vigia: um mutex global a pessoa
+    # sem admin cria antes e cala a coleta, o vigia e a atualização.
+    from estacao import anotador  # aqui dentro: o anotador importa este módulo
+
+    raiz = pastas().raiz
+    if not proteger_pasta(raiz):
+        logger.error("Pasta %s não pôde ser trancada; a trava da rodada não vale.", raiz)
+        return False
+    fd = anotador._travar(os.path.join(raiz, "atualizacao.lock"))
+    if fd is None:
+        return False
+    _TRAVA = fd
+    return True
 
 
 # ── Portal ──────────────────────────────────────────────────────────────
@@ -188,6 +195,67 @@ def comandos_das_tarefas(exe: str) -> list[list[str]]:
     ]
 
 
+NOME_VIGIA = NOME_TAREFA.replace("atualizacao", "vigia")
+
+
+def xml_do_vigia(exe: str) -> str:
+    """A tarefa do vigia (`--vigia`, SYSTEM) em XML: o `schtasks` sem XML não
+    desliga o limite de 72 h nem repete a tarefa que cai.
+
+    O `--atualizar` sobra de propósito: na volta para a 1.4.0, que não conhece
+    `--vigia`, ela cai no `--atualizar` sem pedido e sai com 2, em vez de abrir
+    uma bandeja SYSTEM na sessão 0."""
+    from xml.sax.saxutils import escape
+
+    return f"""<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+    <Hidden>true</Hidden>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{escape(exe)}</Command>
+      <Arguments>--vigia --atualizar</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"""
+
+
+def religar_vigia(executar=None) -> int:
+    """`schtasks /Run` do vigia a cada rodada: conserta a tarefa que alguém
+    parou; com `IgnoreNew`, se já roda, não duplica. Falha só vai ao log."""
+    executar = executar or (lambda c: subprocess.run(c, capture_output=True, timeout=30, creationflags=_SEM_JANELA).returncode)
+    try:
+        codigo = executar(["schtasks", "/Run", "/TN", NOME_VIGIA])
+    except Exception as e:
+        logger.warning("Não foi possível religar o vigia: %s", e)
+        return 1
+    if codigo != 0:
+        logger.warning("schtasks /Run do vigia devolveu %s.", codigo)
+    return 0 if codigo == 0 else 1
+
+
 def preparar_atualizacao(instalador: str, exe: str, executar=None) -> int:
     """Chamado pelo instalador (admin) no fim de toda instalação:
 
@@ -211,7 +279,18 @@ def preparar_atualizacao(instalador: str, exe: str, executar=None) -> int:
     else:
         logger.warning("Instalador %s não encontrado; sem cópia para voltar atrás.", instalador)
         codigo = 1
-    for comando in comandos_das_tarefas(exe):
+    comandos = comandos_das_tarefas(exe)
+    try:
+        # UTF-16 com BOM: o que o `schtasks /XML` espera. A pasta já está trancada.
+        os.makedirs(p.raiz, exist_ok=True)
+        arquivo = os.path.join(p.raiz, "vigia.xml")
+        with open(arquivo, "w", encoding="utf-16", newline="") as f:
+            f.write(xml_do_vigia(exe))
+        comandos.append(["schtasks", "/Create", "/F", "/TN", NOME_VIGIA, "/XML", arquivo])
+    except OSError:
+        logger.exception("Não foi possível gravar o XML da tarefa %s.", NOME_VIGIA)
+        codigo = 1
+    for comando in comandos:
         if executar(comando) != 0:
             logger.error("Não foi possível criar a tarefa %s.", comando[4])
             codigo = 1
@@ -227,6 +306,10 @@ def rodar_tarefa() -> int:
         logger.info("Outra rodada da atualização já está em curso; encerrando esta.")
         return 0
     p = pastas()
+    try:
+        religar_vigia()
+    except Exception:
+        logger.exception("Religar o vigia falhou.")
     with _cliente() as http:
         if e_estacao():
             # Isolada: a coleta falhar não impede a atualização, e vice-versa.

@@ -9,12 +9,14 @@
 ; nome vira lixo na tela. Mantenha o BOM ao editar.
 #define MyAppName "CertGuard Análise"
 #define MyInternalName "Certguard Analise"
-#define MyAppVersion "1.4.0"
+#define MyAppVersion "1.5.0"
 #define MyAppPublisher "Analise Group"
 #define MyAppURL "https://certificado.analisegroup.cnt.br/"
 #define MyAppExeName "certguard_analise.exe"
 ; Mesmo nome de estacao/tarefa.py (NOME_TAREFA); a segunda leva " 6h".
 #define NomeTarefa "Certguard Analise - atualizacao"
+; Mesmo nome de estacao/tarefa.py (NOME_VIGIA): o vigia residente (--vigia).
+#define NomeVigia "Certguard Analise - vigia"
 
 [Setup]
 ; GUID proprio: nao e o do Hardlyze nem o do agente do servidor.
@@ -94,6 +96,8 @@ begin
     // Roda a tarefa agora: numa atualizacao, e ela que confirma a versao nova
     // para o atualizador que esta esperando.
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/Run /TN "{#NomeTarefa}"', '', SW_HIDE, ewNoWait, ResultCode);
+    // O vigia sobe agora, sem esperar o proximo boot.
+    Exec(ExpandConstant('{sys}\schtasks.exe'), '/Run /TN "{#NomeVigia}"', '', SW_HIDE, ewNoWait, ResultCode);
   end;
 end;
 
@@ -104,8 +108,13 @@ begin
   // A chave em ProgramData fica: reinstalar mantem o vinculo ja aprovado.
   if CurUninstallStep = usUninstall then
   begin
+    // O vigia sai antes do taskkill: senao relanca o anotador no meio.
+    Exec(ExpandConstant('{sys}\schtasks.exe'), '/End /TN "{#NomeVigia}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "{#NomeVigia}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     FecharBandejas;
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "{#NomeTarefa}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "{#NomeTarefa} 6h"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Os titulos de janela anotados (ate 48 h) nao ficam na maquina.
+    DelTree(ExpandConstant('{commonappdata}\CertguardAnalise\atualizacoes\janelas'), True, True, True);
   end;
 end;

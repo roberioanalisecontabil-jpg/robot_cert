@@ -15,6 +15,7 @@ from tests.test_seguranca_lote4 import banco as banco_base  # noqa: F401
 RAIZ = Path(__file__).resolve().parents[1]
 JS = RAIZ / "static" / "carteiras-uso.js"
 HORA = datetime(2026, 11, 15, 15, 0, tzinfo=timezone.utc).isoformat()
+EVENTO = datetime(2026, 11, 15, 15, 7, tzinfo=timezone.utc).isoformat()
 
 
 def _uso(uid, doc, maquina="m1", fp="a" * 64, **extra) -> dict:
@@ -97,6 +98,118 @@ def test_aba_uso_existe_e_abre_pelo_link(client: TestClient) -> None:
 
 def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
     assert "innerHTML" not in JS.read_text(encoding="utf-8")
+
+
+def test_js_mostra_sistema_e_abre_detalhe() -> None:
+    js = JS.read_text(encoding="utf-8")
+    assert "mostra_sistema" in js and "/janelas" in js and "modalUsoJanelas" in js
+    assert "innerHTML" not in js and "cg-uso-futuro" not in js
+
+
+def test_modal_tem_o_aviso() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert "É a janela que estava na tela no momento do uso. Um programa em segundo plano não aparece aqui." in html
+    assert 'id="modalUsoJanelas"' in html and 'id="uso-th-sistema"' in html
+
+
+def test_cache_buster_do_js_subiu() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert "carteiras-uso.js?v=janelas-2026-11-18b" in html
+
+
+def test_js_descarta_resposta_antiga_e_rotulo_contem_texto_visivel() -> None:
+    js = JS.read_text(encoding="utf-8")
+    assert "const meu = ++seqJanelas;" in js and js.count("if (meu !== seqJanelas) return;") >= 3
+    assert '"Ver janelas do uso: " + b.textContent' in js
+    assert '[w.programa, w.titulo].filter(Boolean).join(" · ")' in js
+    # Hora do uso (evento_em); a da janela de ordem 0 só se a API não mandar.
+    assert "u.evento_em || (ordem0 && ordem0.quando)" in js
+
+
+def test_modal_importar_manteve_o_espaco_do_atributo() -> None:
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    assert 'id="modalImportar" aria-labelledby=' in html
+
+
+def test_css_do_botao_de_sistema_quebra_linha_e_limita_largura() -> None:
+    css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
+    m = re.search(r"\.cg-uso-sistema\s*\{([^}]*)\}", css)
+    assert m and "white-space: normal" in m.group(1) and "max-width" in m.group(1)
+    assert "cg-uso-sistema" in JS.read_text(encoding="utf-8") and "cg-uso-futuro" not in css
+
+
+def _janela(uso_id, record_id, ordem, programa, titulo) -> dict:
+    return {"uso_id": uso_id, "machine_id": "m1", "record_id": record_id, "ordem": ordem,
+            "quando": HORA, "evento_em": EVENTO, "programa": programa, "titulo": titulo}
+
+
+@pytest.fixture
+def com_janelas(banco):
+    banco.tabelas["uso_certificado"] = [_uso("u-fis", DOC_A, id=1), _uso("u-fis", DOC_A, id=2),
+                                        _uso("u-fis", DOC_A, id=3)]
+    banco.tabelas["uso_janela"] = [
+        _janela(1, 10, 0, "chrome.exe", "Portal A"),
+        _janela(1, 12, 0, "outlook.exe", "Caixa"),   # maior record_id: dá o `sistema`
+        _janela(1, 12, 1, "chrome.exe", "Antes"),    # ordem 1 não conta
+        _janela(1, 11, 0, "chrome.exe", "Portal A"), # par repetido não soma
+        _janela(2, 20, 0, "chrome.exe", "Portal B"),
+    ]
+    return banco
+
+
+def test_admin_recebe_sistema_e_outras(client: TestClient, com_janelas) -> None:
+    j = _get(client, ADMIN).json()
+    assert j["mostra_sistema"] is True
+    por_id = {l["id"]: l for l in j["linhas"]}
+    assert por_id[1]["sistema"] == "outlook.exe · Caixa" and por_id[1]["outras"] == 1
+    assert por_id[2]["sistema"] == "chrome.exe · Portal B" and por_id[2]["outras"] == 0
+
+
+def test_sistema_sem_programa_nao_comeca_com_separador(client: TestClient, com_janelas) -> None:
+    com_janelas.tabelas["uso_janela"].append(_janela(3, 30, 0, "", "Só título"))
+    l3 = {l["id"]: l for l in _get(client, ADMIN).json()["linhas"]}[3]
+    assert l3["sistema"] == "Só título"
+
+
+def test_linha_sem_janela_sai_vazia(client: TestClient, com_janelas) -> None:
+    l3 = {l["id"]: l for l in _get(client, ADMIN).json()["linhas"]}[3]
+    assert l3["sistema"] == "" and l3["outras"] == 0
+
+
+def test_gestor_nao_recebe_janela_nem_id(client: TestClient, com_janelas) -> None:
+    j = _get(client, GESTOR).json()
+    assert j["mostra_sistema"] is False and j["linhas"]
+    assert all(not ({"id", "sistema", "outras"} & set(l)) for l in j["linhas"])
+
+
+def test_detalhe_so_admin(client: TestClient, com_janelas) -> None:
+    assert client.get("/api/carteira/uso/1/janelas", headers=_h(*GESTOR)).status_code == 403
+    assert client.get("/api/carteira/uso/1/janelas", headers=_h(*FISCAL_OP)).status_code == 403
+    r = client.get("/api/carteira/uso/1/janelas", headers=_h(*ADMIN))
+    assert r.status_code == 200
+    usos = r.json()["usos"]
+    assert [u["record_id"] for u in usos] == [10, 11, 12]
+    assert [(w["ordem"], w["programa"], w["titulo"]) for w in usos[2]["janelas"]] == [
+        (0, "outlook.exe", "Caixa"), (1, "chrome.exe", "Antes")]
+    assert usos[0]["janelas"][0]["quando"] == HORA
+    # O título do bloco é a hora do uso, não a da janela que ganhou o foco.
+    assert all(u["evento_em"] == EVENTO for u in usos)
+
+
+def test_detalhe_inexistente_404(client: TestClient, com_janelas) -> None:
+    assert client.get("/api/carteira/uso/999/janelas", headers=_h(*ADMIN)).status_code == 404
+
+
+def test_detalhe_com_banco_fora_503(client: TestClient, com_janelas, monkeypatch) -> None:
+    original = com_janelas.table
+
+    def _quebra(nome, *a, **k):
+        if nome == "uso_janela":  # a sessão usa o mesmo banco; só a leitura das janelas cai
+            raise RuntimeError("fora")
+        return original(nome, *a, **k)
+    monkeypatch.setattr(com_janelas, "table", _quebra)
+    r = client.get("/api/carteira/uso/1/janelas", headers=_h(*ADMIN))
+    assert r.status_code == 503 and "uso" in r.json()["detail"].lower()
 
 
 def test_paginas_com_a_mesma_hora_nao_repetem_nem_perdem_linhas(client: TestClient, banco) -> None:

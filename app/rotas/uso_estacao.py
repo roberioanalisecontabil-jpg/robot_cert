@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Annotated, List, Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BeforeValidator, BaseModel, Field, StringConstraints
 
 from app import computadores, uso
 from app.rotas.atualizacao import _limitar
@@ -28,12 +28,27 @@ _FORA = "Não foi possível gravar agora."
 _ultima_limpeza = 0.0
 
 
+def _sem_nul(v):
+    # Postgres `text` recusa NUL e psycopg não codifica surrogate solto. Roda ANTES da
+    # validação: o pydantic recusa o surrogate e a resposta 422 estoura ao ecoá-lo.
+    if not isinstance(v, str):
+        return v
+    return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace").replace("\x00", "")
+
+
+class JanelaDeUso(BaseModel):
+    quando: datetime
+    programa: Annotated[str, BeforeValidator(_sem_nul)] = Field(max_length=64)
+    titulo: Annotated[str, BeforeValidator(_sem_nul)] = Field(max_length=300)
+
+
 class EventoDeUso(BaseModel):
     record_id: int = Field(ge=0)
     quando: datetime
     sid: str = Field(min_length=1, max_length=184)
     usuario: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, max_length=256)]
     conteiner: str = Field(min_length=1, max_length=512)
+    janelas: List[JanelaDeUso] = Field(default_factory=list, max_length=3)
 
 
 class LoteDeUso(BaseModel):
@@ -68,7 +83,8 @@ def registrar(corpo: LoteDeUso, request: Request) -> dict:
     try:
         gravadas = uso.registrar_usos(
             corpo.machine_id,
-            [uso.Evento(e.record_id, e.quando, e.sid, e.usuario, e.conteiner) for e in corpo.eventos],
+            [uso.Evento(e.record_id, e.quando, e.sid, e.usuario, e.conteiner,
+                        [j.model_dump() for j in e.janelas]) for e in corpo.eventos],
             corpo.auditoria, agora)
     except Exception:  # noqa: BLE001
         logger.exception("Uso: gravação de %s falhou", computadores.mac(corpo.machine_id))

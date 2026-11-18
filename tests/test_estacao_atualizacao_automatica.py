@@ -28,6 +28,17 @@ CONTEUDO = b"MZ-certguard-1.1.1" * 40
 SHA = hashlib.sha256(CONTEUDO).hexdigest()
 
 
+from estacao import tarefa as _tarefa
+
+_RELIGAR_REAL = _tarefa.religar_vigia
+
+
+@pytest.fixture(autouse=True)
+def _sem_schtasks_de_verdade(monkeypatch):
+    """rodar_tarefa religa o vigia: nunca rodar o schtasks real nos testes."""
+    monkeypatch.setattr(_tarefa, "religar_vigia", lambda executar=None: 0)
+
+
 @pytest.fixture
 def publicada(tmp_path, monkeypatch) -> Path:
     monkeypatch.setattr("app.config.ATUALIZACOES_DIR", tmp_path, raising=False)
@@ -159,8 +170,8 @@ def test_instalador_prepara_pasta_copia_e_tarefas(tmp_path, monkeypatch) -> None
     icacls = [c for c in comandos if c[0] == "icacls"]
     assert any("/setowner" in c for c in icacls) and any("/inheritance:r" in c for c in icacls)
     tarefas = [c for c in comandos if c[0] == "schtasks"]
-    assert [c[4] for c in tarefas] == [tarefa.NOME_TAREFA, tarefa.NOME_TAREFA + " 6h"]
-    for c in tarefas:
+    assert [c[4] for c in tarefas] == [tarefa.NOME_TAREFA, tarefa.NOME_TAREFA + " 6h", tarefa.NOME_VIGIA]
+    for c in tarefas[:2]:
         assert c[c.index("/RU") + 1] == "SYSTEM"
         assert c[c.index("/TR") + 1] == f'"{exe}" --atualizacao'
 
@@ -189,6 +200,126 @@ def test_instalador_da_atualizacao_automatica() -> None:
     assert "/Run /TN" in iss and '/Delete /F /TN "{#NomeTarefa} 6h"' in iss
     corre = next(linha for linha in iss.splitlines() if linha.startswith('Filename: "{app}\\{#MyAppExeName}"'))
     assert "skipifsilent" in corre, "em silêncio a bandeja abriria na sessão invisível do SYSTEM"
+
+
+# ── O vigia (1.5.0) ──────────────────────────────────────────────────────
+
+
+def test_xml_do_vigia_sem_limite_e_sem_duplicar() -> None:
+    from estacao import tarefa
+
+    x = tarefa.xml_do_vigia(r"C:\Program Files\CertGuard & Cia\certguard_analise.exe")
+    for trecho in ("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>", "<MultipleInstancesPolicy>IgnoreNew",
+                   "<UserId>S-1-5-18</UserId>", "<BootTrigger>", "<Arguments>--vigia --atualizar</Arguments>",
+                   "<RestartOnFailure>", "<Count>999</Count>", "<RunLevel>HighestAvailable</RunLevel>",
+                   "<DisallowStartIfOnBatteries>false", "<StopIfGoingOnBatteries>false", "<Hidden>true",
+                   "CertGuard &amp; Cia"):
+        assert trecho in x, trecho
+    import xml.dom.minidom
+
+    xml.dom.minidom.parseString(x.encode("utf-16"))  # bem formado
+
+
+def test_preparar_cria_tambem_o_vigia(tmp_path, monkeypatch) -> None:
+    from estacao import atualizador, tarefa
+
+    monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(tmp_path / "atualizacoes")))
+    instalador = tmp_path / "i.exe"
+    instalador.write_bytes(b"MZ")
+    exe = r"C:\Program Files\Certguard Analise\certguard_analise.exe"
+    comandos = []
+    assert tarefa.preparar_atualizacao(str(instalador), exe, executar=lambda c: comandos.append(c) or 0) == 0
+    vigia = [c for c in comandos if c[0] == "schtasks" and tarefa.NOME_VIGIA in c]
+    assert len(vigia) == 1 and vigia[0][:5] == ["schtasks", "/Create", "/F", "/TN", tarefa.NOME_VIGIA]
+    arquivo = Path(vigia[0][vigia[0].index("/XML") + 1])
+    assert arquivo == tmp_path / "atualizacoes" / "vigia.xml"
+    assert arquivo.read_bytes()[:2] in (b"\xff\xfe", b"\xfe\xff"), "schtasks /XML espera UTF-16"
+    assert "--vigia" in arquivo.read_text(encoding="utf-16")
+
+
+def test_preparar_falha_do_vigia_da_codigo_1(tmp_path, monkeypatch) -> None:
+    from estacao import atualizador, tarefa
+
+    monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(tmp_path / "atualizacoes")))
+    instalador = tmp_path / "i.exe"
+    instalador.write_bytes(b"MZ")
+    assert tarefa.preparar_atualizacao(
+        str(instalador), "c.exe", executar=lambda c: 1 if tarefa.NOME_VIGIA in c else 0) == 1
+
+
+def test_rodada_da_tarefa_religa_o_vigia(tmp_path, monkeypatch) -> None:
+    from estacao import atualizador, tarefa
+
+    monkeypatch.setattr(tarefa, "configurar_log", lambda nome: None)
+    monkeypatch.setattr(tarefa, "_unica", lambda: True)
+    monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(tmp_path)))
+    monkeypatch.setattr(tarefa, "e_estacao", lambda: False)
+    monkeypatch.setattr(tarefa, "buscar_pacote", lambda http: None)
+    chamados = []
+    monkeypatch.setattr(tarefa, "religar_vigia", lambda executar=None: chamados.append(1) or 0)
+    assert tarefa.rodar_tarefa() == 0 and chamados == [1]
+
+
+def test_religar_vigia_roda_o_schtasks_e_so_avisa_se_falha() -> None:
+    from estacao import tarefa
+
+    comandos = []
+    assert _RELIGAR_REAL(executar=lambda c: comandos.append(c) or 0) == 0
+    assert comandos == [["schtasks", "/Run", "/TN", tarefa.NOME_VIGIA]]
+
+    def estoura(c):
+        raise OSError("sem schtasks")
+
+    assert _RELIGAR_REAL(executar=estoura) == 1  # não propaga
+
+
+def test_instalador_liga_e_desliga_o_vigia() -> None:
+    from estacao import tarefa
+
+    iss = (RAIZ / "estacao_setup.iss").read_text(encoding="utf-8-sig")
+    assert f'#define NomeVigia "{tarefa.NOME_VIGIA}"' in iss and tarefa.NOME_VIGIA == "Certguard Analise - vigia"
+    for acao in ('/Run /TN "{#NomeVigia}"', '/End /TN "{#NomeVigia}"', '/Delete /F /TN "{#NomeVigia}"'):
+        assert acao in iss, acao
+
+
+def test_desinstalar_para_o_vigia_antes_de_fechar_e_apaga_as_janelas() -> None:
+    iss = (RAIZ / "estacao_setup.iss").read_text(encoding="utf-8-sig")
+    desinstalar = iss[iss.index("procedure CurUninstallStepChanged"):]
+    fechar = desinstalar.index("FecharBandejas;")
+    # Antes do taskkill: senão o vigia relança o anotador no meio.
+    assert desinstalar.index('/End /TN "{#NomeVigia}"') < fechar
+    assert desinstalar.index('/Delete /F /TN "{#NomeVigia}"') < fechar
+    assert r"DelTree(ExpandConstant('{commonappdata}\CertguardAnalise\atualizacoes\janelas'), True, True, True);" in desinstalar
+    assert desinstalar.index("DelTree(") > fechar
+    assert desinstalar.isascii()
+
+
+def test_unica_trava_arquivo_na_pasta_trancada(tmp_path, monkeypatch) -> None:
+    import os
+
+    from estacao import atualizador, tarefa
+
+    raiz = tmp_path / "atualizacoes"
+    monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(raiz)))
+    protegidas = []
+    monkeypatch.setattr(tarefa, "proteger_pasta", lambda r: protegidas.append(r) or True)
+    monkeypatch.setattr(tarefa, "_TRAVA", None)
+    assert tarefa._unica() is True
+    assert (raiz / "atualizacao.lock").exists() and protegidas == [str(raiz)]
+    assert tarefa._unica() is False  # outra rodada
+    os.close(tarefa._TRAVA)  # o Windows solta quando o processo sai
+    assert tarefa._unica() is True
+    os.close(tarefa._TRAVA)
+    monkeypatch.setattr(tarefa, "proteger_pasta", lambda r: False)
+    assert tarefa._unica() is False  # trava em pasta que a pessoa escreve não vale
+    fonte = (RAIZ / "estacao" / "tarefa.py").read_text(encoding="utf-8")
+    assert "CreateMutexW" not in fonte
+
+
+def test_versao_1_5_0() -> None:
+    from estacao import VERSAO, VERSAO_REPORTADA
+
+    assert VERSAO == "1.5.0" and VERSAO_REPORTADA == "certguard-1.5.0"
 
 
 def test_build_leva_os_modulos_da_atualizacao() -> None:

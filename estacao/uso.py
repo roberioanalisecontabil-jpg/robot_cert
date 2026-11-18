@@ -96,6 +96,44 @@ def ler_eventos(desde_record: int, executar=_powershell) -> List[dict]:
     return sorted(dados, key=lambda e: e["record_id"])
 
 
+def _limpar(s: str) -> str:
+    """Surrogate solto vira U+FFFD: o Postgres do portal o rejeitaria e o lote inteiro falharia."""
+    return s.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+
+
+def _anexar_janelas(lote: List[dict]) -> List[dict]:
+    """Acrescenta `janelas` a cada evento; qualquer falha de leitura deixa [] e a coleta segue."""
+    from datetime import datetime
+
+    from estacao import janelas, tarefa
+
+    def quando(e: dict) -> datetime:
+        return datetime.fromisoformat(str(e["quando"]).replace("Z", "+00:00"))
+
+    ate: dict = {}
+    for e in lote:
+        try:
+            ate[e["sid"]] = max(ate.get(e["sid"], quando(e)), quando(e))
+        except (ValueError, KeyError, TypeError):
+            pass
+    registro: dict = {}
+    for sid, t in ate.items():
+        try:
+            registro[sid] = janelas.ler(tarefa.pastas().raiz, sid, t)
+        except Exception:
+            logger.warning("Não foi possível ler as janelas de %s.", sid, exc_info=True)
+    saida = []
+    for e in lote:
+        try:
+            achadas = janelas.janelas_do_evento(registro.get(e["sid"], []), quando(e))
+            achadas = [{**j, "programa": _limpar(j["programa"]), "titulo": _limpar(j["titulo"])} for j in achadas]
+        except Exception:
+            logger.warning("Janelas do evento %s descartadas.", e.get("record_id"), exc_info=True)
+            achadas = []
+        saida.append({**e, "janelas": achadas})
+    return saida
+
+
 def coletar(http, executar=_powershell) -> int:
     """Devolve o total enviado. O marcador só avança depois de o portal aceitar."""
     from estacao import bandeja, chave_maquina
@@ -118,7 +156,8 @@ def coletar(http, executar=_powershell) -> int:
         lido = eventos[i:i + LOTE]
         # Evento sem sid ou contêiner faria o portal responder 422 para sempre: sai daqui,
         # mas o marcador passa por ele.
-        lote = [{**e, "usuario": e.get("usuario") or ""} for e in lido if e.get("sid") and e.get("conteiner")]
+        lote = _anexar_janelas(
+            [{**e, "usuario": e.get("usuario") or ""} for e in lido if e.get("sid") and e.get("conteiner")])
         r = http.post(f"{portal()}/api/estacao/uso", json={
             "machine_id": bandeja.machine_id(), "chave": chave, "auditoria": auditoria, "eventos": lote})
         r.raise_for_status()

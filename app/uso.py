@@ -1,6 +1,8 @@
 """Registro de uso dos certificados (Frente C).
 
-Diz QUE o certificado foi usado, QUANDO e POR QUEM; nunca qual programa ou site.
+Diz QUE o certificado foi usado, QUANDO e POR QUEM. O programa e o título da
+janela em primeiro plano vêm do anotador da estação (até 3 por evento) e só o
+administrador os vê.
 Os eventos 5061 chegam da bandeja com o contêiner da chave; o `uso_conteiner`
 liga o contêiner ao certificado do acervo, e o uso que chega antes do mapa
 espera com `fingerprint` nulo até o mapa chegar.
@@ -8,7 +10,7 @@ espera com `fingerprint` nulo até o mapa chegar.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -29,6 +31,7 @@ class Evento:
     sid: str
     usuario: str
     conteiner: str
+    janelas: List[dict] = field(default_factory=list)  # quando, programa, titulo; índice = ordem
 
 
 def hora_de(quando: datetime) -> datetime:
@@ -72,6 +75,18 @@ def registrar_mapa(machine_id: str, sid: str, usuario_windows: str, user_id: Opt
     return resolvidas
 
 
+def _gravar_janelas(client, mid: str, uso_id, eventos: List[Evento]) -> None:
+    # Também dos eventos já contados: o reenvio completa o que faltou, sem duplicar.
+    # Chave por linha de uso: o record_id recomeça quando o log de Segurança é limpo.
+    linhas = [{"uso_id": uso_id, "machine_id": mid, "record_id": e.record_id, "ordem": i,
+               "evento_em": _iso(e.quando), "quando": _iso(j["quando"]),
+               "programa": j["programa"], "titulo": j["titulo"]}
+              for e in eventos for i, j in enumerate(e.janelas)]
+    if linhas:
+        client.table("uso_janela").upsert(
+            linhas, on_conflict="uso_id,record_id,ordem", ignore_duplicates=True).execute()
+
+
 def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora: datetime) -> int:
     mid = comp.mac(machine_id)
     client = _cliente()
@@ -94,6 +109,7 @@ def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora
         # O reenvio de um lote não soma de novo: só conta o que passa do último record_id.
         novos = [e for e in evs if atual is None or e.record_id > int(atual["ultimo_record"])]
         if not novos:
+            _gravar_janelas(client, mid, atual["id"], evs)
             continue
         quando = [comp._quando(e.quando) for e in novos]
         primeiro, ultimo = min(quando), max(quando)
@@ -117,8 +133,9 @@ def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora
                 linha.update(fingerprint=fp, documento=acervo[fp], user_id=m.get("user_id"))
             else:
                 linha.update(fingerprint=None, documento=None, user_id=None)
-        client.table("uso_certificado").upsert(
-            linha, on_conflict="machine_id,sid,conteiner,hora").execute()
+        salva = client.table("uso_certificado").upsert(
+            linha, on_conflict="machine_id,sid,conteiner,hora").execute().data
+        _gravar_janelas(client, mid, salva[0]["id"], evs)
         gravadas += 1
 
     client.table("uso_coleta").upsert(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 import pytest
@@ -67,6 +68,53 @@ def test_lote_acima_de_2000_recusado(client: TestClient, banco: _Fake) -> None:
     _fixar(banco, PC_SOL)
     r = client.post("/api/estacao/uso", json=_lote(eventos=[_evento(i) for i in range(2001)]))
     assert r.status_code == 422
+
+
+def _jan(**extra) -> dict:
+    return {"quando": "2026-11-15T12:29:00Z", "programa": "chrome.exe", "titulo": "Portal", **extra}
+
+
+def test_rota_aceita_lote_sem_janelas_e_recusa_4(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    _fixar(banco, PC_SOL)
+    recebidos = []
+    monkeypatch.setattr(uso, "registrar_usos", lambda mid, ev, aud, ag: recebidos.append(ev) or 1)
+    monkeypatch.setattr(uso, "limpar", lambda agora: None)
+    assert client.post("/api/estacao/uso", json=_lote()).status_code == 200
+    assert recebidos[0][0].janelas == []
+    r = client.post("/api/estacao/uso", json=_lote(eventos=[_evento(janelas=[_jan()] * 3)]))
+    assert r.status_code == 200, r.text
+    assert recebidos[1][0].janelas[0]["programa"] == "chrome.exe"
+    assert client.post("/api/estacao/uso", json=_lote(eventos=[_evento(janelas=[_jan()] * 4)])).status_code == 422
+    assert client.post("/api/estacao/uso",
+                       json=_lote(eventos=[_evento(janelas=[_jan(titulo="x" * 301)])])).status_code == 422
+
+
+def test_janela_perde_o_nul(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    # Postgres `text` recusa NUL: a rota tira antes de gravar.
+    _fixar(banco, PC_SOL)
+    recebidos = []
+    monkeypatch.setattr(uso, "registrar_usos", lambda mid, ev, aud, ag: recebidos.append(ev) or 1)
+    monkeypatch.setattr(uso, "limpar", lambda agora: None)
+    r = client.post("/api/estacao/uso",
+                    json=_lote(eventos=[_evento(janelas=[_jan(programa="a\u0000b.exe", titulo="t\u0000i")])]))
+    assert r.status_code == 200, r.text
+    j = recebidos[0][0].janelas[0]
+    assert (j["programa"], j["titulo"]) == ("ab.exe", "ti")
+
+
+def test_janela_com_surrogate_solto_vira_substituto(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    # psycopg nao codifica surrogate solto: sem troca, o lote inteiro daria 503 para sempre.
+    _fixar(banco, PC_SOL)
+    recebidos = []
+    monkeypatch.setattr(uso, "registrar_usos", lambda mid, ev, aud, ag: recebidos.append(ev) or 1)
+    monkeypatch.setattr(uso, "limpar", lambda agora: None)
+    corpo = json.dumps(_lote(eventos=[_evento(janelas=[_jan(programa="a\\ud800b", titulo="t\\udc00i")])]))
+    corpo = corpo.replace("\\\\ud800", "\\ud800").replace("\\\\udc00", "\\udc00")
+    r = client.post("/api/estacao/uso", content=corpo, headers={"Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    j = recebidos[0][0].janelas[0]
+    assert (j["programa"], j["titulo"]) == ("a�b", "t�i")
+    j["programa"].encode("utf-8")
 
 
 def test_conferencia_grava_mapa_com_remocao_desligada(client: TestClient, banco: _Fake, monkeypatch) -> None:
