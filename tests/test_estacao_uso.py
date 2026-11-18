@@ -148,6 +148,53 @@ def test_sem_chave_nao_envia(ambiente, monkeypatch) -> None:
     assert http.posts == [] and _marcador(ambiente) == 0
 
 
+def _anotar(ambiente, programa="chrome", titulo="eCAC", segundos_antes=5, sid="S-1-5-21-1"):
+    from datetime import datetime, timedelta, timezone
+
+    from estacao import janelas
+
+    evento = datetime(2026, 11, 15, 10, 0, 0, tzinfo=timezone.utc)
+    janelas.anotar(str(ambiente), sid, evento - timedelta(seconds=segundos_antes), programa, titulo)
+
+
+def test_evento_leva_as_janelas_do_sid(ambiente) -> None:
+    _anotar(ambiente)
+    _anotar(ambiente, "outro", "nao e dele", sid="S-1-5-21-2")
+    http = _Http()
+    uso.coletar(http, _Executor(maior=50, eventos=_eventos(1)))
+    lote = http.posts[0][1]["eventos"]
+    assert lote[0]["janelas"] == [{"quando": "2026-11-15T09:59:55+00:00", "programa": "chrome", "titulo": "eCAC"}]
+
+
+def test_sem_registro_vai_lista_vazia_e_nao_quebra(ambiente) -> None:
+    http = _Http()
+    assert uso.coletar(http, _Executor(maior=50, eventos=_eventos(2))) == 2
+    assert [e["janelas"] for e in http.posts[0][1]["eventos"]] == [[], []]
+    assert _marcador(ambiente) == 2
+
+
+def test_erro_lendo_janelas_nao_impede_a_coleta(ambiente, monkeypatch) -> None:
+    from estacao import janelas
+
+    def quebrar(*_a):
+        raise OSError("disco")
+
+    monkeypatch.setattr(janelas, "ler", quebrar)
+    http = _Http()
+    assert uso.coletar(http, _Executor(maior=50, eventos=_eventos(1))) == 1
+    assert http.posts[0][1]["eventos"][0]["janelas"] == []
+    assert _marcador(ambiente) == 1
+
+
+def test_surrogate_solto_no_titulo_vira_substituto(ambiente) -> None:
+    _anotar(ambiente, "chr\ud800ome", "eC\ud800AC")
+    http = _Http()
+    uso.coletar(http, _Executor(maior=50, eventos=_eventos(1)))
+    j = http.posts[0][1]["eventos"][0]["janelas"][0]
+    assert j["programa"] == "chr�ome" and j["titulo"] == "eC�AC"
+    json.dumps(j, ensure_ascii=False).encode("utf-8")  # o portal recebe UTF-8 valido
+
+
 # ── rodar_tarefa ─────────────────────────────────────────────────────────
 
 
