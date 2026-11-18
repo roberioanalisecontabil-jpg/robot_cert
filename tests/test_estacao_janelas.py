@@ -53,6 +53,12 @@ def test_titulo_hostil_fica_numa_linha_e_cortado(tmp_path):
         assert len(f.read().splitlines()) == 1
 
 
+def test_titulo_com_surrogate_solto_nao_levanta(tmp_path):
+    janelas.anotar(str(tmp_path), SID, T, "chrome", "abc\ud800def")
+    [l] = janelas.ler(str(tmp_path), SID, T)
+    assert l["j"] == "abc\ud800def"
+
+
 def test_linha_corrompida_e_ignorada(tmp_path):
     janelas.anotar(str(tmp_path), SID, T, "chrome", "Inteira")
     with open(janelas.arquivo(str(tmp_path), SID, T), "a", encoding="utf-8") as f:

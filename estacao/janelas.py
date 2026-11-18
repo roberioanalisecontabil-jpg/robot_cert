@@ -36,7 +36,8 @@ def anotar(raiz: str, sid: str, quando: datetime, programa: str, titulo: str) ->
     os.makedirs(os.path.dirname(caminho), exist_ok=True)
     linha = {"t": _utc(quando).isoformat(), "p": programa[:MAX_PROGRAMA], "j": titulo[:MAX_TITULO]}
     with open(caminho, "a", encoding="utf-8") as f:
-        f.write(json.dumps(linha, ensure_ascii=False) + "\n")
+        # ASCII (ensure_ascii padrão): surrogate solto no título não derruba a gravação em UTF-8
+        f.write(json.dumps(linha) + "\n")
 
 
 def podar(raiz: str, agora: datetime) -> int:
