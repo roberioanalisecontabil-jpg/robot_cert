@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Annotated, List, Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints
+from pydantic import BeforeValidator, BaseModel, Field, StringConstraints
 
 from app import computadores, uso
 from app.rotas.atualizacao import _limitar
@@ -28,14 +28,18 @@ _FORA = "Não foi possível gravar agora."
 _ultima_limpeza = 0.0
 
 
-def _sem_nul(v: str) -> str:
-    return v.replace("\x00", "")  # Postgres `text` recusa NUL
+def _sem_nul(v):
+    # Postgres `text` recusa NUL e psycopg não codifica surrogate solto. Roda ANTES da
+    # validação: o pydantic recusa o surrogate e a resposta 422 estoura ao ecoá-lo.
+    if not isinstance(v, str):
+        return v
+    return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace").replace("\x00", "")
 
 
 class JanelaDeUso(BaseModel):
     quando: datetime
-    programa: Annotated[str, AfterValidator(_sem_nul)] = Field(max_length=64)
-    titulo: Annotated[str, AfterValidator(_sem_nul)] = Field(max_length=300)
+    programa: Annotated[str, BeforeValidator(_sem_nul)] = Field(max_length=64)
+    titulo: Annotated[str, BeforeValidator(_sem_nul)] = Field(max_length=300)
 
 
 class EventoDeUso(BaseModel):

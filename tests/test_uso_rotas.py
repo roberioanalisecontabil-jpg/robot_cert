@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 import pytest
@@ -99,6 +100,21 @@ def test_janela_perde_o_nul(client: TestClient, banco: _Fake, monkeypatch) -> No
     assert r.status_code == 200, r.text
     j = recebidos[0][0].janelas[0]
     assert (j["programa"], j["titulo"]) == ("ab.exe", "ti")
+
+
+def test_janela_com_surrogate_solto_vira_substituto(client: TestClient, banco: _Fake, monkeypatch) -> None:
+    # psycopg nao codifica surrogate solto: sem troca, o lote inteiro daria 503 para sempre.
+    _fixar(banco, PC_SOL)
+    recebidos = []
+    monkeypatch.setattr(uso, "registrar_usos", lambda mid, ev, aud, ag: recebidos.append(ev) or 1)
+    monkeypatch.setattr(uso, "limpar", lambda agora: None)
+    corpo = json.dumps(_lote(eventos=[_evento(janelas=[_jan(programa="a\\ud800b", titulo="t\\udc00i")])]))
+    corpo = corpo.replace("\\\\ud800", "\\ud800").replace("\\\\udc00", "\\udc00")
+    r = client.post("/api/estacao/uso", content=corpo, headers={"Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    j = recebidos[0][0].janelas[0]
+    assert (j["programa"], j["titulo"]) == ("a�b", "t�i")
+    j["programa"].encode("utf-8")
 
 
 def test_conferencia_grava_mapa_com_remocao_desligada(client: TestClient, banco: _Fake, monkeypatch) -> None:
