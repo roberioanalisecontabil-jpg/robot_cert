@@ -80,6 +80,42 @@ def test_guarda_de_5_anos(banco):
     assert _usos(banco) == []
 
 
+def _jan(minuto: int, programa: str = "chrome.exe", titulo: str = "Portal") -> dict:
+    return {"quando": datetime(2026, 11, 15, 16, minuto, tzinfo=UTC), "programa": programa, "titulo": titulo}
+
+
+def _ev_j(rid: int, janelas: list, minuto: int = 6) -> Evento:
+    e = _ev(rid, minuto)
+    e.janelas = janelas
+    return e
+
+
+def _janelas(banco: _Fake) -> list:
+    return banco.tabelas["uso_janela"]
+
+
+def test_janelas_gravadas_com_a_ordem(banco):
+    uso.registrar_usos(M, [_ev_j(10, [_jan(5, "a.exe"), _jan(4, "b.exe")])], "ligada", AGORA)
+    js = sorted(_janelas(banco), key=lambda j: j["ordem"])
+    assert [(j["ordem"], j["programa"], j["record_id"]) for j in js] == [(0, "a.exe", 10), (1, "b.exe", 10)]
+    assert all(j["uso_id"] == _usos(banco)[0]["id"] and j["machine_id"] == M for j in js)
+
+
+def test_reenvio_nao_duplica_janelas(banco):
+    lote = [_ev_j(10, [_jan(5), _jan(4)])]
+    uso.registrar_usos(M, lote, "ligada", AGORA)
+    uso.registrar_usos(M, lote, "ligada", AGORA)
+    assert len(_janelas(banco)) == 2 and _usos(banco)[0]["quantidade"] == 1
+
+
+def test_janela_de_evento_ja_contado_e_gravada(banco):
+    uso.registrar_usos(M, [_ev(10)], "ligada", AGORA)
+    assert "uso_janela" not in banco.tabelas or _janelas(banco) == []
+    uso.registrar_usos(M, [_ev_j(10, [_jan(5)])], "ligada", AGORA)
+    assert _usos(banco)[0]["quantidade"] == 1
+    assert len(_janelas(banco)) == 1 and _janelas(banco)[0]["uso_id"] == _usos(banco)[0]["id"]
+
+
 def test_coleta_grava_auditoria(banco):
     uso.registrar_usos(M, [_ev(10)], "desligada", AGORA)
     (coleta,) = banco.tabelas["uso_coleta"]
