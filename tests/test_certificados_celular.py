@@ -37,3 +37,8 @@ def test_cabecalho_do_voltar_some_no_desktop_nas_duas_abas():
 
 def test_rotulo_oculto_da_tabela_nao_alarga_a_pagina():
     assert "#certDetalhe .ag-table-scroll { position: relative; }" in CSS
+
+
+def test_detalhe_do_certificado_tem_margem_interna():
+    assert "#certDetalhe:not([hidden]) { padding: var(--space-5) var(--space-6);" in CSS
+    assert ".cg-cart-corpo, #certDetalhe { padding-inline: var(--space-4); }" in CSS

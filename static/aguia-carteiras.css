@@ -260,8 +260,10 @@
 /* O rótulo oculto "Ações" (absolute) escapava da rolagem da tabela e alargava
    a página no celular em ~100px. */
 #certDetalhe .ag-table-scroll { position: relative; }
+/* Sem isto o título e a tabela do certificado encostavam na borda do cartão. */
+#certDetalhe:not([hidden]) { padding: var(--space-5) var(--space-6); display: grid; gap: var(--space-4); }
 @media (max-width: 640px) {
-    .cg-cart-cab, .cg-cart-op, .cg-cart-corpo { padding-inline: var(--space-4); }
+    .cg-cart-cab, .cg-cart-op, .cg-cart-corpo, #certDetalhe { padding-inline: var(--space-4); }
     .cg-acess { padding-inline: var(--space-4); }
     .cg-acess__linha { flex-wrap: wrap; }
     .cg-cart-busca { padding-inline: var(--space-4); }
