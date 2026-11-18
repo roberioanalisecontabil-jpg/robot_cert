@@ -9,6 +9,12 @@ import pytest
 
 from estacao import atualizador, chave_maquina, tarefa, uso
 
+
+@pytest.fixture(autouse=True)
+def _sem_schtasks_de_verdade(monkeypatch):
+    """rodar_tarefa religa o vigia: nunca rodar o schtasks real nos testes."""
+    monkeypatch.setattr(tarefa, "religar_vigia", lambda executar=None: 0)
+
 CSV_PT = (
     '"Nome do Computador","Destino da Política","Subcategoria","GUID de Subcategoria",'
     '"Configuração de Inclusão","Configuração de Exclusão"\n'

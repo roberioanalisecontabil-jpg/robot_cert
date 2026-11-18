@@ -28,6 +28,17 @@ CONTEUDO = b"MZ-certguard-1.1.1" * 40
 SHA = hashlib.sha256(CONTEUDO).hexdigest()
 
 
+from estacao import tarefa as _tarefa
+
+_RELIGAR_REAL = _tarefa.religar_vigia
+
+
+@pytest.fixture(autouse=True)
+def _sem_schtasks_de_verdade(monkeypatch):
+    """rodar_tarefa religa o vigia: nunca rodar o schtasks real nos testes."""
+    monkeypatch.setattr(_tarefa, "religar_vigia", lambda executar=None: 0)
+
+
 @pytest.fixture
 def publicada(tmp_path, monkeypatch) -> Path:
     monkeypatch.setattr("app.config.ATUALIZACOES_DIR", tmp_path, raising=False)
@@ -253,13 +264,13 @@ def test_religar_vigia_roda_o_schtasks_e_so_avisa_se_falha() -> None:
     from estacao import tarefa
 
     comandos = []
-    assert tarefa.religar_vigia(executar=lambda c: comandos.append(c) or 0) == 0
+    assert _RELIGAR_REAL(executar=lambda c: comandos.append(c) or 0) == 0
     assert comandos == [["schtasks", "/Run", "/TN", tarefa.NOME_VIGIA]]
 
     def estoura(c):
         raise OSError("sem schtasks")
 
-    assert tarefa.religar_vigia(executar=estoura) == 1  # não propaga
+    assert _RELIGAR_REAL(executar=estoura) == 1  # não propaga
 
 
 def test_instalador_liga_e_desliga_o_vigia() -> None:
