@@ -87,6 +87,8 @@ CERT_ROBOT_API_KEY=sua_chave_secreta_aqui
 ## 🔌 PARTE 2 — Firewall: só as portas do proxy TLS
 
 > **Desenho (auditoria de 24/09/2026, achados #37 e #38):** a aplicação (uvicorn) faz bind **só em `127.0.0.1:8020`**. Quem atende a rede é o **Caddy** (`deploy/Caddyfile`), com TLS (Let's Encrypt por DNS na Cloudflare) e redirecionamento automático de 80 para 443. O firewall abre **80 e 443**; a **8020 nunca** é aberta para fora — HTTP puro na rede entregaria JWT, X-API-Key e o cofre em claro.
+>
+> **Situação em 20/11/2026:** o Caddy escuta também na **8191**, a porta por onde a Cloudflare chega (ver Parte 3). E o **Firewall do Windows está desligado** no ANALISESRV nos três perfis (Domínio, Privado e Público). As regras desta parte existem (`AnaliseCertiDigital-Proxy-HTTPS`, e `AnaliseCertiDigital-Proxy-2053`, que sobrou da porta antiga), mas não têm efeito. Hoje a proteção vem de a aplicação ouvir só em `127.0.0.1`, do pfSense da nuvem e dos filtros do Caddy. Se o firewall for religado, crie antes uma regra para a 8191, ou os sites publicados saem do ar.
 
 ### 2.1 Via script (recomendado)
 
@@ -122,7 +124,9 @@ netstat -ano | findstr :8020
 
 ## 🌐 PARTE 3 — Acesso de fora
 
-Os portais são atendidos **só na rede interna e pela VPN** (os nomes `certificado.analisegroup.cnt.br` e `hardlyze.analisegroup.cnt.br` resolvem para `10.200.0.4`). Não há encaminhamento de porta no roteador, e não deve haver um para a 8020 em hipótese nenhuma. Se um dia for preciso expor à internet, o que se encaminha é a **443 para o Caddy**, e o Caddyfile passa a exigir revisão de cabeçalhos e limites — não a aplicação.
+Desde 14/10/2026 o `certificado.analisegroup.cnt.br` está **na internet, pela Cloudflare** (proxy ligado, nuvem laranja). O `hardlyze.analisegroup.cnt.br` foi depois pelo mesmo caminho. A Cloudflare chega pela **8191** do IP público 147.15.37.38, que o pfSense da nuvem encaminha para a 8191 do Caddy. No Caddyfile, esses sites usam `import so_cloudflare`: só atendem a Cloudflare ou a rede interna, e quem for direto ao IP público tem a conexão encerrada. O roteiro completo e a situação conferida em 20/11/2026 estão em [`publicacao-na-web.md`](publicacao-na-web.md).
+
+O destino de qualquer encaminhamento é sempre o **Caddy**, nunca a 8020: pular o Caddy pularia o TLS, o filtro de origem, o IP real e o teto de corpo. Para publicar outro nome, troque antes o bloco dele no Caddyfile para `so_cloudflare`, e só depois ligue a nuvem laranja.
 
 ### Descobrir o IP local do servidor:
 ```powershell
@@ -222,7 +226,7 @@ Get-Service AnaliseCertiDigital     # status via PowerShell nativo
 
 ## 🔒 PARTE 6 — HTTPS com Caddy (obrigatório)
 
-O portal emite `Strict-Transport-Security`, então **precisa** estar atrás de TLS: quem faz a terminação e o redirecionamento HTTP→HTTPS é o Caddy. A configuração de referência está versionada em **`deploy/Caddyfile`** (reverse proxy para `127.0.0.1:8020` e `127.0.0.1:8021`, certificados Let's Encrypt por desafio DNS na Cloudflare). O binário e o instalador (`caddy.exe` com o plugin Cloudflare, `instalar-caddy.ps1`) ficam na pasta `Apps` do servidor, fora do repositório.
+O portal emite `Strict-Transport-Security`, então **precisa** estar atrás de TLS: quem faz a terminação e o redirecionamento HTTP→HTTPS é o Caddy. A configuração de referência está versionada em **`deploy/Caddyfile`** (reverse proxy para `127.0.0.1:8020`, `127.0.0.1:8021` e os outros portais do servidor, certificados Let's Encrypt por desafio DNS na Cloudflare). O binário e o instalador (`caddy.exe` com o plugin Cloudflare, `instalar-caddy.ps1`) ficam na pasta `Apps` do servidor, fora do repositório.
 
 ### 6.1 Instalar
 
@@ -251,7 +255,7 @@ Cabeçalhos: o Caddy acrescenta `X-Forwarded-For` e `X-Forwarded-Proto`; o porta
 [ ] Python instalado e no PATH
 [ ] .venv criado e dependências instaladas
 [ ] .env configurado com todas as chaves
-[ ] Firewall: 80 e 443 abertas (scripts/setup_porta_servidor.ps1); 8020 fechada para fora
+[ ] Firewall: 80, 443 e 8191 abertas (scripts/setup_porta_servidor.ps1 cobre só 80/443); 8020 fechada para fora
 [ ] netstat mostra a aplicação só em 127.0.0.1:8020
 [ ] Servidor inicia sem erros (testar manualmente primeiro)
 [ ] Caddy instalado; http:// redireciona (308) para https:// e o certificado é válido
