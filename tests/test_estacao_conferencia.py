@@ -290,7 +290,7 @@ def test_falha_nos_conteineres_nao_impede_conferencia(estacao: list, repo: dict)
 def test_versao_1_5_0() -> None:
     from estacao import VERSAO, VERSAO_REPORTADA
 
-    assert VERSAO == "1.5.0" and VERSAO_REPORTADA == "certguard-1.5.0"
+    assert VERSAO == "1.5.1" and VERSAO_REPORTADA == "certguard-1.5.1"
 
 
 # ── Laço da bandeja ──────────────────────────────────────────────────────

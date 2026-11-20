@@ -319,7 +319,7 @@ def test_unica_trava_arquivo_na_pasta_trancada(tmp_path, monkeypatch) -> None:
 def test_versao_1_5_0() -> None:
     from estacao import VERSAO, VERSAO_REPORTADA
 
-    assert VERSAO == "1.5.0" and VERSAO_REPORTADA == "certguard-1.5.0"
+    assert VERSAO == "1.5.1" and VERSAO_REPORTADA == "certguard-1.5.1"
 
 
 def test_build_leva_os_modulos_da_atualizacao() -> None:
