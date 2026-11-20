@@ -8,6 +8,18 @@ Decidido em 14/10/2026:
 
 Acrescentado em 15/10/2026: entrada pela **porta 2053** do IP público, com o firewall aceitando só os IPs da Cloudflare, e o portal **só para acessos do Brasil**, por uma regra na Cloudflare.
 
+## Situação em 20/11/2026
+
+Conferido no servidor e de um PC da rede. O que mudou desde o roteiro original:
+
+- **`hardlyze.` também está na internet**, pela Cloudflare: o DNS aponta para IPs dela (nuvem laranja), o bloco do Caddy usa `import so_cloudflare`, e o log `acesso-8021.log` mostra os agentes Hardlyze das estações chegando de fora. Já estava assim antes de 04/11 (os planos do INVENT dessa data citam a Cloudflare na frente do Hardlyze). `eficacia.` foi para a internet em 16/10.
+- **Outros sites do ANALISESRV passaram pelo Caddy**, com `so_cloudflare`: `intranet.` (a intranet agora roda na 8192, atrás do Caddy), `jornada.`, `crm.` e `eventos.`. Só rede + VPN, com `so_rede_interna`: `diario.`, `zabbix.` e o aviso da porta 94.
+- **A porta de entrada da Cloudflare é a 8191**, não mais a 2053: todos os sites publicados escutam em `nome:8191`, e o Caddy não escuta na 2053. A regra de firewall `AnaliseCertiDigital-Proxy-2053` ainda existe no Windows, sem uso.
+- **Testes de 20/11:** `certificado.` responde pela Cloudflare (`cf-ray` de GRU); login falso dá 401 em 0,8 s; o IP público 147.15.37.38 não conecta direto nem na 443 nem na 2053.
+- **`deploy/Caddyfile` voltou a ser a cópia do `C:\Apps\Caddyfile` de produção.** Quem mudar um, atualize o outro.
+
+As seções abaixo são o roteiro de 14 e 15/10, mantido como histórico. Onde ele diz 2053 ou "hardlyze só por dentro", vale o que está acima.
+
 O robô do próprio servidor (envio de PFX, fila do agente) acessa o portal pelo nome `certificado.analisegroup.cnt.br`. Para ele não depender da internet nem da Cloudflare, o `hosts` do ANALISESRV aponta esse nome para `10.200.0.4` (ver o passo 4).
 
 ## Onde o servidor está
@@ -23,7 +35,7 @@ O ANALISESRV (10.200.0.4) é uma máquina virtual na **Oracle Cloud**, num ambie
 
 1. **IP verdadeiro.** Confia no `CF-Connecting-IP` só quando quem conecta é a Cloudflare (`trusted_proxies`), e entrega ao portal um único `X-Forwarded-For` com o IP real. Sem isso, os limites por endereço (login, código, bandeja) seriam contados por IP da Cloudflare e compartilhados por todo mundo. Quando quem não é a Cloudflare forja o cabeçalho, ele é ignorado.
 2. **`certificado.` só pela Cloudflare ou pela rede interna.** Quem for direto ao IP público tem a conexão encerrada sem resposta. A rede interna continua aceita: a troca do DNS não derruba ninguém no meio, e o portal segue alcançável por dentro se a internet cair.
-3. **`hardlyze.` e `eficacia.` só pela rede interna e pela VPN.** A porta é uma só para os três sites; sem essa recusa, bastaria pedir o nome certo ao IP público.
+3. **Sites que não estão na internet só pela rede interna e pela VPN** (`so_rede_interna`; hoje `diario.` e `zabbix.`). A porta é uma só para todos os sites; sem essa recusa, bastaria pedir o nome certo ao IP público. Em 14/10 eram `hardlyze.` e `eficacia.`; os dois passaram depois para `so_cloudflare`.
 
 Testado em 14/10 com Caddy 2.11.7 e uma cópia local do arquivo:
 - rede interna: passa;
@@ -98,12 +110,12 @@ Neste ponto nada mudou para ninguém: o DNS ainda aponta para 10.200.0.4.
 New-NetFirewallRule -DisplayName "AnaliseCertiDigital-Proxy-2053" -Direction Inbound -Protocol TCP -LocalPort 2053 -Action Allow -Profile Any
 ```
 
-Para conferir de uma máquina da rede: `curl.exe -I --resolve certificado.analisegroup.cnt.br:2053:10.200.0.4 https://certificado.analisegroup.cnt.br:2053/login` responde 200.
+Para conferir de uma máquina da rede: `curl.exe -I --resolve certificado.analisegroup.cnt.br:8191:10.200.0.4 https://certificado.analisegroup.cnt.br:8191/login` responde 200 (era a 2053 até o início de 11/2026).
 
 ### 4. Cloudflare: DNS
 
 - **DNS › Records › `certificado`:** trocar o conteúdo de `10.200.0.4` para **147.15.37.38** e ligar o **proxy (nuvem laranja)**.
-- **Não mexer** em `hardlyze` e `eficacia`: continuam em 10.200.0.4, nuvem cinza.
+- Em 14/10: **não mexer** em `hardlyze` e `eficacia`, que ficaram em 10.200.0.4, nuvem cinza. Os dois foram depois para a nuvem laranja (ver "Situação em 20/11/2026"). Antes de passar qualquer nome para a nuvem laranja, troque o bloco dele no Caddyfile para `so_cloudflare`.
 - **Antes, no ANALISESRV** (como administrador): `Add-Content -Path C:\Windows\System32\drivers\etc\hosts -Value "10.200.0.4 certificado.analisegroup.cnt.br"` e `ipconfig /flushdns`. O robô do servidor usa esse nome e segue pela rede interna.
 
 A troca chega em poucos minutos. Algumas máquinas guardam o endereço antigo por um tempo; `ipconfig /flushdns` resolve.
@@ -115,7 +127,7 @@ A troca chega em poucos minutos. Algumas máquinas guardam o endereço antigo po
   - o nome resolve para IPs da Cloudflare;
   - a resposta traz o cabeçalho `cf-ray`;
   - um login falso dá 401 rápido;
-  - o hardlyze continua respondendo só por dentro.
+  - quem ir direto ao IP público (147.15.37.38) não conecta. (Em 14/10 conferia-se também "o hardlyze continua respondendo só por dentro"; deixou de valer quando ele foi para a Cloudflare.)
 - **No log do Caddy** (`C:\Apps\caddy\logs\acesso-8020.log`): numa requisição de fora, `remote_ip` tem de ser um IP da Cloudflare e `client_ip` o IP de quem acessou. Se `remote_ip` for um IP interno, o pfSense está trocando a origem (ver o passo 2).
 - **Brasil:** em **Security › Events**, a regra `certificado-so-brasil` aparece barrando acessos de fora. Ninguém daqui deve aparecer nela.
 - **Intranet e gest:** continuam abrindo como antes.
