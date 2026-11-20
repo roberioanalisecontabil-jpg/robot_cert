@@ -265,15 +265,14 @@ class Bandeja:
                     credencial=conta.ler(),
                 )
 
-            janela_status.abrir_janela(obter_estado=_estado, ao_entrar=self.on_login,
-                                       ao_sair_da_conta=self.on_sair_da_conta)
+            # Os dois falam com o portal: fora da thread do Tk, para a janela não congelar.
+            def _em_thread(f):
+                return lambda: threading.Thread(target=f, daemon=True).start()
+
+            janela_status.abrir_janela(obter_estado=_estado, ao_entrar=_em_thread(self.on_login),
+                                       ao_sair_da_conta=_em_thread(self.on_sair_da_conta))
         except Exception:
             logger.exception("Falha ao abrir a janela de status")
-
-    def on_fechar(self, icon=None, item=None) -> None:
-        self._parar.set()
-        if self.icon:
-            self.icon.stop()
 
     def _conectado(self) -> bool:
         try:
@@ -297,8 +296,10 @@ class Bandeja:
             item("Entrar no portal de certificados…", self.on_login),
             item("Sair da conta de certificados", self.on_sair_da_conta,
                  visible=lambda item: self._conectado()),
-            item("Fechar", self.on_fechar),
         )
+        # 1.5.2: saiu "Fechar", como o "Sair" do Hardlyze 1.3.0. Fechada pelo
+        # Gerenciador de Tarefas, o vigia (SYSTEM) a reabre em até um minuto
+        # (estacao/anotador.py, rodar_vigia).
         from estacao import icone
 
         self.icon = pystray.Icon("certguard_analise", icone.imagem(), NOME, menu)

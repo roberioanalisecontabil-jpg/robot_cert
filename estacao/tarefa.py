@@ -179,20 +179,59 @@ def instalar(caminho: str, raiz: str, anterior: str) -> int:
 
 # ── O passo do instalador ───────────────────────────────────────────────
 
-# Duas tarefas porque o schtasks não põe dois gatilhos numa só sem XML: a da
+# Duas tarefas (os nomes vêm da 1.1.0; o instalador apaga as duas): a da
 # partida espera a rede subir; a de 6 h pega a máquina que nunca desliga.
+# Em XML desde a 1.5.2: pelo `schtasks /SC` elas não iniciavam na bateria, e
+# o notebook fora da tomada nem atualizava nem confirmava a versão nova (a
+# confirmação perdida em 10 min volta a versão anterior).
 TAREFAS = (
-    (NOME_TAREFA, ["/SC", "ONSTART", "/DELAY", "0005:00"]),
-    (NOME_TAREFA + " 6h", ["/SC", "HOURLY", "/MO", "6"]),
+    (NOME_TAREFA, """    <BootTrigger>
+      <Delay>PT5M</Delay>
+      <Enabled>true</Enabled>
+    </BootTrigger>"""),
+    (NOME_TAREFA + " 6h", """    <TimeTrigger>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Repetition>
+        <Interval>PT6H</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <Enabled>true</Enabled>
+    </TimeTrigger>"""),
 )
 
 
-def comandos_das_tarefas(exe: str) -> list[list[str]]:
-    return [
-        ["schtasks", "/Create", "/F", "/TN", nome, *gatilho, "/RU", "SYSTEM", "/RL", "HIGHEST",
-         "/TR", f'"{exe}" --atualizacao']
-        for nome, gatilho in TAREFAS
-    ]
+def xml_da_tarefa(exe: str, gatilho: str) -> str:
+    """Uma tarefa `--atualizacao` (SYSTEM) que roda também na bateria."""
+    from xml.sax.saxutils import escape
+
+    return f"""<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+{gatilho}
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Hidden>true</Hidden>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{escape(exe)}</Command>
+      <Arguments>--atualizacao</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"""
 
 
 NOME_VIGIA = NOME_TAREFA.replace("atualizacao", "vigia")
@@ -279,17 +318,20 @@ def preparar_atualizacao(instalador: str, exe: str, executar=None) -> int:
     else:
         logger.warning("Instalador %s não encontrado; sem cópia para voltar atrás.", instalador)
         codigo = 1
-    comandos = comandos_das_tarefas(exe)
-    try:
-        # UTF-16 com BOM: o que o `schtasks /XML` espera. A pasta já está trancada.
-        os.makedirs(p.raiz, exist_ok=True)
-        arquivo = os.path.join(p.raiz, "vigia.xml")
-        with open(arquivo, "w", encoding="utf-16", newline="") as f:
-            f.write(xml_do_vigia(exe))
-        comandos.append(["schtasks", "/Create", "/F", "/TN", NOME_VIGIA, "/XML", arquivo])
-    except OSError:
-        logger.exception("Não foi possível gravar o XML da tarefa %s.", NOME_VIGIA)
-        codigo = 1
+    comandos = []
+    tarefas = [(nome, f"tarefa{i}.xml", xml_da_tarefa(exe, gatilho)) for i, (nome, gatilho) in enumerate(TAREFAS)]
+    tarefas.append((NOME_VIGIA, "vigia.xml", xml_do_vigia(exe)))
+    for nome, arquivo, xml in tarefas:
+        try:
+            # UTF-16 com BOM: o que o `schtasks /XML` espera. A pasta já está trancada.
+            os.makedirs(p.raiz, exist_ok=True)
+            caminho = os.path.join(p.raiz, arquivo)
+            with open(caminho, "w", encoding="utf-16", newline="") as f:
+                f.write(xml)
+            comandos.append(["schtasks", "/Create", "/F", "/TN", nome, "/XML", caminho])
+        except OSError:
+            logger.exception("Não foi possível gravar o XML da tarefa %s.", nome)
+            codigo = 1
     for comando in comandos:
         if executar(comando) != 0:
             logger.error("Não foi possível criar a tarefa %s.", comando[4])
@@ -316,7 +358,9 @@ def rodar_tarefa() -> int:
             try:
                 from estacao import uso
 
-                logger.info("Uso dos certificados: %d evento(s) enviado(s).", uso.coletar(http))
+                enviados = uso.coletar_travado(http)
+                if enviados is not None:
+                    logger.info("Uso dos certificados: %d evento(s) enviado(s).", enviados)
             except Exception:
                 logger.exception("Coleta do uso dos certificados falhou.")
         try:

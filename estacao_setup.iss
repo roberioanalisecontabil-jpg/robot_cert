@@ -9,7 +9,7 @@
 ; nome vira lixo na tela. Mantenha o BOM ao editar.
 #define MyAppName "CertGuard Análise"
 #define MyInternalName "Certguard Analise"
-#define MyAppVersion "1.5.1"
+#define MyAppVersion "1.5.2"
 #define MyAppPublisher "Analise Group"
 #define MyAppURL "https://certificado.analisegroup.cnt.br/"
 #define MyAppExeName "certguard_analise.exe"
@@ -74,7 +74,12 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
 begin
+  // 1.5.2: o vigia reabre a bandeja; parado antes, para nao subir o exe
+  // velho no meio da troca. O ssPostInstall o sobe de novo.
+  Exec(ExpandConstant('{sys}\schtasks.exe'), '/End /TN "{#NomeVigia}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   FecharBandejas;
   Result := '';
 end;

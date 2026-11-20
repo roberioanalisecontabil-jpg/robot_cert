@@ -6,8 +6,8 @@ e depois só quando o portal derruba a sessão. O que ela produz não é uma
 sessão: é o registro do dispositivo, guardado cifrado por `estacao.conta`. A
 senha digitada aqui morre com a janela.
 
-Roda em thread própria porque o Tk quer o seu próprio laço de eventos e não
-divide thread com o pystray. A parte que DECIDE fica separada da que desenha —
+Roda na thread do Tk da bandeja (estacao/ui.py), porque o Tk quer o seu
+próprio laço de eventos e não divide thread com o pystray. A parte que DECIDE fica separada da que desenha —
 `validar_campos` e `mensagem_de_falha` são testáveis sem Tk, sem Windows e sem
 rede.
 """
@@ -86,7 +86,7 @@ def abrir_janela(
     ao_microsoft: Callable[[], Any] | None = None,
 ) -> None:
     """
-    Abre o login numa thread própria. Chamada repetida enquanto aberta não faz nada.
+    Abre o login na thread do Tk (estacao/ui.py). Chamada repetida enquanto aberta não faz nada.
 
     `ao_registrar(email, senha)` é injetada pelo agente — é ela que fala
     com o portal. Manter a chamada fora daqui é o que permite testar a janela
@@ -98,28 +98,27 @@ def abrir_janela(
     if _janela_aberta.is_set():
         return
     _janela_aberta.set()
-    threading.Thread(
-        target=_rodar_janela,
-        args=(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft),
-        name="CertguardJanelaLogin",
-        daemon=True,
-    ).start()
+    from estacao import ui
+
+    def _montar(mestre) -> None:
+        try:
+            _rodar_janela(mestre, ao_registrar, portal, machine_id, ao_concluir, ao_microsoft)
+        except Exception:
+            _janela_aberta.clear()
+            raise
+
+    ui.executar(_montar)
 
 
 _janela_aberta = threading.Event()
 
 
-def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=None) -> None:
+def _rodar_janela(mestre, ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=None) -> None:
     import tkinter as tk
 
-    try:
-        raiz = tk.Tk()
-    except Exception:
-        # Sessão sem desktop (serviço, ou logon remoto sem interface). Não é
-        # erro: o serviço não faz login, quem faz é a bandeja.
-        _janela_aberta.clear()
-        LOGGER.warning("Sem interface gráfica disponível para a janela de login.")
-        return
+    # Toplevel do Tk único da bandeja (estacao/ui.py): um Tk por janela, em
+    # threads diferentes, derrubava o processo quando o lixo era coletado.
+    raiz = tk.Toplevel(mestre)
 
     raiz.title(f"{NOME} — Entrar")
     from estacao import icone
@@ -299,9 +298,6 @@ def _rodar_janela(ao_registrar, portal, machine_id, ao_concluir, ao_microsoft=No
         botao_ms.configure(command=_microsoft)
     raiz.bind("<Return>", _enviar)
     raiz.protocol("WM_DELETE_WINDOW", _fechar)
+    raiz.lift()
+    raiz.focus_force()
     campo_email.focus_set()
-
-    try:
-        raiz.mainloop()
-    finally:
-        _janela_aberta.clear()

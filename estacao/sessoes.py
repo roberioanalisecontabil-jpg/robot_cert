@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import ntpath
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,50 @@ def reabrir_bandejas(caminho_exe: str) -> int:
         if s.get("State") != win32ts.WTSActive:
             continue
         if _abrir_na_sessao(s["SessionId"], caminho_exe):
+            abertas += 1
+    return abertas
+
+
+SYSTEM = "S-1-5-18"
+
+
+def sessoes_sem_bandeja(ativas: list[int], processos: list[tuple[int, str, str]],
+                        nome_exe: str) -> list[int]:
+    """Das sessões ativas, as que não têm a bandeja. `processos` são trios
+    (sessão, nome do executável, SID do dono). O anotador é o mesmo exe, mas
+    roda como SYSTEM na sessão da pessoa: não conta como bandeja."""
+    com_bandeja = {s for s, nome, sid in processos
+                   if nome.lower() == nome_exe.lower() and sid != SYSTEM}
+    return [s for s in ativas if s not in com_bandeja]
+
+
+def garantir_bandejas(caminho_exe: str) -> int:
+    """Reabre a bandeja só onde ela NÃO está (1.5.2: a bandeja não tem mais
+    "Fechar"; quem a fecha pelo Gerenciador de Tarefas a vê voltar). Roda no
+    vigia, como SYSTEM. Devolve quantas abriu."""
+    try:
+        import win32security
+        import win32ts
+    except ImportError:
+        return 0
+    servidor = win32ts.WTS_CURRENT_SERVER_HANDLE
+    try:
+        ativas = [s["SessionId"] for s in win32ts.WTSEnumerateSessions(servidor)
+                  if s.get("State") == win32ts.WTSActive]
+        processos = []
+        for sessao, _pid, nome, sid in win32ts.WTSEnumerateProcesses(servidor):
+            try:
+                texto = win32security.ConvertSidToStringSid(sid) if sid else ""
+            except Exception:
+                texto = ""
+            processos.append((sessao, nome, texto))
+    except Exception:
+        logger.debug("Não foi possível listar sessões/processos.", exc_info=True)
+        return 0
+    abertas = 0
+    for sessao in sessoes_sem_bandeja(ativas, processos, ntpath.basename(caminho_exe)):
+        if _abrir_na_sessao(sessao, caminho_exe):
+            logger.info("Bandeja reaberta na sessão %s.", sessao)
             abertas += 1
     return abertas
 

@@ -162,28 +162,27 @@ def abrir_janela(
     ao_entrar: Callable[[], None] | None = None,
     ao_sair_da_conta: Callable[[], None] | None = None,
 ) -> None:
-    """Abre numa thread propria; chamada repetida enquanto aberta nao faz nada."""
+    """Abre na thread do Tk (estacao/ui.py); chamada repetida enquanto aberta nao faz nada."""
     if _aberta.is_set():
         return
     _aberta.set()
-    threading.Thread(
-        target=_rodar,
-        args=(obter_estado, ao_entrar, ao_sair_da_conta),
-        name="CertguardJanelaStatus",
-        daemon=True,
-    ).start()
+    from estacao import ui
+
+    def _montar(mestre) -> None:
+        try:
+            _rodar(mestre, obter_estado, ao_entrar, ao_sair_da_conta)
+        except Exception:
+            _aberta.clear()
+            raise
+
+    ui.executar(_montar)
 
 
-def _rodar(obter_estado, ao_entrar, ao_sair_da_conta) -> None:
+def _rodar(mestre, obter_estado, ao_entrar, ao_sair_da_conta) -> None:
     import tkinter as tk
     from tkinter import scrolledtext
 
-    try:
-        raiz = tk.Tk()
-    except Exception:
-        _aberta.clear()
-        LOGGER.warning("Sem interface grafica para a janela de status.")
-        return
+    raiz = tk.Toplevel(mestre)
 
     raiz.title(f"{NOME} — Status")
     from estacao import icone
@@ -268,19 +267,24 @@ def _rodar(obter_estado, ao_entrar, ao_sair_da_conta) -> None:
 
     def _atualizar() -> None:
         try:
+            if not raiz.winfo_exists():
+                return  # janela fechada: o after para aqui
+        except Exception:
+            return
+        try:
             _pintar(obter_estado())
         except Exception:
             LOGGER.exception("Falha ao atualizar a janela de status")
         # 3s: rapido o bastante para ver a instalacao acontecer, devagar o
         # bastante para nao reler 300 KB sem parar.
-        raiz.after(3000, _atualizar)
+        # Na raiz que nunca morre: o destroy da janela apagaria o comando
+        # deste after, e o Tcl reclamaria de comando inexistente.
+        mestre.after(3000, _atualizar)
 
     raiz.protocol("WM_DELETE_WINDOW", lambda: _fechar(raiz))
     _atualizar()
-    try:
-        raiz.mainloop()
-    finally:
-        _aberta.clear()
+    raiz.lift()
+    raiz.focus_force()
 
 
 def _fechar(raiz) -> None:
