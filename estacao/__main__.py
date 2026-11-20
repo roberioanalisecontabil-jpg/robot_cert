@@ -2,7 +2,8 @@
 
   (sem argumento)    a bandeja da pessoa
   --preparar-chave   chamado pelo instalador, como administrador: gera a
-                     chave da máquina, se ainda não houver (chave_maquina)
+                     chave da máquina, se ainda não houver (chave_maquina),
+                     e fixa o machine_id dela (identidade, 1.5.3)
   --preparar-atualizacao <instalador>
                      também do instalador: tranca a pasta de atualização,
                      guarda o instalador para voltar atrás e cria as tarefas
@@ -35,6 +36,15 @@ def _preparar_chave() -> int:
         logging.exception("Não foi possível preparar a chave da máquina")
         return 1
     logging.info("Chave da máquina: %s.", resultado)
+    # 1.5.3: o machine_id que o portal conhece para esta chave. Sem rede, a
+    # tarefa SYSTEM fixa depois; nunca impede a instalação.
+    try:
+        from estacao import identidade, tarefa
+
+        with tarefa._cliente() as http:
+            logging.info("machine_id: %s.", identidade.fixar(http))
+    except Exception:
+        logging.exception("Não foi possível fixar o machine_id")
     return 0
 
 

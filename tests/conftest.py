@@ -84,6 +84,14 @@ def login_sem_codigo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.config.LOGIN_EXIGE_CODIGO", False, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def identidade_sem_rede(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`rodar_tarefa` fixa o machine_id (estacao/identidade.py, 1.5.3): sem isto,
+    os testes da tarefa perguntavam ao portal de verdade e gravavam no
+    ProgramData da máquina. Os testes do próprio módulo religam o `fixar` real."""
+    monkeypatch.setattr("estacao.identidade.fixar", lambda http: "aa:bb:cc:dd:ee:ff", raising=False)
+
+
 @pytest.fixture
 def no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """API sem exigir X-API-Key (reproduz ambiente dev sem API_KEY)."""

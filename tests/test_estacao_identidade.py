@@ -27,8 +27,12 @@ class _Http:
         return SimpleNamespace(status_code=self.status, json=lambda: {"machine_id": self.machine_id})
 
 
+_FIXAR = identidade.fixar  # o real: o conftest o troca em todos os outros testes
+
+
 @pytest.fixture(autouse=True)
 def maquina(tmp_path, monkeypatch):
+    monkeypatch.setattr(identidade, "fixar", _FIXAR)
     monkeypatch.setattr(caminhos, "pasta_maquina", lambda: tmp_path)
     monkeypatch.setattr(chave_maquina, "ler", lambda: "k" * 43)
     monkeypatch.setattr(identidade, "mac_calculado", lambda: WSL)

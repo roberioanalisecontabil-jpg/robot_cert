@@ -212,6 +212,10 @@ def rodada(tmp_path, monkeypatch):
     monkeypatch.setattr(tarefa, "_unica", lambda: True)
     monkeypatch.setattr(tarefa, "pastas", lambda: atualizador.Pastas(str(tmp_path)))
     monkeypatch.setattr(tarefa, "e_estacao", lambda: True)
+    from estacao import identidade
+
+    # Nunca a rede nem o ProgramData de verdade nos testes da rodada.
+    monkeypatch.setattr(identidade, "fixar", lambda http: "aa:bb:cc:dd:ee:ff")
     ordem: list[str] = []
     return ordem
 
@@ -299,3 +303,24 @@ def test_vigia_coleta_a_cada_5_min_e_sobrevive_a_falha() -> None:
     with pytest.raises(_Parar):
         anotador.coletar_uso_sempre(dormir=_dormir, coletar=_coletar)
     assert esperas == [anotador.COLETA_PRIMEIRA, 300, 300, 300] and len(chamadas) == 3
+
+
+def test_tarefa_fixa_a_identidade_antes_da_coleta(rodada, monkeypatch) -> None:
+    """1.5.3: a coleta já sai com o machine_id que o portal conhece para a chave."""
+    from estacao import identidade
+
+    monkeypatch.setattr(identidade, "fixar", lambda http: rodada.append("fixar") or "aa:bb:cc:dd:ee:ff")
+    monkeypatch.setattr(uso, "coletar", lambda http, *_a: rodada.append("coletar") or 0)
+    monkeypatch.setattr(tarefa, "buscar_pacote", lambda http: rodada.append("buscar"))
+    assert tarefa.rodar_tarefa() == 0
+    assert rodada == ["fixar", "coletar", "buscar"]
+
+
+def test_tarefa_fixa_a_identidade_tambem_fora_de_estacao(rodada, monkeypatch) -> None:
+    from estacao import identidade
+
+    monkeypatch.setattr(tarefa, "e_estacao", lambda: False)
+    monkeypatch.setattr(identidade, "fixar", lambda http: rodada.append("fixar") or "aa:bb:cc:dd:ee:ff")
+    monkeypatch.setattr(tarefa, "buscar_pacote", lambda http: rodada.append("buscar"))
+    tarefa.rodar_tarefa()
+    assert rodada == ["fixar", "buscar"]
