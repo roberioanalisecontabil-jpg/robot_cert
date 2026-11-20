@@ -1,4 +1,4 @@
-"""Onde o CertGuard Análise guarda as coisas, e onde o Hardlyze guardava.
+"""Onde o CertGuard Análise guarda as coisas.
 
   máquina  %ProgramData%\\CertguardAnalise   chave da máquina (o instalador grava)
   pessoa   %LOCALAPPDATA%\\CertguardAnalise  conta do portal e o log da bandeja
@@ -6,8 +6,8 @@
 LOCALAPPDATA e não APPDATA: perfil móvel sincronizaria a conta entre máquinas,
 e um blob DPAPI de outra máquina não decifra.
 
-As pastas `InventAgent` são as do Hardlyze, lidas uma vez na transição e
-apagadas depois (adendo de 14/10/2026 do ADR 0003).
+As pastas `InventAgent` do Hardlyze não são mais lidas: a migração da chave e
+da conta (adendo de 14/10/2026 ao ADR 0003) foi retirada em 20/11/2026.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import os
 from pathlib import Path
 
 PASTA = "CertguardAnalise"
-PASTA_HARDLYZE = "InventAgent"
 
 
 def _programdata() -> Path:
@@ -38,11 +37,3 @@ def pasta_pessoa() -> Path:
 
 def pasta_de_log() -> Path:
     return pasta_pessoa() / "logs"
-
-
-def chave_hardlyze() -> Path:
-    return _programdata() / PASTA_HARDLYZE / "chave_certificados.dat"
-
-
-def conta_hardlyze() -> Path:
-    return _localappdata() / PASTA_HARDLYZE / "certificados.dat"

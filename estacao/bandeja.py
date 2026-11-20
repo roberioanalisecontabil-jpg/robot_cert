@@ -289,13 +289,6 @@ class Bandeja:
         import pystray
         from pystray import MenuItem as item
 
-        from estacao import conta
-
-        try:
-            conta.migrar_do_hardlyze()
-        except Exception:
-            logger.exception("Falha ao trazer a conta do Hardlyze")
-
         threading.Thread(target=self.laco, daemon=True).start()
 
         menu = (

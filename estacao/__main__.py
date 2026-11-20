@@ -1,8 +1,8 @@
 """Ponto de entrada do `certguard_analise.exe`.
 
   (sem argumento)    a bandeja da pessoa
-  --preparar-chave   chamado pelo instalador, como administrador: copia a
-                     chave da máquina do Hardlyze ou gera uma (chave_maquina)
+  --preparar-chave   chamado pelo instalador, como administrador: gera a
+                     chave da máquina, se ainda não houver (chave_maquina)
   --preparar-atualizacao <instalador>
                      também do instalador: tranca a pasta de atualização,
                      guarda o instalador para voltar atrás e cria as tarefas

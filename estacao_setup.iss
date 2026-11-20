@@ -85,7 +85,7 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
-    // Copia a chave da maquina do Hardlyze (e apaga a original) ou gera uma.
+    // Gera a chave da maquina (reinstalacao mantem a que ja existe).
     if not Exec(ExpandConstant('{app}\{#MyAppExeName}'), '--preparar-chave', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
       SuppressibleMsgBox('Nao foi possivel preparar a chave desta maquina. A bandeja funciona, mas o computador vai pedir autorizacao ao administrador. Detalhes em ' +
         ExpandConstant('{commonappdata}\CertguardAnalise\logs\instalacao.log'), mbError, MB_OK, IDOK);
