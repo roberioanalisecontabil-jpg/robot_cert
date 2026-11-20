@@ -22,6 +22,7 @@ logger = logging.getLogger("app.main")
 router = APIRouter()
 
 _TETO_USO = (30, 600)
+_TETO_IDENTIDADE = (30, 600)
 _LIMPEZA_A_CADA = 24 * 3600
 _FORA = "Não foi possível gravar agora."
 # shortcut: marcador em memória do processo; reiniciar o serviço roda a limpeza de novo, o que é inofensivo.
@@ -49,6 +50,10 @@ class EventoDeUso(BaseModel):
     usuario: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, max_length=256)]
     conteiner: str = Field(min_length=1, max_length=512)
     janelas: List[JanelaDeUso] = Field(default_factory=list, max_length=3)
+
+
+class PedidoDeIdentidade(BaseModel):
+    chave: str = Field(min_length=1, max_length=256)
 
 
 class LoteDeUso(BaseModel):
@@ -91,3 +96,22 @@ def registrar(corpo: LoteDeUso, request: Request) -> dict:
         raise HTTPException(status_code=503, detail=_FORA) from None
     _limpar_se_for_hora(agora)
     return {"ok": True, "gravadas": gravadas}
+
+
+@router.post("/api/estacao/identidade")
+def identidade(corpo: PedidoDeIdentidade, request: Request) -> dict:
+    """De quem é esta chave: a estação fixa o `machine_id` que o portal conhece
+    para ela, e um adaptador de rede novo não a transforma em outra máquina.
+    Quem não tem a chave não descobre nada."""
+    _limitar(request, "identidade", _TETO_IDENTIDADE)
+    h = computadores.hash_da_chave(corpo.chave)
+    if not h:
+        raise HTTPException(status_code=422, detail="Chave da máquina fora do formato.")
+    try:
+        maquina = computadores.maquina_da_chave(h)
+    except Exception:  # noqa: BLE001
+        logger.exception("Identidade: consulta da chave falhou")
+        raise HTTPException(status_code=503, detail=_FORA) from None
+    if not maquina:
+        raise HTTPException(status_code=404, detail="Chave da máquina não fixada.")
+    return {"machine_id": maquina}

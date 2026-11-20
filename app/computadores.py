@@ -251,6 +251,20 @@ def chave_fixada(machine_id: str) -> Optional[str]:
     return linhas[0].get("chave_hash") if linhas else None
 
 
+def maquina_da_chave(chave_hash: str) -> Optional[str]:
+    """O `machine_id` a que esta chave está fixada; None se a nenhum.
+
+    É a identidade da estação (plano 2026-11-20-identidade-pela-chave): o MAC
+    muda com adaptador novo (WSL, VPN, placa), a chave não. A mesma chave em
+    duas linhas (reaprovada depois de o MAC mudar): vale a fixada por último.
+    """
+    linhas = _banco().table(TABELA_CHAVE).select("machine_id, fixada_em").eq("chave_hash", chave_hash).execute().data or []
+    if not linhas:
+        return None
+    ultima = max(linhas, key=lambda l: _quando(l.get("fixada_em")) or datetime.min.replace(tzinfo=timezone.utc))
+    return mac(ultima.get("machine_id"))
+
+
 def _fixar_chave(machine_id: str, chave_hash: str, por: str) -> None:
     sb, mid = _banco(), mac(machine_id)
     campos = {"chave_hash": chave_hash, "fixada_em": _iso(_agora()), "fixada_por": por}
