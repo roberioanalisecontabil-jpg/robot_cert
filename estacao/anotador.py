@@ -2,7 +2,11 @@
 
   certguard_analise.exe --vigia                a tarefa agendada (SYSTEM): a cada
                                                5 s, sobe um anotador em cada
-                                               sessão ativa que não tem um
+                                               sessão ativa que não tem um; a
+                                               cada 60 s, reabre a bandeja
+                                               onde ela não está; a cada
+                                               5 min, leva o uso ao portal
+                                               (1.5.2)
   certguard_analise.exe --anotador --sid <S>   SYSTEM dentro da sessão da pessoa:
                                                a cada 1 s, anota a janela em foco
                                                em `tarefa.pastas().raiz`
@@ -45,6 +49,9 @@ PODAR = 3600
 AVISAR = 60
 MORTE_PRECOCE = 30  # anotador que morre antes disso depois de subir...
 PAUSA = 60  # ...não é relançado nessa sessão por este tempo (o onefile extrai a cada subida)
+BANDEJA = 60  # a cada quanto o vigia reabre a bandeja que alguém fechou
+COLETA = 300  # a cada quanto o vigia leva o uso ao portal (1.5.2)
+COLETA_PRIMEIRA = 60  # depois de subir: a rede ainda pode estar chegando
 _SID = re.compile(r"S-1(-\d+)+")
 _TRAVAS = []  # travas presas até o processo sair: o Windows solta quando ele morre
 _AVISOS: dict = {}
@@ -309,6 +316,28 @@ def rodar_anotador(sid: str, dormir=time.sleep, ler=janela_em_foco,
     return 0
 
 
+def coletar_uso_sempre(dormir=time.sleep, coletar=None) -> None:
+    """Thread do vigia: leva o uso ao portal a cada COLETA s. Dentro do vigia,
+    que já roda o tempo todo, e não numa tarefa de 5 min: cada subida do exe
+    onefile extrai ~49 MB e gasta ~2 s de CPU (medido na TI-002, 20/11/2026)."""
+    if coletar is None:
+        def coletar() -> None:
+            from estacao import uso
+
+            with tarefa._cliente() as http:
+                enviados = uso.coletar_travado(http)
+            if enviados:
+                logger.info("Uso dos certificados: %d evento(s) enviado(s).", enviados)
+
+    dormir(COLETA_PRIMEIRA)
+    while True:
+        try:
+            coletar()
+        except Exception:
+            _avisar("coleta", "Coleta do uso falhou; tenta de novo em %s s.", COLETA)
+        dormir(COLETA)
+
+
 def rodar_vigia(intervalo: int = 5) -> int:
     tarefa.configurar_log("vigia.log")
     if not getattr(sys, "frozen", False):
@@ -326,9 +355,25 @@ def rodar_vigia(intervalo: int = 5) -> int:
     _TRAVAS.append(trava)
     import win32ts
 
+    from estacao import sessoes as bandejas
+
+    if tarefa.e_estacao():
+        import threading
+
+        threading.Thread(target=coletar_uso_sempre, name="coleta-uso", daemon=True).start()
+
     vivos: dict = {}
     pausa: dict = {}
+    bandeja_em = 0.0
     while True:
+        # 1.5.2: a bandeja não tem "Fechar"; morta pelo Gerenciador de
+        # Tarefas, volta em até BANDEJA segundos.
+        if time.monotonic() - bandeja_em >= BANDEJA:
+            bandeja_em = time.monotonic()
+            try:
+                bandejas.garantir_bandejas(sys.executable)
+            except Exception:
+                _avisar("bandeja", "Falha ao conferir a bandeja; segue.")
         try:
             sessoes = win32ts.WTSEnumerateSessions(win32ts.WTS_CURRENT_SERVER_HANDLE)
         except Exception:

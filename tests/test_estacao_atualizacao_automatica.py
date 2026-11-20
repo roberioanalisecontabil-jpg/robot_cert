@@ -171,9 +171,17 @@ def test_instalador_prepara_pasta_copia_e_tarefas(tmp_path, monkeypatch) -> None
     assert any("/setowner" in c for c in icacls) and any("/inheritance:r" in c for c in icacls)
     tarefas = [c for c in comandos if c[0] == "schtasks"]
     assert [c[4] for c in tarefas] == [tarefa.NOME_TAREFA, tarefa.NOME_TAREFA + " 6h", tarefa.NOME_VIGIA]
-    for c in tarefas[:2]:
-        assert c[c.index("/RU") + 1] == "SYSTEM"
-        assert c[c.index("/TR") + 1] == f'"{exe}" --atualizacao'
+    import xml.dom.minidom
+
+    for c, gatilho in zip(tarefas[:2], ("<BootTrigger>", "<Interval>PT6H</Interval>"), strict=True):
+        x = open(c[c.index("/XML") + 1], encoding="utf-16").read()
+        xml.dom.minidom.parseString(x.encode("utf-16"))  # bem formado
+        for trecho in ("<UserId>S-1-5-18</UserId>", "<Arguments>--atualizacao</Arguments>",
+                       f"<Command>{exe}</Command>", gatilho,
+                       # 1.5.2: pelo /SC elas não iniciavam na bateria (TI-002, 20/11/2026)
+                       "<DisallowStartIfOnBatteries>false", "<StopIfGoingOnBatteries>false"):
+            assert trecho in x, (c[4], trecho)
+    assert "<Delay>PT5M</Delay>" in open(tarefas[0][-1], encoding="utf-16").read()
 
 
 def test_instalador_sem_pasta_trancada_nao_segue(tmp_path, monkeypatch) -> None:
@@ -198,6 +206,9 @@ def test_instalador_da_atualizacao_automatica() -> None:
     assert f'#define NomeTarefa "{tarefa.NOME_TAREFA}"' in iss
     assert "--preparar-atualizacao" in iss and "{srcexe}" in iss
     assert "/Run /TN" in iss and '/Delete /F /TN "{#NomeTarefa} 6h"' in iss
+    prepara = iss[iss.index("function PrepareToInstall"):]
+    assert prepara.index('/End /TN "{#NomeVigia}"') < prepara.index("FecharBandejas"), (
+        "o vigia reabre a bandeja: tem de parar antes do taskkill, ou sobe o exe velho na troca")
     corre = next(linha for linha in iss.splitlines() if linha.startswith('Filename: "{app}\\{#MyAppExeName}"'))
     assert "skipifsilent" in corre, "em silêncio a bandeja abriria na sessão invisível do SYSTEM"
 
@@ -319,7 +330,7 @@ def test_unica_trava_arquivo_na_pasta_trancada(tmp_path, monkeypatch) -> None:
 def test_versao_1_5_0() -> None:
     from estacao import VERSAO, VERSAO_REPORTADA
 
-    assert VERSAO == "1.5.1" and VERSAO_REPORTADA == "certguard-1.5.1"
+    assert VERSAO == "1.5.2" and VERSAO_REPORTADA == "certguard-1.5.2"
 
 
 def test_build_leva_os_modulos_da_atualizacao() -> None:

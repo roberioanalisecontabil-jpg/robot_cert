@@ -83,6 +83,8 @@ def test_liga_auditoria_pelo_guid() -> None:
     uso.ligar_auditoria(ex)
     assert "{0CCE9212-69AE-11D9-BED3-505054503030}" in ex.comandos[0]
     assert "/success:enable /failure:enable" in ex.comandos[0]
+    # Entre aspas: no PowerShell `{...}` solto é bloco de script (até a 1.5.1).
+    assert all("'/subcategory:{0CCE9212-69AE-11D9-BED3-505054503030}'" in c for c in ex.comandos[:2])
     assert all("0CCE9214" not in c and "System Integrity" not in c for c in ex.comandos)
 
 
@@ -215,7 +217,7 @@ def rodada(tmp_path, monkeypatch):
 
 
 def test_falha_na_coleta_nao_impede_atualizacao(rodada, monkeypatch) -> None:
-    def coletar(http):
+    def coletar(http, *_a):
         rodada.append("coletar")
         raise RuntimeError("log ilegível")
 
@@ -230,7 +232,7 @@ def test_atualizacao_fora_nao_impede_coleta(rodada, monkeypatch) -> None:
         rodada.append("buscar")
         raise ConnectionError("fora do ar")
 
-    monkeypatch.setattr(uso, "coletar", lambda http: rodada.append("coletar") or 0)
+    monkeypatch.setattr(uso, "coletar", lambda http, *_a: rodada.append("coletar") or 0)
     monkeypatch.setattr(tarefa, "buscar_pacote", fora)
     assert tarefa.rodar_tarefa() == 1
     assert rodada == ["coletar", "buscar"]
@@ -238,7 +240,62 @@ def test_atualizacao_fora_nao_impede_coleta(rodada, monkeypatch) -> None:
 
 def test_nao_estacao_nao_coleta(rodada, monkeypatch) -> None:
     monkeypatch.setattr(tarefa, "e_estacao", lambda: False)
-    monkeypatch.setattr(uso, "coletar", lambda http: rodada.append("coletar") or 0)
+    monkeypatch.setattr(uso, "coletar", lambda http, *_a: rodada.append("coletar") or 0)
     monkeypatch.setattr(tarefa, "buscar_pacote", lambda http: None)
     tarefa.rodar_tarefa()
     assert rodada == []
+
+
+# ── 1.5.2: coleta no vigia, trava e auditoria pelo PowerShell ─────────────
+
+
+def test_auditoria_com_linhas_em_branco_do_powershell() -> None:
+    """Pelo PowerShell o auditpol vem com linha em branco entre as de texto;
+    até a 1.5.1 isso dava IndexError em toda coleta."""
+    com_brancos = CSV_PT.replace("\n", "\n\n")
+    assert uso.ligar_auditoria(_Executor(csv="\n" + com_brancos)) == "ligada"
+    sem = com_brancos.replace("Êxito e Falha", "Sem Auditoria")
+    assert uso.ligar_auditoria(_Executor(csv=sem)) == "desligada"
+    so_cabecalho = CSV_PT.splitlines()[0]
+    assert uso.ligar_auditoria(_Executor(csv=so_cabecalho)) == "desconhecida"
+
+
+def test_coleta_travada_nao_roda_duas_ao_mesmo_tempo(ambiente) -> None:
+    from estacao import anotador
+
+    fd = anotador._travar(str(ambiente / uso.TRAVA))  # a tarefa coletando
+    try:
+        http = _Http()
+        assert uso.coletar_travado(http, _Executor(maior=5, eventos=_eventos(2))) is None
+        assert http.posts == [] and _marcador(ambiente) == 0
+    finally:
+        import msvcrt
+        import os
+
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        os.close(fd)
+    assert uso.coletar_travado(_Http(), _Executor(maior=5, eventos=_eventos(2))) == 2
+    assert uso.coletar_travado(_Http(), _Executor(maior=5)) == 0, "a trava é solta no fim"
+
+
+def test_vigia_coleta_a_cada_5_min_e_sobrevive_a_falha() -> None:
+    from estacao import anotador
+
+    esperas, chamadas = [], []
+
+    class _Parar(Exception):
+        pass
+
+    def _dormir(s):
+        esperas.append(s)
+        if len(esperas) > 3:
+            raise _Parar
+
+    def _coletar():
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            raise RuntimeError("portal fora")
+
+    with pytest.raises(_Parar):
+        anotador.coletar_uso_sempre(dormir=_dormir, coletar=_coletar)
+    assert esperas == [anotador.COLETA_PRIMEIRA, 300, 300, 300] and len(chamadas) == 3

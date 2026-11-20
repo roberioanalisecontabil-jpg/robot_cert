@@ -1,4 +1,5 @@
-"""Coleta do uso dos certificados (Frente C), na tarefa SYSTEM.
+"""Coleta do uso dos certificados (Frente C): no vigia SYSTEM a cada 5 min
+(1.5.2) e na tarefa SYSTEM (partida e 6 h).
 
 Liga a auditoria "System Integrity", lê os eventos 5061 novos do log de
 Segurança e manda ao portal. O marcador (maior EventRecordID aceito) fica na
@@ -48,11 +49,21 @@ def _gravar_marcador(record_id: int) -> None:
 def ligar_auditoria(executar=_powershell) -> str:
     """Pelo GUID, nunca pelo nome: o nome da subcategoria muda com o idioma."""
     try:
-        executar(f"auditpol /set /subcategory:{GUID_AUDITORIA} /success:enable /failure:enable")
-        r = executar(f"auditpol /get /subcategory:{GUID_AUDITORIA} /r")
-        linhas = list(csv.reader(io.StringIO(r.stdout or "")))
-        # O cabeçalho vem traduzido: a configuração de inclusão é a 5ª coluna, por posição.
-        valor = linhas[1][4].strip().lower()
+        # Entre aspas: no PowerShell, `{...}` solto é bloco de script e o auditpol
+        # recebia o argumento quebrado (só mostrava a ajuda, até a 1.5.1).
+        executar(f"auditpol /set '/subcategory:{GUID_AUDITORIA}' /success:enable /failure:enable")
+        r = executar(f"auditpol /get '/subcategory:{GUID_AUDITORIA}' /r")
+        saida = r.stdout or ""
+        # A linha da subcategoria, achada pelo GUID: pelo PowerShell a saída vem
+        # com linhas em branco entre as de texto, e a 2ª linha não era a dela
+        # (IndexError em toda coleta até a 1.5.1). O cabeçalho vem traduzido: a
+        # configuração de inclusão é a 5ª coluna, por posição.
+        linha = next((l for l in csv.reader(io.StringIO(saida))
+                      if len(l) > 4 and l[3].strip().upper() == GUID_AUDITORIA), None)
+        if linha is None:
+            logger.warning("auditpol sem a linha da auditoria: %r", saida[:300])
+            return "desconhecida"
+        valor = linha[4].strip().lower()
     except Exception:
         logger.warning("Não foi possível conferir a auditoria.", exc_info=True)
         return "desconhecida"
@@ -132,6 +143,30 @@ def _anexar_janelas(lote: List[dict]) -> List[dict]:
             achadas = []
         saida.append({**e, "janelas": achadas})
     return saida
+
+
+TRAVA = "uso.lock"
+
+
+def coletar_travado(http, executar=_powershell) -> int | None:
+    """`coletar` com a trava da pasta trancada: o vigia (a cada 5 min) e a
+    tarefa (partida e 6 h) não coletam juntos — os dois leriam o mesmo marcador
+    e mandariam o mesmo lote. None se a outra já está coletando."""
+    import msvcrt
+
+    from estacao import anotador, tarefa
+
+    fd = anotador._travar(os.path.join(tarefa.pastas().raiz, TRAVA))
+    if fd is None:
+        logger.info("Outra coleta do uso em curso; esta fica para a próxima.")
+        return None
+    try:
+        return coletar(http, executar)
+    finally:
+        try:
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        finally:
+            os.close(fd)
 
 
 def coletar(http, executar=_powershell) -> int:
