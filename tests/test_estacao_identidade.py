@@ -27,6 +27,7 @@ class _Http:
         return SimpleNamespace(status_code=self.status, json=lambda: {"machine_id": self.machine_id})
 
 
+_ACLS: list = []  # (nome, concessões) de cada icacls, pela fixture
 _FIXAR = identidade.fixar  # o real: o conftest o troca em todos os outros testes
 
 
@@ -36,6 +37,8 @@ def maquina(tmp_path, monkeypatch):
     monkeypatch.setattr(caminhos, "pasta_maquina", lambda: tmp_path)
     monkeypatch.setattr(chave_maquina, "ler", lambda: "k" * 43)
     monkeypatch.setattr(identidade, "mac_calculado", lambda: WSL)
+    monkeypatch.setattr(chave_maquina, "_icacls", lambda alvo, *c: _ACLS.append((alvo.name, c)))
+    _ACLS.clear()
     return tmp_path
 
 
@@ -99,3 +102,16 @@ def test_arquivo_com_quebra_de_linha_vale(maquina) -> None:
 def test_bandeja_usa_a_identidade(maquina) -> None:
     _gravar(maquina, CONHECIDO)
     assert bandeja.machine_id() == CONHECIDO
+
+
+def test_temporario_plantado_nao_impede_a_gravacao(maquina) -> None:
+    """Revisão de 20/11: o SYSTEM gravava por `machine_id.txt.novo`, nome que
+    qualquer usuário cria antes em ProgramData (pasta ou link simbólico)."""
+    (maquina / (identidade.ARQUIVO + ".novo")).mkdir()
+    assert identidade.fixar(_Http()) == CONHECIDO == _lido(maquina)
+
+
+def test_arquivo_gravado_so_o_system_e_admin_alteram(maquina) -> None:
+    identidade.fixar(_Http())
+    finais = [c for nome, c in _ACLS if nome == identidade.ARQUIVO]
+    assert finais == [("*S-1-5-18:F", "*S-1-5-32-544:F", "*S-1-5-32-545:R")]

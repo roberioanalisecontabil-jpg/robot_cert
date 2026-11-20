@@ -87,11 +87,17 @@ def _icacls(alvo: Path, *concessoes: str) -> None:
 
 
 def _gravar(cifrado: bytes) -> None:
-    """Grava sem nenhum instante com a chave e permissão herdada (achado da
+    gravar_restrito(caminho(), cifrado)
+
+
+def gravar_restrito(destino: Path, conteudo: bytes) -> None:
+    """Grava sem nenhum instante com o conteúdo e permissão herdada (achado da
     auditoria de 10/10/2026): o conteúdo nasce numa subpasta já restrita a
-    SYSTEM e Administradores, com criação exclusiva, e só então vai para o
-    destino, que recebe a ACL final (Usuários passam a ler)."""
-    destino = caminho()
+    SYSTEM e Administradores, com criação exclusiva e nome aleatório, e só então
+    vai para o destino, que recebe a ACL final (Usuários passam a ler). Nome
+    aleatório porque Usuários criam arquivos em ProgramData: um temporário de
+    nome fixo podia ser plantado antes (link simbólico ou pasta). Também usada
+    pelo machine_id (estacao/identidade.py)."""
     destino.parent.mkdir(parents=True, exist_ok=True)
     temp = Path(tempfile.mkdtemp(prefix=".novo-", dir=str(destino.parent)))
     try:
@@ -99,7 +105,7 @@ def _gravar(cifrado: bytes) -> None:
         novo = temp / (secrets.token_hex(16) + ".tmp")
         fd = os.open(str(novo), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
         with os.fdopen(fd, "wb") as f:
-            f.write(cifrado)
+            f.write(conteudo)
         os.replace(str(novo), str(destino))
     finally:
         shutil.rmtree(temp, ignore_errors=True)

@@ -21,7 +21,6 @@ Um arquivo plantado por quem não é administrador não engana o portal (a chave
 from __future__ import annotations
 
 import logging
-import os
 import re
 from pathlib import Path
 
@@ -69,11 +68,12 @@ def machine_id() -> str:
 
 
 def _gravar(mid: str) -> None:
-    destino = caminho()
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    temporario = destino.with_name(destino.name + ".novo")
-    temporario.write_text(mid + "\n", encoding="utf-8")
-    os.replace(temporario, destino)  # a bandeja nunca lê um arquivo pela metade
+    # Como a chave: temporário de nome aleatório numa subpasta restrita, depois
+    # `os.replace` (a bandeja nunca lê pela metade) e a ACL final (Usuários só
+    # leem). O SYSTEM não pode seguir um nome que a pessoa criou antes.
+    from estacao import chave_maquina
+
+    chave_maquina.gravar_restrito(caminho(), (mid + "\n").encode("utf-8"))
 
 
 def _do_portal(http, chave: str) -> str | None:
