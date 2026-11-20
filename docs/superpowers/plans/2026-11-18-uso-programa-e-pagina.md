@@ -347,17 +347,17 @@ def test_cache_buster_do_js_subiu(): ...  # carteiras-uso.js?v=janelas-2026-11-1
 
 Cada passo no servidor e a publicação da bandeja **só com a autorização do Robério no chat**.
 
-- [ ] **Step 1: Revisão independente do ramo inteiro**, antes do push.
-- [ ] **Step 2: Push, PR e merge** do `feat/uso-programa-pagina`.
-- [ ] **Step 3: Deploy do portal** com `C:\Apps\deploy\atualizar-portal.ps1 -Portal robot_cert`.
+- [x] **Step 1: Revisão independente do ramo inteiro**, antes do push.
+- [x] **Step 2: Push, PR e merge** do `feat/uso-programa-pagina` (PR #14, `b55ea02`).
+- [x] **Step 3: Deploy do portal** com `C:\Apps\deploy\atualizar-portal.ps1 -Portal robot_cert` (18/11, conferido de novo em 20/11).
   - Conferir `git -C C:\Apps\robot_cert log --oneline -1`.
   - Conferir a tabela `uso_janela` criada.
   - Conferir que a aba Uso segue igual, com "—" para o admin.
-- [ ] **Step 4: Gerar a bandeja 1.5.0** (PyInstaller + Inno Setup) e instalar na TI-002.
+- [x] **Step 4: Gerar a bandeja 1.5.0** (PyInstaller + Inno Setup) e instalar na TI-002. Feito, confirmado pelo Robério em 20/11/2026 (instalador de 18/11 14:41).
   - Conferir no `vigia.log` e no `Get-Process -IncludeUserName`: um anotador SYSTEM por sessão.
   - Fazer um uso no e-CAC e um no Acrobat e rodar a tarefa (`schtasks /Run`).
   - A coluna deve mostrar `chrome · …` e `Acrobat · …`.
   - Conferir também: tela bloqueada, logoff e novo logon, troca rápida de usuário. Sem administrador, `Stop-Process` no anotador deve dar "Acesso negado".
   - Contar as pastas `_MEI*` em `C:\Windows\SystemTemp` e `C:\Windows\Temp` depois de 3 reinícios. Se crescerem, limpar as velhas na subida do vigia ou gerar o exe em onedir.
-- [ ] **Step 5: Publicar a 1.5.0** com `lancar-certguard.ps1`.
-- [ ] **Step 6: Atualizar a memória** `robot-cert-carteira-certificados.md`.
+- [x] **Step 5: Publicar a 1.5.0** com `lancar-certguard.ps1`. Publicada em 20/11/2026 às 11:08 (horário do servidor): o instalador de 18/11 testado na TI-002, sha256 `ce2a095e2804c39f192cca1e2be173d60545648bd96ee6bb73c919bbcb7813f8`, assinado com a chave "principal". Conferido no servidor: `vigente.json`, o arquivo e o download pelo portal com o mesmo sha. Esse pacote ainda traz a migração do Hardlyze; a retirada (PR #17) vai na 1.5.1.
+- [x] **Step 6: Atualizar a memória** (feito em 20/11/2026, na memória do projeto CertGuard Análise).
