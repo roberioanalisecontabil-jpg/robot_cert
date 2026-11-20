@@ -41,24 +41,12 @@ def configurar_log() -> Path:
 
 
 def machine_id() -> str:
-    """O MAC que identifica esta máquina no portal: o primeiro em ordem
-    alfabética, sem o nulo. TEM de ser o mesmo cálculo do Hardlyze
-    (`DataCollector._get_mac_addresses()[0]`): é a mesma máquina para o portal,
-    e um id diferente faria todo computador já autorizado virar equipamento
-    novo no primeiro login."""
-    import psutil
+    """O id desta máquina no portal: o fixado pela chave da máquina
+    (estacao/identidade.py, 1.5.3); sem ele, o primeiro MAC em ordem alfabética,
+    o mesmo cálculo do Hardlyze. Os testes substituem esta função."""
+    from estacao import identidade
 
-    macs = set()
-    try:
-        for addrs in psutil.net_if_addrs().values():
-            for addr in addrs:
-                if addr.family == psutil.AF_LINK:
-                    mac = addr.address.replace("-", ":").lower()
-                    if mac and mac != "00:00:00:00:00:00":
-                        macs.add(mac)
-    except Exception:
-        logger.exception("Erro ao obter MACs")
-    return sorted(macs)[0] if macs else "unknown"
+    return identidade.machine_id()
 
 
 _MUTEX = None
