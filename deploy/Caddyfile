@@ -11,14 +11,19 @@
 #     quando um site tem TLS) -- e o "redirect" que o HSTS pressupoe;
 #   * certificados Let's Encrypt por desafio DNS na Cloudflare (continua
 #     valendo com a porta 443 aberta: nao depende de a 80 chegar aqui);
-#   * desde 14/10/2026 o portal de certificados esta NA INTERNET: o nome
-#     certificado. passa pelo proxy da Cloudflare (nuvem laranja) e o firewall
-#     encaminha a 443 do IP publico para o 10.200.0.4. So ele: hardlyze. e
-#     eficacia. continuam so rede + VPN, e este arquivo recusa quem chega a
-#     eles de fora (a 443 e uma so; sem a recusa, bastava pedir o nome certo
-#     ao IP publico). E o certificado. so atende quem chega PELA Cloudflare:
-#     e ela que filtra rajadas (auditoria run-2, item 14), e ir direto ao IP
-#     publico pularia o filtro;
+#   * sites NA INTERNET, pelo proxy da Cloudflare (nuvem laranja), com
+#     "import so_cloudflare": certificado. (desde 14/10/2026), eficacia.
+#     (16/10), hardlyze. (antes de 04/11), intranet., jornada., crm. e
+#     eventos. A Cloudflare chega pela 8191 do IP publico (Origin Rule), que
+#     o pfSense da nuvem encaminha para a 8191 deste servidor. Esses sites so
+#     atendem quem chega PELA Cloudflare (ou pela rede interna): e ela que
+#     filtra rajadas (auditoria run-2, item 14), e ir direto ao IP publico
+#     pularia o filtro;
+#   * sites SO rede + VPN, com "import so_rede_interna": diario., zabbix. e
+#     o aviso da porta 94. Este arquivo recusa quem chega a eles de fora (a
+#     porta e uma so; sem a recusa, bastava pedir o nome certo ao IP publico);
+#   * copia do C:\Apps\Caddyfile de producao conferida em 20/11/2026: quem
+#     mudar la, traga para ca, e vice-versa;
 #   * a aplicacao so e alcancada por 127.0.0.1 -- uvicorn/NSSM fazem bind em
 #     loopback (ver docs/GUIA_MIGRACAO_WINDOWS_SERVER.md), e o firewall so
 #     abre 80/443 (scripts/setup_porta_servidor.ps1).
@@ -50,7 +55,7 @@
 }
 
 # So rede da empresa e VPN (10.200.0.0/24, VPN 10.255.255.x) e a propria
-# maquina: hardlyze. e eficacia. nao estao na internet.
+# maquina: para os sites que nao estao na internet.
 (so_rede_interna) {
 	@de_fora not remote_ip private_ranges
 	abort @de_fora
@@ -93,23 +98,89 @@
 	}
 }
 
-# A 2053 e a porta que a Cloudflare usa para chegar aqui (Origin Rule
-# certificado-porta-2053, 15/10/2026): o pfSense da nuvem encaminha a 2053 do IP
-# publico para a MESMA porta deste servidor. A 443 continua para a rede interna.
-certificado.analisegroup.cnt.br, certificado.analisegroup.cnt.br:2053 {
+# A 8191 e a porta que a Cloudflare usa para chegar aqui (Origin Rule): o
+# pfSense da nuvem encaminha a 8191 do IP publico para a MESMA porta deste
+# servidor. A 443 continua para a rede interna. Ate o inicio de 11/2026 era a
+# 2053 (Origin Rule certificado-porta-2053, 15/10/2026); o Caddy nao escuta
+# mais nela (conferido em 20/11/2026).
+certificado.analisegroup.cnt.br, certificado.analisegroup.cnt.br:8191 {
 	# So pela Cloudflare. Todo mundo, de dentro ou de fora, chega por ela
 	# (decisao de 14/10/2026); o servidor tambem (o agente usa o mesmo nome).
 	import so_cloudflare
 	import portal 8020
 }
 
-hardlyze.analisegroup.cnt.br {
-	import so_rede_interna
+hardlyze.analisegroup.cnt.br, hardlyze.analisegroup.cnt.br:8191 {
+	# Na internet, como o certificado.: os agentes Hardlyze das estacoes
+	# chegam de fora pela Cloudflare (log de 20/11/2026).
+	import so_cloudflare
 	import portal 8021
 }
 
 # Validacao de Eficacia (repositorio Validacao-de-Eficacia, servico NSSM "eficacia").
-eficacia.analisegroup.cnt.br {
-	import so_rede_interna
+eficacia.analisegroup.cnt.br, eficacia.analisegroup.cnt.br:8191 {
+	# Na internet desde 16/10/2026, como o certificado.: so pela Cloudflare
+	# (Origin Rule para a 8191) ou pela rede interna.
+	import so_cloudflare
 	import portal 8022
+}
+
+diario.analisegroup.cnt.br, diario.analisegroup.cnt.br:8191 {
+
+    import so_rede_interna
+
+    import portal 8023
+
+}
+
+intranet.analisegroup.cnt.br:8191 {
+    import so_cloudflare
+    import portal 8192
+}
+
+
+
+jornada.analisegroup.cnt.br, jornada.analisegroup.cnt.br:8191 {
+
+    import so_cloudflare
+
+    import portal 8195
+
+}
+
+crm.analisegroup.cnt.br, crm.analisegroup.cnt.br:8191 {
+    import so_cloudflare
+    import portal 8196
+}
+# Aviso no endereço antigo do portal (http://10.200.0.4:94): o link mudou.
+http://:94 {
+    import so_rede_interna
+    root * C:/Apps/caddy/aviso-link-mudou
+    header Cache-Control "no-store"
+    rewrite * /index.html
+    file_server
+}
+eventos.analisegroup.cnt.br, eventos.analisegroup.cnt.br:8191 {
+
+    import so_cloudflare
+
+    import portal 8197
+
+}
+
+zabbix.analisegroup.cnt.br, zabbix.analisegroup.cnt.br:8198 {
+    # Rede interna e VPN; Let's Encrypt pelo DNS da Cloudflare (11/11/2026).
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+        resolvers 1.1.1.1 8.8.8.8
+    }
+    import so_rede_interna
+
+    log {
+        output file C:\Apps\caddy\logs\zabbix-access.log
+        format json
+    }
+
+    redir / /zabbix/
+    reverse_proxy 172.30.50.20:80
 }
