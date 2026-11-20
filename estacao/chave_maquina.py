@@ -10,13 +10,15 @@ precisa enviá-la); só SYSTEM e Administradores a alteram.
 
 No Hardlyze era o serviço. O CertGuard Análise 1.0 não tem serviço (adendo de
 14/10/2026 ao ADR 0003): quem grava é o INSTALADOR, que já roda como
-administrador, chamando `certguard_analise.exe --preparar-chave`. Na troca, ele
-copia a chave do Hardlyze — o hash é o mesmo, então o vínculo já aprovado
-continua valendo — e apaga a original. Sem chave antiga, gera uma nova, e a
-máquina passa pela aprovação do administrador como equipamento novo.
+administrador, chamando `certguard_analise.exe --preparar-chave`. Sem chave,
+gera uma nova, e a máquina passa pela aprovação do administrador como
+equipamento novo.
 
-O blob é copiado como está, sem decifrar e cifrar de novo: a entropia continua
-a do Hardlyze, e é por isso que o nome dela fala em "invent-agent".
+Até 20/11/2026 o instalador também copiava a chave do Hardlyze
+(`ProgramData\\InventAgent`) como estava, sem decifrar e cifrar de novo. Por
+isso a entropia é a do Hardlyze e o nome dela fala em "invent-agent": as chaves
+copiadas naquela época continuam cifradas com ela, e trocar a entropia as
+deixaria ilegíveis.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ from estacao.dpapi import SemCofreLocal, desproteger, proteger
 LOGGER = logging.getLogger(__name__)
 
 ARQUIVO = "chave_maquina.dat"
-# Amarra o blob a este uso; não é segredo. Herdada do Hardlyze (ver acima).
+# Amarra o blob a este uso; não é segredo. Herdada do Hardlyze: NÃO trocar (ver acima).
 _ENTROPIA = b"invent-agent-chave-certificados-v1"
 
 _SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -112,36 +114,12 @@ def _gravar(cifrado: bytes) -> None:
 def preparar() -> str:
     """Deixa a chave pronta. Roda no instalador, como administrador.
 
-    Devolve "existente" (reinstalação), "copiada" (veio do Hardlyze, original
-    apagado) ou "gerada". Levanta se não conseguir gravar: o instalador mostra
-    o erro em vez de seguir com uma máquina sem chave.
+    Devolve "existente" (reinstalação) ou "gerada". Levanta se não conseguir
+    gravar: o instalador mostra o erro em vez de seguir com uma máquina sem chave.
     """
     if ler():
         return "existente"
 
-    legado = caminhos.chave_hardlyze()
-    try:
-        bruto = legado.read_bytes() if legado.is_file() else b""
-    except OSError:
-        LOGGER.warning("Chave do Hardlyze em %s não pôde ser lida; gerando uma nova.", legado)
-        bruto = b""
-    chave_antiga = _decifrar(bruto) if bruto else None
-
-    if chave_antiga:
-        _gravar(bruto)
-        if ler() != chave_antiga:
-            raise SemCofreLocal("A chave copiada do Hardlyze não confere depois de gravada.")
-        # Só depois de conferir a cópia (adendo de 14/10: cada agente é dono da
-        # sua). Se apagar falhar, a cópia já vale; o original fica esquecido.
-        try:
-            legado.unlink()
-        except OSError:
-            LOGGER.warning("Chave copiada, mas o original em %s não pôde ser apagado.", legado)
-        LOGGER.info("Chave da máquina copiada do Hardlyze para %s.", caminho())
-        return "copiada"
-
-    if bruto:
-        LOGGER.warning("Chave do Hardlyze em %s ilegível; gerando uma nova (fica onde está).", legado)
     _gravar(proteger(secrets.token_urlsafe(32).encode("utf-8"), _ENTROPIA, maquina=True))
     if not ler():
         raise SemCofreLocal("A chave gerada não pôde ser lida de volta.")

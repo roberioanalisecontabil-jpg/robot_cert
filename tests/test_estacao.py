@@ -1,9 +1,9 @@
 """CertGuard Análise (estacao/): a bandeja de certificados separada do Hardlyze.
 
 Adendo de 14/10/2026 ao ADR 0003. Os testes da conta, da chave e das janelas
-vieram do Hardlyze junto com o código; os da TRANSIÇÃO são novos e são os que
-mais importam: quem já estava logado e autorizado no Hardlyze tem de continuar
-assim depois de trocar de programa, sem login nem aprovação do administrador.
+vieram do Hardlyze junto com o código. Os da transição (trazer a chave e a conta
+do Hardlyze) saíram com ela em 20/11/2026; fica um que prova que as pastas
+`InventAgent` não são mais lidas.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from estacao import VERSAO_REPORTADA, caminhos
+from estacao import VERSAO_REPORTADA
 from estacao import chave_maquina as ch
 from estacao import conta as cc
 from estacao.dpapi import proteger
@@ -93,23 +93,6 @@ class _Portal:
             t, self.tokens = self.tokens, []
             return _Resp(200, {"tokens": t})
         return _Resp(404)
-
-
-def _conta_do_hardlyze(segredo: str = "seg-antigo") -> Path:
-    """O certificados.dat como a bandeja do Hardlyze 2.2.0 gravava."""
-    destino = caminhos.conta_hardlyze()
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    dados = {"segredo": segredo, "portal": PORTAL, "email": "ana@x.com", "machine_id": MAQUINA, "gravado_em": 1.0}
-    destino.write_bytes(proteger(json.dumps(dados).encode(), b"invent-agent-dispositivo-v1"))
-    return destino
-
-
-def _chave_do_hardlyze(chave: str = "k" * 43) -> Path:
-    """A chave_certificados.dat como o serviço do Hardlyze 2.1.4+ gravava."""
-    destino = caminhos.chave_hardlyze()
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(proteger(chave.encode(), b"invent-agent-chave-certificados-v1", maquina=True))
-    return destino
 
 
 # ── Conta (veio do Hardlyze) ─────────────────────────────────────────────
@@ -213,24 +196,6 @@ def test_conteudo_nasce_em_pasta_restrita_e_usuarios_so_leem(estacao: list) -> N
 
 
 @so_windows
-def test_copia_a_chave_do_hardlyze_e_apaga_o_original(estacao: list) -> None:
-    """O hash é o mesmo: o computador já autorizado continua autorizado."""
-    legado = _chave_do_hardlyze("chave-do-hardlyze-" + "x" * 30)
-    assert ch.preparar() == "copiada"
-    assert ch.ler() == "chave-do-hardlyze-" + "x" * 30
-    assert not legado.exists(), "adendo de 14/10: cada agente é dono da sua"
-
-
-@so_windows
-def test_chave_do_hardlyze_ilegivel_fica_e_gera_outra(estacao: list) -> None:
-    legado = caminhos.chave_hardlyze()
-    legado.parent.mkdir(parents=True)
-    legado.write_bytes(b"plantado por outra conta")
-    assert ch.preparar() == "gerada" and ch.ler()
-    assert legado.read_bytes() == b"plantado por outra conta"
-
-
-@so_windows
 def test_arquivo_estranho_no_lugar_da_chave_e_substituido(estacao: list) -> None:
     ch.caminho().parent.mkdir(parents=True)
     ch.caminho().write_bytes(b"plantado")
@@ -248,33 +213,26 @@ def test_login_manda_a_chave_quando_ha(estacao: list) -> None:
     assert "chave_maquina" not in portal2.chamadas[0][2]
 
 
-# ── Transição da conta ───────────────────────────────────────────────────
+# ── Sem transição: o Hardlyze não é mais lido (retirada em 20/11/2026) ───
 
 
 @so_windows
-def test_traz_a_conta_do_hardlyze_e_apaga_o_original(estacao: list) -> None:
-    legado = _conta_do_hardlyze("seg-antigo")
-    assert cc.migrar_do_hardlyze() is True
-    assert cc.ler()["segredo"] == "seg-antigo" and cc.ler()["machine_id"] == MAQUINA
-    assert not legado.exists()
-    assert cc.migrar_do_hardlyze() is False, "uma vez só"
+def test_chave_e_conta_do_hardlyze_nao_sao_mais_lidas(estacao: list, tmp_path: Path) -> None:
+    """Uma chave e uma conta válidas do Hardlyze, nos lugares de antes: a chave
+    é gerada nova, a bandeja não entra com a conta antiga, e nada é apagado."""
+    chave_antiga = tmp_path / "pd" / "InventAgent" / "chave_certificados.dat"
+    chave_antiga.parent.mkdir(parents=True)
+    chave_antiga.write_bytes(proteger(b"chave-do-hardlyze-" + b"x" * 30, b"invent-agent-chave-certificados-v1",
+                                      maquina=True))
+    conta_antiga = tmp_path / "perfil" / "InventAgent" / "certificados.dat"
+    conta_antiga.parent.mkdir(parents=True)
+    dados = {"segredo": "seg-antigo", "portal": PORTAL, "email": "ana@x.com", "machine_id": MAQUINA}
+    conta_antiga.write_bytes(proteger(json.dumps(dados).encode(), b"invent-agent-dispositivo-v1"))
 
-
-@so_windows
-def test_com_conta_propria_nao_mexe_no_hardlyze(estacao: list) -> None:
-    cc.guardar("seg-novo", PORTAL, "ana@x.com", MAQUINA)
-    legado = _conta_do_hardlyze("seg-antigo")
-    assert cc.migrar_do_hardlyze() is False
-    assert cc.ler()["segredo"] == "seg-novo" and legado.exists()
-
-
-@so_windows
-def test_conta_do_hardlyze_ilegivel_fica_onde_esta(estacao: list) -> None:
-    legado = caminhos.conta_hardlyze()
-    legado.parent.mkdir(parents=True)
-    legado.write_bytes(b"lixo")
-    assert cc.migrar_do_hardlyze() is False
-    assert not cc.esta_conectado() and legado.exists()
+    assert ch.preparar() == "gerada"
+    assert ch.ler() != "chave-do-hardlyze-" + "x" * 30
+    assert not cc.esta_conectado()
+    assert chave_antiga.exists() and conta_antiga.exists()
 
 
 # ── Bandeja ──────────────────────────────────────────────────────────────

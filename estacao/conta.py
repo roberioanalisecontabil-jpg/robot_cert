@@ -6,11 +6,8 @@ pessoa, junto do endereço do portal que o emitiu. A senha só existe dentro de
 `registrar`. As chamadas levam o segredo em `X-Device-Secret`, e só nas rotas
 da estação (ADR 0003): o dispositivo não abre sessão do portal.
 
-── Transição ─────────────────────────────────────────────────────────────
-
-`migrar_do_hardlyze` lê uma vez o `certificados.dat` que a bandeja do Hardlyze
-guardava, grava a conta aqui e apaga o original (adendo de 14/10/2026 ao ADR
-0003). Quem já estava logado não precisa entrar de novo.
+Até 20/11/2026 a bandeja trazia uma vez a conta do `certificados.dat` do
+Hardlyze (adendo de 14/10/2026 ao ADR 0003); essa migração foi retirada.
 """
 
 from __future__ import annotations
@@ -32,8 +29,6 @@ ARQUIVO = "conta.dat"
 PORTAL_PADRAO = "https://certificado.analisegroup.cnt.br"
 
 _ENTROPIA = b"certguard-analise-conta-v1"
-# A do Hardlyze: `core/identidade.py` de lá cifrava o certificados.dat com ela.
-_ENTROPIA_HARDLYZE = b"invent-agent-dispositivo-v1"
 
 
 class NaoConectado(RuntimeError):
@@ -117,31 +112,6 @@ def apagar() -> bool:
     except OSError:
         LOGGER.exception("Falha ao apagar a conta do portal")
     return False
-
-
-def migrar_do_hardlyze() -> bool:
-    """Traz a conta da bandeja do Hardlyze, uma vez. True se trouxe.
-
-    Já havendo conta aqui, não mexe em nada. O original só é apagado depois de
-    a cópia ler de volta igual; ilegível, fica onde está e a pessoa entra de novo.
-    """
-    if caminho().is_file():
-        return False
-    origem = caminhos.conta_hardlyze()
-    antiga = _ler_de(origem, _ENTROPIA_HARDLYZE)
-    if not antiga:
-        return False
-    _gravar(antiga)
-    if (ler() or {}).get("segredo") != antiga["segredo"]:
-        apagar()
-        LOGGER.error("A conta copiada do Hardlyze não confere; mantido o original em %s.", origem)
-        return False
-    try:
-        origem.unlink()
-    except OSError:
-        LOGGER.warning("Conta copiada, mas o original em %s não pôde ser apagado.", origem)
-    LOGGER.info("Conta do portal trazida do Hardlyze (%s).", antiga.get("email") or "sem e-mail")
-    return True
 
 
 def esta_conectado() -> bool:
