@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=compacto-2026-11-21b" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=coletas-2026-11-21" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -275,8 +275,8 @@
       </div>
 
       <section class="ag-card cg-uso-coletas" aria-labelledby="tit-uso-coletas">
-        <h3 class="ag-form-subhead__titulo" id="tit-uso-coletas">Última coleta por máquina</h3>
-        <ul id="uso-coletas" class="cg-op-lista"></ul>
+        <div class="cg-uso-cab"><h2 class="cg-uso-cab__titulo" id="tit-uso-coletas">Coleta por máquina</h2><span class="cg-uso-fraco" id="uso-coletas-resumo"></span></div>
+        <ul id="uso-coletas" class="cg-uso-coletas-lista" role="list"></ul>
       </section>
     </section>
 
@@ -1237,6 +1237,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-celular-2026-11-17"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=sistema-pagina-2026-11-21"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=coletas-2026-11-21"></script>
 </body>
 </html>

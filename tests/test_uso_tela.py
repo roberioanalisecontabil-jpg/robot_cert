@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=sistema-pagina-2026-11-21" in html
+    assert "carteiras-uso.js?v=coletas-2026-11-21" in html
 
 
 
@@ -247,3 +247,11 @@ def test_js_da_aba_uso_e_javascript_valido() -> None:
         pytest.skip("node não instalado")
     r = subprocess.run([node, "--check", str(JS)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_coleta_traz_o_nome_da_maquina_mesmo_fora_da_pagina(client: TestClient, banco) -> None:
+    """21/11/2026: o quadro de coletas mostrava o MAC da máquina sem linha na página."""
+    banco.tabelas["uso_coleta"].append({"machine_id": "m2", "ultima_em": HORA, "auditoria": "ligada"})
+    banco.tabelas["agent_devices"].append({"machine_id": "m2", "nome": "PC-SEM-USO", "visto_em": HORA})
+    c = _get(client, ADMIN).json()["coletas"]
+    assert c["m2"]["nome"] == "PC-SEM-USO" and c["m1"]["nome"] == "PC-FISCAL"

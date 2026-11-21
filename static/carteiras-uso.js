@@ -119,16 +119,37 @@
     $("uso-linhas").replaceChildren(tr);
   }
 
-  function coletas(mapa, nomes) {
-    const itens = Object.keys(mapa).sort().map((m) => {
+  // Coleta por máquina (21/11/2026): situação em selo com texto (nunca só cor),
+  // problemas primeiro. Parada = sem coletar há 24 h ou mais (a coleta é a cada
+  // 5 min com a estação ligada; uma noite desligada não chega a 24 h).
+  const PARADA_MS = 24 * 3600 * 1000;
+  function ha(iso) {
+    const min = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+    if (isNaN(min)) return "";
+    if (min < 60) return "há " + min + " min";
+    if (min < 48 * 60) return "há " + Math.round(min / 60) + " h";
+    return "há " + Math.round(min / 1440) + " dias";
+  }
+  function situacao(c) {
+    if (c.auditoria === "desligada") return ["danger", "Auditoria desligada", 0];
+    if (Date.now() - new Date(c.ultima_em) >= PARADA_MS) return ["warning", "Parada", 1];
+    return ["success", "Em dia", 2];
+  }
+  function coletas(mapa) {
+    const itens = Object.keys(mapa).map((m) => ({ m, c: mapa[m], s: situacao(mapa[m]) }))
+      .sort((a, b) => a.s[2] - b.s[2] || String(a.c.nome || a.m).localeCompare(String(b.c.nome || b.m)));
+    $("uso-coletas").replaceChildren(...itens.map(({ m, c, s }) => {
       const li = document.createElement("li");
-      li.className = "cg-op-vazio";
-      const c = mapa[m];
-      li.textContent = (nomes[m] || m) + ": " + data(c.ultima_em) + " " + hm(c.ultima_em) +
-        (c.auditoria === "desligada" ? " (auditoria desligada)" : "");
+      li.className = "cg-uso-coleta";
+      li.title = "Última coleta: " + data(c.ultima_em) + " " + hm(c.ultima_em);
+      texto(li, "span", s[1], "ag-badge ag-badge--" + s[0]);
+      texto(li, "span", c.nome || m, "cg-uso-coleta__nome");
+      texto(li, "span", ha(c.ultima_em), "cg-uso-fraco");
       return li;
-    });
-    $("uso-coletas").replaceChildren(...itens);
+    }));
+    const prob = itens.filter((i) => i.s[2] < 2).length;
+    $("uso-coletas-resumo").textContent = itens.length + (itens.length === 1 ? " máquina" : " máquinas") +
+      (prob ? " · " + prob + " com problema" : " · todas em dia");
   }
 
   async function carregarPessoas() {
@@ -264,7 +285,7 @@
   async function carregarColetas() {
     try {
       const r = await fetch("/api/carteira/uso?" + filtros() + "&por_pagina=10", { headers: getHeaders() });
-      if (r.ok) coletas((await r.json()).coletas || {}, {});
+      if (r.ok) coletas((await r.json()).coletas || {});
     } catch (e) { /* a lista só fica como estava */ }
   }
 
@@ -301,7 +322,7 @@
           return tr;
         }));
       }
-      coletas(j.coletas || {}, nomes);
+      coletas(j.coletas || {});
     } catch (e) {
       if (meu !== seqHist) return;
       mensagem("Erro de conexão com o servidor.");
