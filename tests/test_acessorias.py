@@ -607,7 +607,7 @@ def test_painel_numa_linha_e_lista_descontada():
     assert 'classList.add("cg-com-acess")' in html
     media = css[css.index("@media (min-width: 1025px)"):]
     assert ".cg-com-acess .cg-op-rolagem { max-height: max(12rem, calc(100vh - 30rem)); }" in media
-    assert "aguia-carteiras.css?v=por-certificado-2026-11-21" in html
+    assert "aguia-carteiras.css?v=compacto-2026-11-21" in html
 
 
 def test_convite_abre_direto_no_codigo_sem_pedir_outro():
