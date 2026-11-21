@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=pagina-admin-2026-11-21" in html
+    assert "carteiras-uso.js?v=sistema-pagina-2026-11-21" in html
 
 
 
@@ -143,7 +143,8 @@ def test_admin_ve_uma_linha_por_pagina(client: TestClient, com_janelas) -> None:
     o uso sem janela conta uma vez. Sem coluna de sistema nem de quantidade."""
     j = _get(client, ADMIN).json()
     assert j["total_itens"] == 4 and len(j["linhas"]) == 4  # uso 1: Portal A e Caixa; 2: Portal B; 3: sem janela
-    assert not ({"sistema", "outras", "quantidade", "id"} & set(j["linhas"][0])) and j["mostra_pagina"] is True
+    assert not ({"sistema", "outras", "quantidade"} & set(j["linhas"][0])) and j["mostra_pagina"] is True
+    assert sorted(l["id"] for l in j["linhas"]) == [1, 1, 2, 3]  # o id do uso abre o modal de janelas
     assert sorted((l["quando"], l["pagina_acessada"]) for l in j["linhas"]) == sorted(
         [(EVENTO, "chrome.exe · Portal A"), (EVENTO, "outlook.exe · Caixa"), (EVENTO, "chrome.exe · Portal B"), (HORA, "")])
 
@@ -221,13 +222,28 @@ def test_visao_por_certificado_com_historico_paginado() -> None:
 
 def test_historico_sem_coluna_de_sistema_nem_de_usos() -> None:
     """21/11/2026: cada linha já é um uso (uma página, para o admin); a coluna
-    Usos confundia (contava assinaturas da chave). O botão de Sistema e o modal
-    saíram; a página volta como texto, só para o admin (uso-th-pagina)."""
+    Usos confundia (contava assinaturas da chave). Sistema/Página fica só para
+    o admin, e o nome abre o modal com as janelas do uso."""
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
     cab = html.split('aria-label="Histórico de uso do certificado"')[1].split("</thead>")[0]
-    assert re.findall(r">([^<>]+)</th>", cab) == ["Quando", "Pessoa", "Máquina", "Página"]
+    assert re.findall(r">([^<>]+)</th>", cab) == ["Quando", "Pessoa", "Máquina", "Sistema/Página"]
     assert 'id="uso-th-pagina" hidden' in cab
-    assert "modalUsoJanelas" not in html and "uso-th-sistema" not in html
+    assert 'id="modalUsoJanelas"' in html and "É a janela que estava na tela no momento do uso." in html
     js = JS.read_text(encoding="utf-8")
-    assert "mostra_sistema" not in js and "/janelas" not in js and "quantidade" not in js
-    assert "cg-uso-sistema" not in (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
+    assert "/janelas" in js and "abrirJanelas(l.id)" in js and "quantidade" not in js and "innerHTML" not in js
+    # Clique antigo não sobrescreve o modal de um clique novo; rótulo contém o texto visível.
+    assert "const meu = ++seqJanelas;" in js and js.count("if (meu !== seqJanelas) return;") >= 3
+    assert '"Ver janelas do uso: " + b.textContent' in js
+
+
+def test_js_da_aba_uso_e_javascript_valido() -> None:
+    """21/11/2026: um corte errado deixou o arquivo sem fechar uma função e os
+    testes de texto acima passaram assim mesmo."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node não instalado")
+    r = subprocess.run([node, "--check", str(JS)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr

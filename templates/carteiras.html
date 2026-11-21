@@ -242,7 +242,7 @@
                   <th role="columnheader" class="ag-th--estatico">Quando</th>
                   <th role="columnheader" class="ag-th--estatico">Pessoa</th>
                   <th role="columnheader" class="ag-th--estatico">Máquina</th>
-                  <th role="columnheader" class="ag-th--estatico" id="uso-th-pagina" hidden>Página</th>
+                  <th role="columnheader" class="ag-th--estatico" id="uso-th-pagina" hidden>Sistema/Página</th>
                 </tr></thead>
                 <tbody role="rowgroup" id="uso-linhas"></tbody>
               </table>
@@ -371,6 +371,24 @@
     </div>
   </dialog>
 
+
+  <dialog class="ag-modal" id="modalUsoJanelas" aria-labelledby="tit-uso-janelas">
+    <div class="ag-modal__head">
+      <h2 class="ag-modal__titulo" id="tit-uso-janelas">Janelas no momento do uso</h2>
+      <button type="button" class="ag-modal__x" data-ag-modal-close aria-label="Fechar">
+        <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="ag-modal__body">
+      <div id="usoJanelasLista"></div>
+      <p class="cg-acess__nota">É a janela que estava na tela no momento do uso. Um programa em segundo plano não aparece aqui.</p>
+    </div>
+    <div class="ag-modal__foot">
+      <button type="button" class="ag-btn ag-btn--outline" data-ag-modal-close>Fechar</button>
+    </div>
+  </dialog>
+
+  <dialog class="ag-modal ag-modal--lg" id="modalImportar" aria-labelledby="tit-importar">
 
   <dialog class="ag-modal ag-modal--lg" id="modalImportar" aria-labelledby="tit-importar">
     <form id="formImportar" method="dialog">
@@ -1215,6 +1233,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-celular-2026-11-17"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=pagina-admin-2026-11-21"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=sistema-pagina-2026-11-21"></script>
 </body>
 </html>

@@ -642,8 +642,8 @@ def listar_uso(
             "maquina": l["machine_id"], "nome_maquina": nomes_pc.get(str(l["machine_id"])) or l["machine_id"],
             "documento": l.get("documento") or "", "titular": titulares.get(str(l.get("documento"))) or "",
         })
-        if permitidos is None:  # admin: a página acessada (programa · título da janela)
-            linhas[-1]["pagina_acessada"] = l.get("pagina") or ""
+        if permitidos is None:  # admin: a página acessada e o id do uso (modal de janelas)
+            linhas[-1].update({"pagina_acessada": l.get("pagina") or "", "id": l.get("id")})
     return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
                                           for c in coletas},
             "pagina": pagina, "tem_mais": tem_mais, "mostra_pagina": permitidos is None,
