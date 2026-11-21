@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=janelas-2026-11-18" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=por-certificado-2026-11-21" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -190,47 +190,91 @@
 
     <!-- Aba Uso: quando cada certificado foi usado e por quem (Frente C). O texto
          das células vem da estação: static/carteiras-uso.js só usa textContent. -->
-    <section class="ag-card" id="sec-uso" role="tabpanel" aria-labelledby="tab-uso" {% if aba != 'uso' %}hidden{% endif %}>
-      <div class="ag-form-cols">
-        <div class="ag-field"><label class="ag-label" for="uso-desde">De</label><input type="date" id="uso-desde" class="ag-input" /></div>
-        <div class="ag-field"><label class="ag-label" for="uso-ate">Até</label><input type="date" id="uso-ate" class="ag-input" /></div>
-        <div class="ag-field"><label class="ag-label" for="uso-pessoa">Pessoa</label><select id="uso-pessoa" class="ag-select"><option value="">Todas</option></select></div>
-        <div class="ag-field"><label class="ag-label" for="uso-documento">Certificado (CNPJ/CPF)</label><input type="search" id="uso-documento" class="ag-input" inputmode="numeric" autocomplete="off" /></div>
-      </div>
-      <div class="ag-table-scroll" role="region" aria-label="Uso dos certificados">
-        <table class="ag-table" role="table">
-          <thead role="rowgroup"><tr role="row">
-            <th role="columnheader" class="ag-th--estatico">Quando</th>
-            <th role="columnheader" class="ag-th--estatico">Pessoa</th>
-            <th role="columnheader" class="ag-th--estatico">Máquina</th>
-            <th role="columnheader" class="ag-th--estatico">Certificado</th>
-            <th role="columnheader" class="ag-th--estatico" id="uso-th-sistema" hidden>Sistema/Página</th>
-            <th role="columnheader" class="ag-th--estatico">Usos</th>
-          </tr></thead>
-          <tbody role="rowgroup" id="uso-linhas"><tr class="cg-state-row"><td colspan="5" class="ag-table__vazio">Carregando…</td></tr></tbody>
-        </table>
-      </div>
-      <!-- Mesma barra do Início: preenchida por cgPageNavRefresh (ui-common.js). -->
-      <nav id="uso-paginacao" class="cg-page-nav" aria-label="Navegação por páginas do uso">
-        <div id="uso-pagina" class="cg-page-nav__meta" role="status"></div>
-        <div class="cg-page-nav__row">
-          <ul id="uso-pag-ul" class="cg-page-nav__ul" role="list">
-            <li><button type="button" id="uso-anterior" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button></li>
-            <li id="uso-pag-li-next"><button type="button" id="uso-proxima" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button></li>
-          </ul>
-          <div>
-            <label for="uso-por-pagina" class="cg-sr-only">Registros por página</label>
-            <select id="uso-por-pagina" class="cg-page-perpage-select" title="Itens por página">
-              <option value="10">10 por página</option>
-              <option value="25">25 por página</option>
-              <option value="50" selected>50 por página</option>
-              <option value="100">100 por página</option>
-            </select>
-          </div>
+    <!-- Visão por certificado (proposta B, 21/11/2026): lista à esquerda, detalhe
+         e histórico paginado à direita. Prévia em docs/propostas/uso-carteiras.html. -->
+    <section id="sec-uso" role="tabpanel" aria-labelledby="tab-uso" {% if aba != 'uso' %}hidden{% endif %}>
+      <div class="ag-card cg-uso-filtros">
+        <div class="cg-uso-periodo" role="group" aria-label="Período">
+          <button type="button" class="cg-uso-seg" data-dias="1" aria-pressed="false">Hoje</button>
+          <button type="button" class="cg-uso-seg" data-dias="7" aria-pressed="true">7 dias</button>
+          <button type="button" class="cg-uso-seg" data-dias="30" aria-pressed="false">30 dias</button>
+          <button type="button" class="cg-uso-seg" data-dias="0" aria-pressed="false">Personalizado</button>
         </div>
-      </nav>
-      <h3 class="ag-form-subhead__titulo">Última coleta por máquina</h3>
-      <ul id="uso-coletas" class="cg-op-lista"></ul>
+        <div class="cg-uso-datas" id="uso-datas" hidden>
+          <label class="cg-sr-only" for="uso-desde">De</label><input type="date" id="uso-desde" class="ag-input" />
+          <span aria-hidden="true">a</span>
+          <label class="cg-sr-only" for="uso-ate">Até</label><input type="date" id="uso-ate" class="ag-input" />
+        </div>
+        <label class="cg-sr-only" for="uso-pessoa">Pessoa</label>
+        <select id="uso-pessoa" class="ag-select cg-uso-campo"><option value="">Todas as pessoas</option></select>
+        <label class="cg-sr-only" for="uso-busca">Certificado: nome ou CNPJ/CPF</label>
+        <input type="search" id="uso-busca" class="ag-input cg-uso-campo cg-uso-campo--busca" placeholder="Certificado: nome ou CNPJ/CPF" autocomplete="off" />
+        <button type="button" class="ag-btn ag-btn--ghost cg-uso-limpar" id="uso-limpar">Limpar filtros</button>
+      </div>
+
+      <div class="cg-uso-mestre">
+        <section class="ag-card cg-uso-lista" aria-labelledby="tit-uso-certs">
+          <div class="cg-uso-cab"><h2 class="cg-uso-cab__titulo" id="tit-uso-certs">Certificados usados</h2><span class="cg-uso-fraco" id="uso-ncerts" role="status"></span></div>
+          <ul class="cg-uso-certs" id="uso-certs" role="list"></ul>
+        </section>
+
+        <section class="ag-card cg-uso-detalhe" id="uso-detalhe" aria-labelledby="uso-tit-cert">
+          <p class="cg-uso-fraco" id="uso-detalhe-vazio">Carregando…</p>
+          <div id="uso-detalhe-corpo" hidden>
+            <h2 class="cg-uso-detalhe__titulo" id="uso-tit-cert"></h2>
+            <div class="cg-uso-doc" id="uso-doc-cert"></div>
+            <dl class="cg-uso-mini" id="uso-mini"></dl>
+            <div class="cg-uso-duas">
+              <div>
+                <h3 class="cg-uso-sub">Usos por dia</h3>
+                <div class="cg-uso-colunas" id="uso-colunas" role="img"></div>
+                <div class="cg-uso-eixo" id="uso-eixo" aria-hidden="true"></div>
+              </div>
+              <div>
+                <h3 class="cg-uso-sub">Quem usou</h3>
+                <ul class="cg-uso-quem" id="uso-quem"></ul>
+              </div>
+            </div>
+            <h3 class="cg-uso-sub">Histórico</h3>
+            <div class="ag-table-scroll" role="region" aria-label="Histórico de uso do certificado">
+              <table class="ag-table" role="table">
+                <thead role="rowgroup"><tr role="row">
+                  <th role="columnheader" class="ag-th--estatico">Quando</th>
+                  <th role="columnheader" class="ag-th--estatico">Pessoa</th>
+                  <th role="columnheader" class="ag-th--estatico">Máquina</th>
+                  <th role="columnheader" class="ag-th--estatico" id="uso-th-sistema" hidden>Sistema/Página</th>
+                  <th role="columnheader" class="ag-th--estatico cg-uso-num">Usos</th>
+                </tr></thead>
+                <tbody role="rowgroup" id="uso-linhas"></tbody>
+              </table>
+            </div>
+            <!-- Mesma barra do Início: preenchida por cgPageNavRefresh (ui-common.js). -->
+            <nav id="uso-paginacao" class="cg-page-nav" aria-label="Navegação por páginas do histórico">
+              <div id="uso-pagina" class="cg-page-nav__meta" role="status"></div>
+              <div class="cg-page-nav__row">
+                <ul id="uso-pag-ul" class="cg-page-nav__ul" role="list">
+                  <li><button type="button" id="uso-anterior" class="cg-page-link cg-page-link--rounded-s" title="Página anterior">Anterior</button></li>
+                  <li id="uso-pag-li-next"><button type="button" id="uso-proxima" class="cg-page-link cg-page-link--rounded-e" title="Próxima página">Seguinte</button></li>
+                </ul>
+                <div>
+                  <label for="uso-por-pagina" class="cg-sr-only">Registros por página</label>
+                  <select id="uso-por-pagina" class="cg-page-perpage-select" title="Itens por página">
+                    <option value="10" selected>10 por página</option>
+                    <option value="20">20 por página</option>
+                    <option value="50">50 por página</option>
+                    <option value="100">100 por página</option>
+                  </select>
+                </div>
+              </div>
+            </nav>
+          </div>
+        </section>
+      </div>
+
+      <section class="ag-card cg-uso-coletas" aria-labelledby="tit-uso-coletas">
+        <h3 class="ag-form-subhead__titulo" id="tit-uso-coletas">Última coleta por máquina</h3>
+        <ul id="uso-coletas" class="cg-op-lista"></ul>
+      </section>
     </section>
 
     <!-- Aba Certificados: um certificado por vez, com quem pode usá-lo.
@@ -1187,6 +1231,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-celular-2026-11-17"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=janelas-2026-11-18b"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=por-certificado-2026-11-21"></script>
 </body>
 </html>

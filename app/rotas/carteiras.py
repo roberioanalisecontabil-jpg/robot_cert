@@ -436,6 +436,109 @@ def _intervalo_uso(desde: Optional[date], ate: Optional[date]) -> tuple:
     return uso._iso(ini), uso._iso(fim) if fim else None
 
 
+def _alcance_uso(sb, token: auth.TokenData, user_id: str) -> tuple:
+    """(users, permitidos, fora). Admin: permitidos None (tudo). Gestor: os ids
+    dos departamentos que lidera; `fora` quando não lidera nenhum ou o user_id
+    pedido é de fora. Levanta AlcanceIndisponivel como antes."""
+    us = sb.table("users").select("id, email, full_name, departamento_id").execute().data or []
+    if (token.role or "").strip().lower() in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
+        return us, None, False
+    meus = cert_installer.departamentos_que_lidera(_user_id_da_sessao(token) or "")
+    permitidos = [str(u["id"]) for u in us if u.get("departamento_id") and str(u["departamento_id"]) in meus]
+    return us, permitidos, not permitidos or bool(user_id and user_id not in permitidos)
+
+
+# Antes de /api/carteira/uso/{uso_id} e /api/carteira/{user_id}.
+@router.get("/api/carteira/uso/resumo", dependencies=[Depends(require_modulo("carteiras"))])
+def resumo_uso(
+    desde: Optional[date] = None,
+    ate: Optional[date] = None,
+    user_id: str = Query("", max_length=64),
+    documento: str = Query("", max_length=20),
+    token: auth.TokenData = Depends(require_admin_ou_gestor),
+) -> dict:
+    """Visão por certificado da aba Uso: soma do período por certificado e, com
+    `documento`, o detalhe dele (por dia e quem usou). Mesmo alcance de
+    /api/carteira/uso; o histórico paginado continua lá."""
+    from app import uso
+    from app.dashboard import _todas_as_linhas
+    from app.rotas.remocao import _nomes_por
+    from app.settings_state import _banco
+
+    sb = _banco()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Banco não configurado")
+    ini, fim = _intervalo_uso(desde, ate)
+    doc = "".join(c for c in documento if c.isdigit())
+    vazio = {"certificados": [], "detalhe": None}
+    try:
+        us, permitidos, fora = _alcance_uso(sb, token, user_id)
+        if fora:
+            return vazio
+
+        def consulta(a: int, b: int):
+            q = (sb.table("uso_certificado").select("id, hora, quantidade, documento, user_id, usuario_windows, machine_id")
+                 .is_("fingerprint", "not.null").gte("hora", ini))
+            if fim:
+                q = q.lt("hora", fim)
+            if user_id:
+                q = q.eq("user_id", user_id)
+            elif permitidos is not None:
+                q = q.in_("user_id", permitidos)
+            return q.order("id").range(a, b)
+
+        linhas = [l for l in _todas_as_linhas(consulta) if l.get("documento")]
+        titulares = _nomes_por("documento", sorted({str(l["documento"]) for l in linhas}))
+    except cert_installer.AlcanceIndisponivel:
+        raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
+    except Exception:
+        logger.exception("Falha ao resumir o uso dos certificados")
+        raise HTTPException(status_code=503, detail="Não foi possível ler o uso dos certificados agora.")
+
+    def quem(l: dict) -> tuple:
+        return ("u", str(l["user_id"])) if l.get("user_id") else ("w", l.get("usuario_windows") or "")
+
+    por_doc: Dict[str, List[dict]] = {}
+    for l in linhas:
+        por_doc.setdefault(str(l["documento"]), []).append(l)
+    certificados = sorted(({
+        "documento": d, "titular": titulares.get(d) or "",
+        "usos": sum(int(l.get("quantidade") or 0) for l in ls),
+        "pessoas": len({quem(l) for l in ls}),
+        "ultimo_em": max(str(l["hora"]) for l in ls),
+    } for d, ls in por_doc.items()), key=lambda c: (-c["usos"], c["titular"], c["documento"]))
+    if doc not in por_doc:
+        return {"certificados": certificados, "detalhe": None}
+
+    ls = por_doc[doc]
+    hoje = datetime.now(uso.BRASILIA).date()
+    dia_ini, dia_fim = desde or (hoje - timedelta(days=7)), ate or hoje
+    por_dia: Dict[str, int] = {}
+    for l in ls:
+        dia = datetime.fromisoformat(str(l["hora"]).replace("Z", "+00:00")).astimezone(uso.BRASILIA).date().isoformat()
+        por_dia[dia] = por_dia.get(dia, 0) + int(l.get("quantidade") or 0)
+    # shortcut: no máximo 366 colunas no gráfico (os dias mais recentes); período maior que isso não tem uso hoje.
+    dias = [(dia_ini + timedelta(days=i)).isoformat() for i in range(max(0, (dia_fim - dia_ini).days) + 1)][-366:]
+    por_id = {str(u["id"]): u for u in us}
+    soma_quem: Dict[tuple, int] = {}
+    for l in ls:
+        soma_quem[quem(l)] = soma_quem.get(quem(l), 0) + int(l.get("quantidade") or 0)
+
+    def nome(k: tuple) -> str:
+        if k[0] == "w":
+            return k[1]
+        u = por_id.get(k[1]) or {}
+        return nomes.nome_pessoa(u.get("full_name")) or u.get("email") or ""
+
+    resumo = next(c for c in certificados if c["documento"] == doc)
+    return {"certificados": certificados, "detalhe": {
+        **resumo, "maquinas": len({str(l["machine_id"]) for l in ls}),
+        "por_dia": [{"dia": d, "usos": por_dia.get(d, 0)} for d in dias],
+        "quem": sorted(({"nome": nome(k), "usos": n, "sem_login": k[0] == "w"} for k, n in soma_quem.items()),
+                       key=lambda q: (-q["usos"], q["nome"])),
+    }}
+
+
 # Antes de /api/carteira/{user_id}: senão "uso" casaria como user_id.
 @router.get("/api/carteira/uso", dependencies=[Depends(require_modulo("carteiras"))])
 def listar_uso(
@@ -463,13 +566,9 @@ def listar_uso(
     vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False, "mostra_sistema": False,
              "total_itens": 0, "total_paginas": 1}
     try:
-        us = sb.table("users").select("id, email, full_name, departamento_id").execute().data or []
-        permitidos: Optional[List[str]] = None
-        if papel not in cert_installer.PAPEIS_COM_ALCANCE_TOTAL:
-            meus = cert_installer.departamentos_que_lidera(_user_id_da_sessao(token) or "")
-            permitidos = [str(u["id"]) for u in us if u.get("departamento_id") and str(u["departamento_id"]) in meus]
-            if not permitidos or (user_id and user_id not in permitidos):
-                return vazio
+        us, permitidos, fora = _alcance_uso(sb, token, user_id)
+        if fora:
+            return vazio
         q = sb.table("uso_certificado").select("*", count="exact").is_("fingerprint", "not.null").gte("hora", ini)
         if fim:
             q = q.lt("hora", fim)
