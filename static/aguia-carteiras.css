@@ -274,6 +274,8 @@
 .cg-uso-semlogin { color: var(--warning-700); }
 #sec-uso .ag-table td { white-space: normal; }
 #sec-uso td.cg-uso-quando { white-space: nowrap; }
+/* Título longo da janela quebra em vez de alargar a tabela. */
+#sec-uso td.cg-uso-pagina { overflow-wrap: anywhere; max-width: 48ch; }
 #sec-uso .cg-page-nav { padding: var(--space-4) 0 0; margin-top: 0; }
 #sec-uso .ag-form-subhead__titulo { padding: var(--space-4) var(--space-6) var(--space-3); margin: 0; }
 #sec-uso .cg-op-lista > li { padding: var(--space-2) var(--space-6); }

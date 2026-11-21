@@ -489,8 +489,10 @@ def _usos_da_tela(sb, ini: str, fim: Optional[str], user_id: str, permitidos: Op
                     ps[k] = t
     out = []
     for l in linhas:
-        horas = sorted(paginas.get(l.get("id"), {}).values()) or [str(l.get("primeiro_em") or l["hora"])]
-        out += [{**l, "quando": t} for t in horas]
+        ps = sorted(paginas.get(l.get("id"), {}).items(), key=lambda kv: kv[1])
+        # `pagina` só existe no caminho do admin; o gestor nunca a recebe (listar_uso).
+        out += ([{**l, "quando": t, "pagina": " · ".join(p for p in k if p)} for k, t in ps]
+                or [{**l, "quando": str(l.get("primeiro_em") or l["hora"]), "pagina": ""}])
     # Desempate pelo id: páginas disjuntas mesmo com a mesma hora.
     out.sort(key=lambda r: (r["quando"], r.get("id") or 0), reverse=True)
     return out
@@ -640,9 +642,11 @@ def listar_uso(
             "maquina": l["machine_id"], "nome_maquina": nomes_pc.get(str(l["machine_id"])) or l["machine_id"],
             "documento": l.get("documento") or "", "titular": titulares.get(str(l.get("documento"))) or "",
         })
+        if permitidos is None:  # admin: a página acessada (programa · título da janela)
+            linhas[-1]["pagina_acessada"] = l.get("pagina") or ""
     return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
                                           for c in coletas},
-            "pagina": pagina, "tem_mais": tem_mais,
+            "pagina": pagina, "tem_mais": tem_mais, "mostra_pagina": permitidos is None,
             "total_itens": total_itens, "total_paginas": max(1, -(-total_itens // por_pagina))}
 
 
