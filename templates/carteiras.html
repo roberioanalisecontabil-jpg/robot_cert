@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=por-certificado-2026-11-21" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=compacto-2026-11-21" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -221,9 +221,13 @@
         <section class="ag-card cg-uso-detalhe" id="uso-detalhe" aria-labelledby="uso-tit-cert">
           <p class="cg-uso-fraco" id="uso-detalhe-vazio">Carregando…</p>
           <div id="uso-detalhe-corpo" hidden>
-            <h2 class="cg-uso-detalhe__titulo" id="uso-tit-cert"></h2>
-            <div class="cg-uso-doc" id="uso-doc-cert"></div>
-            <dl class="cg-uso-mini" id="uso-mini"></dl>
+            <div class="cg-uso-topo">
+              <div>
+                <h2 class="cg-uso-detalhe__titulo" id="uso-tit-cert"></h2>
+                <div class="cg-uso-doc" id="uso-doc-cert"></div>
+              </div>
+              <dl class="cg-uso-mini" id="uso-mini"></dl>
+            </div>
             <div class="cg-uso-duas">
               <div>
                 <h3 class="cg-uso-sub">Usos por dia</h3>
