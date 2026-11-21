@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=sem-rolagem-2026-11-21" in html
+    assert "carteiras-uso.js?v=sem-laco-2026-11-21" in html
 
 
 
@@ -271,3 +271,9 @@ def test_css_de_carteiras_sem_caractere_de_controle() -> None:
     do quadro de coletas saiu como um quadrado."""
     css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
     assert not [c for c in css if ord(c) < 32 and c not in "\n\r\t"]
+
+
+def test_js_nao_pede_o_resumo_sem_parar() -> None:
+    """21/11/2026: detalhe vazio para o mais usado fazia carregarResumo chamar
+    a si mesma sem fim (50 chamadas no harness até o stub ceder; 2 depois)."""
+    assert "if (!j.detalhe && certs.length && docSel !== certs[0].documento) {" in JS.read_text(encoding="utf-8")
