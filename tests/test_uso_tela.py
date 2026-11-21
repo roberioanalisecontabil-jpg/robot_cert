@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=coletas-2026-11-21" in html
+    assert "carteiras-uso.js?v=recolhe-2026-11-21" in html
 
 
 
@@ -255,3 +255,19 @@ def test_coleta_traz_o_nome_da_maquina_mesmo_fora_da_pagina(client: TestClient, 
     banco.tabelas["agent_devices"].append({"machine_id": "m2", "nome": "PC-SEM-USO", "visto_em": HORA})
     c = _get(client, ADMIN).json()["coletas"]
     assert c["m2"]["nome"] == "PC-SEM-USO" and c["m1"]["nome"] == "PC-FISCAL"
+
+
+def test_coleta_por_maquina_recolhe() -> None:
+    """21/11/2026: o quadro abre recolhido; o resumo (com selo se houver
+    problema) fica no título clicável."""
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    quadro = html.split('id="uso-coletas-quadro"')[0].rsplit("<", 1)[1] + html.split('id="uso-coletas-quadro"')[1].split("</details>")[0]
+    assert quadro.startswith("details") and " open" not in quadro.split(">")[0]
+    assert "<summary" in quadro and 'id="uso-coletas-resumo"' in quadro.split("</summary>")[0]
+
+
+def test_css_de_carteiras_sem_caractere_de_controle() -> None:
+    """21/11/2026: um escape "\25B8" virou o caractere 0x15 ao gravar e a seta
+    do quadro de coletas saiu como um quadrado."""
+    css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
+    assert not [c for c in css if ord(c) < 32 and c not in "\n\r\t"]
