@@ -115,3 +115,11 @@ def test_arquivo_gravado_so_o_system_e_admin_alteram(maquina) -> None:
     identidade.fixar(_Http())
     finais = [c for nome, c in _ACLS if nome == identidade.ARQUIVO]
     assert finais == [("*S-1-5-18:F", "*S-1-5-32-544:F", "*S-1-5-32-545:R")]
+
+
+def test_sem_mac_nao_grava_unknown(maquina, monkeypatch) -> None:
+    """Sem rede no boot o cálculo dá "unknown": gravar isso regravava o arquivo
+    a cada rodada (a leitura o ignora). Fica sem arquivo até haver um MAC."""
+    monkeypatch.setattr(identidade, "mac_calculado", lambda: "unknown")
+    assert identidade.fixar(_Http(404)) == "unknown"
+    assert not (maquina / identidade.ARQUIVO).exists()

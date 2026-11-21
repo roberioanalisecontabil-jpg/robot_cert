@@ -105,7 +105,9 @@ def fixar(http) -> str:
         do_portal = _do_portal(http, chave) if chave else None
         atual = _do_arquivo()
         escolhido = do_portal or atual or mac_calculado()
-        if escolhido != atual:
+        # "unknown" (sem rede no boot) não vai ao arquivo: a leitura o ignoraria e
+        # cada rodada o regravaria.
+        if escolhido != atual and _FORMATO.fullmatch(escolhido):
             _gravar(escolhido)
             logger.info("Identidade: machine_id fixado em %s (antes: %s).", escolhido, atual or "nenhum")
         return escolhido
