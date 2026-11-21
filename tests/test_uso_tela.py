@@ -100,30 +100,15 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
     assert "innerHTML" not in JS.read_text(encoding="utf-8")
 
 
-def test_js_mostra_sistema_e_abre_detalhe() -> None:
-    js = JS.read_text(encoding="utf-8")
-    assert "mostra_sistema" in js and "/janelas" in js and "modalUsoJanelas" in js
-    assert "innerHTML" not in js and "cg-uso-futuro" not in js
 
 
-def test_modal_tem_o_aviso() -> None:
-    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "É a janela que estava na tela no momento do uso. Um programa em segundo plano não aparece aqui." in html
-    assert 'id="modalUsoJanelas"' in html and 'id="uso-th-sistema"' in html
 
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=por-certificado-2026-11-21" in html
+    assert "carteiras-uso.js?v=por-pagina-2026-11-21" in html
 
 
-def test_js_descarta_resposta_antiga_e_rotulo_contem_texto_visivel() -> None:
-    js = JS.read_text(encoding="utf-8")
-    assert "const meu = ++seqJanelas;" in js and js.count("if (meu !== seqJanelas) return;") >= 3
-    assert '"Ver janelas do uso: " + b.textContent' in js
-    assert '[w.programa, w.titulo].filter(Boolean).join(" · ")' in js
-    # Hora do uso (evento_em); a da janela de ordem 0 só se a API não mandar.
-    assert "u.evento_em || (ordem0 && ordem0.quando)" in js
 
 
 def test_modal_importar_manteve_o_espaco_do_atributo() -> None:
@@ -131,11 +116,6 @@ def test_modal_importar_manteve_o_espaco_do_atributo() -> None:
     assert 'id="modalImportar" aria-labelledby=' in html
 
 
-def test_css_do_botao_de_sistema_quebra_linha_e_limita_largura() -> None:
-    css = (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")
-    m = re.search(r"\.cg-uso-sistema\s*\{([^}]*)\}", css)
-    assert m and "white-space: normal" in m.group(1) and "max-width" in m.group(1)
-    assert "cg-uso-sistema" in JS.read_text(encoding="utf-8") and "cg-uso-futuro" not in css
 
 
 def _janela(uso_id, record_id, ordem, programa, titulo) -> dict:
@@ -157,28 +137,27 @@ def com_janelas(banco):
     return banco
 
 
-def test_admin_recebe_sistema_e_outras(client: TestClient, com_janelas) -> None:
+def test_admin_ve_uma_linha_por_pagina(client: TestClient, com_janelas) -> None:
+    """21/11/2026: cada página distinta (janela da frente, ordem 0) dentro de
+    um uso vira uma linha; a mesma página em vários eventos conta uma vez, e
+    o uso sem janela conta uma vez. Sem coluna de sistema nem de quantidade."""
     j = _get(client, ADMIN).json()
-    assert j["mostra_sistema"] is True
-    por_id = {l["id"]: l for l in j["linhas"]}
-    assert por_id[1]["sistema"] == "outlook.exe · Caixa" and por_id[1]["outras"] == 1
-    assert por_id[2]["sistema"] == "chrome.exe · Portal B" and por_id[2]["outras"] == 0
+    assert j["total_itens"] == 4 and len(j["linhas"]) == 4  # uso 1: Portal A e Caixa; 2: Portal B; 3: sem janela
+    assert not ({"sistema", "outras", "quantidade", "id"} & set(j["linhas"][0])) and "mostra_sistema" not in j
+    assert sorted(l["quando"] for l in j["linhas"]) == sorted([EVENTO, EVENTO, EVENTO, HORA])
 
 
-def test_sistema_sem_programa_nao_comeca_com_separador(client: TestClient, com_janelas) -> None:
-    com_janelas.tabelas["uso_janela"].append(_janela(3, 30, 0, "", "Só título"))
-    l3 = {l["id"]: l for l in _get(client, ADMIN).json()["linhas"]}[3]
-    assert l3["sistema"] == "Só título"
+def test_pagina_vale_na_primeira_vez_que_aparece(client: TestClient, com_janelas) -> None:
+    com_janelas.tabelas["uso_certificado"] = [_uso("u-fis", DOC_A, id=1)]
+    cedo = datetime(2026, 11, 15, 15, 2, tzinfo=timezone.utc).isoformat()
+    com_janelas.tabelas["uso_janela"] = [{**_janela(1, 10, 0, "chrome.exe", "Portal A"), "evento_em": EVENTO},
+                                         {**_janela(1, 9, 0, "chrome.exe", "Portal A"), "evento_em": cedo}]
+    assert [l["quando"] for l in _get(client, ADMIN).json()["linhas"]] == [cedo]
 
 
-def test_linha_sem_janela_sai_vazia(client: TestClient, com_janelas) -> None:
-    l3 = {l["id"]: l for l in _get(client, ADMIN).json()["linhas"]}[3]
-    assert l3["sistema"] == "" and l3["outras"] == 0
-
-
-def test_gestor_nao_recebe_janela_nem_id(client: TestClient, com_janelas) -> None:
+def test_gestor_ve_uma_linha_por_uso_sem_pagina(client: TestClient, com_janelas) -> None:
     j = _get(client, GESTOR).json()
-    assert j["mostra_sistema"] is False and j["linhas"]
+    assert j["total_itens"] == 3 and len(j["linhas"]) == 3
     assert all(not ({"id", "sistema", "outras"} & set(l)) for l in j["linhas"])
 
 
@@ -214,11 +193,11 @@ def test_detalhe_com_banco_fora_503(client: TestClient, com_janelas, monkeypatch
 
 def test_paginas_com_a_mesma_hora_nao_repetem_nem_perdem_linhas(client: TestClient, banco) -> None:
     # hora é balde de uma hora: empate é a regra, e o desempate pelo id mantém as páginas disjuntas.
-    banco.tabelas["uso_certificado"] = [_uso("u-fis", DOC_A, id=i, quantidade=i) for i in range(1, 76)]
+    banco.tabelas["uso_certificado"] = [_uso(None, DOC_A, id=i, usuario_windows=str(i)) for i in range(1, 76)]
     ids = []
     for p in (1, 2):
         j = _get(client, ADMIN, f"&pagina={p}").json()
-        ids += [l["quantidade"] for l in j["linhas"]]
+        ids += [int(l["usuario_windows"]) for l in j["linhas"]]
     assert sorted(ids) == list(range(1, 76))  # sem repetir nem perder
     assert ids[:3] == [75, 74, 73]
 
@@ -236,3 +215,16 @@ def test_visao_por_certificado_com_historico_paginado() -> None:
     assert "/api/carteira/uso/resumo?" in js and 'q.set("documento", docSel)' in js
     # O "por página" fica na barra: ela não pode sumir com uma página só.
     assert "hideWhenSingle: false" in js
+
+
+def test_historico_sem_coluna_de_sistema_nem_de_usos() -> None:
+    """21/11/2026: cada linha já é um uso (uma página, para o admin); a coluna
+    Usos confundia (contava assinaturas da chave) e a de Sistema saiu a pedido.
+    O modal de janelas só abria por ela e saiu junto."""
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    cab = html.split('aria-label="Histórico de uso do certificado"')[1].split("</thead>")[0]
+    assert re.findall(r">([^<>]+)</th>", cab) == ["Quando", "Pessoa", "Máquina"]
+    assert "modalUsoJanelas" not in html and "uso-th-sistema" not in html
+    js = JS.read_text(encoding="utf-8")
+    assert "mostra_sistema" not in js and "/janelas" not in js and "quantidade" not in js
+    assert "cg-uso-sistema" not in (RAIZ / "static" / "aguia-carteiras.css").read_text(encoding="utf-8")

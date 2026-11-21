@@ -270,7 +270,7 @@
 .cg-uso-eixo { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--text-caption); margin-top: var(--space-1); }
 .cg-uso-quem { list-style: none; margin: 0; padding: 0; }
 .cg-uso-quem li { display: flex; justify-content: space-between; gap: var(--space-3); padding: 6px 0; border-bottom: var(--bw-1) solid var(--border-subtle); }
-.cg-uso-quem li span:last-child, .cg-uso-num { font-variant-numeric: tabular-nums; text-align: end; }
+.cg-uso-quem li span:last-child { font-variant-numeric: tabular-nums; text-align: end; }
 .cg-uso-semlogin { color: var(--warning-700); }
 #sec-uso .ag-table td { white-space: normal; }
 #sec-uso td.cg-uso-quando { white-space: nowrap; }
@@ -281,8 +281,6 @@
     .cg-uso-mestre, .cg-uso-duas { grid-template-columns: minmax(0, 1fr); }
     .cg-uso-certs { max-height: 320px; }
 }
-/* Título longo da janela quebra em vez de alargar a tabela e esconder "Usos". */
-.cg-uso-sistema { white-space: normal; text-align: start; overflow-wrap: anywhere; max-width: 40ch; height: auto; }
 
 /* ── Duas etapas até 1024px ─────────────────────────────────────────── */
 @media (max-width: 1024px) {

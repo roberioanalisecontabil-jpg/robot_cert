@@ -448,6 +448,54 @@ def _alcance_uso(sb, token: auth.TokenData, user_id: str) -> tuple:
     return us, permitidos, not permitidos or bool(user_id and user_id not in permitidos)
 
 
+def _usos_da_tela(sb, ini: str, fim: Optional[str], user_id: str, permitidos: Optional[List[str]],
+                  documento: str, por_pagina_aberta: bool) -> List[dict]:
+    """As linhas do Histórico, do mais recente ao mais antigo, com `quando`.
+
+    Admin (`por_pagina_aberta`): uma linha por página distinta (programa e
+    título da janela em primeiro plano, ordem 0) dentro de cada linha de
+    `uso_certificado`, na hora em que a página apareceu primeiro; sem janela,
+    a linha conta uma vez. Gestor: uma linha por `uso_certificado`, sem página
+    (decisão de 21/11/2026). É a mesma lista que o resumo soma: o total da
+    tela é o número de linhas que a pessoa vê.
+    """
+    from app.dashboard import _todas_as_linhas
+
+    def consulta(a: int, b: int):
+        q = (sb.table("uso_certificado")
+             .select("id, hora, primeiro_em, documento, user_id, usuario_windows, machine_id")
+             .is_("fingerprint", "not.null").gte("hora", ini))
+        if fim:
+            q = q.lt("hora", fim)
+        if user_id:
+            q = q.eq("user_id", user_id)
+        elif permitidos is not None:
+            q = q.in_("user_id", permitidos)
+        if documento:
+            q = q.eq("documento", documento)
+        return q.order("id").range(a, b)
+
+    linhas = [l for l in _todas_as_linhas(consulta) if l.get("documento")]
+    paginas: Dict[Any, Dict[tuple, str]] = {}
+    ids = [l["id"] for l in linhas if l.get("id") is not None]
+    if por_pagina_aberta:
+        for i in range(0, len(ids), 200):  # `in` longo estoura a URL do PostgREST
+            for w in (sb.table("uso_janela").select("uso_id, ordem, evento_em, quando, programa, titulo")
+                      .in_("uso_id", ids[i:i + 200]).eq("ordem", 0).execute().data or []):
+                t = str(w.get("evento_em") or w.get("quando") or "")
+                ps = paginas.setdefault(w["uso_id"], {})
+                k = (w.get("programa") or "", w.get("titulo") or "")
+                if t and (k not in ps or t < ps[k]):
+                    ps[k] = t
+    out = []
+    for l in linhas:
+        horas = sorted(paginas.get(l.get("id"), {}).values()) or [str(l.get("primeiro_em") or l["hora"])]
+        out += [{**l, "quando": t} for t in horas]
+    # Desempate pelo id: páginas disjuntas mesmo com a mesma hora.
+    out.sort(key=lambda r: (r["quando"], r.get("id") or 0), reverse=True)
+    return out
+
+
 # Antes de /api/carteira/uso/{uso_id} e /api/carteira/{user_id}.
 @router.get("/api/carteira/uso/resumo", dependencies=[Depends(require_modulo("carteiras"))])
 def resumo_uso(
@@ -457,11 +505,11 @@ def resumo_uso(
     documento: str = Query("", max_length=20),
     token: auth.TokenData = Depends(require_admin_ou_gestor),
 ) -> dict:
-    """Visão por certificado da aba Uso: soma do período por certificado e, com
-    `documento`, o detalhe dele (por dia e quem usou). Mesmo alcance de
-    /api/carteira/uso; o histórico paginado continua lá."""
+    """Visão por certificado da aba Uso: quantas linhas do Histórico cada
+    certificado tem no período e, com `documento`, o detalhe dele (por dia e
+    quem usou). Mesmo alcance de /api/carteira/uso; o histórico paginado
+    continua lá."""
     from app import uso
-    from app.dashboard import _todas_as_linhas
     from app.rotas.remocao import _nomes_por
     from app.settings_state import _banco
 
@@ -475,19 +523,7 @@ def resumo_uso(
         us, permitidos, fora = _alcance_uso(sb, token, user_id)
         if fora:
             return vazio
-
-        def consulta(a: int, b: int):
-            q = (sb.table("uso_certificado").select("id, hora, quantidade, documento, user_id, usuario_windows, machine_id")
-                 .is_("fingerprint", "not.null").gte("hora", ini))
-            if fim:
-                q = q.lt("hora", fim)
-            if user_id:
-                q = q.eq("user_id", user_id)
-            elif permitidos is not None:
-                q = q.in_("user_id", permitidos)
-            return q.order("id").range(a, b)
-
-        linhas = [l for l in _todas_as_linhas(consulta) if l.get("documento")]
+        linhas = _usos_da_tela(sb, ini, fim, user_id, permitidos, "", permitidos is None)
         titulares = _nomes_por("documento", sorted({str(l["documento"]) for l in linhas}))
     except cert_installer.AlcanceIndisponivel:
         raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
@@ -502,10 +538,8 @@ def resumo_uso(
     for l in linhas:
         por_doc.setdefault(str(l["documento"]), []).append(l)
     certificados = sorted(({
-        "documento": d, "titular": titulares.get(d) or "",
-        "usos": sum(int(l.get("quantidade") or 0) for l in ls),
-        "pessoas": len({quem(l) for l in ls}),
-        "ultimo_em": max(str(l["hora"]) for l in ls),
+        "documento": d, "titular": titulares.get(d) or "", "usos": len(ls),
+        "pessoas": len({quem(l) for l in ls}), "ultimo_em": max(l["quando"] for l in ls),
     } for d, ls in por_doc.items()), key=lambda c: (-c["usos"], c["titular"], c["documento"]))
     if doc not in por_doc:
         return {"certificados": certificados, "detalhe": None}
@@ -515,14 +549,14 @@ def resumo_uso(
     dia_ini, dia_fim = desde or (hoje - timedelta(days=7)), ate or hoje
     por_dia: Dict[str, int] = {}
     for l in ls:
-        dia = datetime.fromisoformat(str(l["hora"]).replace("Z", "+00:00")).astimezone(uso.BRASILIA).date().isoformat()
-        por_dia[dia] = por_dia.get(dia, 0) + int(l.get("quantidade") or 0)
+        dia = datetime.fromisoformat(l["quando"].replace("Z", "+00:00")).astimezone(uso.BRASILIA).date().isoformat()
+        por_dia[dia] = por_dia.get(dia, 0) + 1
     # shortcut: no máximo 366 colunas no gráfico (os dias mais recentes); período maior que isso não tem uso hoje.
     dias = [(dia_ini + timedelta(days=i)).isoformat() for i in range(max(0, (dia_fim - dia_ini).days) + 1)][-366:]
     por_id = {str(u["id"]): u for u in us}
     soma_quem: Dict[tuple, int] = {}
     for l in ls:
-        soma_quem[quem(l)] = soma_quem.get(quem(l), 0) + int(l.get("quantidade") or 0)
+        soma_quem[quem(l)] = soma_quem.get(quem(l), 0) + 1
 
     def nome(k: tuple) -> str:
         if k[0] == "w":
@@ -552,8 +586,9 @@ def listar_uso(
 ) -> dict:
     """Uso dos certificados (Frente C): quando, por quem, em qual máquina.
 
-    Admin vê tudo, inclusive perfil sem login; Gestor só pessoas dos
-    departamentos que lidera. user_id de fora do alcance dá lista vazia.
+    Admin vê tudo, inclusive perfil sem login, com uma linha por página
+    acessada; Gestor só pessoas dos departamentos que lidera, uma linha por
+    uso (_usos_da_tela). user_id de fora do alcance dá lista vazia.
     """
     from app.rotas.remocao import _nomes_por
     from app.settings_state import _banco
@@ -562,26 +597,16 @@ def listar_uso(
     if not sb:
         raise HTTPException(status_code=503, detail="Banco não configurado")
     ini, fim = _intervalo_uso(desde, ate)
-    papel = (token.role or "").strip().lower()
-    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False, "mostra_sistema": False,
+    vazio = {"linhas": [], "coletas": {}, "pagina": pagina, "tem_mais": False,
              "total_itens": 0, "total_paginas": 1}
     try:
         us, permitidos, fora = _alcance_uso(sb, token, user_id)
         if fora:
             return vazio
-        q = sb.table("uso_certificado").select("*", count="exact").is_("fingerprint", "not.null").gte("hora", ini)
-        if fim:
-            q = q.lt("hora", fim)
-        if user_id:
-            q = q.eq("user_id", user_id)
-        elif permitidos is not None:
-            q = q.in_("user_id", permitidos)
-        if documento:
-            q = q.eq("documento", "".join(c for c in documento if c.isdigit()))
+        todas = _usos_da_tela(sb, ini, fim, user_id, permitidos, "".join(c for c in documento if c.isdigit()),
+                              permitidos is None)
         ini_p = (pagina - 1) * por_pagina
-        # count="exact" conta o filtro inteiro, ignorando o range: é o total da barra de páginas.
-        r = q.order("hora", desc=True).order("id", desc=True).range(ini_p, ini_p + por_pagina - 1).execute()
-        achadas, total_itens = r.data or [], r.count or 0
+        achadas, total_itens = todas[ini_p:ini_p + por_pagina], len(todas)
         tem_mais = ini_p + len(achadas) < total_itens
         maquinas = sorted({str(l["machine_id"]) for l in achadas})
         # Admin vê a coleta de todas as máquinas (é como se descobre a auditoria desligada);
@@ -598,15 +623,6 @@ def listar_uso(
                 if d.get("nome"):
                     nomes_pc[str(d["machine_id"])] = d["nome"]
         titulares = _nomes_por("documento", [str(l["documento"]) for l in achadas if l.get("documento")])
-        # Programa e janela só para o admin; o gestor nem dispara a consulta.
-        mostra_sistema = papel in cert_installer.PAPEIS_COM_ALCANCE_TOTAL
-        ids = [l["id"] for l in achadas if l.get("id") is not None]
-        janelas: Dict[Any, List[dict]] = {}
-        if mostra_sistema and ids:
-            for w in (sb.table("uso_janela").select("uso_id, record_id, ordem, programa, titulo")
-                      .in_("uso_id", ids).execute().data or []):
-                if w.get("ordem") == 0:
-                    janelas.setdefault(w["uso_id"], []).append(w)
     except cert_installer.AlcanceIndisponivel:
         raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
     except Exception:
@@ -617,25 +633,16 @@ def listar_uso(
     for l in achadas:
         u = por_id.get(str(l.get("user_id"))) if l.get("user_id") else None
         linhas.append({
-            "hora": l["hora"], "primeiro_em": l["primeiro_em"], "ultimo_em": l["ultimo_em"],
-            "quantidade": l["quantidade"],
+            "quando": l["quando"],
             "pessoa": (nomes.nome_pessoa(u.get("full_name")) or u.get("email") or "") if u else "",
             "email": (u.get("email") or "") if u else "",
             "usuario_windows": l.get("usuario_windows") or "", "sem_login": not l.get("user_id"),
             "maquina": l["machine_id"], "nome_maquina": nomes_pc.get(str(l["machine_id"])) or l["machine_id"],
             "documento": l.get("documento") or "", "titular": titulares.get(str(l.get("documento"))) or "",
         })
-        if mostra_sistema:
-            ws = janelas.get(l.get("id"), [])
-            ultima = max(ws, key=lambda w: w["record_id"], default=None)
-            linhas[-1].update({
-                "id": l.get("id"),
-                "sistema": " · ".join(p for p in (ultima["programa"], ultima["titulo"]) if p) if ultima else "",
-                "outras": max(0, len({(w["programa"], w["titulo"]) for w in ws}) - 1),
-            })
     return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
                                           for c in coletas},
-            "pagina": pagina, "tem_mais": tem_mais, "mostra_sistema": mostra_sistema,
+            "pagina": pagina, "tem_mais": tem_mais,
             "total_itens": total_itens, "total_paginas": max(1, -(-total_itens // por_pagina))}
 
 

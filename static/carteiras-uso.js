@@ -1,6 +1,7 @@
 // Aba "Uso" da tela Carteiras (Frente C, 15/11/2026). Visão por certificado
 // (proposta B, 21/11/2026): /api/carteira/uso/resumo dá a lista e o detalhe;
-// o histórico paginado continua em /api/carteira/uso.
+// o histórico paginado continua em /api/carteira/uso. Cada linha é um uso: para
+// o admin, uma página acessada; para o gestor, um uso sem a página (21/11/2026).
 // usuario_windows e nomes vêm da estação e podem ser forjados: toda célula é
 // montada com createElement/textContent, nunca com HTML em texto.
 (function () {
@@ -38,14 +39,6 @@
   }
   function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 
-  // Só o admin recebe a coluna Sistema/Página (a API manda mostra_sistema).
-  let mostraSistema = false;
-
-  function dataHora(iso) {
-    const d = new Date(iso);
-    return isNaN(d) ? "" : d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR");
-  }
-
   function texto(el, tag, t, cls) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -54,64 +47,11 @@
     return n;
   }
 
-  let seqJanelas = 0; // descarta a resposta de um clique antigo se outro já abriu o modal
-  async function abrirJanelas(id) {
-    const meu = ++seqJanelas;
-    const lista = $("usoJanelasLista");
-    lista.replaceChildren();
-    texto(lista, "p", "Carregando…");
-    $("modalUsoJanelas").showModal();
-    try {
-      const r = await fetch("/api/carteira/uso/" + encodeURIComponent(id) + "/janelas", { headers: getHeaders() });
-      if (!r.ok) {
-        const msg = await mensagemCorpoErro(r);
-        if (meu !== seqJanelas) return;
-        lista.replaceChildren(); texto(lista, "p", msg); return;
-      }
-      const usos = (await r.json()).usos;
-      if (meu !== seqJanelas) return;
-      lista.replaceChildren();
-      if (!usos.length) texto(lista, "p", "Sem janelas registradas para este uso.");
-      usos.forEach((u) => {
-        const ordem0 = u.janelas.find((w) => w.ordem === 0);
-        // A hora do uso (evento_em), não a da janela que ganhou o foco antes dele.
-        const quando = u.evento_em || (ordem0 && ordem0.quando);
-        texto(lista, "h3", quando ? dataHora(quando) : "Uso");
-        const ul = document.createElement("ul");
-        u.janelas.forEach((w) => texto(ul, "li", [w.programa, w.titulo].filter(Boolean).join(" · ") +
-          (w.ordem === 0 ? " (no momento)" : "")));
-        lista.appendChild(ul);
-      });
-    } catch (e) {
-      if (meu !== seqJanelas) return;
-      lista.replaceChildren();
-      texto(lista, "p", "Erro de conexão com o servidor.");
-    }
-  }
-
-  function celulaSistema(tr, l) {
-    const td = document.createElement("td");
-    td.setAttribute("role", "cell");
-    if (l.sistema) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "ag-btn ag-btn--ghost cg-uso-sistema";
-      b.textContent = l.sistema + (l.outras > 0 ? " +" + l.outras : "");
-      // O nome acessível contém o texto visível (WCAG 2.5.3).
-      b.setAttribute("aria-label", "Ver janelas do uso: " + b.textContent);
-      b.addEventListener("click", () => { void abrirJanelas(l.id); });
-      td.appendChild(b);
-    } else {
-      td.appendChild(document.createTextNode("—"));
-    }
-    tr.appendChild(td);
-  }
-
   function mensagem(texto) {
     const tr = document.createElement("tr");
     tr.className = "cg-state-row";
     const td = document.createElement("td");
-    td.colSpan = mostraSistema ? 5 : 4;
+    td.colSpan = 3;
     td.className = "ag-table__vazio";
     td.textContent = texto;
     tr.appendChild(td);
@@ -282,8 +222,6 @@
       const j = await r.json();
       if (meu !== seqHist) return;
       pg = j;
-      mostraSistema = j.mostra_sistema === true;
-      $("uso-th-sistema").hidden = !mostraSistema;
       const nomes = {};
       if (!j.linhas.length) {
         mensagem("Nenhum uso neste período.");
@@ -292,12 +230,10 @@
           nomes[l.maquina] = l.nome_maquina;
           const tr = document.createElement("tr");
           tr.setAttribute("role", "row");
-          celula(tr, data(l.hora).slice(0, 5) + " " + hm(l.primeiro_em) + "–" + hm(l.ultimo_em), "cg-uso-quando");
+          celula(tr, data(l.quando).slice(0, 5) + " " + hm(l.quando), "cg-uso-quando");
           const p = celula(tr, l.sem_login ? l.usuario_windows + " (sem login)" : l.pessoa);
           if (l.sem_login) p.classList.add("cg-uso-semlogin");
           celula(tr, l.nome_maquina);
-          if (mostraSistema) celulaSistema(tr, l);
-          celula(tr, l.quantidade, "cg-uso-num");
           return tr;
         }));
       }
@@ -326,8 +262,6 @@
     });
   }
 
-  $("modalUsoJanelas").querySelectorAll("[data-ag-modal-close]").forEach((b) =>
-    b.addEventListener("click", () => $("modalUsoJanelas").close()));
   window.carregarUso = carregarResumo;
 
   const refiltrar = () => { pagina = 1; void carregarResumo(); };
