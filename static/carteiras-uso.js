@@ -11,6 +11,8 @@
   let docSel = "";         // certificado aberto no detalhe
   let certs = [];          // última lista do resumo
   let seqResumo = 0, seqHist = 0;
+  // Só o admin recebe a página acessada (a API manda mostra_pagina).
+  let mostraPagina = false;
   const $ = (id) => document.getElementById(id);
 
   function celula(tr, linhas, cls) {
@@ -51,7 +53,7 @@
     const tr = document.createElement("tr");
     tr.className = "cg-state-row";
     const td = document.createElement("td");
-    td.colSpan = 3;
+    td.colSpan = mostraPagina ? 4 : 3;
     td.className = "ag-table__vazio";
     td.textContent = texto;
     tr.appendChild(td);
@@ -222,6 +224,8 @@
       const j = await r.json();
       if (meu !== seqHist) return;
       pg = j;
+      mostraPagina = j.mostra_pagina === true;
+      $("uso-th-pagina").hidden = !mostraPagina;
       const nomes = {};
       if (!j.linhas.length) {
         mensagem("Nenhum uso neste período.");
@@ -234,6 +238,7 @@
           const p = celula(tr, l.sem_login ? l.usuario_windows + " (sem login)" : l.pessoa);
           if (l.sem_login) p.classList.add("cg-uso-semlogin");
           celula(tr, l.nome_maquina);
+          if (mostraPagina) celula(tr, l.pagina_acessada || "—", "cg-uso-pagina");
           return tr;
         }));
       }

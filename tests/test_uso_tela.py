@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=por-pagina-2026-11-21" in html
+    assert "carteiras-uso.js?v=pagina-admin-2026-11-21" in html
 
 
 
@@ -143,8 +143,9 @@ def test_admin_ve_uma_linha_por_pagina(client: TestClient, com_janelas) -> None:
     o uso sem janela conta uma vez. Sem coluna de sistema nem de quantidade."""
     j = _get(client, ADMIN).json()
     assert j["total_itens"] == 4 and len(j["linhas"]) == 4  # uso 1: Portal A e Caixa; 2: Portal B; 3: sem janela
-    assert not ({"sistema", "outras", "quantidade", "id"} & set(j["linhas"][0])) and "mostra_sistema" not in j
-    assert sorted(l["quando"] for l in j["linhas"]) == sorted([EVENTO, EVENTO, EVENTO, HORA])
+    assert not ({"sistema", "outras", "quantidade", "id"} & set(j["linhas"][0])) and j["mostra_pagina"] is True
+    assert sorted((l["quando"], l["pagina_acessada"]) for l in j["linhas"]) == sorted(
+        [(EVENTO, "chrome.exe · Portal A"), (EVENTO, "outlook.exe · Caixa"), (EVENTO, "chrome.exe · Portal B"), (HORA, "")])
 
 
 def test_pagina_vale_na_primeira_vez_que_aparece(client: TestClient, com_janelas) -> None:
@@ -158,7 +159,8 @@ def test_pagina_vale_na_primeira_vez_que_aparece(client: TestClient, com_janelas
 def test_gestor_ve_uma_linha_por_uso_sem_pagina(client: TestClient, com_janelas) -> None:
     j = _get(client, GESTOR).json()
     assert j["total_itens"] == 3 and len(j["linhas"]) == 3
-    assert all(not ({"id", "sistema", "outras"} & set(l)) for l in j["linhas"])
+    assert all(not ({"id", "sistema", "outras", "pagina", "pagina_acessada"} & set(l)) for l in j["linhas"])
+    assert j["mostra_pagina"] is False
 
 
 def test_detalhe_so_admin(client: TestClient, com_janelas) -> None:
@@ -219,11 +221,12 @@ def test_visao_por_certificado_com_historico_paginado() -> None:
 
 def test_historico_sem_coluna_de_sistema_nem_de_usos() -> None:
     """21/11/2026: cada linha já é um uso (uma página, para o admin); a coluna
-    Usos confundia (contava assinaturas da chave) e a de Sistema saiu a pedido.
-    O modal de janelas só abria por ela e saiu junto."""
+    Usos confundia (contava assinaturas da chave). O botão de Sistema e o modal
+    saíram; a página volta como texto, só para o admin (uso-th-pagina)."""
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
     cab = html.split('aria-label="Histórico de uso do certificado"')[1].split("</thead>")[0]
-    assert re.findall(r">([^<>]+)</th>", cab) == ["Quando", "Pessoa", "Máquina"]
+    assert re.findall(r">([^<>]+)</th>", cab) == ["Quando", "Pessoa", "Máquina", "Página"]
+    assert 'id="uso-th-pagina" hidden' in cab
     assert "modalUsoJanelas" not in html and "uso-th-sistema" not in html
     js = JS.read_text(encoding="utf-8")
     assert "mostra_sistema" not in js and "/janelas" not in js and "quantidade" not in js
