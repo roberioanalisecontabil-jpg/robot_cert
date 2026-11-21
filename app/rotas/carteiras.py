@@ -617,10 +617,12 @@ def listar_uso(
         if permitidos is not None:
             cq = cq.in_("machine_id", maquinas or [""])
         coletas = cq.execute().data or []
+        # Os nomes servem à tabela e ao quadro de coletas (antes a coleta sem linha na página saía como MAC).
+        com_nome = sorted(set(maquinas) | {str(c["machine_id"]) for c in coletas})
         nomes_pc = {}
-        if maquinas:
+        if com_nome:
             for d in sorted(sb.table("agent_devices").select("machine_id, nome, visto_em")
-                            .in_("machine_id", maquinas).execute().data or [],
+                            .in_("machine_id", com_nome).execute().data or [],
                             key=lambda d: str(d.get("visto_em") or "")):
                 if d.get("nome"):
                     nomes_pc[str(d["machine_id"])] = d["nome"]
@@ -644,8 +646,9 @@ def listar_uso(
         })
         if permitidos is None:  # admin: a página acessada e o id do uso (modal de janelas)
             linhas[-1].update({"pagina_acessada": l.get("pagina") or "", "id": l.get("id")})
-    return {"linhas": linhas, "coletas": {str(c["machine_id"]): {"ultima_em": c["ultima_em"], "auditoria": c["auditoria"]}
-                                          for c in coletas},
+    return {"linhas": linhas, "coletas": {str(c["machine_id"]): {
+                "ultima_em": c["ultima_em"], "auditoria": c["auditoria"],
+                "nome": nomes_pc.get(str(c["machine_id"])) or str(c["machine_id"])} for c in coletas},
             "pagina": pagina, "tem_mais": tem_mais, "mostra_pagina": permitidos is None,
             "total_itens": total_itens, "total_paginas": max(1, -(-total_itens // por_pagina))}
 
