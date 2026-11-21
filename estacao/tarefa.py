@@ -353,6 +353,10 @@ def rodar_tarefa() -> int:
     except Exception:
         logger.exception("Religar o vigia falhou.")
     with _cliente() as http:
+        # 1.5.3: antes de tudo que manda o machine_id ao portal (estacao/identidade.py).
+        from estacao import identidade
+
+        identidade.fixar(http)
         if e_estacao():
             # Isolada: a coleta falhar não impede a atualização, e vice-versa.
             try:
