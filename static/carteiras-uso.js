@@ -148,8 +148,11 @@
       return li;
     }));
     const prob = itens.filter((i) => i.s[2] < 2).length;
-    $("uso-coletas-resumo").textContent = itens.length + (itens.length === 1 ? " máquina" : " máquinas") +
+    const resumo = $("uso-coletas-resumo");
+    resumo.textContent = itens.length + (itens.length === 1 ? " máquina" : " máquinas") +
       (prob ? " · " + prob + " com problema" : " · todas em dia");
+    // Recolhido, o problema precisa aparecer no título: selo de aviso com texto.
+    resumo.className = prob ? "ag-badge ag-badge--warning" : "cg-uso-fraco";
   }
 
   async function carregarPessoas() {
