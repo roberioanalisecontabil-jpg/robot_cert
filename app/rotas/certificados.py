@@ -1246,6 +1246,9 @@ def _cert_history_fetch_all(sb: Any) -> List[dict[str, Any]]:
             sb.table("cert_history")
             .select(cols)
             .order("ultima_data_registrada", desc=True)
+            # Desempate: a varredura grava a mesma data em todas as linhas e o
+            # Postgres devolveria os empates em qualquer ordem a cada lote.
+            .order("arquivo_chave")
             .range(offset, offset + batch - 1)
             .execute()
         )
@@ -1326,6 +1329,7 @@ def historico_certificados(
                             "primeira_data_registrada, ausente_desde",
                         )
                         .order("ultima_data_registrada", desc=True)
+                        .order("arquivo_chave")  # desempate estável entre páginas
                     )
                     hi = offset + page_limit - 1
                     p_r = qp.range(offset, hi).execute()

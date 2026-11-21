@@ -165,7 +165,8 @@ def relatorio(estado: Optional[str] = Query(default=None, pattern="^(" + "|".joi
         q = ci._banco().table("remocao_estacao").select("*")
         if estado:
             q = q.eq("estado", estado)
-        linhas = (q.order("atualizado_em", desc=True).range(inicio, inicio + POR_PAGINA - 1)
+        # Desempate pelo id: aplicar() grava o mesmo atualizado_em em toda a estação.
+        linhas = (q.order("atualizado_em", desc=True).order("id", desc=True).range(inicio, inicio + POR_PAGINA - 1)
                   .execute().data or [])
         ids = sorted({str(l["user_id"]) for l in linhas if l.get("user_id")})
         pessoas = {str(p["id"]): p for p in (_sb_do_login().table("users").select("id, email, full_name")

@@ -998,6 +998,9 @@
         }
 
         let depEditandoId = null;
+        // Gestores do departamento quando o modal abriu (P7-1): o salvar só manda
+        // PUT /lideres se a escolha mudou, e confirma quem deixa de ser gestor.
+        let depLideresAntes = new Set();
 
         function abrirDep(id) {
             const d = id ? depsCache.find((x) => x.id === id) : null;
@@ -1012,6 +1015,11 @@
             const sel = document.getElementById('dep-lideres');
             sel.textContent = '';
             const escolhidos = new Set((d && d.lideres || []).map((l) => l.id));
+            depLideresAntes = new Set(escolhidos);
+            // Sem a lista de usuários (/api/users fora) o select viria vazio e
+            // salvar o nome apagaria os gestores: trava e avisa.
+            sel.disabled = !usersCache.length;
+            sel.title = usersCache.length ? '' : 'Lista de usuários indisponível; recarregue a página para mudar os gestores.';
             usersCache
                 // Só contas ativas: líder que não entra no portal não libera
                 // nada, e o departamento pareceria resolvido sem estar.
@@ -1039,8 +1047,23 @@
             e.preventDefault();
             const btn = document.getElementById('dep-salvar');
             const nome = document.getElementById('dep-nome').value.trim();
-            const lideres = Array.from(document.getElementById('dep-lideres').selectedOptions)
-                .map((o) => o.value);
+            const selLideres = document.getElementById('dep-lideres');
+            const lideres = Array.from(selLideres.selectedOptions).map((o) => o.value);
+            const mudouLideres = !selLideres.disabled && (lideres.length !== depLideresAntes.size
+                || lideres.some((l) => !depLideresAntes.has(l)));
+            const saem = mudouLideres ? [...depLideresAntes].filter((l) => !lideres.includes(l)) : [];
+            if (saem.length) {
+                const nomes = saem.map((l) => {
+                    const u = usersCache.find((x) => x.id === l);
+                    return u ? (u.full_name || u.email) : l;
+                }).join(', ');
+                const ok = await confirmarAcao({
+                    titulo: 'Tirar gestores',
+                    mensagem: `${nomes} deixa(m) de ser gestor(es) deste departamento. Quem não for gestor de outro volta a operador, com a carteira vazia.`,
+                    textoConfirmar: 'Salvar mesmo assim',
+                });
+                if (!ok) return;
+            }
 
             btn.disabled = true;
             btn.textContent = 'Salvando...';
@@ -1061,17 +1084,20 @@
                 // Segunda chamada de propósito: o nome e a lista de líderes são
                 // recursos diferentes, e juntá-los faria um erro de validação
                 // nos líderes desfazer também a renomeação.
-                const rl = await fetch(`/api/departamentos/${id}/lideres`, {
-                    method: 'PUT',
-                    headers: getHeaders(true),
-                    body: JSON.stringify({ lideres }),
-                });
-                if (!rl.ok) {
-                    erroDoDep('Departamento salvo, mas os gestores não: ' + (await mensagemCorpoErro(rl)));
-                    await loadDepartamentos();
-                    return;
+                let resultadoLideres = {};
+                if (mudouLideres) {
+                    const rl = await fetch(`/api/departamentos/${id}/lideres`, {
+                        method: 'PUT',
+                        headers: getHeaders(true),
+                        body: JSON.stringify({ lideres }),
+                    });
+                    if (!rl.ok) {
+                        erroDoDep('Departamento salvo, mas os gestores não: ' + (await mensagemCorpoErro(rl)));
+                        await loadDepartamentos();
+                        return;
+                    }
+                    resultadoLideres = await rl.json().catch(() => ({}));
                 }
-                const resultadoLideres = await rl.json().catch(() => ({}));
                 document.getElementById('modal-dep').close();
                 await loadDepartamentos();
                 await loadUsers();
