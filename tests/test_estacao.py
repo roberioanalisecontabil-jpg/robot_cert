@@ -240,10 +240,14 @@ def test_chave_e_conta_do_hardlyze_nao_sao_mais_lidas(estacao: list, tmp_path: P
 
 def test_machine_id_e_o_mesmo_calculo_do_hardlyze(monkeypatch: pytest.MonkeyPatch) -> None:
     """Primeiro MAC em ordem alfabética, sem o nulo. Outro cálculo faria todo
-    computador autorizado virar equipamento novo."""
+    computador autorizado virar equipamento novo.
+
+    Desde a 1.5.3 o cálculo é o `mac_calculado`; `bandeja.machine_id()` lê
+    antes o machine_id.txt da máquina (test_estacao_identidade), e numa
+    estação com a 1.5.3 instalada este teste lia o arquivo real."""
     import psutil
 
-    from estacao import bandeja
+    from estacao import identidade
 
     def _end(mac, fam=psutil.AF_LINK):
         return SimpleNamespace(family=fam, address=mac)
@@ -253,9 +257,9 @@ def test_machine_id_e_o_mesmo_calculo_do_hardlyze(monkeypatch: pytest.MonkeyPatc
         "VPN": [_end("00-FF-12-34-56-78")],
         "Loopback": [_end("00-00-00-00-00-00")],
     })
-    assert bandeja.machine_id() == "00:ff:12:34:56:78"
+    assert identidade.mac_calculado() == "00:ff:12:34:56:78"
     monkeypatch.setattr(psutil, "net_if_addrs", lambda: {})
-    assert bandeja.machine_id() == "unknown"
+    assert identidade.mac_calculado() == "unknown"
 
 
 @so_windows

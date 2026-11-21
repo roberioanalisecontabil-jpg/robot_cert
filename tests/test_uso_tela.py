@@ -114,7 +114,7 @@ def test_modal_tem_o_aviso() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=janelas-2026-11-18b" in html
+    assert "carteiras-uso.js?v=por-certificado-2026-11-21" in html
 
 
 def test_js_descarta_resposta_antiga_e_rotulo_contem_texto_visivel() -> None:
@@ -221,3 +221,18 @@ def test_paginas_com_a_mesma_hora_nao_repetem_nem_perdem_linhas(client: TestClie
         ids += [l["quantidade"] for l in j["linhas"]]
     assert sorted(ids) == list(range(1, 76))  # sem repetir nem perder
     assert ids[:3] == [75, 74, 73]
+
+
+def test_visao_por_certificado_com_historico_paginado() -> None:
+    """Proposta B (21/11/2026): lista de certificados e detalhe pela rota de
+    resumo; o Histórico abre com 10 por página e vai a 20, 50 ou 100."""
+    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    opcoes = re.findall(r'<option value="(\d+)"( selected)?>\d+ por página</option>',
+                        html.split('id="uso-por-pagina"')[1].split("</select>")[0])
+    assert opcoes == [("10", " selected"), ("20", ""), ("50", ""), ("100", "")]
+    for id_ in ("uso-certs", "uso-detalhe", "uso-colunas", "uso-quem", "uso-busca", "uso-linhas", "uso-coletas"):
+        assert f'id="{id_}"' in html
+    js = JS.read_text(encoding="utf-8")
+    assert "/api/carteira/uso/resumo?" in js and 'q.set("documento", docSel)' in js
+    # O "por página" fica na barra: ela não pode sumir com uma página só.
+    assert "hideWhenSingle: false" in js

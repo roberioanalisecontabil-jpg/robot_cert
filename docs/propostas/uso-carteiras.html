@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aba Uso: propostas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Exo:wght@600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<style>
+/* Tokens copiados de static/aguia-tokens.css (subconjunto). Mock: dados fictícios. */
+:root {
+  --gold-50:#FBF7EF; --gold-100:#F6EAD3; --gold-200:#ECD6AC; --gold-300:#E0C08A; --gold-500:#C9A06A; --gold-600:#B88157; --gold-700:#9A6A3D; --gold-800:#7A5330;
+  --ink-900:#212121; --ink-700:#3D3B38; --ink-600:#52504C; --ink-500:#6B6863; --ink-400:#8C8983; --ink-300:#B4B0A9; --ink-200:#D8D4CC; --ink-150:#E7E3DB; --ink-100:#EFEBE3; --ink-50:#F7F4EE;
+  --success-50:#E6F4EC; --success-700:#22633F; --warning-50:#FBF0DC; --warning-700:#8A5A12; --danger-50:#FBE9E9; --danger-700:#9B2323;
+  --bg-page:var(--ink-50); --bg-surface:#fff; --bg-alt:var(--ink-100);
+  --text:var(--ink-900); --text-2:var(--ink-600); --muted:var(--ink-500); --brand:var(--gold-700);
+  --border:var(--ink-200); --border-subtle:var(--ink-150);
+  --font-display:'Exo',system-ui,sans-serif; --font-body:'Inter',system-ui,'Segoe UI',sans-serif; --font-mono:'JetBrains Mono',Consolas,monospace;
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+  --shadow-sm:0 1px 3px rgba(45,32,20,.08),0 1px 2px rgba(45,32,20,.06);
+  --focus:0 0 0 3px rgba(201,160,106,.5);
+  --heat-0:var(--ink-100); --heat-1:var(--gold-100); --heat-2:var(--gold-300); --heat-3:var(--gold-500); --heat-4:var(--gold-700);
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg-page); color:var(--text); font:400 14px/1.5 var(--font-body); }
+button, input, select { font:inherit; color:inherit; }
+:focus-visible { outline:none; box-shadow:var(--focus); }
+.num { font-variant-numeric:tabular-nums; }
+.mono { font-family:var(--font-mono); font-size:12.5px; color:var(--muted); }
+
+/* Barra do mock (fora da tela real) */
+.mock-bar { position:sticky; top:0; z-index:10; background:var(--ink-900); color:#fff; display:flex; gap:8px; align-items:center; padding:10px 16px; flex-wrap:wrap; }
+.mock-bar strong { font-family:var(--font-display); font-weight:600; margin-right:8px; }
+.mock-bar button { background:transparent; border:1px solid var(--ink-600); color:#fff; border-radius:var(--r-pill); padding:4px 14px; cursor:pointer; }
+.mock-bar button[aria-pressed="true"] { background:var(--gold-500); border-color:var(--gold-500); color:var(--ink-900); font-weight:600; }
+.mock-bar span { color:var(--ink-300); font-size:13px; margin-left:auto; }
+
+.page { max-width:1240px; margin:0 auto; padding:24px 16px 48px; }
+h1 { font:600 26px/1.2 var(--font-display); margin:0 0 16px; }
+.tabs { display:flex; gap:24px; border-bottom:1px solid var(--border); margin-bottom:24px; }
+.tabs a { padding:8px 0; color:var(--text-2); text-decoration:none; border-bottom:3px solid transparent; }
+.tabs a.on { color:var(--text); font-weight:600; border-color:var(--gold-500); }
+.card { background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:var(--r-lg); box-shadow:var(--shadow-sm); }
+.proposta[hidden] { display:none; }
+.nota { color:var(--muted); font-size:13px; margin:0 0 16px; }
+
+/* Filtros numa linha */
+.filtros { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; padding:12px 16px; }
+.seg { display:inline-flex; border:1px solid var(--border); border-radius:var(--r-pill); overflow:hidden; }
+.seg button { border:0; background:transparent; padding:6px 12px; cursor:pointer; color:var(--text-2); }
+.seg button + button { border-left:1px solid var(--border); }
+.seg button[aria-pressed="true"] { background:var(--gold-100); color:var(--gold-800); font-weight:600; }
+.campo { position:relative; display:flex; align-items:center; }
+.campo svg { position:absolute; left:10px; width:16px; height:16px; color:var(--muted); pointer-events:none; }
+.campo input, .campo select { height:34px; border:1px solid var(--border); border-radius:var(--r-sm); background:#fff; padding:0 10px 0 32px; min-width:200px; }
+.campo select { padding-left:32px; }
+.campo input[type="search"] { min-width:280px; }
+.limpar { margin-left:auto; border:0; background:none; color:var(--brand); cursor:pointer; padding:6px 4px; }
+.chips { display:flex; flex-wrap:wrap; gap:8px; padding:0 16px 12px; }
+.chip { display:inline-flex; align-items:center; gap:6px; background:var(--ink-100); border-radius:var(--r-pill); padding:2px 4px 2px 10px; font-size:13px; }
+.chip button { border:0; background:none; cursor:pointer; width:20px; height:20px; border-radius:50%; color:var(--muted); }
+.chip button:hover { background:var(--ink-200); }
+
+/* Resumo */
+.tiles { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin:16px 0; }
+.tile { padding:16px; }
+.tile .rot { color:var(--text-2); font-size:13px; }
+.tile .val { font:600 28px/1.2 var(--font-display); margin-top:4px; }
+.tile .sub { color:var(--muted); font-size:12.5px; margin-top:2px; }
+.tile.alerta { border-color:var(--warning-50); background:var(--warning-50); }
+.tile.alerta .val { color:var(--warning-700); }
+
+/* Tabela */
+.tabela-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; font-weight:500; font-size:12.5px; color:var(--muted); padding:10px 16px; border-bottom:1px solid var(--border); white-space:nowrap; }
+td { padding:10px 16px; border-bottom:1px solid var(--border-subtle); vertical-align:top; }
+tr.dia td { background:var(--bg-alt); font-weight:600; padding:6px 16px; color:var(--text-2); position:sticky; top:44px; }
+tr.dia td span { font-weight:400; color:var(--muted); margin-left:8px; }
+td.r, th.r { text-align:right; }
+td.hora { white-space:nowrap; }
+.forte { font-weight:500; }
+.fraco { color:var(--muted); font-size:12.5px; }
+.sist { display:inline-block; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:1px solid var(--border); border-radius:var(--r-pill); padding:1px 10px; font-size:12.5px; background:#fff; cursor:pointer; vertical-align:middle; }
+.sist:hover { border-color:var(--gold-500); }
+.semlogin { color:var(--warning-700); font-size:12.5px; }
+
+/* Saúde da coleta */
+.saude { padding:16px; }
+.saude h3, .bloco h3 { font:600 15px/1.3 var(--font-display); margin:0 0 12px; }
+.saude ul { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px 16px; }
+.saude li { display:flex; gap:8px; align-items:baseline; font-size:13px; }
+.st { display:inline-flex; align-items:center; gap:4px; border-radius:var(--r-pill); padding:0 8px; font-size:12px; font-weight:500; white-space:nowrap; }
+.st.ok { background:var(--success-50); color:var(--success-700); }
+.st.atraso { background:var(--warning-50); color:var(--warning-700); }
+.st.off { background:var(--danger-50); color:var(--danger-700); }
+
+.layout-a { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
+
+/* B: mestre-detalhe */
+.mestre { display:grid; grid-template-columns:minmax(280px,380px) minmax(0,1fr); gap:16px; margin-top:16px; align-items:start; }
+.lista-cert { padding:8px 0; max-height:720px; overflow:auto; }
+.lista-cert button { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 12px; width:100%; text-align:left; border:0; background:none; padding:10px 16px; cursor:pointer; border-left:3px solid transparent; }
+.lista-cert button:hover { background:var(--ink-50); }
+.lista-cert button[aria-current="true"] { background:var(--gold-50); border-left-color:var(--gold-500); }
+.lista-cert .nome { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.lista-cert .qtd { font-weight:600; }
+.barra { grid-column:1 / -1; height:6px; background:var(--ink-100); border-radius:3px; overflow:hidden; }
+.barra i { display:block; height:100%; background:var(--gold-500); border-radius:0 3px 3px 0; }
+.detalhe { padding:24px; }
+.detalhe h2 { font:600 20px/1.25 var(--font-display); margin:0; }
+.mini { display:flex; flex-wrap:wrap; gap:24px; margin:16px 0 24px; }
+.mini div { min-width:110px; }
+.mini b { display:block; font:600 22px/1.2 var(--font-display); }
+.mini span { color:var(--muted); font-size:12.5px; }
+.duas { display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr); gap:24px; }
+.bloco { margin-bottom:24px; }
+.colunas { display:flex; align-items:flex-end; gap:2px; height:120px; border-bottom:1px solid var(--border); position:relative; }
+.colunas .c { flex:1; display:flex; align-items:flex-end; height:100%; position:relative; }
+.colunas .c i { display:block; width:100%; background:var(--gold-500); border-radius:4px 4px 0 0; min-height:0; }
+.colunas .c:hover i { background:var(--gold-700); }
+.eixo { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:4px; }
+.quem { list-style:none; margin:0; padding:0; }
+.quem li { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--border-subtle); }
+
+.pag { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding-top:12px; }
+.pag-meta { color:var(--muted); font-size:13px; margin-right:auto; }
+.pag-ul { display:flex; list-style:none; margin:0; padding:0; }
+.pag-btn { min-width:36px; height:34px; padding:0 10px; border:1px solid var(--border); background:#fff; cursor:pointer; margin-left:-1px; }
+.pag-ul li:first-child .pag-btn { border-radius:var(--r-sm) 0 0 var(--r-sm); }
+.pag-ul li:last-child .pag-btn { border-radius:0 var(--r-sm) var(--r-sm) 0; }
+.pag-btn.on { background:var(--gold-100); color:var(--gold-800); font-weight:600; border-color:var(--gold-300); position:relative; }
+.pag-btn:disabled { color:var(--ink-300); cursor:default; }
+.pag-sel { height:34px; border:1px solid var(--border); border-radius:var(--r-sm); background:#fff; padding:0 8px; }
+
+/* C: mapa de calor */
+.heat-wrap { padding:16px; overflow-x:auto; margin-top:16px; }
+.heat { display:grid; gap:2px; align-items:center; min-width:640px; }
+.heat .lbl { font-size:13px; padding-right:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.heat .dh { font-size:11.5px; color:var(--muted); text-align:center; }
+.heat .dh.fds { color:var(--ink-300); }
+.heat .cel { height:28px; border-radius:4px; border:0; cursor:pointer; padding:0; }
+.heat .cel:hover { outline:2px solid var(--ink-900); outline-offset:-2px; }
+.heat .cel[aria-pressed="true"] { outline:2px solid var(--ink-900); outline-offset:1px; }
+.heat .tot { font-size:12.5px; text-align:right; padding-left:8px; color:var(--text-2); }
+.legenda { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; margin-top:12px; }
+.legenda i { width:20px; height:12px; border-radius:3px; display:inline-block; }
+.dica { position:fixed; pointer-events:none; background:var(--ink-900); color:#fff; font-size:12.5px; padding:6px 10px; border-radius:var(--r-sm); z-index:20; display:none; white-space:nowrap; }
+.cab-tabela { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); }
+.cab-tabela h3 { font:600 15px/1.3 var(--font-display); margin:0; }
+
+@media (max-width: 900px) {
+  .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .mestre, .duas { grid-template-columns:minmax(0,1fr); }
+  .lista-cert { max-height:320px; }
+}
+@media (max-width: 600px) {
+  .campo, .campo input, .campo select { width:100%; min-width:0; }
+  .seg { width:100%; overflow-x:auto; }
+  .limpar { margin-left:0; }
+  .tiles { gap:8px; }
+  .tile .val { font-size:22px; }
+  .campo input[type="search"] { min-width:0; }
+  /* Celular: cada uso vira um cartão (horário e usos na 1ª linha). */
+  thead { display:none; }
+  table, tbody, tr, td { display:block; }
+  tbody tr:not(.dia) { display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:12px 16px; border-bottom:1px solid var(--border-subtle); }
+  tbody tr:not(.dia) td { padding:0; border:0; }
+  tbody tr:not(.dia) td.hora { grid-column:1; grid-row:1; color:var(--text-2); }
+  tbody tr:not(.dia) td.r { grid-column:2; grid-row:1; }
+  tbody tr:not(.dia) td:not(.hora):not(.r) { grid-column:1 / -1; }
+  .col-maq { display:none !important; }
+  tr.dia td { position:static; }
+  .sist { max-width:100%; }
+}
+</style>
+</head>
+<body>
+<div class="mock-bar" role="toolbar" aria-label="Propostas">
+  <strong>Aba Uso</strong>
+  <button type="button" data-p="a" aria-pressed="true">A · Resumo + lista por dia</button>
+  <button type="button" data-p="b" aria-pressed="false">B · Por certificado</button>
+  <button type="button" data-p="c" aria-pressed="false">C · Mapa pessoa × dia</button>
+  <span>Mock com dados fictícios</span>
+</div>
+
+<div class="page">
+  <h1>Carteiras</h1>
+  <nav class="tabs"><a href="#">Pessoas</a><a href="#">Certificados</a><a href="#" class="on">Uso</a></nav>
+
+  <!-- ============ A ============ -->
+  <section class="proposta" id="p-a">
+    <div class="card">
+      <div class="filtros" data-filtros></div>
+      <div class="chips" data-chips></div>
+    </div>
+    <div class="tiles" id="a-tiles"></div>
+    <div class="layout-a">
+      <div class="card tabela-wrap">
+        <table>
+          <thead><tr><th>Horário</th><th>Certificado</th><th>Pessoa</th><th class="col-maq">Máquina</th><th>Sistema</th><th class="r">Usos</th></tr></thead>
+          <tbody id="a-linhas"></tbody>
+        </table>
+      </div>
+      <div class="card saude" id="a-saude"></div>
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="proposta" id="p-b" hidden>
+    <div class="card">
+      <div class="filtros" data-filtros></div>
+      <div class="chips" data-chips></div>
+    </div>
+    <div class="mestre">
+      <div class="card">
+        <div class="cab-tabela"><h3>Certificados usados</h3><span class="fraco num" id="b-ncert"></span></div>
+        <div class="lista-cert" id="b-lista" role="list"></div>
+      </div>
+      <div class="card detalhe" id="b-detalhe"></div>
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="proposta" id="p-c" hidden>
+    <div class="card">
+      <div class="filtros" data-filtros></div>
+      <div class="chips" data-chips></div>
+    </div>
+    <div class="card heat-wrap">
+      <div class="cab-tabela" style="padding:0 0 12px;border:0"><h3>Usos por pessoa e dia</h3><span class="fraco">Clique num quadro para ver os usos</span></div>
+      <div class="heat" id="c-heat"></div>
+      <div class="legenda">Menos <i style="background:var(--heat-0)"></i><i style="background:var(--heat-1)"></i><i style="background:var(--heat-2)"></i><i style="background:var(--heat-3)"></i><i style="background:var(--heat-4)"></i> Mais</div>
+    </div>
+    <div class="card tabela-wrap" style="margin-top:16px">
+      <div class="cab-tabela"><h3 id="c-titulo">Todos os usos</h3><button type="button" class="limpar" id="c-limpar" hidden>Ver todos</button></div>
+      <table>
+        <thead><tr><th>Quando</th><th>Certificado</th><th>Pessoa</th><th class="col-maq">Máquina</th><th>Sistema</th><th class="r">Usos</th></tr></thead>
+        <tbody id="c-linhas"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<div class="dica" id="dica" role="tooltip"></div>
+
+<script>
+// ---------- dados fictícios ----------
+let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+const PESSOAS = ["Ana Ribeiro", "Bruno Melo", "Carla Nunes", "Diego Farias", "Elisa Torres", "Fábio Lima", "Gabriela Rocha"];
+const MAQ = { "Ana Ribeiro": "TI-011", "Bruno Melo": "TI-014", "Carla Nunes": "TI-017", "Diego Farias": "TI-019", "Elisa Torres": "TI-022", "Fábio Lima": "TI-025", "Gabriela Rocha": "TI-030" };
+const CERTS = [
+  ["Comercial Santa Luzia Ltda", "12345678000190"], ["Padaria Pão Dourado ME", "23456789000101"],
+  ["Mercadinho Bom Preço Ltda", "34567890000112"], ["Clínica Vida Plena S/S", "45678901000123"],
+  ["Construtora Litoral Ltda", "56789012000134"], ["Auto Peças Maceió Ltda", "67890123000145"],
+  ["Farmácia Popular do Centro", "78901234000156"], ["Transportes Rápido Norte", "89012345000167"],
+  ["João Batista de Souza", "12345678901"], ["Restaurante Sabor da Terra", "90123456000178"],
+];
+const SIST = ["Chrome · e-CAC – Receita Federal", "Chrome · SEFAZ-AL – Portal do Contribuinte", "Chrome · eSocial", "Domínio Folha", "Chrome · Conectividade Social", "Chrome · NFS-e Maceió", "Edge · Portal do Simples Nacional"];
+const HOJE = new Date(2026, 10, 21);
+const USOS = [];
+for (let d = 0; d < 30; d++) {
+  const dia = new Date(HOJE); dia.setDate(HOJE.getDate() - d);
+  const fds = dia.getDay() === 0 || dia.getDay() === 6;
+  const n = fds ? Math.floor(rnd() * 2) : 4 + Math.floor(rnd() * 9);
+  for (let i = 0; i < n; i++) {
+    const p = rnd() < 0.06 ? null : pick(PESSOAS);
+    const c = CERTS[Math.min(CERTS.length - 1, Math.floor(Math.pow(rnd(), 1.6) * CERTS.length))];
+    const h = 8 + Math.floor(rnd() * 9), m = Math.floor(rnd() * 50);
+    const ini = new Date(dia); ini.setHours(h, m);
+    const fim = new Date(ini); fim.setMinutes(m + 1 + Math.floor(rnd() * 25));
+    USOS.push({ ini, fim, pessoa: p, win: p ? null : "estagiario.fiscal", maq: p ? MAQ[p] : "TI-035", cert: c[0], doc: c[1],
+      sist: pick(SIST), outras: rnd() < 0.3 ? 1 + Math.floor(rnd() * 3) : 0, qtd: 1 + Math.floor(rnd() * 6) });
+  }
+}
+USOS.sort((a, b) => b.ini - a.ini);
+const COLETAS = [["TI-011", 2, "ok"], ["TI-014", 4, "ok"], ["TI-017", 1, "ok"], ["TI-019", 3, "ok"], ["TI-022", 3, "ok"], ["TI-025", 380, "atraso"], ["TI-030", 2, "ok"], ["TI-035", 5, "off"]];
+
+// ---------- utilidades ----------
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+const fmtDoc = (d) => d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const hm = (d) => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const diaLongo = (d) => d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "");
+const mesmoDia = (a, b) => a.toDateString() === b.toDateString();
+const soma = (l) => l.reduce((t, u) => t + u.qtd, 0);
+const ICON_BUSCA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+const ICON_PESSOA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
+
+// ---------- filtros (iguais nas três) ----------
+const F = { periodo: 7, pessoa: "", cert: "" };
+const PERIODOS = [["Hoje", 1], ["7 dias", 7], ["30 dias", 30], ["Personalizado", 0]];
+function montarFiltros(box) {
+  box.replaceChildren();
+  const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Período");
+  PERIODOS.forEach(([t, v]) => { const b = el("button", null, t); b.type = "button"; b.setAttribute("aria-pressed", String(F.periodo === v)); b.onclick = () => { if (v) { F.periodo = v; render(); } }; seg.append(b); });
+  const cp = el("label", "campo"); cp.innerHTML = ICON_PESSOA;
+  const sp = el("select"); sp.setAttribute("aria-label", "Pessoa");
+  sp.append(new Option("Todas as pessoas", ""));
+  PESSOAS.forEach((p) => sp.append(new Option(p, p))); sp.value = F.pessoa;
+  sp.onchange = () => { F.pessoa = sp.value; render(); }; cp.append(sp);
+  const cc = el("label", "campo"); cc.innerHTML = ICON_BUSCA;
+  const ic = el("input"); ic.type = "search"; ic.placeholder = "Certificado: nome ou CNPJ/CPF"; ic.setAttribute("aria-label", "Certificado"); ic.value = F.cert; ic.setAttribute("list", "dl-cert");
+  ic.onchange = () => { F.cert = ic.value.trim(); render(); }; cc.append(ic);
+  const limpar = el("button", "limpar", "Limpar filtros"); limpar.type = "button"; limpar.onclick = () => { F.periodo = 7; F.pessoa = ""; F.cert = ""; render(); };
+  box.append(seg, cp, cc, limpar);
+}
+function montarChips(box) {
+  box.replaceChildren();
+  const add = (t, fn) => { const c = el("span", "chip", t); const x = el("button", null, "×"); x.type = "button"; x.setAttribute("aria-label", "Remover filtro " + t); x.onclick = fn; c.append(x); box.append(c); };
+  if (F.pessoa) add("Pessoa: " + F.pessoa, () => { F.pessoa = ""; render(); });
+  if (F.cert) add("Certificado: " + F.cert, () => { F.cert = ""; render(); });
+  box.hidden = !box.children.length;
+}
+const dl = el("datalist"); dl.id = "dl-cert"; CERTS.forEach(([n]) => dl.append(new Option(n))); document.body.append(dl);
+function filtrados() {
+  const lim = new Date(HOJE); lim.setDate(HOJE.getDate() - F.periodo + 1); lim.setHours(0, 0, 0, 0);
+  const q = F.cert.toLowerCase().replace(/[.\/-]/g, "");
+  return USOS.filter((u) => u.ini >= lim && (!F.pessoa || u.pessoa === F.pessoa) &&
+    (!q || u.cert.toLowerCase().includes(q) || u.doc.includes(q)));
+}
+function anteriores() {
+  const fim = new Date(HOJE); fim.setDate(HOJE.getDate() - F.periodo + 1); fim.setHours(0, 0, 0, 0);
+  const ini = new Date(fim); ini.setDate(fim.getDate() - F.periodo);
+  return USOS.filter((u) => u.ini >= ini && u.ini < fim && (!F.pessoa || u.pessoa === F.pessoa));
+}
+
+// ---------- linha de uso (A e C) ----------
+function linhaUso(u, comData) {
+  const tr = el("tr");
+  const t = el("td", "num hora",(comData ? u.ini.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " : "") + hm(u.ini) + "–" + hm(u.fim));
+  const c = el("td"); c.append(el("div", "forte", u.cert), el("div", "mono", fmtDoc(u.doc)));
+  const p = el("td"); p.append(u.pessoa ? el("div", null, u.pessoa) : el("div", "semlogin", u.win + " (sem login)"));
+  const m = el("td", "col-maq fraco", u.maq);
+  const s2 = el("td"); const b = el("button", "sist", u.sist + (u.outras ? "  +" + u.outras : "")); b.type = "button"; b.title = "Ver janelas no momento do uso"; s2.append(b);
+  const q = el("td", "r num forte", String(u.qtd));
+  tr.append(t, c, p, m, s2, q);
+  return tr;
+}
+
+// ---------- A ----------
+function renderA() {
+  const l = filtrados(), ant = anteriores();
+  const tot = soma(l), totAnt = soma(ant);
+  const delta = totAnt ? Math.round((tot - totAnt) / totAnt * 100) : 0;
+  const tiles = [
+    ["Usos no período", tot, (delta >= 0 ? "+" : "") + delta + "% vs. período anterior"],
+    ["Certificados usados", new Set(l.map((u) => u.doc)).size, "de " + CERTS.length + " na carteira"],
+    ["Pessoas", new Set(l.map((u) => u.pessoa || u.win)).size, l.some((u) => !u.pessoa) ? "inclui uso sem login" : "todas com login"],
+  ];
+  const box = $("a-tiles"); box.replaceChildren();
+  tiles.forEach(([r, v, sub]) => { const t = el("div", "card tile"); t.append(el("div", "rot", r), el("div", "val num", v.toLocaleString("pt-BR")), el("div", "sub", sub)); box.append(t); });
+  const prob = COLETAS.filter((c) => c[2] !== "ok").length;
+  const t4 = el("div", "card tile" + (prob ? " alerta" : "")); t4.append(el("div", "rot", "Máquinas com problema na coleta"), el("div", "val num", String(prob)), el("div", "sub", prob ? "ver abaixo" : "todas coletando")); box.append(t4);
+
+  const tb = $("a-linhas"); tb.replaceChildren();
+  if (!l.length) { const tr = el("tr"); const td = el("td", "fraco", "Nenhum uso com esses filtros."); td.colSpan = 6; tr.append(td); tb.append(tr); }
+  let dia = null;
+  l.slice(0, 60).forEach((u) => {
+    if (!dia || !mesmoDia(dia, u.ini)) {
+      dia = u.ini; const doDia = l.filter((x) => mesmoDia(x.ini, dia));
+      const tr = el("tr", "dia"); const td = el("td", null, diaLongo(dia)); td.colSpan = 6; td.append(el("span", "num", soma(doDia) + " usos · " + new Set(doDia.map((x) => x.doc)).size + " certificados")); tr.append(td); tb.append(tr);
+    }
+    tb.append(linhaUso(u, false));
+  });
+  const s = $("a-saude"); s.replaceChildren(el("h3", null, "Coleta por máquina"));
+  const ul = el("ul");
+  [...COLETAS].sort((a, b) => (a[2] === "ok") - (b[2] === "ok")).forEach(([m, min, st]) => {
+    const li = el("li"); const lab = { ok: "✓ Em dia", atraso: "! Atrasada", off: "× Auditoria desligada" }[st];
+    li.append(el("span", "st " + st, lab), el("span", "forte", m), el("span", "fraco", min < 60 ? "há " + min + " min" : "há " + Math.round(min / 60) + " h"));
+    ul.append(li);
+  });
+  s.append(ul);
+}
+
+// ---------- B ----------
+let certSel = null;
+function renderB() {
+  const l = filtrados();
+  const porCert = {}; l.forEach((u) => (porCert[u.doc] ||= { cert: u.cert, doc: u.doc, usos: [] }).usos.push(u));
+  const lista = Object.values(porCert).sort((a, b) => soma(b.usos) - soma(a.usos));
+  $("b-ncert").textContent = lista.length + " de " + CERTS.length;
+  if (!lista.find((c) => c.doc === certSel)) certSel = lista[0] && lista[0].doc;
+  const max = lista.length ? soma(lista[0].usos) : 1;
+  const box = $("b-lista"); box.replaceChildren();
+  lista.forEach((c) => {
+    const b = el("button"); b.type = "button"; b.setAttribute("role", "listitem"); b.setAttribute("aria-current", String(c.doc === certSel));
+    const pessoas = new Set(c.usos.map((u) => u.pessoa || u.win)).size;
+    b.append(el("span", "nome", c.cert), el("span", "qtd num", String(soma(c.usos))), el("span", "mono", fmtDoc(c.doc) + " · " + pessoas + (pessoas > 1 ? " pessoas" : " pessoa")), el("span"));
+    const bar = el("span", "barra"); const i = el("i"); i.style.width = (soma(c.usos) / max * 100) + "%"; bar.append(i); b.append(bar);
+    b.onclick = () => { certSel = c.doc; histPag = 1; renderB(); };
+    box.append(b);
+  });
+  const d = $("b-detalhe"); d.replaceChildren();
+  const c = porCert[certSel];
+  if (!c) { d.append(el("p", "fraco", "Nenhum uso com esses filtros.")); return; }
+  d.append(el("h2", null, c.cert), el("div", "mono", fmtDoc(c.doc)));
+  const ult = c.usos[0];
+  const mini = el("div", "mini");
+  [[soma(c.usos), "usos no período"], [new Set(c.usos.map((u) => u.pessoa || u.win)).size, "pessoas"], [new Set(c.usos.map((u) => u.maq)).size, "máquinas"], [diaLongo(ult.ini) + " " + hm(ult.ini), "último uso"]]
+    .forEach(([v, t]) => { const x = el("div"); x.append(el("b", "num", String(v)), el("span", null, t)); mini.append(x); });
+  d.append(mini);
+  const duas = el("div", "duas");
+  // colunas por dia (uma série: sem legenda, o título nomeia)
+  const g = el("div", "bloco"); g.append(el("h3", null, "Usos por dia"));
+  const dias = []; for (let i = F.periodo - 1; i >= 0; i--) { const x = new Date(HOJE); x.setDate(HOJE.getDate() - i); dias.push(x); }
+  const vals = dias.map((x) => soma(c.usos.filter((u) => mesmoDia(u.ini, x))));
+  const vmax = Math.max(1, ...vals);
+  const cols = el("div", "colunas");
+  dias.forEach((x, i) => { const cc = el("div", "c"); const bar = el("i"); bar.style.height = (vals[i] / vmax * 100) + "%"; cc.append(bar); dica(cc, diaLongo(x) + ": " + vals[i] + " usos"); cols.append(cc); });
+  const eixo = el("div", "eixo"); eixo.append(el("span", null, diaLongo(dias[0])), el("span", null, diaLongo(dias[dias.length - 1])));
+  g.append(cols, eixo);
+  const q = el("div", "bloco"); q.append(el("h3", null, "Quem usou"));
+  const porP = {}; c.usos.forEach((u) => { const k = u.pessoa || u.win + " (sem login)"; porP[k] = (porP[k] || 0) + u.qtd; });
+  const ul = el("ul", "quem"); Object.entries(porP).sort((a, b) => b[1] - a[1]).forEach(([p, n]) => { const li = el("li"); li.append(el("span", null, p), el("span", "num forte", String(n))); ul.append(li); });
+  q.append(ul);
+  duas.append(g, q); d.append(duas);
+  const h = el("div", "bloco"); h.append(el("h3", null, "Histórico"));
+  const tw = el("div", "tabela-wrap"); const t = el("table");
+  t.innerHTML = '<thead><tr><th>Quando</th><th>Pessoa</th><th class="col-maq">Máquina</th><th>Sistema</th><th class="r">Usos</th></tr></thead>';
+  const tb = el("tbody");
+  const paginas = Math.max(1, Math.ceil(c.usos.length / histPor));
+  histPag = Math.min(histPag, paginas);
+  c.usos.slice((histPag - 1) * histPor, histPag * histPor).forEach((u) => {
+    const tr = linhaUso(u, true); tr.children[1].remove(); tb.append(tr);
+  });
+  t.append(tb); tw.append(t); h.append(tw, paginacaoHist(c.usos.length, paginas)); d.append(h);
+}
+
+// Paginação do Histórico: padrão 10, pode ir a 20, 50, 100.
+let histPag = 1, histPor = 10;
+function paginacaoHist(total, paginas) {
+  const nav = el("nav", "pag"); nav.setAttribute("aria-label", "Páginas do histórico");
+  const ini = total ? (histPag - 1) * histPor + 1 : 0, fim = Math.min(total, histPag * histPor);
+  nav.append(el("span", "pag-meta num", ini + "–" + fim + " de " + total + " usos"));
+  const ul = el("ul", "pag-ul");
+  const botao = (txt, alvo, opts = {}) => {
+    const li = el("li"); const b = el("button", "pag-btn" + (opts.atual ? " on" : ""), txt); b.type = "button";
+    if (opts.atual) b.setAttribute("aria-current", "page");
+    if (opts.label) b.setAttribute("aria-label", opts.label);
+    b.disabled = !!opts.off;
+    b.onclick = () => { histPag = alvo; renderB(); };
+    li.append(b); ul.append(li);
+  };
+  botao("Anterior", histPag - 1, { off: histPag === 1, label: "Página anterior" });
+  const ini5 = Math.max(1, Math.min(histPag - 2, paginas - 4));
+  for (let p = ini5; p <= Math.min(paginas, ini5 + 4); p++) botao(String(p), p, { atual: p === histPag, label: "Página " + p });
+  botao("Seguinte", histPag + 1, { off: histPag === paginas, label: "Próxima página" });
+  const sel = el("select", "pag-sel"); sel.setAttribute("aria-label", "Linhas por página");
+  [10, 20, 50, 100].forEach((n) => sel.append(new Option(n + " por página", String(n))));
+  sel.value = String(histPor);
+  sel.onchange = () => { histPor = Number(sel.value); histPag = 1; renderB(); };
+  nav.append(ul, sel);
+  return nav;
+}
+
+// ---------- C ----------
+let celSel = null;
+function nivel(v, max) { if (!v) return 0; return Math.min(4, 1 + Math.floor(v / max * 3.999)); }
+function renderC() {
+  const periodo = Math.max(F.periodo, 7) > 14 ? 14 : Math.max(F.periodo, 7);
+  const dias = []; for (let i = periodo - 1; i >= 0; i--) { const x = new Date(HOJE); x.setDate(HOJE.getDate() - i); dias.push(x); }
+  const l = filtrados();
+  const pessoas = [...new Set(l.map((u) => u.pessoa || u.win + " (sem login)"))].sort();
+  const val = (p, d) => soma(l.filter((u) => (u.pessoa || u.win + " (sem login)") === p && mesmoDia(u.ini, d)));
+  let max = 1; pessoas.forEach((p) => dias.forEach((d) => { max = Math.max(max, val(p, d)); }));
+  const h = $("c-heat"); h.replaceChildren();
+  h.style.gridTemplateColumns = "minmax(120px,180px) repeat(" + dias.length + ",minmax(28px,1fr)) 48px";
+  h.append(el("span"));
+  dias.forEach((d) => { const fds = d.getDay() === 0 || d.getDay() === 6; h.append(el("span", "dh" + (fds ? " fds" : ""), d.toLocaleDateString("pt-BR", { day: "2-digit" }) + "\n")); });
+  h.append(el("span", "dh", "Total"));
+  pessoas.forEach((p) => {
+    h.append(el("span", "lbl", p));
+    let tot = 0;
+    dias.forEach((d) => {
+      const v = val(p, d); tot += v;
+      const b = el("button", "cel"); b.type = "button";
+      b.style.background = "var(--heat-" + nivel(v, max) + ")";
+      const chave = p + "|" + d.toDateString();
+      b.setAttribute("aria-pressed", String(celSel === chave));
+      b.setAttribute("aria-label", p + ", " + diaLongo(d) + ": " + v + " usos");
+      dica(b, p + " · " + diaLongo(d) + ": " + v + " usos");
+      b.onclick = () => { celSel = celSel === chave ? null : chave; renderC(); };
+      h.append(b);
+    });
+    h.append(el("span", "tot num", String(tot)));
+  });
+  const [cp, cd] = celSel ? celSel.split("|") : [];
+  const lin = celSel ? l.filter((u) => (u.pessoa || u.win + " (sem login)") === cp && u.ini.toDateString() === cd) : l;
+  $("c-titulo").textContent = celSel ? cp + " · " + diaLongo(new Date(cd)) : "Todos os usos";
+  $("c-limpar").hidden = !celSel;
+  const tb = $("c-linhas"); tb.replaceChildren();
+  if (!lin.length) { const tr = el("tr"); const td = el("td", "fraco", "Nenhum uso neste dia."); td.colSpan = 6; tr.append(td); tb.append(tr); }
+  lin.slice(0, 40).forEach((u) => tb.append(linhaUso(u, true)));
+}
+$("c-limpar").onclick = () => { celSel = null; renderC(); };
+
+// ---------- dica (hover) ----------
+const tip = $("dica");
+function dica(n, t) {
+  n.addEventListener("mouseenter", () => { tip.textContent = t; tip.style.display = "block"; });
+  n.addEventListener("mousemove", (e) => { tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY + 14) + "px"; });
+  n.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+}
+
+// ---------- troca de proposta ----------
+let atual = "a";
+function render() {
+  document.querySelectorAll("[data-filtros]").forEach(montarFiltros);
+  document.querySelectorAll("[data-chips]").forEach(montarChips);
+  ({ a: renderA, b: renderB, c: renderC })[atual]();
+}
+document.querySelectorAll(".mock-bar button").forEach((b) => b.onclick = () => {
+  atual = b.dataset.p;
+  document.querySelectorAll(".mock-bar button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  document.querySelectorAll(".proposta").forEach((p) => p.hidden = p.id !== "p-" + atual);
+  render();
+});
+const inicial = document.querySelector('.mock-bar button[data-p="' + location.hash.slice(1) + '"]');
+if (inicial) inicial.click(); else render();
+</script>
+</body>
+</html>
