@@ -149,8 +149,9 @@
     }));
     const prob = itens.filter((i) => i.s[2] < 2).length;
     const resumo = $("uso-coletas-resumo");
-    resumo.textContent = itens.length + (itens.length === 1 ? " máquina" : " máquinas") +
-      (prob ? " · " + prob + " com problema" : " · todas em dia");
+    // Curto: cabe ao lado do título na coluna da lista.
+    resumo.textContent = prob ? prob + " com problema" : itens.length + " em dia";
+    resumo.title = itens.length + (itens.length === 1 ? " máquina" : " máquinas");
     // Recolhido, o problema precisa aparecer no título: selo de aviso com texto.
     resumo.className = prob ? "ag-badge ag-badge--warning" : "cg-uso-fraco";
   }

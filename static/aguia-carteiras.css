@@ -275,7 +275,9 @@ body:has(#sec-uso:not([hidden])) .ag-page__lead { display: none; }
 .cg-uso-col > i { display: block; width: 100%; background: var(--gold-500); border-radius: 4px 4px 0 0; }
 .cg-uso-col:hover > i { background: var(--gold-700); }
 .cg-uso-eixo { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--text-caption); margin-top: var(--space-1); }
-.cg-uso-quem { list-style: none; margin: 0; padding: 0; }
+/* Duas colunas: cinco pessoas em três linhas, mesma altura do gráfico. */
+.cg-uso-quem { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-4); }
+.cg-uso-quem li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cg-uso-quem li { display: flex; justify-content: space-between; gap: var(--space-3); padding: 1px 0; font-size: var(--text-xs); border-bottom: var(--bw-1) solid var(--border-subtle); }
 .cg-uso-quem li span:last-child { font-variant-numeric: tabular-nums; text-align: end; }
 .cg-uso-semlogin { color: var(--warning-700); }
@@ -289,10 +291,11 @@ body:has(#sec-uso:not([hidden])) .ag-page__lead { display: none; }
 .cg-uso-coletas__titulo::before { content: "\25B8"; color: var(--text-muted); margin-right: var(--space-2); transition: transform var(--dur-fast) var(--ease-standard); display: inline-block; }
 .cg-uso-coletas[open] > .cg-uso-coletas__titulo::before { transform: rotate(90deg); }
 .cg-uso-coletas[open] > .cg-uso-coletas__titulo { border-bottom: var(--bw-1) solid var(--border-default); }
-.cg-uso-coletas__titulo .cg-uso-cab__titulo { margin-right: auto; }
+.cg-uso-coletas__titulo .cg-uso-cab__titulo { margin-right: auto; white-space: nowrap; }
 .cg-uso-coletas__titulo:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
 @media (prefers-reduced-motion: reduce) { .cg-uso-coletas__titulo::before { transition: none; } }
-.cg-uso-coletas-lista { list-style: none; margin: 0; padding: var(--space-2) var(--space-4) var(--space-3); display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-1) var(--space-5); }
+.cg-uso-esq { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+.cg-uso-coletas-lista { list-style: none; margin: 0; padding: var(--space-2) var(--space-4) var(--space-3); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-1); max-height: 320px; overflow: auto; }
 .cg-uso-coleta { display: flex; align-items: center; gap: var(--space-2); min-width: 0; font-size: var(--text-sm); padding: 2px 0; }
 .cg-uso-coleta .ag-badge { flex: 0 0 auto; }
 .cg-uso-coleta__nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

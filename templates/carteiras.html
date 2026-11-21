@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=recolhe-2026-11-21" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=sem-rolagem-2026-11-21" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -213,10 +213,18 @@
       </div>
 
       <div class="cg-uso-mestre">
+        <!-- Sem rolagem (21/11/2026): a coluna da lista tinha sobra embaixo; a coleta foi para lá. -->
+        <div class="cg-uso-esq">
         <section class="ag-card cg-uso-lista" aria-labelledby="tit-uso-certs">
           <div class="cg-uso-cab"><h2 class="cg-uso-cab__titulo" id="tit-uso-certs">Certificados usados</h2><span class="cg-uso-fraco" id="uso-ncerts" role="status"></span></div>
           <ul class="cg-uso-certs" id="uso-certs" role="list"></ul>
         </section>
+        <!-- Recolhido por padrão (21/11/2026): o resumo no título já diz se há problema. -->
+        <details class="ag-card cg-uso-coletas" id="uso-coletas-quadro">
+          <summary class="cg-uso-cab cg-uso-coletas__titulo"><span class="cg-uso-cab__titulo">Coleta por máquina</span><span class="cg-uso-fraco" id="uso-coletas-resumo"></span></summary>
+          <ul id="uso-coletas" class="cg-uso-coletas-lista" role="list"></ul>
+        </details>
+        </div>
 
         <section class="ag-card cg-uso-detalhe" id="uso-detalhe" aria-labelledby="uso-tit-cert">
           <p class="cg-uso-fraco" id="uso-detalhe-vazio">Carregando…</p>
@@ -274,11 +282,6 @@
         </section>
       </div>
 
-      <!-- Recolhido por padrão (21/11/2026): o resumo no título já diz se há problema. -->
-      <details class="ag-card cg-uso-coletas" id="uso-coletas-quadro">
-        <summary class="cg-uso-cab cg-uso-coletas__titulo"><span class="cg-uso-cab__titulo">Coleta por máquina</span><span class="cg-uso-fraco" id="uso-coletas-resumo"></span></summary>
-        <ul id="uso-coletas" class="cg-uso-coletas-lista" role="list"></ul>
-      </details>
     </section>
 
     <!-- Aba Certificados: um certificado por vez, com quem pode usá-lo.
@@ -1238,6 +1241,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=certificados-celular-2026-11-17"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=recolhe-2026-11-21"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=sem-rolagem-2026-11-21"></script>
 </body>
 </html>
