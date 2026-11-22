@@ -306,15 +306,17 @@
     let painelPagina = 1;
     let selecaoPagina = 1;
 
-    function fmtSoData(iso) {
+    // tz: o vencimento do certificado é data e hora, e vai no fuso de Brasília;
+    // data_validade é só data e fica em UTC para não mudar de dia.
+    function fmtSoData(iso, tz) {
       if (!iso) return "—";
       const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+      return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR", { timeZone: tz || "UTC" });
     }
-    function fmtDataHora(iso) {
+    function fmtDataHora(iso, tz) {
       if (!iso) return "";
       const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("pt-BR", { timeZone: "UTC" });
+      return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("pt-BR", { timeZone: tz || "UTC" });
     }
     function nomeDe(it) { return it.nome_exibicao || it.nome || "—"; }
 
@@ -472,7 +474,9 @@
 
     // Busca por nome (como está no arquivo ou como é exibido) e por
     // documento, com ou sem pontuação.
-    function linhasSelecao() {
+    let _ordemSelecao = null; // { q, rows } da última ordenação
+    function linhasSelecao(reordenar) {
+      if (!reordenar && _ordemSelecao) return _ordemSelecao;
       const q = (document.getElementById("busca-selecao").value || "").trim().toLowerCase();
       const qDig = q.replace(/\D/g, "");
       const rows = opcoes.filter((it) => {
@@ -482,15 +486,17 @@
       });
       // Marcados no TOPO, e por ordem alfabética dentro de cada grupo: com
       // centenas de clientes em várias páginas, é o único jeito de ver de uma
-      // vez o que já se acompanha. Só reordena em busca, troca de página ou
-      // recarga — nunca no clique.
+      // vez o que já se acompanha. Só reordena em busca, recarga ou salvar —
+      // nunca no clique nem na troca de página: reordenar ali pulava ou
+      // repetia cliente entre as páginas (revisão de 22/11/2026, P10-6).
       rows.sort((a, b) => {
         const ma = selecionados.has(String(a.documento_digitos)) ? 0 : 1;
         const mb = selecionados.has(String(b.documento_digitos)) ? 0 : 1;
         if (ma !== mb) return ma - mb;
         return nomeDe(a).localeCompare(nomeDe(b), "pt-BR", { sensitivity: "base" });
       });
-      return { q, rows };
+      _ordemSelecao = { q, rows };
+      return _ordemSelecao;
     }
 
     function trSelecao(it) {
@@ -498,7 +504,7 @@
       const id = "sel-" + doc;
       const marcado = selecionados.has(doc);
       const venc = it.vencimento_certificado
-        ? `<time datetime="${esc(it.vencimento_certificado)}">${esc(fmtSoData(it.vencimento_certificado))}</time>`
+        ? `<time datetime="${esc(it.vencimento_certificado)}">${esc(fmtSoData(it.vencimento_certificado, "America/Sao_Paulo"))}</time>`
         : "—";
       // O nome é o rótulo da caixa: clicar nele também marca, e o leitor de
       // tela anuncia "Acompanhar <nome>" sem aria-label separado.
@@ -511,8 +517,8 @@
         </tr>`;
     }
 
-    function renderSelecao() {
-      const { q, rows } = linhasSelecao();
+    function renderSelecao(reordenar) {
+      const { q, rows } = linhasSelecao(reordenar);
       const psz = porPagColabSelecao();
       const total = rows.length;
       const totalPag = Math.max(1, Math.ceil(total / psz));
@@ -535,7 +541,7 @@
           onAction: () => {
             document.getElementById("busca-selecao").value = "";
             selecaoPagina = 1;
-            renderSelecao();
+            renderSelecao(true);
           },
         } : _opcoesErro ? {
           icon: "",
@@ -710,7 +716,7 @@
 
     function trPainel(it) {
       const venc = it.vencimento_certificado
-        ? `<time datetime="${esc(it.vencimento_certificado)}" title="${esc(fmtDataHora(it.vencimento_certificado))}">${esc(fmtSoData(it.vencimento_certificado))}</time>`
+        ? `<time datetime="${esc(it.vencimento_certificado)}" title="${esc(fmtDataHora(it.vencimento_certificado, "America/Sao_Paulo"))}">${esc(fmtSoData(it.vencimento_certificado, "America/Sao_Paulo"))}</time>`
         : "—";
       return `
         <tr role="row">
@@ -726,14 +732,20 @@
 
     async function carregarPainel(refetch) {
       if (refetch !== false) {
-        const r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
-        if (!r.ok) {
-          const detalhe = await mensagemCorpoErro(r);
+        let r = null, j = null;
+        try {
+          r = await fetch("/api/colaborador/certificados/painel", { headers: getHeaders() });
+          if (r.ok) j = await r.json();
+        } catch (_e) {
+          r = null; // queda de rede: cai no mesmo estado de erro, com "Tentar novamente"
+        }
+        if (!j) {
+          const detalhe = r ? await mensagemCorpoErro(r) : "Erro de conexão com o servidor.";
           document.getElementById("painel-hint").textContent = "";
           showToast("Não foi possível carregar os acompanhados: " + detalhe, "error");
           renderEmptyRow("tbody-painel", 3, {
             title: "Erro ao carregar os acompanhados",
-            description: detalhe || "O servidor respondeu com erro " + r.status + ".",
+            description: detalhe || "O servidor respondeu com erro " + (r && r.status) + ".",
             actionText: "Tentar novamente",
             onAction: () => void carregarPainel(true),
           });
@@ -743,7 +755,6 @@
           document.getElementById("painel-indicadores").hidden = true;
           return;
         }
-        const j = await r.json();
         painelItens = j.itens || [];
         painelTextos = j.textos || {};
         painelMostrarBusca = !!j.mostrar_busca;
@@ -805,20 +816,24 @@
     }
 
     async function carregarSelecao() {
-      const [ro, rs] = await Promise.all([
-        fetch("/api/colaborador/certificados/opcoes", { headers: getHeaders() }),
-        fetch("/api/colaborador/certificados/selecionados", { headers: getHeaders() }),
-      ]);
-      if (!ro.ok || !rs.ok) {
-        const det = !ro.ok ? await mensagemCorpoErro(ro) : await mensagemCorpoErro(rs);
+      let jo, js;
+      try {
+        const [ro, rs] = await Promise.all([
+          fetch("/api/colaborador/certificados/opcoes", { headers: getHeaders() }),
+          fetch("/api/colaborador/certificados/selecionados", { headers: getHeaders() }),
+        ]);
+        if (!ro.ok || !rs.ok) throw new Error(!ro.ok ? await mensagemCorpoErro(ro) : await mensagemCorpoErro(rs));
+        jo = await ro.json();
+        js = await rs.json();
+      } catch (e) {
+        // Queda de rede rejeita o fetch: mesmo estado de erro, com "Tentar de novo".
+        const det = e instanceof TypeError ? "Erro de conexão com o servidor." : e.message;
         showToast("Erro ao carregar as opções: " + det, "error");
         opcoes = [];
         _opcoesErro = det;
-        renderSelecao();
+        renderSelecao(true);
         return;
       }
-      const jo = await ro.json();
-      const js = await rs.json();
       opcoes = jo.itens || [];
       opcoesTextos = jo.textos || {};
       _opcoesErro = "";
@@ -826,7 +841,7 @@
       selecionados = new Set((js.documentos || []).map(String));
       selecaoSalva = new Set(selecionados);
       atualizarBarraColab();
-      renderSelecao();
+      renderSelecao(true);
     }
 
     function atualizarBarraColab() {
@@ -846,24 +861,39 @@
       // Do Set, não do DOM: a tabela é paginada, e ler só os checkboxes
       // renderizados descartaria o que foi marcado nas OUTRAS páginas.
       const docs = Array.from(selecionados);
-      const r = await fetch("/api/colaborador/certificados/selecionados", {
-        method: "PUT",
-        headers: getHeaders(true),
-        body: JSON.stringify({ documentos: docs }),
-      });
+      const btn = document.getElementById("btn-salvar-selecao");
+      btn.disabled = true; // sem clique duplo; atualizarBarraColab devolve o estado
+      let r = null;
+      try {
+        r = await fetch("/api/colaborador/certificados/selecionados", {
+          method: "PUT",
+          headers: getHeaders(true),
+          body: JSON.stringify({ documentos: docs }),
+        });
+      } catch (_e) {
+        showToast("Erro de conexão: a seleção não foi salva.", "error");
+        return;
+      } finally {
+        if (!r || !r.ok) atualizarBarraColab();
+      }
       if (!r.ok) {
         showToast("Não foi possível salvar a seleção: " + (await mensagemCorpoErro(r)), "error");
         return;
       }
       // O servidor devolve o que GRAVOU (recortado pelo Alcance).
       const gravado = await r.json().catch(() => ({ documentos: docs }));
-      selecionados = new Set((gravado.documentos || docs).map(String));
-      selecaoSalva = new Set(selecionados);
+      selecaoSalva = new Set((gravado.documentos || docs).map(String));
+      // Marcação feita durante o PUT continua pendente, e não some calada.
+      const enviados = new Set(docs);
+      const agora = selecionados;
+      selecionados = new Set(selecaoSalva);
+      agora.forEach((d) => { if (!enviados.has(d)) selecionados.add(d); });
+      enviados.forEach((d) => { if (!agora.has(d)) selecionados.delete(d); });
       atualizarBarraColab();
-      renderSelecao();
+      renderSelecao(true);
       painelPagina = 1;
       await carregarPainel(true);
-      const n = selecionados.size;
+      const n = selecaoSalva.size;
       showToast(
         n === 0 ? "Nenhum certificado em acompanhamento."
           : n === 1 ? "1 certificado selecionado para acompanhamento."
@@ -873,7 +903,7 @@
     }
 
     document.getElementById("busca-painel").addEventListener("input", () => { painelPagina = 1; void carregarPainel(false); });
-    document.getElementById("busca-selecao").addEventListener("input", () => { selecaoPagina = 1; renderSelecao(); });
+    document.getElementById("busca-selecao").addEventListener("input", () => { selecaoPagina = 1; renderSelecao(true); });
     document.getElementById("btn-salvar-selecao").addEventListener("click", salvarSelecao);
     document.getElementById("btn-colab-painel-prev").addEventListener("click", () => {
       if (painelPagina > 1) { painelPagina--; void carregarPainel(false); }
@@ -902,7 +932,7 @@
     document.getElementById("btn-desfazer-selecao").addEventListener("click", () => {
       selecionados = new Set(selecaoSalva);
       atualizarBarraColab();
-      renderSelecao();
+      renderSelecao(true);
       document.getElementById("btn-salvar-selecao").focus();
     });
 
@@ -929,7 +959,8 @@
       initPerPageColabPainel();
       initPerPageColabSelecao();
       void aplicarNivel();
-      await carregarSelecao();
+      // Em paralelo: a aba Escolher não segura nem derruba o painel (P10-4).
+      void carregarSelecao();
       await carregarPainel(true);
       // Depois da tabela, sem `await` no caminho crítico: a preferência é
       // acessória e uma demora nela não deve segurar o que a pessoa veio ver.

@@ -57,6 +57,9 @@
       {# Os prints usam dados de demonstração: empresas, pessoas e documentos
          inventados. Dizer isso evita alguém procurar "Padaria Pão Dourado" na
          lista de verdade. #}
+      {% if sem_permissoes %}
+        <div class="ag-alert ag-alert--warning" role="alert"><div class="ag-alert__corpo">Não deu para conferir suas permissões agora; tente de novo em instantes. Por enquanto aparecem só as partes que valem para todos.</div></div>
+      {% endif %}
       <p class="wiki-aviso">As telas dos tutoriais usam dados de demonstração: os nomes, CNPJs e CPFs que aparecem nelas são inventados.</p>
 
       <ol class="wiki-indice" role="list">

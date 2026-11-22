@@ -607,9 +607,12 @@
         ]);
         if (!res.ok) throw new Error(await mensagemCorpoErro(res));
         const data = await res.json();
-        let pastaEntrada = "";
-        if (cfg.ok) { pastaEntrada = ((await cfg.json()).pasta_entrada || "").trim(); }
-        document.getElementById("entradaSemPasta").hidden = !!pastaEntrada;
+        // Só acusa pasta não configurada se /api/settings respondeu; falha na
+        // leitura não é prova de que a pasta falta.
+        if (cfg.ok) {
+          const pastaEntrada = ((await cfg.json()).pasta_entrada || "").trim();
+          document.getElementById("entradaSemPasta").hidden = !!pastaEntrada;
+        }
 
         const pend = data.pendentes || [];
         const cont = document.getElementById("tab-movimentos-contagem");
@@ -630,7 +633,11 @@
         const evs = data.eventos || [];
         document.getElementById("entradaResumo").textContent = data.erro
           ? data.erro
-          : (evs.length ? plural(evs.length, "movimento") + " no período." : "");
+          : (evs.length
+            ? (data.truncado
+              ? `Os ${evs.length} mais recentes; reduza o período para ver todos.`
+              : plural(evs.length, "movimento") + " no período.")
+            : "");
         if (!evs.length) {
           tbodyE.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">${
             data.banco === false ? "Sem banco de dados: os movimentos não são registrados." : "Nenhum movimento no período."

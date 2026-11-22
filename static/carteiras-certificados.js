@@ -44,17 +44,20 @@
   });
 
   // ── Lista ─────────────────────────────────────────────────────────
+  // Recarrega a cada volta à aba: atribuir ou retirar na aba Pessoas muda as
+  // contagens e o detalhe aberto (revisão de 22/11/2026, P5-4).
   async function iniciar() {
-    if (carregou) return;
+    const primeira = !carregou;
     carregou = true;
     try {
       const r = await fetch("/api/carteira/certificados", { headers: getHeaders() });
       if (!r.ok) throw new Error(await mensagemCorpoErro(r));
       certs = (await r.json()).certificados || [];
       renderLista();
-      if (CERTIFICADO_INICIAL) abrir(CERTIFICADO_INICIAL);
+      if (primeira && CERTIFICADO_INICIAL) abrir(CERTIFICADO_INICIAL);
+      else if (atual) abrir(atual.documento);
     } catch (e) {
-      carregou = false;
+      carregou = !primeira;
       $("listaCerts").innerHTML = `<li class="cg-op-vazio">${esc(e.message)}</li>`;
     }
   }
@@ -138,6 +141,8 @@
     const doc = atual.documento;
     const r = await fetch("/api/carteira/certificados", { headers: getHeaders() });
     if (r.ok) certs = (await r.json()).certificados || certs;
+    // A aba Pessoas mostra as mesmas contagens.
+    void carregarOperadores();
     await abrir(doc);
   }
 

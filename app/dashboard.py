@@ -35,7 +35,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from app import cert_installer, texto
+from app import cert_installer, snapshots, texto
 from app.settings_state import _banco
 
 logger = logging.getLogger(__name__)
@@ -791,11 +791,15 @@ def painel_renovacoes(dias: int = 30, machine_id: str = "ANALISESRV") -> Dict[st
     if not atual:
         return {"erro": f"Sem varredura para {machine_id}"}
     if not anterior:
+        # Além da retenção, o expurgo apagou a referência; não é o histórico
+        # que "começa depois" (P2-3, revisão de 21/11/2026).
+        retencao = snapshots.retencao_dias()
         return {
             "sem_referencia": True,
             "motivo": (
                 f"Não há varredura anterior a {dias} dias para {machine_id}. "
-                "O histórico começa depois desse ponto."
+                + (f"Os snapshots são guardados por {retencao} dias."
+                   if 0 < retencao < dias else "O histórico começa depois desse ponto.")
             ),
             "atual": atual[0]["scanned_at"],
         }

@@ -492,3 +492,22 @@ def test_agente_parado_antes_do_periodo_continua_no_cartao(banco: _Fake) -> None
     a = dash.painel_agente(7)
     assert a["varreduras"] == 0
     assert a["estado"] == "atencao" and all(m["atrasado"] for m in a["maquinas"]) and a["maquinas"]
+
+
+def test_p2_3_sem_referencia_por_causa_da_retencao_diz_isso(
+    banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """365 dias com retenção de 180: o expurgo apagou a referência, e o motivo
+    não pode culpar um histórico que "começa depois" (revisão de 21/11/2026)."""
+    monkeypatch.setenv("SNAPSHOTS_RETENCAO_DIAS", "180")
+    r = dash.painel_renovacoes(dias=365, machine_id="SRV")
+    assert r.get("sem_referencia") is True
+    assert "180 dias" in r["motivo"] and "começa depois" not in r["motivo"]
+
+
+def test_p2_3_dentro_da_retencao_mantem_o_motivo_do_historico(
+    banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SNAPSHOTS_RETENCAO_DIAS", "0")
+    r = dash.painel_renovacoes(dias=365, machine_id="SRV")
+    assert "começa depois" in r["motivo"]

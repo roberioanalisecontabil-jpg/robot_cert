@@ -217,17 +217,17 @@
 
     // Data e hora completas só na exportação e no `title` da célula; a lista
     // mostra dd/mm/aaaa (seção 2 do DS), como no Início.
-    function fmtDataUtc(iso) {
+    function fmtDataHora(iso) {
       if (!iso) return "—";
       const d = new Date(iso);
-      return d.toLocaleString("pt-BR", { timeZone: "UTC" });
+      return d.toLocaleString("pt-BR");
     }
 
     function fmtSoData(iso) {
       if (!iso) return "—";
       const d = new Date(iso);
       if (Number.isNaN(d.getTime())) return "—";
-      return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+      return d.toLocaleDateString("pt-BR");
     }
 
     // Status da última verificação (D3, 01/10/2026): o servidor já mandava
@@ -252,7 +252,7 @@
       const texto = fmtSoData(iso);
       const abre = "<td role='cell' class='cg-col-data " + classe + "' data-prefixo='" + esc(prefixo) + "'>";
       if (texto === "—") return abre + "—</td>";
-      return abre + "<time datetime='" + esc(iso) + "' title='" + esc(fmtDataUtc(iso)) + "'>" + esc(texto) + "</time></td>";
+      return abre + "<time datetime='" + esc(iso) + "' title='" + esc(fmtDataHora(iso)) + "'>" + esc(texto) + "</time></td>";
     }
 
     // Entrou: o acervo anterior a 30/09 não tem a data (primeira_data_registrada
@@ -268,10 +268,10 @@
       return "<td role='cell' class='cg-col-data cg-col-saida'></td>";
     }
     function textoEntrada(it) {
-      return it.primeira_data_registrada ? fmtDataUtc(it.primeira_data_registrada) : fmtSoData(ENTRADA_SEM_DATA);
+      return it.primeira_data_registrada ? fmtDataHora(it.primeira_data_registrada) : fmtSoData(ENTRADA_SEM_DATA);
     }
     function textoSaida(it) {
-      return it.ausente_desde ? fmtDataUtc(it.ausente_desde) : "";
+      return it.ausente_desde ? fmtDataHora(it.ausente_desde) : "";
     }
 
     // Mesma regra de exibição do Início: o nome vem em CAIXA ALTA do arquivo
@@ -461,8 +461,8 @@
         it.documento || "",
         textoEntrada(it),
         textoSaida(it),
-        fmtDataUtc(it.ultima_data_registrada),
-        fmtDataUtc(it.vencimento_certificado),
+        fmtDataHora(it.ultima_data_registrada),
+        fmtDataHora(it.vencimento_certificado),
       ]);
       const all = [headers, ...rows];
       const csv = all
@@ -497,8 +497,8 @@
             <td>${esc(it.documento || "")}</td>
             <td>${esc(textoEntrada(it))}</td>
             <td>${esc(textoSaida(it))}</td>
-            <td>${esc(fmtDataUtc(it.ultima_data_registrada))}</td>
-            <td>${esc(fmtDataUtc(it.vencimento_certificado))}</td>
+            <td>${esc(fmtDataHora(it.ultima_data_registrada))}</td>
+            <td>${esc(fmtDataHora(it.vencimento_certificado))}</td>
             <td>${esc(rotuloStatusHistorico(it))}</td>
           </tr>
         `)

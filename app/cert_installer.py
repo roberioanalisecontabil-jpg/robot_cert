@@ -1160,6 +1160,16 @@ def estado_de_instalabilidade(
     alcance_total = alcance is None
     carteira: Any = alcance if alcance is not None else set()
 
+    agora = datetime.now(timezone.utc)
+
+    def _vencido_pela_data(valor: Any) -> bool:
+        # O snapshot só diz "expirado" na próxima ingestão; a data já basta.
+        try:
+            d = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return False
+        return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)) < agora
+
     out: Dict[str, Dict[str, Any]] = {}
     for item in itens:
         fp = str(item.get("fingerprint_sha256") or "").strip()
@@ -1171,7 +1181,7 @@ def estado_de_instalabilidade(
         status = str(item.get("status") or "").strip().lower()
         doc = so_digitos(item.get("documento_numero"))
 
-        if status in ("expirado", "vencido"):
+        if status in ("expirado", "vencido") or (item.get("not_after") and _vencido_pela_data(item.get("not_after"))):
             estado = ESTADO_VENCIDO
         elif status in ("erro", "fora_do_padrao"):
             estado = ESTADO_ILEGIVEL

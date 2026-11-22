@@ -92,18 +92,20 @@ def _prints() -> dict:
         return {}
 
 
-def _visiveis(papel: str) -> list[ModuloWiki]:
+def _visiveis(papel: str) -> tuple[list[ModuloWiki], bool]:
     """Os módulos que o papel alcança. Sem a matriz, só os que valem para todos:
-    melhor um índice curto do que ensinar o que a pessoa talvez não possa usar."""
+    melhor um índice curto do que ensinar o que a pessoa talvez não possa usar.
+    O segundo valor diz que a matriz falhou, para a tela avisar (P9-2)."""
+    falhou = False
     try:
         niveis = permissoes.matriz_para_papel(papel)
     except permissoes.PermissoesIndisponiveis as e:
         logger.error("Wiki sem a matriz de permissões: %s", e)
-        niveis = {}
+        niveis, falhou = {}, True
     return [
         m for m in MODULOS
         if m.permissao is None or niveis.get(m.permissao, permissoes.NIVEL_NENHUM) != permissoes.NIVEL_NENHUM
-    ]
+    ], falhou
 
 
 def _para_o_login(request: Request) -> RedirectResponse:
@@ -127,16 +129,21 @@ async def pagina_wiki(request: Request) -> Response:
     if (sessao.role or "") == "agent":
         return _para_o_login(request)
 
-    visiveis = _visiveis(sessao.role or "")
+    visiveis, sem_permissoes = _visiveis(sessao.role or "")
     chave = (request.query_params.get("modulo") or "").strip()
     atual = _POR_CHAVE.get(chave)
-    if chave and atual not in visiveis:
+    if sem_permissoes and atual is not None and atual not in visiveis:
+        # Sem a matriz não dá para saber se alcança: o índice com o aviso, e
+        # não um 303 que parece perda de acesso ("503, nunca 403").
+        atual = None
+    elif chave and atual not in visiveis:
         # Módulo que não existe ou que a pessoa não alcança: o índice.
         return RedirectResponse("/wiki-certguard", status_code=303)
 
     from app.main import templates  # import tardio: main importa este router
 
-    contexto = {"pagina_ativa": "wiki", "modulos": visiveis, "atual": atual, "prints": _prints() if atual else {}}
+    contexto = {"pagina_ativa": "wiki", "modulos": visiveis, "atual": atual, "prints": _prints() if atual else {},
+                "sem_permissoes": sem_permissoes}
     if atual:
         i = visiveis.index(atual)
         contexto["anterior"] = visiveis[i - 1] if i > 0 else None

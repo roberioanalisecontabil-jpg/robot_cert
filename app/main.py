@@ -358,7 +358,14 @@ async def paginas_exigem_sessao_middleware(request: Request, call_next):
     com `next`, quem não tem sessão válida. Vale quando o portal está fechado
     (`API_KEY` configurada), a mesma regra que `require_auth` segue na API.
     """
-    if (request.method in ("GET", "HEAD") and request.url.path in sessao_cookie.PAGINAS
+    # Os prints e vídeos da wiki também (P9-1): o <img> manda o cookie. O
+    # caminho é normalizado como o StaticFiles o resolve no Windows (`//`,
+    # `..`, `\` e maiúsculas), senão `/static//wiki/` passaria pela cerca.
+    import posixpath
+
+    caminho_wiki = posixpath.normpath(request.url.path.replace("\\", "/")).lower()
+    if (request.method in ("GET", "HEAD")
+            and (request.url.path in sessao_cookie.PAGINAS or caminho_wiki.startswith("/static/wiki/"))
             and config.API_KEY):
         valida = False
         token = sessao_cookie.token_do_cookie(request)

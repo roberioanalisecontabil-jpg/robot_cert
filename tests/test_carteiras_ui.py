@@ -575,7 +575,7 @@ def test_certificado_na_url_abre_o_detalhe_no_celular(html: str) -> None:
 
 
 def test_script_da_aba_carrega_com_cache_buster(html: str) -> None:
-    assert "/static/carteiras-certificados.js?v=certificados-celular-2026-11-17" in html
+    assert "/static/carteiras-certificados.js?v=lote4-2026-11-22" in html
 
 
 def test_teto_de_700_dias_na_tela() -> None:

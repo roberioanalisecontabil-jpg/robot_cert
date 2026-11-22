@@ -155,7 +155,9 @@ def listar(dias: int = 30, limite: int = 500) -> Dict[str, Any]:
     for lista in (pend, evs):
         for x in lista:
             x["resultado_rotulo"] = ROTULO_RESULTADO.get(str(x.get("resultado") or ""), str(x.get("resultado") or ""))
-    return {"pendentes": pend, "eventos": evs, "banco": True}
+    # `truncado`: o teto `limite` cortou os eventos; a tela avisa em vez de
+    # anunciar o corte como total do período.
+    return {"pendentes": pend, "eventos": evs, "banco": True, "truncado": len(evs) >= limite}
 
 
 # ── E-mail aos administradores ────────────────────────────────────────────

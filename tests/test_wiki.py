@@ -125,3 +125,30 @@ def test_permissoes_dos_modulos_existem_na_matriz() -> None:
     os que não são admin, sem erro nenhum."""
     for m in wiki.MODULOS:
         assert m.permissao is None or m.permissao in permissoes.MODULOS, m.chave
+
+
+# P9-1 e P9-2 (revisão de 21/11/2026)
+
+def test_p9_1_prints_da_wiki_exigem_sessao(client_wiki: TestClient) -> None:
+    for caminho in ("/static/wiki/prints.json", "/static//wiki/prints.json", "/static/WIKI/prints.json"):
+        r = client_wiki.get(caminho, follow_redirects=False)
+        assert r.status_code in (401, 303, 404), caminho
+        assert '"w"' not in r.text, caminho
+    assert client_wiki.get("/static/wiki/prints.json", headers=_cabecalho("user")).status_code == 200
+
+
+def test_p9_1_resto_do_static_continua_publico(client_wiki: TestClient) -> None:
+    # A tela de login usa o /static sem sessão.
+    assert client_wiki.get("/static/wiki.css").status_code == 200
+
+
+def test_p9_2_sem_matriz_o_modulo_pedido_mostra_aviso_e_nao_redireciona(
+    client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def indisponivel(papel: str) -> dict:
+        raise permissoes.PermissoesIndisponiveis("sem banco")
+
+    monkeypatch.setattr(permissoes, "matriz_para_papel", indisponivel)
+    r = client_wiki.get("/wiki-certguard?modulo=inicio", headers=_cabecalho("user"), follow_redirects=False)
+    assert r.status_code == 200
+    assert "Não deu para conferir suas permissões agora" in r.text

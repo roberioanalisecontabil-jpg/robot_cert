@@ -431,11 +431,12 @@ def _intervalo_uso(desde: Optional[date], ate: Optional[date]) -> tuple:
     from app import uso
 
     hoje = datetime.now(uso.BRASILIA).date()
+    # Só 'Até': a semana antes do Até, e não a de hoje; senão o período fica vazio (P5-5).
+    de = desde or ((ate or hoje) - timedelta(days=7))
     # O resumo varre o período inteiro a cada clique; o gráfico mostra no máximo 366 dias.
-    if ((ate or hoje) - (desde or hoje - timedelta(days=7))).days > 366:
+    if ((ate or hoje) - de).days > 366:
         raise HTTPException(status_code=422, detail="Escolha um período de até um ano.")
-    ini = datetime.combine(desde or (hoje - timedelta(days=7)),
-                           datetime.min.time(), tzinfo=uso.BRASILIA)
+    ini = datetime.combine(de, datetime.min.time(), tzinfo=uso.BRASILIA)
     fim = datetime.combine(ate, datetime.min.time(), tzinfo=uso.BRASILIA) + timedelta(days=1) if ate else None
     return uso._iso(ini), uso._iso(fim) if fim else None
 
@@ -555,7 +556,8 @@ def resumo_uso(
 
     ls = por_doc[doc]
     hoje = datetime.now(uso.BRASILIA).date()
-    dia_ini, dia_fim = desde or (hoje - timedelta(days=7)), ate or hoje
+    dia_fim = ate or hoje
+    dia_ini = desde or (dia_fim - timedelta(days=7))
     por_dia: Dict[str, int] = {}
     for l in ls:
         dia = datetime.fromisoformat(l["quando"].replace("Z", "+00:00")).astimezone(uso.BRASILIA).date().isoformat()

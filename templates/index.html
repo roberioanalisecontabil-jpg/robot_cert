@@ -307,7 +307,7 @@
     {% include "_modal_detalhes.html" %}
 
     <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=fundo-2026-11-05"></script>
-    <script nonce="{{ request.state.nonce }}" src="/static/detalhes-certificado.js?v=detalhes-2026-10-20"></script>
+    <script nonce="{{ request.state.nonce }}" src="/static/detalhes-certificado.js?v=lote4-2026-11-22"></script>
     <script nonce="{{ request.state.nonce }}">
       const fonte = () => getDataFonte();
       const LS_PER_PAGE_DASH = "cg_per_page_dashboard";
@@ -344,14 +344,14 @@
       const fmt = (iso) => {
         if (!iso) return "—";
         const d = new Date(iso);
-        return d.toLocaleString("pt-BR", { timeZone: "UTC" });
+        return d.toLocaleString("pt-BR");
       };
 
       const fmtData = (iso) => {
         if (!iso) return "—";
         const d = new Date(iso);
         if (Number.isNaN(d.getTime())) return "—";
-        return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+        return d.toLocaleDateString("pt-BR");
       };
 
       // Célula de data com o instante completo ao alcance (title), sem o
@@ -610,6 +610,8 @@
         // Todos veem todos (08/10/2026); a carteira decide quem instala. A
         // instalabilidade não traz os de fora (#30), então vem da lista.
         if (it.instalavel === false) return { estado: "fora_da_carteira", id: null };
+        // Vencido pela data antes de o snapshot dizer "expirado": mesma regra do badge.
+        if (it._isExpiredByDate) return { estado: "vencido", id: null };
         return _instalabilidade[fp] || { estado: "nao_enviado", id: null };
       }
 
@@ -698,6 +700,8 @@
           // servidor vai recusar depois — e o usuário só descobre no download.
           _instalabilidade = {};
           _instalIndisponivel = true;
+          // Sem isto a falha ficava cacheada até o F5: a chave igual barrava a reconsulta.
+          _instalMachineId = null;
           showToast("Não foi possível verificar quais certificados estão disponíveis.", "error");
         }
       }
@@ -1321,6 +1325,8 @@
 
       document.getElementById("btn-refresh").addEventListener("click", () => {
         paginaAtual = 1;
+        // Atualizar reconsulta também a instalabilidade (o agente pode ter subido o PFX).
+        _instalMachineId = null;
         carregarTabela();
       });
       document.getElementById("btnModoSelecao").addEventListener("click", () => {

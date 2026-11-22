@@ -899,8 +899,9 @@
           if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
           const j = await r.json();
-          st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
+          // Depois do recarregar: ele usa o mesmo #cfg-msg e apagava a confirmação (P8-5).
           await loadSettingsToForm();
+          st.textContent = "Guardado (" + (j.persistence || "ok") + ").";
           await syncPathsFromApi();
         } catch (e) {
           st.textContent = "Falha: " + e;
@@ -1011,6 +1012,9 @@
           pintarSenhaGuardada(!!s.smtp_password_set);
           document.getElementById("inp-smtp-pass").value = "";
           preencherGraph(s);
+          // Os textos "Em uso" e o assunto efetivo vêm da resposta (P8-4).
+          preencherAlertas(s);
+          preencherModeloEmail(s);
           marcarLimpo();
           st.textContent = "Salvo.";
           showToast("Alterações salvas.", "success");
@@ -1472,12 +1476,21 @@
             fetch("/api/acessorias/departamentos", { headers: getHeaders() }),
             fetch("/api/departamentos", { headers: getHeaders() }),
           ]);
-          if (!rs.ok) { linhaVazia(document.getElementById("acess-deps"), 4, await mensagemCorpoErro(rs)); return; }
-          _portalDeps = rd.ok ? await rd.json() : [];
+          if (!rs.ok) { erroAcessoriasCfg(await mensagemCorpoErro(rs)); return; }
+          // Sem a lista do portal, todo par sairia "— sem par —" e a tela
+          // mentiria que as ligações sumiram (P8-7): erro nas três tabelas.
+          if (!rd.ok) { erroAcessoriasCfg(await mensagemCorpoErro(rd)); return; }
+          _portalDeps = await rd.json();
           renderAcessoriasCfg(await rs.json());
         } catch (e) {
-          linhaVazia(document.getElementById("acess-deps"), 4, "Erro de conexão com o servidor.");
+          erroAcessoriasCfg("Erro de conexão com o servidor.");
         }
+      }
+
+      function erroAcessoriasCfg(texto) {
+        linhaVazia(document.getElementById("acess-deps"), 4, texto);
+        linhaVazia(document.getElementById("acess-sem-par"), 3, texto);
+        linhaVazia(document.getElementById("acess-decidir"), 3, texto);
       }
 
       async function salvarAcessorias(url, corpo) {
