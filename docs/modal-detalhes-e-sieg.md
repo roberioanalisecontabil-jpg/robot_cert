@@ -53,6 +53,14 @@ recusada → desliga a opção e repete.
   com o motivo escrito. Confirmação "Esta ação não pode ser desfeita".
 - **Renovação:** o novo do mesmo CNPJ atualiza o cadastro no SIEG; o anterior
   vira "Substituído" apontando para o novo.
+- **Troca automática (22/11/2026):** a cada hora o portal confere o
+  `DataExpira` de cada cadastro ativo no SIEG. "No SIEG" com outra validade
+  vira "Fora do SIEG" com a validade do que está lá; cliente com certificado
+  mais novo, válido, legível e no cofre recebe o novo logo que ele chega
+  (trilha "troca automática"). Cliente excluído ou inativo no SIEG também
+  vira "Fora do SIEG", salvo listagem vazia ou mais de 20% saindo de uma vez
+  (suspeita: ninguém é marcado). Erro só tenta de novo depois de 24 h. A
+  inclusão, a reconciliação e a sincronização também conferem a validade.
 - **Reconciliação (administrador):** "Conferir no SIEG" no modal — ativo lá →
   mantém; inativo ou ausente → "Fora do SIEG", que pode ser ligado de novo.
 - **Sincronizar (administrador, Configuração › SIEG):** marca "No SIEG" o

@@ -138,6 +138,16 @@ logging.root.handlers = [_handler]
 logging.root.setLevel(logging.INFO)
 
 
+def ciclo_sieg() -> None:
+    """Uma volta do ciclo do SIEG (laço `sieg_loop` do lifespan)."""
+    from app import sieg
+    from app.settings_state import get_latest_snapshot, load_settings
+
+    s = load_settings()
+    if sieg.configurado(s):
+        sieg.conferir_e_trocar((get_latest_snapshot() or {}).get("items") or [], s)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """
@@ -302,8 +312,23 @@ async def lifespan(_app: FastAPI):
                 logger.error(f"Erro no vencimento de prazos: {e}")
             await asyncio.sleep(300)
 
+    # SIEG (app/sieg.py, 22/11/2026): a cada hora confere qual certificado
+    # está lá e troca pelo mais novo do mesmo CNPJ. Sem SIEG configurado, só dorme.
+    async def sieg_loop():
+        loop = asyncio.get_running_loop()
+        await asyncio.sleep(180)
+        while True:
+            try:
+                await loop.run_in_executor(None, ciclo_sieg)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Erro no ciclo do SIEG: {e}")
+            await asyncio.sleep(3600)
+
     tarefa_alertas = asyncio.create_task(daily_alerts_job_loop())
     tarefa_prazos = asyncio.create_task(prazos_loop())
+    tarefa_sieg = asyncio.create_task(sieg_loop())
     tarefa_novos = asyncio.create_task(novos_por_hora_loop())
     tarefa_acessorias = asyncio.create_task(acessorias_loop())
     tarefa_microsoft = asyncio.create_task(microsoft_loop())
@@ -314,6 +339,7 @@ async def lifespan(_app: FastAPI):
         tarefa_acessorias.cancel()
         tarefa_microsoft.cancel()
         tarefa_prazos.cancel()
+        tarefa_sieg.cancel()
         # O `await` é limitado no tempo de propósito. Esperar a task sem prazo
         # significa que qualquer falha em encerrá-la (um cancel que não chega,
         # um run_in_executor preso num envio SMTP) trava o shutdown do processo
@@ -325,7 +351,7 @@ async def lifespan(_app: FastAPI):
         # pelo prazo cheio passava despercebida. `asyncio.wait` devolve a task
         # pendente sem levantar, e deixa passar um cancelamento externo.
         tarefa_alertas.cancel()
-        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias, tarefa_microsoft, tarefa_prazos}, timeout=5)
+        _, pendentes = await asyncio.wait({tarefa_alertas, tarefa_novos, tarefa_acessorias, tarefa_microsoft, tarefa_prazos, tarefa_sieg}, timeout=5)
         if pendentes:
             logger.warning("Job de alertas não encerrou em 5s; seguindo com o shutdown.")
 

@@ -25,9 +25,16 @@ class SiegFalso:
         self.habilitar_falha = False
         self.jwt_recusa = False
         self.conta = "20929"
+        # PFX (base64) -> validade que o SIEG passa a mostrar em DataExpira.
+        self.validades: Dict[str, str] = {}
+        # O /editar responde OK e o SIEG continua com o certificado antigo.
+        self.editar_ignora = False
 
-    def cadastro(self, doc: str, nome: str = "X", ativo: bool = True, deletado: bool = False) -> Dict[str, Any]:
+    def cadastro(self, doc: str, nome: str = "X", ativo: bool = True, deletado: bool = False,
+                 expira: Optional[str] = None) -> Dict[str, Any]:
         c = {"Id": f"{self.conta}-{doc}", "CnpjCpf": doc, "Nome": nome, "Ativo": ativo, "Deletado": deletado}
+        if expira:
+            c["DataExpira"] = expira
         self.cadastros.append(c)
         return c
 
@@ -63,13 +70,15 @@ class SiegFalso:
                 return self._json(200, {"Message": "Certificado registrado com sucesso."})
             excluido = next((c for c in self.cadastros if c["CnpjCpf"] == doc and c["Deletado"]), None)
             if not excluido:
-                self.cadastro(doc, corpo.get("Nome", ""))
+                self.cadastro(doc, corpo.get("Nome", ""), expira=self.validades.get(corpo.get("Certificado", "")))
             return self._json(200, {"Message": "Certificado registrado com sucesso."})
         if caminho == "/api/v1/editar":
             self.payloads.append(corpo)
             c = next((c for c in self.cadastros if c["Id"] == corpo["CertificadoId"]), None)
             if not c:
                 return self._json(404, {"ErrorMessage": "nao encontrado"})
+            if not self.editar_ignora and corpo.get("Certificado") in self.validades:
+                c["DataExpira"] = self.validades[corpo["Certificado"]]
             return self._json(200, {"Message": "Certificado atualizado"})
         if caminho == "/api/v1/habilitar":
             c = next((c for c in self.cadastros if c["Id"] == req.url.params.get("id")), None)

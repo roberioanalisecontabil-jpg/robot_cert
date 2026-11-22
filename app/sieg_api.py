@@ -183,6 +183,33 @@ def pontuar_candidato(item: Dict[str, Any], nome: str) -> int:
     return pontos
 
 
+def instante(v: Any):
+    from datetime import datetime, timezone
+
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def validade_confere(not_after: Any, data_expira: Any) -> Optional[bool]:
+    """O cadastro do SIEG está com ESTE certificado? Compara a validade do
+    certificado com o DataExpira da listagem (folga de 1 dia por fuso e
+    arredondamento). None quando falta uma das datas: não dá para dizer."""
+    from datetime import timedelta
+
+    a, b = instante(not_after), instante(data_expira)
+    if a is None or b is None:
+        return None
+    return abs(a - b) <= timedelta(days=1)
+
+
+def validade_br(data_expira: Any) -> str:
+    d = instante(data_expira)
+    return d.strftime("%d/%m/%Y") if d else "data desconhecida"
+
+
 def cadastro_ativo(item: Optional[Dict[str, Any]]) -> bool:
     if not item or item.get("Deletado") is True:
         return False
@@ -354,7 +381,7 @@ class ClienteSieg:
         return ok, body
 
     def _atualizar(self, doc: str, cert_id: str, inativo: bool, pfx_b64: str, senha: str, tipo: str,
-                   r: Resultado) -> Resultado:
+                   r: Resultado, validade: Any = None) -> Resultado:
         r.operacao = "atualizar"
         r.certificado_id = cert_id
         ok, status, body = self._post(EP_EDITAR, {
@@ -369,14 +396,20 @@ class ClienteSieg:
             else:
                 r.avisos.append(f"Atualizado, mas não reativou: {mensagem_da_api(body_h)}")
                 ok = False
-        if ok and self._ativo_na_listagem(doc) is None:
+        ativo = self._ativo_na_listagem(doc) if ok else None
+        if ok and ativo is None:
             r.avisos.append("A API respondeu OK, mas o cadastro não ficou ativo na listagem")
+            ok = False
+        if ok and validade_confere(validade, ativo.get("DataExpira")) is False:
+            # Já aconteceu: o /editar responde OK e o SIEG segue com o antigo.
+            r.mensagem = ("O SIEG respondeu OK, mas continua com o certificado que vence em "
+                          + validade_br(ativo.get("DataExpira")) + ".")
             ok = False
         r.ok = ok
         return r
 
     def incluir(self, *, nome: str, documento: str, pfx: bytes, senha: str,
-                padroes: Optional[Dict[str, Any]] = None, tipo: str = "Pfx") -> Resultado:
+                padroes: Optional[Dict[str, Any]] = None, tipo: str = "Pfx", validade: Any = None) -> Resultado:
         """Cadastra (ou atualiza o cadastro do mesmo CNPJ) e confere na listagem."""
         doc = so_digitos(documento)
         pfx_b64 = base64.b64encode(pfx).decode("ascii")
@@ -387,7 +420,7 @@ class ClienteSieg:
             alvo = max(candidatos, key=lambda i: pontuar_candidato(i, nome))
             cert_id = str(alvo.get("Id") or alvo.get("id") or "")
             if cert_id:
-                return self._atualizar(doc, cert_id, not cadastro_ativo(alvo), pfx_b64, senha, tipo, r)
+                return self._atualizar(doc, cert_id, not cadastro_ativo(alvo), pfx_b64, senha, tipo, r, validade)
 
         p = {**PADROES, **(padroes or {})}
         payload: Dict[str, Any] = {
@@ -416,7 +449,8 @@ class ClienteSieg:
                     alvo = max(vivos, key=lambda i: pontuar_candidato(i, nome))
                     cert_id = str(alvo.get("Id") or alvo.get("id") or "")
                     if cert_id:
-                        return self._atualizar(doc, cert_id, not cadastro_ativo(alvo), pfx_b64, senha, tipo, r)
+                        return self._atualizar(doc, cert_id, not cadastro_ativo(alvo), pfx_b64, senha, tipo, r,
+                                               validade)
                 r.mensagem = msg + " (o SIEG diz que já existe, mas o cadastro não aparece na listagem)"
                 return r
             desligadas = desligar_consultas_do_erro(payload, msg)

@@ -103,7 +103,7 @@ def sieg_reconciliar(fingerprint: str = FP_PARAM, token: auth.TokenData = Depend
     item, _snap = _certificado_no_alcance(fingerprint, token)
     settings = load_settings()
     try:
-        sieg.reconciliar(item["fingerprint_sha256"].lower(), settings, _quem(token))
+        sieg.reconciliar(item["fingerprint_sha256"].lower(), settings, _quem(token), not_after=item.get("not_after"))
     except LookupError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except SiegErro as e:
