@@ -270,13 +270,9 @@
       const j = await r.json();
       if (meu !== seqResumo) return;
       certs = j.certificados;
-      // Sem escolha (ou a escolhida saiu do período): abre o mais usado. Só se
-      // ainda não foi ele que veio sem detalhe: senão a tela pedia o resumo sem
-      // parar (medido em 21/11/2026, 50 chamadas até o stub ceder).
-      if (!j.detalhe && certs.length && docSel !== certs[0].documento) {
-        docSel = certs[0].documento; pagina = 1;
-        return void carregarResumo();
-      }
+      // Sem escolha (ou a escolhida saiu do período), o servidor já manda o
+      // detalhe do mais usado: a tela segue com ele, sem pedir o resumo de novo.
+      if (j.detalhe && j.detalhe.documento !== docSel) { docSel = j.detalhe.documento; pagina = 1; }
       renderLista();
       if (!j.detalhe) { docSel = ""; semDetalhe("Nenhum uso no período."); void carregarColetas(); return; }
       renderDetalhe(j.detalhe);

@@ -13,6 +13,8 @@
   };
   let pagina = 1;
   let ultimaCheia = false;
+  // Descarta a resposta de um pedido superado por outro mais novo.
+  let seqRemocao = 0;
 
   function celula(tr, texto, titulo) {
     const td = document.createElement("td");
@@ -44,32 +46,46 @@
     const estado = document.getElementById("sel-remocao-estado").value;
     const q = new URLSearchParams({ pagina: String(pagina) });
     if (estado) q.set("estado", estado);
+    const seq = ++seqRemocao;
+    // Travados até a resposta: duplo clique em Próxima pularia uma página.
+    document.getElementById("btn-remocao-anterior").disabled = true;
+    document.getElementById("btn-remocao-proxima").disabled = true;
     mensagem(tbody, "Carregando…");
     try {
       const r = await fetch("/api/remocao?" + q, { headers: getHeaders() });
-      if (!r.ok) { mensagem(tbody, await mensagemCorpoErro(r)); return; }
-      const j = await r.json();
-      const itens = j.itens || [];
-      ultimaCheia = itens.length >= (j.por_pagina || 50);
-      if (!itens.length) {
-        mensagem(tbody, pagina > 1 ? "Nada nesta página." : "Nada a mostrar.");
+      if (seq !== seqRemocao) return;
+      if (!r.ok) {
+        ultimaCheia = false;
+        const erro = await mensagemCorpoErro(r);
+        if (seq !== seqRemocao) return;
+        mensagem(tbody, erro);
       } else {
-        tbody.replaceChildren(...itens.map((l) => {
-          const tr = document.createElement("tr");
-          tr.setAttribute("role", "row");
-          celula(tr, quando(l.atualizado_em));
-          celula(tr, l.machine_id);
-          celula(tr, l.usuario_windows);
-          celula(tr, l.pessoa);
-          celula(tr, l.titular);
-          celula(tr, REGRAS[l.regra] || l.regra);
-          celula(tr, l.motivo);
-          celula(tr, ESTADOS[l.estado] || l.estado, l.detalhe || "")
-            .append(l.detalhe ? " — " + l.detalhe : "");
-          return tr;
-        }));
+        const j = await r.json();
+        if (seq !== seqRemocao) return;
+        const itens = j.itens || [];
+        ultimaCheia = itens.length >= (j.por_pagina || 50);
+        if (!itens.length) {
+          mensagem(tbody, pagina > 1 ? "Nada nesta página." : "Nada a mostrar.");
+        } else {
+          tbody.replaceChildren(...itens.map((l) => {
+            const tr = document.createElement("tr");
+            tr.setAttribute("role", "row");
+            celula(tr, quando(l.atualizado_em));
+            celula(tr, l.machine_id);
+            celula(tr, l.usuario_windows);
+            celula(tr, l.pessoa);
+            celula(tr, l.titular);
+            celula(tr, REGRAS[l.regra] || l.regra);
+            celula(tr, l.motivo);
+            celula(tr, ESTADOS[l.estado] || l.estado, l.detalhe || "")
+              .append(l.detalhe ? " — " + l.detalhe : "");
+            return tr;
+          }));
+        }
       }
     } catch (e) {
+      if (seq !== seqRemocao) return;
+      ultimaCheia = false;
       mensagem(tbody, "Erro de conexão com o servidor.");
     }
     document.getElementById("btn-remocao-anterior").disabled = pagina <= 1;

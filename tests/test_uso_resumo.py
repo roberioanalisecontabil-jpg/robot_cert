@@ -18,7 +18,8 @@ def test_lista_soma_por_certificado_do_mais_usado(client: TestClient, banco) -> 
     j = _get(client, ADMIN).json()
     assert [(c["documento"], c["usos"], c["pessoas"]) for c in j["certificados"]] == [(DOC_A, 2, 2), (DOC_B, 1, 1)]
     assert j["certificados"][0]["titular"] == "ALFA" and j["certificados"][0]["ultimo_em"]
-    assert j["detalhe"] is None
+    # Sem documento, o detalhe já vem do mais usado: a tela não pede o resumo duas vezes.
+    assert j["detalhe"]["documento"] == DOC_A
 
 
 def test_detalhe_do_certificado(client: TestClient, banco) -> None:
@@ -36,7 +37,8 @@ def test_detalhe_do_certificado(client: TestClient, banco) -> None:
 def test_gestor_so_soma_os_departamentos_dele(client: TestClient, banco) -> None:
     j = _get(client, GESTOR).json()
     assert [(c["documento"], c["usos"], c["pessoas"]) for c in j["certificados"]] == [(DOC_A, 1, 1)]
-    assert _get(client, GESTOR, "&documento=" + DOC_B).json()["detalhe"] is None
+    # DOC_B não é do alcance dele: o detalhe cai no mais usado dele, nunca no DOC_B.
+    assert _get(client, GESTOR, "&documento=" + DOC_B).json()["detalhe"]["documento"] == DOC_A
     assert _get(client, GESTOR, "&user_id=u-sol").json()["certificados"] == []
 
 
@@ -68,3 +70,16 @@ def test_resumo_conta_as_linhas_que_cada_um_ve(client: TestClient, com_janelas) 
     assert _get(client, GESTOR).json()["certificados"][0]["usos"] == 3
     d = _get(client, ADMIN, "&documento=" + DOC_A).json()["detalhe"]
     assert d["usos"] == 4 and sum(p["usos"] for p in d["por_dia"]) == 4 and d["quem"][0]["usos"] == 4
+
+
+def test_periodo_acima_de_um_ano_e_recusado(client: TestClient, banco) -> None:
+    r = client.get("/api/carteira/uso/resumo?desde=2025-01-01&ate=2026-02-05", headers=_h(*ADMIN))
+    assert r.status_code == 422
+    r = client.get("/api/carteira/uso/resumo?desde=2025-11-16&ate=2026-11-16", headers=_h(*ADMIN))
+    assert r.status_code == 200
+
+
+def test_sem_uso_no_periodo_detalhe_e_nulo(client: TestClient, banco) -> None:
+    r = client.get("/api/carteira/uso/resumo?desde=2020-01-01&ate=2020-01-02", headers=_h(*ADMIN))
+    assert r.json() == {"certificados": [], "detalhe": None}
+

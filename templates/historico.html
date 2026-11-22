@@ -545,7 +545,10 @@
 
     let primeiroCarregamentoHist = true;
 
+    // Descarta a resposta de um pedido que já foi superado por outro mais novo.
+    let seqHist = 0;
     async function carregarHistorico() {
+      const seq = ++seqHist;
       const st = document.getElementById("status-msg");
       st.textContent = "Carregando…";
       if (primeiroCarregamentoHist) {
@@ -562,12 +565,14 @@
           situacao: situacaoHistorico(),
         });
         const r = await fetch("/api/certificados/historico?" + params.toString(), { headers: getHeaders() });
+        if (seq !== seqHist) return;
         if (r.status === 401) {
           logout();
           return;
         }
         if (!r.ok) {
           const detalhe = await mensagemCorpoErro(r);
+          if (seq !== seqHist) return;
           st.textContent = `Erro ${r.status}`;
           showToast("Não foi possível carregar o histórico: " + detalhe, "error");
           renderEmptyRow("tbody-historico", 6, {
@@ -580,6 +585,7 @@
           return;
         }
         const j = await r.json();
+        if (seq !== seqHist) return;
         if (j.paginacao) {
           paginaAtualHist = j.paginacao.pagina;
           atualizarPaginacaoHist(j.paginacao);
@@ -596,6 +602,7 @@
             ? j.total.toLocaleString("pt-BR") + " registro(s)"
             : rows.length + " registro(s) nesta página";
       } catch (e) {
+        if (seq !== seqHist) return;
         st.textContent = "Falha de conexão.";
         showToast("Falha de conexão com o servidor: " + e, "error");
         renderEmptyRow("tbody-historico", 6, {
@@ -606,9 +613,11 @@
           onAction: () => carregarHistorico(),
         });
       } finally {
-        toggleLoading(false);
-        limparSkeleton("tbody-historico");
-        primeiroCarregamentoHist = false;
+        if (seq === seqHist) {
+          toggleLoading(false);
+          limparSkeleton("tbody-historico");
+          primeiroCarregamentoHist = false;
+        }
       }
     }
 

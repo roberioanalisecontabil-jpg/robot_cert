@@ -526,14 +526,20 @@
       }
     }
 
+    // Descarta a resposta de um pedido superado: o timer de 4 s não pode
+    // sobrescrever o filtro que a pessoa acabou de escolher.
+    let _seqSieg = 0;
     async function loadSieg() {
+      const seq = ++_seqSieg;
       const tbody = document.getElementById("tblSieg");
       const estado = document.getElementById("siegEstado").value;
       clearTimeout(_siegTimer);
       try {
         const r = await fetch("/api/sieg/inclusoes" + (estado ? "?estado=" + encodeURIComponent(estado) : ""), { headers: getHeaders() });
+        if (seq !== _seqSieg) return;
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
+        if (seq !== _seqSieg) return;
         document.getElementById("siegSemConfig").hidden = !!d.configurado;
         const res = d.resumo || {};
         const total = Object.values(res).reduce((a, b) => a + b, 0);
@@ -564,6 +570,7 @@
         // Enquanto houver inclusão em andamento, a aba se atualiza sozinha.
         if (res.incluindo) _siegTimer = setTimeout(() => { if (!document.getElementById("aba-sieg").hidden) void loadSieg(); }, 4000);
       } catch (e) {
+        if (seq !== _seqSieg) return;
         tbody.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">Falha ao carregar: ${esc(e.message)}</td></tr>`;
       }
     }
