@@ -2193,7 +2193,8 @@ def log_event(
     row: Dict[str, Any] = {
         "event": event,
         "user_id": user_id,
-        "user_email": user_email,
+        # Minúsculo: cadeias_de_instalacao filtra o e-mail no banco com igualdade.
+        "user_email": (user_email or "").strip().lower() or None,
     }
     if token_id:
         row["token_id"] = token_id
@@ -2247,6 +2248,7 @@ def cadeias_de_instalacao(
     desde: Optional[str] = None,
     user_email: Optional[str] = None,
     apenas_com_falha: bool = False,
+    info: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Agrupa `install_log` por token: uma linha por tentativa de instalação.
@@ -2261,9 +2263,14 @@ def cadeias_de_instalacao(
     quais seis morreram no mesmo ponto e pela mesma causa — que foi como se
     descobriu que a senha estava ausente no cofre.
 
-    `desde` é ISO-8601; a filtragem por período vai no banco, a por usuário e
+    `desde` é ISO-8601; período e usuário vão no banco (todos os eventos de um
+    token são da mesma pessoa, então filtrar por e-mail não corta cadeia), e a
     falha em memória (o agrupamento precisa da cadeia inteira para saber se ela
-    falhou, então filtrar antes cortaria eventos da mesma tentativa).
+    falhou). Filtrar o e-mail só depois do limite fazia as tentativas da pessoa
+    sumirem atrás dos 200 eventos mais recentes do portal (revisão 21/11/2026).
+
+    `info`, se vier, recebe `truncado`: se o limite cortou eventos lidos — conta
+    os lidos, não as cadeias que sobraram depois dos filtros.
 
     O limite é fixado em 1.000 porque é o teto do PostgREST: pedir mais devolve
     mil assim mesmo, **sem avisar que truncou**. Melhor um teto declarado que um
@@ -2279,8 +2286,12 @@ def cadeias_de_instalacao(
         q = client.table("install_log").select("*")
         if desde:
             q = q.gte("created_at", desde)
+        if user_email:
+            q = q.eq("user_email", user_email.strip().lower())
         r = q.order("created_at", desc=True).limit(limite).execute()
         eventos = list(r.data or [])
+        if info is not None:
+            info["truncado"] = len(eventos) >= limite
     except Exception:
         logger.exception("Falha ao listar install_log para agrupar")
         return []
@@ -2349,9 +2360,6 @@ def cadeias_de_instalacao(
         )
         saida.append(cadeia)
 
-    if user_email:
-        alvo = user_email.strip().lower()
-        saida = [c for c in saida if (c.get("user_email") or "").lower() == alvo]
     if apenas_com_falha:
         saida = [c for c in saida if c["desfecho"] == "falhou"]
 

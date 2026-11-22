@@ -87,7 +87,9 @@ def test_expurgar_trilha_so_expurga_a_trilha(client: TestClient, banco: _Fake, m
 # ── Trilha avisa quando cortou ────────────────────────────────────────────
 
 def test_trilha_diz_quando_o_teto_cortou(client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch) -> None:
-    def _cadeias(limite, desde, user_email=None, apenas_com_falha=False):
+    def _cadeias(limite, desde, user_email=None, apenas_com_falha=False, info=None):
+        if info is not None:
+            info["truncado"] = True  # o teto cortou os eventos lidos
         return [{"token_id": "t", "eventos": [{"event": "SOLICITADO"}] * limite, "desfecho": "incompleto",
                  "parou_em": "SOLICITADO", "certificados": 1, "target_machine": "pc"}]
     monkeypatch.setattr(_ci_mod, "cadeias_de_instalacao", _cadeias)

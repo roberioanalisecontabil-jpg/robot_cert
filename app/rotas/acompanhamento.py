@@ -176,7 +176,12 @@ def colaborador_put_selecionados(
     email = (token.email or "").strip().lower()
     pedidos = sorted({_doc_norm(x) for x in body.documentos if _doc_norm(x)})
     docs = _selecao_no_alcance(token, pedidos)
-    save_colaborador_selecao(email, docs, _user_id_da_sessao(token))
+    uid = _user_id_da_sessao(token)
+    # O que está fora do Alcance não aparece na tela, então não foi "desmarcado":
+    # fica na linha gravada e volta se o Alcance voltar (docstring acima).
+    alcance = _documentos_ao_alcance(token)
+    ocultos = [] if alcance is None else [d for d in load_colaborador_selecao(email, uid) if d not in alcance]
+    save_colaborador_selecao(email, sorted(set(docs) | set(ocultos)), uid)
     return {"ok": True, "documentos": docs, "total": len(docs), "fora_do_alcance": len(pedidos) - len(docs)}
 
 

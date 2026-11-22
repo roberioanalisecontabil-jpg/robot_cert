@@ -704,6 +704,28 @@
           : "Aguarde a configuração carregar antes de salvar.";
       }
 
+      // Último /api/settings lido ou salvo (revisão de 21/11/2026, P8-1). Cada
+      // aba manda os campos obrigatórios do PUT a partir daqui e só os seus do
+      // DOM: antes, salvar uma aba levava a edição abandonada das outras (e um
+      // destino SMTP trocado zera a senha guardada, parando os alertas).
+      let _settingsSalvos = null;
+      function corpoBaseSalvo() {
+        const s = _settingsSalvos || {};
+        return {
+          source_folder: s.source_folder || "",
+          expired_folder: s.expired_folder || "",
+          machine_id: s.machine_id || "default",
+          smtp_host: s.smtp_host || "",
+          smtp_port: s.smtp_port || 587,
+          smtp_user: s.smtp_user || "",
+          smtp_password: null,
+          smtp_use_tls: !!s.smtp_use_tls,
+          smtp_use_ssl: !!s.smtp_use_ssl,
+          smtp_from_email: s.smtp_from_email || "",
+          smtp_alerts_enabled: !!s.smtp_alerts_enabled,
+        };
+      }
+
       async function loadSettingsToForm() {
         const st = document.getElementById("cfg-msg");
         st.textContent = "A carregar…";
@@ -720,6 +742,7 @@
             return;
           }
           const s = await r.json();
+          _settingsSalvos = s;
           document.getElementById("inp-source").value = s.source_folder || "";
           document.getElementById("inp-exp").value = s.expired_folder || "";
           const midG = s.machine_id || "default";
@@ -866,18 +889,10 @@
         st.textContent = "A guardar…";
         try {
           const body = {
+            ...corpoBaseSalvo(),
             source_folder: document.getElementById("inp-source").value,
             expired_folder: document.getElementById("inp-exp").value,
             machine_id: document.getElementById("inp-machine").value || "default",
-            smtp_host: document.getElementById("inp-smtp-host").value || "",
-            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
-            smtp_user: document.getElementById("inp-smtp-user").value || "",
-            smtp_password: document.getElementById("inp-smtp-pass").value || null,
-            ...seguranca(),
-            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
-            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
-            ...corpoGraph(),
-            ...corpoAlertas(),
             ...corpoEntrada(),
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
@@ -901,17 +916,7 @@
         st.textContent = "A guardar…";
         try {
           const body = {
-            source_folder: document.getElementById("inp-source").value,
-            expired_folder: document.getElementById("inp-exp").value,
-            machine_id: document.getElementById("inp-machine").value || "default",
-            smtp_host: document.getElementById("inp-smtp-host").value || "",
-            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
-            smtp_user: document.getElementById("inp-smtp-user").value || "",
-            smtp_password: null,
-            ...seguranca(),
-            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
-            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
-            ...corpoGraph(),
+            ...corpoBaseSalvo(),
             remocao_carteira_modo: document.getElementById("sel-remocao-carteira").value,
             remocao_sem_login_modo: document.getElementById("sel-remocao-sem-login").value,
           };
@@ -986,9 +991,7 @@
         st.textContent = "Salvando…";
         try {
           const body = {
-            source_folder: document.getElementById("inp-source").value,
-            expired_folder: document.getElementById("inp-exp").value,
-            machine_id: document.getElementById("inp-machine").value || "default",
+            ...corpoBaseSalvo(),
             smtp_host: document.getElementById("inp-smtp-host").value || "",
             smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
             smtp_user: document.getElementById("inp-smtp-user").value || "",
@@ -1004,6 +1007,7 @@
           if (r.status === 403) { st.textContent = ""; erroCfg("Só o administrador altera esta configuração."); return; }
           if (!r.ok) { st.textContent = ""; erroCfg(await mensagemCorpoErro(r)); return; }
           const s = await r.json();
+          _settingsSalvos = s;
           pintarSenhaGuardada(!!s.smtp_password_set);
           document.getElementById("inp-smtp-pass").value = "";
           preencherGraph(s);
@@ -1172,18 +1176,7 @@
         try {
           camposEmail().forEach((el) => { modeloEmailSalvo[el.dataset.campo] = el.value || ""; });
           const body = {
-            source_folder: document.getElementById("inp-source").value,
-            expired_folder: document.getElementById("inp-exp").value,
-            machine_id: document.getElementById("inp-machine").value || "default",
-            smtp_host: document.getElementById("inp-smtp-host").value || "",
-            smtp_port: parseInt(document.getElementById("inp-smtp-port").value, 10) || 587,
-            smtp_user: document.getElementById("inp-smtp-user").value || "",
-            smtp_password: null,
-            ...seguranca(),
-            smtp_from_email: document.getElementById("inp-smtp-from").value || "",
-            smtp_alerts_enabled: document.getElementById("chk-smtp-alerts-enabled").checked,
-            ...corpoGraph(),
-            ...corpoAlertas(),
+            ...corpoBaseSalvo(),
             ...corpoModeloEmail(),
           };
           const r = await fetch("/api/settings", {
@@ -1197,7 +1190,9 @@
             erroEmail("Erro " + r.status + ": " + (await mensagemCorpoErro(r)));
             return;
           }
-          preencherModeloEmail(await r.json());
+          const salvo = await r.json();
+          _settingsSalvos = salvo;
+          preencherModeloEmail(salvo);
           dlgEmail.close();
           showToast("Texto do e-mail salvo.", "success");
         } catch (e) {

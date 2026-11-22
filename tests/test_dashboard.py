@@ -481,3 +481,14 @@ def test_dashboard_aponta_para_historico_filtrado_e_para_avisos_enviados() -> No
     html = (Path(__file__).resolve().parents[1] / "templates" / "dashboard.html").read_text(encoding="utf-8")
     assert 'href="/historico?status=ilegivel"' in html
     assert 'href="/acompanhamento?aba=enviados"' in html
+
+
+def test_agente_parado_antes_do_periodo_continua_no_cartao(banco: _Fake) -> None:
+    """Revisão de 21/11/2026 (P2-1): a última varredura vinha só de dentro do
+    período; o servidor parado há 10 dias sumia do cartão em "7 dias" e a tela
+    dizia "Nenhuma varredura" em vez de Atenção."""
+    for s in banco.tabelas["cert_snapshots"]:
+        s["scanned_at"] = (AGORA - timedelta(days=10)).isoformat()
+    a = dash.painel_agente(7)
+    assert a["varreduras"] == 0
+    assert a["estado"] == "atencao" and all(m["atrasado"] for m in a["maquinas"]) and a["maquinas"]

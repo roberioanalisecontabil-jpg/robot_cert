@@ -35,6 +35,7 @@ class _Query:
         self._l, self._b = linhas, banco
         self._desde: Optional[str] = None
         self._limite: Optional[int] = None
+        self._eq: Dict[str, Any] = {}
 
     def select(self, *_c: str) -> "_Query":
         return self
@@ -42,6 +43,11 @@ class _Query:
     def gte(self, coluna: str, valor: str) -> "_Query":
         assert coluna == "created_at"
         self._desde = valor
+        return self
+
+    def eq(self, coluna: str, valor: Any) -> "_Query":
+        # 21/11/2026: o filtro por pessoa foi para o banco (antes do limite).
+        self._eq[coluna] = valor
         return self
 
     def order(self, _c: str, desc: bool = False) -> "_Query":
@@ -55,7 +61,8 @@ class _Query:
     def execute(self) -> _Resultado:
         if self._b.quebrado:
             raise RuntimeError("banco fora do ar")
-        linhas = [r for r in self._l if not self._desde or r["created_at"] >= self._desde]
+        linhas = [r for r in self._l if (not self._desde or r["created_at"] >= self._desde)
+                  and all(r.get(c) == v for c, v in self._eq.items())]
         linhas.sort(key=lambda r: r["created_at"], reverse=True)
         if self._limite:
             linhas = linhas[: self._limite]

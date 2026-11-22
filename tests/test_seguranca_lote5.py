@@ -335,3 +335,13 @@ def test_health_detalhado_diz_se_o_rate_limit_e_persistente(client: TestClient, 
     assert taxa.estado_persistente() is False
     j = client.get("/api/health/detalhado", headers=_h(*ADMIN)).json()
     assert j["rate_limit_persistente"] is False
+
+
+def test_duplicidades_de_quem_tem_alcance_usam_o_cache(client: TestClient, banco: _Fake) -> None:
+    """Revisão de 21/11/2026 (P4-2): o resultado recortado pela carteira não ia
+    ao cache, então gestor e operador recalculavam a cada abertura e levavam 429
+    na 6ª em 5 minutos, sem a varredura mudar."""
+    _snapshot(banco, [_item(1)])
+    operadora = ("ana@x.com", "user")
+    codigos = [client.get("/api/certificados/duplicidades", headers=_h(*operadora)).status_code for _ in range(6)]
+    assert codigos == [200] * 6, codigos
