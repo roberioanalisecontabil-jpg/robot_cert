@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -106,6 +107,29 @@ def _visiveis(papel: str) -> tuple[list[ModuloWiki], bool]:
         m for m in MODULOS
         if m.permissao is None or niveis.get(m.permissao, permissoes.NIVEL_NENHUM) != permissoes.NIVEL_NENHUM
     ], falhou
+
+
+# De que tutoriais é cada arquivo de static/wiki/ (`<id>.png`, `<id>.mp4`,
+# `<id>.jpg`), lido dos próprios tutoriais: um print citado em dois módulos
+# abre para quem alcança qualquer um deles. Arquivo que nenhum tutorial cita
+# (o manifesto, por exemplo) fica com a regra geral: basta a sessão.
+_CITACAO = re.compile(r'(?:print|video)\("([\w-]+)"')
+_TUTORIAIS = Path(__file__).resolve().parent.parent.parent / "templates" / "wiki"
+_MODULOS_DO_ARQUIVO: dict[str, set[str]] = {}
+for _m in MODULOS:
+    _arq = _TUTORIAIS / f"{_m.chave}.html"
+    if _arq.is_file():
+        for _id in _CITACAO.findall(_arq.read_text(encoding="utf-8")):
+            _MODULOS_DO_ARQUIVO.setdefault(_id.lower(), set()).add(_m.chave)
+
+
+def arquivo_visivel(nome: str, papel: str) -> bool:
+    """O papel alcança algum tutorial que usa este arquivo de static/wiki/?
+    `nome` já vem normalizado e em minúsculas pela cerca do main."""
+    modulos = _MODULOS_DO_ARQUIVO.get(nome.rsplit(".", 1)[0])
+    if not modulos:
+        return True
+    return any(m.chave in modulos for m in _visiveis(papel)[0])
 
 
 def _para_o_login(request: Request) -> RedirectResponse:

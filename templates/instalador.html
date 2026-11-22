@@ -544,11 +544,15 @@
         const res = d.resumo || {};
         const total = Object.values(res).reduce((a, b) => a + b, 0);
         document.getElementById("tab-sieg-contagem").textContent = res.no_sieg ? "(" + res.no_sieg + ")" : "";
-        document.getElementById("siegResumo").textContent = total
+        const itens = d.itens || [];
+        // A rota corta a lista no `limite` e devolve o total: dizer que há mais.
+        const mostrando = d.total > itens.length
+          ? "Mostrando " + itens.length.toLocaleString("pt-BR") + " de " + d.total.toLocaleString("pt-BR") + "."
+          : "";
+        document.getElementById("siegResumo").textContent = [total
           ? [["no_sieg", "no SIEG"], ["incluindo", "incluindo"], ["erro", "com erro"], ["substituido", "substituídos"], ["removido", "fora do SIEG"]]
               .filter(([k]) => res[k]).map(([k, t]) => res[k] + " " + t).join(" · ")
-          : "";
-        const itens = d.itens || [];
+          : "", mostrando].filter(Boolean).join(" · ");
         if (!itens.length) {
           tbody.innerHTML = `<tr class="cg-state-row" role="row"><td role="cell" colspan="5" class="ag-table__vazio">${estado ? "Nenhum certificado nesse estado." : "Nenhum certificado foi ligado ao SIEG ainda. O interruptor fica nos detalhes de cada certificado, no Início."}</td></tr>`;
           return;
@@ -737,7 +741,9 @@
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
         if (!d.executado) {
-          texto.textContent = "Nada a expurgar: " + (d.motivo || "retenção desligada") + ". Defina uma retenção em dias e salve antes.";
+          // O conselho só cabe quando falta a retenção (retencao_dias 0); com
+          // falha na contagem ou sem banco, a retenção já está certa.
+          texto.textContent = "Nada a expurgar: " + (d.motivo || "retenção desligada") + (d.retencao_dias ? "." : ". Defina uma retenção em dias e salve antes.");
           return;
         }
         texto.textContent = plural(d.registros, "registro da trilha", "registros da trilha") + " anteriores a " + fmtData(d.corte) + " (retenção de " + plural(d.retencao_dias, "dia") + ") serão apagados.";

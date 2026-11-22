@@ -152,3 +152,28 @@ def test_p9_2_sem_matriz_o_modulo_pedido_mostra_aviso_e_nao_redireciona(
     r = client_wiki.get("/wiki-certguard?modulo=inicio", headers=_cabecalho("user"), follow_redirects=False)
     assert r.status_code == 200
     assert "Não deu para conferir suas permissões agora" in r.text
+
+
+# Prints de tutorial fora do alcance (lacunas menores, 22/11/2026)
+
+def test_print_de_modulo_fora_do_alcance_da_404(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Quem não alcança Usuários não abre, pela URL, os prints do tutorial de
+    Usuários; nem pelas variações de caminho que o StaticFiles aceita."""
+    _matriz_user(monkeypatch, inicio=permissoes.NIVEL_LER)
+    for caminho in ("/static/wiki/usuarios-importar.png", "/static//wiki/usuarios-importar.png",
+                    "/static/WIKI/Usuarios-Importar.png", "/static/x/../wiki/usuarios-importar.png"):
+        r = client_wiki.get(caminho, headers=_cabecalho("user"), follow_redirects=False)
+        assert r.status_code == 404, caminho
+    # O admin alcança Usuários e abre o print.
+    assert client_wiki.get("/static/wiki/usuarios-importar.png", headers=_cabecalho("admin")).status_code == 200
+
+
+def test_print_de_modulo_alcancado_ou_de_todos_abre(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _matriz_user(monkeypatch, inicio=permissoes.NIVEL_LER)
+    cab = _cabecalho("user")
+    assert client_wiki.get("/static/wiki/inicio-busca.png", headers=cab).status_code == 200
+    # Print citado em dois tutoriais (Início e Instalador): basta alcançar um.
+    assert client_wiki.get("/static/wiki/inicio-sieg-confirmar.png", headers=cab).status_code == 200
+    # Bandeja vale para todos; o manifesto não é de módulo nenhum.
+    assert client_wiki.get("/static/wiki/video-bandeja.jpg", headers=cab).status_code == 200
+    assert client_wiki.get("/static/wiki/prints.json", headers=cab).status_code == 200

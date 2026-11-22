@@ -1807,7 +1807,7 @@ def expurgar_cofre(machine_id: Optional[str] = None) -> Dict[str, Any]:
     # ── 1. Vencidos ────────────────────────────────────────────────────────
     # Sem guarda nenhuma de propósito: a validade é intrínseca à linha.
     try:
-        alvo = client.table("cert_pfx_store").select("id, fingerprint, machine_id, not_after")
+        alvo = client.table("cert_pfx_store").select("id, fingerprint, machine_id, not_after, documento, nome_titular")
         if machine_id:
             alvo = alvo.eq("machine_id", machine_id)
         linhas = alvo.execute().data or []
@@ -1830,6 +1830,7 @@ def expurgar_cofre(machine_id: Optional[str] = None) -> Dict[str, Any]:
 
     for linha in [l for l in linhas if _venceu(l.get("not_after"))]:
         try:
+            _registrar_saida(client, linha, "vencido", agora)
             client.table("cert_pfx_store").delete().eq("id", linha["id"]).execute()
             resultado["vencidos_apagados"] += 1
         except Exception:  # noqa: BLE001
@@ -1844,6 +1845,21 @@ def expurgar_cofre(machine_id: Optional[str] = None) -> Dict[str, Any]:
         resultado["maquinas"].append(_conciliar_ausentes(client, maq, agora))
 
     return resultado
+
+
+def _registrar_saida(client: Any, linha: Dict[str, Any], motivo: str, agora: datetime) -> None:
+    """Guarda que este certificado era do escritório antes de a linha sumir do
+    cofre: a regra "Saiu da pasta" da remoção (app/remocao.py) depende disso.
+    Só impressão digital, documento e titular. Falhar aqui não impede apagar:
+    a chave privada sair do cofre importa mais."""
+    try:
+        client.table("cert_acervo_saida").upsert({
+            "fingerprint": str(linha.get("fingerprint") or "").lower(),
+            "documento": linha.get("documento"), "nome_titular": linha.get("nome_titular"),
+            "motivo": motivo, "saiu_em": agora.isoformat(),
+        }, on_conflict="fingerprint").execute()
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao registrar a saída de %s do cofre", str(linha.get("fingerprint") or "")[:12])
 
 
 def _conciliar_ausentes(client: Any, maq: str, agora: datetime) -> Dict[str, Any]:
@@ -1912,7 +1928,7 @@ def _conciliar_ausentes(client: Any, maq: str, agora: datetime) -> Dict[str, Any
     try:
         no_cofre = (
             client.table("cert_pfx_store")
-            .select("id, fingerprint, ausente_desde")
+            .select("id, fingerprint, ausente_desde, documento, nome_titular")
             .eq("machine_id", maq)
             .execute()
         ).data or []
@@ -1950,6 +1966,7 @@ def _conciliar_ausentes(client: Any, maq: str, agora: datetime) -> Dict[str, Any
         except (ValueError, TypeError):
             continue
         if d <= limite:
+            _registrar_saida(client, linha, "saiu da pasta", agora)
             client.table("cert_pfx_store").delete().eq("id", linha["id"]).execute()
             apagados += 1
 

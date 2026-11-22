@@ -10,6 +10,7 @@
     carteira: "Carteira", desativada: "Conta desativada",
     vinculo: "Computador recusado/desvinculado", emprestimo: "Empréstimo vencido",
     sem_login: "Perfil sem login",
+    fora_da_pasta: "Saiu da pasta",
   };
   let pagina = 1;
   let ultimaCheia = false;
