@@ -71,7 +71,14 @@ def _nomes_por(coluna: str, valores: List[str]) -> Dict[str, str]:
         return {}
     linhas = (ci._banco().table("cert_pfx_store").select(f"{coluna}, nome_titular")
               .in_(coluna, alvo).execute().data or [])
-    return {str(l.get(coluna)): l["nome_titular"] for l in linhas if l.get("nome_titular")}
+    nomes = {str(l.get(coluna)): l["nome_titular"] for l in linhas if l.get("nome_titular")}
+    faltam = [v for v in alvo if v not in nomes]
+    if faltam:  # o que saiu do cofre guarda o titular em cert_acervo_saida
+        for l in (ci._banco().table("cert_acervo_saida").select(f"{coluna}, nome_titular")
+                  .in_(coluna, faltam).execute().data or []):
+            if l.get("nome_titular"):
+                nomes.setdefault(str(l.get(coluna)), l["nome_titular"])
+    return nomes
 
 
 def _conferir(machine_id: str, corpo: Conferencia, user: Optional[Dict[str, Any]], modo: str,
@@ -92,11 +99,15 @@ def _conferir(machine_id: str, corpo: Conferencia, user: Optional[Dict[str, Any]
         remocao.registrar_resultado(machine_id, corpo.usuario_windows, uid, (user or {}).get("email"),
                                     [r.model_dump() for r in corpo.resultados])
         decisoes = decidir() if modo != "desligado" else []
+        modo_pasta = remocao.modo_fora_da_pasta()
+        if modo_pasta != "desligado":
+            ja = {d.fingerprint for d in decisoes}
+            decisoes += [d for d in remocao.decidir_fora_da_pasta(corpo.certificados) if d.fingerprint not in ja]
         por_fp = _nomes_por("fingerprint", [d.fingerprint.strip().lower() for d in decisoes])
         vence = remocao.vencendo(uid, date.today()) if com_vencendo and modo == "ligado" else []
         por_doc = _nomes_por("documento", [str(v["documento"]) for v in vence])
         saida = remocao.aplicar(machine_id, corpo.usuario_windows, uid, decisoes, modo,
-                                datetime.now(timezone.utc))
+                                datetime.now(timezone.utc), modos={"fora_da_pasta": modo_pasta})
     except Exception:  # noqa: BLE001
         logger.exception("Remoção: conferência de %s falhou", computadores.mac(machine_id))
         raise HTTPException(status_code=503, detail=_FORA) from None

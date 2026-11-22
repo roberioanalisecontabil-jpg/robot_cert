@@ -155,5 +155,6 @@ def _settings_dict(s: PortalSettings) -> dict:
         "alertas_novos_modo": s.alertas_novos_modo,
         "remocao_carteira_modo": s.remocao_carteira_modo,
         "remocao_sem_login_modo": s.remocao_sem_login_modo,
+        "remocao_fora_da_pasta_modo": s.remocao_fora_da_pasta_modo,
         "alertas_novos_modo_efetivo": alertas_config.modo_novos_efetivo(s.alertas_novos_modo),
     }

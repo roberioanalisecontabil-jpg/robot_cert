@@ -38,6 +38,10 @@ def modo_sem_login() -> str:
     return _modo(load_settings().remocao_sem_login_modo)
 
 
+def modo_fora_da_pasta() -> str:
+    return _modo(load_settings().remocao_fora_da_pasta_modo)
+
+
 # ── Decisão do portal ────────────────────────────────────────────────────
 #
 # Remover de quem tem direito é a pior falha desta frente. Por isso toda
@@ -203,6 +207,22 @@ def decidir_sem_login(fingerprints: List[str]) -> List[Decisao]:
 
 
 @_leitura
+def decidir_fora_da_pasta(fingerprints: List[str]) -> List[Decisao]:
+    """Certificados do escritório que saíram do cofre (vencidos ou apagados da
+    pasta) e seguem instalados. O que voltou ao cofre não entra; o que nunca
+    esteve no cofre (um e-CPF pessoal) não está em `cert_acervo_saida`."""
+    alvo = sorted({str(f).strip().lower() for f in fingerprints if str(f or "").strip()})
+    if not alvo:
+        return []
+    linhas = (_cliente().table("cert_acervo_saida").select("fingerprint, documento, motivo")
+              .in_("fingerprint", alvo).execute().data or [])
+    no_cofre = do_acervo([str(l.get("fingerprint") or "") for l in linhas])
+    return [Decisao(str(l["fingerprint"]).lower(), ci.so_digitos(l.get("documento")) or None, "fora_da_pasta",
+                    str(l.get("motivo") or "saiu da pasta"), None)
+            for l in linhas if str(l.get("fingerprint") or "").lower() not in no_cofre]
+
+
+@_leitura
 def vencendo(user_id: str, hoje: date) -> List[Dict[str, Any]]:
     """Liberações manuais com prazo que termina entre hoje e daqui a 3 dias."""
     linhas = (_cliente().table("carteira").select("documento, origem, valido_ate")
@@ -229,13 +249,21 @@ def _dias(falta: timedelta) -> int:
 
 
 def aplicar(machine_id: str, usuario_windows: str, user_id: Optional[str],
-            decisoes: List[Decisao], modo: str, agora: datetime) -> Dict[str, List[Dict[str, Any]]]:
+            decisoes: List[Decisao], modo: str, agora: datetime,
+            modos: Optional[Dict[str, str]] = None) -> Dict[str, List[Dict[str, Any]]]:
+    """`modo` vale para as regras sem modo próprio em `modos` (regra -> modo)."""
     saida: Dict[str, List[Dict[str, Any]]] = {"remover": [], "avisos": []}
     agora = comp._quando(agora)  # sem fuso conta como UTC
     mid = comp.mac(machine_id)
     client = _cliente()
     tabela = "remocao_estacao"
-    if modo not in ("relatorio", "ligado"):
+    modos = modos or {}
+
+    def modo_de(d: Decisao) -> str:
+        return modos.get(d.regra, modo)
+
+    decisoes = [d for d in decisoes if modo_de(d) in ("relatorio", "ligado")]
+    if modo not in ("relatorio", "ligado") and not decisoes:
         # Desligado zera o relógio pendente: ao religar, o aviso prometido volta inteiro.
         (client.table(tabela).update({"estado": "removeria", "aviso_desde": None,
                                       "atualizado_em": agora.isoformat()})
@@ -252,13 +280,13 @@ def aplicar(machine_id: str, usuario_windows: str, user_id: Optional[str],
     linhas = []
     for fp, d in por_fp.items():
         estado, aviso_desde = "removeria", None
-        if modo == "ligado":
+        if modo_de(d) == "ligado":
             antiga = existentes.get(fp) or {}
             # Só `ligado` grava aviso_desde: semanas de relatório não contam como aviso.
             # Só herda de um aviso em curso: o reinstalado após removido/falhou ganha aviso novo.
             herda = antiga.get("regra") == d.regra and antiga.get("estado") in _PENDENTE
             aviso_desde = (herda and comp._quando(antiga.get("aviso_desde"))) or agora
-            remover_em = aviso_desde + AVISO if d.regra == "sem_login" else d.remover_em
+            remover_em = aviso_desde + AVISO if d.regra in ("sem_login", "fora_da_pasta") else d.remover_em
             item = {"fingerprint": fp, "documento": d.documento, "motivo": d.motivo}
             if remover_em is not None and remover_em > agora:
                 estado = "aviso"

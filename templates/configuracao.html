@@ -442,6 +442,14 @@
             <option value="ligado">Ligado</option>
           </select>
         </div>
+        <div class="ag-field">
+          <label class="ag-label" for="sel-remocao-fora-da-pasta">Certificados que saíram da pasta ou venceram</label>
+          <select id="sel-remocao-fora-da-pasta" class="ag-select">
+            <option value="desligado">Desligado</option>
+            <option value="relatorio">Só relatório</option>
+            <option value="ligado">Ligado</option>
+          </select>
+        </div>
         </div>
         <div class="ag-form-actions">
           <button type="button" id="btn-remocao-salvar" class="ag-btn ag-btn--primary">Salvar</button>
@@ -532,7 +540,7 @@
   </dialog>
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=fundo-2026-11-05"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/configuracao-remocao.js?v=sem-atraso-2026-11-22"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/configuracao-remocao.js?v=fora-da-pasta-2026-11-22"></script>
   <script nonce="{{ request.state.nonce }}">
       // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `health`,
       // `getDataFonte`, `setDataFonte`, `KEY_STORAGE` e `showToastAfterRedirect`
@@ -856,6 +864,7 @@
         // Vazio guardado = "Só relatório" (o padrão do servidor).
         document.getElementById("sel-remocao-carteira").value = s.remocao_carteira_modo || "relatorio";
         document.getElementById("sel-remocao-sem-login").value = s.remocao_sem_login_modo || "relatorio";
+        document.getElementById("sel-remocao-fora-da-pasta").value = s.remocao_fora_da_pasta_modo || "relatorio";
         document.getElementById("chk-alertas-novos").checked = s.alertas_novos_enabled !== false;
         document.getElementById("sel-alertas-novos-modo").value = s.alertas_novos_modo || "";
         document.getElementById("inp-entrada").value = s.pasta_entrada || "";
@@ -920,6 +929,7 @@
             ...corpoBaseSalvo(),
             remocao_carteira_modo: document.getElementById("sel-remocao-carteira").value,
             remocao_sem_login_modo: document.getElementById("sel-remocao-sem-login").value,
+            remocao_fora_da_pasta_modo: document.getElementById("sel-remocao-fora-da-pasta").value,
           };
           const r = await fetch("/api/settings", { method: "PUT", headers: getHeaders(true), body: JSON.stringify(body) });
           if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }

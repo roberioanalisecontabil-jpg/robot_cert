@@ -398,10 +398,17 @@ async def paginas_exigem_sessao_middleware(request: Request, call_next):
         dados = auth.decode_access_token(token) if token else None
         if dados:
             try:
-                _sessao_do_token(dados)
+                sessao = _sessao_do_token(dados)
                 valida = True
             except HTTPException:
                 valida = False
+        if valida and caminho_wiki.startswith("/static/wiki/"):
+            # Print de tutorial que o papel não alcança: 404, como se não
+            # existisse (o mesmo corte do índice da wiki).
+            from app.rotas import wiki
+
+            if not wiki.arquivo_visivel(posixpath.basename(caminho_wiki), sessao.role or ""):
+                return Response(status_code=404)
         if not valida:
             from urllib.parse import quote
 

@@ -451,7 +451,7 @@
         resumo.textContent = d.total === 1 ? "1 aviso" : `${d.total} avisos`;
         tb.innerHTML = d.itens.map((it) => `
         <tr role="row">
-          <td role="cell"><time datetime="${esc(it.enviado_em || "")}">${esc(fmtDataHora(it.enviado_em))}</time></td>
+          <td role="cell"><time datetime="${esc(it.enviado_em || "")}">${esc(fmtDataHora(it.enviado_em, "America/Sao_Paulo"))}</time></td>
           <td role="cell"><span class="ag-cell-stack"><span class="ag-cell-main">${esc(it.rotulo || it.tipo || "—")}</span>${it.data_validade ? `<span class="ag-cell-sub">vence em ${esc(fmtSoData(it.data_validade))}</span>` : ""}</span></td>
           <td role="cell">${it.nome || it.documento ? `<span class="ag-cell-stack"><span class="ag-cell-main">${esc(it.nome || "—")}</span><span class="ag-cell-sub ag-cell-sub--mono">${esc(it.documento || "")}</span></span>` : `<span class="ag-cell-sub">${it.data_validade ? "Certificado fora do cofre e do inventário atual" : "Resumo, sem certificado"}</span>`}</td>
           <td role="cell" class="cg-enviados-para" ${d.ve_tudo ? "" : "hidden"}><span class="ag-cell-sub">${esc(it.destinatario || "—")}</span></td>

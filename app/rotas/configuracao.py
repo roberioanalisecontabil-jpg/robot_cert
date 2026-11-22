@@ -103,6 +103,7 @@ class SettingsBody(BaseModel):
     # Remoção nas estações (Frente B): `None` preserva; "" volta ao padrão.
     remocao_carteira_modo: Optional[str] = Field(default=None, max_length=16)
     remocao_sem_login_modo: Optional[str] = Field(default=None, max_length=16)
+    remocao_fora_da_pasta_modo: Optional[str] = Field(default=None, max_length=16)
 
 
 # Mao dupla: a tela de Configuracao le daqui, e o agente tambem — e o que diz
@@ -172,7 +173,7 @@ def put_settings(body: SettingsBody) -> dict:
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     modos_remocao = {}
-    for campo in ("remocao_carteira_modo", "remocao_sem_login_modo"):
+    for campo in ("remocao_carteira_modo", "remocao_sem_login_modo", "remocao_fora_da_pasta_modo"):
         valor = getattr(old, campo) if getattr(body, campo) is None else getattr(body, campo).strip()
         if valor not in ("", *MODOS_REMOCAO):
             raise HTTPException(status_code=422, detail="Modo de remoção: use desligado, relatorio ou ligado.")
