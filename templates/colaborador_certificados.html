@@ -411,7 +411,10 @@
 
     /* ── Avisos enviados ──────────────────────────────────────────────── */
 
+    // Descarta a resposta de um período que já foi trocado por outro.
+    let _seqEnviados = 0;
     async function carregarEnviados() {
+      const meu = ++_seqEnviados;
       const tb = document.getElementById("tbody-enviados");
       const resumo = document.getElementById("enviados-resumo");
       const dias = document.getElementById("enviados-dias").value || "30";
@@ -419,14 +422,18 @@
       renderSkeletonRows("tbody-enviados", 5, 4);
       try {
         const r = await fetch(`/api/colaborador/alertas/enviados?dias=${encodeURIComponent(dias)}`, { headers: getHeaders() });
+        if (meu !== _seqEnviados) return;
         if (r.status === 401) { logout(); return; }
         if (!r.ok) {
+          const erro = await mensagemCorpoErro(r);
+          if (meu !== _seqEnviados) return;
           limparSkeleton(tb);
           resumo.textContent = "";
-          renderEmptyRow(tb, 4, { icon: "", title: "Não foi possível carregar os avisos", description: await mensagemCorpoErro(r) });
+          renderEmptyRow(tb, 4, { icon: "", title: "Não foi possível carregar os avisos", description: erro });
           return;
         }
         const d = await r.json();
+        if (meu !== _seqEnviados) return;
         _enviadosCarregados = true;
         document.querySelectorAll(".cg-enviados-para").forEach((el) => { el.hidden = !d.ve_tudo; });
         limparSkeleton(tb);
@@ -448,6 +455,7 @@
           <td role="cell" class="cg-enviados-para" ${d.ve_tudo ? "" : "hidden"}><span class="ag-cell-sub">${esc(it.destinatario || "—")}</span></td>
         </tr>`).join("");
       } catch (_e) {
+        if (meu !== _seqEnviados) return;
         limparSkeleton(tb);
         resumo.textContent = "";
         renderEmptyRow(tb, 4, { icon: "", title: "Não foi possível carregar os avisos", description: "Erro de conexão com o servidor." });

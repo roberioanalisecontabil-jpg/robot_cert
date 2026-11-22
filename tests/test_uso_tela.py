@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=sem-laco-2026-11-21" in html
+    assert "carteiras-uso.js?v=resumo-unico-2026-11-22" in html
 
 
 
@@ -275,5 +275,8 @@ def test_css_de_carteiras_sem_caractere_de_controle() -> None:
 
 def test_js_nao_pede_o_resumo_sem_parar() -> None:
     """21/11/2026: detalhe vazio para o mais usado fazia carregarResumo chamar
-    a si mesma sem fim (50 chamadas no harness até o stub ceder; 2 depois)."""
-    assert "if (!j.detalhe && certs.length && docSel !== certs[0].documento) {" in JS.read_text(encoding="utf-8")
+    a si mesma sem fim (50 chamadas no harness até o stub ceder; 2 depois).
+    22/11/2026: o servidor manda o detalhe do mais usado, e ela não chama a si mesma."""
+    js = JS.read_text(encoding="utf-8")
+    corpo = js[js.index("async function carregarResumo"):js.index("async function carregarColetas")]
+    assert "carregarResumo()" not in corpo.split("{", 1)[1]

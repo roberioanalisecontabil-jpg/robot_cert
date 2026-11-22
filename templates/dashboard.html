@@ -533,7 +533,11 @@
       history.replaceState(null, "", url.pathname + (url.search || ""));
     }
 
+    // Descarta a resposta de uma carga superada por outra mais nova (trocar o
+    // período durante a carga deixaria números de outro período).
+    let _geracao = 0;
     async function carregarDashboard() {
+      const minha = ++_geracao;
       const dias = diasEscolhidos();
       const st = document.getElementById("dashStatus");
       st.textContent = "Carregando…";
@@ -542,8 +546,10 @@
 
       try {
         const r = await fetch(`/api/dashboard?dias=${dias}`, { headers: getHeaders() });
+        if (minha !== _geracao) return;
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
+        if (minha !== _geracao) return;
         renderVencimento(d.acervo || {});
         renderAcervo(d.acervo || {});
         renderAcesso(d.acesso || {});
@@ -556,13 +562,15 @@
         const g = new Date(d.gerado_em);
         st.textContent = "Atualizado em " + g.toLocaleDateString("pt-BR") + " às " + fmtHora(g);
       } catch (e) {
+        if (minha !== _geracao) return;
         st.textContent = "Não foi possível atualizar. O que está na tela é a carga anterior.";
         showToast("Não foi possível carregar o dashboard: " + e.message, "error");
         erroEmTodosOsCards(e.message);
         document.getElementById("dashSaude").hidden = true;
       } finally {
-        setCarregando(false);
+        if (minha === _geracao) setCarregando(false);
       }
+      if (minha !== _geracao) return;
 
       // Depois e em separado, de propósito (o painel caro).
       const cardRen = document.getElementById("card-renovacoes");
@@ -570,13 +578,19 @@
       cardRen.setAttribute("aria-busy", "true");
       try {
         const r = await fetch(`/api/dashboard/renovacoes?dias=${dias}`, { headers: getHeaders() });
+        if (minha !== _geracao) return;
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
-        renderRenovacoes(await r.json());
+        const ren = await r.json();
+        if (minha !== _geracao) return;
+        renderRenovacoes(ren);
       } catch (e) {
+        if (minha !== _geracao) return;
         renderRenovacoes({ erro: e.message });
       } finally {
-        cardRen.classList.remove("is-carregando");
-        cardRen.removeAttribute("aria-busy");
+        if (minha === _geracao) {
+          cardRen.classList.remove("is-carregando");
+          cardRen.removeAttribute("aria-busy");
+        }
       }
     }
 

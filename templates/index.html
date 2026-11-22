@@ -1131,8 +1131,11 @@
       }
 
       let primeiroCarregamento = true;
+      // Descarta a resposta de um pedido que já foi superado por outro mais novo.
+      let _pedidoTabela = 0;
 
       async function carregarTabela() {
+        const pedido = ++_pedidoTabela;
         const st = document.getElementById("status-msg");
         const ph = document.getElementById("panel-hint");
         ph.style.display = "none";
@@ -1166,6 +1169,7 @@
             direcao: ordenacao.direcao,
           });
           const r = await fetch("/api/certificados?" + params.toString(), { headers: getHeaders() });
+          if (pedido !== _pedidoTabela) return;
           if (r.status === 401) {
             logout(); // Se falhar por 401, token expirou ou é inválido
             return;
@@ -1188,6 +1192,7 @@
           }
           if (!r.ok) {
             const detalhe = await mensagemCorpoErro(r);
+            if (pedido !== _pedidoTabela) return;
             st.textContent = "Erro " + r.status;
             showToast("Não foi possível carregar os certificados: " + detalhe, "error");
             renderEmptyRow("tbody", 6, {
@@ -1203,6 +1208,7 @@
           try {
             d = await r.json();
           } catch (jsonErr) {
+            if (pedido !== _pedidoTabela) return;
             st.textContent = "Resposta inválida do servidor.";
             showToast("Resposta inválida do servidor. Confirme o endereço da API.", "error");
             renderEmptyRow("tbody", 6, {
@@ -1214,6 +1220,7 @@
             });
             return;
           }
+          if (pedido !== _pedidoTabela) return;
           st.textContent = "Atualizado em " + new Date(d.atualizado_em).toLocaleString("pt-BR");
           _alcanceVazio = !!d.alcance_vazio;
           const items = d.itens || [];
@@ -1239,10 +1246,12 @@
           // O machine_id vem na RAIZ do payload, não em cada item — mesma
           // pegadinha que causou o bug do opt-in em 08/08.
           await carregarInstalabilidade(d.machine_id);
+          if (pedido !== _pedidoTabela) return;
 
           renderTabela(items);
           atualizarBarraSelecao();
         } catch (e) {
+          if (pedido !== _pedidoTabela) return;
           st.textContent = "Falha de conexão.";
           showToast("Falha de conexão com o servidor: " + e, "error");
           renderEmptyRow("tbody", 6, {
@@ -1253,9 +1262,11 @@
             onAction: () => carregarTabela(),
           });
         } finally {
-          toggleLoading(false);
-          limparSkeleton("tbody");
-          primeiroCarregamento = false;
+          if (pedido === _pedidoTabela) {
+            toggleLoading(false);
+            limparSkeleton("tbody");
+            primeiroCarregamento = false;
+          }
         }
       }
 

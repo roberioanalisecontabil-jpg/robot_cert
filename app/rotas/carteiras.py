@@ -430,7 +430,11 @@ def _intervalo_uso(desde: Optional[date], ate: Optional[date]) -> tuple:
     """Datas de Brasília (ate inclusive) -> limites UTC para a coluna `hora`."""
     from app import uso
 
-    ini = datetime.combine(desde or (datetime.now(uso.BRASILIA).date() - timedelta(days=7)),
+    hoje = datetime.now(uso.BRASILIA).date()
+    # O resumo varre o período inteiro a cada clique; o gráfico mostra no máximo 366 dias.
+    if ((ate or hoje) - (desde or hoje - timedelta(days=7))).days > 366:
+        raise HTTPException(status_code=422, detail="Escolha um período de até um ano.")
+    ini = datetime.combine(desde or (hoje - timedelta(days=7)),
                            datetime.min.time(), tzinfo=uso.BRASILIA)
     fim = datetime.combine(ate, datetime.min.time(), tzinfo=uso.BRASILIA) + timedelta(days=1) if ate else None
     return uso._iso(ini), uso._iso(fim) if fim else None
@@ -544,7 +548,10 @@ def resumo_uso(
         "pessoas": len({quem(l) for l in ls}), "ultimo_em": max(l["quando"] for l in ls),
     } for d, ls in por_doc.items()), key=lambda c: (-c["usos"], c["titular"], c["documento"]))
     if doc not in por_doc:
-        return {"certificados": certificados, "detalhe": None}
+        # Sem escolha válida, o detalhe é o do mais usado: a tela não precisa pedir de novo.
+        if not certificados:
+            return {"certificados": certificados, "detalhe": None}
+        doc = certificados[0]["documento"]
 
     ls = por_doc[doc]
     hoje = datetime.now(uso.BRASILIA).date()
