@@ -33,8 +33,13 @@
   }
   function validadeTexto(it) {
     if (!it.not_after) return "—";
-    const dias = Math.ceil((Date.parse(it.not_after) - Date.now()) / 86400000);
-    if (dias < 0) return "Vencido há " + (-dias) + (dias === -1 ? " dia" : " dias");
+    // Decide pelo instante antes de arredondar: Math.ceil(-0,25) dá -0, que passava por "vence hoje".
+    const ms = Date.parse(it.not_after) - Date.now();
+    if (ms < 0) {
+      const d = Math.max(1, Math.floor(-ms / 86400000));
+      return "Vencido há " + d + (d === 1 ? " dia" : " dias");
+    }
+    const dias = Math.ceil(ms / 86400000);
     if (dias === 0) return "Válido · vence hoje";
     return "Válido · vence em " + dias + (dias === 1 ? " dia" : " dias");
   }

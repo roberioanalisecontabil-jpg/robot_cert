@@ -411,9 +411,9 @@ def previa_do_expurgo() -> dict:
             if len(pagina) < 1000 or inicio > 50_000:
                 break
             inicio += 1000
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         logger.exception("Falha ao contar registros para o expurgo")
-        return {"executado": False, "retencao_dias": dias, "registros": 0, "motivo": str(e)}
+        return {"executado": False, "retencao_dias": dias, "registros": 0, "motivo": "falha ao contar os registros; veja o log do servidor"}
     return {"executado": True, "retencao_dias": dias, "corte": corte, "registros": n}
 
 
@@ -477,10 +477,10 @@ def diagnostico_do_instalador() -> dict:
     try:
         out["cofre"] = cert_installer.diagnostico_do_cofre()
         out["chaves"] = cert_installer.diagnostico_das_chaves()
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         logger.exception("Falha no diagnóstico do cofre")
-        out["cofre"] = {"erro": str(e)}
-        out["chaves"] = {"erro": str(e)}
+        out["cofre"] = {"erro": ERRO_INTERNO_VEJA_LOG}
+        out["chaves"] = {"erro": ERRO_INTERNO_VEJA_LOG}
 
     # Situação geral ESCRITA (seção 2 do DS: nunca só por cor) e a lista do
     # que está errado, com quantos. "Senha em claro" é o mais grave.

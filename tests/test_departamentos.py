@@ -319,3 +319,39 @@ def test_omitir_mantem_o_setor(client: TestClient, banco: _Fake) -> None:
     })
     assert r.status_code == 200, r.text
     assert banco.tabelas["users"][2]["departamento_id"] == "dep-1"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# P7-5 (revisão de 21/11/2026): a 2ª escrita falha e o papel acompanha o banco
+# ──────────────────────────────────────────────────────────────────────────
+
+def _falha_na(banco: _Fake, monkeypatch: pytest.MonkeyPatch, tabela: str, op: str) -> None:
+    """Só a operação `op` em `tabela` falha: a anterior (o delete) já entrou,
+    como no db_pg, onde cada execute() é um commit."""
+    original = _Query.execute
+
+    def execute(self: _Query) -> _Res:
+        if self._n == tabela and self._op == op:
+            raise RuntimeError("banco caiu no meio")
+        return original(self)
+
+    monkeypatch.setattr(_Query, "execute", execute)
+
+
+def test_p7_5_insert_dos_gestores_falha_e_o_ex_gestor_volta_a_operador(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _falha_na(banco, monkeypatch, "departamento_lider", "insert")
+    r = client.put("/api/departamentos/dep-1/lideres", headers=_admin(), json={"lideres": ["u-op"]})
+    assert r.status_code == 400
+    assert banco.tabelas["departamento_lider"] == []
+    assert banco.tabelas["users"][1]["role"] == "user", "ficou gestor sem liderar nada"
+
+
+def test_p7_5_apagar_falha_depois_das_liderancas_e_o_papel_acompanha(
+    client: TestClient, banco: _Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _falha_na(banco, monkeypatch, "departamento", "delete")
+    r = client.delete("/api/departamentos/dep-1", headers=_admin())
+    assert r.status_code == 400
+    assert banco.tabelas["users"][1]["role"] == "user", "ficou gestor sem liderar nada"

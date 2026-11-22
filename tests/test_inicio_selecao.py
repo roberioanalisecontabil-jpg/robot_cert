@@ -344,3 +344,13 @@ def test_selecionar_todos_alcanca_so_a_pagina_visivel(html_inicio: str) -> None:
     clicaria uma vez e receberia um erro de limite sem entender o que fez.
     """
     assert '#tbody .chk-cert:not([disabled])' in html_inicio
+
+
+def test_vencido_pela_data_mesmo_com_status_ok(client: TestClient, banco: _Fake) -> None:
+    """Lote 4 (P1-6): o snapshot só diz "expirado" na próxima ingestão. Até lá
+    a linha já mostra Vencido pela data e não pode oferecer a instalação."""
+    from datetime import datetime, timedelta, timezone
+
+    ontem = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    banco.tabelas["cert_snapshots"][0]["items"][0]["not_after"] = ontem  # FP_OK, status "ok"
+    assert _estados(client, _h("user", "operador@x.com"))[FP_OK] == "vencido"

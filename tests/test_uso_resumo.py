@@ -83,3 +83,12 @@ def test_sem_uso_no_periodo_detalhe_e_nulo(client: TestClient, banco) -> None:
     r = client.get("/api/carteira/uso/resumo?desde=2020-01-01&ate=2020-01-02", headers=_h(*ADMIN))
     assert r.json() == {"certificados": [], "detalhe": None}
 
+
+
+def test_so_ate_conta_sete_dias_antes_do_ate(client: TestClient, banco) -> None:
+    """Revisão de 22/11/2026 (P5-5): Personalizado só com 'Até' anterior a
+    hoje−7 vinha vazio, porque o 'De' padrão era hoje−7 e não Até−7."""
+    r = client.get("/api/carteira/uso/resumo?ate=2026-11-15&documento=" + DOC_A, headers=_h(*ADMIN))
+    d = r.json()["detalhe"]
+    assert d["usos"] == 2
+    assert [p["dia"] for p in d["por_dia"]][::7] == ["2026-11-08", "2026-11-15"] and len(d["por_dia"]) == 8

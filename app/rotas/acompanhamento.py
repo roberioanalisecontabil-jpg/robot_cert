@@ -33,6 +33,13 @@ logger = logging.getLogger("app.main")
 router = APIRouter()
 
 
+def _dias_ate(v_dt: datetime, now: datetime) -> int:
+    """Dias até o vencimento contados no dia de Brasília: no dia UTC, entre 21h
+    e 24h todo prazo saía com um dia a menos (revisão de 22/11/2026, P10-5)."""
+    from app import uso
+    return (v_dt.astimezone(uso.BRASILIA).date() - now.astimezone(uso.BRASILIA).date()).days
+
+
 def _painel_docs_selecionados(doc_ids: List[str]) -> List[dict]:
     base = _lista_base_docs_historico()
     by_doc = {str(it.get("documento_digitos")): it for it in base}
@@ -54,7 +61,7 @@ def _painel_docs_selecionados(doc_ids: List[str]) -> List[dict]:
             continue
         v_iso = it.get("vencimento_certificado")
         v_dt = _parse_iso_utc(v_iso) if v_iso else datetime.min.replace(tzinfo=timezone.utc)
-        dias = (v_dt.date() - now.date()).days if v_iso else None
+        dias = _dias_ate(v_dt, now) if v_iso else None
         
         status_ult = str(it.get("status_ultimo") or "").lower()
         if status_ult == "expirado" or (v_iso and v_dt < now):
@@ -130,7 +137,7 @@ def colaborador_opcoes_certificados(token: auth.TokenData = Depends(require_auth
     for it in itens:
         v_iso = it.get("vencimento_certificado")
         v_dt = _parse_iso_utc(v_iso) if v_iso else datetime.min.replace(tzinfo=timezone.utc)
-        dias = (v_dt.date() - now.date()).days if v_iso else None
+        dias = _dias_ate(v_dt, now) if v_iso else None
         
         status_ult = str(it.get("status_ultimo") or "").lower()
         if status_ult == "expirado" or (v_iso and v_dt < now):

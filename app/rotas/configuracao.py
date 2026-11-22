@@ -108,10 +108,22 @@ class SettingsBody(BaseModel):
 # Mao dupla: a tela de Configuracao le daqui, e o agente tambem — e o que diz
 # a ele quais pastas varrer. `permitir_agente` mantem o robo funcionando enquanto
 # o modulo passa a governar as pessoas.
-@router.get("/api/settings", dependencies=[Depends(require_admin_ou_agente_leitura)])
-def get_settings() -> dict:
+@router.get("/api/settings")
+def get_settings(token: auth.TokenData = Depends(require_admin_ou_agente_leitura)) -> dict:
     s = load_settings()
-    return _settings_dict(s)
+    dados = _settings_dict(s)
+    if (token.role or "").strip().lower() == "agent":
+        # A API_KEY está em toda estação: o agente leva só as pastas, não a
+        # configuração de e-mail (P8-6, revisão de 21/11/2026).
+        return {k: dados.get(k) for k in _CAMPOS_DO_AGENTE}
+    return dados
+
+
+# O que agent/run_agent.py e agent/entrada.py leem daqui.
+_CAMPOS_DO_AGENTE = (
+    "source_folder", "expired_folder", "machine_id", "effective_source",
+    "effective_expired", "pasta_entrada", "pasta_pj", "pasta_pf",
+)
 
 
 @router.put("/api/settings", dependencies=[Depends(require_admin)])

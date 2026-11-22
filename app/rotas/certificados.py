@@ -161,9 +161,7 @@ def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
     doc_f = _painel_busca_normalizada(row.get("documento_formatado") or "")
     doc_n = _painel_busca_normalizada(row.get("documento_numero") or "")
     fn = _painel_busca_normalizada(row.get("nome_publico") or "")
-    na_txt = _painel_busca_normalizada(row.get("not_after") or "")
     dd = _digits_only_doc(row.get("documento_numero") or row.get("documento_formatado"))
-    nd = _digits_only_doc(str(row.get("not_after") or ""))
     if bt and bt in nome:
         return True
     if bt and bt in doc_f:
@@ -172,11 +170,7 @@ def _dashboard_busca_match(row: dict, q_raw: str) -> bool:
         return True
     if bt and bt in fn:
         return True
-    if bt and bt in na_txt:
-        return True
     if bd and bd in dd:
-        return True
-    if bd and bd in nd:
         return True
     return False
 
@@ -667,6 +661,8 @@ def _filtrar_grupo_documento_apos_fingerprint(members: List[dict]) -> List[dict]
     por fingerprint (2+ com o mesmo SHA-256). A duplicidade criptográfica é a
     validação definitiva; o grupo por documento fica para CPF/CNPJ igual sem
     fingerprint ou com certificados distintos (ex.: renovação).
+    De cada fingerprint repetido fica um representante: sem ele, a cópia A/A'
+    escondia o renovado B do mesmo documento.
     """
     by_fp: dict[str, List[dict]] = defaultdict(list)
     sem_fp: List[dict] = []
@@ -679,8 +675,7 @@ def _filtrar_grupo_documento_apos_fingerprint(members: List[dict]) -> List[dict]
     kept: List[dict] = []
     kept.extend(sem_fp)
     for _fp, grupo in by_fp.items():
-        if len(grupo) < 2:
-            kept.extend(grupo)
+        kept.append(grupo[0])
     return kept
 
 
@@ -1191,8 +1186,7 @@ def _historico_filtrar_busca(itens: List[dict], busca_raw: str) -> List[dict]:
     for it in itens:
         haystack = (
             f"{it.get('nome_publico') or ''} {it.get('nome') or ''} {it.get('documento') or ''} "
-            f"{_doc_norm(it.get('documento'))} "
-            f"{it.get('ultima_data_registrada') or ''} {it.get('vencimento_certificado') or ''}"
+            f"{_doc_norm(it.get('documento'))}"
         ).lower()
         if q in haystack:
             out.append(it)
@@ -1370,7 +1364,7 @@ def historico_certificados(
                 rows_non_paginated = _cert_history_fetch_all(sb)
         except Exception as e:  # noqa: BLE001
             err_str = str(e)
-            if db_pg.tabela_ausente(e) or "PGRST205" in err_str or "cert_history" in err_str:
+            if db_pg.tabela_ausente(e) or "PGRST205" in err_str:
                 logger.warning(
                     "Tabela cert_history não encontrada; usando fallback de snapshots. "
                     "Aplique supabase/migrations/20260504_cert_history.sql no banco."

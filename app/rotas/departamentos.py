@@ -187,6 +187,9 @@ def apagar_departamento(dep_id: str) -> dict:
         sb.table("departamento").delete().eq("id", dep_id).execute()
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao apagar departamento %s", dep_id)
+        # As lideranças podem já ter saído (cada execute() é um commit): o
+        # papel acompanha o que ficou gravado (P7-5, revisão de 21/11/2026).
+        papeis.rederivar(sb, lideres)
         raise HTTPException(status_code=400, detail="Não foi possível apagar o departamento.")
     return {"ok": True, "papeis": papeis.rederivar(sb, lideres)}
 
@@ -249,6 +252,8 @@ def definir_lideres(dep_id: str, body: DepartamentoLideresBody) -> dict:
             ).execute()
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao definir os gestores")
+        # O delete pode ter entrado sem o insert: o papel acompanha o banco (P7-5).
+        papeis.rederivar(sb, antes | set(ids))
         raise HTTPException(status_code=400, detail="Não foi possível gravar os gestores.")
     return {"ok": True, "lideres": len(ids), "papeis": papeis.rederivar(sb, antes | set(ids))}
 

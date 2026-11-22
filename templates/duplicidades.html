@@ -577,7 +577,10 @@
         const total = Number(j.total_itens_analisados || 0);
         meta.textContent = (quando ? "Atualizado em " + quando + " · " : "") + total.toLocaleString("pt-BR") + (total === 1 ? " arquivo analisado" : " arquivos analisados") + " · " + origem;
 
-        if (!total) {
+        if (j.alcance_vazio) {
+          // Operador sem clientes: o inventário existe, só não há o que mostrar a ele.
+          st.textContent = "Sua carteira está vazia: nenhum cliente foi atribuído a você ainda. Peça ao gestor do seu departamento.";
+        } else if (!total) {
           st.textContent = "Nenhum arquivo analisado ainda: o agente não enviou o inventário e a pasta local está vazia.";
         } else {
           st.textContent = "Análise concluída: " + grupos.igual.linhas.length + " confirmado(s), " + grupos.doc.linhas.length + " provável(is) e " + grupos.nome.linhas.length + " para revisar.";

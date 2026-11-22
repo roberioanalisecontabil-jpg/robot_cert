@@ -1079,7 +1079,13 @@
                     }
                 );
                 if (!r.ok) { erroDoDep(await mensagemCorpoErro(r)); return; }
-                if (!id) id = (await r.json()).id;
+                if (!id) {
+                    // Guardado já: se os gestores falharem, o novo Salvar faz
+                    // PUT, e não outro POST que daria 409 (P7-2).
+                    id = (await r.json()).id;
+                    depEditandoId = id;
+                    document.getElementById('modal-dep-titulo').textContent = 'Editar departamento';
+                }
 
                 // Segunda chamada de propósito: o nome e a lista de líderes são
                 // recursos diferentes, e juntá-los faria um erro de validação
@@ -1127,10 +1133,16 @@
                 perigo: true,
             });
             if (!ok) return;
-            const r = await fetch(`/api/departamentos/${id}`, {
-                method: 'DELETE',
-                headers: getHeaders(true),
-            });
+            let r;
+            try {
+                r = await fetch(`/api/departamentos/${id}`, {
+                    method: 'DELETE',
+                    headers: getHeaders(true),
+                });
+            } catch (_e) {
+                showToast('Erro de conexão com o servidor.', 'error');
+                return;
+            }
             if (!r.ok) {
                 showToast('Não foi possível apagar: ' + (await mensagemCorpoErro(r)), 'error');
                 return;
@@ -1375,6 +1387,15 @@
         // A pessoa perdeu o celular (login em dois passos, 10/10/2026): sem o
         // app, ela volta a entrar com o código por e-mail e cadastra de novo.
         async function removerAppAutenticador(id, btn) {
+            const u = usersCache.find((x) => x.id === id);
+            // Um clique errado tirava a reserva de entrada sem aviso (P7-4).
+            const ok = await confirmarAcao({
+                titulo: 'Remover app autenticador',
+                mensagem: `${(u && (u.full_name || u.email)) || 'Este usuário'} deixa de usar o app autenticador e passa a entrar com o código por e-mail, até cadastrar o app de novo.`,
+                textoConfirmar: 'Remover app',
+                perigo: true,
+            });
+            if (!ok) return;
             if (btn) btn.disabled = true;
             try {
                 const r = await fetch(`/api/users/${id}/app-autenticador/remover`, { method: 'POST', headers: getHeaders(true) });
@@ -1492,10 +1513,16 @@
                 perigo: true,
             });
             if (!ok) return;
-            const r = await fetch(`/api/users/${id}/deactivate`, {
-                method: 'POST',
-                headers: getHeaders(true),
-            });
+            let r;
+            try {
+                r = await fetch(`/api/users/${id}/deactivate`, {
+                    method: 'POST',
+                    headers: getHeaders(true),
+                });
+            } catch (_e) {
+                showToast('Erro de conexão com o servidor.', 'error');
+                return;
+            }
             if (!r.ok) {
                 showToast('Não foi possível desativar o usuário: ' + (await mensagemCorpoErro(r)), 'error');
                 return;
@@ -1528,7 +1555,13 @@
                 perigo: true,
             });
             if (!ok) return;
-            const r = await fetch(`/api/users/${id}/microsoft/desligar`, { method: 'POST', headers: getHeaders(true) });
+            let r;
+            try {
+                r = await fetch(`/api/users/${id}/microsoft/desligar`, { method: 'POST', headers: getHeaders(true) });
+            } catch (_e) {
+                showToast('Erro de conexão com o servidor.', 'error');
+                return;
+            }
             if (!r.ok) {
                 showToast('Não foi possível desfazer a ligação: ' + (await mensagemCorpoErro(r)), 'error');
                 return;
@@ -1549,10 +1582,16 @@
                 textoConfirmar: 'Reativar',
             });
             if (!ok) return;
-            const r = await fetch(`/api/users/${id}/reactivate`, {
-                method: 'POST',
-                headers: getHeaders(true),
-            });
+            let r;
+            try {
+                r = await fetch(`/api/users/${id}/reactivate`, {
+                    method: 'POST',
+                    headers: getHeaders(true),
+                });
+            } catch (_e) {
+                showToast('Erro de conexão com o servidor.', 'error');
+                return;
+            }
             if (!r.ok) {
                 showToast('Não foi possível reativar o usuário: ' + (await mensagemCorpoErro(r)), 'error');
                 return;
@@ -1619,13 +1658,25 @@
             const fd = new FormData();
             fd.append('file', f);
             const headers = getHeaders(false);
-            const r = await fetch('/api/users/import', {
-                method: 'POST',
-                headers,
-                body: fd,
-            });
-            botao.disabled = false;
-            botao.textContent = 'Importar';
+            // Queda de rede ou resposta que não é JSON: o botão volta e a
+            // pessoa sabe que não houve confirmação (P7-3).
+            let r, j;
+            try {
+                r = await fetch('/api/users/import', {
+                    method: 'POST',
+                    headers,
+                    body: fd,
+                });
+                if (r.ok) j = await r.json();
+            } catch (_e) {
+                msg.querySelector('.ag-alert__corpo').textContent = 'Erro de conexão com o servidor. Confira a lista de usuários antes de importar de novo.';
+                msg.className = 'ag-alert ag-alert--danger';
+                msg.hidden = false;
+                return;
+            } finally {
+                botao.disabled = false;
+                botao.textContent = 'Importar';
+            }
             if (!r.ok) {
                 msg.querySelector('.ag-alert__corpo').textContent = 'Erro na importação: ' + (await mensagemCorpoErro(r));
                 msg.className = 'ag-alert ag-alert--danger';
@@ -1634,7 +1685,6 @@
                 mostrarErrosImport([]);
                 return;
             }
-            const j = await r.json();
             // Erros e ignoradas na mesma lista: a pessoa quer saber QUAIS
             // linhas nao entraram, seja qual for a razao.
             const erros = (j.erros || []).concat(
