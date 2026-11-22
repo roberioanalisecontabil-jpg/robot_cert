@@ -25,7 +25,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from app import cert_installer
-from app.sieg_api import PADROES, ClienteSieg, Credenciais, SiegErro, so_digitos
+from app.sieg_api import (PADROES, ClienteSieg, Credenciais, SiegErro, cadastro_ativo, instante, so_digitos,
+                          validade_br, validade_confere)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,12 @@ INCLUINDO, NO_SIEG, ERRO, SUBSTITUIDO, REMOVIDO = "incluindo", "no_sieg", "erro"
 LIGADOS = (INCLUINDO, NO_SIEG, ERRO, SUBSTITUIDO)
 # Um "incluindo" mais velho que isto foi interrompido (o processo caiu).
 INCLUINDO_EXPIRA = timedelta(minutes=15)
+# Quem aparece na trilha quando o portal troca sozinho (conferir_e_trocar).
+POR_AUTOMATICO = "troca automática"
+# A troca automática que deu erro só tenta de novo depois disto.
+ERRO_ESPERA = timedelta(hours=24)
+# Mais que esta fração dos "No SIEG" saindo de uma vez = listagem suspeita.
+FORA_SUSPEITO = 0.2
 
 ROTULOS = {
     INCLUINDO: "Incluindo…",
@@ -269,6 +276,7 @@ def executar(item: Dict[str, Any], settings: Any, por: str, *, machine_id: Optio
             r = cliente(settings, http=http).incluir(
                 nome=nome, documento=documento, pfx=pfx, senha=senha, padroes=padroes(settings),
                 tipo="P12" if str(item.get("nome_publico") or "").lower().endswith(".p12") else "Pfx",
+                validade=item.get("not_after"),
             )
         except SiegErro as e:
             return falhar(str(e), http_status=e.status)
@@ -303,15 +311,21 @@ def _substituir_anteriores(client, fp: str, documento: str, nome: str, por: str)
                  evento="substituido", por=por, mensagem=f"Substituído por {fp[:12]}…")
 
 
-def reconciliar(fp: str, settings: Any, por: str, http=None) -> Dict[str, Any]:
-    """Administrador: confere no SIEG. Ativo → mantém; senão → removido."""
+def reconciliar(fp: str, settings: Any, por: str, http=None, not_after: Any = None) -> Dict[str, Any]:
+    """Administrador: confere no SIEG. Ativo com ESTE certificado → mantém;
+    ativo com outro (DataExpira diferente da validade) ou fora → removido."""
     client = _banco()
     atual = estado(fp)
     if not atual:
         raise LookupError("Este certificado nunca foi ligado ao SIEG.")
     situacao, item = cliente(settings, http=http).situacao(atual["documento"])
     sieg_id = str((item or {}).get("Id") or "")
-    if situacao == "ativo":
+    if situacao == "ativo" and validade_confere(not_after, (item or {}).get("DataExpira")) is False:
+        novo = REMOVIDO
+        msg = "O SIEG está com outro certificado (vence em " + validade_br(item.get("DataExpira")) + ")."
+        _gravar_estado(client, fp, estado=REMOVIDO, mensagem=msg + " Pode ser ligado de novo.")
+        evento = "reconciliado_desligado"
+    elif situacao == "ativo":
         novo = NO_SIEG if atual["estado"] in (ERRO, REMOVIDO, INCLUINDO) else atual["estado"]
         _gravar_estado(client, fp, estado=novo, sieg_id=sieg_id or atual.get("sieg_id", ""),
                        mensagem="Conferido no SIEG: ativo.")
@@ -326,16 +340,8 @@ def reconciliar(fp: str, settings: Any, por: str, http=None) -> Dict[str, Any]:
     return {"estado": novo, "situacao": situacao, "mensagem": msg}
 
 
-def sincronizar(itens: List[Dict[str, Any]], settings: Any, por: str, http=None) -> Dict[str, int]:
-    """Marca "No SIEG" o certificado vigente de cada cliente que já está lá.
-
-    Só cria linha onde não há nenhuma (não mexe em pedido nem em erro), e só
-    para o certificado vigente do documento (o de vencimento mais distante
-    entre os válidos), que é o que o SIEG deve estar usando.
-    """
-    client = _banco()
-    no_sieg = {doc for doc, cads in cliente(settings, http=http).cadastros().items()
-               if any(c.get("Ativo") is True or c.get("_listado_como_ativo") is True for c in cads)}
+def _vigentes(itens: List[Dict[str, Any]], settings: Any) -> Dict[str, Dict[str, Any]]:
+    """Documento → o certificado válido e legível de vencimento mais distante."""
     vigentes: Dict[str, Dict[str, Any]] = {}
     for it in itens:
         if motivo_para_nao_ligar(it, None, settings) in ("vencido", "ilegivel"):
@@ -345,11 +351,39 @@ def sincronizar(itens: List[Dict[str, Any]], settings: Any, por: str, http=None)
             continue
         if doc not in vigentes or str(it.get("not_after") or "") > str(vigentes[doc].get("not_after") or ""):
             vigentes[doc] = it
+    return vigentes
+
+
+def _ativo(cads: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    return next((c for c in cads if cadastro_ativo(c)), None)
+
+
+def sincronizar(itens: List[Dict[str, Any]], settings: Any, por: str, http=None) -> Dict[str, int]:
+    """Marca "No SIEG" o certificado que o SIEG de fato tem em cada cliente.
+
+    Só cria linha onde não há nenhuma (não mexe em pedido nem em erro). Qual
+    certificado: o que tem a validade do DataExpira da listagem; sem a data,
+    o vigente do documento (o de vencimento mais distante entre os válidos).
+    Até 22/11/2026 era sempre o vigente, e 11 clientes ficaram "No SIEG" com
+    o SIEG ainda no certificado antigo.
+    """
+    client = _banco()
+    cadastros = cliente(settings, http=http).cadastros()
+    no_sieg = {doc: _ativo(cads) for doc, cads in cadastros.items() if _ativo(cads)}
+    vigentes = _vigentes(itens, settings)
     ja = estados(None)
     marcados = 0
-    for doc, it in vigentes.items():
+    for doc, cad in no_sieg.items():
+        expira = cad.get("DataExpira")
+        if expira:
+            it = next((i for i in itens if so_digitos(i.get("documento_numero")) == doc and i.get("fingerprint_sha256")
+                       and validade_confere(i.get("not_after"), expira)), None)
+        else:
+            it = vigentes.get(doc)
+        if not it:
+            continue
         fp = str(it["fingerprint_sha256"]).lower()
-        if doc not in no_sieg or fp in ja:
+        if fp in ja:
             continue
         agora = _iso(_agora())
         client.table("sieg_inclusao").insert({
@@ -361,3 +395,80 @@ def sincronizar(itens: List[Dict[str, Any]], settings: Any, por: str, http=None)
                  mensagem="Já estava no SIEG.")
         marcados += 1
     return {"clientes_no_sieg": len(no_sieg), "marcados": marcados}
+
+
+def _erro_recente(e: Dict[str, Any]) -> bool:
+    try:
+        quando = datetime.fromisoformat(str(e.get("atualizado_em") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return _agora() - quando < ERRO_ESPERA
+
+
+def conferir_e_trocar(itens: List[Dict[str, Any]], settings: Any, por: str = POR_AUTOMATICO,
+                      http=None) -> Dict[str, int]:
+    """Ciclo periódico (app/main.py): confere e troca pelo certificado mais novo.
+
+    1. Conferir: certificado "No SIEG" cujo cadastro ativo tem outra validade
+       (DataExpira) passa a "Fora do SIEG", com a validade do que está lá; o
+       de cliente excluído ou inativo no SIEG também. Listagem vazia ou que
+       tiraria mais de FORA_SUSPEITO de uma vez não tira ninguém.
+    2. Trocar: cliente ativo no SIEG com um certificado mais novo no portal,
+       válido, legível e no cofre, recebe o novo (decisão de 22/11/2026:
+       logo que o novo chega). Erro recente não repete antes de ERRO_ESPERA.
+    """
+    client = _banco()
+    cadastros = cliente(settings, http=http).cadastros()
+    ativos = {doc: _ativo(cads) for doc, cads in cadastros.items() if _ativo(cads)}
+    por_fp = {str(i.get("fingerprint_sha256") or "").lower(): i for i in itens if i.get("fingerprint_sha256")}
+    divergentes = fora = 0
+    no_sieg = [(fp, e) for fp, e in estados(None).items() if e["estado"] == NO_SIEG]
+    sairiam = []
+    for fp, e in no_sieg:
+        cad = ativos.get(e["documento"])
+        if not cad:
+            msg = "Inativo no SIEG." if cadastros.get(e["documento"]) else "Não existe no SIEG."
+            sairiam.append((fp, e, msg))
+            continue
+        it = por_fp.get(fp)
+        if it and validade_confere(it.get("not_after"), cad.get("DataExpira")) is False:
+            msg = "O SIEG está com outro certificado (vence em " + validade_br(cad.get("DataExpira")) + ")."
+            _gravar_estado(client, fp, estado=REMOVIDO, mensagem=msg + " Pode ser ligado de novo.")
+            _trilhar(client, fp=fp, documento=e["documento"], nome=e.get("nome", ""), evento="conferido_divergente",
+                     por=por, mensagem=msg)
+            divergentes += 1
+    if sairiam and (not ativos or len(sairiam) > len(no_sieg) * FORA_SUSPEITO):
+        logger.warning("SIEG: %s de %s certificados sairiam do SIEG de uma vez; listagem suspeita, ninguém marcado.",
+                       len(sairiam), len(no_sieg))
+        sairiam = []
+    for fp, e, msg in sairiam:
+        _gravar_estado(client, fp, estado=REMOVIDO, mensagem=msg + " Pode ser ligado de novo.")
+        _trilhar(client, fp=fp, documento=e["documento"], nome=e.get("nome", ""), evento="conferido_fora",
+                 por=por, mensagem=msg)
+        fora += 1
+
+    no_cofre = {str(l.get("fingerprint") or "").lower()
+                for l in (client.table("cert_pfx_store").select("fingerprint").execute().data or [])}
+    atual = estados(None)
+    trocados = falhas = 0
+    for doc, it in _vigentes(itens, settings).items():
+        cad = ativos.get(doc)
+        fp = str(it["fingerprint_sha256"]).lower()
+        if not cad or fp not in no_cofre or not cad.get("DataExpira"):
+            continue
+        if validade_confere(it.get("not_after"), cad["DataExpira"]) is not False:
+            continue  # o SIEG já está com ele
+        if instante(it.get("not_after")) <= instante(cad["DataExpira"]):
+            continue  # o do SIEG é o mais novo
+        e = atual.get(fp)
+        if e and (e["estado"] == INCLUINDO or (e["estado"] == ERRO and _erro_recente(e))):
+            continue
+        solicitar(it, por)
+        r = executar(it, settings, por, http=http)
+        if r.get("estado") == NO_SIEG:
+            trocados += 1
+        else:
+            falhas += 1
+    if divergentes or fora or trocados or falhas:
+        logger.info("SIEG: %s divergente(s), %s fora, %s trocado(s), %s falha(s)", divergentes, fora, trocados, falhas)
+    return {"divergentes": divergentes, "fora": fora, "trocados": trocados, "falhas": falhas}
