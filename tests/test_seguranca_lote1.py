@@ -148,6 +148,50 @@ class _Query:
         self._f.append((c, "in", list(vs)))
         return self
 
+    def or_(self, filtros: str) -> "_Query":
+        """Mesma sintaxe e mesmo parser do app/db_pg.py. Até 21/11/2026 o fake
+        não tinha `or_`: toda busca no SQL do histórico levantava aqui e caía no
+        fallback por snapshots, e esse caminho nunca era testado."""
+        from app.db_pg import _desaspear, _dividir_or
+
+        termos = []
+        for t in _dividir_or(filtros):
+            col, op, val = t.split(".", 2)
+            termos.append((col, op, _desaspear(val)))
+        self._f.append((None, "or", termos))
+        return self
+
+    @staticmethod
+    def _ilike(a: Any, padrao: str) -> bool:
+        import re as _re
+
+        rx, i = "", 0
+        while i < len(padrao):
+            ch = padrao[i]
+            if ch == "\\" and i + 1 < len(padrao):
+                rx += _re.escape(padrao[i + 1]); i += 2; continue
+            rx += ".*" if ch == "%" else "." if ch == "_" else _re.escape(ch)
+            i += 1
+        return a is not None and _re.fullmatch(rx, str(a), _re.I | _re.S) is not None
+
+    def _um(self, a: Any, op: str, v: Any) -> bool:
+        if op == "eq":
+            return a == v or (a is not None and not isinstance(v, (list, dict)) and str(a) == str(v))
+        if op == "neq":
+            return a != v
+        if op == "is":
+            return (a is not None) if v == "not.null" else (v == "null" and a is None)
+        if op in ("gt", "gte", "lt", "lte"):
+            if a is None:
+                return False
+            x, y = str(a), str(v)
+            return {"gt": x > y, "gte": x >= y, "lt": x < y, "lte": x <= y}[op]
+        if op in ("like", "ilike"):
+            return self._ilike(a, v)
+        if op == "in":
+            return a in v
+        raise AssertionError(f"operador sem suporte no fake: {op}")
+
     def limit(self, n: int) -> "_Query":
         self._limit = n
         return self
@@ -161,6 +205,10 @@ class _Query:
 
     def _casa(self, r: Dict[str, Any]) -> bool:
         for c, op, v in self._f:
+            if op == "or":
+                if not any(self._um(r.get(tc), top, tv) for tc, top, tv in v):
+                    return False
+                continue
             a = r.get(c)
             if op == "eq" and a != v:
                 return False

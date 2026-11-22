@@ -195,12 +195,15 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
     if not client:
         return {"erro": "Banco não configurado"}
 
-    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    desde = datetime.now(timezone.utc) - timedelta(days=dias)
     try:
-        linhas = _todas_as_linhas(
+        # Sem filtro de data: a última varredura de cada máquina vem de toda a
+        # tabela (o expurgo a mantém pequena e guarda a última de cada uma).
+        # Filtrar no banco fazia o servidor parado antes do período sumir do
+        # cartão em vez de dar Atenção (revisão de 21/11/2026).
+        todas = _todas_as_linhas(
             lambda i, f: client.table("cert_snapshots")
             .select("scanned_at, machine_id")
-            .gte("scanned_at", desde)
             .range(i, f)
         )
     except Exception as e:  # noqa: BLE001
@@ -209,11 +212,15 @@ def painel_agente(dias: int = 30) -> Dict[str, Any]:
 
     por_dia: Counter = Counter()
     ultima_por_maquina: Dict[str, str] = {}
-    for l in linhas:
+    linhas = []
+    for l in todas:
         quando = str(l.get("scanned_at") or "")
         if not quando:
             continue
-        por_dia[quando[:10]] += 1
+        d = _dt(quando)
+        if d and d >= desde:
+            linhas.append(l)
+            por_dia[quando[:10]] += 1
         maq = str(l.get("machine_id") or "?")
         if quando > ultima_por_maquina.get(maq, ""):
             ultima_por_maquina[maq] = quando

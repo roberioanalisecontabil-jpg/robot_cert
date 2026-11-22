@@ -170,3 +170,16 @@ def test_aba_escolher_segue_a_tela_de_acompanhados() -> None:
     assert 'class="ag-table cg-tabela cg-tabela-acomp cg-tabela-escolher"' in html
     # Salvar só acende com alteração; zero marcados continua sendo salvável.
     assert "selecaoSuja()" in html and "selecaoSalva" in html
+
+
+def test_salvar_a_selecao_nao_apaga_o_que_saiu_do_alcance(client: TestClient, banco: _Fake) -> None:
+    """Revisão de 21/11/2026 (P10-1): o PUT gravava só o recorte, e o documento
+    fora do alcance sumia da linha; quando o alcance voltava, a escolha não
+    voltava (contra a docstring de _selecao_no_alcance)."""
+    banco.tabelas["carteira"].append({"user_id": "u-fis", "documento": DOC_B})
+    assert client.put(SEL, json={"documentos": [DOC_A, DOC_B]}, headers=_h(*FISCAL_OP)).json()["documentos"] == [DOC_A, DOC_B]
+    client.delete(f"/api/carteira/u-fis/{DOC_B}", headers=_h(*ADMIN))      # B sai do alcance
+    r = client.put(SEL, json={"documentos": [DOC_A]}, headers=_h(*FISCAL_OP))  # salva sem ver B
+    assert r.json()["documentos"] == [DOC_A]
+    client.post("/api/carteira", json={"user_id": "u-fis", "documentos": [DOC_B]}, headers=_h(*ADMIN))  # B volta
+    assert client.get(SEL, headers=_h(*FISCAL_OP)).json()["documentos"] == [DOC_A, DOC_B]

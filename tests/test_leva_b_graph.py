@@ -379,7 +379,10 @@ def test_configuracao_tem_a_forma_de_envio_e_o_bloco_do_graph() -> None:
     assert 'id="sel-email-transporte"' in html and 'value="graph"' in html
     for campo in ("inp-graph-tenant", "inp-graph-client", "inp-graph-secret", "inp-graph-validade", "inp-graph-remetente", "inp-graph-reply-to"):
         assert f'id="{campo}"' in html, campo
-    assert html.count("...corpoGraph(),") == 4, "os quatro PUT da tela mandam o bloco do Graph (o da Remoção entrou em 14/11)"
+    # 21/11/2026 (P8-1): só o bloco de e-mail manda o Graph do DOM; Pastas,
+    # Remoção e o modal do texto mandam o que está salvo, e o PUT preserva o
+    # Graph omitido (test_salvar_outra_aba_sem_o_graph_mantem_o_graph).
+    assert html.count("...corpoGraph(),") == 1, "só o bloco de e-mail manda o Graph"
     assert "docs/envio-microsoft-365.md" in html
     assert (RAIZ / "docs" / "envio-microsoft-365.md").is_file()
     assert (RAIZ / "supabase" / "migrations" / "20261003120000_envio_microsoft_graph.sql").is_file()
@@ -397,3 +400,17 @@ def test_senha_smtp_nao_segue_para_outro_servidor(client: TestClient, banco: _Fa
     r = client.put("/api/settings", json=_corpo(**{**base, "smtp_host": "smtp.atacante.example"}), headers=_h(*ADMIN))
     assert r.status_code == 200, r.text
     assert not banco.tabelas["portal_settings"][0]["smtp_password_encrypted"]
+
+
+def test_salvar_outra_aba_sem_o_graph_mantem_o_graph(client: TestClient, banco: _Fake) -> None:
+    """21/11/2026 (P8-1): Remoção, Pastas e o modal do texto deixaram de mandar
+    o bloco do Graph lido da tela; o PUT tem de manter o Graph gravado."""
+    assert client.put("/api/settings", json=_corpo(
+        email_transporte="graph", graph_tenant_id=TENANT, graph_client_id=APP, graph_client_secret="segredo-do-app",
+        graph_remetente="noreply@empresa.com.br", graph_secret_validade="2028-10-01",
+    ), headers=_h(*ADMIN)).status_code == 200
+    base = {k: v for k, v in _corpo().items() if not k.startswith(("graph_", "email_transporte"))}
+    r = client.put("/api/settings", json={**base, "remocao_carteira_modo": "relatorio"}, headers=_h(*ADMIN))
+    assert r.status_code == 200, r.text
+    d = client.get("/api/settings", headers=_h(*ADMIN)).json()
+    assert d["email_transporte"] == "graph" and d["graph_client_id"] == APP and d["graph_client_secret_set"] is True

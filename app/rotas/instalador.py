@@ -1290,8 +1290,9 @@ def trilha_de_instalacao(
     if not admin:
         user_email = (token.email or "").strip().lower() or "-"
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    lidos: dict = {}
     cadeias = cert_installer.cadeias_de_instalacao(
-        limite=limite, desde=desde, user_email=user_email, apenas_com_falha=apenas_falhas
+        limite=limite, desde=desde, user_email=user_email, apenas_com_falha=apenas_falhas, info=lidos
     )
     if not admin:
         for c in cadeias:
@@ -1330,12 +1331,12 @@ def trilha_de_instalacao(
         "subtitulo": ("tentativa concluída" if total == 1 else "tentativas concluídas") + " no período",
     }
     # O teto de eventos (`limite`) corta em silêncio; a tela precisa dizer
-    # "estas são as mais recentes" em vez de parecer completa.
-    eventos = sum(len(c.get("eventos") or []) for c in cadeias)
+    # "estas são as mais recentes" em vez de parecer completa. Conta os eventos
+    # lidos, não os que sobraram depois do filtro de falhas.
     return {
         "dias": dias,
         "desde": desde,
         "resumo": resumo,
         "cadeias": cadeias,
-        "truncado": eventos >= min(limite, 1000),
+        "truncado": bool(lidos.get("truncado")),
     }

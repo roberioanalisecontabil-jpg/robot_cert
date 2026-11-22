@@ -1002,15 +1002,17 @@ def certificados_duplicidades(request: Request, token: auth.TokenData = Depends(
     # operador com carteira vazia via nome, CNPJ, serial e fingerprint de todo
     # o acervo. Com recorte, o resultado é por pessoa e não vai ao cache.
     alcance = _documentos_ao_alcance(token)
-    chave = (origem, str(scanned_at or ""), admin)
+    # O recorte entra na chave (revisão de 21/11/2026): sem cache, gestor e
+    # operador recalculavam a cada abertura e levavam 429 na 6ª em 5 minutos.
+    # Mesmo alcance, mesmo resultado; alcance mudou, chave nova.
+    recorte = None if alcance is None else tuple(sorted(alcance))
+    chave = (origem, str(scanned_at or ""), admin, recorte)
     agora = time.monotonic()
-    guardado = None
-    if alcance is None:
-        with _dup_cache_lock:
-            guardado = _dup_cache.get(chave)
+    with _dup_cache_lock:
+        guardado = _dup_cache.get(chave)
     if guardado and agora - guardado[0] < _DUP_CACHE_TTL_SEG and origem == "ultimo_snapshot":
         gd, gn, gci = guardado[1]
-        rows_total = sum(1 for it in raw_items if str((it.get("nome_publico") or it.get("file_name") or "")).strip())
+        rows_total = guardado[2]  # do recorte guardado, não do inventário inteiro
     else:
         quem = (token.email or "").strip().lower() or _ip_do_cliente(request)
         if not taxa.permitir(f"dup:{quem}", 5, 300):
@@ -1020,11 +1022,10 @@ def certificados_duplicidades(request: Request, token: auth.TokenData = Depends(
         rows = _recortar_pela_carteira(rows, alcance)
         rows_total = len(rows)
         gd, gn, gci = _agrupar_duplicidades(rows, incluir_pasta=admin)
-        if alcance is None:
-            with _dup_cache_lock:
-                if len(_dup_cache) > 32:
-                    _dup_cache.clear()
-                _dup_cache[chave] = (agora, (gd, gn, gci))
+        with _dup_cache_lock:
+            if len(_dup_cache) > 32:
+                _dup_cache.clear()
+            _dup_cache[chave] = (agora, (gd, gn, gci), rows_total)
     return {
         "origem_dados": origem,
         "scanned_at": scanned_at,
@@ -1129,9 +1130,18 @@ STATUS_HISTORICO = {
     "ilegivel": ("erro", "fora_do_padrao"),
     "erro": ("erro",),
     "fora_do_padrao": ("fora_do_padrao",),
-    "ok": ("ok",),
-    "expirado": ("expirado",),
+    "ok": ("ok", "valido"),
+    "expirado": ("expirado", "vencido"),
 }
+# Ativos/Expirados seguem o selo da tela (revisão de 21/11/2026, P3-3): o
+# selo diz "Vencido" pelo status OU pela data já passada. Só o status deixava
+# em "Ativos" o certificado que venceu depois da última varredura.
+_ATIVOS, _EXPIRADOS = STATUS_HISTORICO["ok"], STATUS_HISTORICO["expirado"]
+
+
+def _venceu(it: dict, agora: datetime) -> bool:
+    v = it.get("vencimento_certificado")
+    return bool(v) and _parse_iso_utc(str(v)) < agora
 
 
 def _historico_status_aceitos(status_raw: Optional[str]) -> Optional[tuple]:
@@ -1146,7 +1156,13 @@ def _historico_status_aceitos(status_raw: Optional[str]) -> Optional[tuple]:
 def _historico_filtrar_status(itens: List[dict], aceitos: Optional[tuple]) -> List[dict]:
     if not aceitos:
         return itens
-    return [it for it in itens if str(it.get("status_ultimo") or "").lower() in aceitos]
+    agora = datetime.now(timezone.utc)
+    st = lambda it: str(it.get("status_ultimo") or "").lower()  # noqa: E731
+    if aceitos == _ATIVOS:
+        return [it for it in itens if st(it) in aceitos and not _venceu(it, agora)]
+    if aceitos == _EXPIRADOS:
+        return [it for it in itens if st(it) in aceitos or _venceu(it, agora)]
+    return [it for it in itens if st(it) in aceitos]
 
 
 # Situação nas pastas (06/11/2026): `ausente_desde` NULL = está nas pastas.
@@ -1300,7 +1316,14 @@ def historico_certificados(
         ]
 
     def _apply_cert_history_or_busca(qb: Any) -> Any:
-        if status_aceitos:
+        agora_q = _valor_or(datetime.now(timezone.utc).isoformat())
+        if status_aceitos == _ATIVOS:
+            qb = qb.in_("status_ultimo", list(status_aceitos)).or_(
+                f"vencimento_certificado.is.null,vencimento_certificado.gte.{agora_q}")
+        elif status_aceitos == _EXPIRADOS:
+            qb = qb.or_(",".join(f"status_ultimo.eq.{s}" for s in status_aceitos)
+                        + f",vencimento_certificado.lt.{agora_q}")
+        elif status_aceitos:
             qb = qb.in_("status_ultimo", list(status_aceitos))
         if situacao_v != "todos":
             qb = qb.is_("ausente_desde", "null" if situacao_v == "nas_pastas" else "not.null")

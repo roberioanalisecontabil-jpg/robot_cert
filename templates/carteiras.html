@@ -654,11 +654,16 @@
 
     async function carregarCarteira() {
       const el = document.getElementById("listaCarteira");
+      // Troca rápida de pessoa (revisão de 21/11/2026): a resposta de A que
+      // chega depois do clique em B não pinta a carteira de A sob B.
+      const alvo = _selecionado && _selecionado.id;
       el.innerHTML = `<p class="cg-transfer__vazio">Carregando…</p>`;
       try {
-        const r = await fetch(`/api/carteira/${encodeURIComponent(_selecionado.id)}`, { headers: getHeaders() });
+        const r = await fetch(`/api/carteira/${encodeURIComponent(alvo)}`, { headers: getHeaders() });
+        if (!_selecionado || _selecionado.id !== alvo) return;
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
+        if (!_selecionado || _selecionado.id !== alvo) return;
         _tipoCarteira = d.tipo || "atribuicoes";
         _carteiraAtual = new Set(d.documentos || []);
         _trilha = Object.fromEntries((d.itens || []).map((i) => [i.documento, i]));
@@ -669,6 +674,7 @@
         atualizarContagemOp();
         renderTransfer();
       } catch (e) {
+        if (!_selecionado || _selecionado.id !== alvo) return;
         el.innerHTML = `<p class="cg-transfer__vazio">${esc(e.message)}</p>`;
       }
     }
@@ -677,14 +683,17 @@
       const el = document.getElementById("historicoOperador");
       // Rota da própria tela, com o alcance da carteira (C3, 01/10/2026): o
       // gestor vê as instalações dos operadores dos departamentos que lidera.
+      const alvo = _selecionado && _selecionado.id;
       el.innerHTML = `<p class="cg-cart-dica">Carregando…</p>`;
       try {
         const r = await fetch(
-          `/api/carteira/${encodeURIComponent(_selecionado.id)}/instalacoes?dias=365`,
+          `/api/carteira/${encodeURIComponent(alvo)}/instalacoes?dias=365`,
           { headers: getHeaders() }
         );
+        if (!_selecionado || _selecionado.id !== alvo) return;
         if (!r.ok) throw new Error(await mensagemCorpoErro(r));
         const d = await r.json();
+        if (!_selecionado || _selecionado.id !== alvo) return;
         const cadeias = d.cadeias || [];
         if (!cadeias.length) {
           el.innerHTML = `<p class="cg-cart-dica">Nenhuma instalação registrada.</p>`;
@@ -701,6 +710,7 @@
               <span>${esc(c.desfecho)}</span>
             </div>`).join("");
       } catch (e) {
+        if (!_selecionado || _selecionado.id !== alvo) return;
         el.innerHTML = `<p class="cg-cart-dica">${esc(e.message)}</p>`;
       }
     }
@@ -985,10 +995,12 @@
       )) return;
       let falhas = 0;
       let bloqueados = 0;
+      // A pessoa fica fixa durante o laço: trocar de pessoa no meio não desvia os DELETEs.
+      const alvo = _selecionado.id;
       for (const doc of documentos) {
         try {
           const r = await fetch(
-            `/api/carteira/${encodeURIComponent(_selecionado.id)}/${encodeURIComponent(doc)}`,
+            `/api/carteira/${encodeURIComponent(alvo)}/${encodeURIComponent(doc)}`,
             { method: "DELETE", headers: getHeaders() }
           );
           if (!r.ok) falhas++;
