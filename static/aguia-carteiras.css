@@ -303,6 +303,15 @@ body:has(#sec-uso:not([hidden])) .ag-page__lead { display: none; }
 .cg-uso-coleta { display: flex; align-items: center; gap: var(--space-2); min-width: 0; font-size: var(--text-sm); padding: 2px 0; }
 .cg-uso-coleta .ag-badge { flex: 0 0 auto; }
 .cg-uso-coleta__nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-uso-coletas[hidden] { display: none; }
+/* Histórico no celular: a tabela rola dentro do cartão (aguia-listas.css solta o
+   .ag-table-scroll em 768px e a página inteira ia para o lado). */
+#sec-uso .ag-table-scroll { overflow-x: auto; }
+.cg-uso-listagens__nota { margin: 0; padding: var(--space-2) var(--space-4) 0; font-size: var(--text-xs); }
+.cg-uso-listagem { display: grid; gap: 2px; min-width: 0; font-size: var(--text-sm); padding: var(--space-1) 0; }
+.cg-uso-listagem__topo { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.cg-uso-listagem__topo .cg-uso-fraco { flex: 0 0 auto; }
+.cg-uso-listagem__onde { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1024px) {
     .cg-uso-mestre, .cg-uso-duas { grid-template-columns: minmax(0, 1fr); }
     .cg-uso-certs { max-height: 320px; }

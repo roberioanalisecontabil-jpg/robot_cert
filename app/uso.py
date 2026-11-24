@@ -89,15 +89,16 @@ def _gravar_janelas(client, mid: str, uso_id, eventos: List[Evento]) -> None:
             linhas, on_conflict="uso_id,record_id,ordem", ignore_duplicates=True).execute()
 
 
-def sem_listagens(eventos: List[Evento]) -> List[Evento]:
-    """Tira as aberturas em rajada: a mesma pessoa abrindo LISTAGEM_CERTS ou mais
+def separar_listagens(eventos: List[Evento]) -> Tuple[List[Evento], List[List[Evento]]]:
+    """(usos, rajadas). Rajada: a mesma pessoa abrindo LISTAGEM_CERTS ou mais
     chaves diferentes com no máximo LISTAGEM_INTERVALO entre uma e a seguinte.
-    É o programa montando a lista de escolha (o SPED abre todas), não um uso; o
-    5061 não diz qual foi assinada, então a rajada inteira sai. A abertura
-    isolada (navegador, assinador comum) é a seleção e fica."""
+    É o programa montando a lista de escolha (o SPED abre todas e assina sem
+    abrir de novo), não um uso de cada certificado: o 5061 não diz qual foi
+    assinada, então a rajada vira uma assinatura sem certificado identificado.
+    A abertura isolada (navegador, assinador comum) é a seleção e fica como uso."""
     # shortcut: a rajada partida entre dois lotes da coleta (a cada 5 min) não é
     # vista inteira; juntar com o fim do lote anterior se isso aparecer.
-    fora = set()
+    rajadas: List[List[Evento]] = []
     por_sid: Dict[str, List[Evento]] = {}
     for e in eventos:
         por_sid.setdefault(e.sid, []).append(e)
@@ -109,21 +110,42 @@ def sem_listagens(eventos: List[Evento]) -> List[Evento]:
                 bloco.append(e)
                 continue
             if len({b.conteiner for b in bloco}) >= LISTAGEM_CERTS:
-                fora.update(id(b) for b in bloco)
+                rajadas.append(bloco)
             bloco = [e] if e is not None else []
-    return [e for e in eventos if id(e) not in fora]
+    fora = {id(e) for r in rajadas for e in r}
+    return [e for e in eventos if id(e) not in fora], rajadas
+
+
+def _gravar_listagens(client, mid: str, rajadas: List[List[Evento]], mapa: Dict[Tuple[str, str], dict],
+                      agora: datetime) -> None:
+    linhas = []
+    for r in rajadas:
+        sid = r[0].sid
+        # A pessoa do portal vem do mapa da bandeja: qualquer contêiner daquela sessão serve.
+        user_id = next((m.get("user_id") for (s, _), m in mapa.items() if s == sid and m.get("user_id")), None)
+        janela = next((e.janelas[0] for e in r if e.janelas), {})
+        linhas.append({
+            "machine_id": mid, "sid": sid, "usuario_windows": r[-1].usuario, "user_id": user_id,
+            "primeiro_em": _iso(r[0].quando), "ultimo_em": _iso(r[-1].quando),
+            "certificados": len({e.conteiner for e in r}), "primeiro_record": min(e.record_id for e in r),
+            "programa": janela.get("programa") or "", "titulo": janela.get("titulo") or "",
+            "recebido_em": _iso(agora),
+        })
+    if linhas:
+        client.table("uso_listagem").upsert(
+            linhas, on_conflict="machine_id,sid,primeiro_record", ignore_duplicates=True).execute()
 
 
 def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora: datetime) -> int:
     mid = comp.mac(machine_id)
     client = _cliente()
-    eventos = sem_listagens(eventos)
+    eventos, rajadas = separar_listagens(eventos)
     grupos: Dict[Tuple[str, str, datetime], List[Evento]] = {}
     for e in eventos:
         grupos.setdefault((e.sid, e.conteiner, hora_de(e.quando)), []).append(e)
 
     mapa: Dict[Tuple[str, str], dict] = {}
-    for sid in {k[0] for k in grupos}:
+    for sid in {k[0] for k in grupos} | {r[0].sid for r in rajadas}:
         for r in (client.table("uso_conteiner").select("*").eq("machine_id", mid).eq("sid", sid)
                   .execute().data or []):
             mapa[(sid, r["conteiner"])] = r
@@ -166,6 +188,7 @@ def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora
         _gravar_janelas(client, mid, salva[0]["id"], evs)
         gravadas += 1
 
+    _gravar_listagens(client, mid, rajadas, mapa, agora)
     client.table("uso_coleta").upsert(
         {"machine_id": mid, "ultima_em": _iso(agora), "auditoria": auditoria},
         on_conflict="machine_id").execute()
@@ -175,5 +198,6 @@ def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora
 def limpar(agora: datetime) -> None:
     client = _cliente()
     client.table("uso_certificado").delete().lt("hora", _iso(agora - GUARDA)).execute()
+    client.table("uso_listagem").delete().lt("primeiro_em", _iso(agora - GUARDA)).execute()
     (client.table("uso_certificado").delete().is_("fingerprint", "null")
      .lt("recebido_em", _iso(agora - PENDENTE)).execute())

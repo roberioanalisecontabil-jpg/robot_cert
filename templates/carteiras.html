@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=alinhamento-2026-11-23" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=listagem-2026-11-24" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -219,6 +219,13 @@
           <div class="cg-uso-cab"><h2 class="cg-uso-cab__titulo" id="tit-uso-certs">Certificados usados</h2><span class="cg-uso-fraco" id="uso-ncerts" role="status"></span></div>
           <ul class="cg-uso-certs" id="uso-certs" role="list"></ul>
         </section>
+        <!-- Assinaturas sem certificado identificado (24/11/2026): o programa (o SPED, em
+             Java) abriu a lista de certificados e não diz qual foi escolhido. Some se vazio. -->
+        <details class="ag-card cg-uso-coletas" id="uso-listagens-quadro" hidden>
+          <summary class="cg-uso-cab cg-uso-coletas__titulo"><span class="cg-uso-cab__titulo">Assinaturas sem certificado</span><span class="cg-uso-fraco" id="uso-listagens-resumo"></span></summary>
+          <p class="cg-uso-fraco cg-uso-listagens__nota">O programa abriu a lista de certificados e não informa qual foi escolhido.</p>
+          <ul id="uso-listagens" class="cg-uso-coletas-lista" role="list"></ul>
+        </details>
         <!-- Recolhido por padrão (21/11/2026): o resumo no título já diz se há problema. -->
         <details class="ag-card cg-uso-coletas" id="uso-coletas-quadro">
           <summary class="cg-uso-cab cg-uso-coletas__titulo"><span class="cg-uso-cab__titulo">Coleta por máquina</span><span class="cg-uso-fraco" id="uso-coletas-resumo"></span></summary>
@@ -1253,6 +1260,6 @@
     })();
   </script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=alinhamento-2026-11-23"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=resumo-unico-2026-11-22"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=listagem-2026-11-24"></script>
 </body>
 </html>

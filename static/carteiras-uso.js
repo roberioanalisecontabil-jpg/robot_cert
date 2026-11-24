@@ -156,6 +156,25 @@
     resumo.className = prob ? "ag-badge ag-badge--warning" : "cg-uso-fraco";
   }
 
+  // Assinaturas sem certificado identificado: a pessoa abriu a lista no programa
+  // (o SPED abre todas as chaves) e o Windows não diz qual foi a escolhida.
+  function listagens(ls) {
+    $("uso-listagens-quadro").hidden = !ls.length;
+    $("uso-listagens-resumo").textContent = String(ls.length);
+    $("uso-listagens").replaceChildren(...ls.map((l) => {
+      const li = document.createElement("li");
+      li.className = "cg-uso-listagem";
+      const topo = texto(li, "div", "", "cg-uso-listagem__topo");
+      texto(topo, "span", l.pessoa + (l.sem_login ? " (sem login)" : ""), "cg-uso-coleta__nome" + (l.sem_login ? " cg-uso-semlogin" : ""));
+      texto(topo, "span", diaCurto(l.quando) + " " + hm(l.quando), "cg-uso-fraco");
+      // O título da janela vai por último: longo, ele é o que se corta.
+      const onde = [l.nome_maquina, l.certificados + " certificados na lista", l.titulo || l.programa].filter(Boolean);
+      texto(li, "span", onde.join(" · "), "cg-uso-fraco cg-uso-listagem__onde");
+      if (l.programa) li.title = l.programa + (l.titulo ? " · " + l.titulo : "");
+      return li;
+    }));
+  }
+
   async function carregarPessoas() {
     if (carregouPessoas) return;
     carregouPessoas = true;
@@ -266,10 +285,11 @@
     try {
       const r = await fetch("/api/carteira/uso/resumo?" + q, { headers: getHeaders() });
       if (meu !== seqResumo) return;
-      if (!r.ok) { const msg = await mensagemCorpoErro(r); if (meu === seqResumo) { certs = []; renderLista(); semDetalhe(msg); } return; }
+      if (!r.ok) { const msg = await mensagemCorpoErro(r); if (meu === seqResumo) { certs = []; renderLista(); listagens([]); semDetalhe(msg); } return; }
       const j = await r.json();
       if (meu !== seqResumo) return;
       certs = j.certificados;
+      listagens(j.listagens || []);
       // Sem escolha (ou a escolhida saiu do período), o servidor já manda o
       // detalhe do mais usado: a tela segue com ele, sem pedir o resumo de novo.
       if (j.detalhe && j.detalhe.documento !== docSel) { docSel = j.detalhe.documento; pagina = 1; }
