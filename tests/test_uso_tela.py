@@ -106,7 +106,7 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 def test_cache_buster_do_js_subiu() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=resumo-unico-2026-11-22" in html
+    assert "carteiras-uso.js?v=listagem-2026-11-24" in html
 
 
 

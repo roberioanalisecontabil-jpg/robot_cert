@@ -81,7 +81,7 @@ def test_periodo_acima_de_um_ano_e_recusado(client: TestClient, banco) -> None:
 
 def test_sem_uso_no_periodo_detalhe_e_nulo(client: TestClient, banco) -> None:
     r = client.get("/api/carteira/uso/resumo?desde=2020-01-01&ate=2020-01-02", headers=_h(*ADMIN))
-    assert r.json() == {"certificados": [], "detalhe": None}
+    assert r.json() == {"certificados": [], "detalhe": None, "listagens": []}
 
 
 
@@ -92,3 +92,30 @@ def test_so_ate_conta_sete_dias_antes_do_ate(client: TestClient, banco) -> None:
     d = r.json()["detalhe"]
     assert d["usos"] == 2
     assert [p["dia"] for p in d["por_dia"]][::7] == ["2026-11-08", "2026-11-15"] and len(d["por_dia"]) == 8
+
+
+def _listagem(user_id, quando="2026-11-15T15:00:00+00:00", **extra):
+    return {"id": len(extra) + hash(user_id) % 1000, "machine_id": "aa:bb:cc:dd:ee:ff", "sid": "S-1",
+            "usuario_windows": "win-" + str(user_id), "user_id": user_id, "primeiro_em": quando, "ultimo_em": quando,
+            "certificados": 22, "primeiro_record": 10, "programa": "javaw", "titulo": "Assinar Escrituração", **extra}
+
+
+def test_assinaturas_sem_certificado_no_resumo(client: TestClient, banco) -> None:
+    banco.tabelas["uso_listagem"] = [_listagem("u-fis"), _listagem("u-sol", "2026-11-16T12:00:00+00:00"),
+                                     _listagem(None, "2026-11-14T12:00:00+00:00"),
+                                     _listagem("u-fis", "2026-10-01T12:00:00+00:00")]  # fora do período
+    a = _get(client, ADMIN).json()["listagens"]
+    assert [(l["certificados"], l["sem_login"]) for l in a] == [(22, False), (22, False), (22, True)]
+    assert a[0]["quando"] > a[1]["quando"] > a[2]["quando"]  # mais recente primeiro
+    assert a[0]["programa"] == "javaw" and a[0]["titulo"] == "Assinar Escrituração"
+    assert a[2]["pessoa"] == "win-None" and a[0]["nome_maquina"]
+    # Gestor: só os departamentos dele e sem a janela (decisão de 21/11/2026).
+    g = _get(client, GESTOR).json()["listagens"]
+    assert len(g) == 1 and "programa" not in g[0] and "titulo" not in g[0]
+    assert [l["pessoa"] for l in _get(client, ADMIN, "&user_id=u-sol").json()["listagens"]] == [a[0]["pessoa"]]
+
+
+def test_listagem_aparece_mesmo_sem_uso_de_certificado(client: TestClient, banco) -> None:
+    banco.tabelas["uso_listagem"] = [_listagem("u-fis", "2020-01-01T15:00:00+00:00")]
+    j = client.get("/api/carteira/uso/resumo?desde=2020-01-01&ate=2020-01-02", headers=_h(*ADMIN)).json()
+    assert j["detalhe"] is None and len(j["listagens"]) == 1

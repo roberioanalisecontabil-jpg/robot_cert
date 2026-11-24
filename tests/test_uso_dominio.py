@@ -148,6 +148,30 @@ def test_listagem_de_certificados_nao_conta(banco):
     assert banco.tabelas.get("uso_certificado", []) == []
 
 
+def test_listagem_vira_assinatura_sem_certificado(banco):
+    uso.registrar_mapa(M, "S-1", "ana", "u-1", {"C1": FP}, AGORA)
+    lista = [_ev_s(10 + i, i * 0.01, f"C{i}") for i in range(22)]
+    lista[0].janelas = [{"quando": lista[0].quando, "programa": "javaw", "titulo": "Assinar Escrituração"}]
+    uso.registrar_usos(M, lista, "ligada", AGORA)
+    uso.registrar_usos(M, lista, "ligada", AGORA)  # reenvio do lote não duplica
+    (l,) = banco.tabelas["uso_listagem"]
+    assert (l["certificados"], l["user_id"], l["usuario_windows"]) == (22, "u-1", "ana")
+    assert (l["programa"], l["titulo"], l["primeiro_record"]) == ("javaw", "Assinar Escrituração", 10)
+    assert l["primeiro_em"] < l["ultimo_em"]
+
+
+def test_listagem_sem_mapa_fica_sem_pessoa_do_portal(banco):
+    uso.registrar_usos(M, [_ev_s(10 + i, i * 0.01, f"C{i}") for i in range(3)], "ligada", AGORA)
+    (l,) = banco.tabelas["uso_listagem"]
+    assert l["user_id"] is None and l["programa"] == ""
+
+
+def test_guarda_de_5_anos_vale_para_a_listagem(banco):
+    uso.registrar_usos(M, [_ev_s(10 + i, i * 0.01, f"C{i}") for i in range(3)], "ligada", AGORA)
+    uso.limpar(AGORA + timedelta(days=5 * 365 + 2))
+    assert banco.tabelas["uso_listagem"] == []
+
+
 def test_selecao_isolada_conta_mesmo_perto_de_listagem(banco):
     lista = [_ev_s(10 + i, i * 0.01, f"C{i}") for i in range(5)]
     escolhido = _ev_s(50, 30, "C2")

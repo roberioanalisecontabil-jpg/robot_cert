@@ -503,6 +503,46 @@ def _usos_da_tela(sb, ini: str, fim: Optional[str], user_id: str, permitidos: Op
     return out
 
 
+def _listagens_da_tela(sb, ini: str, fim: Optional[str], user_id: str, permitidos: Optional[List[str]],
+                       us: List[dict]) -> List[dict]:
+    """Assinaturas sem certificado identificado (uso_listagem), mais recente
+    primeiro. Mesmo alcance do Histórico; programa e título só para o admin,
+    como a página acessada (decisão de 21/11/2026)."""
+    from app.dashboard import _todas_as_linhas
+
+    def consulta(a: int, b: int):
+        q = sb.table("uso_listagem").select("*").gte("primeiro_em", ini)
+        if fim:
+            q = q.lt("primeiro_em", fim)
+        if user_id:
+            q = q.eq("user_id", user_id)
+        elif permitidos is not None:
+            q = q.in_("user_id", permitidos)
+        return q.order("id").range(a, b)
+
+    linhas = sorted(_todas_as_linhas(consulta), key=lambda l: str(l["primeiro_em"]), reverse=True)
+    nomes_pc: Dict[str, str] = {}
+    maquinas = sorted({str(l["machine_id"]) for l in linhas})
+    if maquinas:
+        for d in sorted(sb.table("agent_devices").select("machine_id, nome, visto_em").in_("machine_id", maquinas)
+                        .execute().data or [], key=lambda d: str(d.get("visto_em") or "")):
+            if d.get("nome"):
+                nomes_pc[str(d["machine_id"])] = d["nome"]
+    por_id = {str(u["id"]): u for u in us}
+    out = []
+    for l in linhas:
+        u = por_id.get(str(l.get("user_id"))) if l.get("user_id") else None
+        item = {
+            "quando": l["primeiro_em"], "certificados": l["certificados"], "sem_login": u is None,
+            "pessoa": (nomes.nome_pessoa(u.get("full_name")) or u.get("email") or "") if u else (l.get("usuario_windows") or ""),
+            "nome_maquina": nomes_pc.get(str(l["machine_id"])) or str(l["machine_id"]),
+        }
+        if permitidos is None:
+            item.update(programa=l.get("programa") or "", titulo=l.get("titulo") or "")
+        out.append(item)
+    return out
+
+
 # Antes de /api/carteira/uso/{uso_id} e /api/carteira/{user_id}.
 @router.get("/api/carteira/uso/resumo", dependencies=[Depends(require_modulo("carteiras"))])
 def resumo_uso(
@@ -525,12 +565,13 @@ def resumo_uso(
         raise HTTPException(status_code=503, detail="Banco não configurado")
     ini, fim = _intervalo_uso(desde, ate)
     doc = "".join(c for c in documento if c.isdigit())
-    vazio = {"certificados": [], "detalhe": None}
+    vazio = {"certificados": [], "detalhe": None, "listagens": []}
     try:
         us, permitidos, fora = _alcance_uso(sb, token, user_id)
         if fora:
             return vazio
         linhas = _usos_da_tela(sb, ini, fim, user_id, permitidos, "", permitidos is None)
+        listagens = _listagens_da_tela(sb, ini, fim, user_id, permitidos, us)
         titulares = _nomes_por("documento", sorted({str(l["documento"]) for l in linhas}))
     except cert_installer.AlcanceIndisponivel:
         raise HTTPException(status_code=503, detail="Não foi possível verificar seus departamentos. Tente de novo.")
@@ -551,7 +592,7 @@ def resumo_uso(
     if doc not in por_doc:
         # Sem escolha válida, o detalhe é o do mais usado: a tela não precisa pedir de novo.
         if not certificados:
-            return {"certificados": certificados, "detalhe": None}
+            return {"certificados": certificados, "detalhe": None, "listagens": listagens}
         doc = certificados[0]["documento"]
 
     ls = por_doc[doc]
@@ -576,7 +617,7 @@ def resumo_uso(
         return nomes.nome_pessoa(u.get("full_name")) or u.get("email") or ""
 
     resumo = next(c for c in certificados if c["documento"] == doc)
-    return {"certificados": certificados, "detalhe": {
+    return {"certificados": certificados, "listagens": listagens, "detalhe": {
         **resumo, "maquinas": len({str(l["machine_id"]) for l in ls}),
         "por_dia": [{"dia": d, "usos": por_dia.get(d, 0)} for d in dias],
         "quem": sorted(({"nome": nome(k), "usos": n, "sem_login": k[0] == "w"} for k, n in soma_quem.items()),
