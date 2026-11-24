@@ -222,6 +222,9 @@
 
   $("btnIncluirPessoas").addEventListener("click", () => abrirModal(null));
   $("buscaCert").addEventListener("input", renderLista);
+  // A lista filtra enquanto digita; Enter não envia o formulário (recarregaria a
+  // página na aba Pessoas). Era `onsubmit` no HTML, que a CSP bloqueia.
+  $("buscaCert").form.addEventListener("submit", (e) => e.preventDefault());
   $("buscaIncluir").addEventListener("input", renderPessoas);
   $("prazoDesde").addEventListener("change", ajustarFim);
   document.querySelectorAll('input[name="prazoTipo"]').forEach((i) => i.addEventListener("change", mostrarPeriodo));

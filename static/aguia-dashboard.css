@@ -253,13 +253,7 @@
 .cg-dash-card__erro .ag-icon { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 .cg-dash-card__vazio { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
 
-/* Ícone de aviso ao lado de um valor que sozinho representa problema. */
-.cg-valor-aviso {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-}
-.cg-valor-aviso .ag-icon { width: 14px; height: 14px; color: var(--danger-500); }
+/* .cg-valor-aviso mora em aguia-components.css: o Instalador também usa. */
 
 /* Tabela de atividade: ocupa a largura do cartão, sem moldura própria. */
 .cg-tabela-atividade { margin-top: var(--space-2); }

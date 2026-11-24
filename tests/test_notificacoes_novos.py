@@ -588,9 +588,9 @@ def test_estilo_do_novo_e_busters() -> None:
     for t in (ROOT / "templates").glob("*.html"):
         s = t.read_text(encoding="utf-8")
         if "ui-common.js?v=" in s:
-            assert "ui-common.js?v=fundo-2026-11-05" in s, t.name  # 10a: Leva B (03/10)
+            assert "ui-common.js?v=alinhamento-2026-11-23" in s, t.name  # 10a: Leva B (03/10)
         if "style.css?v=" in s:
-            assert "style.css?v=menu-2026-10-23" in s, t.name
+            assert "style.css?v=alinhamento-2026-11-23" in s, t.name
 
 
 def test_migration_da_primeira_data_existe_e_nao_sobrescreve_na_atualizacao() -> None:

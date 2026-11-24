@@ -345,7 +345,8 @@ body {
   z-index: 9999;
   font-weight: 600;
   text-decoration: none;
-  box-shadow: var(--shadow-lg);
+  /* Sombra só com foco: escondido acima da tela, ela vazava como mancha cinza. */
+  box-shadow: none;
   /* `transform` e nao `top`: anima no compositor, sem passar pelo layout.
      O elemento fica em `top: 1rem` e sobe para fora da tela por translacao. */
   transform: translateY(calc(-1rem - 100%));
@@ -354,6 +355,7 @@ body {
 
 .skip-to-content:focus {
   transform: translateY(0);
+  box-shadow: var(--shadow-lg);
 }
 
 /* `*` cobre tudo que recebe foco, inclusive `summary`, `[tabindex]` e a regiao

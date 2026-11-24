@@ -1057,6 +1057,7 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
 .ag-abas--trilho::-webkit-scrollbar { display: none; }
 @media (max-width: 640px) {
     .ag-abas--trilho { gap: var(--space-4); mask-image: linear-gradient(to right, #000 calc(100% - var(--space-8)), transparent); }
+    .ag-abas--trilho.is-fim { mask-image: none; }
 }
 
 /* ── Campo com sufixo ────────────────────────────────────────────────── */
@@ -1229,3 +1230,14 @@ html.dark .ag-tooltip::before, :root[data-theme="dark"] .ag-tooltip::before {
 }
 .ag-sticky-acoes__estado { font-size: var(--text-xs); color: var(--text-muted); margin-right: auto; }
 .ag-sticky-acoes__estado:empty { display: none; }
+
+/* ── Valor com aviso ─────────────────────────────────────────────────── */
+
+/* Ícone de aviso ao lado de um valor que sozinho representa problema
+   (Dashboard e Instalador). */
+.cg-valor-aviso {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+.cg-valor-aviso .ag-icon { width: 14px; height: 14px; color: var(--danger-500); }
