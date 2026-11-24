@@ -13,6 +13,9 @@
 .cg-painel > * + * {
     margin-top: var(--space-4);
 }
+/* O <dialog> filho do <main> não entra no empilhamento: a margem de cima o
+   descia 16px e, no celular (modal em tela cheia), cortava o rodapé. */
+.cg-painel > dialog { margin: auto; }
 
 /* ── KPIs ────────────────────────────────────────────────────────────── */
 
@@ -150,10 +153,10 @@
 .cg-toolbar--compacta .cg-toolbar__filtros { grid-template-columns: minmax(0, 1fr); }
 .cg-toolbar--compacta .cg-campo-busca { max-width: 28rem; }
 
-/* Histórico (23/10/2026): busca e Status na mesma linha — a busca até
-   28rem, o Status com a largura dele. No celular volta a empilhar. */
+/* Histórico (23/10/2026): busca, Status e Situação na mesma linha — a busca
+   até 28rem, os selects com a largura deles. No celular volta a empilhar. */
 .cg-toolbar--compacta .cg-toolbar__filtros--busca-status {
-    grid-template-columns: minmax(0, 28rem) auto;
+    grid-template-columns: minmax(0, 28rem) auto auto;
     justify-content: start;
 }
 @media (max-width: 640px) {
@@ -697,6 +700,7 @@
 .cg-grupo .ag-table td:last-child { padding-inline-end: var(--space-6); }
 .cg-grupo .ag-table td { vertical-align: top; }
 .cg-grupo .ag-table tbody tr:last-child td { border-bottom: 0; }
+.cg-grupo .ag-table tbody tr:last-child td:not(.ag-table__vazio) { padding-bottom: var(--space-3); }
 .cg-grupo__pag {
     padding: var(--space-4) var(--space-6);
     border-top: var(--bw-1) solid var(--border-subtle);
@@ -706,7 +710,10 @@
 
 /* A linha que expande: o acordeão vive na célula do nome, e o número de
    arquivos fica na coluna da direita, em mono. */
-.cg-tabela-dup .ag-accordion__topo { padding: 0; min-height: 44px; }
+/* Seta no alto, na linha do nome, como o número de arquivos ao lado (centrada
+   ela caía entre o nome e o documento). */
+.cg-tabela-dup .ag-accordion__topo { padding: 0; min-height: 44px; align-items: flex-start; }
+.cg-tabela-dup .ag-accordion__seta { margin-top: 2px; }
 .cg-tabela-dup .ag-accordion__topo .ag-cell-main { font-weight: 500; }
 .cg-tabela-dup .ag-accordion .ag-cell-stack { flex: 1 1 auto; }
 .cg-col-arquivos { font-family: var(--font-mono); }
@@ -775,7 +782,8 @@
     color: var(--text-muted);
 }
 .cg-bloco .cg-arquivos { margin: 0; }
-.cg-blocos__vazio { padding: var(--space-6); color: var(--text-muted); }
+/* Mesma fonte e recuo da frase vazia das duas tabelas acima. */
+.cg-blocos__vazio { padding: var(--space-2) 0; font-size: var(--text-xs); }
 
 @media (max-width: 640px) {
     /* O cartão do grupo perde a moldura (como o card da tabela nas outras

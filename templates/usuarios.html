@@ -10,11 +10,11 @@
        tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
        da família de listas (shell comum) e o desta tela. -->
   <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/style.css?v=menu-2026-10-23" />
+  <link rel="stylesheet" href="/static/style.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-usuarios.css?v=aguia-2026-10d" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
 </head>
@@ -256,7 +256,7 @@
         <div class="ag-alert ag-alert--danger" id="modal-editar-erro" role="alert" hidden><svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><div class="ag-alert__corpo"></div></div>
         <div class="ag-field">
           <label class="ag-label" for="ed-nome">Nome completo</label>
-          <input type="text" id="ed-nome" class="ag-input cg-usu-maiusculas" required autocomplete="name" placeholder="NOME COMPLETO">
+          <input type="text" id="ed-nome" class="ag-input cg-usu-maiusculas" required autocomplete="name">
         </div>
         <div class="ag-field">
           <label class="ag-label" for="ed-email">E-mail</label>
@@ -379,7 +379,7 @@
     </form>
   </dialog>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=fundo-2026-11-05"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=alinhamento-2026-11-23"></script>
   <script nonce="{{ request.state.nonce }}">
         let usersCache = [];
         let depsCache = [];
@@ -1159,7 +1159,7 @@
             // pessoa concluia que nao havia usuarios. O erro precisa dizer que
             // e erro.
             document.getElementById(idCorpo).innerHTML =
-                '<tr class="cg-state-row" role="row"><td role="cell" colspan="' + colunas + '" class="ag-table__vazio">' + esc(texto) + ' <a href="#" onclick="location.reload(); return false;">Recarregar</a>.</td></tr>';
+                '<tr class="cg-state-row" role="row"><td role="cell" colspan="' + colunas + '" class="ag-table__vazio">' + esc(texto) + ' <a href="">Recarregar</a>.</td></tr>';
         }
 
         async function loadUsers() {

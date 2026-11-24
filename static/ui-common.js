@@ -2186,3 +2186,34 @@ function abrirModal(id) {
   s.src = "/static/fundo-parallax.js?v=fundo-2026-11-05b";
   document.body.appendChild(s);
 })();
+
+// Abas em trilho (celular): a aba aberta pode nascer fora da faixa visível.
+// Centraliza a selecionada ao carregar e a cada troca, só na horizontal.
+(function abasTrilhoMostraSelecionada() {
+  // No fim do trilho não há "mais" à direita: o esmaecido sai (is-fim).
+  function marcaFim(trilho) {
+    trilho.classList.toggle("is-fim", trilho.scrollLeft + trilho.clientWidth >= trilho.scrollWidth - 1);
+  }
+  function centra(trilho) {
+    const aba = trilho.querySelector('[aria-selected="true"]');
+    if (aba && trilho.scrollWidth > trilho.clientWidth) {
+      const a = aba.getBoundingClientRect(), t = trilho.getBoundingClientRect();
+      trilho.scrollLeft += (a.left + a.width / 2) - (t.left + t.width / 2);
+    }
+    marcaFim(trilho);
+  }
+  const trilhos = document.querySelectorAll(".ag-abas--trilho");
+  trilhos.forEach((trilho) => {
+    centra(trilho);
+    trilho.addEventListener("click", () => requestAnimationFrame(() => centra(trilho)));
+    trilho.addEventListener("scroll", () => marcaFim(trilho), { passive: true });
+  });
+  // A largura das abas muda depois: a fonte (Exo) termina de carregar e as
+  // contagens ("Usuários (15)") chegam pela API.
+  if (trilhos.length && "ResizeObserver" in window) {
+    trilhos.forEach((trilho) => {
+      const ro = new ResizeObserver(() => centra(trilho));
+      [...trilho.children].forEach((aba) => ro.observe(aba));
+    });
+  }
+})();

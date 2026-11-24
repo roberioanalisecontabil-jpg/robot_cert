@@ -250,6 +250,9 @@ body:has(#sec-uso:not([hidden])) .ag-page__lead { display: none; }
 .cg-uso-cab__titulo { margin: 0; font: 600 var(--text-base)/var(--lh-snug) var(--font-display); }
 .cg-uso-fraco { color: var(--text-muted); font-size: var(--text-xs); margin: 0; }
 .cg-uso-certs { list-style: none; margin: 0; padding: var(--space-1) 0; max-height: 720px; overflow: auto; }
+/* Lista vazia: a frase usa o recuo do cabeçalho, sem o fio de baixo (sobrava
+   uma linha sob a borda arredondada do cartão). */
+.cg-uso-certs > .cg-uso-cab { border-bottom: 0; }
 .cg-uso-cert { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 var(--space-3); width: 100%; text-align: start; border: 0; border-radius: 0; border-left: var(--bw-4) solid transparent; background: none; padding: 4px var(--space-4); cursor: pointer; font: inherit; color: inherit; }
 .cg-uso-cert:hover:not(:disabled) { background: var(--bg-surface-alt); border-color: transparent; opacity: 1; }
 .cg-uso-cert:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
@@ -288,7 +291,8 @@ body:has(#sec-uso:not([hidden])) .ag-page__lead { display: none; }
 #sec-uso .cg-page-nav { padding: var(--space-2) 0 0; margin-top: 0; }
 .cg-uso-coletas__titulo { cursor: pointer; list-style: none; border-bottom: 0; }
 .cg-uso-coletas__titulo::-webkit-details-marker { display: none; }
-.cg-uso-coletas__titulo::before { content: "\25B8"; color: var(--text-muted); margin-right: var(--space-2); transition: transform var(--dur-fast) var(--ease-standard); display: inline-block; }
+/* O summary é flex com gap: a margem negativa deixa a seta a 8px do título. */
+.cg-uso-coletas__titulo::before { content: "\25B8"; color: var(--text-muted); margin-right: calc(var(--space-2) - var(--space-3)); align-self: center; transition: transform var(--dur-fast) var(--ease-standard); display: inline-block; }
 .cg-uso-coletas[open] > .cg-uso-coletas__titulo::before { transform: rotate(90deg); }
 .cg-uso-coletas[open] > .cg-uso-coletas__titulo { border-bottom: var(--bw-1) solid var(--border-default); }
 .cg-uso-coletas__titulo .cg-uso-cab__titulo { margin-right: auto; white-space: nowrap; }

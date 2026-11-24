@@ -10,12 +10,12 @@
        tokens do DS, os componentes .ag-*, a ponte de tokens do shell, o CSS
        da família de listas (shell comum) e o desta tela. -->
   <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/style.css?v=menu-2026-10-23" />
+  <link rel="stylesheet" href="/static/style.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/aguia-components.css?v=compacto-2026-10-23c" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/aguia-listas.css?v=compacto-2026-10-23d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=sem-rolagem-2026-11-21" />
+  <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
   <style nonce="{{ request.state.nonce }}">
     /* Fica aqui, e não na folha, porque um teste lê o HTML servido: `.ag-btn`
@@ -290,7 +290,7 @@
       <div class="cg-cart-layout">
         <section class="ag-card cg-cart-lista" aria-labelledby="tit-certs">
           <div class="cg-cart-cab"><h2 class="ag-card__title" id="tit-certs">Certificados</h2><p class="cg-cart-resumo" id="certResumo"></p></div>
-          <form class="cg-cart-busca" role="search" onsubmit="return false">
+          <form class="cg-cart-busca" role="search">
             <label for="buscaCert" class="cg-sr-only">Buscar certificado</label>
             <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input type="search" id="buscaCert" class="ag-input" placeholder="Nome, CNPJ ou CPF" autocomplete="off" />
@@ -439,7 +439,7 @@
     </form>
   </dialog>
 
-  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=fundo-2026-11-05"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=alinhamento-2026-11-23"></script>
   <script nonce="{{ request.state.nonce }}">
     // `esc`, `getHeaders`, `mensagemCorpoErro` e `showToast` vêm de ui-common.js.
     let _operadores = [];
@@ -1252,7 +1252,7 @@
       });
     })();
   </script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=lote4-2026-11-22"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-certificados.js?v=alinhamento-2026-11-23"></script>
   <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=resumo-unico-2026-11-22"></script>
 </body>
 </html>

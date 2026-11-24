@@ -18,7 +18,9 @@
 .cg-cfg-corpo .ag-form-cols { margin-bottom: var(--space-4); }
 .cg-cfg-corpo .ag-form-cols:last-child { margin-bottom: 0; }
 .cg-cfg-corpo > .ag-alert { margin-bottom: var(--space-4); }
-.cg-cfg-campo-solto { margin-bottom: var(--space-4); }
+/* `.cg-cfg-corpo .ag-field { margin: 0 }` vencia a regra curta e a ajuda
+   encostava nos "Prazos de aviso" logo abaixo. */
+.cg-cfg-corpo .cg-cfg-campo-solto { margin-bottom: var(--space-4); }
 .cg-cfg-aviso-dest { margin-top: var(--space-3); }
 
 /* Interruptor geral no topo da aba, com o estado escrito e a frase. */
@@ -31,9 +33,12 @@
 .cg-cfg-servidor .ag-input--porta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .cg-cfg-rotulo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .cg-cfg-rotulo .ag-badge .ag-icon { width: 12px; height: 12px; }
+/* O selo é mais alto que o rótulo; sem isso o campo descia 5px em relação aos
+   vizinhos da mesma linha. */
+.cg-cfg-rotulo > span { margin-block: -3px; }
 
 /* Enviar teste: campo com rótulo e o botão na mesma linha. */
-.cg-cfg-teste { display: flex; align-items: end; gap: var(--space-3); flex-wrap: wrap; }
+.cg-cfg-teste { display: flex; align-items: end; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-4); }
 .cg-cfg-teste .ag-field { flex: 1 1 16rem; max-width: 28rem; }
 .cg-cfg-resultado { margin-top: var(--space-3); }
 .cg-cfg-resultado:empty { display: none; }
@@ -108,6 +113,10 @@
    forma de envio; sem respiro parecia continuacao do texto. */
 #bloco-graph { margin-top: var(--space-5, 20px); }
 #bloco-graph .ag-form-subhead { margin-top: 0; }
+/* Mesmo respiro para o SMTP: o título é o primeiro filho do bloco e perdia a
+   margem, colando na ajuda da forma de envio. */
+#bloco-smtp { margin-top: var(--space-5, 20px); }
+#bloco-smtp .ag-form-subhead { margin-top: 0; }
 
 /* SIEG (07/10/2026). */
 .cg-cfg-curto { max-width: 8rem; }
@@ -120,3 +129,13 @@
    de 390px no celular, empurrando a página inteira para o lado. */
 #sec-acessorias .ag-table-scroll { overflow-x: auto; margin-bottom: var(--space-6); }
 #sec-acessorias select.ag-input { min-width: 11rem; }
+
+/* Remoção nas estações (23/11/2026): oito colunas não viram cartão; a tabela
+   rola dentro da moldura (o aguia-listas.css desliga a rolagem no celular e a
+   página inteira ia para o lado). O filtro "Estado" não ocupa a linha toda e
+   respira antes da tabela. */
+#sec-remocao .ag-table-scroll { overflow-x: auto; margin-top: var(--space-4); }
+#sec-remocao .ag-form-subhead + .ag-field { max-width: 20rem; }
+/* A tabela vazia tem a largura das oito colunas: centrada, a frase caía fora
+   da área visível no celular. */
+#sec-remocao .ag-table__vazio { text-align: left; }
