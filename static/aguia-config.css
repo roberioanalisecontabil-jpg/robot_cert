@@ -139,3 +139,10 @@
 /* A tabela vazia tem a largura das oito colunas: centrada, a frase caía fora
    da área visível no celular. */
 #sec-remocao .ag-table__vazio { text-align: left; }
+
+/* App autenticador (aba própria, 24/11/2026). */
+#sec-autenticador .cg-cfg-curto { max-width: 16rem; margin-bottom: var(--space-4); }
+.cg-cfg-erro { color: var(--danger-500); }
+.cg-cfg-erro:empty { display: none; }
+.cg-cfg-qr { background: #fff; padding: 8px; border-radius: 8px; image-rendering: pixelated; }
+.cg-cfg-segredo { font-size: 1.1em; letter-spacing: 0.05em; user-select: all; overflow-wrap: anywhere; }

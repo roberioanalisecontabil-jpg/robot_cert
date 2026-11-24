@@ -1134,6 +1134,8 @@ function abrirTrocaDeSenhaObrigatoria() {
 // cadastraria o próprio celular. O segredo aparece uma vez só, como texto
 // (sem QR: o portal não carrega biblioteca de terceiros para isso).
 function abrirAppAutenticador() {
+  // Na Configuração o cadastro tem aba própria: abre a aba, não o modal.
+  if (document.getElementById("sec-autenticador")) { location.href = "/configuracao?aba=autenticador"; return; }
   if (document.getElementById("modal-app-autenticador")) return;
   const dlg = document.createElement("dialog");
   dlg.className = "modal";
@@ -1151,9 +1153,7 @@ function abrirAppAutenticador() {
           <input type="password" id="aa-senha" autocomplete="current-password">
         </div>
         <div id="aa-cadastro" hidden>
-          <p class="modal__sub">No app (Microsoft Authenticator, Google Authenticator ou outro),
-            escolha adicionar conta e aponte a câmera para o QR. Sem câmera, digite a chave
-            abaixo. Os dois aparecem só agora.</p>
+          <p class="modal__sub" id="aa-instrucao"></p>
           <p id="aa-qr-caixa" hidden style="text-align:center;margin:12px 0;">
             <img id="aa-qr" alt="QR para cadastrar o portal no app autenticador" width="220" height="220"
                  style="background:#fff;padding:8px;border-radius:8px;image-rendering:pixelated;">
@@ -1173,12 +1173,19 @@ function abrirAppAutenticador() {
       </div>
     </form>`;
   document.body.appendChild(dlg);
-  const q = (s) => dlg.querySelector(s);
+  dlg.querySelector("#aa-fechar").addEventListener("click", () => { dlg.close(); dlg.remove(); });
+  dlg.addEventListener("close", () => dlg.remove());
+  dlg.showModal();
+  ligarAppAutenticador(dlg);
+}
+
+// Liga o cadastro aos elementos aa-* dentro de `raiz` (o modal ou a aba da
+// Configuração).
+function ligarAppAutenticador(raiz) {
+  const q = (s) => raiz.querySelector(s);
   let etapa = "";
   const erro = (t) => { q("#aa-erro").textContent = t || ""; q("#aa-erro").setAttribute("data-visivel", t ? "1" : "0"); };
-  const fechar = () => { dlg.close(); dlg.remove(); };
-  q("#aa-fechar").addEventListener("click", fechar);
-  dlg.addEventListener("close", () => dlg.remove());
+  q("#aa-instrucao").textContent = "No app, adicione uma conta e leia o QR ou digite a chave. Os dois aparecem só agora.";
 
   function mostrar(novaEtapa, dados) {
     etapa = novaEtapa;
@@ -1193,11 +1200,11 @@ function abrirAppAutenticador() {
       acao.textContent = "Cadastrar app";
       q("#aa-senha").focus();
     } else if (etapa === "ativo") {
-      q("#aa-sub").textContent = "O app autenticador está ativo nesta conta. Para trocar de celular, remova e cadastre de novo.";
+      q("#aa-sub").textContent = "Ativo nesta conta. Para trocar de celular, remova e cadastre de novo.";
       acao.textContent = "Remover app";
       q("#aa-senha").focus();
     } else if (etapa === "cadastro") {
-      q("#aa-sub").textContent = "Falta confirmar: digite o código que o app mostra.";
+      q("#aa-sub").textContent = "Falta confirmar com o código do app.";
       q("#aa-segredo").textContent = dados.segredo;
       // Só imagem `data:` gerada pelo próprio servidor; sem ela, fica a chave.
       const qr = typeof dados.qr === "string" && dados.qr.startsWith("data:image/svg+xml") ? dados.qr : "";
@@ -1208,7 +1215,7 @@ function abrirAppAutenticador() {
       q("#aa-codigo").value = "";
       q("#aa-codigo").focus();
     } else if (etapa === "pronto") {
-      q("#aa-sub").textContent = "Pronto: o app autenticador está ativo. No login, use “Usar o código do app autenticador”.";
+      q("#aa-sub").textContent = "Pronto. No login, use “Usar o código do app autenticador”.";
       acao.hidden = true;
     }
   }
@@ -1244,7 +1251,6 @@ function abrirAppAutenticador() {
     }
   });
 
-  dlg.showModal();
   fetch("/api/users/me/app-autenticador", { headers: getHeaders() })
     .then((r) => (r.ok ? r.json() : Promise.reject(r)))
     .then((d) => mostrar(d.ativo ? "ativo" : "inativo"))
