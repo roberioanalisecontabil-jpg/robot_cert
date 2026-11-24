@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app import agent_devices, auth, config, machine_credentials, permissoes, sessao_cookie, taxa
+from app import agent_devices, api_chaves, auth, config, machine_credentials, permissoes, sessao_cookie, taxa
 
 logger = logging.getLogger("app.main")
 
@@ -266,6 +266,8 @@ async def require_auth(
     #    O navegador manda o JWT no cookie HttpOnly (Leva D, 09/10/2026); o
     #    cabeçalho Bearer continua aceito na transição e vale primeiro.
     credencial = auth_creds.credentials if auth_creds else None
+    if credencial and credencial.startswith(api_chaves.PREFIXO):
+        return _sessao_da_chave(request, credencial)
     via_cookie = False
     if not credencial and not x_api_key:
         # Credencial explícita (Bearer, X-API-Key do agente) vale antes do
@@ -389,6 +391,35 @@ PAPEIS_VALIDOS = auth.PAPEIS_VALIDOS
 # liderança de departamento (ADR 0001) e não entra aqui.
 PAPEIS_IMPORTAVEIS = tuple(p for p in PAPEIS_VALIDOS if p != "gestor")
 conta_ativa = auth.conta_ativa
+
+
+CHAVE_RECUSADA = "Chave de API inválida, revogada ou vencida."
+
+
+def _sessao_da_chave(request: Request, segredo: str) -> auth.TokenData:
+    """Chave de API de leitura: vale como o admin dono dela, só em GET/HEAD.
+
+    O papel é relido em `users` a cada chamada, como na sessão do navegador:
+    dono desativado ou rebaixado derruba a chave na hora."""
+    if request.method not in ("GET", "HEAD"):
+        raise HTTPException(status_code=403, detail="Chave de API só lê: use GET.")
+    ip = _ip_exato_do_cliente(request)
+    try:
+        linha = api_chaves.autenticar(segredo, ip)
+        conta = None
+        if linha:
+            from app.settings_state import _banco
+
+            conta = (_banco().table("users").select("id, email, role, ativo")
+                     .eq("id", linha["user_id"]).limit(1).execute().data or [None])[0]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Não foi possível conferir a chave de API: %s", e)
+        raise HTTPException(status_code=503, detail="Não foi possível conferir a chave. Tente novamente.")
+    if not linha or not conta or not auth.conta_ativa(conta) or conta.get("role") != "admin":
+        raise HTTPException(status_code=401, detail=CHAVE_RECUSADA, headers={"WWW-Authenticate": "Bearer"})
+    logger.info("Chave de API %s: %s %s (%s)", linha.get("id"), request.method, request.url.path, ip)
+    return auth.TokenData(email=conta.get("email"), role="admin", user_id=str(conta["id"]),
+                          api_chave_id=str(linha["id"]))
 
 
 async def require_admin(token: auth.TokenData = Depends(require_auth)) -> auth.TokenData:
@@ -556,7 +587,8 @@ async def require_agent_or_admin(token: auth.TokenData = Depends(require_auth)) 
        significaria acesso sem credencial nenhuma. Aqui a identidade anônima é
        recusada explicitamente.
     """
-    if token.role not in ("agent", "admin") or token.email == ANONYMOUS_IDENTITY_EMAIL:
+    # A chave de API de leitura nunca alcança as rotas da máquina (cofre, fila).
+    if token.role not in ("agent", "admin") or token.email == ANONYMOUS_IDENTITY_EMAIL or token.api_chave_id:
         raise HTTPException(status_code=403, detail=ERRO_ACESSO_MAQUINA)
     return token
 

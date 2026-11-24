@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=autenticador-2026-11-24" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=api-2026-11-24" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
@@ -47,6 +47,7 @@
       <a class="ag-abas__aba" role="tab" id="tab-acessorias" href="?aba=acessorias" aria-controls="sec-acessorias" data-aba="acessorias" aria-selected="{{ 'true' if aba == 'acessorias' else 'false' }}" {% if aba != 'acessorias' %}tabindex="-1"{% endif %}>Acessórias</a>
       <a class="ag-abas__aba" role="tab" id="tab-remocao" href="?aba=remocao" aria-controls="sec-remocao" data-aba="remocao" aria-selected="{{ 'true' if aba == 'remocao' else 'false' }}" {% if aba != 'remocao' %}tabindex="-1"{% endif %}>Remoção nas estações</a>
       <a class="ag-abas__aba" role="tab" id="tab-autenticador" href="?aba=autenticador" aria-controls="sec-autenticador" data-aba="autenticador" aria-selected="{{ 'true' if aba == 'autenticador' else 'false' }}" {% if aba != 'autenticador' %}tabindex="-1"{% endif %}>App autenticador</a>
+      <a class="ag-abas__aba" role="tab" id="tab-api" href="?aba=api" aria-controls="sec-api" data-aba="api" aria-selected="{{ 'true' if aba == 'api' else 'false' }}" {% if aba != 'api' %}tabindex="-1"{% endif %}>Chaves de API</a>
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
@@ -513,6 +514,44 @@
         </div>
       </form>
     </section>
+
+    <!-- ── Chaves de API (24/11/2026) ─────────────────────────────────── -->
+    <section class="ag-card cg-cfg-aba" id="sec-api" role="tabpanel" aria-labelledby="tab-api" {% if aba != 'api' %}hidden{% endif %}>
+      <div class="cg-cfg-corpo">
+        <p class="cg-cfg-lead">A chave lê o que o administrador vê, com <code>GET</code> e o cabeçalho <code>Authorization: Bearer &lt;chave&gt;</code>. Não grava nada e não alcança o cofre.</p>
+        <form id="form-api-chave" novalidate>
+          <div class="ag-form-cols">
+            <div class="ag-field"><label class="ag-label" for="api-nome">Nome</label><input type="text" id="api-nome" class="ag-input" maxlength="80" placeholder="Power BI" required></div>
+            <div class="ag-field"><label class="ag-label" for="api-dias">Validade</label>
+              <select id="api-dias" class="ag-select"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="180">180 dias</option><option value="365">1 ano</option></select></div>
+            <div class="ag-field"><label class="ag-label" for="api-senha">Sua senha atual</label><input type="password" id="api-senha" class="ag-input" autocomplete="current-password"></div>
+          </div>
+          <div class="ag-form-actions">
+            <button type="submit" id="api-criar" class="ag-btn ag-btn--primary">Criar chave</button>
+            <span class="ag-ajuda cg-cfg-erro" id="api-msg" role="alert"></span>
+          </div>
+        </form>
+        <div class="ag-alert ag-alert--warning" id="api-nova" role="status" hidden>
+          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div class="ag-alert__corpo"><p class="ag-alert__titulo">Copie agora: a chave não aparece de novo.</p>
+            <p><code id="api-segredo" class="cg-cfg-segredo"></code></p>
+            <button type="button" id="api-copiar" class="ag-btn ag-btn--outline ag-btn--sm">Copiar</button></div>
+        </div>
+        <div class="ag-table-scroll" role="region" aria-label="Chaves de API">
+          <table class="ag-table" role="table">
+            <thead role="rowgroup"><tr role="row">
+              <th role="columnheader" class="ag-th--estatico">Nome</th>
+              <th role="columnheader" class="ag-th--estatico">Dono</th>
+              <th role="columnheader" class="ag-th--estatico">Expira</th>
+              <th role="columnheader" class="ag-th--estatico">Último uso</th>
+              <th role="columnheader" class="ag-th--estatico">Estado</th>
+              <th role="columnheader" class="ag-th--estatico" aria-label="Ações"></th>
+            </tr></thead>
+            <tbody role="rowgroup" id="api-linhas"><tr class="cg-state-row"><td colspan="6" class="ag-table__vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Confirmação do disparo. -->
@@ -564,6 +603,7 @@
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=autenticador-2026-11-24"></script>
   <script nonce="{{ request.state.nonce }}" src="/static/configuracao-remocao.js?v=fora-da-pasta-2026-11-22"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/configuracao-api.js?v=api-2026-11-24"></script>
   <script nonce="{{ request.state.nonce }}">
       // `esc`, `getHeaders`, `mensagemCorpoErro`, `showToast`, `health`,
       // `getDataFonte`, `setDataFonte`, `KEY_STORAGE` e `showToastAfterRedirect`
@@ -574,8 +614,8 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador" };
-      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador" };
+      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
+      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
@@ -595,6 +635,7 @@
         if (aba === "acessorias") void carregarAcessoriasCfg();
         if (aba === "remocao" && window.carregarRemocao) void window.carregarRemocao();
         if (aba === "autenticador") abrirAbaAutenticador();
+        if (aba === "api" && window.carregarApiChaves) window.carregarApiChaves();
       }
       let _autLigado = false;
       function abrirAbaAutenticador() {
@@ -603,6 +644,7 @@
         ligarAppAutenticador(document.getElementById("sec-autenticador"));
       }
       if (new URLSearchParams(location.search).get("aba") === "autenticador") abrirAbaAutenticador();
+      if (new URLSearchParams(location.search).get("aba") === "api" && window.carregarApiChaves) window.carregarApiChaves();
       ORDEM.forEach((a) => {
         const t = document.getElementById(TAB_IDS[a]);
         t.addEventListener("click", (ev) => { ev.preventDefault(); switchTab(a, true); t.focus(); });

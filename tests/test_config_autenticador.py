@@ -24,4 +24,4 @@ def test_modal_e_aba_usam_a_mesma_logica():
 
 def test_rota_aceita_a_aba():
     main = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    assert '"remocao", "autenticador"):' in main
+    assert '"remocao", "autenticador", "api"):' in main

@@ -133,6 +133,9 @@ class TokenData(BaseModel):
     # anterior a 14/10/2026: aceito até expirar, para o deploy não deslogar
     # ninguém.
     conta_id: Optional[str] = None
+    # Preenchido só quando a identidade veio de uma chave de API de leitura
+    # (`app/api_chaves.py`): as rotas da máquina recusam essa identidade.
+    api_chave_id: Optional[str] = None
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
