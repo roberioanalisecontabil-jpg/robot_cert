@@ -552,7 +552,7 @@ def painel(request: Request) -> HTMLResponse:
 def pagina_configuracao(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
     aba = request.query_params.get("aba") or "chave"
-    if aba not in ("chave", "pastas", "alertas", "comandos", "sieg", "acessorias", "remocao", "autenticador"):
+    if aba not in ("chave", "pastas", "alertas", "comandos", "sieg", "acessorias", "remocao", "autenticador", "api"):
         aba = "chave"
     return templates.TemplateResponse(
         request=request, name="configuracao.html", context={"pagina_ativa": "configuracao", "aba": aba}
@@ -849,6 +849,11 @@ app.include_router(_rotas_uso_estacao)
 from app.rotas.microsoft import MENSAGENS_ERRO as _MENSAGENS_ERRO_MS, router as _rotas_microsoft  # noqa: E402
 
 app.include_router(_rotas_microsoft)
+
+# Chaves de API de leitura do administrador: app/rotas/api_chaves.py.
+from app.rotas.api_chaves import router as _rotas_api_chaves  # noqa: E402
+
+app.include_router(_rotas_api_chaves)
 
 
 

@@ -146,3 +146,7 @@
 .cg-cfg-erro:empty { display: none; }
 .cg-cfg-qr { background: #fff; padding: 8px; border-radius: 8px; image-rendering: pixelated; }
 .cg-cfg-segredo { font-size: 1.1em; letter-spacing: 0.05em; user-select: all; overflow-wrap: anywhere; }
+
+/* Chaves de API (24/11/2026). */
+#sec-api .ag-table-scroll { overflow-x: auto; margin-top: var(--space-4); }
+#sec-api .ag-alert { margin-top: var(--space-4); }
