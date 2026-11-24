@@ -22,6 +22,8 @@ from app.remocao import _cliente, do_acervo
 BRASILIA = timezone(timedelta(hours=-3))
 GUARDA = timedelta(days=5 * 365)
 PENDENTE = timedelta(days=30)
+LISTAGEM_CERTS = 3
+LISTAGEM_INTERVALO = timedelta(seconds=2)
 
 
 @dataclass
@@ -87,9 +89,35 @@ def _gravar_janelas(client, mid: str, uso_id, eventos: List[Evento]) -> None:
             linhas, on_conflict="uso_id,record_id,ordem", ignore_duplicates=True).execute()
 
 
+def sem_listagens(eventos: List[Evento]) -> List[Evento]:
+    """Tira as aberturas em rajada: a mesma pessoa abrindo LISTAGEM_CERTS ou mais
+    chaves diferentes com no máximo LISTAGEM_INTERVALO entre uma e a seguinte.
+    É o programa montando a lista de escolha (o SPED abre todas), não um uso; o
+    5061 não diz qual foi assinada, então a rajada inteira sai. A abertura
+    isolada (navegador, assinador comum) é a seleção e fica."""
+    # shortcut: a rajada partida entre dois lotes da coleta (a cada 5 min) não é
+    # vista inteira; juntar com o fim do lote anterior se isso aparecer.
+    fora = set()
+    por_sid: Dict[str, List[Evento]] = {}
+    for e in eventos:
+        por_sid.setdefault(e.sid, []).append(e)
+    for evs in por_sid.values():
+        evs = sorted(evs, key=lambda e: comp._quando(e.quando))
+        bloco: List[Evento] = []
+        for e in evs + [None]:
+            if e is not None and bloco and comp._quando(e.quando) - comp._quando(bloco[-1].quando) <= LISTAGEM_INTERVALO:
+                bloco.append(e)
+                continue
+            if len({b.conteiner for b in bloco}) >= LISTAGEM_CERTS:
+                fora.update(id(b) for b in bloco)
+            bloco = [e] if e is not None else []
+    return [e for e in eventos if id(e) not in fora]
+
+
 def registrar_usos(machine_id: str, eventos: List[Evento], auditoria: str, agora: datetime) -> int:
     mid = comp.mac(machine_id)
     client = _cliente()
+    eventos = sem_listagens(eventos)
     grupos: Dict[Tuple[str, str, datetime], List[Evento]] = {}
     for e in eventos:
         grupos.setdefault((e.sid, e.conteiner, hora_de(e.quando)), []).append(e)
