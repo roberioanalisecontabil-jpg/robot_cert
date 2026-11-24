@@ -135,3 +135,34 @@ def test_coleta_grava_auditoria(banco):
     uso.registrar_usos(M, [_ev(10)], "desligada", AGORA)
     (coleta,) = banco.tabelas["uso_coleta"]
     assert coleta["auditoria"] == "desligada" and coleta["machine_id"] == M
+
+
+def _ev_s(rid: int, segundo: float, conteiner: str, sid: str = "S-1") -> Evento:
+    return Evento(rid, datetime(2026, 11, 15, 16, 6, tzinfo=UTC) + timedelta(seconds=segundo), sid, "ana", conteiner)
+
+
+def test_listagem_de_certificados_nao_conta(banco):
+    # O SPED (Java) abre a chave de todos os certificados para montar a lista.
+    lista = [_ev_s(10 + i, i * 0.01, f"C{i}") for i in range(22)]
+    assert uso.registrar_usos(M, lista, "ligada", AGORA) == 0
+    assert banco.tabelas.get("uso_certificado", []) == []
+
+
+def test_selecao_isolada_conta_mesmo_perto_de_listagem(banco):
+    lista = [_ev_s(10 + i, i * 0.01, f"C{i}") for i in range(5)]
+    escolhido = _ev_s(50, 30, "C2")
+    uso.registrar_usos(M, lista + [escolhido], "ligada", AGORA)
+    (linha,) = _usos(banco)
+    assert (linha["conteiner"], linha["quantidade"]) == ("C2", 1)
+
+
+def test_dois_certificados_juntos_ainda_contam(banco):
+    uso.registrar_usos(M, [_ev_s(10, 0, "C1"), _ev_s(11, 0.5, "C2"), _ev_s(12, 0.6, "C1")], "ligada", AGORA)
+    assert sorted(l["conteiner"] for l in _usos(banco)) == ["C1", "C2"]
+
+
+def test_listagem_e_por_pessoa(banco):
+    # Três pessoas na mesma máquina, cada uma com um certificado no mesmo segundo.
+    evs = [_ev_s(10, 0, "C1", "S-1"), _ev_s(11, 0.1, "C2", "S-2"), _ev_s(12, 0.2, "C3", "S-3")]
+    uso.registrar_usos(M, evs, "ligada", AGORA)
+    assert len(_usos(banco)) == 3
