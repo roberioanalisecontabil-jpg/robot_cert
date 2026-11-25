@@ -35,19 +35,9 @@
   position: relative;
 }
 .cg-painel > * + * { margin-top: var(--pp-gap); }
-/* so onde o cabecalho da pagina e filho direto do main; nas outras
-   paginas sino e tema seguem na fila propria, como antes */
-.main-content:has(> .ag-page__head) > .topbar-actions {
-  position: absolute;
-  top: var(--pp-pad);
-  /* acompanha a borda direita da coluna de 1440px centrada */
-  right: max(var(--pp-pad), calc((100% - 1440px) / 2));
-  margin: 0;
-  max-width: none;
-}
-/* o cabecalho reserva o lugar do sino e do tema (2 botoes de 44px + gap) */
-.main-content > .ag-page__head { padding-right: 7.5rem; margin-top: 0; margin-bottom: var(--pp-gap); }
-.main-content:has(> .ag-page__head) > .topbar-actions + * { margin-top: 0; }
+/* 25/11/2026: o sino fica no topo, a esquerda, preso ao rolar (style.css,
+   "Sino no topo"); o tema foi para o menu da conta. */
+.main-content > .ag-page__head { margin-top: 0; margin-bottom: var(--pp-gap); }
 .ag-page__title { font-size: clamp(1.375rem, 1.5625vw + 2px, 2rem); margin-bottom: .25rem; }
 .ag-page__lead { max-width: 90ch; }
 
@@ -155,7 +145,6 @@
   body.sidebar-collapsed .main-content { margin-left: 72px; }
 }
 .main-content { padding-inline: var(--pp-pad-x); }
-.main-content:has(> .ag-page__head) > .topbar-actions { right: max(var(--pp-pad-x), calc((100% - 1440px) / 2)); }
 /* moldura da tabela com um pouco mais de ar por dentro: ~20px em 1536 */
 .cg-tabela-card { padding: clamp(.625rem, 1.04vw - .25rem, 1rem) clamp(1rem, 1.3vw, 1.5rem); }
 

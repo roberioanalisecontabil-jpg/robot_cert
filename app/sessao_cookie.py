@@ -36,6 +36,7 @@ METODOS_SEGUROS = frozenset({"GET", "HEAD", "OPTIONS"})
 PAGINAS = frozenset({
     "/", "/configuracao", "/usuarios", "/historico", "/duplicidades",
     "/acompanhamento", "/carteiras", "/dashboard", "/instalador", "/wiki-certguard",
+    "/perfil",
 })
 
 

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meu perfil — CertGuard Análise</title>
+  <link rel="icon" href="/favicon.ico?v=certguard-c-v1" type="image/x-icon" />
+  <!-- Meu perfil (25/11/2026): a própria pessoa troca foto, nome, telefone e
+       senha. Abre pelo botão da conta no pé da barra lateral. -->
+  <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/style.css?v=conta-2026-11-25" />
+  <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
+  <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
+  <link rel="stylesheet" href="/static/perfil.css?v=perfil-2026-11-25" />
+  <link rel="stylesheet" href="/static/fluidez.css?v=conta-2026-11-25" />
+</head>
+<body class="cg-aguia">
+  <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
+  {% include "_sidebar.html" %}
+
+  <main class="main-content cg-painel" id="main-content">
+    <header class="ag-page__head">
+      <h1 class="ag-page__title">Meu perfil</h1>
+    </header>
+
+    <div class="cg-perfil">
+      <section class="ag-card cg-perfil__bloco" aria-labelledby="tit-foto">
+        <h2 class="cg-perfil__titulo" id="tit-foto">Foto</h2>
+        <div class="cg-perfil__foto">
+          <span class="cg-perfil__avatar" id="perfil-avatar" aria-hidden="true"></span>
+          <div class="cg-perfil__foto-acoes">
+            <input type="file" id="perfil-arquivo" accept="image/jpeg,image/png,image/webp" class="cg-sr-only" />
+            <label class="ag-btn ag-btn--outline" for="perfil-arquivo">Trocar foto</label>
+            <button type="button" class="ag-btn ag-btn--ghost" id="perfil-remover-foto" hidden>Remover</button>
+            <p class="ag-ajuda">JPG, PNG ou WebP. A foto é cortada em quadrado.</p>
+          </div>
+        </div>
+        <p class="ag-ajuda" id="perfil-foto-msg" role="status"></p>
+      </section>
+
+      <section class="ag-card cg-perfil__bloco" aria-labelledby="tit-dados">
+        <h2 class="cg-perfil__titulo" id="tit-dados">Seus dados</h2>
+        <form id="form-perfil" novalidate>
+          <div class="ag-form-cols">
+            <div class="ag-field"><label class="ag-label" for="perfil-nome">Nome</label><input type="text" id="perfil-nome" class="ag-input" maxlength="120" autocomplete="name" required /></div>
+            <div class="ag-field"><label class="ag-label" for="perfil-telefone">Telefone</label><input type="tel" id="perfil-telefone" class="ag-input" maxlength="16" autocomplete="tel-national" placeholder="(82) 99999-9999" /></div>
+            <div class="ag-field"><label class="ag-label" for="perfil-email">E-mail</label><input type="email" id="perfil-email" class="ag-input" readonly aria-describedby="perfil-email-ajuda" /><p class="ag-ajuda" id="perfil-email-ajuda">Só o administrador troca o e-mail.</p></div>
+          </div>
+          <div class="ag-form-actions">
+            <button type="submit" class="ag-btn ag-btn--primary" id="perfil-salvar">Salvar</button>
+            <span class="ag-ajuda" id="perfil-msg" role="status"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="ag-card cg-perfil__bloco" aria-labelledby="tit-senha">
+        <h2 class="cg-perfil__titulo" id="tit-senha">Senha</h2>
+        <p class="ag-ajuda" id="perfil-senha-microsoft" hidden>Você entra pela Microsoft: a senha é a da sua conta Microsoft e se troca lá.</p>
+        <form id="form-senha" novalidate>
+          <div class="ag-form-cols">
+            <div class="ag-field"><label class="ag-label" for="senha-atual">Senha atual</label><input type="password" id="senha-atual" class="ag-input" autocomplete="current-password" required /></div>
+            <div class="ag-field"><label class="ag-label" for="senha-nova">Senha nova</label><input type="password" id="senha-nova" class="ag-input" autocomplete="new-password" minlength="12" required aria-describedby="senha-ajuda" /><p class="ag-ajuda" id="senha-ajuda">Pelo menos 12 caracteres.</p></div>
+            <div class="ag-field"><label class="ag-label" for="senha-confirma">Repita a senha nova</label><input type="password" id="senha-confirma" class="ag-input" autocomplete="new-password" minlength="12" required /></div>
+          </div>
+          <div class="ag-form-actions">
+            <button type="submit" class="ag-btn ag-btn--primary" id="senha-trocar">Trocar senha</button>
+            <span class="ag-ajuda" id="senha-msg" role="status"></span>
+          </div>
+          <p class="ag-ajuda">Depois da troca você entra de novo, com a senha nova.</p>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=conta-2026-11-25"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/perfil.js?v=perfil-2026-11-25"></script>
+</body>
+</html>
