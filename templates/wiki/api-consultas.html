@@ -10,7 +10,7 @@
 <div class="wiki-tabela"><table>
   <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
   <tbody>
-    <tr><td><code>/api/certificados</code></td><td>Os certificados de hoje, como na tela Início.</td><td>[filtro_status=todos: <code>todos</code>, <code>validos</code>, <code>prestes_vencer</code>, <code>vencidos</code>, <code>erros</code>] [busca] [pagina] [por_pagina, até 2000] [todas_filtradas=false] [ocultar_ilegiveis=false] [ocultar_vencidos=false] [filtro_sieg=todos: <code>incluindo</code>, <code>no_sieg</code>, <code>fora</code>] [ordenar: <code>nome</code>, <code>status</code>, <code>emissao</code>, <code>vencimento</code>, <code>documento</code>] [direcao=asc] [fonte=auto]</td></tr>
+    <tr><td><code>/api/certificados</code></td><td>Os certificados de hoje, como na tela Início. Pela chave vem a <a href="#certificados-campos">resposta enxuta</a>.</td><td>[documento: um ou vários CNPJ/CPF separados por vírgula] [documento_tipo: <code>cnpj</code>, <code>cpf</code>] [vence_em_dias: vence de hoje até daqui a N dias] [vence_de] [vence_ate] [campos=enxuto: <code>completo</code> ou uma lista] [filtro_status=todos: <code>todos</code>, <code>validos</code>, <code>prestes_vencer</code>, <code>vencidos</code>, <code>erros</code>] [busca] [pagina] [por_pagina, até 2000] [todas_filtradas=false] [ocultar_ilegiveis=false] [ocultar_vencidos=false] [filtro_sieg=todos: <code>incluindo</code>, <code>no_sieg</code>, <code>fora</code>] [ordenar: <code>nome</code>, <code>status</code>, <code>emissao</code>, <code>vencimento</code>, <code>documento</code>] [direcao=asc] [fonte=auto]</td></tr>
     <tr><td><code>/api/certificados/{fingerprint}/detalhes</code></td><td>Um certificado, com os dados do responsável.</td><td>—</td></tr>
     <tr><td><code>/api/certificados/historico</code></td><td>Todos os certificados que já passaram pelo portal.</td><td>[busca] [status: <code>ok</code>, <code>expirado</code>, <code>erro</code>, <code>ilegivel</code>, <code>fora_do_padrao</code>] [situacao: <code>todos</code>, <code>nas_pastas</code>, <code>sairam</code>] [pagina=1] [por_pagina=20, até 2000] [todas_filtradas=false]</td></tr>
     <tr><td><code>/api/certificados/vencidos</code></td><td>Clientes com o certificado vencido.</td><td>[data_inicio] [data_fim] [busca] [ordem=desc] [pagina=1] [por_pagina=20, até 2000] [todas_filtradas=false]</td></tr>
@@ -18,6 +18,25 @@
     <tr><td><code>/api/sieg/certificado/{fingerprint}</code></td><td>A situação do certificado no SIEG.</td><td>—</td></tr>
   </tbody>
 </table></div>
+
+<h4 id="certificados-campos">Campos de <code>/api/certificados</code></h4>
+<p>Pela chave de API, cada certificado vem com nove campos:</p>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Campo</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td><code>nome</code></td><td>Titular do certificado.</td></tr>
+    <tr><td><code>documento</code></td><td>CNPJ ou CPF, só os dígitos.</td></tr>
+    <tr><td><code>documento_tipo</code></td><td><code>cnpj</code> ou <code>cpf</code>.</td></tr>
+    <tr><td><code>status</code></td><td><code>valido</code>, <code>prestes_vencer</code> (até 30 dias), <code>vencido</code>, <code>erro</code> ou <code>fora_do_padrao</code>.</td></tr>
+    <tr><td><code>vence_em</code></td><td>Data do vencimento, no horário de Brasília.</td></tr>
+    <tr><td><code>dias_para_vencer</code></td><td>Dias até o vencimento; negativo se já venceu.</td></tr>
+    <tr><td><code>emissor</code></td><td>Autoridade certificadora.</td></tr>
+    <tr><td><code>tipo_icp</code></td><td>Tipo do certificado ICP-Brasil.</td></tr>
+    <tr><td><code>sieg_estado</code></td><td>Situação no SIEG; vazio se nunca foi enviado.</td></tr>
+  </tbody>
+</table></div>
+<p>Para outros campos, escolha em <code>campos</code>, separados por vírgula, por exemplo <code>campos=nome,documento,vence_em,fingerprint_sha256</code>. Também podem ser pedidos: <code>emitido_em</code>, <code>documento_formatado</code>, <code>organizacao</code>, <code>issuer</code>, <code>subject</code>, <code>serial_number</code>, <code>fingerprint_sha256</code>, <code>error_message</code>, <code>not_before</code>, <code>not_after</code>, <code>pasta</code>. Com <code>campos=completo</code>, vem tudo o que a tela Início recebe. Um campo que não existe devolve <code>422</code> com a lista dos válidos.</p>
+<p>Exemplo: CNPJs que vencem nos próximos 60 dias, <code>/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60&amp;por_pagina=500</code>.</p>
 
 <h3 id="dashboard">Dashboard</h3>
 <div class="wiki-tabela"><table>
