@@ -1,46 +1,47 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
 <h2 id="sieg">Aba SIEG</h2>
-<p>Lista os certificados que alguém incluiu no SIEG, com as colunas <strong>Certificado</strong>, <strong>Estado</strong>, <strong>Ligado por</strong>, <strong>Quando</strong> e <strong>Última resposta</strong>.</p>
-<p>A inclusão no SIEG não é feita aqui. Ela é feita pelo interruptor <strong>Incluir no SIEG</strong>, nos detalhes do certificado, no Início. Esta aba serve para acompanhar.</p>
+<p>A aba lista os certificados incluídos no SIEG, com as colunas <strong>Certificado</strong>, <strong>Estado</strong>, <strong>Ligado por</strong>, <strong>Quando</strong> e <strong>Última resposta</strong>.</p>
+<p>A inclusão no SIEG não é feita nesta aba, que serve para acompanhar. Ela é feita pelo interruptor <strong>Incluir no SIEG</strong>, nos detalhes do certificado, no Início.</p>
 
-<h3 id="acompanhar-sieg">Acompanhar as inclusões</h3>
+<h3 id="acompanhar-sieg">Como acompanhar as inclusões</h3>
 <ol>
-  <li>Clique na aba <strong>SIEG</strong>. O número ao lado do nome da aba é quantos estão <strong>No SIEG</strong>.</li>
+  <li>No <strong>Instalador</strong>, clique na aba <strong>SIEG</strong>. O número ao lado do nome da aba indica quantos estão <strong>No SIEG</strong>.</li>
   <li>Em <strong>Estado</strong>, filtre por <strong>Todos</strong>, <strong>No SIEG</strong>, <strong>Incluindo</strong>, <strong>Erro</strong>, <strong>Substituído</strong> ou <strong>Fora do SIEG</strong>.
     {{ print("instalador-sieg", "Aba SIEG com o filtro Estado e a tabela dos certificados incluídos no SIEG", "Os certificados no SIEG.") }}
   </li>
-  <li>Para ver todas as tentativas de um certificado, clique na coluna <strong>Última resposta</strong> da linha. Abre a lista com a data, a operação, quem fez e a mensagem do SIEG.
+  <li>Para ver todas as tentativas de um certificado, clique na coluna <strong>Última resposta</strong> da linha. Abre a lista com a data, a operação, o responsável e a mensagem do SIEG.
     {{ print("instalador-sieg-tentativas", "Linha da tabela do SIEG aberta, com a lista de tentativas de um certificado", "As tentativas de um certificado.") }}
   </li>
 </ol>
 
-<p>O que cada estado quer dizer:</p>
+<p>Significado de cada estado:</p>
 <ul>
   <li><strong>Incluindo</strong>: o portal está enviando.</li>
   <li><strong>No SIEG</strong>: cadastrado e conferido.</li>
   <li><strong>Erro</strong>: o envio falhou. Quem tem o cliente na carteira vê o botão <strong>Tentar de novo</strong> nos detalhes do certificado, no Início.</li>
-  <li><strong>Substituído</strong>: o cliente renovou e o certificado novo tomou o lugar.</li>
-  <li><strong>Fora do SIEG</strong>: conferido, e não está ativo lá. Pode ser incluído de novo.</li>
+  <li><strong>Substituído</strong>: o cliente renovou e o certificado novo ocupou o lugar do anterior.</li>
+  <li><strong>Fora do SIEG</strong>: conferido, e não está ativo no SIEG. Pode ser incluído novamente.</li>
 </ul>
 <p>Se aparecer <strong>O SIEG ainda não foi configurado</strong>, informe as credenciais em <a href="/wiki-certguard?pagina=sieg-configuracao">Configuração</a>, aba <strong>SIEG</strong>.</p>
 
-<h3 id="incluir-sieg">Incluir um certificado no SIEG</h3>
+<h3 id="incluir-sieg">Como incluir um certificado no SIEG</h3>
 <ol>
   <li>No Início, abra os detalhes do certificado.</li>
   <li>Na seção <strong>SIEG</strong>, ligue o interruptor <strong>Incluir no SIEG</strong>.</li>
-  <li>Abre a janela <strong>Incluir no SIEG</strong>, com o nome do cliente e o aviso <strong>Esta ação não pode ser desfeita.</strong> Confira o cliente.
+  <li>Na janela <strong>Incluir no SIEG</strong>, com o nome do cliente e o aviso <strong>Esta ação não pode ser desfeita.</strong>, confira o cliente.
     {{ print("inicio-sieg-confirmar", "Janela Incluir no SIEG com o nome do cliente e o aviso Esta ação não pode ser desfeita", "A confirmação antes de incluir no SIEG.") }}
   </li>
   <li>Clique em <strong>Incluir no SIEG</strong> para confirmar, ou em <strong>Cancelar</strong>.</li>
 </ol>
 
-{% call cuidado("Incluir no SIEG não tem volta pelo portal") %}<p>Depois de ligado, o interruptor não volta. Tirar o certificado do SIEG só pelo painel do próprio SIEG. Confira o cliente antes de confirmar.</p>{% endcall %}
+{% call cuidado("A inclusão no SIEG não pode ser desfeita pelo portal") %}<p>Depois de ligado, o interruptor não pode ser desligado. A retirada do certificado do SIEG é feita somente pelo painel do próprio SIEG. Confira o cliente antes de confirmar.</p>{% endcall %}
 
-<h3 id="conferir-sieg">Conferir um certificado no SIEG</h3>
+<h3 id="conferir-sieg">Como conferir um certificado no SIEG</h3>
 <ol>
   <li>No Início, abra os detalhes do certificado.</li>
   <li>Na seção <strong>SIEG</strong>, clique em <strong>Conferir no SIEG</strong>.</li>
-  <li>Se o certificado estiver ativo lá, fica <strong>No SIEG</strong>. Se não, passa a <strong>Fora do SIEG</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> se o certificado estiver ativo no SIEG, o estado fica <strong>No SIEG</strong>. Se não estiver, passa a <strong>Fora do SIEG</strong>.</p>

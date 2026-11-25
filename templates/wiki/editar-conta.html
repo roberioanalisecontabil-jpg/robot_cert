@@ -1,7 +1,10 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="editar">Editar uma conta</h2>
+<p>Na aba <strong>Usuários</strong>, as ações de cada conta ficam nos três pontos da linha: editar os dados, ajudar quem esqueceu a senha e remover o app autenticador de quem perdeu o celular.</p>
+
+<h2 id="editar">Como editar uma conta</h2>
 <ol>
   <li>Clique no nome da pessoa, ou nos três pontos da linha e depois em <strong>Editar</strong>.
     {{ print("usuarios-menu-linha", "Menu de três pontos aberto numa linha, com Editar, Redefinir senha, Enviar código de redefinição, Remover app autenticador e Desativar", "As ações de cada conta ficam nos três pontos.") }}
@@ -9,19 +12,20 @@
   <li>Ajuste <strong>Nome completo</strong>, <strong>E-mail</strong>, <strong>Nível</strong> ou <strong>Departamento</strong>.
     {{ print("usuarios-editar", "Janela Editar usuário de uma conta de operador", "A janela de edição.") }}
   </li>
-  <li>Clique em <strong>Salvar</strong>. Trocar o e-mail encerra a sessão aberta da pessoa.</li>
+  <li>Clique em <strong>Salvar</strong>.</li>
 </ol>
+<p>A troca do e-mail encerra a sessão aberta da pessoa.</p>
 
 <h2 id="senha">A pessoa esqueceu a senha</h2>
-<p>Há dois caminhos, os dois nos três pontos da linha.</p>
+<p>Há duas opções, ambas nos três pontos da linha.</p>
 <ul>
-  <li><strong>Enviar código de redefinição</strong> (recomendado): o portal manda, sem pedir confirmação, um código de 6 dígitos para o e-mail da pessoa. A mensagem confirma o envio e avisa que o código vale 15 minutos. Você não fica sabendo a senha nova.</li>
-  <li><strong>Redefinir senha</strong>: você digita a <strong>Nova senha</strong> e repete em <strong>Repita a senha</strong> (mínimo de 12 caracteres) e clica em <strong>Redefinir</strong>. A pessoa é obrigada a trocá-la no próximo acesso, e a sessão aberta dela cai na hora.</li>
+  <li><strong>Enviar código de redefinição</strong> (recomendado): o portal envia, sem pedir confirmação, um código de 6 dígitos para o e-mail da pessoa. A mensagem confirma o envio e informa que o código vale 15 minutos. Você não fica sabendo a nova senha.</li>
+  <li><strong>Redefinir senha</strong>: você digita a <strong>Nova senha</strong>, repete em <strong>Repita a senha</strong> (mínimo de 12 caracteres) e clica em <strong>Redefinir</strong>. A pessoa é obrigada a trocá-la no próximo acesso, e a sessão aberta dela é encerrada imediatamente.</li>
 </ul>
 {{ print("usuarios-redefinir-senha", "Janela Redefinir senha aberta com os campos Nova senha e Repita a senha vazios", "A janela para redefinir a senha.") }}
 
 <h2 id="autenticador">A pessoa perdeu o celular do app autenticador</h2>
 <ol>
   <li>Nos três pontos da linha, clique em <strong>Remover app autenticador</strong>. A remoção é feita no clique, sem confirmação.</li>
-  <li>A mensagem confirma: <strong>App autenticador removido. A pessoa entra com o código por e-mail.</strong> Depois ela pode cadastrar o app de novo pela própria conta. Veja <a href="/wiki-certguard?pagina=app-autenticador">Primeiros passos</a>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a mensagem confirma <strong>App autenticador removido. A pessoa entra com o código por e-mail.</strong> Depois, a pessoa pode cadastrar o app novamente pela própria conta. Veja <a href="/wiki-certguard?pagina=app-autenticador">Como usar o app autenticador</a>.</p>

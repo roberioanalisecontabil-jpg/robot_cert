@@ -1,44 +1,46 @@
-{% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, video, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Todos"]) }}
+{{ atualizado("25/11/2026") }}
 
-<p>Esta é a porta do portal. Você entra com e-mail e senha e, na maioria das vezes, confirma com um código de 6 dígitos que chega por e-mail. Aqui também estão a recuperação de senha, a troca da senha provisória e o app autenticador, a saída para quando o e-mail não chega.</p>
+<p>Para acessar o portal, informe seu e-mail e sua senha. Na maioria das vezes, confirme também com um código de 6 dígitos enviado por e-mail. Se o e-mail não chegar, use o <a href="/wiki-certguard?pagina=app-autenticador">app autenticador</a>. Para senha esquecida ou provisória, veja <a href="/wiki-certguard?pagina=recuperar-senha">Como recuperar a senha</a>.</p>
 {{ video("video-login", "Primeiro acesso com código do e-mail e senha provisória") }}
 
-<h2 id="entrar">Entrar no portal</h2>
+<h2 id="entrar">Como entrar no portal</h2>
 <ol>
   <li>Abra o endereço do portal. A tela mostra <strong>CertGuard Análise</strong> e "Faça login para acessar o monitor".</li>
   <li>Preencha <strong>E-mail</strong> e <strong>Senha</strong>. O ícone de olho ao lado da senha mostra o que você digitou.
     {{ print("login-tela", "Tela de login com os campos E-mail e Senha vazios e o botão Acessar o painel", "A tela de entrada do portal") }}
   </li>
-  <li>Clique em <strong>Acessar o painel</strong>. Se o e-mail ou a senha estiverem errados, a tela avisa "E-mail ou senha incorretos.".
-    {{ print("login-erro", "Tela de login com o aviso E-mail ou senha incorretos acima dos campos") }}
-  </li>
+  <li>Clique em <strong>Acessar o painel</strong>.</li>
 </ol>
+<p>Se o e-mail ou a senha estiverem incorretos, a tela exibe "E-mail ou senha incorretos.".</p>
+{{ print("login-erro", "Tela de login com o aviso E-mail ou senha incorretos acima dos campos") }}
 
-<h2 id="codigo-por-email">Confirmar com o código do e-mail</h2>
-<p>Se este navegador não estiver lembrado, depois da senha aparece "Confirme que é você". O portal mandou um código de 6 dígitos para o seu e-mail.</p>
+<h2 id="codigo-por-email">Como confirmar com o código do e-mail</h2>
+<p>Se este navegador não estiver lembrado, a tela "Confirme que é você" aparece depois da senha. O portal envia um código de 6 dígitos para o seu e-mail.</p>
 <ol>
   <li>Abra seu e-mail e copie o código.</li>
   <li>Digite o código em <strong>Código do e-mail</strong>.
     {{ print("login-codigo", "Tela Confirme que é você com o campo Código do e-mail, a caixa Lembrar deste navegador por 7 dias e o botão Entrar", "O código chega por e-mail e vale 15 minutos") }}
   </li>
-  <li>Se o computador é seu, marque <strong>Lembrar deste navegador por 7 dias</strong>. Nos próximos 7 dias, neste navegador, a senha basta.</li>
-  <li>Clique em <strong>Entrar</strong>. Você cai no Início, ou na página que tentou abrir antes.</li>
+  <li>Se o computador for seu, marque <strong>Lembrar deste navegador por 7 dias</strong>. Nos próximos 7 dias, neste navegador, basta a senha.</li>
+  <li>Clique em <strong>Entrar</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o portal abre o Início, ou a página que você tentou abrir antes.</p>
 
 <h3 id="codigo-nao-chegou">O código não chegou ou expirou</h3>
 <p>O código vale <strong>15 minutos</strong> e aceita <strong>3 tentativas</strong>.</p>
 <ol>
   <li>Clique em <strong>Voltar e pedir outro código</strong>. A tela volta para e-mail e senha.</li>
-  <li>Digite a senha de novo e clique em <strong>Acessar o painel</strong>. Um código novo é enviado.</li>
-  <li>Se você tem o app autenticador cadastrado, pode usar o código dele (veja abaixo).</li>
+  <li>Digite a senha novamente e clique em <strong>Acessar o painel</strong>. Um novo código é enviado.</li>
+  <li>Se você tiver o app autenticador cadastrado, use o código dele (veja <a href="/wiki-certguard?pagina=app-autenticador#entrar-com-app">Entrar com o código do app</a>).</li>
 </ol>
 
-{% call cuidado("Lembrar o navegador só no seu computador") %}
-<p>Só marque <strong>Lembrar deste navegador por 7 dias</strong> no computador que é seu. Em máquina de colega ou compartilhada, deixe desmarcado.</p>
+{% call cuidado("Lembre o navegador apenas no seu computador") %}
+<p>Marque <strong>Lembrar deste navegador por 7 dias</strong> somente no computador que é seu. Em máquina de colega ou compartilhada, deixe desmarcado.</p>
 {% endcall %}
 
-<h2 id="sair">Sair</h2>
+<h2 id="sair">Como sair do portal</h2>
 <ol>
   <li>No menu lateral, clique em <strong>Sair</strong>, o último item, em vermelho.</li>
 </ol>

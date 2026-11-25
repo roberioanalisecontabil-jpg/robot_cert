@@ -1,23 +1,26 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="desativar">Alguém saiu da equipe</h2>
+<p>Quando alguém sai da equipe, a conta é desativada, não apagada. Assim, o registro de quem instalou cada certificado é preservado. Quando a pessoa volta, a conta é reativada.</p>
+
+<h2 id="desativar">Como desativar a conta de quem saiu da equipe</h2>
 <ol>
-  <li>Nos três pontos da linha, clique em <strong>Desativar</strong>.</li>
-  <li>Leia a confirmação. Ela diz quantos clientes da carteira da pessoa serão apagados e, se ela era gestora, que deixa de ser gestora.
+  <li>Na aba <strong>Usuários</strong>, clique nos três pontos da linha e em <strong>Desativar</strong>.</li>
+  <li>Leia a confirmação. Ela informa quantos clientes da carteira da pessoa serão apagados e, se ela era gestora, que deixará de ser.
     {{ print("usuarios-desativar", "Janela Desativar usuário com o aviso sobre a carteira da pessoa, antes de confirmar", "A confirmação antes de desativar.") }}
   </li>
   <li>Confirme em <strong>Desativar</strong>, ou em <strong>Desativar e remover</strong> seguido do número de clientes, quando a pessoa tem carteira.</li>
-  <li>A pessoa perde o acesso na hora, inclusive a bandeja do computador.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a pessoa perde o acesso imediatamente, inclusive à bandeja do computador.</p>
 
-{% call cuidado("Desativar apaga a carteira") %}<p>Não existe apagar usuário: desativar guarda o registro de quem instalou o quê. Mas desativar apaga a carteira da pessoa, e reativar devolve a conta com a carteira vazia.</p>{% endcall %}
+{% call cuidado("Desativar apaga a carteira") %}<p>Não é possível apagar um usuário: a desativação preserva o registro de quem instalou cada certificado. Porém, desativar apaga a carteira da pessoa, e a reativação devolve a conta com a carteira vazia.</p>{% endcall %}
 
-<h2 id="reativar">Alguém voltou</h2>
+<h2 id="reativar">Como reativar a conta de quem voltou</h2>
 <ol>
   <li>Em <strong>Status</strong>, escolha <strong>Inativo</strong> ou <strong>Todos</strong>.</li>
   <li>Nos três pontos da linha, clique em <strong>Reativar</strong> e confirme.</li>
-  <li>A conta volta com o mesmo nível, com duas exceções: quem era gestor volta como Operador, e a carteira volta vazia.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a conta volta com o mesmo nível, com duas exceções: quem era gestor volta como Operador, e a carteira volta vazia. Monte a carteira novamente em <a href="/wiki-certguard?pagina=montar-carteira">Carteiras</a>.</p>
 
-{% call dica("Sempre um administrador ativo") %}<p>O portal não deixa desativar nem rebaixar o último administrador ativo. Promova outro administrador antes.</p>{% endcall %}
+{% call dica("Sempre um administrador ativo") %}<p>O portal não permite desativar nem rebaixar o último administrador ativo. Promova outro administrador antes.</p>{% endcall %}

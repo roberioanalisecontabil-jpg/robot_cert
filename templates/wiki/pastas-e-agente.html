@@ -1,31 +1,34 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
 <h2 id="pastas">Aba Pastas e agente</h2>
-<p>Diz ao agente do servidor quais pastas olhar.</p>
+<p>Esta aba informa ao agente do servidor quais pastas ele deve ler.</p>
 
-<h3 id="mudar-pastas">Mudar as pastas</h3>
+<h3 id="mudar-pastas">Como mudar as pastas</h3>
 <ol>
   <li>Preencha <strong>Origem (.pfx)</strong>, onde estão os certificados, e <strong>Vencidos (destino)</strong>, para onde vão os vencidos.</li>
-  <li><strong>ID do servidor</strong> identifica o agente. Normalmente fica <strong>default</strong>.</li>
+  <li>Confira o <strong>ID do servidor</strong>, que identifica o agente. Normalmente, o valor é <strong>default</strong>.</li>
   <li>No bloco <strong>Entrada de certificados</strong>, preencha <strong>Pasta de entrada</strong>, <strong>Pessoa jurídica (CNPJ)</strong> e <strong>Pessoa física (CPF)</strong>. Deixar a pasta de entrada vazia desliga esse passo. Escreva os caminhos como o servidor os vê, não como aparecem no seu computador.</li>
   <li>Clique em <strong>Guardar e sincronizar</strong>.</li>
-  <li>Confira em <strong>Leitura local efetiva</strong> os caminhos que valem.
+  <li>Confira em <strong>Leitura local efetiva</strong> os caminhos em uso.
     {{ print("configuracao-pastas", "Aba Pastas e agente com os campos de pastas preenchidos e a Leitura local efetiva carregada", "As pastas e a leitura efetiva.") }}
   </li>
 </ol>
+<p><strong>Resultado esperado:</strong> os caminhos em <strong>Leitura local efetiva</strong> são os que você informou.</p>
 
-{% call cuidado("Caminho errado cega o agente") %}<p>Caminhos de pasta errados fazem o agente parar de ver certificados. Depois de <strong>Guardar e sincronizar</strong>, confira <strong>Leitura local efetiva</strong> e, se quiser, use <a href="#forcar-leitura"><strong>Forçar leitura</strong></a>.</p>{% endcall %}
+{% call cuidado("Caminho errado impede o agente de ver os certificados") %}<p>Caminhos de pasta errados fazem o agente deixar de ver certificados. Depois de <strong>Guardar e sincronizar</strong>, confira <strong>Leitura local efetiva</strong> e, se quiser, use <a href="#forcar-leitura"><strong>Forçar leitura</strong></a>.</p>{% endcall %}
 
-<h3 id="forcar-leitura">Forçar leitura</h3>
-<p>O agente relê a pasta sozinho a cada mudança. Depois de trocar um caminho, clique em <strong>Forçar leitura</strong>, no bloco <strong>Pastas monitoradas</strong>: o pedido vai para o agente do <strong>ID do servidor</strong>. Se ele não responder em 1 minuto, o portal avisa; costuma ser ID errado ou o serviço do agente parado.</p>
+<h3 id="forcar-leitura">Como forçar a leitura</h3>
+<p>O agente relê a pasta automaticamente a cada mudança. Depois de trocar um caminho, clique em <strong>Forçar leitura</strong>, no bloco <strong>Pastas monitoradas</strong>: o pedido vai para o agente do <strong>ID do servidor</strong>.</p>
+<p><strong>Se não funcionar:</strong> se o agente não responder em 1 minuto, o portal avisa. As causas mais comuns são o ID do servidor errado ou o serviço do agente parado.</p>
 
-<h3 id="arquivo-agente">Gerar o arquivo de configuração do agente</h3>
+<h3 id="arquivo-agente">Como gerar o arquivo de configuração do agente</h3>
 <ol>
-  <li>No bloco <strong>Arquivo do agente</strong>, confira o campo <strong>URL do portal no arquivo</strong>. Ele só vai para o arquivo baixado.</li>
-  <li>Clique em <strong>Baixar agent_config.json</strong> e copie o arquivo para a pasta onde o agente está instalado. O arquivo não leva a chave.</li>
+  <li>No bloco <strong>Arquivo do agente</strong>, confira o campo <strong>URL do portal no arquivo</strong>. Ele é usado somente no arquivo baixado.</li>
+  <li>Clique em <strong>Baixar agent_config.json</strong> e copie o arquivo para a pasta onde o agente está instalado. O arquivo não inclui a chave.</li>
 </ol>
 <p>Regra do nome dos arquivos: a senha do certificado vem depois da palavra <strong>senha</strong>, por exemplo <strong>MeuNome certificado senha aMinhaSenha.pfx</strong>.</p>
 
 <h3 id="agente-windows">O agente no Windows</h3>
-<p>O agente é o serviço <code>AnaliseCertiDigitalAgent</code>, instalado pelo <code>Instalador_AnaliseCertiDigital_Agente.exe</code>. Para atualizar, rode o instalador novo. Com a conta do serviço em branco, ele roda como LocalSystem e não alcança pasta de rede (<code>\\servidor\pasta</code>); a conta informada precisa do direito “Fazer logon como serviço”.</p>
+<p>O agente é o serviço <code>AnaliseCertiDigitalAgent</code>, instalado pelo <code>Instalador_AnaliseCertiDigital_Agente.exe</code>. Para atualizar, execute o instalador novo. Com a conta do serviço em branco, ele roda como LocalSystem e não alcança pasta de rede (<code>\\servidor\pasta</code>); a conta informada precisa do direito “Fazer logon como serviço”.</p>

@@ -1,43 +1,47 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<p>Em Usuários se cadastra e se cuida de quem entra no portal: as contas, os departamentos e seus gestores, o que cada papel pode ver e quais computadores podem receber certificado. Quem sai da equipe é desativado, não apagado.</p>
+<p>Em Usuários, o administrador cadastra e gerencia quem acessa o portal: as contas, os departamentos e seus gestores, o que cada papel pode ver e quais computadores podem receber certificado. Quem sai da equipe é desativado, não apagado.</p>
 
-<p>Só o administrador abre esta tela. Quem não é administrador e tenta abrir volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
+<p>Somente o administrador abre esta tela. Quem não é administrador e tenta abri-la volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
 
 <p>A página tem quatro abas: <strong>Usuários</strong>, <strong>Departamentos</strong>, <strong>Níveis de acesso</strong> e <strong>Computadores</strong>.</p>
 
 <h2 id="usuarios">Aba Usuários</h2>
-<p>A lista mostra <strong>Nome</strong> (com o e-mail embaixo), <strong>Nível</strong>, <strong>Status</strong> e <strong>Carteira</strong>. Por padrão aparecem só as contas ativas.</p>
+<p>A lista mostra <strong>Nome</strong> (com o e-mail abaixo), <strong>Nível</strong>, <strong>Status</strong> e <strong>Carteira</strong>. Por padrão, aparecem somente as contas ativas.</p>
 {{ print("usuarios-lista", "Aba Usuários com a lista de contas, os filtros Buscar, Nível e Status e os botões Importar CSV e Novo usuário", "A lista de contas ativas.") }}
 
-<h3 id="encontrar">Encontrar alguém</h3>
+<h3 id="encontrar">Como encontrar uma pessoa</h3>
 <ol>
   <li>Digite parte do nome ou do e-mail em <strong>Buscar</strong>.</li>
   <li>Se precisar, escolha em <strong>Nível</strong> (Todos, Administrador, Gestor ou Operador) e em <strong>Status</strong> (Ativo, Inativo ou Todos).</li>
   <li>Se nada aparecer, clique em <strong>Limpar filtros</strong>.</li>
 </ol>
 
-<h3 id="cadastrar">Cadastrar uma pessoa</h3>
+<h3 id="cadastrar">Como cadastrar uma pessoa</h3>
+<p><strong>Antes de começar:</strong> o departamento da pessoa precisa estar cadastrado (veja <a href="/wiki-certguard?pagina=departamentos#criar-departamento">Criar um departamento</a>).</p>
 <ol>
   <li>Clique em <strong>Novo usuário</strong>, o botão dourado no alto, à direita.
     {{ print("usuarios-novo", "Janela Novo usuário aberta e vazia, com os campos Nome completo, E-mail, Senha inicial, Nível e Departamento", "A janela de cadastro.") }}
   </li>
   <li>Preencha <strong>Nome completo</strong> e <strong>E-mail</strong>. É com esse e-mail que a pessoa entra no portal.</li>
-  <li>Em <strong>Senha inicial</strong>, digite uma senha de pelo menos 12 caracteres. O olho ao lado mostra o que você digitou.</li>
-  <li>Em <strong>Nível</strong>, escolha <strong>Operador</strong> ou <strong>Administrador</strong>. Gestor não se escolhe aqui: veja <a href="/wiki-certguard?pagina=departamentos#departamentos">Departamentos</a>.</li>
-  <li>Em <strong>Departamento</strong>, escolha o departamento. É obrigatório. Se a lista disser <strong>Cadastre um departamento primeiro</strong>, crie o departamento antes.</li>
-  <li>Clique em <strong>Cadastrar</strong>. A pessoa aparece destacada na lista e a mensagem <strong>Usuário cadastrado.</strong> confirma.</li>
+  <li>Em <strong>Senha inicial</strong>, digite uma senha de pelo menos 12 caracteres. O ícone de olho ao lado mostra o que você digitou.</li>
+  <li>Em <strong>Nível</strong>, escolha <strong>Operador</strong> ou <strong>Administrador</strong>. O gestor não é escolhido aqui: veja <a href="/wiki-certguard?pagina=departamentos#departamentos">Departamentos</a>.</li>
+  <li>Em <strong>Departamento</strong>, escolha o departamento. O campo é obrigatório. Se a lista informar <strong>Cadastre um departamento primeiro</strong>, crie o departamento antes.</li>
+  <li>Clique em <strong>Cadastrar</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a pessoa aparece destacada na lista e a mensagem <strong>Usuário cadastrado.</strong> confirma o cadastro.</p>
 <p>Depois de cadastrar um operador, monte a carteira dele em <a href="/wiki-certguard?pagina=montar-carteira">Carteiras</a>. Sem carteira, ele não instala nenhum certificado.</p>
 
-<h3 id="importar">Cadastrar várias pessoas de uma vez</h3>
+<h3 id="importar">Como cadastrar várias pessoas de uma vez</h3>
 <ol>
   <li>Clique em <strong>Importar CSV</strong>.
     {{ print("usuarios-importar", "Janela Importar usuários por CSV com a área para arrastar o arquivo e o link Baixar o modelo", "A janela de importação.") }}
   </li>
   <li>Clique em <strong>Baixar o modelo (.csv)</strong> e preencha as colunas <strong>nome</strong>, <strong>email</strong>, <strong>senha</strong>, <strong>nivel</strong> e <strong>departamento</strong>.</li>
-  <li>Na coluna <strong>nivel</strong>, escreva exatamente <strong>admin</strong> (administrador) ou <strong>user</strong> (operador). Na coluna <strong>departamento</strong>, o nome de um departamento já cadastrado.</li>
+  <li>Na coluna <strong>nivel</strong>, escreva exatamente <strong>admin</strong> (administrador) ou <strong>user</strong> (operador). Na coluna <strong>departamento</strong>, informe o nome de um departamento já cadastrado.</li>
   <li>Salve a planilha como CSV, arraste o arquivo para a área <strong>Arraste o arquivo ou clique para escolher</strong> e clique em <strong>Importar</strong>.</li>
-  <li>Leia o resultado. As linhas boas entram; as que ficaram de fora aparecem com o número da linha e o motivo, por exemplo um e-mail que já existe. Corrija só essas e importe de novo.</li>
+  <li>Leia o resultado.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> as linhas corretas são cadastradas. As linhas recusadas aparecem com o número da linha e o motivo, por exemplo um e-mail que já existe. Corrija somente essas linhas e importe novamente.</p>

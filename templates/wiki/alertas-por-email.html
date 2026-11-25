@@ -1,69 +1,73 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
 <h2 id="alertas">Aba Alertas por e-mail</h2>
+<p>Nesta aba, o administrador liga os alertas automáticos, define a forma de envio, testa o envio e ajusta o resumo de vencimentos e o texto do e-mail.</p>
 
-<h3 id="ligar-alertas">Ligar ou desligar os alertas</h3>
+<h3 id="ligar-alertas">Como ligar ou desligar os alertas</h3>
 <ol>
-  <li>Use o interruptor <strong>Enviar alertas automaticamente</strong>. A etiqueta ao lado diz <strong>Ligado</strong> ou <strong>Desligado</strong>, e a frase embaixo diz o que está valendo.</li>
+  <li>Use o interruptor <strong>Enviar alertas automaticamente</strong>. A etiqueta ao lado indica <strong>Ligado</strong> ou <strong>Desligado</strong>, e a frase abaixo descreve a configuração em uso.</li>
   <li>Clique em <strong>Salvar alterações</strong>, na barra do rodapé. Enquanto houver mudança pendente, a barra avisa que há alterações não salvas.</li>
 </ol>
 
-<h3 id="forma-envio">Escolher a forma de envio</h3>
+<h3 id="forma-envio">Como escolher a forma de envio</h3>
+<p><strong>Antes de começar:</strong> para Microsoft 365, tenha em mãos os dados do cadastro do aplicativo feito pela equipe de TI no Microsoft 365. Para SMTP, os dados do servidor de e-mail.</p>
 <ol>
   <li>Em <strong>Enviar por</strong>, escolha <strong>SMTP (servidor de e-mail com usuário e senha)</strong> ou <strong>Microsoft 365 (aplicativo, pelo Graph)</strong>.
     {{ print("configuracao-alertas-topo", "Interruptor Enviar alertas automaticamente, campo Enviar por e bloco Servidor de e-mail com a senha vazia e a etiqueta Senha guardada", "O interruptor geral e a forma de envio.") }}
   </li>
-  <li>Para Microsoft 365, preencha <strong>ID do tenant (diretório)</strong>, <strong>ID do aplicativo (cliente)</strong>, <strong>Segredo do aplicativo</strong>, <strong>Segredo vence em</strong>, <strong>Caixa de envio (remetente)</strong> e <strong>Responder para</strong>. Esses dados vêm do cadastro do aplicativo feito pela TI no Microsoft 365.
+  <li>Para Microsoft 365, preencha <strong>ID do tenant (diretório)</strong>, <strong>ID do aplicativo (cliente)</strong>, <strong>Segredo do aplicativo</strong>, <strong>Segredo vence em</strong>, <strong>Caixa de envio (remetente)</strong> e <strong>Responder para</strong>.
     {{ print("configuracao-alertas-m365", "Forma de envio Microsoft 365 com o bloco Aplicativo no Microsoft 365 e o campo de segredo vazio", "Os campos do Microsoft 365.") }}
   </li>
   <li>Para SMTP, preencha <strong>Servidor</strong>, <strong>Porta</strong>, <strong>Segurança da conexão</strong>, <strong>Usuário</strong>, <strong>Senha</strong> e <strong>E-mail do remetente</strong>.</li>
   <li>Clique em <strong>Salvar alterações</strong>.</li>
 </ol>
-<p>Os campos de senha e de segredo sempre aparecem vazios. Uma etiqueta ao lado diz <strong>Senha guardada</strong> ou <strong>Segredo guardado</strong> quando já existe um valor. Deixe o campo vazio para manter o atual; só digite para trocar.</p>
+<p>Os campos de senha e de segredo sempre aparecem vazios. Uma etiqueta ao lado indica <strong>Senha guardada</strong> ou <strong>Segredo guardado</strong> quando já existe um valor. Deixe o campo vazio para manter o valor atual; preencha somente para trocá-lo.</p>
 
-{% call cuidado("Anote quando o segredo vence") %}<p>Preencha <strong>Segredo vence em</strong> com a data de validade do segredo do Microsoft 365: o sino do administrador avisa 30 dias antes. Sem a data, ninguém é avisado, e os alertas param no dia em que o segredo vencer.</p>{% endcall %}
+{% call cuidado("Registre a data de vencimento do segredo") %}<p>Preencha <strong>Segredo vence em</strong> com a data de validade do segredo do Microsoft 365: o sino do administrador avisa 30 dias antes. Sem a data, ninguém é avisado, e os alertas param no dia em que o segredo vencer.</p>{% endcall %}
 
-<h3 id="testar">Testar o envio</h3>
+<h3 id="testar">Como testar o envio</h3>
 <ol>
-  <li>Salve antes: o teste usa o que está salvo.</li>
+  <li>Salve as alterações antes: o teste usa a configuração salva.</li>
   <li>Digite um e-mail em <strong>Enviar teste para</strong> e clique em <strong>Enviar teste</strong>.</li>
-  <li>A resposta aparece logo abaixo: a confirmação de que o e-mail de teste foi enviado, ou o motivo da recusa.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a resposta aparece logo abaixo: a confirmação de que o e-mail de teste foi enviado ou o motivo da recusa.</p>
 
-<h3 id="certificado-novo">Aviso de certificado novo</h3>
+<h3 id="certificado-novo">Como ativar o aviso de certificado novo</h3>
 <ol>
   <li>Ligue <strong>Avisar quando chegar certificado novo</strong> para avisar os administradores e quem tem o cliente na carteira.</li>
   <li>Em <strong>Enviar</strong>, escolha <strong>A cada hora cheia (padrão)</strong> ou <strong>Imediatamente, a cada varredura com novos</strong>.</li>
   <li>Clique em <strong>Salvar alterações</strong>.</li>
 </ol>
 
-<h3 id="quem-quando">Para quem e quando sai o resumo</h3>
+<h3 id="quem-quando">Como definir quem recebe o resumo e quando</h3>
 <ol>
   <li>No bloco <strong>Resumo de vencimentos</strong>, em <strong>Destinatários</strong>, escreva os e-mails separados por vírgula. Vazio envia para todos os administradores ativos. Um endereço fora da empresa faz aparecer o aviso <strong>Endereço fora da empresa</strong>.</li>
-  <li>Em <strong>Prazos de aviso</strong>, escreva os dias antes do vencimento, separados por vírgula. A linha embaixo do campo mostra os prazos em uso. O aviso de que o certificado venceu é sempre enviado.</li>
+  <li>Em <strong>Prazos de aviso</strong>, escreva os dias antes do vencimento, separados por vírgula. A linha abaixo do campo mostra os prazos em uso. O aviso de que o certificado venceu é sempre enviado.</li>
   <li>Em <strong>Verificar a cada</strong>, escolha <strong>20 horas (padrão)</strong>, <strong>12 horas</strong>, <strong>24 horas</strong> ou <strong>7 dias</strong>. É o intervalo entre verificações, não um horário fixo.
     {{ print("configuracao-alertas-quem-quando", "Bloco Resumo de vencimentos, com os destinatários, os prazos de aviso, o intervalo e o botão Disparar agora", "Quem recebe o resumo e com que frequência.") }}
   </li>
   <li>Clique em <strong>Salvar alterações</strong>.</li>
 </ol>
 
-<h3 id="disparar">Mandar o resumo agora</h3>
+<h3 id="disparar">Como enviar o resumo imediatamente</h3>
 <ol>
   <li>Clique em <strong>Disparar agora</strong>.</li>
-  <li>A janela <strong>Disparar o resumo agora</strong> diz para quem vai.
+  <li>A janela <strong>Disparar o resumo agora</strong> mostra os destinatários.
     {{ print("configuracao-alertas-disparo", "Janela Disparar o resumo agora com os destinatários, antes de confirmar", "A confirmação antes de disparar o resumo.") }}
   </li>
-  <li>Clique em <strong>Enviar agora</strong> só se quiser mesmo enviar. Para desistir, clique em <strong>Cancelar</strong>.</li>
+  <li>Clique em <strong>Enviar agora</strong> somente se quiser realmente enviar. Para desistir, clique em <strong>Cancelar</strong>.</li>
 </ol>
 
-{% call cuidado("Disparar agora manda e-mails de verdade") %}<p><strong>Disparar agora</strong> é o mesmo envio do horário, com e-mails reais para os destinatários. Para testar, use <strong>Enviar teste</strong> com o seu próprio e-mail.</p>{% endcall %}
+{% call cuidado("Disparar agora envia e-mails reais") %}<p><strong>Disparar agora</strong> faz o mesmo envio do agendamento, com e-mails reais para os destinatários. Para testar, use <strong>Enviar teste</strong> com o seu próprio e-mail.</p>{% endcall %}
 
-<h3 id="texto-email">Mudar o texto do e-mail</h3>
+<h3 id="texto-email">Como mudar o texto do e-mail</h3>
 <ol>
   <li>Em <strong>Texto do e-mail</strong>, clique em <strong>Editar texto…</strong>.</li>
-  <li>Ajuste <strong>Assunto</strong>, <strong>Título</strong>, <strong>Abertura</strong> e <strong>Recado final</strong>. Os botões em <strong>Variáveis disponíveis</strong> inserem dados automáticos no ponto onde está o cursor. A prévia, à direita, mostra o resultado.
+  <li>Ajuste <strong>Assunto</strong>, <strong>Título</strong>, <strong>Abertura</strong> e <strong>Recado final</strong>. Os botões em <strong>Variáveis disponíveis</strong> inserem dados automáticos na posição do cursor. A prévia, à direita, mostra o resultado.
     {{ print("configuracao-alertas-texto", "Janela Texto do e-mail de alerta com os campos Assunto, Título, Abertura e Recado final e a prévia à direita", "O texto do e-mail e a prévia.") }}
   </li>
-  <li>Clique em <strong>Salvar</strong>. <strong>Restaurar padrão</strong> limpa os campos, mas ainda é preciso salvar.</li>
+  <li>Clique em <strong>Salvar</strong>.</li>
 </ol>
+<p><strong>Restaurar padrão</strong> limpa os campos, mas ainda é preciso clicar em <strong>Salvar</strong>.</p>

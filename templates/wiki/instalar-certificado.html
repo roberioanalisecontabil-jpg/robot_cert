@@ -1,35 +1,38 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="instalar">Instalar certificados no seu computador</h2>
-<p>Antes, confira: a bandeja <strong>CertGuard Análise</strong> precisa estar aberta no seu computador, com você conectado e o computador autorizado. Veja <a href="/wiki-certguard?pagina=bandeja-entrar">Bandeja CertGuard Análise</a>.</p>
+<p>Pelo Início, você pede a instalação dos certificados dos clientes da sua carteira. A bandeja <strong>CertGuard Análise</strong> recebe o pedido e instala o certificado no seu computador.</p>
+
+<h2 id="instalar">Como instalar certificados no seu computador</h2>
+<p><strong>Antes de começar:</strong> a bandeja <strong>CertGuard Análise</strong> precisa estar aberta no seu computador, com você conectado e o computador autorizado. Veja <a href="/wiki-certguard?pagina=bandeja-entrar">Como entrar na bandeja</a>.</p>
 <ol>
-  <li>Clique em <strong>Selecionar</strong>. Aparece uma coluna de caixas de marcação e o botão vira <strong>Cancelar</strong>.</li>
-  <li>Marque os certificados que quer instalar. A caixa do cabeçalho marca todos os instaláveis desta página.</li>
-  <li>Abaixo dos botões aparece quantos certificados estão selecionados.
+  <li>No Início, clique em <strong>Selecionar</strong>. Aparece uma coluna de caixas de marcação e o botão passa a se chamar <strong>Cancelar</strong>.</li>
+  <li>Marque os certificados que deseja instalar. A caixa do cabeçalho marca todos os instaláveis desta página. Abaixo dos botões aparece quantos certificados estão selecionados.
     {{ print("inicio-selecao", "Modo de seleção com dois certificados marcados, a contagem de selecionados e o botão Instalar selecionados", "Dois certificados marcados para instalar") }}
   </li>
-  <li>Clique em <strong>Instalar selecionados</strong>.</li>
-  <li>O portal avisa "Pedido enviado. Acompanhando a instalação…".
+  <li>Clique em <strong>Instalar selecionados</strong>. O portal exibe "Pedido enviado. Acompanhando a instalação…".
     {{ print("inicio-pedido-enviado", "Aviso Pedido enviado. Acompanhando a instalação, no Início") }}
   </li>
-  <li>Aguarde. Em alguns segundos aparece "Certificado instalado em" e o nome do seu computador. A bandeja também mostra um aviso no canto da tela.</li>
+  <li>Aguarde alguns segundos.</li>
   <li>Clique em <strong>Cancelar</strong> para sair do modo de seleção.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o portal exibe "Certificado instalado em" seguido do nome do seu computador, e a bandeja mostra um aviso no canto da tela.</p>
+
+{% call dica("Limite por pedido") %}
+<p>Cada pedido aceita até <strong>50 certificados</strong>. Se você marcar mais, o portal pede para desmarcar o excesso.</p>
+{% endcall %}
+
+<h2 id="erros">Erros e soluções</h2>
 
 <h3 id="sem-botao-instalar">O botão de instalar não aparece</h3>
-<p>Sem a bandeja pronta no seu computador, o botão <strong>Instalar selecionados</strong> não aparece. No lugar dele, um aviso diz o que falta, por exemplo "Sem agente ativo na sua estação" ou que o computador está aguardando o administrador autorizar.</p>
+<p>Sem a bandeja pronta no seu computador, o botão <strong>Instalar selecionados</strong> não aparece. No lugar dele, um aviso informa o que falta, por exemplo "Sem agente ativo na sua estação" ou que o computador aguarda a autorização do administrador.</p>
 {{ print("inicio-sem-agente", "Modo de seleção com o aviso de que o computador aguarda a autorização do administrador, no lugar do botão de instalar") }}
 <ol>
   <li>Abra a bandeja <strong>CertGuard Análise</strong> e entre com a sua conta do portal.</li>
   <li>Confira se o computador já foi autorizado.</li>
-  <li>Volte ao Início e marque os certificados de novo.</li>
+  <li>Volte ao Início e marque os certificados novamente.</li>
 </ol>
 
-{% call dica("Caixa apagada") %}
-<p>Linha com a caixa de marcação apagada não pode ser instalada. Passe o mouse sobre ela para ver o motivo, por exemplo "Certificado vencido", "Fora da sua carteira" ou "Aguardando o envio pelo agente".</p>
-{% endcall %}
-
-{% call dica("Limite por pedido") %}
-<p>Cada pedido aceita até <strong>50 certificados</strong>. Se marcar mais, o portal pede para desmarcar o excesso.</p>
-{% endcall %}
+<h3 id="caixa-apagada">A caixa de marcação está apagada</h3>
+<p>Uma linha com a caixa de marcação apagada não pode ser instalada. Passe o mouse sobre ela para ver o motivo, por exemplo "Certificado vencido", "Fora da sua carteira" ou "Aguardando o envio pelo agente".</p>

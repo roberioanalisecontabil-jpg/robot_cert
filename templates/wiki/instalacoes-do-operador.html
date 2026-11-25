@@ -1,19 +1,23 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Gestor", "Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="instalacoes">Conferir o que um operador instalou</h2>
+<p>Em Carteiras, o gestor e o administrador conferem as instalações recentes de cada operador.</p>
+
+<h2 id="instalacoes">Como conferir o que um operador instalou</h2>
 <ol>
-  <li>Abra o operador.</li>
-  <li>Role até <strong>Instalações desta pessoa</strong>. Aparecem o resumo do último ano (tentativas, concluídas e com falha) e as 10 instalações mais recentes, com data, número de certificados, estação e desfecho.
+  <li>Em <strong>Carteiras</strong>, abra o operador.</li>
+  <li>Role até <strong>Instalações desta pessoa</strong>.
     {{ print("carteiras-historico", "Bloco Instalações desta pessoa com o resumo do último ano e as instalações mais recentes", "As instalações recentes de um operador.") }}
   </li>
 </ol>
+<p><strong>Resultado esperado:</strong> aparecem o resumo do último ano (tentativas, concluídas e com falha) e as 10 instalações mais recentes, com data, número de certificados, estação e desfecho.</p>
 
-<h2 id="dicas">Dicas e cuidados</h2>
+<h2 id="dicas">Cuidados com as carteiras</h2>
 {% call cuidado("Operador sem carteira não instala") %}<p>Operador sem carteira não consegue instalar nenhum certificado. Depois de cadastrar uma pessoa nova, monte a carteira dela.</p>{% endcall %}
 
-{% call cuidado("Retirar vale na hora") %}<p><strong>Retirar</strong> tem efeito imediato: a pessoa perde o acesso aos certificados daquele cliente. Por isso o portal sempre pede confirmação.</p>{% endcall %}
+{% call cuidado("Retirar tem efeito imediato") %}<p><strong>Retirar</strong> tem efeito imediato: a pessoa perde o acesso aos certificados daquele cliente. Por isso, o portal sempre pede confirmação.</p>{% endcall %}
 
-{% call dica("Desativar ou mudar o papel esvazia a carteira") %}<p>Desativar a conta de alguém, ou mudar o papel dele, esvazia a carteira. Ao reativar, é preciso montar a carteira de novo. Uma conta inativa que ainda tem carteira aparece na lista com o aviso <strong>Conta inativa, com carteira a limpar</strong>.</p>{% endcall %}
+{% call dica("Desativar ou mudar o papel esvazia a carteira") %}<p>Desativar a conta de alguém, ou mudar o papel dessa pessoa, esvazia a carteira. Ao reativar, é preciso montar a carteira novamente. Uma conta inativa que ainda tem carteira aparece na lista com o aviso <strong>Conta inativa, com carteira a limpar</strong>.</p>{% endcall %}
 
-{% call dica("Só clientes do inventário atual") %}<p>Para atribuir, só aparecem clientes que estão no inventário atual. Um cliente que saiu da pasta continua na carteira, marcado, até alguém retirar.</p>{% endcall %}
+{% call dica("Somente clientes do inventário atual") %}<p>Para atribuir, aparecem somente clientes que estão no inventário atual. Um cliente que saiu da pasta continua na carteira, marcado, até ser retirado.</p>{% endcall %}
