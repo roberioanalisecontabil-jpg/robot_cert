@@ -9,3 +9,11 @@ def test_postman_aparece_inteiro_e_na_busca(client, banco) -> None:
     assert "{{base}}/api/certificados" in p.text and "{{chave_certguard}}" in p.text
     r = client.get("/wiki-certguard?q=postman", headers=_h(*ADMIN))
     assert "pagina=api-consultar#postman" in r.text
+
+
+def test_postman_tem_exemplos_com_os_filtros_novos(client, banco) -> None:
+    p = client.get("/wiki-certguard?pagina=api-consultar", headers=_h(*ADMIN)).text
+    assert 'id="postman-filtros"' in p
+    assert "{{base}}/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60" in p
+    for par in ("vence_de", "vence_ate", "documento", "campos"):
+        assert f"<code>{par}</code>" in p, par

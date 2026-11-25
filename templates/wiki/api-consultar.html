@@ -58,6 +58,42 @@ in
   <li>Na aba <strong>Params</strong>, ponha os filtros, por exemplo <code>filtro_status</code> = <code>prestes_vencer</code> e <code>por_pagina</code> = <code>100</code>.</li>
   <li>Clique em <strong>Send</strong>. A resposta vem em JSON.</li>
 </ol>
+
+<h4 id="postman-filtros">Exemplos com filtros</h4>
+<p>Cada linha da tabela vira uma linha na aba <strong>Params</strong> (Key e Value). O Postman monta a URL sozinho.</p>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Para ver</th><th>Params</th></tr></thead>
+  <tbody>
+    <tr><td>Empresas que vencem nos próximos 60 dias</td><td><code>documento_tipo</code> = <code>cnpj</code><br><code>vence_em_dias</code> = <code>60</code><br><code>ordenar</code> = <code>vencimento</code></td></tr>
+    <tr><td>Os certificados de alguns clientes</td><td><code>documento</code> = <code>11.222.333/0001-81,123.456.789-09</code></td></tr>
+    <tr><td>O que vence em dezembro</td><td><code>vence_de</code> = <code>2026-12-01</code><br><code>vence_ate</code> = <code>2026-12-31</code></td></tr>
+    <tr><td>Pessoas físicas já vencidas</td><td><code>documento_tipo</code> = <code>cpf</code><br><code>filtro_status</code> = <code>vencidos</code></td></tr>
+    <tr><td>Só nome, documento e vencimento</td><td><code>campos</code> = <code>nome,documento,vence_em</code></td></tr>
+    <tr><td>Tudo o que a tela Início recebe</td><td><code>campos</code> = <code>completo</code></td></tr>
+  </tbody>
+</table></div>
+<p>O primeiro exemplo fica assim na URL:</p>
+<pre><code>{% raw %}{{base}}/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60&amp;ordenar=vencimento{% endraw %}</code></pre>
+<p>E a resposta, com um certificado só:</p>
+<pre><code>{
+  "atualizado_em": "2026-11-25T14:00:00+00:00",
+  "itens": [
+    {
+      "nome": "EMPRESA EXEMPLO LTDA",
+      "documento": "11222333000181",
+      "documento_tipo": "cnpj",
+      "status": "prestes_vencer",
+      "vence_em": "2026-12-10",
+      "dias_para_vencer": 15,
+      "emissor": "AC EXEMPLO RFB",
+      "tipo_icp": "e-CNPJ",
+      "sieg_estado": "no_sieg"
+    }
+  ],
+  "resumo": { "total": 1, ... },
+  "paginacao": { "pagina": 1, "total_paginas": 1, "total_itens": 1, "por_pagina": 100, ... }
+}</code></pre>
+<p>A explicação de cada campo está em <a href="/wiki-certguard?pagina=api-consultas#certificados-campos">Campos de /api/certificados</a>.</p>
 <p>Outros métodos (<code>POST</code>, <code>PUT</code>, <code>DELETE</code>) respondem <code>403</code>: a chave só lê. Os parâmetros de cada consulta estão em <a href="/wiki-certguard?pagina=api-consultas">Consultas permitidas</a>.</p>
 
 <h2 id="respostas">Respostas de erro</h2>
