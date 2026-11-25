@@ -1,139 +1,332 @@
-{% from "wiki/_macros.html" import papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import papeis, atualizado, parametros, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="consultas">Consultas permitidas</h2>
-<p>Datas no formato <code>AAAA-MM-DD</code>. Parâmetros entre colchetes são opcionais; o valor depois do <code>=</code> é o padrão.</p>
+<p>Conheça as demais consultas disponíveis na API, seus parâmetros e restrições de acesso. As consultas de certificados estão em <a href="/wiki-certguard?pagina=api-certificados">Consultar certificados digitais</a>. Todas usam <code>GET</code> e a chave no cabeçalho <code>Authorization</code>.</p>
+<p>Na coluna <strong>Valores aceitos</strong>, o tipo, o padrão e os limites vêm do próprio portal e acompanham qualquer mudança nas consultas. As datas seguem o formato <code>AAAA-MM-DD</code>.</p>
 
-{% call dica("Listas grandes") %}<p>Nas listas com <code>pagina</code> e <code>por_pagina</code>, peça uma página por vez. Para trazer tudo de uma vez em relatórios, use <code>todas_filtradas=true</code> onde existir.</p>{% endcall %}
-
-<h3 id="certificados">Certificados</h3>
+<h2 id="identificadores">Identificadores</h2>
+<p>Algumas consultas pedem um identificador no próprio caminho, no lugar do trecho entre chaves.</p>
 <div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <thead><tr><th>Identificador</th><th>O que é</th><th>Onde obter</th></tr></thead>
   <tbody>
-    <tr><td><code>/api/certificados</code></td><td>Os certificados de hoje, como na tela Início. Pela chave vem a <a href="#certificados-campos">resposta enxuta</a>.</td><td>[documento: um ou vários CNPJ/CPF separados por vírgula] [documento_tipo: <code>cnpj</code>, <code>cpf</code>] [vence_em_dias: vence de hoje até daqui a N dias] [vence_de] [vence_ate] [campos=enxuto: <code>completo</code> ou uma lista] [filtro_status=todos: <code>todos</code>, <code>validos</code>, <code>prestes_vencer</code>, <code>vencidos</code>, <code>erros</code>] [busca] [pagina] [por_pagina, até 2000] [todas_filtradas=false] [ocultar_ilegiveis=false] [ocultar_vencidos=false] [filtro_sieg=todos: <code>incluindo</code>, <code>no_sieg</code>, <code>fora</code>] [ordenar: <code>nome</code>, <code>status</code>, <code>emissao</code>, <code>vencimento</code>, <code>documento</code>] [direcao=asc] [fonte=auto]</td></tr>
-    <tr><td><code>/api/certificados/{fingerprint}/detalhes</code></td><td>Um certificado, com os dados do responsável.</td><td>—</td></tr>
-    <tr><td><code>/api/certificados/historico</code></td><td>Todos os certificados que já passaram pelo portal.</td><td>[busca] [status: <code>ok</code>, <code>expirado</code>, <code>erro</code>, <code>ilegivel</code>, <code>fora_do_padrao</code>] [situacao: <code>todos</code>, <code>nas_pastas</code>, <code>sairam</code>] [pagina=1] [por_pagina=20, até 2000] [todas_filtradas=false]</td></tr>
-    <tr><td><code>/api/certificados/vencidos</code></td><td>Clientes com o certificado vencido.</td><td>[data_inicio] [data_fim] [busca] [ordem=desc] [pagina=1] [por_pagina=20, até 2000] [todas_filtradas=false]</td></tr>
-    <tr><td><code>/api/certificados/duplicidades</code></td><td>Clientes com mais de um certificado guardado.</td><td>—</td></tr>
-    <tr><td><code>/api/sieg/certificado/{fingerprint}</code></td><td>A situação do certificado no SIEG.</td><td>—</td></tr>
+    <tr><td><code>fingerprint</code></td><td>Impressão digital SHA-256 do certificado, com 64 caracteres hexadecimais.</td><td>Campo <code>fingerprint_sha256</code> de <code>/api/certificados</code> (peça em <code>campos</code>).</td></tr>
+    <tr><td><code>user_id</code></td><td>Identificador da conta de um colaborador.</td><td>Campo <code>id</code> de <code>/api/users</code>.</td></tr>
+    <tr><td><code>documento</code></td><td>CNPJ ou CPF do cliente, somente os dígitos.</td><td>Campo <code>documento</code> de <code>/api/certificados</code>.</td></tr>
+    <tr><td><code>machine_id</code></td><td>Identificador da máquina (estação ou servidor).</td><td>Campo <code>machine_id</code> de <code>/api/agent/dispositivos</code>.</td></tr>
+    <tr><td><code>token_id</code></td><td>Identificador de um pedido de instalação.</td><td>Campo <code>token_id</code> de cada cadeia em <code>/api/cert-installer/trilha</code>.</td></tr>
+    <tr><td><code>uso_id</code></td><td>Identificador de uma linha de uso de certificado.</td><td>Campo <code>id</code> de <code>/api/carteira/uso</code>.</td></tr>
   </tbody>
 </table></div>
 
-<h4 id="certificados-campos">Campos de <code>/api/certificados</code></h4>
-<p>Pela chave de API, cada certificado vem com nove campos:</p>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Campo</th><th>O que é</th></tr></thead>
-  <tbody>
-    <tr><td><code>nome</code></td><td>Titular do certificado.</td></tr>
-    <tr><td><code>documento</code></td><td>CNPJ ou CPF, só os dígitos.</td></tr>
-    <tr><td><code>documento_tipo</code></td><td><code>cnpj</code> ou <code>cpf</code>.</td></tr>
-    <tr><td><code>status</code></td><td><code>valido</code>, <code>prestes_vencer</code> (até 30 dias), <code>vencido</code>, <code>erro</code> ou <code>fora_do_padrao</code>.</td></tr>
-    <tr><td><code>vence_em</code></td><td>Data do vencimento, no horário de Brasília.</td></tr>
-    <tr><td><code>dias_para_vencer</code></td><td>Dias até o vencimento; negativo se já venceu.</td></tr>
-    <tr><td><code>emissor</code></td><td>Autoridade certificadora.</td></tr>
-    <tr><td><code>tipo_icp</code></td><td><code>e-CNPJ</code> ou <code>e-CPF</code>.</td></tr>
-    <tr><td><code>sieg_estado</code></td><td>Situação no SIEG; vazio se nunca foi enviado.</td></tr>
-  </tbody>
-</table></div>
-<p>Para outros campos, escolha em <code>campos</code>, separados por vírgula, por exemplo <code>campos=nome,documento,vence_em,fingerprint_sha256</code>. Também podem ser pedidos: <code>emitido_em</code>, <code>documento_formatado</code>, <code>organizacao</code>, <code>issuer</code>, <code>subject</code>, <code>serial_number</code>, <code>fingerprint_sha256</code>, <code>error_message</code>, <code>not_before</code>, <code>not_after</code>, <code>pasta</code>. Com <code>campos=completo</code>, vem tudo o que a tela Início recebe. Um campo que não existe devolve <code>422</code> com a lista dos válidos.</p>
-<p>Exemplo: CNPJs que vencem nos próximos 60 dias, <code>/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60&amp;por_pagina=500</code>.</p>
+<h2 id="dashboard">Dashboard</h2>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/dashboard</code></h4>
+  <p>Indicadores gerais dos certificados gerenciados pelo portal.</p>
+  {{ parametros("/api/dashboard", {
+    "dias": "Janela, em dias, dos indicadores de vencimento e de movimentação.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/dashboard/renovacoes</code></h4>
+  <p>Renovações: compara o inventário de hoje com o de N dias atrás.</p>
+  {{ parametros("/api/dashboard/renovacoes", {
+    "dias": "Quantos dias atrás fica o inventário comparado.",
+    "machine_id": "Máquina cujo inventário é comparado (a que lê as pastas de certificados).",
+  }) }}
+</section>
 
-<h3 id="dashboard">Dashboard</h3>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
-  <tbody>
-    <tr><td><code>/api/dashboard</code></td><td>Os números do parque de certificados.</td><td>[dias=30, até 365]</td></tr>
-    <tr><td><code>/api/dashboard/renovacoes</code></td><td>Renovações: o inventário de hoje contra o de N dias atrás.</td><td>[dias=30, até 365] [machine_id=ANALISESRV]</td></tr>
-  </tbody>
-</table></div>
+<h2 id="carteiras">Carteiras e utilização dos certificados</h2>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/operadores</code></h4>
+  <p>Operadores habilitados a receber carteiras e quantidade de clientes atribuídos a cada um.</p>
+  {{ parametros("/api/carteira/operadores") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/{user_id}</code></h4>
+  <p>Clientes da carteira de um colaborador.</p>
+  {{ parametros("/api/carteira/{user_id}", {
+    "user_id": "Identificador da conta do colaborador.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/{user_id}/instalacoes</code></h4>
+  <p>Instalações solicitadas pelo colaborador.</p>
+  {{ parametros("/api/carteira/{user_id}/instalacoes", {
+    "user_id": "Identificador da conta do colaborador.",
+    "dias": "Período, em dias, contado até hoje.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/documentos</code></h4>
+  <p>Clientes (CNPJ/CPF) que podem ser incluídos em uma carteira.</p>
+  {{ parametros("/api/carteira/documentos", {
+    "q": "Texto procurado no nome ou no número do documento.",
+    "limite": "Quantidade máxima de registros retornados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/certificados</code></h4>
+  <p>Certificados com a quantidade de colaboradores que os têm na carteira.</p>
+  {{ parametros("/api/carteira/certificados", {
+    "q": "Texto procurado no nome ou no número do documento.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/certificados/{documento}</code></h4>
+  <p>Colaboradores que têm o cliente na carteira, com o prazo de cada um.</p>
+  {{ parametros("/api/carteira/certificados/{documento}", {
+    "documento": "CNPJ ou CPF do cliente, somente os dígitos.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/uso</code></h4>
+  <p>Cada uso de certificado: quando, por quem e em qual máquina. A resposta traz <code>linhas</code> e <code>tem_mais</code> (true quando há mais páginas).</p>
+  {{ parametros("/api/carteira/uso", {
+    "desde": "Data inicial.",
+    "ate": "Data final.",
+    "user_id": "Somente os usos de um colaborador.",
+    "documento": "Somente os usos do certificado de um cliente (CNPJ ou CPF).",
+    "pagina": "Página dos resultados.",
+    "por_pagina": "Registros por página.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/uso/resumo</code></h4>
+  <p>Uso somado por certificado, por dia e por colaborador, mais as assinaturas sem certificado identificado.</p>
+  {{ parametros("/api/carteira/uso/resumo", {
+    "desde": "Data inicial.",
+    "ate": "Data final.",
+    "user_id": "Somente os usos de um colaborador.",
+    "documento": "Somente os usos do certificado de um cliente (CNPJ ou CPF).",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/carteira/uso/{uso_id}/janelas</code></h4>
+  <p>Programa e janela em uso em cada registro de uma linha de uso.</p>
+  {{ parametros("/api/carteira/uso/{uso_id}/janelas", {
+    "uso_id": "Identificador da linha de uso: o campo id de /api/carteira/uso.",
+  }) }}
+</section>
 
-<h3 id="carteiras">Carteiras e uso dos certificados</h3>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
-  <tbody>
-    <tr><td><code>/api/carteira/operadores</code></td><td>Quem pode receber carteira, com quantos clientes cada um tem.</td><td>—</td></tr>
-    <tr><td><code>/api/carteira/{user_id}</code></td><td>Os clientes da carteira de uma pessoa.</td><td>—</td></tr>
-    <tr><td><code>/api/carteira/{user_id}/instalacoes</code></td><td>As instalações pedidas por essa pessoa.</td><td>[dias=365, até 365]</td></tr>
-    <tr><td><code>/api/carteira/documentos</code></td><td>Os clientes (CNPJ/CPF) que podem entrar numa carteira.</td><td>[q: nome ou número] [limite=500, até 2000]</td></tr>
-    <tr><td><code>/api/carteira/certificados</code></td><td>Os certificados com quantas pessoas os têm na carteira.</td><td>[q]</td></tr>
-    <tr><td><code>/api/carteira/certificados/{documento}</code></td><td>Quem tem esse cliente na carteira, com o prazo de cada um.</td><td>—</td></tr>
-    <tr><td><code>/api/carteira/uso</code></td><td>Cada uso de certificado: quando, por quem e em qual máquina.</td><td>[desde] [ate] [user_id] [documento] [pagina=1] [por_pagina=50, de 10 a 100]</td></tr>
-    <tr><td><code>/api/carteira/uso/resumo</code></td><td>O uso somado por certificado, por dia e por pessoa, mais as assinaturas sem certificado identificado.</td><td>[desde] [ate] [user_id] [documento]</td></tr>
-    <tr><td><code>/api/carteira/uso/{uso_id}/janelas</code></td><td>O programa e a janela em uso em cada registro de uma linha de uso.</td><td>—</td></tr>
-  </tbody>
-</table></div>
+<h2 id="instalador">Instalador e SIEG</h2>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/diagnostico</code></h4>
+  <p>Estado do módulo instalador e do cofre (contagens, sem senhas).</p>
+  {{ parametros("/api/cert-installer/diagnostico") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/entrada</code></h4>
+  <p>Movimentos: pendências abertas e certificados que entraram no período.</p>
+  {{ parametros("/api/cert-installer/entrada", {
+    "dias": "Período, em dias, contado até hoje.",
+    "limite": "Quantidade máxima de registros retornados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/trilha</code></h4>
+  <p>Cada tentativa de instalação, agrupada por pedido em <code>cadeias</code>.</p>
+  {{ parametros("/api/cert-installer/trilha", {
+    "dias": "Período, em dias, contado até hoje.",
+    "user_email": "Somente as tentativas de um colaborador (e-mail da conta).",
+    "apenas_falhas": "true retorna somente as tentativas que falharam.",
+    "limite": "Quantidade máxima de registros retornados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/acompanhar/{token_id}</code></h4>
+  <p>Status atual de uma solicitação de instalação feita pela conta dona da chave.</p>
+  {{ parametros("/api/cert-installer/acompanhar/{token_id}", {
+    "token_id": "Identificador do pedido: o campo token_id de cada cadeia em /api/cert-installer/trilha.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/expurgo-previa</code></h4>
+  <p>Quantos registros da trilha o expurgo apagaria agora.</p>
+  {{ parametros("/api/cert-installer/expurgo-previa") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/sieg/inclusoes</code></h4>
+  <p>Certificados enviados ao SIEG, com a última tentativa.</p>
+  {{ parametros("/api/sieg/inclusoes", {
+    "estado": "Somente um estado de envio: incluindo, no_sieg, erro, removido ou substituido.",
+    "limite": "Quantidade máxima de registros retornados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/sieg/trilha</code></h4>
+  <p>Tentativas de inclusão no SIEG.</p>
+  {{ parametros("/api/sieg/trilha", {
+    "fingerprint": "Somente as tentativas de um certificado (fingerprint_sha256).",
+    "limite": "Quantidade máxima de registros retornados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/sieg/configuracao</code></h4>
+  <p>Configuração do SIEG (as credenciais aparecem apenas como “definida”).</p>
+  {{ parametros("/api/sieg/configuracao") }}
+</section>
 
-<h3 id="instalador">Instalador e SIEG</h3>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
-  <tbody>
-    <tr><td><code>/api/cert-installer/diagnostico</code></td><td>O estado do módulo instalador e do cofre (contagens, sem senhas).</td><td>—</td></tr>
-    <tr><td><code>/api/cert-installer/entrada</code></td><td>Movimentos: pendências abertas e o que entrou no período.</td><td>[dias=30, até 365] [limite=500, até 1000]</td></tr>
-    <tr><td><code>/api/cert-installer/trilha</code></td><td>Cada tentativa de instalação.</td><td>[dias=30, até 365] [user_email] [apenas_falhas=false] [limite=500, até 1000]</td></tr>
-    <tr><td><code>/api/cert-installer/acompanhar/{token_id}</code></td><td>Em que pé está um pedido de instalação.</td><td>—</td></tr>
-    <tr><td><code>/api/cert-installer/expurgo-previa</code></td><td>Quantos registros da trilha o expurgo apagaria agora.</td><td>—</td></tr>
-    <tr><td><code>/api/sieg/inclusoes</code></td><td>Os certificados enviados ao SIEG, com a última tentativa.</td><td>[estado] [limite=500, até 2000]</td></tr>
-    <tr><td><code>/api/sieg/trilha</code></td><td>As tentativas de inclusão no SIEG.</td><td>[fingerprint] [limite=200, até 1000]</td></tr>
-    <tr><td><code>/api/sieg/configuracao</code></td><td>A configuração do SIEG (as credenciais aparecem só como “definida”).</td><td>—</td></tr>
-  </tbody>
-</table></div>
+<h2 id="usuarios">Usuários, permissões e computadores</h2>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/users</code></h4>
+  <p>Contas do portal, sem senhas. O campo <code>id</code> é o <code>user_id</code> das outras consultas.</p>
+  {{ parametros("/api/users") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/users/{user_id}/carteira/contagem</code></h4>
+  <p>Quantidade de clientes na carteira do colaborador.</p>
+  {{ parametros("/api/users/{user_id}/carteira/contagem", {
+    "user_id": "Identificador da conta do colaborador.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/departamentos</code></h4>
+  <p>Departamentos, com gestores e colaboradores ativos e inativos.</p>
+  {{ parametros("/api/departamentos") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/permissoes</code></h4>
+  <p>Permissões de acesso de cada perfil de usuário, organizadas por módulo.</p>
+  {{ parametros("/api/permissoes") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/permissoes/trilha</code></h4>
+  <p>Histórico de concessão e revogação de acessos.</p>
+  {{ parametros("/api/permissoes/trilha", {
+    "limite": "Quantidade máxima de registros retornados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/computadores</code></h4>
+  <p>Computadores: pendentes, ativos e histórico.</p>
+  {{ parametros("/api/computadores") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/agent/dispositivos</code></h4>
+  <p>Bandejas das estações, com o último contato.</p>
+  {{ parametros("/api/agent/dispositivos") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/agent/maquinas</code></h4>
+  <p>Máquinas com credencial própria do agente.</p>
+  {{ parametros("/api/agent/maquinas") }}
+</section>
 
-<h3 id="usuarios">Usuários, acesso e computadores</h3>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
-  <tbody>
-    <tr><td><code>/api/users</code></td><td>As contas do portal, sem senhas.</td><td>—</td></tr>
-    <tr><td><code>/api/users/{user_id}/carteira/contagem</code></td><td>Quantos clientes a pessoa tem na carteira.</td><td>—</td></tr>
-    <tr><td><code>/api/departamentos</code></td><td>Os departamentos, com gestores e pessoas ativas e inativas.</td><td>—</td></tr>
-    <tr><td><code>/api/permissoes</code></td><td>O que cada papel alcança, módulo a módulo.</td><td>—</td></tr>
-    <tr><td><code>/api/permissoes/trilha</code></td><td>O histórico de concessão e revogação de acesso.</td><td>[limite=30, até 200]</td></tr>
-    <tr><td><code>/api/computadores</code></td><td>Os computadores: pendentes, ativos e histórico.</td><td>—</td></tr>
-    <tr><td><code>/api/agent/dispositivos</code></td><td>As bandejas das estações, com o último contato.</td><td>—</td></tr>
-    <tr><td><code>/api/agent/maquinas</code></td><td>As máquinas com credencial própria do agente.</td><td>—</td></tr>
-  </tbody>
-</table></div>
+<h2 id="operacao">Configuração e operação</h2>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/settings</code></h4>
+  <p>Pastas, alertas e envio de e-mail (senhas e segredos aparecem apenas como “definido”).</p>
+  {{ parametros("/api/settings") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/agent/queue</code></h4>
+  <p>Comandos pendentes para o agente.</p>
+  {{ parametros("/api/agent/queue") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/remocao</code></h4>
+  <p>Relatório de remoção de certificados nas estações.</p>
+  {{ parametros("/api/remocao", {
+    "estado": "Somente um estado: removeria, aviso, remover, removido ou falhou.",
+    "pagina": "Página dos resultados.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/acessorias/departamentos</code></h4>
+  <p>Departamentos do Acessórias e o correspondente de cada um no portal.</p>
+  {{ parametros("/api/acessorias/departamentos") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/acessorias/situacao</code></h4>
+  <p>Situação da integração com o Acessórias.</p>
+  {{ parametros("/api/acessorias/situacao") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/health/detalhado</code></h4>
+  <p>Estado da configuração do servidor.</p>
+  {{ parametros("/api/health/detalhado") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/api-chaves</code></h4>
+  <p>Chaves de API, sem o texto da chave.</p>
+  {{ parametros("/api/api-chaves") }}
+</section>
 
-<h3 id="operacao">Configuração e operação</h3>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
-  <tbody>
-    <tr><td><code>/api/settings</code></td><td>Pastas, alertas e envio de e-mail (senhas e segredos só como “definido”).</td><td>—</td></tr>
-    <tr><td><code>/api/agent/queue</code></td><td>Os comandos pendentes para o agente.</td><td>—</td></tr>
-    <tr><td><code>/api/remocao</code></td><td>O relatório de remoção nas estações.</td><td>[estado: <code>removeria</code>, <code>aviso</code>, <code>remover</code>, <code>removido</code>, <code>falhou</code>] [pagina=1]</td></tr>
-    <tr><td><code>/api/acessorias/departamentos</code></td><td>Os departamentos do Acessórias e o par de cada um no portal.</td><td>—</td></tr>
-    <tr><td><code>/api/acessorias/situacao</code></td><td>A situação da integração com o Acessórias.</td><td>—</td></tr>
-    <tr><td><code>/api/health/detalhado</code></td><td>O estado da configuração do servidor.</td><td>—</td></tr>
-    <tr><td><code>/api/api-chaves</code></td><td>As chaves de API, sem o texto da chave.</td><td>—</td></tr>
-  </tbody>
-</table></div>
+<h2 id="conta">Consultas da conta vinculada à chave</h2>
+<p>Estas consultas respondem sobre o administrador que criou a chave, e não sobre o portal inteiro.</p>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/permissoes/minhas</code></h4>
+  <p>Permissões da conta, módulo a módulo.</p>
+  {{ parametros("/api/permissoes/minhas") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/users/me/export</code></h4>
+  <p>Dados pessoais da conta (LGPD).</p>
+  {{ parametros("/api/users/me/export") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/users/me/app-autenticador</code></h4>
+  <p>Se o app autenticador está ativo.</p>
+  {{ parametros("/api/users/me/app-autenticador") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/perfil</code></h4>
+  <p>Nome, telefone e e-mail da conta.</p>
+  {{ parametros("/api/perfil") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/perfil/foto</code></h4>
+  <p>Foto da conta. Retorna uma imagem JPEG, e não JSON; responde <code>404</code> quando não há foto.</p>
+  {{ parametros("/api/perfil/foto") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/colaborador/certificados/painel</code></h4>
+  <p>Painel do Acompanhamento.</p>
+  {{ parametros("/api/colaborador/certificados/painel") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/colaborador/certificados/opcoes</code></h4>
+  <p>Certificados que a conta pode acompanhar.</p>
+  {{ parametros("/api/colaborador/certificados/opcoes") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/colaborador/certificados/selecionados</code></h4>
+  <p>Certificados que a conta acompanha.</p>
+  {{ parametros("/api/colaborador/certificados/selecionados") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/colaborador/alertas/preferencia</code></h4>
+  <p>Preferência de avisos e os marcos em uso.</p>
+  {{ parametros("/api/colaborador/alertas/preferencia") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/colaborador/alertas/enviados</code></h4>
+  <p>Avisos já enviados.</p>
+  {{ parametros("/api/colaborador/alertas/enviados", {
+    "dias": "Período, em dias, contado até hoje.",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/colaborador/notificacoes</code></h4>
+  <p>Notificações disponíveis na central de notificações.</p>
+  {{ parametros("/api/colaborador/notificacoes", {
+    "tipo": "Somente um tipo: novo (certificado novo), expiring (vencendo) ou expired (vencido).",
+  }) }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/minha-estacao</code></h4>
+  <p>Se há bandeja ativa da conta agora, e em qual máquina.</p>
+  {{ parametros("/api/cert-installer/minha-estacao") }}
+</section>
+<section class="wiki-rota">
+  <h4 class="wiki-rota__titulo"><span class="wiki-rota__metodo">GET</span> <code>/api/cert-installer/instalabilidade</code></h4>
+  <p>O que a conta pode instalar em uma estação.</p>
+  {{ parametros("/api/cert-installer/instalabilidade", {
+    "machine_id": "Identificador da máquina: o campo machine_id de /api/agent/dispositivos.",
+    "estacao": "Nome da estação, quando a máquina tem mais de uma sessão.",
+  }) }}
+</section>
 
-<h3 id="conta">Da conta dona da chave</h3>
-<p>Estas respondem sobre o administrador que criou a chave, não sobre o portal inteiro.</p>
-<div class="wiki-tabela"><table>
-  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
-  <tbody>
-    <tr><td><code>/api/permissoes/minhas</code></td><td>O que a conta alcança, módulo a módulo.</td><td>—</td></tr>
-    <tr><td><code>/api/users/me/export</code></td><td>Os dados pessoais da conta (LGPD).</td><td>—</td></tr>
-    <tr><td><code>/api/users/me/app-autenticador</code></td><td>Se o app autenticador está ativo.</td><td>—</td></tr>
-    <tr><td><code>/api/perfil</code></td><td>Nome, telefone e e-mail do dono da chave.</td><td>—</td></tr>
-    <tr><td><code>/api/perfil/foto</code></td><td>A foto do dono da chave (JPEG).</td><td>—</td></tr>
-    <tr><td><code>/api/colaborador/certificados/painel</code></td><td>O painel do Acompanhamento.</td><td>—</td></tr>
-    <tr><td><code>/api/colaborador/certificados/opcoes</code></td><td>Os certificados que a conta pode acompanhar.</td><td>—</td></tr>
-    <tr><td><code>/api/colaborador/certificados/selecionados</code></td><td>Os certificados que a conta acompanha.</td><td>—</td></tr>
-    <tr><td><code>/api/colaborador/alertas/preferencia</code></td><td>A preferência de avisos e os marcos em uso.</td><td>—</td></tr>
-    <tr><td><code>/api/colaborador/alertas/enviados</code></td><td>Os avisos já enviados.</td><td>[dias=30, até 365]</td></tr>
-    <tr><td><code>/api/colaborador/notificacoes</code></td><td>As notificações do sino.</td><td>[tipo: <code>novo</code>, <code>expiring</code>, <code>expired</code>]</td></tr>
-    <tr><td><code>/api/cert-installer/minha-estacao</code></td><td>Se há bandeja ativa da conta agora, e em qual máquina.</td><td>—</td></tr>
-    <tr><td><code>/api/cert-installer/instalabilidade</code></td><td>O que a conta pode instalar numa estação.</td><td>machine_id [estacao]</td></tr>
-  </tbody>
-</table></div>
-
-<h3 id="publica">Sem chave</h3>
-<p><code>/api/health</code> responde a qualquer um, só para saber se o portal está no ar.</p>
-
-<h2 id="bloqueadas">O que fica de fora</h2>
-<ul>
-  <li><strong>Gravar qualquer coisa</strong>: <code>POST</code>, <code>PUT</code>, <code>PATCH</code> e <code>DELETE</code> respondem <code>403</code>.</li>
-  <li><strong>Cofre e agente</strong>: <code>/api/agent/next</code> e <code>/api/cert-installer/vault-optin</code> respondem <code>403</code>. Arquivos <code>.pfx</code> e senhas de certificado nunca saem pela chave.</li>
-  <li><strong>Rotas das estações e do agendador</strong> (<code>/api/estacao/…</code>, <code>/api/agent/microsoft</code>, <code>/api/cron/alerts</code>): usam credenciais próprias e não aceitam a chave.</li>
-</ul>
+<h2 id="publica">Sem chave</h2>
+<p><code>/api/health</code> responde a qualquer pessoa, somente para informar se o portal está no ar.</p>

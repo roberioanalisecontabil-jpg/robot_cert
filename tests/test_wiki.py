@@ -217,7 +217,7 @@ def test_link_antigo_do_modulo_vai_para_a_primeira_pagina_do_tema(client_wiki: T
     ("inicio", "sieg", "incluir-no-sieg"),
     ("primeiros-passos", "cadastrar-app", "app-autenticador"),
     ("primeiros-passos", "codigo-nao-chegou", "entrar-no-portal"),
-    ("api", "bloqueadas", "api-consultas"),
+    ("api", "bloqueadas", "api-visao-geral"),
     ("configuracao", "forcar-leitura", "pastas-e-agente"),
     ("usuarios", "departamentos", "departamentos"),
 ])

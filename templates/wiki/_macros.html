@@ -63,3 +63,35 @@
     </div>
   </div>
 {%- endmacro %}
+
+{# Data da última revisão do artigo, logo abaixo dos selos. #}
+{% macro atualizado(data) -%}
+  <p class="wiki-atualizado">Atualizado em {{ data }}.</p>
+{%- endmacro %}
+
+{# Tabela de parâmetros de uma consulta da API de leitura. Tipo,
+   obrigatoriedade, padrão e limites vêm do OpenAPI do portal
+   (`parametros_api`, em app/rotas/wiki.py); a descrição vem do tutorial.
+   Parâmetro sem descrição sai marcado, e o teste da wiki barra. #}
+{% macro parametros(caminho, descricoes={}) -%}
+  {%- set lista = parametros_api(caminho, descricoes.keys()|list) -%}
+  {%- if lista %}
+  <div class="wiki-tabela"><table class="wiki-parametros">
+    <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Obrigatório</th><th>Padrão</th><th>Valores aceitos</th><th>Descrição</th></tr></thead>
+    <tbody>
+    {%- for p in lista %}
+      <tr>
+        <td><code>{{ p.nome }}</code>{% if p.na_rota %}<span class="wiki-parametros__rota">na rota</span>{% endif %}</td>
+        <td>{{ p.tipo }}</td>
+        <td>{{ "Sim" if p.obrigatorio else "Não" }}</td>
+        <td>{% if p.padrao %}<code>{{ p.padrao }}</code>{% else %}—{% endif %}</td>
+        <td>{{ p.valores or "—" }}</td>
+        {%- if descricoes.get(p.nome) %}<td>{{ descricoes[p.nome] }}</td>{% else %}<td class="wiki-sem-descricao"></td>{% endif %}
+      </tr>
+    {%- endfor %}
+    </tbody>
+  </table></div>
+  {%- else %}
+  <p class="wiki-parametros__nenhum">Sem parâmetros.</p>
+  {%- endif %}
+{%- endmacro %}

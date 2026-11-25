@@ -1,80 +1,32 @@
-{% from "wiki/_macros.html" import papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<p>A API do portal entrega os mesmos dados que o administrador vê nas telas, para usar em relatórios (Power BI, Excel) e em outros sistemas. É <strong>somente leitura</strong>: a chave consulta e não altera nada.</p>
+<p>Este artigo mostra como fazer uma consulta de teste, conferir a resposta e percorrer todas as páginas de uma lista.</p>
+<p><strong>Antes de começar:</strong> uma <a href="/wiki-certguard?pagina=api-chaves">chave de API</a> ativa e o endereço do portal.</p>
 
-<h2 id="chave">Criar a chave</h2>
-<ol>
-  <li>Abra <strong>Configuração › Chaves de API</strong>.</li>
-  <li>Dê um <strong>Nome</strong> que diga onde a chave vai ser usada (por exemplo, <strong>Power BI financeiro</strong>), escolha a <strong>Validade</strong> e digite a sua senha atual.</li>
-  <li>Clique em <strong>Criar chave</strong> e depois em <strong>Copiar</strong>. A chave começa com <code>cg_ro_</code> e aparece uma vez só.</li>
-</ol>
-<p>A tabela da aba mostra cada chave com o dono, a data de expiração, o último uso (com o IP) e o estado. <strong>Revogar</strong> desliga a chave na hora.</p>
-
-{% call cuidado("A chave vale como você") %}<p>Quem tiver a chave lê tudo o que você lê no portal, inclusive dados de clientes. Guarde-a num cofre de senhas ou na configuração protegida do sistema que vai usá-la, nunca em planilha, e-mail ou chat. Se vazar, revogue e crie outra.</p>{% endcall %}
-
-<p>A chave também morre sozinha quando vence, quando o dono é desativado ou quando ele deixa de ser administrador.</p>
-
-<h2 id="usar">Fazer uma consulta</h2>
-<p>Toda consulta é um <code>GET</code> no endereço do portal, com a chave no cabeçalho <code>Authorization</code>. As respostas vêm em JSON.</p>
-
-<h3 id="powershell">PowerShell</h3>
-<pre><code>$chave = "cg_ro_..."
-Invoke-RestMethod "https://ENDERECO-DO-PORTAL/api/certificados?filtro_status=prestes_vencer" `
-  -Headers @{ Authorization = "Bearer $chave" }</code></pre>
-
-<h3 id="curl">curl</h3>
-<pre><code>curl -H "Authorization: Bearer cg_ro_..." \
-  "https://ENDERECO-DO-PORTAL/api/certificados/vencidos?data_inicio=2026-01-01"</code></pre>
-
-<h3 id="python">Python</h3>
-<pre><code>import requests
-
-r = requests.get(
-    "https://ENDERECO-DO-PORTAL/api/carteira/uso",
-    params={"desde": "2026-11-01", "ate": "2026-11-30", "pagina": 1, "por_pagina": 100},
-    headers={"Authorization": "Bearer cg_ro_..."},
-    timeout=60,
-)
-r.raise_for_status()
-print(r.json())</code></pre>
-
-<h3 id="powerbi">Power BI (Obter dados › Consulta em branco)</h3>
-<pre><code>let
-    Fonte = Json.Document(Web.Contents(
-        "https://ENDERECO-DO-PORTAL",
-        [RelativePath = "api/certificados",
-         Query = [todas_filtradas = "true"],
-         Headers = [Authorization = "Bearer cg_ro_..."]]))
-in
-    Fonte</code></pre>
-<p>No aviso de credenciais do Power BI, escolha <strong>Anônimo</strong>: a chave já vai no cabeçalho.</p>
-
-<h3 id="postman">Postman</h3>
-<ol>
-  <li>Em <strong>Environments › New</strong>, crie a variável <code>chave_certguard</code>, marque o tipo <strong>secret</strong> e cole a chave em <strong>Current value</strong>. Crie também <code>base</code> com o endereço do portal (<code>https://ENDERECO-DO-PORTAL</code>). Assim a chave não vai junto quando a coleção for exportada ou compartilhada.</li>
-  <li>Numa requisição nova, escolha o método <strong>GET</strong> e escreva a URL, por exemplo <code>{% raw %}{{base}}/api/certificados{% endraw %}</code>.</li>
-  <li>Na aba <strong>Authorization</strong>, escolha <strong>Bearer Token</strong> e, em <strong>Token</strong>, escreva <code>{% raw %}{{chave_certguard}}{% endraw %}</code>.</li>
-  <li>Na aba <strong>Params</strong>, ponha os filtros, por exemplo <code>filtro_status</code> = <code>prestes_vencer</code> e <code>por_pagina</code> = <code>100</code>.</li>
-  <li>Clique em <strong>Send</strong>. A resposta vem em JSON.</li>
-</ol>
-
-<h4 id="postman-filtros">Exemplos com filtros</h4>
-<p>Cada linha da tabela vira uma linha na aba <strong>Params</strong> (Key e Value). O Postman monta a URL sozinho.</p>
+<h2 id="usar">Como montar a consulta</h2>
+<p>Toda consulta é um <code>GET</code> com três partes:</p>
 <div class="wiki-tabela"><table>
-  <thead><tr><th>Para ver</th><th>Params</th></tr></thead>
+  <thead><tr><th>Parte</th><th>O que informar</th><th>Exemplo</th></tr></thead>
   <tbody>
-    <tr><td>Empresas que vencem nos próximos 60 dias</td><td><code>documento_tipo</code> = <code>cnpj</code><br><code>vence_em_dias</code> = <code>60</code><br><code>ordenar</code> = <code>vencimento</code></td></tr>
-    <tr><td>Os certificados de alguns clientes</td><td><code>documento</code> = <code>11.222.333/0001-81,123.456.789-09</code></td></tr>
-    <tr><td>O que vence em dezembro</td><td><code>vence_de</code> = <code>2026-12-01</code><br><code>vence_ate</code> = <code>2026-12-31</code></td></tr>
-    <tr><td>Pessoas físicas já vencidas</td><td><code>documento_tipo</code> = <code>cpf</code><br><code>filtro_status</code> = <code>vencidos</code></td></tr>
-    <tr><td>Só nome, documento e vencimento</td><td><code>campos</code> = <code>nome,documento,vence_em</code></td></tr>
-    <tr><td>Tudo o que a tela Início recebe</td><td><code>campos</code> = <code>completo</code></td></tr>
+    <tr><td>Endereço do portal</td><td>O mesmo da barra do navegador ao abrir o portal, sem o caminho. Nos exemplos da wiki, troque <code>ENDERECO-DO-PORTAL</code> por ele.</td><td><code>https://portal.exemplo.com.br</code></td></tr>
+    <tr><td>Consulta</td><td>O caminho da consulta e, depois de <code>?</code>, os filtros separados por <code>&amp;</code>.</td><td><code>/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60</code></td></tr>
+    <tr><td>Cabeçalho <code>Authorization</code></td><td>A palavra <code>Bearer</code>, um espaço e a chave.</td><td><code>Bearer cg_ro_…</code></td></tr>
   </tbody>
 </table></div>
-<p>O primeiro exemplo fica assim na URL:</p>
-<pre><code>{% raw %}{{base}}/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60&amp;ordenar=vencimento{% endraw %}</code></pre>
-<p>E a resposta, com um certificado só:</p>
+
+<h2 id="teste">Consulta de teste</h2>
+<p>No Windows, abra o <strong>PowerShell</strong> e execute os comandos abaixo. O primeiro pede a chave sem exibi-la na tela nem gravá-la no histórico.</p>
+<pre><code>$chave = Read-Host "Chave de API" -MaskInput
+$r = Invoke-RestMethod "https://ENDERECO-DO-PORTAL/api/certificados?por_pagina=5" `
+  -Headers @{ Authorization = "Bearer $chave" }
+$r.itens | Format-Table nome, documento, status, vence_em</code></pre>
+<p><strong>Resultado esperado:</strong> uma tabela com até cinco certificados. Se aparecer um erro, veja <a href="/wiki-certguard?pagina=api-erros">Erros e soluções</a>.</p>
+<p>O <code>-MaskInput</code> existe a partir do PowerShell 7. No Windows PowerShell 5.1, use <code>$chave = Read-Host "Chave de API"</code>.</p>
+
+<h2 id="resposta">Como ler a resposta</h2>
+<p>As respostas vêm em JSON. A única exceção é <code>/api/perfil/foto</code>, que devolve uma imagem JPEG. Uma resposta de <code>/api/certificados</code> com um certificado:</p>
 <pre><code>{
   "atualizado_em": "2026-11-25T14:00:00+00:00",
   "itens": [
@@ -90,20 +42,49 @@ in
       "sieg_estado": "no_sieg"
     }
   ],
-  "resumo": { "total": 1, ... },
-  "paginacao": { "pagina": 1, "total_paginas": 1, "total_itens": 1, "por_pagina": 100, ... }
+  "vencidos_ocultos": 0,
+  "resumo": {
+    "total": 1,
+    "validos": 0,
+    "expirando": 1,
+    "erros": 0,
+    "vencidos": 0,
+    "sem_padrao": 0
+  },
+  "paginacao": {
+    "pagina": 1,
+    "total_paginas": 1,
+    "total_itens": 1,
+    "por_pagina": 100,
+    "export_max": 5000
+  }
 }</code></pre>
-<p>A explicação de cada campo está em <a href="/wiki-certguard?pagina=api-consultas#certificados-campos">Campos de /api/certificados</a>.</p>
-<p>Outros métodos (<code>POST</code>, <code>PUT</code>, <code>DELETE</code>) respondem <code>403</code>: a chave só lê. Os parâmetros de cada consulta estão em <a href="/wiki-certguard?pagina=api-consultas">Consultas permitidas</a>.</p>
-
-<h2 id="respostas">Respostas de erro</h2>
 <div class="wiki-tabela"><table>
-  <thead><tr><th>Código</th><th>O que significa</th></tr></thead>
+  <thead><tr><th>Objeto</th><th>O que contém</th></tr></thead>
   <tbody>
-    <tr><td><code>401</code></td><td>Chave errada, revogada ou vencida, ou o dono foi desativado ou deixou de ser administrador.</td></tr>
-    <tr><td><code>403</code></td><td>Tentativa de gravar (<code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>) ou consulta a uma rota que a chave não alcança (veja <a href="/wiki-certguard?pagina=api-consultas#bloqueadas">o que fica de fora</a>).</td></tr>
-    <tr><td><code>404</code></td><td>O registro pedido não existe.</td></tr>
-    <tr><td><code>422</code></td><td>Parâmetro fora do formato ou do limite (por exemplo, <code>por_pagina</code> acima do máximo).</td></tr>
-    <tr><td><code>503</code></td><td>O portal não conseguiu falar com o banco agora. Tente de novo em seguida.</td></tr>
+    <tr><td><code>atualizado_em</code></td><td>Data e hora (UTC) da última leitura das pastas de certificados.</td></tr>
+    <tr><td><code>itens</code></td><td>Os registros da página atual. Os campos de cada certificado estão em <a href="/wiki-certguard?pagina=api-certificados#certificados-campos">Campos da resposta</a>.</td></tr>
+    <tr><td><code>vencidos_ocultos</code></td><td>Quantos vencidos ficaram de fora por causa de <code>ocultar_vencidos=true</code>.</td></tr>
+    <tr><td><code>resumo</code></td><td>Totais por situação, de todos os registros do filtro (não só da página).</td></tr>
+    <tr><td><code>paginacao</code></td><td>Página atual, total de páginas, total de registros, registros por página e o máximo de <code>todas_filtradas</code>.</td></tr>
   </tbody>
 </table></div>
+
+<h2 id="paginacao">Como percorrer todas as páginas</h2>
+<p>As listas são entregues em páginas: <code>/api/certificados</code> traz 100 registros por página, se <code>por_pagina</code> não for informado. Para obter todos, repita a consulta aumentando <code>pagina</code> até chegar a <code>paginacao.total_paginas</code>.</p>
+<pre><code>$todos = @()
+$pagina = 1
+do {
+  $r = Invoke-RestMethod "https://ENDERECO-DO-PORTAL/api/certificados?pagina=$pagina&amp;por_pagina=500" `
+    -Headers @{ Authorization = "Bearer $chave" }
+  $todos += $r.itens
+  $pagina++
+} while ($pagina -le $r.paginacao.total_paginas)
+"$($todos.Count) certificados"</code></pre>
+{% call dica("Tudo de uma vez") %}<p>Nas consultas que aceitam <code>todas_filtradas=true</code>, a resposta traz todos os registros do filtro em uma página, até o limite de <code>export_max</code> (5.000). Quando o limite é atingido, a resposta traz <code>"lista_truncada": true</code>.</p>{% endcall %}
+
+<h2 id="proximos">Próximos passos</h2>
+<ul>
+  <li>Conectar Postman, Power BI, Excel, Python ou cURL: <a href="/wiki-certguard?pagina=api-integracoes">Guias de integração</a>.</li>
+  <li>Filtros e campos dos certificados: <a href="/wiki-certguard?pagina=api-certificados">Consultar certificados digitais</a>.</li>
+</ul>

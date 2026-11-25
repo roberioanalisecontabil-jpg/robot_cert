@@ -1,0 +1,46 @@
+{% from "wiki/_macros.html" import papeis, atualizado, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
+
+<p>A chave de API identifica o sistema que consulta o portal. Cada integração deve ter a sua própria chave: assim, é possível revogar uma sem interromper as outras.</p>
+
+<h2 id="chave">Como criar a chave</h2>
+<p><strong>Antes de começar:</strong> perfil de Administrador e a senha atual da sua conta.</p>
+<ol>
+  <li>Acesse <strong>Configuração › Chaves de API</strong>.</li>
+  <li>Informe um <strong>Nome</strong> que identifique a finalidade, como <strong>Power BI Financeiro</strong>.</li>
+  <li>Escolha a <strong>Validade</strong>: 30, 90 ou 180 dias, ou 1 ano.</li>
+  <li>Informe <strong>Sua senha atual</strong>.</li>
+  <li>Clique em <strong>Criar chave</strong> e depois em <strong>Copiar</strong>.</li>
+  <li>Armazene a chave em um cofre de senhas ou em uma configuração protegida.</li>
+</ol>
+<p><strong>Resultado esperado:</strong> a chave aparece na tabela da aba, com o dono, a data de expiração e o estado <strong>Ativa</strong>. O estado muda para <strong>Revogada</strong> ou <strong>Vencida</strong> quando a chave deixa de valer.</p>
+
+{% call cuidado("A chave é exibida apenas uma vez") %}<p>A chave começa com <code>cg_ro_</code> e não pode ser consultada depois que a janela é fechada. Ela permite acessar os dados disponibilizados pela API, inclusive dados de clientes. Não a compartilhe por e-mail, chat ou planilha. Em caso de perda ou exposição, revogue a chave e crie outra.</p>{% endcall %}
+
+<h2 id="acompanhar">Como acompanhar o uso</h2>
+<p>A tabela da aba mostra, para cada chave, o dono, a data de expiração, o último uso (com o endereço IP de origem) e o estado. Um último uso inesperado, de um IP desconhecido, indica que a chave pode ter sido exposta.</p>
+
+<h2 id="revogar">Como revogar uma chave</h2>
+<ol>
+  <li>Acesse <strong>Configuração › Chaves de API</strong>.</li>
+  <li>Na linha da chave, clique em <strong>Revogar</strong>. Não há confirmação: a chave é revogada no clique.</li>
+</ol>
+<p>Ao revogar uma chave, seu acesso é interrompido imediatamente: a próxima consulta com ela responde <code>401</code>.</p>
+
+<h2 id="substituir">Como substituir uma chave</h2>
+<p>Use este procedimento quando a chave estiver perto de expirar ou houver suspeita de exposição.</p>
+<ol>
+  <li>Crie uma chave nova, com o mesmo nome e a palavra <strong>nova</strong> no final, para diferenciá-las.</li>
+  <li>Atualize a chave na integração (no Postman, no parâmetro do Power BI ou do Excel, ou na variável de ambiente).</li>
+  <li>Faça uma consulta de teste e confira, na tabela, que a chave nova registrou o último uso.</li>
+  <li>Revogue a chave antiga.</li>
+</ol>
+
+<h2 id="invalida">Quando a chave deixa de funcionar?</h2>
+<ul>
+  <li>Quando atinge a data de expiração.</li>
+  <li>Quando é revogada.</li>
+  <li>Quando a conta vinculada é desativada ou perde o perfil de administrador.</li>
+</ul>
+<p>Em todos os casos, a consulta responde <code>401</code>. Veja <a href="/wiki-certguard?pagina=api-erros">Erros e soluções</a>.</p>

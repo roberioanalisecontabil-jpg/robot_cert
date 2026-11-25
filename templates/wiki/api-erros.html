@@ -1,0 +1,38 @@
+{% from "wiki/_macros.html" import papeis, atualizado, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
+
+<p>Quando uma consulta não funciona, a resposta traz um código HTTP e, em JSON, o campo <code>detail</code> com o motivo:</p>
+<pre><code>{
+  "detail": "Chave de API só lê: use GET."
+}</code></pre>
+
+<h2 id="respostas">Erros e soluções</h2>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Código</th><th>O que aconteceu?</th><th>Como resolver?</th></tr></thead>
+  <tbody>
+    <tr><td><code>401</code></td><td>Falha na autenticação: a chave está errada, revogada ou expirada, ou a conta vinculada foi desativada ou perdeu o perfil de administrador.</td><td>Confira se o cabeçalho é <code>Authorization: Bearer</code> seguido da chave completa, sem espaços a mais. Em <strong>Configuração › Chaves de API</strong>, confira se a chave está <strong>Ativa</strong>. Se não estiver, <a href="/wiki-certguard?pagina=api-chaves#substituir">substitua a chave</a>.</td></tr>
+    <tr><td><code>403</code></td><td>Operação ou consulta não permitida: um método diferente de <code>GET</code>, ou uma rota que a chave não alcança.</td><td>Use o método <code>GET</code> e confira se a consulta está na <a href="/wiki-certguard?pagina=api-consultas">referência</a>. As rotas bloqueadas estão em <a href="/wiki-certguard?pagina=api-visao-geral#bloqueadas">Restrições e limitações da API</a>.</td></tr>
+    <tr><td><code>404</code></td><td>Registro não encontrado.</td><td>Confira o identificador informado no caminho (veja <a href="/wiki-certguard?pagina=api-consultas#identificadores">Identificadores</a>).</td></tr>
+    <tr><td><code>422</code></td><td>Parâmetro inválido: formato, valor ou limite fora do aceito.</td><td>Confira o tipo, os valores aceitos e os limites na tabela de parâmetros da consulta. O campo <code>detail</code> indica qual parâmetro está errado.</td></tr>
+    <tr><td><code>429</code></td><td>Muitas consultas em sequência.</td><td>Aguarde alguns minutos e tente novamente. Em automações, espace as consultas.</td></tr>
+    <tr><td><code>503</code></td><td>O portal não conseguiu estabelecer comunicação com o banco de dados.</td><td>Tente novamente após alguns instantes. Se o erro persistir, procure a equipe de TI.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="perguntas">Perguntas frequentes</h2>
+
+<h3 id="faq-power-bi">O Power BI pede usuário e senha. O que informar?</h3>
+<p>Escolha <strong>Anônimo</strong>. A chave já vai no cabeçalho <code>Authorization</code> da consulta, como mostra o <a href="/wiki-certguard?pagina=api-integracoes#powerbi">guia do Power BI</a>.</p>
+
+<h3 id="faq-poucos">A consulta trouxe só 100 registros. Onde estão os outros?</h3>
+<p>As listas são entregues em páginas. Percorra as páginas ou use <code>todas_filtradas=true</code>, como em <a href="/wiki-certguard?pagina=api-consultar#paginacao">Como percorrer todas as páginas</a>.</p>
+
+<h3 id="faq-campos">A resposta tem menos campos do que a tela. Por quê?</h3>
+<p>Por padrão, a API retorna apenas os campos essenciais. Para outros, use o parâmetro <code>campos</code>, descrito em <a href="/wiki-certguard?pagina=api-certificados#certificados-campos">Campos da resposta</a>.</p>
+
+<h3 id="faq-gravar">É possível alterar dados pela API?</h3>
+<p>Não. A API é exclusivamente de leitura. Alterações são feitas pelo portal.</p>
+
+<h3 id="faq-vazou">A chave foi enviada por engano a outra pessoa. O que fazer?</h3>
+<p>Revogue a chave imediatamente e crie outra, seguindo <a href="/wiki-certguard?pagina=api-chaves#substituir">Como substituir uma chave</a>. Depois, confira na tabela de chaves se houve uso de um endereço IP desconhecido.</p>

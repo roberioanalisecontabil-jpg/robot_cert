@@ -1,0 +1,108 @@
+{% from "wiki/_macros.html" import papeis, atualizado, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
+
+<p>Este artigo mostra como conectar cada ferramenta à API de leitura. Em todos os guias, a chave fica guardada fora do código e dos arquivos compartilhados.</p>
+<p><strong>Antes de começar:</strong> uma <a href="/wiki-certguard?pagina=api-chaves">chave de API</a> ativa e o endereço do portal. Nos exemplos, troque <code>ENDERECO-DO-PORTAL</code> pelo endereço da barra do navegador, sem o caminho.</p>
+
+{% call cuidado("A chave não vai no código") %}<p>Não escreva a chave diretamente em scripts, planilhas ou consultas que serão compartilhadas. Use a variável de ambiente, o parâmetro ou o cofre indicado em cada guia.</p>{% endcall %}
+
+<h2 id="postman">Postman</h2>
+<ol>
+  <li>Em <strong>Environments › New</strong>, crie a variável <code>chave_certguard</code>, marque o tipo <strong>secret</strong> e cole a chave em <strong>Current value</strong>. Crie também <code>base</code> com o endereço do portal (<code>https://ENDERECO-DO-PORTAL</code>). O <strong>Current value</strong> fica só no seu computador e não vai junto quando a coleção é exportada ou compartilhada.</li>
+  <li>Selecione o ambiente no canto superior direito.</li>
+  <li>Em uma requisição nova, escolha o método <strong>GET</strong> e escreva a URL, por exemplo <code>{% raw %}{{base}}/api/certificados{% endraw %}</code>.</li>
+  <li>Na aba <strong>Authorization</strong>, escolha <strong>Bearer Token</strong> e, em <strong>Token</strong>, escreva <code>{% raw %}{{chave_certguard}}{% endraw %}</code>.</li>
+  <li>Na aba <strong>Params</strong>, informe os filtros, por exemplo <code>documento_tipo</code> = <code>cnpj</code> e <code>vence_em_dias</code> = <code>60</code>.</li>
+  <li>Clique em <strong>Send</strong>.</li>
+</ol>
+<p><strong>Resultado esperado:</strong> status <code>200 OK</code> e a resposta em JSON, no formato descrito em <a href="/wiki-certguard?pagina=api-consultar#resposta">Como ler a resposta</a>.</p>
+
+<h3 id="postman-filtros">Exemplos com filtros</h3>
+<p>Cada linha da tabela corresponde a uma linha na aba <strong>Params</strong> (Key e Value). O Postman monta a URL automaticamente.</p>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Para consultar</th><th>Params</th></tr></thead>
+  <tbody>
+    <tr><td>Certificados de empresas que vencem nos próximos 60 dias</td><td><code>documento_tipo</code> = <code>cnpj</code><br><code>vence_em_dias</code> = <code>60</code><br><code>ordenar</code> = <code>vencimento</code></td></tr>
+    <tr><td>Certificados de clientes específicos</td><td><code>documento</code> = <code>11.222.333/0001-81,123.456.789-09</code></td></tr>
+    <tr><td>Certificados que vencem em dezembro</td><td><code>vence_de</code> = <code>2026-12-01</code><br><code>vence_ate</code> = <code>2026-12-31</code></td></tr>
+    <tr><td>Certificados vencidos de pessoas físicas</td><td><code>documento_tipo</code> = <code>cpf</code><br><code>filtro_status</code> = <code>vencidos</code></td></tr>
+    <tr><td>Somente nome, documento e vencimento</td><td><code>campos</code> = <code>nome,documento,vence_em</code></td></tr>
+    <tr><td>Todos os campos que a tela Início recebe</td><td><code>campos</code> = <code>completo</code></td></tr>
+  </tbody>
+</table></div>
+<p>O primeiro exemplo, escrito na URL:</p>
+<pre><code>{% raw %}{{base}}/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60&amp;ordenar=vencimento{% endraw %}</code></pre>
+
+<h2 id="powerbi">Power BI</h2>
+<ol>
+  <li>Em <strong>Página Inicial › Transformar dados › Gerenciar Parâmetros › Novo Parâmetro</strong>, crie o parâmetro <code>ChaveCertGuard</code>, do tipo <strong>Texto</strong>, com a chave em <strong>Valor Atual</strong>.</li>
+  <li>Em <strong>Obter dados › Consulta em branco</strong>, abra o <strong>Editor Avançado</strong> e cole a consulta abaixo.</li>
+  <li>No aviso de credenciais, escolha <strong>Anônimo</strong>: a chave já vai no cabeçalho.</li>
+  <li>Clique em <strong>Fechar e Aplicar</strong>.</li>
+</ol>
+<pre><code>let
+    Fonte = Json.Document(Web.Contents(
+        "https://ENDERECO-DO-PORTAL",
+        [RelativePath = "api/certificados",
+         Query = [todas_filtradas = "true"],
+         Headers = [Authorization = "Bearer " &amp; ChaveCertGuard]])),
+    Certificados = Table.FromRecords(Fonte[itens])
+in
+    Certificados</code></pre>
+<p><strong>Resultado esperado:</strong> uma tabela com uma linha por certificado e uma coluna por campo.</p>
+<p>O parâmetro fica gravado dentro do arquivo <code>.pbix</code>. Compartilhe o arquivo somente com quem pode ter acesso à chave e, ao publicar no serviço do Power BI, prefira uma chave exclusiva para o relatório publicado.</p>
+
+<h2 id="excel">Excel</h2>
+<p>O Excel usa o mesmo Power Query do Power BI.</p>
+<ol>
+  <li>Em <strong>Dados › Obter Dados › De Outras Fontes › Consulta em Branco</strong>, abra o Power Query.</li>
+  <li>Em <strong>Página Inicial › Gerenciar Parâmetros › Novo Parâmetro</strong>, crie o parâmetro <code>ChaveCertGuard</code>, do tipo <strong>Texto</strong>, com a chave em <strong>Valor Atual</strong>.</li>
+  <li>Selecione a consulta em branco, abra o <strong>Editor Avançado</strong> e cole a mesma consulta do <a href="#powerbi">Power BI</a>.</li>
+  <li>No aviso de credenciais, escolha <strong>Anônimo</strong>.</li>
+  <li>Clique em <strong>Fechar e Carregar</strong>.</li>
+</ol>
+<p><strong>Resultado esperado:</strong> uma planilha nova com a tabela de certificados. Para trazer os dados mais recentes, use <strong>Dados › Atualizar Tudo</strong>.</p>
+<p>Assim como no Power BI, o parâmetro fica gravado dentro do arquivo <code>.xlsx</code>: antes de enviar a planilha a outra pessoa, apague o valor do parâmetro.</p>
+
+<h2 id="powershell">PowerShell</h2>
+<p>Guarde a chave uma vez em uma variável de ambiente da sua conta do Windows. Ela fica disponível nas próximas janelas do PowerShell.</p>
+<pre><code>[Environment]::SetEnvironmentVariable("CERTGUARD_CHAVE", (Read-Host "Chave de API" -MaskInput), "User")</code></pre>
+<p>Em uma janela nova, consulte:</p>
+<pre><code>$r = Invoke-RestMethod "https://ENDERECO-DO-PORTAL/api/certificados?filtro_status=prestes_vencer" `
+  -Headers @{ Authorization = "Bearer $env:CERTGUARD_CHAVE" }
+$r.itens | Format-Table nome, documento, vence_em, dias_para_vencer</code></pre>
+<p>Para percorrer todas as páginas, veja <a href="/wiki-certguard?pagina=api-consultar#paginacao">Como percorrer todas as páginas</a>.</p>
+
+<h2 id="python">Python</h2>
+<p>Com a variável <code>CERTGUARD_CHAVE</code> criada como no guia do <a href="#powershell">PowerShell</a> (no Linux ou no macOS, com <code>export CERTGUARD_CHAVE=…</code> no perfil do usuário):</p>
+<pre><code>import os
+import requests
+
+BASE = "https://ENDERECO-DO-PORTAL"
+CABECALHO = {"Authorization": "Bearer " + os.environ["CERTGUARD_CHAVE"]}
+
+# Esta consulta devolve "linhas" e "tem_mais" (a de certificados usa "itens" e "paginacao").
+linhas, pagina = [], 1
+while True:
+    r = requests.get(
+        BASE + "/api/carteira/uso",
+        params={"desde": "2026-11-01", "ate": "2026-11-30", "pagina": pagina, "por_pagina": 100},
+        headers=CABECALHO,
+        timeout=60,
+    )
+    r.raise_for_status()
+    dados = r.json()
+    linhas += dados["linhas"]
+    if not dados["tem_mais"]:
+        break
+    pagina += 1
+
+print(len(linhas), "usos")</code></pre>
+
+<h2 id="curl">cURL</h2>
+<p>No Linux ou no macOS, com a variável <code>CERTGUARD_CHAVE</code> definida:</p>
+<pre><code>curl -H "Authorization: Bearer $CERTGUARD_CHAVE" \
+  "https://ENDERECO-DO-PORTAL/api/certificados/vencidos?data_inicio=2026-01-01"</code></pre>
+<p>No PowerShell do Windows, chame <code>curl.exe</code> e use <code>$env:CERTGUARD_CHAVE</code>:</p>
+<pre><code>curl.exe -H "Authorization: Bearer $env:CERTGUARD_CHAVE" "https://ENDERECO-DO-PORTAL/api/certificados/vencidos?data_inicio=2026-01-01"</code></pre>
