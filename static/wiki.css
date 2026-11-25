@@ -9,7 +9,8 @@
 .wiki-layout { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: var(--space-8); align-items: start; }
 .wiki-layout:has(> .wiki-toc[hidden]) { grid-template-columns: minmax(0, 1fr); }
 .wiki-coluna { min-width: 0; max-width: 64rem; }
-.wiki-toc { position: sticky; top: var(--space-6); max-height: calc(100vh - var(--space-12)); overflow-y: auto; padding-top: var(--space-2); }
+/* Gruda abaixo do sino, que é fixo no canto direito (44px + folga). */
+.wiki-toc { position: sticky; top: calc(44px + var(--space-8)); max-height: calc(100vh - 44px - var(--space-12)); overflow-y: auto; padding-top: var(--space-2); }
 .wiki-toc__titulo { margin: 0 0 var(--space-2); font-family: var(--font-display); font-size: var(--text-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
 .wiki-toc__lista { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--border-subtle); }
 .wiki-toc__item a {
