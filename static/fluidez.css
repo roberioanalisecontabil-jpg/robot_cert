@@ -35,7 +35,7 @@
   position: relative;
 }
 .cg-painel > * + * { margin-top: var(--pp-gap); }
-/* 25/11/2026: o sino fica no topo, a esquerda, preso ao rolar (style.css,
+/* 25/11/2026: o sino fica no canto direito da tela, fixo (style.css,
    "Sino no topo"); o tema foi para o menu da conta. */
 .main-content > .ag-page__head { margin-top: 0; margin-bottom: var(--pp-gap); }
 .ag-page__title { font-size: clamp(1.375rem, 1.5625vw + 2px, 2rem); margin-bottom: .25rem; }

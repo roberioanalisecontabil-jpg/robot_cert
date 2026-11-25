@@ -2571,8 +2571,8 @@ body.sidebar-open .sidebar-backdrop {
      hambúrguer fica à esquerda (é da sidebar); sino e tema, juntos à
      direita, onde todo portal os põe. */
   justify-content: flex-start;
-  /* 25/11/2026: presa ao topo, à esquerda, com altura zero (não empurra o
-     conteúdo; o cabeçalho da página reserva o lugar do sino). */
+  /* 25/11/2026: presa ao topo, com altura zero (não empurra o conteúdo).
+     O sino dentro dela é fixo no canto direito ("Sino no topo"). */
   align-items: flex-start;
   height: 0;
   margin-bottom: 0;
@@ -2591,6 +2591,10 @@ body.sidebar-open .sidebar-backdrop {
      drawer mobile deixaria de cobrir o conteúdo. */
   position: sticky;
   z-index: 5;
+  /* Sem a entrada fadeUp de `.main-content > *` (vem depois dela e vence):
+     o transform da animação viraria o bloco de contenção do sino fixo, e ele
+     pularia de lugar ao fim da animação. */
+  animation: none;
 }
 
 .sidebar-toggle-btn {
@@ -3738,24 +3742,33 @@ dialog.modal--largo {
 }
 
 
-/* ═══ Sino no topo, à esquerda (25/11/2026) ═══════════════════════════════
-   Pedido do Robério: o sino sai do canto direito e fica logo depois do menu
-   lateral, na mesma altura, preso ao rolar. A barra tem altura zero: não
-   empurra o conteúdo; o cabeçalho da página reserva o lugar do sino. */
+/* ═══ Sino no topo, canto direito, fixo (25/11/2026) ══════════════════════
+   Pedido do Robério: o sino vai para o canto superior direito da tela e fica
+   fixo ao rolar. Só o sino sai da barra (altura zero); o sanduíche do
+   celular continua preso à esquerda. O cabeçalho da página reserva o lugar
+   do sino à direita (e o do sanduíche à esquerda, no celular). */
 .main-content > .topbar-actions + * { margin-top: 0; }
-.topbar-actions .notifications-container { margin-left: 0; }
-.topbar-actions .notifications-dropdown { left: 0; right: auto; top: 50px; }
+.topbar-actions .notifications-container {
+  position: fixed;
+  top: var(--pp-pad, 1.5rem);
+  right: var(--pp-pad-x, 1rem);
+  margin-left: 0;
+}
+/* Painel alinhado à direita do sino (regra base); abaixo de 481px ele é
+   fixo às margens da tela (regra de celular). */
+@media (min-width: 481px) {
+  .topbar-actions .notifications-dropdown { top: 50px; }
+}
 .main-content:has(> .topbar-actions > .notifications-container) > .ag-page__head,
 .main-content:has(> .topbar-actions > .notifications-container) .wiki-coluna > :first-child {
-  padding-left: calc(44px + 1rem);
-  padding-right: 0;
+  padding-right: calc(44px + 1rem);
   min-height: 44px;
 }
 @media screen and (max-width: 768px) {
-  /* No celular o sanduíche vem antes do sino: a reserva dobra. */
+  /* No celular o sanduíche fica à esquerda, preso ao rolar. */
   .main-content:has(> .topbar-actions > .notifications-container) > .ag-page__head,
   .main-content:has(> .topbar-actions > .notifications-container) .wiki-coluna > :first-child {
-    padding-left: calc(88px + 1.5rem);
+    padding-left: calc(44px + 1rem);
   }
 }
 

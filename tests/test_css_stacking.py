@@ -70,6 +70,15 @@ def test_topbar_declarada_uma_unica_vez(css: str) -> None:
     assert css.count(".topbar-actions {") == 1
 
 
+def test_sino_fixo_no_canto_direito(css: str) -> None:
+    """25/11/2026: sino fixo no canto superior direito; a barra não anima
+    (transform da entrada viraria o bloco de contenção do fixo)."""
+    bloco = re.search(r"\.topbar-actions \.notifications-container\s*\{([^}]*)\}", css)
+    assert bloco and "position: fixed" in bloco.group(1) and "right:" in bloco.group(1)
+    barra = re.search(r"\.topbar-actions\s*\{([^}]*)\}", css)
+    assert "animation: none" in barra.group(1)
+
+
 def test_dropdown_de_notificacoes_tem_z_index(css: str) -> None:
     assert (_z_index(css, ".notifications-dropdown") or 0) > 0
 
