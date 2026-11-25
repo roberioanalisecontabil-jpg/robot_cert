@@ -1,0 +1,39 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+
+<p>O Início mostra os certificados dos clientes e é daqui que você pede a instalação no seu computador. Também abre os detalhes de cada certificado e a inclusão no SIEG. Você pode instalar os certificados dos clientes da sua carteira; os demais aparecem, mas com a instalação bloqueada.</p>
+
+<h2 id="achar">Achar um certificado</h2>
+<ol>
+  <li>No menu lateral, clique em <strong>Início</strong>. A página se chama <strong>Painel de Certificados</strong>.</li>
+  <li>No topo há três números: <strong>Total</strong> (certificados mapeados), <strong>Ativo</strong> (válidos e prontos para instalar) e <strong>Expirando</strong> (vencem nos próximos 30 dias).
+    {{ print("inicio-lista", "Início com os números Total, Ativo e Expirando no topo e a lista de certificados abaixo", "A lista de certificados") }}
+  </li>
+  <li>Em <strong>Buscar</strong>, digite nome, CNPJ ou CPF.
+    {{ print("inicio-busca", "Lista do Início filtrada por um nome digitado no campo Buscar") }}
+  </li>
+  <li>Use <strong>Status</strong> para ver <strong>Todos</strong>, só <strong>Ativo</strong> ou só <strong>Expirando</strong>.
+    {{ print("inicio-filtro-expirando", "Filtro Status em Expirando, com a lista só dos certificados que vencem em até 30 dias") }}
+  </li>
+  <li>Use <strong>SIEG</strong> para filtrar <strong>No SIEG</strong>, <strong>Incluindo ou com erro</strong> ou <strong>Fora do SIEG</strong>.
+    {{ print("inicio-filtro-sieg", "Filtro SIEG em No SIEG, com as linhas marcadas pelo selo SIEG") }}
+  </li>
+  <li>Clique no título de uma coluna (Status, Nome, Emissão, Vencimento, CNPJ/CPF) para ordenar.</li>
+  <li>Clique em <strong>Atualizar tabela</strong> para buscar os dados mais novos.</li>
+</ol>
+
+{% call dica("Onde estão os vencidos") %}
+<p>Certificados vencidos não aparecem no Início. A linha de status abaixo dos botões diz quantos ficaram de fora e leva até eles. Veja <a href="/wiki-certguard?pagina=vencidos">Vencidos</a>.</p>
+{% endcall %}
+
+<h2 id="detalhes">Ver os detalhes de um certificado</h2>
+<ol>
+  <li>Clique no nome do cliente.</li>
+  <li>Abre uma janela com os blocos <strong>Certificado</strong> (nome, tipo, validade, documento, emissão, vencimento, emissor e outros dados), <strong>Responsável</strong> (nome, CPF, data de nascimento, e-mail) e <strong>No portal</strong>.
+    {{ print("inicio-detalhes", "Janela de detalhes de um certificado com os blocos Certificado, Responsável, No portal e SIEG", "Os detalhes de um certificado") }}
+  </li>
+  <li>Clique em <strong>Fechar</strong> para voltar à lista.</li>
+</ol>
+
+<h2 id="carteira-vazia">Sua carteira está vazia</h2>
+<p>Se a lista mostrar "Sua carteira está vazia", ainda não há clientes atribuídos a você. Peça ao gestor do seu departamento.</p>

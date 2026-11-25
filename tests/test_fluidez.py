@@ -57,6 +57,6 @@ def test_nenhuma_fonte_maior_nas_colunas():
 
 def test_versao_do_fluidez_nos_templates():
     usam = [p for p in (RAIZ / "templates").glob("*.html") if "/static/fluidez.css" in p.read_text(encoding="utf-8")]
-    assert len(usam) == 9  # Dashboard entrou em 23/11/2026: cabeçalho igual às outras telas
+    assert len(usam) == 10  # Dashboard entrou em 23/11/2026; Meu perfil em 25/11/2026
     for p in usam:
-        assert "fluidez.css?v=fluidez-2026-11-07" in p.read_text(encoding="utf-8"), p.name
+        assert "fluidez.css?v=conta-2026-11-25" in p.read_text(encoding="utf-8"), p.name

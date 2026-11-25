@@ -1,0 +1,16 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Gestor", "Administrador"]) }}
+
+<h2 id="importar">Importar carteiras por planilha</h2>
+<ol>
+  <li>Clique em <strong>Importar planilha</strong>, no alto da página.
+    {{ print("carteiras-importar", "Janela Importar carteiras por planilha aberta, com a área para arrastar o arquivo e o link do modelo", "A janela de importação.") }}
+  </li>
+  <li>Se precisar, clique em <strong>Baixar o modelo (.csv)</strong>.</li>
+  <li>Preencha duas colunas: o e-mail do operador (coluna <strong>email</strong>) e o CNPJ do cliente (coluna <strong>cnpj</strong>), uma linha por par. Também valem os nomes de coluna <strong>e-mail</strong>, <strong>documento</strong> e <strong>cpf</strong>.</li>
+  <li>Arraste o arquivo para a caixa ou clique em <strong>Arraste a planilha ou clique para escolher</strong>. Vale arquivo .xlsx ou .csv.</li>
+  <li>Clique em <strong>Importar</strong>.</li>
+  <li>Se tudo entrar, a janela fecha e uma mensagem diz quantos clientes foram atribuídos e quantas carteiras foram atualizadas.</li>
+  <li>Se alguma linha for recusada, a janela fica aberta e lista cada linha com o motivo, por exemplo conta inativa ou cliente fora do inventário. Corrija a planilha e importe de novo.</li>
+</ol>
+<p>A planilha só monta carteira de operador. As exceções de um gestor são editadas na tela.</p>

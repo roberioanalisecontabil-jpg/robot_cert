@@ -1,0 +1,23 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Gestor", "Administrador"]) }}
+
+<h2 id="retirar">Retirar clientes da carteira de um operador</h2>
+<ol>
+  <li>Abra o operador.</li>
+  <li>No painel <strong>Na carteira</strong>, clique nos clientes que vão sair.</li>
+  <li>Clique em <strong>Retirar</strong>. Para retirar todos os listados, clique em <strong>Todos</strong>, no rodapé do mesmo painel.</li>
+  <li>O portal sempre pergunta antes de retirar. Confirme com <strong>OK</strong>.</li>
+  <li>A pessoa deixa de ver e instalar os certificados desses clientes na mesma hora.</li>
+</ol>
+
+<h2 id="excecoes">Exceções de um gestor</h2>
+<p>Só o administrador faz esta parte.</p>
+<ol>
+  <li>Na lista <strong>Pessoas</strong>, clique no gestor. Ele tem o selo <strong>Gestor</strong>.</li>
+  <li>Os painéis mudam de nome: <strong>Exceções</strong> (o que foi retirado dele) à esquerda e <strong>No alcance</strong> à direita. O cabeçalho mostra quantas exceções ele tem, por exemplo <strong>Todos os clientes, menos 2 exceções</strong>.
+    {{ print("carteiras-gestor-excecoes", "Carteira de um gestor com os painéis Exceções e No alcance e o botão Devolver", "Para um gestor, os painéis viram Exceções e No alcance.") }}
+  </li>
+  <li>Para retirar um cliente do gestor: marque o cliente em <strong>No alcance</strong> e clique em <strong>Retirar</strong>. Confirme. Aparece a mensagem <strong>Exceção registrada.</strong></li>
+  <li>Para devolver: marque o cliente em <strong>Exceções</strong> e clique em <strong>Devolver</strong>. Aparece a mensagem <strong>Cliente devolvido ao gestor.</strong></li>
+</ol>
+<p>A exceção também impede o gestor de atribuir esse cliente aos operadores dele.</p>

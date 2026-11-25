@@ -109,7 +109,9 @@ def test_wiki_lista_toda_consulta_que_a_chave_alcanca() -> None:
             deps(s, acc)
         return acc
 
-    wiki = (Path(__file__).resolve().parent.parent / "templates" / "wiki" / "api.html").read_text(encoding="utf-8")
+    # 25/11/2026: o tutorial da API virou duas páginas da wiki (tema "api").
+    pasta = Path(__file__).resolve().parent.parent / "templates" / "wiki"
+    wiki = "".join((pasta / f"{p}.html").read_text(encoding="utf-8") for p in ("api-consultar", "api-consultas"))
     faltam = []
     for r in app.routes:
         if not isinstance(r, APIRoute) or "GET" not in r.methods or not r.path.startswith("/api/"):

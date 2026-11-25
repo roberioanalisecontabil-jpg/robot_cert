@@ -548,6 +548,12 @@ def painel(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/perfil", response_class=HTMLResponse)
+def pagina_perfil(request: Request) -> HTMLResponse:
+    # Sem item no menu: abre pelo botão da conta, no pé da barra lateral.
+    return templates.TemplateResponse(request=request, name="perfil.html", context={"pagina_ativa": "perfil"})
+
+
 @app.get("/configuracao", response_class=HTMLResponse)
 def pagina_configuracao(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
@@ -854,6 +860,11 @@ app.include_router(_rotas_microsoft)
 from app.rotas.api_chaves import router as _rotas_api_chaves  # noqa: E402
 
 app.include_router(_rotas_api_chaves)
+
+# Meu perfil (nome, telefone, foto): app/rotas/perfil.py.
+from app.rotas.perfil import router as _rotas_perfil  # noqa: E402
+
+app.include_router(_rotas_perfil)
 
 
 

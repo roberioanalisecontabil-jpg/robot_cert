@@ -14,7 +14,7 @@
   {%- set p = prints.get(id) if prints else None -%}
   {%- if p -%}
   <figure class="wiki-print">
-    <a href="/static/wiki/{{ id }}.png?v={{ p.v }}" target="_blank" rel="noopener" title="Abrir a imagem em tamanho real">
+    <a href="/static/wiki/{{ id }}.png?v={{ p.v }}" target="_blank" rel="noopener" title="Ver a imagem em tela cheia" class="wiki-print__abrir">
       <img src="/static/wiki/{{ id }}.png?v={{ p.v }}" alt="{{ alt }}" width="{{ p.w }}" height="{{ p.h }}" loading="lazy" decoding="async">
     </a>
     {%- if legenda %}<figcaption>{{ legenda }}</figcaption>{% endif %}

@@ -1,0 +1,32 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="departamentos">Aba Departamentos</h2>
+<p>Quem lidera um departamento é o gestor dele: vê todos os certificados e libera clientes para os operadores do departamento. A tabela mostra <strong>Departamento</strong>, <strong>Gestores</strong> e <strong>Pessoas</strong> (as inativas aparecem à parte). Departamento sem gestor aparece com o aviso <strong>sem gestor</strong>.</p>
+{{ print("usuarios-departamentos", "Aba Departamentos com a tabela de departamentos, seus gestores e o número de pessoas", "Os departamentos e quem lidera cada um.") }}
+
+<h3 id="criar-departamento">Criar um departamento</h3>
+<ol>
+  <li>Clique em <strong>Novo departamento</strong>.</li>
+  <li>Digite o <strong>Nome</strong>, por exemplo Fiscal.</li>
+  <li>Em <strong>Gestores</strong>, escolha quem lidera. Para escolher mais de um, segure Ctrl enquanto clica. Só contas ativas aparecem.</li>
+  <li>Clique em <strong>Salvar</strong>. Mensagens confirmam quem virou gestor.</li>
+</ol>
+
+<h3 id="editar-departamento">Trocar o gestor ou renomear</h3>
+<ol>
+  <li>Clique em <strong>Editar</strong> na linha do departamento.
+    {{ print("usuarios-departamento-editar", "Janela Editar departamento com o campo Nome e a lista Gestores", "A janela do departamento, com a lista de gestores.") }}
+  </li>
+  <li>Mude o <strong>Nome</strong> ou a seleção em <strong>Gestores</strong>.</li>
+  <li>Clique em <strong>Salvar</strong>. Quem saiu da lista e não lidera outro departamento volta a operador, com a carteira vazia.</li>
+</ol>
+
+<h3 id="apagar-departamento">Apagar um departamento</h3>
+<ol>
+  <li>Clique em <strong>Apagar</strong> na linha.</li>
+  <li>Leia o aviso: as pessoas não são apagadas, mas ficam sem departamento, e só o administrador libera certificados para elas até serem colocadas em outro. Quem só era gestor daquele departamento volta a operador, com a carteira vazia.</li>
+  <li>Confirme em <strong>Apagar</strong>.</li>
+</ol>
+
+{% call dica("Gestor se escolhe no departamento") %}<p>Gestor não se escolhe no cadastro da pessoa: ela vira gestora quando entra na lista de <strong>Gestores</strong> de um departamento. Quem sai de todos os departamentos que liderava volta a operador, com a carteira vazia.</p>{% endcall %}

@@ -1,0 +1,20 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="trilha">Aba Trilha</h2>
+<p>Uma linha por tentativa de instalação, do pedido ao desfecho. No alto fica o resumo do período: concluídas, a barra e as causas das falhas.</p>
+
+<h3 id="consultar-instalacoes">Consultar instalações</h3>
+<ol>
+  <li>Clique na aba <strong>Trilha</strong>.</li>
+  <li>Escolha o <strong>Período</strong>.</li>
+  <li>Para ver só uma pessoa, digite o e-mail dela em <strong>Solicitante</strong>.</li>
+  <li>Marque <strong>Só falhas</strong> para ver só o que deu errado.</li>
+  <li>Clique em <strong>Filtrar</strong>.
+    {{ print("instalador-trilha-falhas", "Trilha filtrada nos últimos 90 dias com Só falhas marcado", "Só as falhas dos últimos 90 dias.") }}
+  </li>
+  <li>Leia as colunas: <strong>Quando</strong>, <strong>Solicitante</strong>, <strong>Estação</strong>, <strong>Certificado</strong>, <strong>Etapas</strong> (pedido, resgate e conclusão) e <strong>Desfecho</strong> (<strong>Concluído</strong>, <strong>Falhou</strong> ou <strong>Sem desfecho</strong>, com o motivo da falha embaixo).
+    {{ print("instalador-trilha", "Aba Trilha com o resumo do período e a tabela com etapas e desfecho de cada instalação", "A trilha de instalações.") }}
+  </li>
+</ol>
+<p>Se não houver nada no período, o portal oferece o link <strong>Ver últimos 90 dias</strong>.</p>

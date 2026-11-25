@@ -138,8 +138,10 @@ def test_todas_as_rotas_de_pagina_estao_cobertas() -> None:
         and getattr(r, "response_class", None) is not None
         and "HTMLResponse" in str(getattr(r, "response_class", ""))
     }
-    # O login renderiza HTML e não tem menu — é a única exceção legítima.
+    # O login renderiza HTML e não tem menu. Meu perfil (25/11/2026) abre pelo
+    # botão da conta, fora da navegação: nenhum item acende (test_perfil.py).
     rotas_html.discard("/login")
+    rotas_html.discard("/perfil")
 
     faltando = rotas_html - {rota for rota, _, _ in PAGINAS}
     assert not faltando, (

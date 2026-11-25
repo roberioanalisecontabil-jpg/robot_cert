@@ -1,0 +1,39 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="custodia">Aba Custódia</h2>
+<p>Lista os certificados do servidor da varredura (o selo <strong>Servidor</strong> diz qual) e se cada um está guardado no cofre do portal. As colunas são <strong>Titular</strong>, <strong>Validade</strong>, <strong>Fingerprint</strong> (a impressão digital do certificado) e <strong>Custódia</strong>, mais o botão de ação.</p>
+<ul>
+  <li><strong>Ativa</strong>: o certificado está guardado e pode ser instalado pelo portal.</li>
+  <li><strong>Desativada</strong>: a cópia foi apagada e o agente ignora esse certificado.</li>
+  <li><strong>Fora da custódia · vencido</strong> ou <strong>Fora da custódia · ilegível</strong>: nunca entra no cofre e não tem botão.</li>
+</ul>
+{{ print("instalador-custodia", "Aba Custódia com o selo do servidor, a tabela de certificados e a paginação", "A custódia dos certificados.") }}
+
+<h3 id="procurar">Procurar um certificado</h3>
+<ol>
+  <li>Clique na aba <strong>Custódia</strong>.</li>
+  <li>Digite no campo <strong>Nome ou CNPJ/CPF</strong>. A tabela filtra enquanto você digita.
+    {{ print("instalador-custodia-busca", "Tabela da custódia filtrada por parte do nome de um titular", "A tabela filtrada pela busca.") }}
+  </li>
+  <li>Use <strong>Anterior</strong> e <strong>Seguinte</strong> para trocar de página, e a caixa <strong>10 por página</strong> para mostrar até 100 linhas.</li>
+  <li>Para copiar a impressão digital do certificado, clique em <strong>Copiar</strong> na coluna <strong>Fingerprint</strong>.</li>
+</ol>
+
+<h3 id="desativar">Desativar a custódia de um certificado</h3>
+<ol>
+  <li>Ache o certificado e clique em <strong>Desativar</strong> na linha.</li>
+  <li>Abre a janela <strong>Desativar custódia</strong>, com o nome, o documento e o servidor.
+    {{ print("instalador-custodia-desativar", "Janela Desativar custódia aberta, com o nome do titular, o documento e o aviso de que a cópia guardada será apagada", "A confirmação antes de desativar.") }}
+  </li>
+  <li>Leia o aviso: a cópia guardada será apagada e o certificado não volta ao cofre nas próximas varreduras.</li>
+  <li>Clique em <strong>Desativar custódia</strong> para confirmar, ou em <strong>Cancelar</strong>.</li>
+</ol>
+
+{% call cuidado("Desativar apaga a cópia guardada") %}<p>Depois de desativar, o certificado deixa de ser instalável pelo portal até alguém reativar e o agente enviar a cópia de novo.</p>{% endcall %}
+
+<h3 id="reativar">Reativar a custódia</h3>
+<ol>
+  <li>Ache o certificado com <strong>Desativada</strong> e clique em <strong>Reativar</strong>.</li>
+  <li>Não há confirmação. Uma mensagem avisa que o certificado está de volta à custódia e que o agente envia no próximo ciclo. Ele volta a ser instalável depois da próxima varredura.</li>
+</ol>

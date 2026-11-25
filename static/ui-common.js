@@ -78,6 +78,7 @@ function logout(motivo) {
   localStorage.removeItem(KEY_STORAGE);
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_email');
+  localStorage.removeItem('cg_conta_cache');
   // O cache do menu descreve o que UMA pessoa alcanca. Sai junto com ela.
   localStorage.removeItem(MENU_CACHE_STORAGE);
   const next = motivo === "sessao" && !window.location.pathname.startsWith("/login")
@@ -1306,36 +1307,42 @@ function applyTheme(theme) {
   const seguindoSistema = theme !== "dark" && theme !== "light";
   const sufixo = seguindoSistema ? " (seguindo o sistema)" : "";
 
+  // No menu da conta (25/11/2026) o item mostra ícone e texto; no topo da
+  // página (telas sem a barra lateral) continua só o ícone.
+  const comTexto = btn.classList.contains("sidebar-conta__tema");
   if (emVigor === "dark") {
-    btn.innerHTML = sunIcon;
+    btn.innerHTML = sunIcon + (comTexto ? "Tema claro" : "");
     btn.title = "Ativar modo claro" + sufixo;
     btn.setAttribute("aria-label", "Ativar modo claro" + sufixo);
   } else {
-    btn.innerHTML = moonIcon;
+    btn.innerHTML = moonIcon + (comTexto ? "Tema escuro" : "");
     btn.title = "Ativar modo escuro" + sufixo;
     btn.setAttribute("aria-label", "Ativar modo escuro" + sufixo);
   }
 }
 
 function initThemeToggle() {
-  if (document.getElementById("btn-theme-toggle")) return;
-
-  // Coloca o botão de tema ao lado do botão sanduíche no topbar
-  let bar = document.getElementById("topbar-actions");
-  if (!bar) {
-    // Se initSidebarToggle ainda não rodou, cria o wrapper
-    const main = document.querySelector(".main-content");
-    if (!main) return;
-    bar = document.createElement("div");
-    bar.id = "topbar-actions";
-    bar.className = "topbar-actions";
-    main.prepend(bar);
+  // Desde 25/11/2026 o botão nasce no menu da conta (_sidebar.html). Só uma
+  // tela sem a barra lateral ganha o botão antigo, no topo da página.
+  let btn = document.getElementById("btn-theme-toggle");
+  if (btn && btn.dataset.ligado) return;
+  if (!btn) {
+    let bar = document.getElementById("topbar-actions");
+    if (!bar) {
+      const main = document.querySelector(".main-content");
+      if (!main) return;
+      bar = document.createElement("div");
+      bar.id = "topbar-actions";
+      bar.className = "topbar-actions";
+      main.prepend(bar);
+    }
+    btn = document.createElement("button");
+    btn.id = "btn-theme-toggle";
+    btn.type = "button";
+    btn.className = "sidebar-toggle-btn theme-toggle-btn";
+    bar.appendChild(btn);
   }
-
-  const btn = document.createElement("button");
-  btn.id = "btn-theme-toggle";
-  btn.type = "button";
-  btn.className = "sidebar-toggle-btn theme-toggle-btn";
+  btn.dataset.ligado = "1";
 
   btn.addEventListener("click", () => {
     const armazenado = localStorage.getItem("cert_robot_theme");
@@ -1353,7 +1360,6 @@ function initThemeToggle() {
     }
   });
 
-  bar.appendChild(btn);
   applyTheme(localStorage.getItem("cert_robot_theme"));
 
   // Enquanto o usuário estiver seguindo o sistema, acompanhar a troca em tempo real
@@ -1776,8 +1782,10 @@ function initNotifications() {
     </div>
   `;
 
+  // O tema só fica na barra do topo em tela sem a barra lateral; desde
+  // 25/11/2026 ele mora no menu da conta, fora desta barra.
   const themeBtn = document.getElementById("btn-theme-toggle");
-  if (themeBtn) {
+  if (themeBtn && themeBtn.parentNode === bar) {
     bar.insertBefore(container, themeBtn);
   } else {
     bar.appendChild(container);
@@ -1922,12 +1930,85 @@ function avisarAppAutenticador() {
     .catch(() => {});
 }
 
+// ─── Sua conta (25/11/2026) ───────────────────────────────────────────────────
+// Botão no pé da barra lateral. Abre ao passar o mouse (CSS :hover), ao focar
+// (:focus-within) e por clique/toque (classe is-aberto, para celular). Esc e
+// clique fora fecham. Nome e foto vêm de /api/perfil.
+function iniciaisDe(nome) {
+  const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return "";
+  const a = partes[0][0] || "";
+  const b = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (a + b).toUpperCase();
+}
+
+function pintarConta(perfil) {
+  const nomeEl = document.getElementById("conta-nome");
+  const avatar = document.getElementById("conta-avatar");
+  if (!nomeEl || !avatar || !perfil) return;
+  const nome = String(perfil.nome || perfil.email || "Sua conta").trim();
+  // Primeiro e último nome: o completo não cabe na barra.
+  const partes = nome.split(/\s+/);
+  nomeEl.textContent = partes.length > 2 ? partes[0] + " " + partes[partes.length - 1] : nome;
+  const btn = document.getElementById("btn-conta");
+  if (btn) btn.title = nome;
+  if (perfil.foto_versao) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = "/api/perfil/foto?v=" + encodeURIComponent(perfil.foto_versao);
+    img.addEventListener("error", () => { avatar.textContent = iniciaisDe(nome); });
+    avatar.replaceChildren(img);
+  } else if (iniciaisDe(nome)) {
+    avatar.textContent = iniciaisDe(nome);
+  }
+}
+
+function initConta() {
+  const caixa = document.getElementById("sidebar-conta");
+  const btn = document.getElementById("btn-conta");
+  if (!caixa || !btn || btn.dataset.ligado) return;
+  btn.dataset.ligado = "1";
+  const abrir = (sim) => {
+    caixa.classList.toggle("is-aberto", sim);
+    btn.setAttribute("aria-expanded", String(sim));
+  };
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    abrir(!caixa.classList.contains("is-aberto"));
+  });
+  caixa.addEventListener("mouseenter", () => btn.setAttribute("aria-expanded", "true"));
+  caixa.addEventListener("mouseleave", () => { if (!caixa.classList.contains("is-aberto")) btn.setAttribute("aria-expanded", "false"); });
+  document.addEventListener("click", (e) => { if (!e.target.closest("#sidebar-conta")) abrir(false); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && caixa.contains(document.activeElement)) {
+      abrir(false);
+      btn.focus();
+    }
+  });
+  if (!temSessao()) return;
+  // Cache por e-mail: o nome aparece sem esperar a rede a cada página.
+  const CHAVE = "cg_conta_cache";
+  try {
+    const c = JSON.parse(localStorage.getItem(CHAVE) || "null");
+    if (c && c.email && c.email === localStorage.getItem("user_email")) pintarConta(c);
+  } catch (_e) { /* cache ilegível: segue pela rede */ }
+  fetch("/api/perfil", { headers: getHeaders() })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((p) => {
+      if (!p) return;
+      pintarConta(p);
+      try { localStorage.setItem(CHAVE, JSON.stringify(p)); } catch (_e) { /* sem storage */ }
+    })
+    .catch(() => {});
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     initSidebarPorPapel();
     initSidebarToggle();
     initSidebarDicas();
     initThemeToggle();
+    initConta();
     initNotifications();
     initRegioesRolaveis();
     _consumirToastPendente();
@@ -1938,6 +2019,7 @@ if (document.readyState === "loading") {
   initSidebarToggle();
   initSidebarDicas();
   initThemeToggle();
+  initConta();
   initNotifications();
   initRegioesRolaveis();
   _consumirToastPendente();

@@ -34,36 +34,3 @@
 </ol>
 <p>Se você ainda não escolheu ninguém, a aba mostra "Você ainda não acompanha nenhum certificado" e um atalho para <strong>Escolher certificados</strong>.</p>
 {{ print("acomp-vazio", "Aba Acompanhados vazia, com a mensagem Você ainda não acompanha nenhum certificado e o botão Escolher certificados") }}
-
-<h2 id="aviso-por-email">Ligar ou ajustar o aviso por e-mail</h2>
-<ol>
-  <li>Na aba <strong>Acompanhados</strong>, clique na linha <strong>Aviso por e-mail</strong> para abri-la.</li>
-  <li>Marque <strong>Quero receber aviso dos certificados que acompanho</strong>.</li>
-  <li>Em <strong>Avisar quando faltarem</strong>, marque os prazos que quer receber, por exemplo 30 dias.
-    {{ print("acomp-aviso-email", "Bloco Aviso por e-mail aberto, com a caixa para receber aviso e os prazos para marcar") }}
-  </li>
-  <li>Clique em <strong>Salvar preferência</strong>. Aparece "Preferência salva.".</li>
-</ol>
-
-{% call dica("Desmarcar um prazo") %}
-<p>Desmarcar um prazo dispensa só aquele lembrete. O aviso de que o certificado venceu continua chegando enquanto o aviso por e-mail estiver ligado.</p>
-{% endcall %}
-
-<h2 id="avisos-enviados">Conferir os avisos que já foram enviados</h2>
-<ol>
-  <li>Clique na aba <strong>Avisos enviados</strong>.</li>
-  <li>Em <strong>Período</strong>, escolha <strong>Últimos 7 dias</strong>, <strong>Últimos 30 dias</strong> ou <strong>Últimos 90 dias</strong>.
-    {{ print("acomp-enviados", "Aba Avisos enviados com o período Últimos 30 dias e a tabela de avisos") }}
-  </li>
-  <li>A tabela mostra <strong>Quando</strong>, <strong>Aviso</strong> e <strong>Cliente</strong>. O administrador vê também a coluna <strong>Para</strong>, com quem recebeu.
-    {{ print("acomp-enviados-admin", "Aba Avisos enviados vista pelo administrador, com a coluna Para") }}
-  </li>
-</ol>
-
-<h2 id="dicas">Dicas</h2>
-{% call dica("Só clientes da sua carteira") %}
-<p>Só aparecem para escolha os clientes da sua carteira. Se um cliente sair da sua carteira, ele sai do acompanhamento; se voltar, a escolha volta.</p>
-{% endcall %}
-{% call dica("Botões de salvar apagados") %}
-<p>Se os botões de salvar estiverem apagados, com a mensagem "Seu perfil só consulta o acompanhamento", você pode consultar mas não mudar a escolha. Peça ao administrador a permissão de edição.</p>
-{% endcall %}

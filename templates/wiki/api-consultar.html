@@ -1,0 +1,63 @@
+{% from "wiki/_macros.html" import papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<p>A API do portal entrega os mesmos dados que o administrador vê nas telas, para usar em relatórios (Power BI, Excel) e em outros sistemas. É <strong>somente leitura</strong>: a chave consulta e não altera nada.</p>
+
+<h2 id="chave">Criar a chave</h2>
+<ol>
+  <li>Abra <strong>Configuração › Chaves de API</strong>.</li>
+  <li>Dê um <strong>Nome</strong> que diga onde a chave vai ser usada (por exemplo, <strong>Power BI financeiro</strong>), escolha a <strong>Validade</strong> e digite a sua senha atual.</li>
+  <li>Clique em <strong>Criar chave</strong> e depois em <strong>Copiar</strong>. A chave começa com <code>cg_ro_</code> e aparece uma vez só.</li>
+</ol>
+<p>A tabela da aba mostra cada chave com o dono, a data de expiração, o último uso (com o IP) e o estado. <strong>Revogar</strong> desliga a chave na hora.</p>
+
+{% call cuidado("A chave vale como você") %}<p>Quem tiver a chave lê tudo o que você lê no portal, inclusive dados de clientes. Guarde-a num cofre de senhas ou na configuração protegida do sistema que vai usá-la, nunca em planilha, e-mail ou chat. Se vazar, revogue e crie outra.</p>{% endcall %}
+
+<p>A chave também morre sozinha quando vence, quando o dono é desativado ou quando ele deixa de ser administrador.</p>
+
+<h2 id="usar">Fazer uma consulta</h2>
+<p>Toda consulta é um <code>GET</code> no endereço do portal, com a chave no cabeçalho <code>Authorization</code>. As respostas vêm em JSON.</p>
+
+<h3 id="powershell">PowerShell</h3>
+<pre><code>$chave = "cg_ro_..."
+Invoke-RestMethod "https://ENDERECO-DO-PORTAL/api/certificados?filtro_status=prestes_vencer" `
+  -Headers @{ Authorization = "Bearer $chave" }</code></pre>
+
+<h3 id="curl">curl</h3>
+<pre><code>curl -H "Authorization: Bearer cg_ro_..." \
+  "https://ENDERECO-DO-PORTAL/api/certificados/vencidos?data_inicio=2026-01-01"</code></pre>
+
+<h3 id="python">Python</h3>
+<pre><code>import requests
+
+r = requests.get(
+    "https://ENDERECO-DO-PORTAL/api/carteira/uso",
+    params={"desde": "2026-11-01", "ate": "2026-11-30", "pagina": 1, "por_pagina": 100},
+    headers={"Authorization": "Bearer cg_ro_..."},
+    timeout=60,
+)
+r.raise_for_status()
+print(r.json())</code></pre>
+
+<h3 id="powerbi">Power BI (Obter dados › Consulta em branco)</h3>
+<pre><code>let
+    Fonte = Json.Document(Web.Contents(
+        "https://ENDERECO-DO-PORTAL",
+        [RelativePath = "api/certificados",
+         Query = [todas_filtradas = "true"],
+         Headers = [Authorization = "Bearer cg_ro_..."]]))
+in
+    Fonte</code></pre>
+<p>No aviso de credenciais do Power BI, escolha <strong>Anônimo</strong>: a chave já vai no cabeçalho.</p>
+
+<h2 id="respostas">Respostas de erro</h2>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Código</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>401</code></td><td>Chave errada, revogada ou vencida, ou o dono foi desativado ou deixou de ser administrador.</td></tr>
+    <tr><td><code>403</code></td><td>Tentativa de gravar (<code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>) ou consulta a uma rota que a chave não alcança (veja <a href="/wiki-certguard?pagina=api-consultas#bloqueadas">o que fica de fora</a>).</td></tr>
+    <tr><td><code>404</code></td><td>O registro pedido não existe.</td></tr>
+    <tr><td><code>422</code></td><td>Parâmetro fora do formato ou do limite (por exemplo, <code>por_pagina</code> acima do máximo).</td></tr>
+    <tr><td><code>503</code></td><td>O portal não conseguiu falar com o banco agora. Tente de novo em seguida.</td></tr>
+  </tbody>
+</table></div>

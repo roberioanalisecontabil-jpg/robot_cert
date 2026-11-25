@@ -1,0 +1,26 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="movimentos">Aba Movimentos</h2>
+<p>Mostra o que o agente do servidor fez com cada arquivo: o certificado que chegou à pasta de entrada e foi renomeado e movido para a pasta da letra, o vencido que saiu da pasta da letra, e o que ficou pendente.</p>
+
+<h3 id="ver-movimentos">Ver os movimentos do período</h3>
+<ol>
+  <li>Clique na aba <strong>Movimentos</strong>.</li>
+  <li>Em <strong>Período</strong>, escolha <strong>Últimos 7 dias</strong>, <strong>Últimos 30 dias</strong>, <strong>Últimos 90 dias</strong> ou <strong>Último ano</strong> e clique em <strong>Filtrar</strong>.</li>
+  <li>A tabela mostra <strong>Quando</strong>, <strong>De</strong> (pasta de origem), <strong>Titular</strong>, <strong>Para</strong> (pasta de destino) e <strong>Resultado</strong>, com o motivo quando houver.
+    {{ print("instalador-movimentos", "Aba Movimentos com a tabela de movimentos do período", "Os movimentos de arquivos do período.") }}
+  </li>
+</ol>
+<p>Resultados possíveis: <strong>Renomeado e movido</strong>, <strong>Para vencidos</strong>, <strong>Substituiu o vencido</strong>, <strong>Cópia descartada</strong>, <strong>Duplicidade</strong>, <strong>Pendente na entrada</strong> e <strong>Vencido não movido</strong>.</p>
+
+<h3 id="pendencias">Resolver pendências</h3>
+<ol>
+  <li>Se houver pendências, o número aparece ao lado do nome da aba e um quadro amarelo <strong>Pendências</strong> aparece no alto, com a tabela <strong>Desde</strong>, <strong>Arquivo</strong>, <strong>Pasta</strong>, <strong>Situação</strong> e <strong>Motivo</strong>.
+    {{ print("instalador-movimentos-pendencias", "Quadro amarelo Pendências com a tabela de arquivos pendentes e o motivo de cada um", "As pendências e o motivo de cada uma.") }}
+  </li>
+  <li>Pendência <strong>na entrada</strong>: o arquivo não abriu e ficou com o nome original. Corrija o nome do arquivo (o nome, a palavra senha e a senha do certificado, terminando em .pfx) ou a senha.</li>
+  <li>Pendência <strong>na pasta da letra</strong>: o vencido não pôde ser movido. Veja o motivo e resolva na pasta.</li>
+  <li>O agente tenta de novo a cada varredura. A pendência some sozinha quando o arquivo sai da pasta.</li>
+</ol>
+<p>Se aparecer <strong>A pasta de entrada não está configurada</strong>, defina a pasta em <a href="/wiki-certguard?pagina=pastas-e-agente">Configuração</a>, aba <strong>Pastas e agente</strong>.</p>
