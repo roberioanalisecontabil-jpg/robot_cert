@@ -163,10 +163,22 @@ PAGINAS: tuple[PaginaWiki, ...] = (
        "Ligar os alertas, a forma de envio, o teste e o resumo."),
     _P("sieg-configuracao", "configuracao", "Credenciais do SIEG",
        "Ligar o portal à conta do SIEG e acertar o que já está lá."),
-    _P("api-consultar", "api", "Criar a chave e consultar",
-       "A chave de API, exemplos em PowerShell, curl, Python e Power BI, e as respostas de erro."),
-    _P("api-consultas", "api", "Consultas permitidas",
-       "Todas as consultas que a chave alcança e o que fica de fora."),
+    # API de leitura (revisão editorial de 25/11/2026): tutoriais primeiro,
+    # depois a referência; as chaves api-consultar/api-consultas ficaram.
+    _P("api-visao-geral", "api", "Visão geral da API de leitura",
+       "Finalidade, requisitos, segurança e o que cada consulta resolve."),
+    _P("api-chaves", "api", "Como criar e gerenciar chaves de API",
+       "Criar, guardar, substituir e revogar uma chave de API."),
+    _P("api-consultar", "api", "Como realizar a primeira consulta",
+       "O endereço, o cabeçalho, a resposta e como percorrer as páginas."),
+    _P("api-integracoes", "api", "Guias de integração",
+       "Postman, Power BI, Excel, PowerShell, Python e cURL, com a chave guardada com segurança."),
+    _P("api-certificados", "api", "Consultar certificados digitais",
+       "As consultas de certificados, seus filtros e os campos da resposta."),
+    _P("api-consultas", "api", "Referência das demais consultas",
+       "Dashboard, carteiras, instalador, SIEG, usuários, configuração e conta vinculada."),
+    _P("api-erros", "api", "Erros, soluções e perguntas frequentes",
+       "O que cada código de erro significa e como resolver."),
     _P("bandeja-entrar", "bandeja", "Entrar na bandeja",
        "Entrar pela primeira vez e esperar a autorização do computador."),
     _P("bandeja-instalar", "bandeja", "Receber os certificados na bandeja",
@@ -195,6 +207,63 @@ def _prints() -> dict:
     except (OSError, ValueError) as e:
         logger.error("Manifesto dos prints da wiki ilegível: %s", e)
         return {}
+
+
+# ── Parâmetros da API de leitura ──────────────────────────────────────────
+# As tabelas de parâmetros da wiki saem do OpenAPI do próprio portal: tipo,
+# obrigatoriedade, padrão e limites não ficam desatualizados quando a rota
+# muda. A descrição de cada parâmetro vem do tutorial (macro `parametros`).
+_TIPOS = {"string": "Texto", "integer": "Inteiro", "number": "Número", "boolean": "true ou false"}
+_LISTA = re.compile(r"^\^\(([\w|]+)\)\$$")
+
+
+def _faixa(v: dict) -> str:
+    lo, hi = v.get("minimum"), v.get("maximum")
+    if lo is not None and hi is not None:
+        return f"De {lo} a {hi}"
+    if hi is not None:
+        return f"Até {hi}"
+    return f"A partir de {lo}" if lo is not None else ""
+
+
+def parametros_api(caminho: str, ordem=()) -> list[dict]:
+    """Os parâmetros do GET `caminho`, como a wiki os mostra. Rota que não
+    existe devolve lista vazia (o teste da wiki é quem barra)."""
+    from app.main import app  # import tardio: main importa este router
+
+    op = app.openapi().get("paths", {}).get(caminho, {}).get("get")
+    if op is None:
+        logger.error("Wiki cita uma consulta que não existe: %s", caminho)
+        return []
+    saida = []
+    for p in op.get("parameters", []):
+        if p.get("in") not in ("path", "query"):
+            continue
+        s = p.get("schema", {})
+        v = next((x for x in s.get("anyOf", [s]) if x.get("type") != "null"), s)
+        tipo = "Data (AAAA-MM-DD)" if v.get("format") == "date" else _TIPOS.get(v.get("type"), "Texto")
+        padrao = s.get("default")
+        if isinstance(padrao, bool):
+            padrao = "true" if padrao else "false"
+        valores = []
+        lista = _LISTA.match(v.get("pattern") or "")
+        if lista:
+            valores.append(", ".join(lista.group(1).split("|")))
+        elif v.get("pattern") == "^[0-9a-fA-F]{64}$":
+            valores.append("64 caracteres hexadecimais")
+        if _faixa(v):
+            valores.append(_faixa(v))
+        if v.get("maxLength") and not v.get("pattern"):
+            valores.append(f"Até {v['maxLength']} caracteres")
+        saida.append({
+            "nome": p["name"], "na_rota": p["in"] == "path", "tipo": tipo,
+            "obrigatorio": bool(p.get("required")),
+            "padrao": "" if padrao in (None, "") else str(padrao),
+            "valores": "; ".join(valores),
+        })
+    # Na ordem do tutorial (os filtros mais usados primeiro); o resto depois.
+    pos = {n: i for i, n in enumerate(ordem)}
+    return sorted(saida, key=lambda x: pos.get(x["nome"], len(pos)))
 
 
 def _visiveis(papel: str) -> tuple[list[ModuloWiki], bool]:
@@ -484,6 +553,7 @@ async def pagina_wiki(request: Request) -> Response:
         "temas": [(m, [p for p in paginas if p.tema == m.chave]) for m in temas],
         "q": pergunta, "resultados": buscar(pergunta, paginas) if pergunta and not atual else [],
         "prints": _prints() if atual else {},
+        "parametros_api": parametros_api,
     }
     if atual:
         i = paginas.index(atual)

@@ -207,3 +207,34 @@
   overflow-x: auto; font-size: var(--text-sm); line-height: 1.5;
 }
 .wiki-artigo td code { white-space: nowrap; }
+
+/* API de leitura (revisão editorial de 25/11/2026). */
+.wiki-atualizado { margin: calc(-1 * var(--space-4)) 0 var(--space-6); font-size: var(--text-sm); color: var(--text-secondary); }
+.wiki-rota {
+  margin: var(--space-4) 0; padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+}
+.wiki-rota > p { margin: var(--space-2) 0 0; }
+.wiki-rota .wiki-tabela table { margin-bottom: 0; }
+.wiki-rota__titulo { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0; font-size: var(--text-base); }
+.wiki-rota__titulo code { overflow-wrap: anywhere; }
+.wiki-rota__metodo {
+  padding: 1px var(--space-2); border-radius: var(--radius-sm);
+  background: var(--bg-surface-alt); border: 1px solid var(--border-subtle);
+  font: 700 var(--text-xs)/1.6 var(--font-body); letter-spacing: .04em;
+}
+.wiki-parametros__rota {
+  margin-left: var(--space-2); font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap;
+}
+.wiki-parametros__nenhum { font-size: var(--text-sm); color: var(--text-secondary); }
+.wiki-parametros td:nth-child(2), .wiki-parametros td:nth-child(3) { white-space: nowrap; }
+
+/* Impressão e PDF: só o artigo, sem cortes em código e tabelas. */
+@media print {
+  .sidebar, .topbar-actions, .wiki-toc, .wiki-busca, .wiki-vizinhos, .wiki-veja, .wiki-copiar, .wiki-trilha { display: none !important; }
+  .wiki-artigo { border: 0; box-shadow: none; padding: 0; }
+  .wiki-artigo pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+  .wiki-tabela { overflow: visible; }
+  .wiki-artigo td code { white-space: normal; overflow-wrap: anywhere; }
+  .wiki-rota, .wiki-artigo tr, .wiki-artigo pre { break-inside: avoid; }
+}

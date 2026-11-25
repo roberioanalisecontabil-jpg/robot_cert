@@ -1,0 +1,54 @@
+{% from "wiki/_macros.html" import papeis, atualizado, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
+
+<p>A API de leitura do CertGuard Análise permite consultar as informações do portal e utilizá-las em relatórios, dashboards, automações e integrações com outros sistemas. Com ela, é possível acompanhar vencimentos, consultar carteiras e analisar indicadores sem acessar o portal manualmente.</p>
+<p>A API é <strong>exclusivamente de leitura</strong>: a chave não permite criar, alterar ou excluir informações.</p>
+
+<h2 id="requisitos">Antes de começar</h2>
+<ul>
+  <li>Conta no portal com perfil de <strong>Administrador</strong>.</li>
+  <li>A senha atual da conta, pedida na criação da chave.</li>
+  <li>O endereço do portal: o mesmo que aparece na barra do navegador ao abrir o portal, sem o caminho depois da barra (por exemplo, <code>https://portal.exemplo.com.br</code>).</li>
+  <li>Uma ferramenta para a integração: Postman, Power BI, Excel, PowerShell, Python ou cURL.</li>
+</ul>
+
+<h2 id="seguranca">Permissões e segurança da chave de API</h2>
+<p>A chave tem as mesmas permissões de leitura do administrador que a criou. Quem a possuir consegue consultar tudo o que esse administrador consulta no portal, inclusive dados de clientes.</p>
+<ul>
+  <li>Armazene a chave em um cofre de senhas ou em uma configuração protegida do sistema que vai utilizá-la. Não a envie por e-mail, chat ou planilha.</li>
+  <li>A chave é invalidada automaticamente quando expira, quando é revogada, ou quando a conta vinculada é desativada ou perde o perfil de administrador.</li>
+  <li>O último uso de cada chave, com a data e o endereço IP de origem, aparece em <strong>Configuração › Chaves de API</strong>.</li>
+</ul>
+
+<h2 id="bloqueadas">Restrições e limitações da API</h2>
+<ul>
+  <li><strong>Criar, alterar ou excluir informações</strong>: os métodos <code>POST</code>, <code>PUT</code>, <code>PATCH</code> e <code>DELETE</code> respondem <code>403</code>. Somente <code>GET</code> é aceito.</li>
+  <li><strong>Cofre e agente</strong>: <code>/api/agent/next</code> e <code>/api/cert-installer/vault-optin</code> respondem <code>403</code>. Arquivos <code>.pfx</code> e senhas de certificado nunca são entregues pela chave.</li>
+  <li><strong>Rotas das estações e do agendador</strong> (<code>/api/estacao/…</code>, <code>/api/agent/microsoft</code>, <code>/api/cron/alerts</code>): utilizam credenciais próprias e não aceitam a chave.</li>
+  <li><strong>Dados pessoais do responsável</strong> pelo certificado (nome, CPF, nascimento e e-mail) não aparecem nas listas; somente na consulta de detalhes de um certificado.</li>
+</ul>
+
+<h2 id="objetivos">O que você deseja consultar?</h2>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Objetivo</th><th>Consulta</th></tr></thead>
+  <tbody>
+    <tr><td>Certificados próximos do vencimento</td><td><a href="/wiki-certguard?pagina=api-certificados#certificados"><code>/api/certificados</code></a> com <code>vence_em_dias</code></td></tr>
+    <tr><td>Certificados de clientes específicos</td><td><a href="/wiki-certguard?pagina=api-certificados#certificados"><code>/api/certificados</code></a> com <code>documento</code></td></tr>
+    <tr><td>Clientes com certificados vencidos</td><td><a href="/wiki-certguard?pagina=api-certificados#vencidos"><code>/api/certificados/vencidos</code></a></td></tr>
+    <tr><td>Histórico de certificados</td><td><a href="/wiki-certguard?pagina=api-certificados#historico"><code>/api/certificados/historico</code></a></td></tr>
+    <tr><td>Certificados duplicados</td><td><a href="/wiki-certguard?pagina=api-certificados#duplicidades"><code>/api/certificados/duplicidades</code></a></td></tr>
+    <tr><td>Indicadores para dashboard</td><td><a href="/wiki-certguard?pagina=api-consultas#dashboard"><code>/api/dashboard</code></a></td></tr>
+    <tr><td>Clientes da carteira de um colaborador</td><td><a href="/wiki-certguard?pagina=api-consultas#carteiras"><code>/api/carteira/{user_id}</code></a></td></tr>
+    <tr><td>Uso dos certificados nas estações</td><td><a href="/wiki-certguard?pagina=api-consultas#carteiras"><code>/api/carteira/uso</code></a></td></tr>
+    <tr><td>Status de uma solicitação de instalação</td><td><a href="/wiki-certguard?pagina=api-consultas#instalador"><code>/api/cert-installer/acompanhar/{token_id}</code></a></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="caminho">Por onde seguir</h2>
+<ol>
+  <li><a href="/wiki-certguard?pagina=api-chaves">Criar a chave de API</a>.</li>
+  <li><a href="/wiki-certguard?pagina=api-consultar">Realizar a primeira consulta</a> e conferir o resultado.</li>
+  <li>Conectar a ferramenta pelo <a href="/wiki-certguard?pagina=api-integracoes">guia de integração</a> correspondente.</li>
+  <li>Consultar a <a href="/wiki-certguard?pagina=api-certificados">referência de certificados</a> e a <a href="/wiki-certguard?pagina=api-consultas">referência das demais consultas</a> para os parâmetros.</li>
+</ol>

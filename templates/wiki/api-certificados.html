@@ -1,0 +1,102 @@
+{% from "wiki/_macros.html" import papeis, atualizado, parametros, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
+
+<p>Referência das consultas de certificados digitais: quando utilizar cada uma, os parâmetros aceitos e um exemplo. Todas usam <code>GET</code> e a chave no cabeçalho <code>Authorization</code> (veja <a href="/wiki-certguard?pagina=api-consultar">Como realizar a primeira consulta</a>).</p>
+<p>Na coluna <strong>Valores aceitos</strong>, o tipo, o padrão e os limites vêm do próprio portal e acompanham qualquer mudança nas consultas.</p>
+
+<h2 id="certificados">Consultar certificados digitais</h2>
+<p><code>/api/certificados</code> retorna a lista atual de certificados digitais, com filtros por documento, situação e vencimento. É a mesma lista da tela Início.</p>
+<p><strong>Quando utilizar:</strong> identificar vencimentos, consultar clientes específicos, alimentar dashboards e acompanhar certificados vencidos.</p>
+{{ parametros("/api/certificados", {
+  "documento": "CNPJ ou CPF de um ou mais clientes, separados por vírgula. Aceita com ou sem máscara.",
+  "documento_tipo": "Somente empresas (cnpj) ou somente pessoas físicas (cpf).",
+  "vence_em_dias": "Certificados que vencem de hoje até N dias.",
+  "vence_de": "Data inicial de vencimento.",
+  "vence_ate": "Data final de vencimento.",
+  "filtro_status": "Situação: todos, validos, prestes_vencer (até 30 dias), vencidos ou erros.",
+  "busca": "Texto procurado no nome do titular e no documento.",
+  "campos": "Informações retornadas: enxuto (padrão pela chave), completo, ou uma lista separada por vírgula. Veja Campos da resposta.",
+  "pagina": "Página dos resultados. Sem ela, a primeira.",
+  "por_pagina": "Registros por página. Sem ele, 100.",
+  "todas_filtradas": "true retorna todos os registros do filtro em uma página, até 5.000.",
+  "ocultar_ilegiveis": "true retira da lista os arquivos ilegíveis e fora do padrão.",
+  "ocultar_vencidos": "true retira os vencidos da lista e informa a quantidade em vencidos_ocultos.",
+  "filtro_sieg": "Situação no SIEG: todos, incluindo, no_sieg ou fora.",
+  "ordenar": "Ordem da lista: nome, status, emissao, vencimento ou documento. Sem ele, ordem alfabética do titular.",
+  "direcao": "asc (crescente) ou desc (decrescente).",
+  "fonte": "Origem da leitura: auto (a última leitura do agente). Os valores remoto e local são de diagnóstico.",
+}) }}
+<p><strong>Exemplo:</strong> certificados de empresas que vencem nos próximos 60 dias.</p>
+<pre><code>GET https://ENDERECO-DO-PORTAL/api/certificados?documento_tipo=cnpj&amp;vence_em_dias=60
+Authorization: Bearer cg_ro_…</code></pre>
+<p><strong>Resultado esperado:</strong> a lista dos certificados que atendem aos filtros, com o titular, o documento, o status e o vencimento de cada um, mais o <code>resumo</code> e a <code>paginacao</code> (veja <a href="/wiki-certguard?pagina=api-consultar#resposta">Como ler a resposta</a>).</p>
+
+<h3 id="certificados-campos">Campos da resposta</h3>
+<p>Pela chave de API, cada certificado vem por padrão com os campos essenciais:</p>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Campo</th><th>Descrição</th></tr></thead>
+  <tbody>
+    <tr><td><code>nome</code></td><td>Titular do certificado.</td></tr>
+    <tr><td><code>documento</code></td><td>CNPJ ou CPF, somente os dígitos.</td></tr>
+    <tr><td><code>documento_tipo</code></td><td><code>cnpj</code> ou <code>cpf</code>.</td></tr>
+    <tr><td><code>status</code></td><td><code>valido</code>, <code>prestes_vencer</code> (até 30 dias), <code>vencido</code>, <code>erro</code> ou <code>fora_do_padrao</code>.</td></tr>
+    <tr><td><code>vence_em</code></td><td>Data do vencimento, no horário de Brasília.</td></tr>
+    <tr><td><code>dias_para_vencer</code></td><td>Dias até o vencimento; negativo quando já venceu.</td></tr>
+    <tr><td><code>emissor</code></td><td>Autoridade certificadora.</td></tr>
+    <tr><td><code>tipo_icp</code></td><td><code>e-CNPJ</code> ou <code>e-CPF</code>.</td></tr>
+    <tr><td><code>sieg_estado</code></td><td>Situação no SIEG; vazio quando o certificado nunca foi enviado.</td></tr>
+  </tbody>
+</table></div>
+<p>Outros campos podem ser pedidos em <code>campos</code>: <code>emitido_em</code>, <code>documento_formatado</code>, <code>organizacao</code>, <code>issuer</code>, <code>subject</code>, <code>serial_number</code>, <code>fingerprint_sha256</code>, <code>error_message</code>, <code>not_before</code>, <code>not_after</code> e <code>pasta</code>. Com <code>campos=completo</code>, a resposta traz tudo o que a tela Início recebe. Um campo inexistente responde <code>422</code>, com a lista dos campos válidos.</p>
+{% call dica("Valores diferentes para a mesma situação") %}<p>O filtro <code>filtro_status</code> usa o plural (<code>validos</code>, <code>vencidos</code>, <code>erros</code>), e o campo <code>status</code> da resposta usa o singular (<code>valido</code>, <code>vencido</code>, <code>erro</code>).</p>{% endcall %}
+
+<h2 id="detalhes">Consultar os detalhes de um certificado</h2>
+<p><code>/api/certificados/{fingerprint}/detalhes</code> retorna um certificado com os dados do responsável (nome, CPF, nascimento e e-mail), que não aparecem nas listas.</p>
+<p><strong>Quando utilizar:</strong> conferir os dados completos de um certificado já identificado em uma lista.</p>
+{{ parametros("/api/certificados/{fingerprint}/detalhes", {
+  "fingerprint": "Impressão digital SHA-256 do certificado: o campo fingerprint_sha256 da lista (peça campos=nome,fingerprint_sha256).",
+}) }}
+<pre><code>GET https://ENDERECO-DO-PORTAL/api/certificados/3f2a…c91b/detalhes</code></pre>
+
+<h2 id="historico">Consultar o histórico de certificados</h2>
+<p><code>/api/certificados/historico</code> retorna todos os certificados que já passaram pelo portal, inclusive os que saíram das pastas.</p>
+<p><strong>Quando utilizar:</strong> auditorias e relatórios de entrada e saída de certificados.</p>
+{{ parametros("/api/certificados/historico", {
+  "busca": "Texto procurado no nome, no arquivo ou no documento.",
+  "status": "Situação na última verificação: ok, expirado, erro, ilegivel ou fora_do_padrao.",
+  "situacao": "todos, nas_pastas (ainda nas pastas) ou sairam (já retirados).",
+  "pagina": "Página dos resultados.",
+  "por_pagina": "Registros por página.",
+  "todas_filtradas": "true retorna todos os registros do filtro em uma página, até 5.000.",
+  "limite_snapshots": "Quantidade máxima de leituras antigas consultadas quando o histórico consolidado está vazio. Normalmente não é necessário informar.",
+}) }}
+<pre><code>GET https://ENDERECO-DO-PORTAL/api/certificados/historico?situacao=sairam&amp;por_pagina=100</code></pre>
+<p>A resposta traz <code>itens</code> e, no mesmo nível, <code>pagina</code>, <code>total_paginas</code> e <code>total_itens</code>.</p>
+
+<h2 id="vencidos">Consultar clientes com certificados vencidos</h2>
+<p><code>/api/certificados/vencidos</code> retorna um registro por cliente cujo certificado vigente já venceu.</p>
+<p><strong>Quando utilizar:</strong> listar clientes que precisam renovar o certificado.</p>
+{{ parametros("/api/certificados/vencidos", {
+  "data_inicio": "Data inicial do vencimento (AAAA-MM-DD).",
+  "data_fim": "Data final do vencimento (AAAA-MM-DD).",
+  "busca": "Texto procurado no nome do cliente e no documento.",
+  "ordem": "Ordem pelo vencimento: desc (mais recente primeiro) ou asc.",
+  "pagina": "Página dos resultados.",
+  "por_pagina": "Registros por página.",
+  "todas_filtradas": "true retorna todos os registros do filtro em uma página, até 5.000.",
+  "limite_snapshots": "Sem efeito no resultado; mantido por compatibilidade.",
+}) }}
+<pre><code>GET https://ENDERECO-DO-PORTAL/api/certificados/vencidos?data_inicio=2026-01-01&amp;data_fim=2026-11-30</code></pre>
+<p>A resposta traz <code>itens</code>, a <code>paginacao</code> e <code>resumo_anos</code>, com a quantidade de vencidos por ano.</p>
+
+<h2 id="duplicidades">Consultar certificados duplicados</h2>
+<p><code>/api/certificados/duplicidades</code> retorna os clientes com mais de um certificado guardado, em três grupos: mesmo documento (<code>grupos_documento</code>), mesmo certificado em arquivos diferentes (<code>grupos_certificado_igual</code>) e nomes parecidos sem documento (<code>grupos_nome_similar</code>).</p>
+<p><strong>Quando utilizar:</strong> limpar as pastas e decidir qual certificado vale.</p>
+{{ parametros("/api/certificados/duplicidades") }}
+
+<h2 id="sieg">Consultar a situação de um certificado no SIEG</h2>
+<p><code>/api/sieg/certificado/{fingerprint}</code> retorna se o certificado está no SIEG e as tentativas de envio.</p>
+{{ parametros("/api/sieg/certificado/{fingerprint}", {
+  "fingerprint": "Impressão digital SHA-256 do certificado (campo fingerprint_sha256).",
+}) }}
