@@ -94,7 +94,7 @@ def test_tela_de_configuracao_revisada() -> None:
     assert 'list="portas-smtp"' in html and 'max="65535"' not in html
     assert "no dia do vencimento" not in html
     assert "colaborador" not in html.lower().replace("colaborador_", "")
-    assert "Máquina alvo" not in html and "Servidor alvo" in html
+    assert "Máquina alvo" not in html
     assert "e-mails pessoais de quem acompanha" in html and "admin_resumos_enviados" in html, "L4"
     assert "r.status === 403" in html and "401: a sessão expirou" not in html
     assert "Banco de dados: não verificado" in html
@@ -123,7 +123,9 @@ def test_configuracao_sem_abas_legadas() -> None:
     html = (Path(__file__).resolve().parents[1] / "templates" / "configuracao.html").read_text(encoding="utf-8")
     assert "cg-cfg-legado" not in html
     # A fila é tabela, não o JSON da API num <pre>.
-    assert "JSON.stringify(p, null, 2)" not in html and 'class="ag-table cg-tabela-fila"' in html
+    assert "JSON.stringify(p, null, 2)" not in html
+    # 25/11/2026: a aba Fila de comandos saiu; Forçar leitura ficou em Pastas.
+    assert 'id="sec-comandos"' not in html and 'id="cmd-rescan"' in html and '"/api/agent/queue"' in html
     # O agente é serviço instalado por instalador, não "python run_agent.py".
     assert "python agent\run_agent.py" not in html
     # 25/11/2026: o serviço e o instalador saíram da tela para a wiki.

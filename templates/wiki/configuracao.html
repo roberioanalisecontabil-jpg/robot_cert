@@ -5,7 +5,7 @@
 
 <p>Só o administrador abre esta tela. Quem não é administrador e tenta abrir volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
 
-<p>No alto da página, duas etiquetas mostram o estado do servidor: <strong>Banco de dados conectado</strong> (ou desconectado, ou não verificado) e <strong>Chave API obrigatória</strong> (ou aberta). A página tem oito abas: <strong>Pastas e agente</strong>, <strong>Alertas por e-mail</strong>, <strong>Fila de comandos</strong>, <strong>SIEG</strong>, <strong>Acessórias</strong>, <strong>Remoção nas estações</strong>, <strong>App autenticador</strong> e <strong>Chaves de API</strong>.</p>
+<p>No alto da página, duas etiquetas mostram o estado do servidor: <strong>Banco de dados conectado</strong> (ou desconectado, ou não verificado) e <strong>Chave API obrigatória</strong> (ou aberta). A página tem sete abas: <strong>Pastas e agente</strong>, <strong>Alertas por e-mail</strong>, <strong>SIEG</strong>, <strong>Acessórias</strong>, <strong>Remoção nas estações</strong>, <strong>App autenticador</strong> e <strong>Chaves de API</strong>.</p>
 
 <h2 id="chave">Chave das estações</h2>
 <p>A chave das estações não passa pelo navegador e não tem aba no portal. Ela é digitada no instalador do agente, que a guarda protegida no próprio computador.</p>
@@ -33,7 +33,10 @@
   </li>
 </ol>
 
-{% call cuidado("Caminho errado cega o agente") %}<p>Caminhos de pasta errados fazem o agente parar de ver certificados. Depois de <strong>Guardar e sincronizar</strong>, confira <strong>Leitura local efetiva</strong> e, se quiser, use <strong>Forçar leitura</strong> na <a href="#comandos">Fila de comandos</a>.</p>{% endcall %}
+{% call cuidado("Caminho errado cega o agente") %}<p>Caminhos de pasta errados fazem o agente parar de ver certificados. Depois de <strong>Guardar e sincronizar</strong>, confira <strong>Leitura local efetiva</strong> e, se quiser, use <a href="#forcar-leitura"><strong>Forçar leitura</strong></a>.</p>{% endcall %}
+
+<h3 id="forcar-leitura">Forçar leitura</h3>
+<p>O agente relê a pasta sozinho a cada mudança. Depois de trocar um caminho, clique em <strong>Forçar leitura</strong>, no bloco <strong>Pastas monitoradas</strong>: o pedido vai para o agente do <strong>ID do servidor</strong>. Se ele não responder em 1 minuto, o portal avisa; costuma ser ID errado ou o serviço do agente parado.</p>
 
 <h3 id="arquivo-agente">Gerar o arquivo de configuração do agente</h3>
 <ol>
@@ -111,18 +114,6 @@
   </li>
   <li>Clique em <strong>Salvar</strong>. <strong>Restaurar padrão</strong> limpa os campos, mas ainda é preciso salvar.</li>
 </ol>
-
-<h2 id="comandos">Aba Fila de comandos</h2>
-<p>Manda ordens para o agente do servidor de certificados.</p>
-<ol>
-  <li>Confira o <strong>Servidor alvo</strong>. Normalmente é <strong>default</strong>.</li>
-  <li>Clique em <strong>Forçar leitura</strong> para o agente reler as pastas agora, sem esperar o intervalo normal. <strong>Ping</strong> só testa se o agente responde.</li>
-  <li>A tabela <strong>Pendentes</strong> mostra o que o agente ainda não buscou. Clique em <strong>Atualizar</strong> para recarregar.
-    {{ print("configuracao-comandos", "Aba Fila de comandos com o campo Servidor alvo, os botões Forçar leitura e Ping e a tabela Pendentes", "A fila de comandos do agente.") }}
-  </li>
-</ol>
-
-{% call dica("Comando parado há mais de um dia") %}<p>Um comando pendente há mais de um dia costuma indicar agente parado ou nome de servidor errado em <strong>Servidor alvo</strong>.</p>{% endcall %}
 
 <h2 id="sieg">Aba SIEG</h2>
 <p>Liga o portal à conta do SIEG. Quando alguém liga o SIEG nos detalhes de um certificado, no Início, o portal envia o certificado ao SIEG. As tentativas ficam no <a href="/wiki-certguard?modulo=instalador">Instalador</a>, aba <strong>SIEG</strong>.</p>

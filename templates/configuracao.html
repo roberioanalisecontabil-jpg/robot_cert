@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=blocos-2026-11-25" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=sem-fila-2026-11-25" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
@@ -41,7 +41,6 @@
     <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Seções da configuração">
       <a class="ag-abas__aba" role="tab" id="tab-pastas" href="?aba=pastas" aria-controls="sec-pastas" data-aba="pastas" aria-selected="{{ 'true' if aba == 'pastas' else 'false' }}" {% if aba != 'pastas' %}tabindex="-1"{% endif %}>Pastas e agente</a>
       <a class="ag-abas__aba" role="tab" id="tab-smtp" href="?aba=alertas" aria-controls="sec-smtp" data-aba="alertas" aria-selected="{{ 'true' if aba == 'alertas' else 'false' }}" {% if aba != 'alertas' %}tabindex="-1"{% endif %}>Alertas por e-mail</a>
-      <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
       <a class="ag-abas__aba" role="tab" id="tab-sieg" href="?aba=sieg" aria-controls="sec-sieg" data-aba="sieg" aria-selected="{{ 'true' if aba == 'sieg' else 'false' }}" {% if aba != 'sieg' %}tabindex="-1"{% endif %}>SIEG</a>
       <a class="ag-abas__aba" role="tab" id="tab-acessorias" href="?aba=acessorias" aria-controls="sec-acessorias" data-aba="acessorias" aria-selected="{{ 'true' if aba == 'acessorias' else 'false' }}" {% if aba != 'acessorias' %}tabindex="-1"{% endif %}>Acessórias</a>
       <a class="ag-abas__aba" role="tab" id="tab-remocao" href="?aba=remocao" aria-controls="sec-remocao" data-aba="remocao" aria-selected="{{ 'true' if aba == 'remocao' else 'false' }}" {% if aba != 'remocao' %}tabindex="-1"{% endif %}>Remoção nas estações</a>
@@ -58,7 +57,7 @@
     <!-- ── Pastas e agente ─────────────────── -->
     <section class="cg-cfg-aba" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
       <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
-        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Pastas monitoradas</h2><p class="cg-cfg-bloco__nota">Caminhos como o servidor os vê.</p></header>
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Pastas monitoradas</h2><p class="cg-cfg-bloco__nota">Caminhos como o servidor os vê. O agente relê a pasta sozinho a cada mudança; <em>Forçar leitura</em> serve depois de trocar um caminho.</p></header>
         <div class="ag-form-cols">
           <div class="ag-field"><label class="ag-label" for="inp-source">Origem (.pfx)</label><input type="text" id="inp-source" class="ag-input" placeholder="C:\Certs" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-exp">Vencidos (destino)</label><input type="text" id="inp-exp" class="ag-input" placeholder="C:\Certs\Vencidos" /></div>
@@ -70,6 +69,10 @@
           <li class="ag-dados__item"><span class="ag-dados__rotulo">Destino (vencidos)</span><code class="ag-dados__valor" id="disp-expired">—</code></li>
         </ul>
         <p class="ag-ajuda" id="path-sync-msg" role="status"></p>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="cmd-rescan" class="ag-btn ag-btn--outline">Forçar leitura</button>
+          <span class="ag-ajuda" id="cmd-msg" role="status" aria-live="polite"></span>
+        </div>
       </div>
 
       <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
@@ -275,38 +278,9 @@
       </div>
     </section>
 
-    <!-- ── Fila de comandos ────────────────── -->
-    <section class="cg-cfg-aba" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
-      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
-        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Comando ao agente</h2><p class="cg-cfg-bloco__nota"><em>Forçar leitura</em> relê a pasta sem esperar as 24 horas.</p></header>
-        <div class="cg-cfg-cmd">
-          <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Servidor alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
-          <button type="button" id="cmd-rescan" class="ag-btn ag-btn--outline">Forçar leitura</button>
-          <button type="button" id="cmd-ping" class="ag-btn ag-btn--outline">Ping</button>
-        </div>
-        <p class="ag-ajuda" id="cmd-msg" role="status"></p>
-      </div>
-
-      <!-- A fila vira tabela (Leva C, 06/10/2026): antes "Ver fila" despejava
-           o JSON da API num <pre>. Carrega ao abrir a aba. -->
-      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
-        <header class="cg-cfg-bloco__cab cg-cfg-fila-cab">
-          <h2 class="cg-cfg-bloco__titulo">Pendentes <span class="ag-abas__contagem" id="cmd-contagem"></span></h2>
-          <button type="button" id="cmd-refresh-q" class="ag-btn ag-btn--ghost ag-btn--sm">Atualizar</button>
-        </header>
-        <div class="ag-table-scroll" role="region" aria-label="Comandos pendentes">
-          <table class="ag-table cg-tabela-fila" role="table">
-            <thead role="rowgroup"><tr role="row">
-              <th role="columnheader" class="ag-th--estatico">Comando</th>
-              <th role="columnheader" class="ag-th--estatico">Servidor</th>
-              <th role="columnheader" class="ag-th--estatico">Pedido em</th>
-            </tr></thead>
-            <tbody role="rowgroup" id="cmd-queue"><tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Carregando…</td></tr></tbody>
-          </table>
-        </div>
-        <p class="ag-ajuda" id="cmd-nota" hidden>Pendente há mais de um dia: servidor alvo sem agente com esse nome, ou agente parado.</p>
-      </div>
-    </section>
+    <!-- A aba "Fila de comandos" saiu em 25/11/2026: o agente vigia a pasta
+         e consome a fila em ~10 s, então a tabela de pendentes vivia vazia.
+         Forçar leitura ficou no bloco Pastas monitoradas. -->
 
     <!-- ── SIEG (07/10/2026) ───────────────────────────────────────────
          Credenciais da API do SIEG (cifradas, como o segredo do Microsoft
@@ -622,8 +596,8 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
-      const TAB_IDS = { pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
+      const ABAS = { pastas: "sec-pastas", alertas: "sec-smtp", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
+      const TAB_IDS = { pastas: "tab-pastas", alertas: "tab-smtp", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
@@ -638,7 +612,6 @@
         if (aba === "pastas") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
         history.replaceState(null, "", url.pathname + (url.search || ""));
         if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
-        if (aba === "comandos") void refreshCommandQueue();
         if (aba === "sieg") void carregarSieg();
         if (aba === "acessorias") void carregarAcessoriasCfg();
         if (aba === "remocao" && window.carregarRemocao) void window.carregarRemocao();
@@ -866,8 +839,6 @@
           if (inputAgentBaseUrl) {
             inputAgentBaseUrl.value = localStorage.getItem("cert_robot_agent_base_url") || window.location.origin;
           }
-          const cmi = document.getElementById("cmd-machine-id");
-          if (cmi) cmi.value = midG;
           st.textContent = "";
           _carregado = true;
         } catch (e) {
@@ -1298,83 +1269,39 @@
         }
       });
 
-      // ── Comandos ─────────────────────────────────────────────────────────────
-      async function enqueueRemoteCommand(cmd) {
+      // ── Forçar leitura (25/11/2026) ────────────────────────────────────
+      // Põe `rescan` na fila da máquina do campo "ID do servidor" e espera o
+      // agente consumir (ele consulta a fila a cada ~10 s). Sem consumo em
+      // 1 minuto, diz que o agente não respondeu.
+      async function forcarLeitura() {
         const st = document.getElementById("cmd-msg");
-        st.textContent = "A enfileirar…";
+        const btn = document.getElementById("cmd-rescan");
+        const mid = document.getElementById("inp-machine").value.trim() || "default";
+        btn.disabled = true;
+        st.textContent = "Pedindo ao agente…";
         try {
-          const cmi = document.getElementById("cmd-machine-id");
-          const mid = cmi && cmi.value.trim() ? cmi.value.trim() : "default";
-          const r = await fetch("/api/agent/commands", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ machine_id: mid, command: cmd }) });
+          const r = await fetch("/api/agent/commands", { method: "POST", headers: getHeaders(true), body: JSON.stringify({ machine_id: mid, command: "rescan" }) });
           if (r.status === 403) { st.textContent = "Só o administrador pode fazer isto."; return; }
           if (!r.ok) { st.textContent = "Erro " + r.status + ": " + (await mensagemCorpoErro(r)); return; }
-          const j = await r.json();
-          const nomeCmd = CMD_ROTULO[j.command || cmd] || (j.command || cmd);
-          st.textContent = nomeCmd + " enfileirado para " + mid + ". O agente busca no próximo ciclo.";
-          await refreshCommandQueue();
-        } catch (e) { st.textContent = "Erro: " + e; }
-      }
-
-      // Rótulo do que a pessoa clicou; comando fora da lista aparece pelo
-      // nome técnico, marcado como desconhecido (sobra de teste, por exemplo).
-      const CMD_ROTULO = {
-        rescan: "Forçar leitura",
-        ping: "Ping",
-        mover_vencidos: "Mover vencidos",
-        instalar_certificados: "Instalar certificados",
-      };
-
-      function haQuanto(iso) {
-        const t = Date.parse(iso || "");
-        if (Number.isNaN(t)) return "";
-        const min = Math.max(0, Math.round((Date.now() - t) / 60000));
-        if (min < 1) return "agora";
-        if (min < 60) return "há " + min + " min";
-        const h = Math.round(min / 60);
-        if (h < 24) return "há " + h + " h";
-        const d = Math.round(h / 24);
-        return "há " + d + (d === 1 ? " dia" : " dias");
-      }
-
-      async function refreshCommandQueue() {
-        const tb = document.getElementById("cmd-queue");
-        const conta = document.getElementById("cmd-contagem");
-        try {
-          const r = await fetch("/api/agent/queue", { headers: getHeaders() });
-          if (r.status === 401) return;
-          if (!r.ok) {
-            conta.textContent = "";
-            tb.innerHTML = '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Não foi possível ler a fila: ' + esc(await mensagemCorpoErro(r)) + "</td></tr>";
-            return;
+          const id = (await r.json()).id;
+          for (let i = 0; i < 12; i++) {
+            await new Promise((ok) => setTimeout(ok, 5000));
+            const q = await fetch("/api/agent/queue", { headers: getHeaders() });
+            if (!q.ok) break;
+            const pend = (await q.json()).pendentes || [];
+            if (!pend.some((c) => c.id === id)) {
+              st.textContent = "O agente de " + mid + " recebeu o pedido e está relendo a pasta.";
+              return;
+            }
           }
-          const p = (await r.json()).pendentes || [];
-          conta.textContent = p.length ? "(" + p.length + ")" : "";
-          if (!p.length) {
-            tb.innerHTML = '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Nenhum comando pendente: o agente já buscou tudo o que foi pedido.</td></tr>';
-            document.getElementById("cmd-nota").hidden = true;
-            return;
-          }
-          let velhos = 0;
-          tb.innerHTML = p.map((c) => {
-            const rot = CMD_ROTULO[c.command];
-            const idade = Date.now() - Date.parse(c.created_at || "");
-            if (idade > 86400000) velhos++;
-            const quando = c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "—";
-            return `<tr role="row">
-              <td role="cell"><span class="ag-cell-stack"><span class="ag-cell-main">${rot ? esc(rot) : `<code>${esc(c.command)}</code>`}</span>${rot ? "" : '<span class="ag-cell-sub">comando desconhecido</span>'}</span></td>
-              <td role="cell"><code class="cg-cfg-maquina">${esc(c.machine_id || "—")}</code></td>
-              <td role="cell"><span class="ag-cell-stack"><time class="cg-cfg-quando" datetime="${esc(c.created_at || "")}">${esc(quando)}</time><span class="ag-cell-sub">${esc(haQuanto(c.created_at))}</span></span></td>
-            </tr>`;
-          }).join("");
-          document.getElementById("cmd-nota").hidden = velhos === 0;
-        } catch (_e) {
-          tb.innerHTML = '<tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Não foi possível ler a fila: erro de conexão com o servidor.</td></tr>';
+          st.textContent = "O agente de " + mid + " não respondeu em 1 minuto. Confira o ID do servidor e se o serviço AnaliseCertiDigitalAgent está rodando.";
+        } catch (e) {
+          st.textContent = "Erro de conexão com o servidor.";
+        } finally {
+          btn.disabled = false;
         }
       }
-
-      document.getElementById("cmd-rescan").addEventListener("click", () => enqueueRemoteCommand("rescan"));
-      document.getElementById("cmd-ping").addEventListener("click", () => enqueueRemoteCommand("ping"));
-      document.getElementById("cmd-refresh-q").addEventListener("click", refreshCommandQueue);
+      document.getElementById("cmd-rescan").addEventListener("click", forcarLeitura);
 
 
       // ── SIEG ─────────────────────────────────────────────────────────────
@@ -1494,7 +1421,6 @@
         marcarLimpo();
         _segAnterior = document.getElementById("sel-smtp-seguranca").value;
         await syncPathsFromApi();
-        await refreshCommandQueue();
         if (new URLSearchParams(location.search).get("aba") === "sieg") void carregarSieg();
         if (new URLSearchParams(location.search).get("aba") === "acessorias") void carregarAcessoriasCfg();
         if (new URLSearchParams(location.search).get("aba") === "remocao" && window.carregarRemocao) void window.carregarRemocao();

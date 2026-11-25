@@ -552,7 +552,7 @@ def painel(request: Request) -> HTMLResponse:
 def pagina_configuracao(request: Request) -> HTMLResponse:
     # As abas são links (?aba=…): sem JavaScript a página abre já na aba pedida.
     aba = request.query_params.get("aba") or "pastas"
-    if aba not in ("pastas", "alertas", "comandos", "sieg", "acessorias", "remocao", "autenticador", "api"):
+    if aba not in ("pastas", "alertas", "sieg", "acessorias", "remocao", "autenticador", "api"):
         aba = "pastas"
     return templates.TemplateResponse(
         request=request, name="configuracao.html", context={"pagina_ativa": "configuracao", "aba": aba}

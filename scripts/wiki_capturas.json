@@ -638,10 +638,6 @@
        {"acao": "esperar", "sel": "#em-previa-assunto:not(:text-is('—'))"}],
      "recorte": "#modal-email", "ocultar": [], "manual": false,
      "obs": "NÃO salvar."},
-    {"id": "configuracao-comandos", "modulo": "configuracao", "papel": "admin", "url": "/configuracao?aba=comandos",
-     "passos": [{"acao": "esperar", "sel": "#cmd-queue tr:not(:has-text('Carregando'))"}],
-     "recorte": "#sec-comandos", "ocultar": [], "manual": false,
-     "obs": "Não clicar em Forçar leitura nem em Ping."},
     {"id": "configuracao-sieg", "modulo": "configuracao", "papel": "admin", "url": "/configuracao?aba=sieg",
      "passos": [
        {"acao": "esperar", "sel": "#sieg-secret-status .ag-badge"},
