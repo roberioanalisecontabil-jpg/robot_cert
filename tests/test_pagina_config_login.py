@@ -126,4 +126,6 @@ def test_configuracao_sem_abas_legadas() -> None:
     assert "JSON.stringify(p, null, 2)" not in html and 'class="ag-table cg-tabela-fila"' in html
     # O agente é serviço instalado por instalador, não "python run_agent.py".
     assert "python agent\run_agent.py" not in html
-    assert "AnaliseCertiDigitalAgent" in html and "Instalador_AnaliseCertiDigital_Agente.exe" in html
+    # 25/11/2026: o serviço e o instalador saíram da tela para a wiki.
+    wiki = (Path(__file__).resolve().parents[1] / "templates" / "wiki" / "configuracao.html").read_text(encoding="utf-8")
+    assert "AnaliseCertiDigitalAgent" in wiki and "Instalador_AnaliseCertiDigital_Agente.exe" in wiki

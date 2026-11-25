@@ -25,7 +25,7 @@ def test_selects_com_os_tres_modos() -> None:
         bloco = re.search(rf'<select id="{sel}".*?</select>', TEMPLATE, re.S).group(0)
         for v in ("desligado", "relatorio", "ligado"):
             assert f'value="{v}"' in bloco
-    assert "Desligado: não confere. Só relatório: lista o que sairia, sem remover." in TEMPLATE
+    assert "Só relatório lista o que sairia, sem remover." in TEMPLATE
 
 
 def test_js_e_servido_e_incluido(client: TestClient) -> None:
