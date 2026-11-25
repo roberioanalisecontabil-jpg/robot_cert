@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
-  <link rel="stylesheet" href="/static/aguia-config.css?v=api-2026-11-24" />
+  <link rel="stylesheet" href="/static/aguia-config.css?v=blocos-2026-11-25" />
   <link rel="stylesheet" href="/static/fluidez.css?v=fluidez-2026-11-07" />
 </head>
 <body class="cg-aguia" data-so-admin="1">
@@ -39,7 +39,6 @@
     </div>
 
     <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Seções da configuração">
-      <a class="ag-abas__aba" role="tab" id="tab-chave" href="?aba=chave" aria-controls="sec-chave" data-aba="chave" aria-selected="{{ 'true' if aba == 'chave' else 'false' }}" {% if aba != 'chave' %}tabindex="-1"{% endif %}>Chave API</a>
       <a class="ag-abas__aba" role="tab" id="tab-pastas" href="?aba=pastas" aria-controls="sec-pastas" data-aba="pastas" aria-selected="{{ 'true' if aba == 'pastas' else 'false' }}" {% if aba != 'pastas' %}tabindex="-1"{% endif %}>Pastas e agente</a>
       <a class="ag-abas__aba" role="tab" id="tab-smtp" href="?aba=alertas" aria-controls="sec-smtp" data-aba="alertas" aria-selected="{{ 'true' if aba == 'alertas' else 'false' }}" {% if aba != 'alertas' %}tabindex="-1"{% endif %}>Alertas por e-mail</a>
       <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
@@ -51,72 +50,61 @@
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
-    <!-- ── Chave API ───────────────────────── -->
-    <section class="ag-card cg-cfg-aba" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <!-- A chave não passa mais pelo navegador (SECURITY_AUDIT #46, lote 7):
-             o portal autentica esta tela pelo login (JWT), e a X-API-Key é
-             credencial de ESTAÇÃO — entra no cofre local do agente pelo
-             instalador, nunca por localStorage nem pelo agent_config.json. -->
-        <p class="cg-cfg-lead">A <code>API_KEY</code> é credencial das <strong>estações</strong>: fica cifrada em cada uma, nunca no navegador nem no <code>agent_config.json</code>.</p>
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Como a chave entra numa estação</h3><p class="ag-form-subhead__nota">O instalador do agente pede a chave e a guarda no cofre local.</p></div>
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Trocar a chave depois</h3><p class="ag-form-subhead__nota">Grave a chave num arquivo e rode, como administrador:</p></div>
-        <pre class="cg-cfg-comando">AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre>
-        <p class="ag-ajuda">O agente cifra a chave e apaga o arquivo.</p>
-        <div class="cg-cfg-acoes">
-          <span class="ag-ajuda" id="auth-hint" role="status"></span>
-        </div>
-      </div>
-    </section>
+    <!-- 25/11/2026: cada aba é uma pilha de blocos brancos, um por tema
+         (.cg-cfg-bloco). A aba informativa "Chave API" saiu: a troca da
+         X-API-Key de uma estação ficou na wiki (Configuração › Chave das
+         estações), com o serviço do agente e a regra do nome dos arquivos. -->
 
     <!-- ── Pastas e agente ─────────────────── -->
-    <section class="ag-card cg-cfg-aba" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">O <strong>agente</strong> lê estes caminhos para saber que pastas monitorar.</p>
+    <section class="cg-cfg-aba" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Pastas monitoradas</h2><p class="cg-cfg-bloco__nota">Caminhos como o servidor os vê.</p></header>
         <div class="ag-form-cols">
           <div class="ag-field"><label class="ag-label" for="inp-source">Origem (.pfx)</label><input type="text" id="inp-source" class="ag-input" placeholder="C:\Certs" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-exp">Vencidos (destino)</label><input type="text" id="inp-exp" class="ag-input" placeholder="C:\Certs\Vencidos" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-machine">ID do servidor</label><input type="text" id="inp-machine" class="ag-input" placeholder="default ou nome do PC" /></div>
-          <div class="ag-field"><label class="ag-label" for="inp-agent-base-url">URL do portal no agent_config.json</label><input type="text" id="inp-agent-base-url" class="ag-input" placeholder="https://certificado.exemplo" aria-describedby="agent-url-hint" /><p class="ag-ajuda" id="agent-url-hint">Só entra no arquivo baixado abaixo; o portal não a usa.</p></div>
         </div>
-        <!-- ── Entrada de certificados (02/10/2026) ───────────────────── -->
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Entrada de certificados</h3><p class="ag-form-subhead__nota">O agente renomeia cada certificado para <code>TITULAR CNPJ senha VALOR.pfx</code> e o move para a pasta da letra. O que não abrir fica na entrada e aparece em Instalador › Entrada.</p></div>
-        <div class="ag-form-cols">
-          <div class="ag-field"><label class="ag-label" for="inp-entrada">Pasta de entrada</label><input type="text" id="inp-entrada" class="ag-input" placeholder="D:\Certificados\Entrada" aria-describedby="entrada-hint" /><p class="ag-ajuda" id="entrada-hint">Vazio desliga o passo. Caminhos como o <strong>servidor</strong> os vê.</p></div>
-          <div class="ag-field"><label class="ag-label" for="inp-pasta-pj">Pessoa jurídica (CNPJ)</label><input type="text" id="inp-pasta-pj" class="ag-input" placeholder="D:\Certificados\02.PESSOA JURIDICA" aria-describedby="pj-hint" /><p class="ag-ajuda" id="pj-hint">A raiz das subpastas A–Z e <code>0 a 9</code>; o agente cria a letra que faltar.</p></div>
-          <div class="ag-field"><label class="ag-label" for="inp-pasta-pf">Pessoa física (CPF)</label><input type="text" id="inp-pasta-pf" class="ag-input" placeholder="D:\Certificados\01.PESSOA FISICA" /></div>
-        </div>
-        <div class="cg-cfg-acoes">
-          <button type="button" id="btn-save-cfg" class="ag-btn ag-btn--primary">Guardar e sincronizar</button>
-          <button type="button" id="btn-download-agent-json" class="ag-btn ag-btn--outline">Baixar agent_config.json</button>
-          <span class="ag-ajuda" id="cfg-msg" role="status"></span>
-        </div>
-        <p class="ag-ajuda">Copie o <code>agent_config.json</code> para a pasta do <code>AnaliseCertiDigital_Agent.exe</code>. Ele não leva a chave de API.</p>
-
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Leitura local efetiva</h3></div>
+        <p class="ag-label">Leitura local efetiva</p>
         <ul class="ag-dados cg-cfg-caminhos">
           <li class="ag-dados__item"><span class="ag-dados__rotulo">Origem</span><code class="ag-dados__valor" id="disp-source">—</code></li>
           <li class="ag-dados__item"><span class="ag-dados__rotulo">Destino (vencidos)</span><code class="ag-dados__valor" id="disp-expired">—</code></li>
         </ul>
-
         <p class="ag-ajuda" id="path-sync-msg" role="status"></p>
+      </div>
 
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Agente no Windows</h3><p class="ag-form-subhead__nota">Serviço <code>AnaliseCertiDigitalAgent</code>, instalado pelo <code>Instalador_AnaliseCertiDigital_Agente.exe</code>. Para atualizar, rode o instalador novo.</p></div>
-        <p class="ag-ajuda">Com a <strong>conta do serviço</strong> em branco, ele roda como LocalSystem e não alcança pasta de rede (<code>\\servidor\pasta</code>). A conta informada precisa do direito “Fazer logon como serviço”.</p>
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Nome dos arquivos</h3><p class="ag-form-subhead__nota">A senha do certificado vem do nome do arquivo, depois da palavra <code>senha</code>:</p></div>
-        <pre class="cg-cfg-comando">MeuNome certificado senha aMinhaSenha.pfx</pre>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Entrada de certificados</h2><p class="cg-cfg-bloco__nota">O agente renomeia cada certificado e o move para a pasta da letra. O que não abrir aparece em Instalador › Entrada.</p></header>
+        <div class="ag-form-cols">
+          <div class="ag-field"><label class="ag-label" for="inp-entrada">Pasta de entrada</label><input type="text" id="inp-entrada" class="ag-input" placeholder="D:\Certificados\Entrada" aria-describedby="entrada-hint" /><p class="ag-ajuda" id="entrada-hint">Vazio desliga a entrada.</p></div>
+          <div class="ag-field"><label class="ag-label" for="inp-pasta-pj">Pessoa jurídica (CNPJ)</label><input type="text" id="inp-pasta-pj" class="ag-input" placeholder="D:\Certificados\02.PESSOA JURIDICA" aria-describedby="pj-hint" /><p class="ag-ajuda" id="pj-hint">Raiz das pastas A–Z e <code>0 a 9</code>.</p></div>
+          <div class="ag-field"><label class="ag-label" for="inp-pasta-pf">Pessoa física (CPF)</label><input type="text" id="inp-pasta-pf" class="ag-input" placeholder="D:\Certificados\01.PESSOA FISICA" /></div>
+        </div>
+      </div>
+
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Arquivo do agente</h2><p class="cg-cfg-bloco__nota">Copie o <code>agent_config.json</code> para a pasta do <code>AnaliseCertiDigital_Agent.exe</code>. Ele não leva a chave.</p></header>
+        <div class="cg-cfg-teste">
+          <div class="ag-field"><label class="ag-label" for="inp-agent-base-url">URL do portal no arquivo</label><input type="text" id="inp-agent-base-url" class="ag-input" placeholder="https://certificado.exemplo" aria-describedby="agent-url-hint" /></div>
+          <button type="button" id="btn-download-agent-json" class="ag-btn ag-btn--outline">Baixar agent_config.json</button>
+        </div>
+        <p class="ag-ajuda" id="agent-url-hint">Só entra no arquivo baixado; o portal não a usa.</p>
+      </div>
+
+      <div class="ag-sticky-acoes">
+        <span class="ag-sticky-acoes__estado" id="cfg-msg" role="status"></span>
+        <button type="button" id="btn-save-cfg" class="ag-btn ag-btn--primary">Guardar e sincronizar</button>
       </div>
     </section>
 
     <!-- ── Alertas por e-mail ───────────────────────────────────────── -->
-    <section class="ag-card cg-cfg-aba" id="sec-smtp" role="tabpanel" aria-labelledby="tab-smtp" {% if aba != 'alertas' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <div class="ag-alert ag-alert--danger" id="cfg-erro" role="alert" hidden>
-          <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-          <div class="ag-alert__corpo"></div>
-        </div>
+    <section class="cg-cfg-aba" id="sec-smtp" role="tabpanel" aria-labelledby="tab-smtp" {% if aba != 'alertas' %}hidden{% endif %}>
+      <div class="ag-alert ag-alert--danger" id="cfg-erro" role="alert" hidden>
+        <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <div class="ag-alert__corpo"></div>
+      </div>
 
-        <!-- Interruptor geral com o estado escrito. -->
+      <!-- Interruptor geral com o estado escrito. -->
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
         <div class="cg-cfg-chave">
           <label class="ag-switch">
             <input type="checkbox" id="chk-smtp-alerts-enabled" />
@@ -128,12 +116,14 @@
         </div>
         <div class="ag-alert ag-alert--info" id="alertas-desligados" hidden>
           <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-          <div class="ag-alert__corpo">Os alertas estão desligados. As configurações abaixo ficam guardadas.</div>
+          <div class="ag-alert__corpo">Desligados. As configurações abaixo ficam guardadas.</div>
         </div>
+      </div>
 
-        <!-- ── Forma de envio (03/10/2026) ──────────────────────────── -->
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Forma de envio</h3></div>
-        <div class="ag-field">
+      <!-- ── Forma de envio (03/10/2026) ──────────────────────────── -->
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Forma de envio</h2></header>
+        <div class="ag-field cg-cfg-campo-solto">
           <label class="ag-label" for="sel-email-transporte">Enviar por</label>
           <select id="sel-email-transporte" class="ag-select">
             <option value="smtp">SMTP (servidor de e-mail com usuário e senha)</option>
@@ -144,8 +134,7 @@
 
         <!-- ── Microsoft 365 ────────────────────────────────────────── -->
         <div id="bloco-graph" hidden>
-          <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Aplicativo no Microsoft 365</h3></div>
-          <p class="ag-ajuda">Aplicativo no Entra com <code>Mail.Send</code>, restrito à caixa de envio. Passo a passo em <code>docs/envio-microsoft-365.md</code>.</p>
+          <p class="ag-ajuda cg-cfg-campo-solto">Aplicativo no Entra com <code>Mail.Send</code>, restrito à caixa de envio. Passo a passo em <code>docs/envio-microsoft-365.md</code>.</p>
           <div class="ag-form-cols">
             <div class="ag-field"><label class="ag-label" for="inp-graph-tenant">ID do tenant (diretório)</label><input type="text" id="inp-graph-tenant" class="ag-input" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" /></div>
             <div class="ag-field"><label class="ag-label" for="inp-graph-client">ID do aplicativo (cliente)</label><input type="text" id="inp-graph-client" class="ag-input" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" /></div>
@@ -165,7 +154,6 @@
 
         <!-- ── Servidor de e-mail ─────────────────────────────────── -->
         <div id="bloco-smtp">
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Servidor de e-mail</h3></div>
         <div class="ag-form-cols">
           <div class="cg-cfg-servidor">
             <div class="ag-field"><label class="ag-label" for="inp-smtp-host">Servidor</label><input type="text" id="inp-smtp-host" class="ag-input" placeholder="smtp.gmail.com" /></div>
@@ -178,7 +166,7 @@
               <option value="ssl">SSL/TLS</option>
               <option value="nenhuma">Nenhuma (só para servidor local)</option>
             </select>
-            <p class="ag-ajuda">STARTTLS costuma usar a porta 587; SSL/TLS, a 465. Sem TLS a senha viajaria em claro: o portal só aceita para localhost.</p>
+            <p class="ag-ajuda">STARTTLS usa a 587; SSL/TLS, a 465. Sem TLS, só localhost.</p>
           </div>
           <div class="ag-field"><label class="ag-label" for="inp-smtp-user">Usuário</label><input type="text" id="inp-smtp-user" class="ag-input" placeholder="alertas@empresa.com" autocomplete="off" /></div>
           <div class="ag-field">
@@ -197,18 +185,59 @@
         <div class="cg-cfg-teste">
           <div class="ag-field">
             <label class="ag-label" for="inp-smtp-test-dest">Enviar teste para</label>
-            <input type="email" id="inp-smtp-test-dest" class="ag-input" placeholder="voce@empresa.com" autocomplete="off" />
+            <input type="email" id="inp-smtp-test-dest" class="ag-input" placeholder="voce@empresa.com" autocomplete="off" aria-describedby="teste-hint" />
           </div>
           <button type="button" id="btn-test-smtp" class="ag-btn ag-btn--outline">
             <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
             Enviar teste
           </button>
         </div>
-        <p class="ag-ajuda">O teste usa os valores <strong>salvos</strong>: salve antes de testar.</p>
+        <p class="ag-ajuda" id="teste-hint">Usa os valores salvos.</p>
         <div class="cg-cfg-resultado" id="smtp-teste-resultado" aria-live="polite"></div>
+      </div>
 
-        <!-- ── Certificado novo (02/10/2026) ──────────────────────── -->
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Certificado novo</h3><p class="ag-form-subhead__nota">Avisa os administradores e quem tem o cliente na carteira quando um certificado entra no acervo.</p></div>
+      <!-- ── Para quem, e quando ────────────────────────────────── -->
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Resumo de vencimentos</h2><p class="cg-cfg-bloco__nota">Os avisos de quem acompanha certificados não mudam.</p></header>
+        <div class="ag-field cg-cfg-campo-solto">
+          <label class="ag-label" for="inp-alertas-dest">Destinatários</label>
+          <input type="text" id="inp-alertas-dest" class="ag-input" placeholder="um@empresa.com, outro@empresa.com" autocomplete="off" />
+          <p class="ag-ajuda ag-ajuda--muted" id="alertas-dest-efetivo"></p>
+          <!-- Só quando houver endereço fora do domínio da empresa. -->
+          <div class="ag-alert ag-alert--warning cg-cfg-aviso-dest" id="alertas-dest-externo" hidden>
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <div class="ag-alert__corpo"><p class="ag-alert__titulo">Endereço fora da empresa</p><p>Continua recebendo depois que a pessoa sai, porque não há conta para desativar. O resumo traz dados de clientes.</p></div>
+          </div>
+        </div>
+        <div class="ag-form-cols">
+          <div class="ag-field">
+            <label class="ag-label" for="inp-alertas-marcos">Prazos de aviso</label>
+            <input type="text" id="inp-alertas-marcos" class="ag-input" inputmode="numeric" autocomplete="off" />
+            <p class="ag-ajuda">Dias antes do vencimento, separados por vírgula. O aviso de vencido sai sempre.</p>
+            <p class="ag-ajuda ag-ajuda--muted" id="alertas-marcos-efetivo"></p>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label" for="sel-alertas-intervalo">Verificar a cada</label>
+            <select id="sel-alertas-intervalo" class="ag-select">
+              <option value="0">20 horas (padrão)</option>
+              <option value="12">12 horas</option>
+              <option value="24">24 horas</option>
+              <option value="168">7 dias</option>
+            </select>
+            <p class="ag-ajuda ag-ajuda--muted" id="alertas-intervalo-efetivo"></p>
+          </div>
+        </div>
+        <div class="cg-cfg-acoes">
+          <button type="button" id="btn-trigger-alerts" class="ag-btn ag-btn--outline">
+            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+            Disparar agora
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Certificado novo (02/10/2026) ──────────────────────── -->
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Certificado novo</h2><p class="cg-cfg-bloco__nota">Avisa os administradores e quem tem o cliente na carteira.</p></header>
         <div class="ag-form-cols">
           <div class="ag-field">
             <label class="ag-switch">
@@ -223,50 +252,13 @@
               <option value="">A cada hora cheia (padrão)</option>
               <option value="imediato">Imediatamente, a cada varredura com novos</option>
             </select>
-            <p class="ag-ajuda">Por hora cheia, os novos das 09:01 às 09:59 vão num e-mail só, às 10:00.</p>
           </div>
         </div>
+      </div>
 
-        <!-- ── Para quem, e quando ────────────────────────────────── -->
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Para quem, e quando</h3><p class="ag-form-subhead__nota">Vale para o resumo do portal. Os avisos de quem acompanha certificados não mudam.</p></div>
-        <div class="ag-field cg-cfg-campo-solto">
-          <label class="ag-label" for="inp-alertas-dest">Destinatários do resumo</label>
-          <input type="text" id="inp-alertas-dest" class="ag-input" placeholder="um@empresa.com, outro@empresa.com" autocomplete="off" />
-          <p class="ag-ajuda ag-ajuda--muted" id="alertas-dest-efetivo"></p>
-          <!-- Só quando houver endereço fora do domínio da empresa. -->
-          <div class="ag-alert ag-alert--warning cg-cfg-aviso-dest" id="alertas-dest-externo" hidden>
-            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-            <div class="ag-alert__corpo"><p class="ag-alert__titulo">Endereço fora da empresa</p><p>Continua recebendo depois que a pessoa sai da empresa, porque não há conta para desativar. O resumo traz dados de clientes.</p></div>
-          </div>
-        </div>
-        <div class="ag-form-cols">
-          <div class="ag-field">
-            <label class="ag-label" for="inp-alertas-marcos">Prazos de aviso</label>
-            <input type="text" id="inp-alertas-marcos" class="ag-input" inputmode="numeric" autocomplete="off" />
-            <p class="ag-ajuda">Dias antes do vencimento, separados por vírgula. O aviso de que venceu é sempre enviado.</p>
-            <p class="ag-ajuda ag-ajuda--muted" id="alertas-marcos-efetivo"></p>
-          </div>
-          <div class="ag-field">
-            <label class="ag-label" for="sel-alertas-intervalo">Verificar a cada</label>
-            <select id="sel-alertas-intervalo" class="ag-select">
-              <option value="0">20 horas (padrão)</option>
-              <option value="12">12 horas</option>
-              <option value="24">24 horas</option>
-              <option value="168">7 dias</option>
-            </select>
-            <p class="ag-ajuda">Intervalo entre verificações, não horário de disparo.</p>
-            <p class="ag-ajuda ag-ajuda--muted" id="alertas-intervalo-efetivo"></p>
-          </div>
-        </div>
-        <div class="cg-cfg-acoes">
-          <button type="button" id="btn-trigger-alerts" class="ag-btn ag-btn--outline">
-            <svg class="ag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
-            Disparar agora
-          </button>
-        </div>
-
-        <!-- ── Texto do e-mail ────────────────────────────────────── -->
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Texto do e-mail</h3></div>
+      <!-- ── Texto do e-mail ────────────────────────────────────── -->
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Texto do e-mail</h2></header>
         <p class="ag-label">Assunto</p>
         <p class="cg-cfg-modelo" id="email-assunto-atual">—</p>
         <p class="cg-cfg-exemplo" id="email-assunto-exemplo"></p>
@@ -274,6 +266,7 @@
           <button type="button" id="btn-editar-email" class="ag-btn ag-btn--outline">Editar texto…</button>
         </div>
       </div>
+
       <!-- Salvar sempre à mão: barra grudada no rodapé enquanto a aba está
            visível; com JS diz se há alteração pendente. -->
       <div class="ag-sticky-acoes">
@@ -283,22 +276,24 @@
     </section>
 
     <!-- ── Fila de comandos ────────────────── -->
-    <section class="ag-card cg-cfg-aba" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead"><em>Forçar leitura</em> faz o agente reler a pasta sem esperar as 24 horas.</p>
+    <section class="cg-cfg-aba" id="sec-comandos" role="tabpanel" aria-labelledby="tab-comandos" {% if aba != 'comandos' %}hidden{% endif %}>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Comando ao agente</h2><p class="cg-cfg-bloco__nota"><em>Forçar leitura</em> relê a pasta sem esperar as 24 horas.</p></header>
         <div class="cg-cfg-cmd">
           <div class="ag-field"><label class="ag-label" for="cmd-machine-id">Servidor alvo</label><input type="text" id="cmd-machine-id" class="ag-input" placeholder="default" /></div>
           <button type="button" id="cmd-rescan" class="ag-btn ag-btn--outline">Forçar leitura</button>
           <button type="button" id="cmd-ping" class="ag-btn ag-btn--outline">Ping</button>
         </div>
         <p class="ag-ajuda" id="cmd-msg" role="status"></p>
+      </div>
 
-        <!-- A fila vira tabela (Leva C, 06/10/2026): antes "Ver fila" despejava
-             o JSON da API num <pre>. Carrega ao abrir a aba. -->
-        <div class="cg-cfg-fila-cab">
-          <h3 class="ag-form-subhead__titulo">Pendentes <span class="ag-abas__contagem" id="cmd-contagem"></span></h3>
+      <!-- A fila vira tabela (Leva C, 06/10/2026): antes "Ver fila" despejava
+           o JSON da API num <pre>. Carrega ao abrir a aba. -->
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab cg-cfg-fila-cab">
+          <h2 class="cg-cfg-bloco__titulo">Pendentes <span class="ag-abas__contagem" id="cmd-contagem"></span></h2>
           <button type="button" id="cmd-refresh-q" class="ag-btn ag-btn--ghost ag-btn--sm">Atualizar</button>
-        </div>
+        </header>
         <div class="ag-table-scroll" role="region" aria-label="Comandos pendentes">
           <table class="ag-table cg-tabela-fila" role="table">
             <thead role="rowgroup"><tr role="row">
@@ -317,11 +312,9 @@
          Credenciais da API do SIEG (cifradas, como o segredo do Microsoft
          365) e o que vai no cadastro de cada certificado. Rota própria
          (PUT /api/sieg/configuracao): salvar aqui não mexe nas outras abas. -->
-    <section class="ag-card cg-cfg-aba" id="sec-sieg" role="tabpanel" aria-labelledby="tab-sieg" {% if aba != 'sieg' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">O portal inclui no SIEG o certificado ligado nos detalhes, no Início. As tentativas ficam em Instalador › SIEG.</p>
-
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Credenciais da API</h3><p class="ag-form-subhead__nota">Em Minha conta › Integração API SIEG. A API Key é diferente do Secret Key.</p></div>
+    <section class="cg-cfg-aba" id="sec-sieg" role="tabpanel" aria-labelledby="tab-sieg" {% if aba != 'sieg' %}hidden{% endif %}>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Credenciais da API</h2><p class="cg-cfg-bloco__nota">Em Minha conta › Integração API SIEG. A API Key é diferente do Secret Key.</p></header>
         <div class="ag-form-cols">
           <div class="ag-field"><label class="ag-label" for="inp-sieg-client">Client ID</label><input type="text" id="inp-sieg-client" class="ag-input" autocomplete="off" spellcheck="false" /></div>
           <div class="ag-field">
@@ -333,10 +326,12 @@
             <input type="password" id="inp-sieg-apikey" class="ag-input" placeholder="Deixe vazio para manter a atual" autocomplete="new-password" />
           </div>
         </div>
+      </div>
 
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Cadastro no SIEG</h3><p class="ag-form-subhead__nota">Vale para todo certificado. Opção que a conta não permite é desligada e anotada na tentativa.</p></div>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Cadastro no SIEG</h2><p class="cg-cfg-bloco__nota">Vale para todo certificado com SIEG ligado nos detalhes. Opção que a conta não permite é desligada e anotada.</p></header>
         <div class="ag-form-cols">
-          <div class="ag-field"><label class="ag-label" for="inp-sieg-uf">UF do certificado (código IBGE)</label><input type="text" id="inp-sieg-uf" class="ag-input cg-cfg-curto" inputmode="numeric" maxlength="2" placeholder="27" /><p class="ag-ajuda">27 = Alagoas.</p></div>
+          <div class="ag-field"><label class="ag-label" for="inp-sieg-uf">UF (código IBGE)</label><input type="text" id="inp-sieg-uf" class="ag-input cg-cfg-curto" inputmode="numeric" maxlength="2" placeholder="27" /><p class="ag-ajuda">27 = Alagoas.</p></div>
           <div class="ag-field"><label class="ag-label" for="inp-sieg-dias">Dias retroativos</label><input type="number" id="inp-sieg-dias" class="ag-input cg-cfg-curto" min="0" max="365" /></div>
           <div class="ag-field"><label class="ag-label" for="inp-sieg-nfse">Consulta de NFS-e</label><input type="text" id="inp-sieg-nfse" class="ag-input" placeholder="Nacional" /></div>
         </div>
@@ -357,15 +352,20 @@
             <label class="ag-check"><input type="checkbox" data-sieg-consulta="ExcluirTransferenciaFiliais" /> Excluir transferência entre filiais</label>
           </div>
         </fieldset>
+      </div>
 
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Conexão</h2><p class="cg-cfg-bloco__nota">Usa as credenciais salvas. Sincronizar marca como “No SIEG” o que já está na conta, sem enviar nada. Tentativas em Instalador › SIEG.</p></header>
         <div class="cg-cfg-acoes">
-          <button type="button" id="btn-sieg-salvar" class="ag-btn ag-btn--primary">Salvar</button>
           <button type="button" id="btn-sieg-testar" class="ag-btn ag-btn--outline">Testar conexão</button>
           <button type="button" id="btn-sieg-sincronizar" class="ag-btn ag-btn--outline">Sincronizar com o SIEG</button>
-          <span class="ag-ajuda" id="sieg-msg" role="status"></span>
         </div>
-        <p class="ag-ajuda">Sincronizar marca como “No SIEG” o que já está na conta. Não envia nada.</p>
         <div id="sieg-resultado" aria-live="polite"></div>
+      </div>
+
+      <div class="ag-sticky-acoes">
+        <span class="ag-sticky-acoes__estado" id="sieg-msg" role="status"></span>
+        <button type="button" id="btn-sieg-salvar" class="ag-btn ag-btn--primary">Salvar</button>
       </div>
     </section>
 
@@ -373,11 +373,9 @@
          Quais departamentos do Acessórias dão carteira e a que departamento
          do portal cada um corresponde. A busca e a confirmação ficam em
          Carteiras; aqui só a configuração. -->
-    <section class="ag-card cg-cfg-aba" id="sec-acessorias" role="tabpanel" aria-labelledby="tab-acessorias" {% if aba != 'acessorias' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">O responsável por uma empresa no Acessórias ganha o certificado dela e vai para o departamento em que mais aparece. Só contam os departamentos com <strong>Trazer</strong> ligado. A busca fica em Carteiras.</p>
-
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Departamentos do Acessórias</h3><p class="ag-form-subhead__nota">Ligar Trazer cria o departamento no portal, ou liga ao de mesmo nome. Desligar tira os acessos vindos dele na próxima busca, passando pela trava.</p></div>
+    <section class="cg-cfg-aba" id="sec-acessorias" role="tabpanel" aria-labelledby="tab-acessorias" {% if aba != 'acessorias' %}hidden{% endif %}>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Departamentos do Acessórias</h2><p class="cg-cfg-bloco__nota">O responsável por uma empresa ganha o certificado dela. Ligar <strong>Trazer</strong> cria ou liga o departamento no portal; desligar tira os acessos vindos dele na próxima busca (em Carteiras).</p></header>
         <div class="ag-table-scroll" role="region" aria-label="Departamentos do Acessórias">
           <table class="ag-table" role="table">
             <thead role="rowgroup"><tr role="row">
@@ -389,8 +387,10 @@
             <tbody role="rowgroup" id="acess-deps"><tr class="cg-state-row"><td colspan="4" class="ag-table__vazio">Carregando…</td></tr></tbody>
           </table>
         </div>
+      </div>
 
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Departamentos do portal sem par</h3><p class="ag-form-subhead__nota">Ligue a um do Acessórias na tabela acima, ou arquive: arquivado some da escolha em Usuários.</p></div>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Departamentos do portal sem par</h2><p class="cg-cfg-bloco__nota">Ligue a um do Acessórias acima, ou arquive: arquivado some da escolha em Usuários.</p></header>
         <div class="ag-table-scroll" role="region" aria-label="Departamentos do portal sem par">
           <table class="ag-table" role="table">
             <thead role="rowgroup"><tr role="row">
@@ -401,8 +401,10 @@
             <tbody role="rowgroup" id="acess-sem-par"><tr class="cg-state-row"><td colspan="3" class="ag-table__vazio">Carregando…</td></tr></tbody>
           </table>
         </div>
+      </div>
 
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Pessoas a decidir</h3><p class="ag-form-subhead__nota">Sem departamento claro (3 vezes mais empresas que no segundo). Defina em Usuários.</p></div>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Pessoas a decidir</h2><p class="cg-cfg-bloco__nota">Sem departamento claro. Defina em Usuários.</p></header>
         <div class="ag-table-scroll" role="region" aria-label="Pessoas a decidir">
           <table class="ag-table" role="table">
             <thead role="rowgroup"><tr role="row">
@@ -417,11 +419,11 @@
     </section>
 
     <!-- ── Remoção nas estações (Frente B, 14/11/2026) ────────────────
-         Os dois modos e o relatório do que sairia ou saiu. O texto da tabela
+         Os três modos e o relatório do que sairia ou saiu. O texto da tabela
          vem da estação: o JS só usa textContent. -->
-    <section class="ag-card cg-cfg-aba" id="sec-remocao" role="tabpanel" aria-labelledby="tab-remocao" {% if aba != 'remocao' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">Desligado: não confere. Só relatório: lista o que sairia, sem remover. Ligado: remove nas estações, com aviso quando houver prazo.</p>
+    <section class="cg-cfg-aba" id="sec-remocao" role="tabpanel" aria-labelledby="tab-remocao" {% if aba != 'remocao' %}hidden{% endif %}>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Regras de remoção</h2><p class="cg-cfg-bloco__nota">Só relatório lista o que sairia, sem remover. Ligado remove, com aviso quando houver prazo.</p></header>
         <div class="ag-form-cols">
         <div class="ag-field">
           <label class="ag-label" for="sel-remocao-carteira">Certificados de quem saiu da carteira</label>
@@ -452,9 +454,11 @@
           <button type="button" id="btn-remocao-salvar" class="ag-btn ag-btn--primary">Salvar</button>
           <span class="ag-ajuda" id="remocao-msg" role="status"></span>
         </div>
+      </div>
 
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">O que sairia, e o que saiu</h3></div>
-        <div class="ag-field">
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">O que sairia, e o que saiu</h2></header>
+        <div class="ag-field cg-cfg-filtro">
           <label class="ag-label" for="sel-remocao-estado">Estado</label>
           <select id="sel-remocao-estado" class="ag-select">
             <option value="">Todos</option>
@@ -491,9 +495,9 @@
     <!-- ── App autenticador (24/11/2026) ───────────────────────────────
          O mesmo cadastro do item da barra lateral, numa aba. A lógica é a
          `ligarAppAutenticador` do ui-common.js; os ids aa-* são dela. -->
-    <section class="ag-card cg-cfg-aba" id="sec-autenticador" role="tabpanel" aria-labelledby="tab-autenticador" {% if aba != 'autenticador' %}hidden{% endif %}>
-      <form class="cg-cfg-corpo" id="form-app-aut" novalidate>
-        <p class="cg-cfg-lead" id="aa-sub">Carregando…</p>
+    <section class="cg-cfg-aba" id="sec-autenticador" role="tabpanel" aria-labelledby="tab-autenticador" {% if aba != 'autenticador' %}hidden{% endif %}>
+      <form class="ag-card cg-cfg-bloco cg-cfg-corpo" id="form-app-aut" novalidate>
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">App autenticador</h2><p class="cg-cfg-bloco__nota" id="aa-sub">Carregando…</p></header>
         <p class="ag-ajuda cg-cfg-erro" id="aa-erro" role="alert"></p>
         <div class="ag-field cg-cfg-curto" id="aa-campo-senha" hidden>
           <label class="ag-label" for="aa-senha">Senha atual</label>
@@ -516,9 +520,9 @@
     </section>
 
     <!-- ── Chaves de API (24/11/2026) ─────────────────────────────────── -->
-    <section class="ag-card cg-cfg-aba" id="sec-api" role="tabpanel" aria-labelledby="tab-api" {% if aba != 'api' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <p class="cg-cfg-lead">A chave lê o que o administrador vê, com <code>GET</code> e o cabeçalho <code>Authorization: Bearer &lt;chave&gt;</code>. Não grava nada e não alcança o cofre.</p>
+    <section class="cg-cfg-aba" id="sec-api" role="tabpanel" aria-labelledby="tab-api" {% if aba != 'api' %}hidden{% endif %}>
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Nova chave</h2><p class="cg-cfg-bloco__nota">Só leitura (<code>GET</code>, cabeçalho <code>Authorization: Bearer &lt;chave&gt;</code>). Não grava e não alcança o cofre.</p></header>
         <form id="form-api-chave" novalidate>
           <div class="ag-form-cols">
             <div class="ag-field"><label class="ag-label" for="api-nome">Nome</label><input type="text" id="api-nome" class="ag-input" maxlength="80" placeholder="Power BI" required></div>
@@ -537,6 +541,10 @@
             <p><code id="api-segredo" class="cg-cfg-segredo"></code></p>
             <button type="button" id="api-copiar" class="ag-btn ag-btn--outline ag-btn--sm">Copiar</button></div>
         </div>
+      </div>
+
+      <div class="ag-card cg-cfg-bloco cg-cfg-corpo">
+        <header class="cg-cfg-bloco__cab"><h2 class="cg-cfg-bloco__titulo">Chaves criadas</h2><p class="cg-cfg-bloco__nota">Consultas e exemplos na <a href="/wiki-certguard?modulo=api">wiki da API de leitura</a>.</p></header>
         <div class="ag-table-scroll" role="region" aria-label="Chaves de API">
           <table class="ag-table" role="table">
             <thead role="rowgroup"><tr role="row">
@@ -614,12 +622,12 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
-      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
+      const ABAS = { pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
+      const TAB_IDS = { pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
-        if (!ABAS[aba]) aba = "chave";
+        if (!ABAS[aba]) aba = "pastas";
         ORDEM.forEach((a) => {
           document.getElementById(ABAS[a]).hidden = a !== aba;
           const t = document.getElementById(TAB_IDS[a]);
@@ -627,7 +635,7 @@
           t.tabIndex = a === aba ? 0 : -1;
         });
         const url = new URL(location.href);
-        if (aba === "chave") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
+        if (aba === "pastas") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
         history.replaceState(null, "", url.pathname + (url.search || ""));
         if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
         if (aba === "comandos") void refreshCommandQueue();
@@ -1482,8 +1490,6 @@
         tagS.textContent = semLeitura ? "Banco de dados: não verificado" : (h.banco ? "Banco de dados conectado" : "Banco de dados desconectado");
         const tagK = document.getElementById("tag-api-key");
         tagK.textContent = h.api_key_required ? "Chave API obrigatória" : "Chave API aberta";
-        const ah = document.getElementById("auth-hint");
-        if (ah) ah.textContent = h.api_key_required ? "O servidor exige X-API-Key das estações." : "O servidor não exige X-API-Key das estações.";
         await loadSettingsToForm();
         marcarLimpo();
         _segAnterior = document.getElementById("sel-smtp-seguranca").value;

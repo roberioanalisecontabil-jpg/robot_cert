@@ -1,17 +1,26 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Configuração no Águia DS (24/09/2026) — só desta tela (prefixo .cg-cfg-)
 
-   Cobre a faixa do topo e a aba "Alertas por e-mail". Chave API, Pastas e
-   agente e Fila de comandos continuam com os componentes do DS sem
-   redesenho (item 97, aguardam print).
+   25/11/2026: cada aba é uma pilha de blocos brancos (.cg-cfg-bloco), um
+   por tema, no lugar de um cartão único com subtítulos. A aba Chave API saiu.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Faixa de status: badges escritos numa linha. */
 .cg-cfg-status { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .cg-cfg-status__aviso { margin: 0; flex: 1 1 100%; }
 
+.cg-cfg-aba { display: grid; gap: var(--space-4); }
 .cg-cfg-aba[hidden] { display: none; }
-.cg-cfg-aba > .cg-cfg-corpo { padding: var(--space-5) var(--space-6); }
+.cg-cfg-bloco { padding: var(--space-5) var(--space-6); min-width: 0; }
+.cg-cfg-bloco__cab { display: grid; gap: var(--space-1); margin-bottom: var(--space-4); }
+.cg-cfg-bloco__titulo { margin: 0; font-family: var(--font-display); font-size: var(--text-base); font-weight: 700; line-height: 1.25; color: var(--text-primary); }
+.cg-cfg-bloco__nota { margin: 0; font-size: var(--text-xs); color: var(--text-muted); max-width: 72ch; }
+/* O primeiro conteúdo depois do cabeçalho não soma a própria margem. */
+.cg-cfg-bloco__cab + .cg-cfg-teste, .cg-cfg-bloco__cab + .cg-cfg-acoes { margin-top: 0; }
+.cg-cfg-bloco > :last-child { margin-bottom: 0; }
+/* Fora de um cartão, a barra de salvar vira um bloco próprio, grudado no
+   rodapé enquanto a aba rola. */
+.cg-cfg-aba > .ag-sticky-acoes { border: var(--bw-1) solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
 .cg-cfg-lead { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--text-secondary); max-width: 62ch; }
 .cg-cfg-corpo .ag-field { margin: 0; }
 .cg-cfg-corpo .ag-input, .cg-cfg-corpo .ag-select { width: 100%; }
@@ -20,7 +29,7 @@
 .cg-cfg-corpo > .ag-alert { margin-bottom: var(--space-4); }
 /* `.cg-cfg-corpo .ag-field { margin: 0 }` vencia a regra curta e a ajuda
    encostava nos "Prazos de aviso" logo abaixo. */
-.cg-cfg-corpo .cg-cfg-campo-solto { margin-bottom: var(--space-4); }
+.cg-cfg-corpo .cg-cfg-campo-solto { margin-bottom: var(--space-4); max-width: 40rem; }
 .cg-cfg-aviso-dest { margin-top: var(--space-3); }
 
 /* Interruptor geral no topo da aba, com o estado escrito e a frase. */
@@ -59,8 +68,7 @@
 
 .cg-cfg-cmd { display: flex; align-items: end; gap: var(--space-3); flex-wrap: wrap; }
 .cg-cfg-cmd .ag-field { margin: 0; flex: 1 1 14rem; max-width: 22rem; }
-.cg-cfg-fila-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-5); }
-.cg-cfg-fila-cab .ag-form-subhead__titulo { margin: 0; }
+.cg-cfg-bloco__cab.cg-cfg-fila-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .cg-tabela-fila .cg-cfg-maquina { color: var(--text-secondary); }
 .cg-tabela-fila .cg-cfg-quando { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-xs); }
 .cg-tabela-fila .ag-cell-sub { display: block; }
@@ -102,21 +110,15 @@
 .cg-cfg-marcadores .ag-btn { font-family: var(--font-mono); }
 
 @media (max-width: 640px) {
-    .cg-cfg-aba > .cg-cfg-corpo { padding: var(--space-4); }
+    .cg-cfg-bloco { padding: var(--space-4); }
     .cg-cfg-servidor { grid-template-columns: minmax(0, 1fr) 7rem; }
     .cg-cfg-teste .ag-field { max-width: none; }
     .cg-cfg-email { grid-template-columns: minmax(0, 1fr); }
     .ag-sticky-acoes { padding-inline: var(--space-4); }
 }
 
-/* Microsoft 365 (03/10/2026): o bloco do aplicativo abre depois da ajuda da
-   forma de envio; sem respiro parecia continuacao do texto. */
-#bloco-graph { margin-top: var(--space-5, 20px); }
-#bloco-graph .ag-form-subhead { margin-top: 0; }
-/* Mesmo respiro para o SMTP: o título é o primeiro filho do bloco e perdia a
-   margem, colando na ajuda da forma de envio. */
-#bloco-smtp { margin-top: var(--space-5, 20px); }
-#bloco-smtp .ag-form-subhead { margin-top: 0; }
+/* Microsoft 365 e SMTP dividem o bloco "Forma de envio" com o seletor. */
+#bloco-graph, #bloco-smtp { margin-top: var(--space-4); }
 
 /* SIEG (07/10/2026). */
 .cg-cfg-curto { max-width: 8rem; }
@@ -127,7 +129,7 @@
 /* Acessórias (ADR 0005, 20/10/2026). O .ag-table-scroll daqui não rola por
    conta própria; a tabela dos departamentos tem um seletor por linha e passava
    de 390px no celular, empurrando a página inteira para o lado. */
-#sec-acessorias .ag-table-scroll { overflow-x: auto; margin-bottom: var(--space-6); }
+#sec-acessorias .ag-table-scroll { overflow-x: auto; }
 #sec-acessorias select.ag-input { min-width: 11rem; }
 
 /* Remoção nas estações (23/11/2026): oito colunas não viram cartão; a tabela
@@ -135,7 +137,7 @@
    página inteira ia para o lado). O filtro "Estado" não ocupa a linha toda e
    respira antes da tabela. */
 #sec-remocao .ag-table-scroll { overflow-x: auto; margin-top: var(--space-4); }
-#sec-remocao .ag-form-subhead + .ag-field { max-width: 20rem; }
+.cg-cfg-filtro { max-width: 20rem; }
 /* A tabela vazia tem a largura das oito colunas: centrada, a frase caía fora
    da área visível no celular. */
 #sec-remocao .ag-table__vazio { text-align: left; }
@@ -144,9 +146,11 @@
 #sec-autenticador .cg-cfg-curto { max-width: 16rem; margin-bottom: var(--space-4); }
 .cg-cfg-erro { color: var(--danger-500); }
 .cg-cfg-erro:empty { display: none; }
-.cg-cfg-qr { background: #fff; padding: 8px; border-radius: 8px; image-rendering: pixelated; }
+.cg-cfg-qr { background: #fff; padding: var(--space-2); border-radius: var(--radius-sm); image-rendering: pixelated; }
 .cg-cfg-segredo { font-size: 1.1em; letter-spacing: 0.05em; user-select: all; overflow-wrap: anywhere; }
 
 /* Chaves de API (24/11/2026). */
-#sec-api .ag-table-scroll { overflow-x: auto; margin-top: var(--space-4); }
+#sec-api .ag-table-scroll { overflow-x: auto; }
 #sec-api .ag-alert { margin-top: var(--space-4); }
+/* Paginação do relatório respira abaixo da tabela. */
+#sec-remocao .ag-table-scroll + .ag-form-actions { margin-top: var(--space-3); }

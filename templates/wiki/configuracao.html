@@ -5,17 +5,17 @@
 
 <p>Só o administrador abre esta tela. Quem não é administrador e tenta abrir volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
 
-<p>No alto da página, duas etiquetas mostram o estado do servidor: <strong>Banco de dados conectado</strong> (ou desconectado, ou não verificado) e <strong>Chave API obrigatória</strong> (ou aberta). A página tem cinco abas: <strong>Chave API</strong>, <strong>Pastas e agente</strong>, <strong>Alertas por e-mail</strong>, <strong>Fila de comandos</strong> e <strong>SIEG</strong>.</p>
+<p>No alto da página, duas etiquetas mostram o estado do servidor: <strong>Banco de dados conectado</strong> (ou desconectado, ou não verificado) e <strong>Chave API obrigatória</strong> (ou aberta). A página tem oito abas: <strong>Pastas e agente</strong>, <strong>Alertas por e-mail</strong>, <strong>Fila de comandos</strong>, <strong>SIEG</strong>, <strong>Acessórias</strong>, <strong>Remoção nas estações</strong>, <strong>App autenticador</strong> e <strong>Chaves de API</strong>.</p>
 
-<h2 id="chave">Aba Chave API</h2>
-<p>É só informativa: não tem campo nem botão de salvar. Ela explica que a chave das estações não passa pelo navegador. A chave é digitada no instalador do agente, que a guarda protegida no próprio computador.</p>
-{{ print("configuracao-chave", "Aba Chave API com as duas etiquetas de estado no topo e a explicação de como a chave entra numa estação", "A aba Chave API é só informativa.") }}
+<h2 id="chave">Chave das estações</h2>
+<p>A chave das estações não passa pelo navegador e não tem aba no portal. Ela é digitada no instalador do agente, que a guarda protegida no próprio computador.</p>
 
 <h3 id="trocar-chave">Trocar a chave de uma estação já instalada</h3>
 <p>É tarefa do técnico, feita no próprio computador da estação.</p>
 <ol>
   <li>Grave a chave num arquivo de texto.</li>
-  <li>Abra o prompt de comando como administrador do Windows e rode o comando mostrado na aba, trocando o caminho pelo do seu arquivo.</li>
+  <li>Abra o prompt de comando como administrador do Windows e rode o comando abaixo, trocando o caminho pelo do seu arquivo.
+    <pre>AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre></li>
   <li>O agente guarda a chave e apaga o arquivo.</li>
 </ol>
 
@@ -37,10 +37,13 @@
 
 <h3 id="arquivo-agente">Gerar o arquivo de configuração do agente</h3>
 <ol>
-  <li>Confira o campo <strong>URL do portal no agent_config.json</strong>. Ele só vai para o arquivo baixado.</li>
+  <li>No bloco <strong>Arquivo do agente</strong>, confira o campo <strong>URL do portal no arquivo</strong>. Ele só vai para o arquivo baixado.</li>
   <li>Clique em <strong>Baixar agent_config.json</strong> e copie o arquivo para a pasta onde o agente está instalado. O arquivo não leva a chave.</li>
 </ol>
-<p>O fim da aba lembra a regra do nome dos arquivos: a senha do certificado vem depois da palavra <strong>senha</strong>, por exemplo <strong>MeuNome certificado senha aMinhaSenha.pfx</strong>.</p>
+<p>Regra do nome dos arquivos: a senha do certificado vem depois da palavra <strong>senha</strong>, por exemplo <strong>MeuNome certificado senha aMinhaSenha.pfx</strong>.</p>
+
+<h3 id="agente-windows">O agente no Windows</h3>
+<p>O agente é o serviço <code>AnaliseCertiDigitalAgent</code>, instalado pelo <code>Instalador_AnaliseCertiDigital_Agente.exe</code>. Para atualizar, rode o instalador novo. Com a conta do serviço em branco, ele roda como LocalSystem e não alcança pasta de rede (<code>\\servidor\pasta</code>); a conta informada precisa do direito “Fazer logon como serviço”.</p>
 
 <h2 id="alertas">Aba Alertas por e-mail</h2>
 
@@ -81,10 +84,10 @@
 
 <h3 id="quem-quando">Para quem e quando sai o resumo</h3>
 <ol>
-  <li>Em <strong>Destinatários do resumo</strong>, escreva os e-mails separados por vírgula. Vazio envia para todos os administradores ativos. Um endereço fora da empresa faz aparecer o aviso <strong>Endereço fora da empresa</strong>.</li>
+  <li>No bloco <strong>Resumo de vencimentos</strong>, em <strong>Destinatários</strong>, escreva os e-mails separados por vírgula. Vazio envia para todos os administradores ativos. Um endereço fora da empresa faz aparecer o aviso <strong>Endereço fora da empresa</strong>.</li>
   <li>Em <strong>Prazos de aviso</strong>, escreva os dias antes do vencimento, separados por vírgula. A linha embaixo do campo mostra os prazos em uso. O aviso de que o certificado venceu é sempre enviado.</li>
   <li>Em <strong>Verificar a cada</strong>, escolha <strong>20 horas (padrão)</strong>, <strong>12 horas</strong>, <strong>24 horas</strong> ou <strong>7 dias</strong>. É o intervalo entre verificações, não um horário fixo.
-    {{ print("configuracao-alertas-quem-quando", "Blocos Certificado novo e Para quem, e quando, com os destinatários, os prazos de aviso, o intervalo e o botão Disparar agora", "Quem recebe o resumo e com que frequência.") }}
+    {{ print("configuracao-alertas-quem-quando", "Bloco Resumo de vencimentos, com os destinatários, os prazos de aviso, o intervalo e o botão Disparar agora", "Quem recebe o resumo e com que frequência.") }}
   </li>
   <li>Clique em <strong>Salvar alterações</strong>.</li>
 </ol>
@@ -128,7 +131,7 @@
 <ol>
   <li>No SIEG, abra Minha conta e depois Integração API SIEG.</li>
   <li>Copie <strong>Client ID</strong>, <strong>Secret Key</strong> e <strong>API Key</strong> para os campos de mesmo nome. A API Key é diferente da Secret Key. Os campos secretos aparecem vazios; a etiqueta <strong>Guardada</strong> indica que já existe valor, e <strong>Não informada</strong>, que ainda não.</li>
-  <li>Em <strong>Cadastro no SIEG</strong>, ajuste <strong>UF do certificado (código IBGE)</strong> (27 é Alagoas), <strong>Dias retroativos</strong> e <strong>Consulta de NFS-e</strong>, e marque as <strong>Consultas</strong> desejadas. Isso vale para todo certificado enviado.
+  <li>Em <strong>Cadastro no SIEG</strong>, ajuste <strong>UF (código IBGE)</strong> (27 é Alagoas), <strong>Dias retroativos</strong> e <strong>Consulta de NFS-e</strong>, e marque as <strong>Consultas</strong> desejadas. Isso vale para todo certificado enviado.
     {{ print("configuracao-sieg", "Aba SIEG com as credenciais, os campos secretos vazios com suas etiquetas e a grade de Consultas", "As credenciais e o cadastro no SIEG.") }}
   </li>
   <li>Clique em <strong>Salvar</strong>.</li>
