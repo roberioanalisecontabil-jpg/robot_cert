@@ -124,6 +124,10 @@ def test_ui_common_carrega_antes_do_script_da_pagina() -> None:
         inline = [
             m.start() for m in re.finditer(r"<script(?![^>]*\ssrc=)[^>]*>", html)
         ]
+        if f.name == "perfil.html":
+            # Meu perfil (25/11/2026) tem o script em static/perfil.js.
+            assert pos_comum < html.index("/static/perfil.js"), "perfil.js antes do ui-common.js"
+            continue
         if f.name == "wiki.html":
             # A wiki é texto renderizado no servidor: não tem script próprio,
             # só o ui-common.js (menu por papel, sair, app autenticador).

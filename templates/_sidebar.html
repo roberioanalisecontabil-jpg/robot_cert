@@ -113,19 +113,32 @@
       </svg>
       Wiki
     </a>
-    {# Login em dois passos (10/10/2026): cadastrar ou remover o app
-       autenticador, a saída quando o código por e-mail não chega. #}
-    <a href="#" data-action="app-autenticador" data-tooltip="App autenticador" title="App autenticador" aria-label="App autenticador" style="margin-top: auto;">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-      </svg>
-      App autenticador
-    </a>
-    <a href="#" data-action="logout" data-tooltip="Sair" title="Sair" aria-label="Sair" style="color: var(--sidebar-danger);">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-      </svg>
-      Sair
-    </a>
   </nav>
+  {# Sua conta (25/11/2026): no lugar de "App autenticador" e "Sair". Passar o
+     mouse (ou focar, ou clicar) abre o menu com Meu perfil, Tema, App
+     autenticador e Sair. Nome e foto vêm de /api/perfil pelo ui-common.js;
+     sem JavaScript o menu abre pelo :focus-within e os itens seguem links. #}
+  <div class="sidebar-conta" id="sidebar-conta">
+    <button type="button" class="sidebar-conta__botao" id="btn-conta" aria-haspopup="true" aria-expanded="false" aria-controls="menu-conta" title="Sua conta">
+      <span class="sidebar-conta__avatar" id="conta-avatar" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+      </span>
+      <span class="sidebar-conta__nome" id="conta-nome">Sua conta</span>
+    </button>
+    <div class="sidebar-conta__menu" id="menu-conta" role="menu" aria-labelledby="btn-conta">
+      <a href="/perfil" role="menuitem">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+        Meu perfil
+      </a>
+      <button type="button" role="menuitem" id="btn-theme-toggle" class="sidebar-conta__tema">Tema</button>
+      <a href="#" data-action="app-autenticador" role="menuitem">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
+        App autenticador
+      </a>
+      <a href="#" data-action="logout" role="menuitem" class="sidebar-conta__sair">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>
+        Sair
+      </a>
+    </div>
+  </div>
 </aside>

@@ -48,7 +48,8 @@ def test_topbar_fica_acima_dos_irmaos(css: str) -> None:
     """Sem position+z-index, o dropdown não escapa do conteúdo da página."""
     bloco = re.search(r"\.topbar-actions\s*\{([^}]*)\}", css, flags=re.S)
     assert bloco, ".topbar-actions não encontrada"
-    assert "position: relative" in bloco.group(1)
+    # 25/11/2026: sticky (sino preso ao topo) também cria o contexto do z-index.
+    assert re.search(r"position:\s*(relative|sticky)", bloco.group(1))
     assert (_z_index(css, ".topbar-actions") or 0) > 0
 
 
