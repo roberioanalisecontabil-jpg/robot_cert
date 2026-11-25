@@ -1,31 +1,33 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
 <h2 id="permissoes">Aba Níveis de acesso</h2>
-<p>Uma tabela com cada <strong>Módulo</strong> (página do portal) e duas colunas, <strong>Gestor</strong> e <strong>Operador</strong>. Os níveis são:</p>
+<p>A aba mostra uma tabela com cada <strong>Módulo</strong> (página do portal) e duas colunas, <strong>Gestor</strong> e <strong>Operador</strong>. Os níveis são:</p>
 <ul>
-  <li><strong>Não entra</strong>: o módulo some do menu e o portal recusa mesmo quem digita o endereço.</li>
-  <li><strong>Só ver</strong>: entra e consulta, sem alterar nada.</li>
-  <li><strong>Ver e editar</strong>: entra e altera. Só aparece nos módulos onde existe o que editar: Acompanhamento e Carteiras.</li>
+  <li><strong>Não entra</strong>: o módulo some do menu, e o portal recusa o acesso mesmo a quem digita o endereço.</li>
+  <li><strong>Só ver</strong>: permite entrar e consultar, sem alterar nada.</li>
+  <li><strong>Ver e editar</strong>: permite entrar e alterar. Só aparece nos módulos em que há o que editar: Acompanhamento e Carteiras.</li>
 </ul>
-<p>O administrador não aparece como coluna porque alcança tudo, sempre. Algumas linhas ficam travadas, com um cadeado e o motivo: o Início, onde todos os papéis entram porque é a tela de instalação, e Usuários, Configuração, Instalador e Dashboard, que são só do administrador.</p>
+<p>O administrador não aparece como coluna porque sempre tem acesso a tudo. Algumas linhas ficam travadas, com um cadeado e o motivo: o Início, que todos os papéis acessam porque é a tela de instalação, e Usuários, Configuração, Instalador e Dashboard, que são exclusivos do administrador.</p>
 {{ print("usuarios-permissoes", "Aba Níveis de acesso com a tabela de módulos e as colunas Gestor e Operador", "A tabela de níveis de acesso.") }}
 
-<h3 id="mudar-nivel">Mudar o que um papel pode ver</h3>
+<h3 id="mudar-nivel">Como mudar o que um papel pode ver</h3>
 <ol>
   <li>Na linha do módulo, escolha o novo nível na coluna do papel.</li>
   <li>Aparece o aviso <strong>1 alteração ainda não salva.</strong> Para voltar atrás, clique em <strong>Desfazer alterações</strong>.
     {{ print("usuarios-permissoes-alterada", "Tabela de níveis de acesso com um nível alterado, o aviso de alteração ainda não salva e o botão Salvar habilitado", "Uma alteração ainda não salva.") }}
   </li>
-  <li>Clique em <strong>Salvar</strong>. A mensagem avisa que quem já está no portal vê a mudança em até 30 segundos.</li>
+  <li>Clique em <strong>Salvar</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a mensagem informa que quem já está no portal verá a mudança em até 30 segundos.</p>
 
-{% call cuidado("A mudança vale para todo o papel") %}<p>Cada nível vale para todas as pessoas daquele papel. Tirar um módulo do Operador, por exemplo, tira de todos os operadores ao mesmo tempo. Confira a linha e a coluna antes de salvar.</p>{% endcall %}
+{% call cuidado("A mudança vale para todo o papel") %}<p>Cada nível vale para todas as pessoas daquele papel. Retirar um módulo do Operador, por exemplo, retira o acesso de todos os operadores ao mesmo tempo. Confira a linha e a coluna antes de salvar.</p>{% endcall %}
 
-<h3 id="historico-niveis">Ver quem mudou o quê</h3>
+<h3 id="historico-niveis">Como ver quem alterou cada nível</h3>
 <ol>
   <li>Abra <strong>Histórico de alterações</strong>, abaixo dos botões.</li>
-  <li>Cada linha mostra quando, o módulo, o papel, o nível de antes, o de depois e quem alterou.
+  <li>Cada linha mostra quando, o módulo, o papel, o nível anterior, o novo nível e quem fez a alteração.
     {{ print("usuarios-permissoes-historico", "Histórico de alterações dos níveis de acesso aberto, com as mudanças anteriores", "O histórico das mudanças de nível.") }}
   </li>
 </ol>

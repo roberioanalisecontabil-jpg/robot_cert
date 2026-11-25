@@ -1,48 +1,52 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
 <h2 id="computadores">Aba Computadores</h2>
-<p>Define em qual computador cada pessoa pode receber certificado. A pessoa entra na bandeja da estação com a conta deste portal; o pedido aparece aqui e o computador só recebe certificado depois de autorizado. O número ao lado do nome da aba é a quantidade de pedidos esperando. Veja também <a href="/wiki-certguard?pagina=bandeja-entrar">Bandeja CertGuard Análise</a>.</p>
+<p>Esta aba define em qual computador cada pessoa pode receber certificado. A pessoa entra na bandeja da estação com a conta deste portal; o pedido aparece aqui, e o computador só recebe certificado depois de autorizado. O número ao lado do nome da aba é a quantidade de pedidos aguardando. Veja também <a href="/wiki-certguard?pagina=bandeja-entrar">Como entrar na bandeja</a>.</p>
 <p>A tabela mostra <strong>Pessoa</strong>, <strong>Computador</strong> (nome e identificação), <strong>Vínculo</strong> (Aguardando, Ativo, Encerrado ou Recusado; Principal ou Empréstimo; quem decidiu e quando) e <strong>Bandeja</strong> (Conectada ou Parada, com a versão do programa).</p>
 {{ print("usuarios-computadores", "Aba Computadores com um pedido Aguardando, com os botões Principal, Empréstimo e Recusar, e um vínculo Ativo", "Pedidos e vínculos de computadores.") }}
 
-<h3 id="principal">Autorizar a máquina de trabalho da pessoa</h3>
+<h3 id="principal">Como autorizar o computador de trabalho da pessoa</h3>
 <ol>
   <li>Na linha com <strong>Aguardando</strong>, clique em <strong>Principal</strong>.</li>
-  <li>Confirme em <strong>Autorizar</strong>. A principal anterior da pessoa, e o dono anterior daquela máquina, se houver, vão para o histórico.</li>
+  <li>Confirme em <strong>Autorizar</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o vínculo passa a <strong>Ativo</strong>. O computador principal anterior da pessoa e o dono anterior daquela máquina, se houver, vão para o histórico.</p>
 
-<h3 id="emprestimo">Autorizar uso temporário</h3>
-<p>Para a máquina de um colega ou uma máquina cedida.</p>
+<h3 id="emprestimo">Como autorizar o uso temporário</h3>
+<p>Use para o computador de um colega ou um computador cedido.</p>
 <ol>
   <li>Na linha com <strong>Aguardando</strong>, clique em <strong>Empréstimo</strong>.</li>
   <li>Em <strong>Prazo</strong>, escolha <strong>Até o fim do dia</strong>, <strong>3 dias</strong> ou <strong>7 dias</strong>.
     {{ print("usuarios-computadores-emprestimo", "Janela Autorizar empréstimo com o campo Prazo", "O prazo do empréstimo.") }}
   </li>
-  <li>Clique em <strong>Autorizar</strong>. O empréstimo termina antes se a pessoa voltar para a máquina principal ou sair da bandeja.</li>
+  <li>Clique em <strong>Autorizar</strong>.</li>
+</ol>
+<p>O empréstimo termina antes do prazo se a pessoa voltar ao computador principal ou sair da bandeja.</p>
+
+<h3 id="recusar">Como negar um pedido</h3>
+<ol>
+  <li>Clique em <strong>Recusar</strong> e confirme. A bandeja daquele computador é desconectada.</li>
 </ol>
 
-<h3 id="recusar">Negar um pedido</h3>
+<h3 id="desvincular">Como retirar o acesso de um computador</h3>
 <ol>
-  <li>Clique em <strong>Recusar</strong> e confirme. A bandeja daquela máquina é desconectada.</li>
+  <li>Na linha com <strong>Ativo</strong>, clique em <strong>Desvincular</strong> e confirme.</li>
 </ol>
-
-<h3 id="desvincular">Tirar o acesso de um computador</h3>
-<ol>
-  <li>Na linha com <strong>Ativo</strong>, clique em <strong>Desvincular</strong> e confirme. A bandeja é desconectada e o computador deixa de receber certificados.</li>
-</ol>
+<p><strong>Resultado esperado:</strong> a bandeja é desconectada e o computador deixa de receber certificados.</p>
 
 <h3 id="confirmar-maquina">Pedido para confirmar a máquina</h3>
 <p>Cada computador tem uma chave própria, guardada nele. Se a pessoa entrar sem essa chave, por exemplo depois de formatar o computador, o pedido chega com a nota <strong>Confirmar a máquina: entrou sem a chave desta estação.</strong> Ao autorizar, pode abrir a janela <strong>Chave do computador diferente</strong>.</p>
 {{ print("usuarios-computadores-chave", "Janela Chave do computador diferente com os botões Cancelar e Trocar a chave e autorizar", "A janela que aparece quando a chave do computador mudou.") }}
 <ol>
-  <li>Só clique em <strong>Trocar a chave e autorizar</strong> se o computador foi mesmo reinstalado e a pessoa está nele agora. Confirme com ela por telefone ou pessoalmente.</li>
+  <li>Clique em <strong>Trocar a chave e autorizar</strong> somente se o computador foi de fato reinstalado e a pessoa está nele agora. Confirme com ela por telefone ou pessoalmente.</li>
   <li>Em qualquer outro caso, clique em <strong>Cancelar</strong> e depois em <strong>Recusar</strong>.</li>
 </ol>
 
-{% call cuidado("Desconfie de pedido que ninguém avisou") %}<p>Um pedido para confirmar a máquina que ninguém avisou que viria pode ser outra pessoa tentando usar a conta. Na dúvida, recuse: a pessoa pode pedir de novo.</p>{% endcall %}
+{% call cuidado("Desconfie de pedidos não anunciados") %}<p>Um pedido para confirmar a máquina que ninguém avisou que viria pode ser outra pessoa tentando usar a conta. Na dúvida, recuse: a pessoa pode fazer o pedido novamente.</p>{% endcall %}
 
-<h3 id="historico-computadores">Ver vínculos antigos</h3>
+<h3 id="historico-computadores">Como ver vínculos antigos</h3>
 <ol>
   <li>Marque <strong>Mostrar histórico (encerrados e recusados)</strong>.
     {{ print("usuarios-computadores-historico", "Aba Computadores com o histórico ligado, mostrando vínculos Encerrado e Recusado", "Com o histórico, aparecem os vínculos encerrados e recusados.") }}

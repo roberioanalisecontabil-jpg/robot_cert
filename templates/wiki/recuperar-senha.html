@@ -1,7 +1,10 @@
-{% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, video, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Todos"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="esqueci-a-senha">Esqueci minha senha</h2>
+<p>Use esta página quando esquecer a senha ou quando entrar pela primeira vez com uma senha provisória criada pelo administrador.</p>
+
+<h2 id="esqueci-a-senha">Como recuperar a senha esquecida</h2>
 <ol>
   <li>Na tela de login, clique em <strong>Esqueci minha senha</strong>. O título muda para "Recuperação de senha".
     {{ print("login-esqueci", "Tela Recuperação de senha com o campo E-mail e o botão Enviar código") }}
@@ -13,24 +16,24 @@
   <li>Escolha a <strong>Nova senha</strong>, com no mínimo 12 caracteres, e clique em <strong>Salvar e entrar</strong>.
     {{ print("login-nova-senha", "Tela Recuperação de senha com o campo Nova senha e o botão Salvar e entrar") }}
   </li>
-  <li>A tela de login volta com "Senha alterada. Entre com a nova senha.".</li>
-  <li>Para desistir no meio, clique em <strong>Voltar para o login</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a tela de login volta com "Senha alterada. Entre com a nova senha.".</p>
+<p>Para desistir no meio do processo, clique em <strong>Voltar para o login</strong>.</p>
 
 {% call dica("O código não chegou?") %}
-<p>A tela sempre diz que enviou o código, mesmo para um e-mail sem cadastro. Se nada chegar, confira o e-mail digitado e a caixa de spam.</p>
+<p>A tela sempre informa que enviou o código, mesmo para um e-mail sem cadastro. Se nada chegar, confira o e-mail digitado e a caixa de spam.</p>
 {% endcall %}
 
-<h2 id="senha-provisoria">Primeiro acesso com senha provisória</h2>
-<p>Quando o administrador cria a sua senha, ela é provisória. Depois de entrar, abre a janela <strong>Defina sua senha</strong>, e o portal só funciona depois da troca.</p>
+<h2 id="senha-provisoria">Como trocar a senha provisória no primeiro acesso</h2>
+<p>A senha criada pelo administrador é provisória. Depois de entrar, abre a janela <strong>Defina sua senha</strong>, e o portal só funciona depois da troca.</p>
 <ol>
   <li>Preencha <strong>Senha atual</strong> (a provisória), <strong>Nova senha</strong> (mínimo de 12 caracteres) e <strong>Repita a nova senha</strong>.
     {{ print("senha-provisoria", "Janela Defina sua senha com os campos Senha atual, Nova senha e Repita a nova senha") }}
   </li>
   <li>Clique em <strong>Definir senha</strong>.</li>
-  <li>O portal volta para a tela de login. Entre com a nova senha.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o portal volta para a tela de login. Entre com a nova senha.</p>
 
-{% call cuidado("Trocar a senha encerra a bandeja") %}
-<p>Trocar ou redefinir a senha encerra a sua sessão na bandeja <strong>CertGuard Análise</strong>. Entre de novo nela depois. Veja <a href="/wiki-certguard?pagina=bandeja-entrar">Bandeja CertGuard Análise</a>.</p>
+{% call cuidado("Trocar a senha encerra a sessão na bandeja") %}
+<p>Trocar ou redefinir a senha encerra a sua sessão na bandeja <strong>CertGuard Análise</strong>. Depois, entre novamente nela. Veja <a href="/wiki-certguard?pagina=bandeja-entrar">Como entrar na bandeja</a>.</p>
 {% endcall %}
