@@ -632,7 +632,7 @@ def test_aba_acessorias_na_configuracao():
     assert '"sieg", "acessorias", "remocao", "autenticador", "api")' in main
     # A tabela com seletor passava de 390px e a página inteira rolava de lado.
     assert "#sec-acessorias .ag-table-scroll { overflow-x: auto;" in css
-    assert "aguia-config.css?v=blocos-2026-11-25" in html
+    assert "aguia-config.css?v=sem-fila-2026-11-25" in html
     # Um PathParam por rota: compartilhado, o FastAPI amarrou o nome da
     # primeira (busca_id) e a rota dos departamentos respondia 422.
     rotas = (RAIZ / "app" / "rotas" / "acessorias.py").read_text(encoding="utf-8")
