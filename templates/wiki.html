@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/wiki.css?v=wiki-2026-11-api" />
+  <link rel="stylesheet" href="/static/wiki.css?v=wiki-leitura-2026-11-25" />
 </head>
 <body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
@@ -18,6 +18,8 @@
 
   <main class="main-content cg-painel wiki" id="main-content">
     {% if atual %}
+    <div class="wiki-layout">
+      <div class="wiki-coluna">
       <nav class="wiki-trilha" aria-label="Você está em">
         <a href="/wiki-certguard">Wiki</a>
         <span aria-hidden="true">›</span>
@@ -47,6 +49,19 @@
           </a>
         {% endif %}
       </nav>
+      </div>
+
+      {# Índice da página: o wiki.js preenche com os h2/h3 do artigo. #}
+      <aside class="wiki-toc" aria-labelledby="wiki-toc-titulo" hidden>
+        <p class="wiki-toc__titulo" id="wiki-toc-titulo">Nesta página</p>
+        <ol class="wiki-toc__lista" id="wiki-toc-lista" role="list"></ol>
+      </aside>
+    </div>
+
+    {# Imagem em tela cheia: qualquer clique ou Esc fecha. #}
+    <dialog class="wiki-zoom" id="wiki-zoom" aria-label="Imagem em tela cheia">
+      <img alt="">
+    </dialog>
     {% else %}
       <header class="ag-page__head">
         <p class="ag-page__eyebrow">Wiki do CertGuard</p>
@@ -77,5 +92,6 @@
   </main>
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=autenticador-2026-11-24"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/wiki.js?v=wiki-leitura-2026-11-25"></script>
 </body>
 </html>
