@@ -1,40 +1,42 @@
-{% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, video, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Todos"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="instalar">Receber e instalar um certificado pedido no portal</h2>
+<p>A bandeja recebe os pedidos de instalação feitos no Início do portal e instala os certificados no seu usuário do Windows.</p>
+
+<h2 id="instalar">Como receber e instalar um certificado pedido no portal</h2>
 {{ video("video-bandeja", "Instalar um certificado pela bandeja") }}
+<p><strong>Antes de começar:</strong> a bandeja precisa estar conectada e o computador, autorizado (veja <a href="/wiki-certguard?pagina=bandeja-entrar">Como entrar na bandeja</a>).</p>
 <ol>
-  <li>Com a bandeja conectada e autorizada, peça a instalação no Início do portal: <strong>Selecionar</strong> e depois <strong>Instalar selecionados</strong>. Veja <a href="/wiki-certguard?pagina=instalar-certificado#instalar">Início</a>.</li>
-  <li>A bandeja confere a cada 20 segundos se há pedido para este computador.</li>
-  <li>Ao receber, ela instala sozinha, sem perguntar nada.</li>
-  <li>No canto da tela aparece "1 certificado(s) instalado(s).", com a quantidade instalada e, se houver, quantos falharam.
-    {{ print("bandeja-aviso-instalado", "Aviso do Windows dizendo 2 certificado(s) instalado(s)") }}
-  </li>
-  <li>O certificado fica no seu usuário do Windows, pronto para usar.</li>
+  <li>No Início do portal, clique em <strong>Selecionar</strong>, marque os certificados e clique em <strong>Instalar selecionados</strong>. Veja <a href="/wiki-certguard?pagina=instalar-certificado#instalar">Como instalar um certificado no seu computador</a>.</li>
+  <li>Aguarde. A bandeja verifica a cada 20 segundos se há pedido para este computador e, ao recebê-lo, instala automaticamente, sem perguntas.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> no canto da tela aparece "1 certificado(s) instalado(s).", com a quantidade instalada e, se houver, quantos falharam. O certificado fica no seu usuário do Windows, pronto para uso.</p>
+{{ print("bandeja-aviso-instalado", "Aviso do Windows dizendo 2 certificado(s) instalado(s)") }}
 
-<h2 id="status">Ver o que a bandeja fez</h2>
+<h2 id="status">Como ver o que a bandeja fez</h2>
 <ol>
   <li>Dê dois cliques no ícone ou escolha <strong>Status e histórico</strong> no menu.</li>
-  <li>A janela mostra <strong>Usuário</strong>, <strong>Máquina</strong>, <strong>Portal</strong>, <strong>Versão</strong> e o "Histórico das ações realizadas:".
+  <li>Confira <strong>Usuário</strong>, <strong>Máquina</strong>, <strong>Portal</strong>, <strong>Versão</strong> e o "Histórico das ações realizadas:".
     {{ print("bandeja-status", "Janela Status e histórico da bandeja com os dados do usuário e da máquina e o histórico de instalações") }}
   </li>
-  <li>No menu <strong>Conta</strong> da janela há <strong>Entrar no portal…</strong> e <strong>Sair da conta nesta máquina</strong>.</li>
 </ol>
+<p>No menu <strong>Conta</strong> da janela há <strong>Entrar no portal…</strong> e <strong>Sair da conta nesta máquina</strong>.</p>
 
-<h2 id="sair">Sair da conta neste computador</h2>
+<h2 id="sair">Como sair da conta neste computador</h2>
 <ol>
   <li>Clique com o botão direito no ícone.</li>
-  <li>Escolha <strong>Sair da conta de certificados</strong>. A primeira linha do menu volta para "Certificados: entre com sua conta".</li>
+  <li>Escolha <strong>Sair da conta de certificados</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> a primeira linha do menu volta para "Certificados: entre com sua conta".</p>
 
-<h2 id="dicas">Dicas e cuidados</h2>
+<h2 id="dicas">Cuidados e situações comuns</h2>
 {% call cuidado("Um computador por vez") %}
-<p>Cada pessoa usa a bandeja em um computador por vez. Entrar na bandeja de outro computador, de um colega por exemplo, encerra a sua sessão nos outros. O computador novo fica aguardando o administrador autorizar, como empréstimo com prazo ou como troca do seu computador principal. No seu computador principal, basta entrar de novo.</p>
+<p>Cada pessoa usa a bandeja em um computador por vez. Entrar na bandeja de outro computador, de um colega por exemplo, encerra a sua sessão nos demais. O computador novo fica aguardando a autorização do administrador, como empréstimo com prazo ou como troca do seu computador principal. No seu computador principal, basta entrar novamente.</p>
 {% endcall %}
-{% call cuidado("Trocar a senha encerra a bandeja") %}
-<p>Trocar ou redefinir a senha encerra a bandeja. Aparece "Sua sessão no portal de certificados foi encerrada neste computador.". Entre de novo com a senha nova.</p>
+{% call cuidado("Trocar a senha encerra a sessão na bandeja") %}
+<p>Trocar ou redefinir a senha encerra a sessão na bandeja, que exibe "Sua sessão no portal de certificados foi encerrada neste computador.". Entre novamente com a nova senha.</p>
 {% endcall %}
 {% call dica("Fechar a bandeja") %}
-<p>A bandeja abre sozinha quando o Windows inicia. <strong>Fechar</strong>, no menu do ícone, encerra a bandeja, e os pedidos deixam de chegar até ela ser aberta de novo: pelo atalho <strong>CertGuard Análise</strong> no menu Iniciar ou reiniciando o computador.</p>
+<p>A bandeja abre automaticamente quando o Windows inicia. <strong>Fechar</strong>, no menu do ícone, encerra a bandeja, e os pedidos deixam de chegar até que ela seja aberta novamente: pelo atalho <strong>CertGuard Análise</strong> no menu Iniciar ou reiniciando o computador.</p>
 {% endcall %}

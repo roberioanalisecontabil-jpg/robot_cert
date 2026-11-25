@@ -1,35 +1,36 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<p>O Instalador é a sala de máquinas da instalação. Ele mostra se o cofre e as chaves estão em ordem, quais certificados estão guardados (custódia), o que o agente fez com os arquivos que chegaram (movimentos), cada tentativa de instalação (trilha) e quem incluiu certificados no SIEG. O Instalador não instala nada: para instalar, use o <a href="/wiki-certguard?pagina=instalar-certificado">Início</a>.</p>
+<p>O Instalador reúne o controle técnico da instalação. Ele mostra se o cofre e as chaves estão em ordem, quais certificados estão guardados (custódia), o que o agente fez com os arquivos recebidos (movimentos), cada tentativa de instalação (trilha) e quem incluiu certificados no SIEG. O Instalador não instala certificados: para instalar, use o <a href="/wiki-certguard?pagina=instalar-certificado">Início</a>.</p>
 
-<p>Só o administrador vê o Instalador. O gestor acompanha as instalações dos seus operadores em <a href="/wiki-certguard?pagina=instalacoes-do-operador">Carteiras</a>, no bloco <strong>Instalações desta pessoa</strong>.</p>
+<p>Somente o administrador vê o Instalador. O gestor acompanha as instalações dos seus operadores em <a href="/wiki-certguard?pagina=instalacoes-do-operador">Carteiras</a>, no bloco <strong>Instalações desta pessoa</strong>.</p>
 
 <p>A página tem seis abas: <strong>Diagnóstico</strong>, <strong>Custódia</strong>, <strong>Movimentos</strong>, <strong>Trilha</strong>, <strong>SIEG</strong> e <strong>Configuração</strong>. O botão <strong>Atualizar</strong>, no alto, recarrega todas.</p>
 
 <h2 id="diagnostico">Aba Diagnóstico</h2>
-<p>Mostra o estado do <strong>Cofre</strong> (quantos registros, último envio) e das <strong>Chaves de cifragem</strong>. O selo ao lado do título diz <strong>Tudo em ordem</strong>, <strong>Atenção</strong> ou <strong>Sem leitura</strong>.</p>
+<p>Mostra o estado do <strong>Cofre</strong> (quantos registros, último envio) e das <strong>Chaves de cifragem</strong>. O selo ao lado do título indica <strong>Tudo em ordem</strong>, <strong>Atenção</strong> ou <strong>Sem leitura</strong>.</p>
 
-<h3 id="cofre-saudavel">Conferir se o cofre está saudável</h3>
+<h3 id="cofre-saudavel">Como conferir se o cofre está saudável</h3>
 <ol>
-  <li>Abra <strong>Instalador</strong> no menu lateral. A aba <strong>Diagnóstico</strong> é a primeira.
+  <li>No menu lateral, clique em <strong>Instalador</strong>. A aba <strong>Diagnóstico</strong> é a primeira.
     {{ print("instalador-diagnostico", "Aba Diagnóstico com os blocos Cofre e Chaves de cifragem e o selo de situação ao lado do título", "O diagnóstico do cofre e das chaves.") }}
   </li>
-  <li>Veja o selo ao lado de <strong>Diagnóstico</strong>. Se for <strong>Atenção</strong>, leia o quadro vermelho logo abaixo: ele lista os problemas.</li>
+  <li>Veja o selo ao lado de <strong>Diagnóstico</strong>. Se for <strong>Atenção</strong>, leia o quadro vermelho logo abaixo, que lista os problemas.</li>
   <li>Clique em <strong>Revalidar cofre</strong>. O portal testa se as chaves atuais abrem uma amostra de cada versão. Esse teste não altera nada.</li>
-  <li>O resultado aparece abaixo do botão, uma linha por chave: <strong>decifrou a amostra</strong> (verde) ou <strong>falhou</strong> (vermelho).
-    {{ print("instalador-revalidar", "Resultado da revalidação do cofre, com uma linha por chave", "Cada chave em verde decifrou a amostra.") }}
-  </li>
 </ol>
+<p><strong>Resultado esperado:</strong> o resultado aparece abaixo do botão, uma linha por chave: <strong>decifrou a amostra</strong> (verde) ou <strong>falhou</strong> (vermelho).</p>
+{{ print("instalador-revalidar", "Resultado da revalidação do cofre, com uma linha por chave", "Cada chave em verde decifrou a amostra.") }}
 
-<h3 id="recifrar">Recifrar o cofre</h3>
-<p>Use só depois de trocar uma chave.</p>
+<h3 id="recifrar">Como recifrar o cofre</h3>
+<p><strong>Antes de começar:</strong> use este procedimento somente depois de trocar uma chave.</p>
 <ol>
-  <li>Clique em <strong>Recifrar cofre</strong>.</li>
-  <li>O portal regrava os registros antigos com as chaves atuais e mostra quantos foram recifrados.</li>
-  <li>Se aparecer <strong>Clique de novo para continuar</strong>, clique outra vez, até terminar.</li>
+  <li>Clique em <strong>Recifrar cofre</strong>. O portal regrava os registros antigos com as chaves atuais.</li>
+  <li>Se aparecer <strong>Clique de novo para continuar</strong>, clique novamente, até terminar.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o portal mostra quantos registros foram recifrados.</p>
 
 {% call cuidado("Recifrar não pede confirmação") %}<p><strong>Recifrar cofre</strong> começa no clique e regrava os registros guardados. Só faz sentido depois de trocar uma chave. Na dúvida, use <strong>Revalidar cofre</strong>, que não altera nada.</p>{% endcall %}
 
-<p>Se o servidor não responder, aparece <strong>Não foi possível consultar o servidor.</strong> com o botão <strong>Tentar de novo</strong>.</p>
+<h3 id="cofre-erros">Se o servidor não responder</h3>
+<p>Aparece <strong>Não foi possível consultar o servidor.</strong> com o botão <strong>Tentar de novo</strong>. Clique nele após alguns instantes.</p>

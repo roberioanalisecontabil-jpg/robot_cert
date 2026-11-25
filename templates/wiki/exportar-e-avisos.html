@@ -1,17 +1,21 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="exportar">Exportar a lista</h2>
+<p>No Início, você pode baixar a lista de certificados em planilha ou PDF e consultar os avisos de vencimento pelo sino.</p>
+
+<h2 id="exportar">Como exportar a lista</h2>
 <ol>
   <li>Clique em <strong>Exportar</strong>.
     {{ print("inicio-exportar", "Menu Exportar aberto com as opções Planilha (CSV) e Documento (PDF)") }}
   </li>
-  <li>Escolha <strong>Planilha (CSV)</strong> ou <strong>Documento (PDF)</strong>. O arquivo sai com os filtros aplicados.</li>
+  <li>Escolha <strong>Planilha (CSV)</strong> ou <strong>Documento (PDF)</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o arquivo é baixado com os filtros aplicados na lista.</p>
 
-<h2 id="sino">Usar o sino de avisos</h2>
+<h2 id="sino">Como usar o sino de avisos</h2>
 <ol>
-  <li>No canto superior, clique no sino (<strong>Alertas e notificações</strong>). O número vermelho indica avisos não lidos.
+  <li>No canto superior, clique no sino (<strong>Alertas e notificações</strong>). O número vermelho indica os avisos não lidos.
     {{ print("inicio-sino", "Lista de avisos do sino aberta, com os filtros e os avisos de certificados") }}
   </li>
   <li>Filtre por <strong>Todos</strong>, <strong>Novos</strong>, <strong>Expirando</strong> ou <strong>Vencidos</strong>.</li>

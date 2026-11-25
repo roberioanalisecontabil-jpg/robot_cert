@@ -1,36 +1,37 @@
-{% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, video, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Colaborador", "Gestor", "Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<p>No Acompanhamento você escolhe quais clientes quer acompanhar e como quer ser avisado por e-mail antes do vencimento. O sino e os e-mails de vencimento seguem essa escolha.</p>
+<p>No Acompanhamento, você escolhe quais clientes deseja acompanhar e como quer ser avisado por e-mail antes do vencimento. O sino e os e-mails de vencimento seguem essa escolha.</p>
 {{ video("video-vencimentos", "Acompanhar vencimentos: Expirando no Início, Vencidos e Acompanhamento") }}
 
-<h2 id="escolher">Escolher os clientes que vai acompanhar</h2>
+<h2 id="escolher">Como escolher os clientes que você vai acompanhar</h2>
+<p><strong>Antes de começar:</strong> somente os clientes da sua carteira aparecem para escolha, e seu perfil precisa ter permissão de edição no Acompanhamento.</p>
 <ol>
   <li>No menu lateral, clique em <strong>Acompanhamento</strong>. A página se chama <strong>Acompanhamento de certificados</strong>.</li>
   <li>Clique na aba <strong>Escolher certificados</strong>.</li>
-  <li>Use a busca (<strong>Nome ou CNPJ/CPF</strong>) para achar o cliente.</li>
-  <li>Marque a caixa ao lado de cada cliente. A barra de baixo mostra quantos estão marcados e avisa que há alterações não salvas.
+  <li>Use a busca (<strong>Nome ou CNPJ/CPF</strong>) para encontrar o cliente.</li>
+  <li>Marque a caixa ao lado de cada cliente. A barra inferior mostra quantos estão marcados e avisa que há alterações não salvas.
     {{ print("acomp-escolher", "Aba Escolher certificados com dois clientes marcados e a barra de baixo avisando alterações não salvas", "Marque e depois salve") }}
   </li>
-  <li>Clique em <strong>Salvar seleção</strong>. O número entre parênteses é quantos estão marcados.</li>
-  <li>O portal confirma, por exemplo, "3 certificados selecionados para acompanhamento.".
-    {{ print("acomp-salvo", "Aviso de sucesso confirmando os certificados selecionados para acompanhamento") }}
-  </li>
-  <li>Mudou de ideia antes de salvar? Clique em <strong>Desfazer</strong>.</li>
+  <li>Clique em <strong>Salvar seleção</strong>. O número entre parênteses indica quantos estão marcados.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o portal confirma, por exemplo, "3 certificados selecionados para acompanhamento.".</p>
+{{ print("acomp-salvo", "Aviso de sucesso confirmando os certificados selecionados para acompanhamento") }}
+<p>Para descartar as marcações antes de salvar, clique em <strong>Desfazer</strong>.</p>
 
 {% call dica("A seleção vale para todas as páginas") %}
-<p>O que você marcou em outra página da lista continua marcado na hora de salvar.</p>
+<p>O que você marcou em outra página da lista continua marcado no momento de salvar.</p>
 {% endcall %}
 
-<h2 id="acompanhados">Ver os acompanhados</h2>
+<h2 id="acompanhados">Como ver os clientes acompanhados</h2>
 <ol>
   <li>Clique na aba <strong>Acompanhados</strong>. O número entre parênteses é o total.</li>
-  <li>No topo estão <strong>Vencidos</strong>, <strong>A vencer em 30 dias</strong>, <strong>Ativos</strong> (mais de 30 dias de validade) e, quando houver, <strong>Sem leitura</strong>.
+  <li>Confira, no topo, <strong>Vencidos</strong>, <strong>A vencer em 30 dias</strong>, <strong>Ativos</strong> (mais de 30 dias de validade) e, quando houver, <strong>Sem leitura</strong>.
     {{ print("acomp-acompanhados", "Aba Acompanhados com os números de vencidos, a vencer e ativos e a tabela de clientes", "O resumo dos clientes que você acompanha") }}
   </li>
-  <li>A tabela mostra <strong>Cliente</strong>, <strong>Vencimento</strong> e <strong>Status</strong>, do vencimento mais próximo para o mais distante.</li>
   <li>Use a busca <strong>Nome ou CNPJ/CPF</strong> para filtrar a tabela. Os números do topo não mudam com a busca.</li>
 </ol>
-<p>Se você ainda não escolheu ninguém, a aba mostra "Você ainda não acompanha nenhum certificado" e um atalho para <strong>Escolher certificados</strong>.</p>
+<p>A tabela mostra <strong>Cliente</strong>, <strong>Vencimento</strong> e <strong>Status</strong>, do vencimento mais próximo para o mais distante.</p>
+<p>Se você ainda não escolheu nenhum cliente, a aba mostra "Você ainda não acompanha nenhum certificado" e um atalho para <strong>Escolher certificados</strong>.</p>
 {{ print("acomp-vazio", "Aba Acompanhados vazia, com a mensagem Você ainda não acompanha nenhum certificado e o botão Escolher certificados") }}

@@ -1,20 +1,21 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<p>Configuração reúne os ajustes de funcionamento do portal: como as estações se identificam, quais pastas o agente do servidor lê, como saem os alertas por e-mail, os comandos para o agente e a ligação com o SIEG.</p>
+<p>Configuração reúne os ajustes de funcionamento do portal: como as estações se identificam, quais pastas o agente do servidor lê, como são enviados os alertas por e-mail, os comandos para o agente e a integração com o SIEG.</p>
 
-<p>Só o administrador abre esta tela. Quem não é administrador e tenta abrir volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
+<p>Somente o administrador abre esta tela. Quem não é administrador e tenta abri-la volta para o Início com o aviso <strong>Acesso restrito a administradores.</strong></p>
 
 <p>No alto da página, duas etiquetas mostram o estado do servidor: <strong>Banco de dados conectado</strong> (ou desconectado, ou não verificado) e <strong>Chave API obrigatória</strong> (ou aberta). A página tem sete abas: <strong>Pastas e agente</strong>, <strong>Alertas por e-mail</strong>, <strong>SIEG</strong>, <strong>Acessórias</strong>, <strong>Remoção nas estações</strong>, <strong>App autenticador</strong> e <strong>Chaves de API</strong>.</p>
 
 <h2 id="chave">Chave das estações</h2>
 <p>A chave das estações não passa pelo navegador e não tem aba no portal. Ela é digitada no instalador do agente, que a guarda protegida no próprio computador.</p>
 
-<h3 id="trocar-chave">Trocar a chave de uma estação já instalada</h3>
-<p>É tarefa do técnico, feita no próprio computador da estação.</p>
+<h3 id="trocar-chave">Como trocar a chave de uma estação já instalada</h3>
+<p><strong>Antes de começar:</strong> esta tarefa é do técnico e é feita no próprio computador da estação, com acesso de administrador do Windows.</p>
 <ol>
-  <li>Grave a chave num arquivo de texto.</li>
-  <li>Abra o prompt de comando como administrador do Windows e rode o comando abaixo, trocando o caminho pelo do seu arquivo.
+  <li>Grave a chave em um arquivo de texto.</li>
+  <li>Abra o prompt de comando como administrador do Windows e execute o comando abaixo, substituindo o caminho pelo do seu arquivo.
     <pre>AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre></li>
-  <li>O agente guarda a chave e apaga o arquivo.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> o agente guarda a chave e apaga o arquivo de texto.</p>

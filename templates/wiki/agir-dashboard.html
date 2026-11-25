@@ -1,18 +1,21 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
-<h2 id="agir">Agir a partir do Dashboard</h2>
-<ol>
-  <li>Cartão <strong>Acesso</strong> com número maior que zero: clique em <strong>Ver carteiras</strong> e monte a carteira de quem aparece como sem carteira. Veja como em <a href="/wiki-certguard?pagina=montar-carteira">Carteiras</a>.</li>
-  <li>Cartão <strong>Instalações</strong> com falhas: clique em <strong>Ver instalações</strong> e marque <strong>Só falhas</strong> na Trilha. Veja <a href="/wiki-certguard?pagina=trilha">Instalador</a>.</li>
-  <li>Cartão <strong>Agente</strong> com servidor atrasado: o agente não lê as pastas há mais de 36 horas. Avise a equipe de TI responsável pelo servidor.</li>
-</ol>
+<p>Alguns cartões do Dashboard indicam situações que exigem ação. Esta página mostra o que fazer em cada caso.</p>
 
-<h2 id="dicas">Dicas e cuidados</h2>
-{% call dica("Renovações carrega por último") %}<p>O cartão <strong>Renovações</strong> demora mais que os outros. É normal ele aparecer depois.</p>{% endcall %}
+<h2 id="agir">O que fazer em cada cartão</h2>
+<ul>
+  <li><strong>Acesso</strong> com número maior que zero: clique em <strong>Ver carteiras</strong> e monte a carteira de quem aparece sem carteira. Veja <a href="/wiki-certguard?pagina=montar-carteira">Como montar a carteira de um operador</a>.</li>
+  <li><strong>Instalações</strong> com falhas: clique em <strong>Ver instalações</strong> e marque <strong>Só falhas</strong> na Trilha. Veja <a href="/wiki-certguard?pagina=trilha">Como consultar a trilha das instalações</a>.</li>
+  <li><strong>Agente</strong> com servidor atrasado: o agente não lê as pastas há mais de 36 horas. Avise a equipe de TI responsável pelo servidor.</li>
+</ul>
 
-{% call dica("Confira a data das Renovações") %}<p>A comparação das <strong>Renovações</strong> pode ser feita com uma varredura mais antiga que o período escolhido: você pede 30 dias e a comparação vem com uma varredura de 54 dias atrás, por exemplo. A data certa aparece no rodapé do cartão.</p>{% endcall %}
+<h2 id="dicas">Situações comuns</h2>
+{% call dica("O cartão Renovações carrega por último") %}<p>O cartão <strong>Renovações</strong> demora mais que os outros. É normal que ele apareça depois.</p>{% endcall %}
 
-{% call dica("Um cartão com erro não invalida os outros") %}<p>Se um cartão mostrar <strong>Não foi possível calcular este painel</strong>, os demais continuam valendo. Clique em <strong>Atualizar</strong> depois de alguns minutos.</p>{% endcall %}
+{% call dica("Confira a data das Renovações") %}<p>A comparação das <strong>Renovações</strong> pode ser feita com uma varredura anterior ao período escolhido: por exemplo, você escolhe 30 dias e a comparação usa uma varredura de 54 dias atrás. A data usada aparece no rodapé do cartão.</p>{% endcall %}
 
-{% call dica("O que a Atividade conta") %}<p><strong>Atividade por usuário</strong> conta ações registradas, não tempo conectado. O registro de login começou em 15/08/2026: antes disso não há histórico, o que é diferente de não ter havido uso.</p>{% endcall %}
+{% call dica("Um cartão com erro não invalida os outros") %}<p>Se um cartão mostrar <strong>Não foi possível calcular este painel</strong>, os demais continuam válidos. Clique em <strong>Atualizar</strong> após alguns minutos.</p>{% endcall %}
+
+{% call dica("O que a Atividade conta") %}<p><strong>Atividade por usuário</strong> conta ações registradas, não tempo conectado. O registro de login começou em 15/08/2026: a ausência de histórico antes dessa data não significa que não houve uso.</p>{% endcall %}

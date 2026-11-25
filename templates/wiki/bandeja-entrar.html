@@ -1,31 +1,31 @@
-{% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, video, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Todos"]) }}
+{{ atualizado("25/11/2026") }}
 
 <p>A bandeja <strong>CertGuard Análise</strong> é o programa que fica no canto da barra de tarefas do Windows, perto do relógio. Ela liga o seu computador à sua conta do portal e instala os certificados que você pede no Início. É preciso tê-la em cada computador onde se instala certificado.</p>
 {{ print("bandeja-icone", "Área de notificação do Windows, perto do relógio, com o ícone do CertGuard Análise", "O ícone da bandeja") }}
 
-<h2 id="entrar">Entrar na bandeja pela primeira vez</h2>
+<h2 id="entrar">Como entrar na bandeja pela primeira vez</h2>
+<p><strong>Antes de começar:</strong> tenha o e-mail e a senha do portal. Se a sua senha for provisória, troque-a primeiro no portal pelo navegador.</p>
 <ol>
-  <li>Na primeira vez, a janela <strong>Entrar no portal de certificados</strong> abre sozinha. Se não abrir, clique com o botão direito no ícone <strong>CertGuard Análise</strong> e escolha <strong>Entrar no portal de certificados…</strong>.</li>
+  <li>Na primeira vez, a janela <strong>Entrar no portal de certificados</strong> abre automaticamente. Se não abrir, clique com o botão direito no ícone <strong>CertGuard Análise</strong> e escolha <strong>Entrar no portal de certificados…</strong>.</li>
   <li>Digite o <strong>E-mail</strong> e a <strong>Senha</strong> do portal, os mesmos do navegador.
     {{ print("bandeja-login", "Janela Entrar no portal de certificados com os campos E-mail e Senha e o botão Entrar") }}
   </li>
   <li>Clique em <strong>Entrar</strong>. O botão mostra "Entrando…".</li>
-  <li>Se o computador já está autorizado, aparece "Computador autorizado.". Se é a primeira vez, aparece "Aguardando o administrador autorizar este computador.".
-    {{ print("bandeja-pendente", "Janela de login da bandeja com a mensagem Aguardando o administrador autorizar este computador e o botão Pronto") }}
-  </li>
   <li>Clique em <strong>Pronto</strong> para fechar a janela.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> se o computador já estiver autorizado, aparece "Computador autorizado.". Se for a primeira vez, aparece "Aguardando o administrador autorizar este computador.".</p>
+{{ print("bandeja-pendente", "Janela de login da bandeja com a mensagem Aguardando o administrador autorizar este computador e o botão Pronto") }}
 
 {% call dica("Senha provisória") %}
-<p>Se a janela disser "Sua senha é provisória. Troque-a no portal e volte aqui.", entre primeiro no portal pelo navegador e defina a sua senha. Veja <a href="/wiki-certguard?pagina=recuperar-senha#senha-provisoria">Primeiros passos</a>.</p>
+<p>Se a janela informar "Sua senha é provisória. Troque-a no portal e volte aqui.", entre primeiro no portal pelo navegador e defina a sua senha. Veja <a href="/wiki-certguard?pagina=recuperar-senha#senha-provisoria">Como trocar a senha provisória</a>.</p>
 {% endcall %}
 
-<h2 id="autorizacao">Esperar a autorização do administrador</h2>
+<h2 id="autorizacao">Como acompanhar a autorização do administrador</h2>
 <ol>
   <li>Clique com o botão direito no ícone. A primeira linha do menu mostra a situação: seu e-mail e "aguardando autorização".</li>
-  <li>O administrador recebe o pedido no sino do portal e autoriza na página <strong>Usuários</strong>, aba <strong>Computadores</strong>.</li>
-  <li>Quando o computador for autorizado, a bandeja mostra o aviso "Este computador foi autorizado no portal de certificados." e a primeira linha do menu passa a "computador autorizado".
-    {{ print("bandeja-menu", "Menu do ícone da bandeja com a linha computador autorizado e os itens Status e histórico, Entrar no portal de certificados, Sair da conta de certificados e Fechar") }}
-  </li>
+  <li>Aguarde: o administrador recebe o pedido no sino do portal e autoriza na página <strong>Usuários</strong>, aba <strong>Computadores</strong>.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> quando o computador for autorizado, a bandeja mostra o aviso "Este computador foi autorizado no portal de certificados." e a primeira linha do menu passa a "computador autorizado".</p>
+{{ print("bandeja-menu", "Menu do ícone da bandeja com a linha computador autorizado e os itens Status e histórico, Entrar no portal de certificados, Sair da conta de certificados e Fechar") }}

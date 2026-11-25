@@ -303,7 +303,7 @@ def test_busca_pela_pagina_mostra_titulo_secao_e_trecho(client_wiki: TestClient)
     r = client_wiki.get("/wiki-certguard?q=n%C3%A3o+chega+o+c%C3%B3digo+no+e-mail", headers=_cabecalho("admin"))
     assert r.status_code == 200
     assert 'href="/wiki-certguard?pagina=entrar-no-portal#codigo-nao-chegou"' in r.text
-    assert "Entrar e sair do portal" in r.text and "O código não chegou ou expirou" in r.text
+    assert "Como entrar e sair do portal" in r.text and "O código não chegou ou expirou" in r.text
     assert 'class="wiki-resultado__trecho"' in r.text
     r = client_wiki.get("/wiki-certguard?q=zzzqqq", headers=_cabecalho("admin"))
     assert "Nada encontrado" in r.text

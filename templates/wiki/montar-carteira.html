@@ -1,10 +1,11 @@
-{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{% from "wiki/_macros.html" import print, papeis, atualizado, cuidado, dica with context %}
 {{ papeis(["Gestor", "Administrador"]) }}
+{{ atualizado("25/11/2026") }}
 
 <p>A carteira define quais clientes cada operador pode instalar. O operador começa com a carteira vazia e só instala o que foi atribuído a ele. O gestor já alcança todos os clientes; o administrador pode retirar alguns clientes do alcance de um gestor, o que a tela chama de exceções.</p>
 
 <ul>
-  <li>O <strong>gestor</strong> vê e monta as carteiras dos operadores dos departamentos que ele lidera, só com clientes que estão no alcance dele.</li>
+  <li>O <strong>gestor</strong> vê e monta as carteiras dos operadores dos departamentos que lidera, apenas com clientes que estão no alcance dele.</li>
   <li>O <strong>administrador</strong> monta a carteira de qualquer operador e também registra as exceções dos gestores.</li>
   <li>O administrador não aparece na lista: ele sempre alcança todos os clientes.</li>
 </ul>
@@ -15,9 +16,9 @@
   <li><strong>Retirar</strong>: tirar o cliente da carteira de um operador, ou registrar uma exceção para um gestor.</li>
   <li><strong>Devolver</strong>: desfazer a exceção de um gestor. Ele volta a ver e instalar aquele cliente.</li>
 </ul>
-<p>A carteira é por cliente (CNPJ ou CPF), não por arquivo. Quando o certificado é renovado, o operador continua com acesso sem que ninguém precise fazer nada.</p>
+<p>A carteira é por cliente (CNPJ ou CPF), não por arquivo. Quando o certificado é renovado, o operador mantém o acesso sem nenhuma ação adicional.</p>
 
-<h2 id="montar">Montar a carteira de um operador</h2>
+<h2 id="montar">Como montar a carteira de um operador</h2>
 <ol>
   <li>No menu lateral, clique em <strong>Carteiras</strong>.
     {{ print("carteiras-inicio", "Tela Carteiras com a lista Pessoas à esquerda e, à direita, o aviso Nenhum operador selecionado", "A lista de pessoas e o painel vazio à direita.") }}
@@ -26,22 +27,22 @@
   <li>Clique no nome. À direita aparecem o nome, o e-mail e quantos clientes ele já tem.
     {{ print("carteiras-operador", "Carteira de um operador aberta, com os painéis Disponíveis e Na carteira preenchidos", "Os clientes disponíveis à esquerda e os da carteira à direita.") }}
   </li>
-  <li>No painel <strong>Disponíveis</strong>, clique nos clientes que quer dar a ele. Cada clique marca ou desmarca o cliente. Para achar um cliente, use a caixa <strong>Filtrar por nome ou CNPJ/CPF</strong>: ela filtra os dois painéis.
+  <li>No painel <strong>Disponíveis</strong>, clique nos clientes que deseja atribuir. Cada clique marca ou desmarca o cliente. Para encontrar um cliente, use a caixa <strong>Filtrar por nome ou CNPJ/CPF</strong>, que filtra os dois painéis.
     {{ print("carteiras-filtro", "Painéis Disponíveis e Na carteira filtrados por parte do nome de um cliente", "O filtro vale para os dois painéis.") }}
   </li>
   <li>Clique em <strong>Atribuir</strong>. O botão mostra quantos clientes estão marcados.
     {{ print("carteiras-selecao", "Dois clientes marcados no painel Disponíveis e o botão Atribuir com o número 2", "Dois clientes marcados, prontos para atribuir.") }}
   </li>
   <li>Com um cliente só, a atribuição é imediata. Com mais de um, o portal pergunta se deve atribuir aquela quantidade de clientes à pessoa: confirme com <strong>OK</strong>.</li>
-  <li>Os clientes passam para o painel <strong>Na carteira</strong> e uma mensagem confirma a atribuição.</li>
 </ol>
+<p><strong>Resultado esperado:</strong> os clientes passam para o painel <strong>Na carteira</strong> e uma mensagem confirma a atribuição.</p>
 
-{% call dica("Atalho para quem está sem carteira") %}<p>Antes de escolher alguém, a caixa da direita mostra o botão <strong>Montar carteira de</strong> seguido do nome do primeiro operador sem carteira. Ele abre essa pessoa direto. No resumo acima da lista, a contagem de quem está sem carteira também é clicável: ela leva até o primeiro operador sem carteira na lista.</p>{% endcall %}
+{% call dica("Atalho para quem está sem carteira") %}<p>Antes de você escolher alguém, a caixa da direita mostra o botão <strong>Montar carteira de</strong> seguido do nome do primeiro operador sem carteira. Ele abre essa pessoa diretamente. No resumo acima da lista, a contagem de quem está sem carteira também é clicável e leva ao primeiro operador sem carteira na lista.</p>{% endcall %}
 
 <p>Um operador sem nenhum cliente aparece assim:</p>
 {{ print("carteiras-sem-carteira", "Painel Na carteira vazio com o aviso de que a pessoa não consegue instalar nenhum certificado", "Carteira vazia: a pessoa não instala nada.") }}
 
-<h3 id="atribuir-todos">Atribuir todos os clientes listados</h3>
+<h3 id="atribuir-todos">Como atribuir todos os clientes listados</h3>
 <ol>
   <li>Abra o operador, como nos passos 1 a 3 acima.</li>
   <li>Se quiser, filtre por nome ou CNPJ/CPF para limitar a lista.</li>
