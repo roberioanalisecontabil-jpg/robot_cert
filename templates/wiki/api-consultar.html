@@ -50,6 +50,16 @@ in
     Fonte</code></pre>
 <p>No aviso de credenciais do Power BI, escolha <strong>Anônimo</strong>: a chave já vai no cabeçalho.</p>
 
+<h3 id="postman">Postman</h3>
+<ol>
+  <li>Em <strong>Environments › New</strong>, crie a variável <code>chave_certguard</code>, marque o tipo <strong>secret</strong> e cole a chave em <strong>Current value</strong>. Crie também <code>base</code> com o endereço do portal (<code>https://ENDERECO-DO-PORTAL</code>). Assim a chave não vai junto quando a coleção for exportada ou compartilhada.</li>
+  <li>Numa requisição nova, escolha o método <strong>GET</strong> e escreva a URL, por exemplo <code>{% raw %}{{base}}/api/certificados{% endraw %}</code>.</li>
+  <li>Na aba <strong>Authorization</strong>, escolha <strong>Bearer Token</strong> e, em <strong>Token</strong>, escreva <code>{% raw %}{{chave_certguard}}{% endraw %}</code>.</li>
+  <li>Na aba <strong>Params</strong>, ponha os filtros, por exemplo <code>filtro_status</code> = <code>prestes_vencer</code> e <code>por_pagina</code> = <code>100</code>.</li>
+  <li>Clique em <strong>Send</strong>. A resposta vem em JSON.</li>
+</ol>
+<p>Outros métodos (<code>POST</code>, <code>PUT</code>, <code>DELETE</code>) respondem <code>403</code>: a chave só lê. Os parâmetros de cada consulta estão em <a href="/wiki-certguard?pagina=api-consultas">Consultas permitidas</a>.</p>
+
 <h2 id="respostas">Respostas de erro</h2>
 <div class="wiki-tabela"><table>
   <thead><tr><th>Código</th><th>O que significa</th></tr></thead>
