@@ -600,12 +600,6 @@
      "recorte": "#modal-comp", "ocultar": [], "manual": true,
      "obs": "Feito 15/10/2026 no portal de demo: maquina_chave de DP-PC01 gravada com um hash e o pedido pendente da Juliana com outro. Fechar com Cancelar."},
 
-    {"id": "configuracao-chave", "modulo": "configuracao", "papel": "admin", "url": "/configuracao?aba=chave",
-     "passos": [
-       {"acao": "esperar", "sel": "#tag-banco:not(:has-text('verificando'))"},
-       {"acao": "esperar", "sel": "#tag-api-key:not(:has-text('verificando'))"}],
-     "recorte": null, "ocultar": [], "manual": false,
-     "obs": "A tela não mostra nenhuma chave; conferir antes de publicar."},
     {"id": "configuracao-pastas", "modulo": "configuracao", "papel": "admin", "url": "/configuracao?aba=pastas",
      "passos": [{"acao": "esperar", "sel": "#disp-source:not(:text-is('—'))"}],
      "recorte": "#sec-pastas", "ocultar": [], "manual": false, "obs": ""},

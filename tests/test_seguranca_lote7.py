@@ -145,7 +145,8 @@ def test_tela_nao_guarda_chave_no_navegador_nem_no_arquivo_baixado() -> None:
     assert 'id="api-key"' not in html
     assert "cert_robot_api_key" not in html, "o agent_config.json baixado não leva a chave"
     assert "localStorage.setItem(KEY_STORAGE" not in html, "só o login grava a chave do JWT"
-    assert "guardar-chave" in html, "a tela diz como a chave entra na estação"
+    wiki = (RAIZ / "templates" / "wiki" / "configuracao.html").read_text(encoding="utf-8")
+    assert "guardar-chave" in wiki, "a wiki diz como a chave entra na estação (a aba saiu em 25/11)"
 
 
 # ──────────────────────────────────────────────────────────────────────────

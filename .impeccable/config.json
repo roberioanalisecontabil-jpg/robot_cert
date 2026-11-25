@@ -168,6 +168,15 @@
         ],
         "createdAt": "2026-11-06T12:58:55.404Z",
         "reason": "Robério aprovou a prévia v2 (06/11): pisos de clamp() fluidos, sempre menores que o tamanho de hoje"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "templates/configuracao.html"
+        ],
+        "createdAt": "2026-11-25T11:42:35.871Z",
+        "reason": "model: img#aa-qr fica oculta e recebe o src por JS ao gerar o QR do app autenticador"
       }
     ]
   }

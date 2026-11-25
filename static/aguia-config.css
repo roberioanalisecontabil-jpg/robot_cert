@@ -1,9 +1,9 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Configuração no Águia DS (24/09/2026) — só desta tela (prefixo .cg-cfg-)
 
-   Cobre a faixa do topo e a aba "Alertas por e-mail". Chave API, Pastas e
-   agente e Fila de comandos continuam com os componentes do DS sem
-   redesenho (item 97, aguardam print).
+   Cobre a faixa do topo e a aba "Alertas por e-mail". Pastas e agente e
+   Fila de comandos continuam com os componentes do DS sem redesenho
+   (item 97, aguardam print). A aba Chave API saiu em 25/11/2026.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Faixa de status: badges escritos numa linha. */

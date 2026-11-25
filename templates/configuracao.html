@@ -39,7 +39,6 @@
     </div>
 
     <div class="ag-abas ag-abas--trilho" role="tablist" aria-label="Seções da configuração">
-      <a class="ag-abas__aba" role="tab" id="tab-chave" href="?aba=chave" aria-controls="sec-chave" data-aba="chave" aria-selected="{{ 'true' if aba == 'chave' else 'false' }}" {% if aba != 'chave' %}tabindex="-1"{% endif %}>Chave API</a>
       <a class="ag-abas__aba" role="tab" id="tab-pastas" href="?aba=pastas" aria-controls="sec-pastas" data-aba="pastas" aria-selected="{{ 'true' if aba == 'pastas' else 'false' }}" {% if aba != 'pastas' %}tabindex="-1"{% endif %}>Pastas e agente</a>
       <a class="ag-abas__aba" role="tab" id="tab-smtp" href="?aba=alertas" aria-controls="sec-smtp" data-aba="alertas" aria-selected="{{ 'true' if aba == 'alertas' else 'false' }}" {% if aba != 'alertas' %}tabindex="-1"{% endif %}>Alertas por e-mail</a>
       <a class="ag-abas__aba" role="tab" id="tab-comandos" href="?aba=comandos" aria-controls="sec-comandos" data-aba="comandos" aria-selected="{{ 'true' if aba == 'comandos' else 'false' }}" {% if aba != 'comandos' %}tabindex="-1"{% endif %}>Fila de comandos</a>
@@ -51,23 +50,8 @@
     </div>
     <p class="cg-sr-only" id="abas-anuncio" aria-live="polite"></p>
 
-    <!-- ── Chave API ───────────────────────── -->
-    <section class="ag-card cg-cfg-aba" id="sec-chave" role="tabpanel" aria-labelledby="tab-chave" {% if aba != 'chave' %}hidden{% endif %}>
-      <div class="cg-cfg-corpo">
-        <!-- A chave não passa mais pelo navegador (SECURITY_AUDIT #46, lote 7):
-             o portal autentica esta tela pelo login (JWT), e a X-API-Key é
-             credencial de ESTAÇÃO — entra no cofre local do agente pelo
-             instalador, nunca por localStorage nem pelo agent_config.json. -->
-        <p class="cg-cfg-lead">A <code>API_KEY</code> é credencial das <strong>estações</strong>: fica cifrada em cada uma, nunca no navegador nem no <code>agent_config.json</code>.</p>
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Como a chave entra numa estação</h3><p class="ag-form-subhead__nota">O instalador do agente pede a chave e a guarda no cofre local.</p></div>
-        <div class="ag-form-subhead"><h3 class="ag-form-subhead__titulo">Trocar a chave depois</h3><p class="ag-form-subhead__nota">Grave a chave num arquivo e rode, como administrador:</p></div>
-        <pre class="cg-cfg-comando">AnaliseCertiDigital_Agent.exe --guardar-chave C:\caminho\chave.txt</pre>
-        <p class="ag-ajuda">O agente cifra a chave e apaga o arquivo.</p>
-        <div class="cg-cfg-acoes">
-          <span class="ag-ajuda" id="auth-hint" role="status"></span>
-        </div>
-      </div>
-    </section>
+    <!-- A aba informativa "Chave API" saiu em 25/11/2026: a troca da X-API-Key
+         de uma estação ficou só na wiki (Configuração › Chave das estações). -->
 
     <!-- ── Pastas e agente ─────────────────── -->
     <section class="ag-card cg-cfg-aba" id="sec-pastas" role="tabpanel" aria-labelledby="tab-pastas" {% if aba != 'pastas' %}hidden{% endif %}>
@@ -614,12 +598,12 @@
       function plural(n, s, p) { return n + " " + (Number(n) === 1 ? s : (p || s + "s")); }
 
       // ── Abas por link ─────────────────────────────────────────────────
-      const ABAS = { chave: "sec-chave", pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
-      const TAB_IDS = { chave: "tab-chave", pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
+      const ABAS = { pastas: "sec-pastas", alertas: "sec-smtp", comandos: "sec-comandos", sieg: "sec-sieg", acessorias: "sec-acessorias", remocao: "sec-remocao", autenticador: "sec-autenticador", api: "sec-api" };
+      const TAB_IDS = { pastas: "tab-pastas", alertas: "tab-smtp", comandos: "tab-comandos", sieg: "tab-sieg", acessorias: "tab-acessorias", remocao: "tab-remocao", autenticador: "tab-autenticador", api: "tab-api" };
       const ORDEM = Object.keys(ABAS);
 
       function switchTab(aba, anunciar) {
-        if (!ABAS[aba]) aba = "chave";
+        if (!ABAS[aba]) aba = "pastas";
         ORDEM.forEach((a) => {
           document.getElementById(ABAS[a]).hidden = a !== aba;
           const t = document.getElementById(TAB_IDS[a]);
@@ -627,7 +611,7 @@
           t.tabIndex = a === aba ? 0 : -1;
         });
         const url = new URL(location.href);
-        if (aba === "chave") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
+        if (aba === "pastas") url.searchParams.delete("aba"); else url.searchParams.set("aba", aba);
         history.replaceState(null, "", url.pathname + (url.search || ""));
         if (anunciar) document.getElementById("abas-anuncio").textContent = "Aba " + document.getElementById(TAB_IDS[aba]).textContent.trim() + " aberta.";
         if (aba === "comandos") void refreshCommandQueue();
@@ -1482,8 +1466,6 @@
         tagS.textContent = semLeitura ? "Banco de dados: não verificado" : (h.banco ? "Banco de dados conectado" : "Banco de dados desconectado");
         const tagK = document.getElementById("tag-api-key");
         tagK.textContent = h.api_key_required ? "Chave API obrigatória" : "Chave API aberta";
-        const ah = document.getElementById("auth-hint");
-        if (ah) ah.textContent = h.api_key_required ? "O servidor exige X-API-Key das estações." : "O servidor não exige X-API-Key das estações.";
         await loadSettingsToForm();
         marcarLimpo();
         _segAnterior = document.getElementById("sel-smtp-seguranca").value;
