@@ -1,0 +1,179 @@
+{% from "wiki/_macros.html" import papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<p>A API do portal entrega os mesmos dados que o administrador vê nas telas, para usar em relatórios (Power BI, Excel) e em outros sistemas. É <strong>somente leitura</strong>: a chave consulta e não altera nada.</p>
+
+<h2 id="chave">Criar a chave</h2>
+<ol>
+  <li>Abra <strong>Configuração › Chaves de API</strong>.</li>
+  <li>Dê um <strong>Nome</strong> que diga onde a chave vai ser usada (por exemplo, <strong>Power BI financeiro</strong>), escolha a <strong>Validade</strong> e digite a sua senha atual.</li>
+  <li>Clique em <strong>Criar chave</strong> e depois em <strong>Copiar</strong>. A chave começa com <code>cg_ro_</code> e aparece uma vez só.</li>
+</ol>
+<p>A tabela da aba mostra cada chave com o dono, a data de expiração, o último uso (com o IP) e o estado. <strong>Revogar</strong> desliga a chave na hora.</p>
+
+{% call cuidado("A chave vale como você") %}<p>Quem tiver a chave lê tudo o que você lê no portal, inclusive dados de clientes. Guarde-a num cofre de senhas ou na configuração protegida do sistema que vai usá-la, nunca em planilha, e-mail ou chat. Se vazar, revogue e crie outra.</p>{% endcall %}
+
+<p>A chave também morre sozinha quando vence, quando o dono é desativado ou quando ele deixa de ser administrador.</p>
+
+<h2 id="usar">Fazer uma consulta</h2>
+<p>Toda consulta é um <code>GET</code> no endereço do portal, com a chave no cabeçalho <code>Authorization</code>. As respostas vêm em JSON.</p>
+
+<h3 id="powershell">PowerShell</h3>
+<pre><code>$chave = "cg_ro_..."
+Invoke-RestMethod "https://ENDERECO-DO-PORTAL/api/certificados?filtro_status=prestes_vencer" `
+  -Headers @{ Authorization = "Bearer $chave" }</code></pre>
+
+<h3 id="curl">curl</h3>
+<pre><code>curl -H "Authorization: Bearer cg_ro_..." \
+  "https://ENDERECO-DO-PORTAL/api/certificados/vencidos?data_inicio=2026-01-01"</code></pre>
+
+<h3 id="python">Python</h3>
+<pre><code>import requests
+
+r = requests.get(
+    "https://ENDERECO-DO-PORTAL/api/carteira/uso",
+    params={"desde": "2026-11-01", "ate": "2026-11-30", "pagina": 1, "por_pagina": 100},
+    headers={"Authorization": "Bearer cg_ro_..."},
+    timeout=60,
+)
+r.raise_for_status()
+print(r.json())</code></pre>
+
+<h3 id="powerbi">Power BI (Obter dados › Consulta em branco)</h3>
+<pre><code>let
+    Fonte = Json.Document(Web.Contents(
+        "https://ENDERECO-DO-PORTAL",
+        [RelativePath = "api/certificados",
+         Query = [todas_filtradas = "true"],
+         Headers = [Authorization = "Bearer cg_ro_..."]]))
+in
+    Fonte</code></pre>
+<p>No aviso de credenciais do Power BI, escolha <strong>Anônimo</strong>: a chave já vai no cabeçalho.</p>
+
+<h2 id="respostas">Respostas de erro</h2>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Código</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><code>401</code></td><td>Chave errada, revogada ou vencida, ou o dono foi desativado ou deixou de ser administrador.</td></tr>
+    <tr><td><code>403</code></td><td>Tentativa de gravar (<code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>) ou consulta a uma rota que a chave não alcança (veja <a href="#bloqueadas">o que fica de fora</a>).</td></tr>
+    <tr><td><code>404</code></td><td>O registro pedido não existe.</td></tr>
+    <tr><td><code>422</code></td><td>Parâmetro fora do formato ou do limite (por exemplo, <code>por_pagina</code> acima do máximo).</td></tr>
+    <tr><td><code>503</code></td><td>O portal não conseguiu falar com o banco agora. Tente de novo em seguida.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="consultas">Consultas permitidas</h2>
+<p>Datas no formato <code>AAAA-MM-DD</code>. Parâmetros entre colchetes são opcionais; o valor depois do <code>=</code> é o padrão.</p>
+
+{% call dica("Listas grandes") %}<p>Nas listas com <code>pagina</code> e <code>por_pagina</code>, peça uma página por vez. Para trazer tudo de uma vez em relatórios, use <code>todas_filtradas=true</code> onde existir.</p>{% endcall %}
+
+<h3 id="certificados">Certificados</h3>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/certificados</code></td><td>Os certificados de hoje, como na tela Início.</td><td>[filtro_status=todos: <code>todos</code>, <code>validos</code>, <code>prestes_vencer</code>, <code>vencidos</code>, <code>erros</code>] [busca] [pagina] [por_pagina, até 2000] [todas_filtradas=false] [ocultar_ilegiveis=false] [ocultar_vencidos=false] [filtro_sieg=todos: <code>incluindo</code>, <code>no_sieg</code>, <code>fora</code>] [ordenar: <code>nome</code>, <code>status</code>, <code>emissao</code>, <code>vencimento</code>, <code>documento</code>] [direcao=asc] [fonte=auto]</td></tr>
+    <tr><td><code>/api/certificados/{fingerprint}/detalhes</code></td><td>Um certificado, com os dados do responsável.</td><td>—</td></tr>
+    <tr><td><code>/api/certificados/historico</code></td><td>Todos os certificados que já passaram pelo portal.</td><td>[busca] [status: <code>ok</code>, <code>expirado</code>, <code>erro</code>, <code>ilegivel</code>, <code>fora_do_padrao</code>] [situacao: <code>todos</code>, <code>nas_pastas</code>, <code>sairam</code>] [pagina=1] [por_pagina=20, até 2000] [todas_filtradas=false]</td></tr>
+    <tr><td><code>/api/certificados/vencidos</code></td><td>Clientes com o certificado vencido.</td><td>[data_inicio] [data_fim] [busca] [ordem=desc] [pagina=1] [por_pagina=20, até 2000] [todas_filtradas=false]</td></tr>
+    <tr><td><code>/api/certificados/duplicidades</code></td><td>Clientes com mais de um certificado guardado.</td><td>—</td></tr>
+    <tr><td><code>/api/sieg/certificado/{fingerprint}</code></td><td>A situação do certificado no SIEG.</td><td>—</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="dashboard">Dashboard</h3>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/dashboard</code></td><td>Os números do parque de certificados.</td><td>[dias=30, até 365]</td></tr>
+    <tr><td><code>/api/dashboard/renovacoes</code></td><td>Renovações: o inventário de hoje contra o de N dias atrás.</td><td>[dias=30, até 365] [machine_id=ANALISESRV]</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="carteiras">Carteiras e uso dos certificados</h3>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/carteira/operadores</code></td><td>Quem pode receber carteira, com quantos clientes cada um tem.</td><td>—</td></tr>
+    <tr><td><code>/api/carteira/{user_id}</code></td><td>Os clientes da carteira de uma pessoa.</td><td>—</td></tr>
+    <tr><td><code>/api/carteira/{user_id}/instalacoes</code></td><td>As instalações pedidas por essa pessoa.</td><td>[dias=365, até 365]</td></tr>
+    <tr><td><code>/api/carteira/documentos</code></td><td>Os clientes (CNPJ/CPF) que podem entrar numa carteira.</td><td>[q: nome ou número] [limite=500, até 2000]</td></tr>
+    <tr><td><code>/api/carteira/certificados</code></td><td>Os certificados com quantas pessoas os têm na carteira.</td><td>[q]</td></tr>
+    <tr><td><code>/api/carteira/certificados/{documento}</code></td><td>Quem tem esse cliente na carteira, com o prazo de cada um.</td><td>—</td></tr>
+    <tr><td><code>/api/carteira/uso</code></td><td>Cada uso de certificado: quando, por quem e em qual máquina.</td><td>[desde] [ate] [user_id] [documento] [pagina=1] [por_pagina=50, de 10 a 100]</td></tr>
+    <tr><td><code>/api/carteira/uso/resumo</code></td><td>O uso somado por certificado, por dia e por pessoa, mais as assinaturas sem certificado identificado.</td><td>[desde] [ate] [user_id] [documento]</td></tr>
+    <tr><td><code>/api/carteira/uso/{uso_id}/janelas</code></td><td>O programa e a janela em uso em cada registro de uma linha de uso.</td><td>—</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="instalador">Instalador e SIEG</h3>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/cert-installer/diagnostico</code></td><td>O estado do módulo instalador e do cofre (contagens, sem senhas).</td><td>—</td></tr>
+    <tr><td><code>/api/cert-installer/entrada</code></td><td>Movimentos: pendências abertas e o que entrou no período.</td><td>[dias=30, até 365] [limite=500, até 1000]</td></tr>
+    <tr><td><code>/api/cert-installer/trilha</code></td><td>Cada tentativa de instalação.</td><td>[dias=30, até 365] [user_email] [apenas_falhas=false] [limite=500, até 1000]</td></tr>
+    <tr><td><code>/api/cert-installer/acompanhar/{token_id}</code></td><td>Em que pé está um pedido de instalação.</td><td>—</td></tr>
+    <tr><td><code>/api/cert-installer/expurgo-previa</code></td><td>Quantos registros da trilha o expurgo apagaria agora.</td><td>—</td></tr>
+    <tr><td><code>/api/sieg/inclusoes</code></td><td>Os certificados enviados ao SIEG, com a última tentativa.</td><td>[estado] [limite=500, até 2000]</td></tr>
+    <tr><td><code>/api/sieg/trilha</code></td><td>As tentativas de inclusão no SIEG.</td><td>[fingerprint] [limite=200, até 1000]</td></tr>
+    <tr><td><code>/api/sieg/configuracao</code></td><td>A configuração do SIEG (as credenciais aparecem só como “definida”).</td><td>—</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="usuarios">Usuários, acesso e computadores</h3>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/users</code></td><td>As contas do portal, sem senhas.</td><td>—</td></tr>
+    <tr><td><code>/api/users/{user_id}/carteira/contagem</code></td><td>Quantos clientes a pessoa tem na carteira.</td><td>—</td></tr>
+    <tr><td><code>/api/departamentos</code></td><td>Os departamentos, com gestores e pessoas ativas e inativas.</td><td>—</td></tr>
+    <tr><td><code>/api/permissoes</code></td><td>O que cada papel alcança, módulo a módulo.</td><td>—</td></tr>
+    <tr><td><code>/api/permissoes/trilha</code></td><td>O histórico de concessão e revogação de acesso.</td><td>[limite=30, até 200]</td></tr>
+    <tr><td><code>/api/computadores</code></td><td>Os computadores: pendentes, ativos e histórico.</td><td>—</td></tr>
+    <tr><td><code>/api/agent/dispositivos</code></td><td>As bandejas das estações, com o último contato.</td><td>—</td></tr>
+    <tr><td><code>/api/agent/maquinas</code></td><td>As máquinas com credencial própria do agente.</td><td>—</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="operacao">Configuração e operação</h3>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/settings</code></td><td>Pastas, alertas e envio de e-mail (senhas e segredos só como “definido”).</td><td>—</td></tr>
+    <tr><td><code>/api/agent/queue</code></td><td>Os comandos pendentes para o agente.</td><td>—</td></tr>
+    <tr><td><code>/api/remocao</code></td><td>O relatório de remoção nas estações.</td><td>[estado: <code>removeria</code>, <code>aviso</code>, <code>remover</code>, <code>removido</code>, <code>falhou</code>] [pagina=1]</td></tr>
+    <tr><td><code>/api/acessorias/departamentos</code></td><td>Os departamentos do Acessórias e o par de cada um no portal.</td><td>—</td></tr>
+    <tr><td><code>/api/acessorias/situacao</code></td><td>A situação da integração com o Acessórias.</td><td>—</td></tr>
+    <tr><td><code>/api/health/detalhado</code></td><td>O estado da configuração do servidor.</td><td>—</td></tr>
+    <tr><td><code>/api/api-chaves</code></td><td>As chaves de API, sem o texto da chave.</td><td>—</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="conta">Da conta dona da chave</h3>
+<p>Estas respondem sobre o administrador que criou a chave, não sobre o portal inteiro.</p>
+<div class="wiki-tabela"><table>
+  <thead><tr><th>Consulta</th><th>O que devolve</th><th>Parâmetros</th></tr></thead>
+  <tbody>
+    <tr><td><code>/api/permissoes/minhas</code></td><td>O que a conta alcança, módulo a módulo.</td><td>—</td></tr>
+    <tr><td><code>/api/users/me/export</code></td><td>Os dados pessoais da conta (LGPD).</td><td>—</td></tr>
+    <tr><td><code>/api/users/me/app-autenticador</code></td><td>Se o app autenticador está ativo.</td><td>—</td></tr>
+    <tr><td><code>/api/colaborador/certificados/painel</code></td><td>O painel do Acompanhamento.</td><td>—</td></tr>
+    <tr><td><code>/api/colaborador/certificados/opcoes</code></td><td>Os certificados que a conta pode acompanhar.</td><td>—</td></tr>
+    <tr><td><code>/api/colaborador/certificados/selecionados</code></td><td>Os certificados que a conta acompanha.</td><td>—</td></tr>
+    <tr><td><code>/api/colaborador/alertas/preferencia</code></td><td>A preferência de avisos e os marcos em uso.</td><td>—</td></tr>
+    <tr><td><code>/api/colaborador/alertas/enviados</code></td><td>Os avisos já enviados.</td><td>[dias=30, até 365]</td></tr>
+    <tr><td><code>/api/colaborador/notificacoes</code></td><td>As notificações do sino.</td><td>[tipo: <code>novo</code>, <code>expiring</code>, <code>expired</code>]</td></tr>
+    <tr><td><code>/api/cert-installer/minha-estacao</code></td><td>Se há bandeja ativa da conta agora, e em qual máquina.</td><td>—</td></tr>
+    <tr><td><code>/api/cert-installer/instalabilidade</code></td><td>O que a conta pode instalar numa estação.</td><td>machine_id [estacao]</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="publica">Sem chave</h3>
+<p><code>/api/health</code> responde a qualquer um, só para saber se o portal está no ar.</p>
+
+<h2 id="bloqueadas">O que fica de fora</h2>
+<ul>
+  <li><strong>Gravar qualquer coisa</strong>: <code>POST</code>, <code>PUT</code>, <code>PATCH</code> e <code>DELETE</code> respondem <code>403</code>.</li>
+  <li><strong>Cofre e agente</strong>: <code>/api/agent/next</code> e <code>/api/cert-installer/vault-optin</code> respondem <code>403</code>. Arquivos <code>.pfx</code> e senhas de certificado nunca saem pela chave.</li>
+  <li><strong>Rotas das estações e do agendador</strong> (<code>/api/estacao/…</code>, <code>/api/agent/microsoft</code>, <code>/api/cron/alerts</code>): usam credenciais próprias e não aceitam a chave.</li>
+</ul>

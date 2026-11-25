@@ -70,6 +70,8 @@ MODULOS: tuple[ModuloWiki, ...] = (
                "Contas, departamentos, níveis de acesso e computadores.", "usuarios"),
     ModuloWiki("configuracao", "Configuração",
                "Pastas, alertas, comandos e integrações do portal.", "configuracao"),
+    ModuloWiki("api", "API de leitura",
+               "Chave de API, como consultar e todas as consultas permitidas.", "configuracao"),
     ModuloWiki("bandeja", "Bandeja CertGuard Análise",
                "O programa das estações que instala os certificados pedidos no portal.", None),
 )

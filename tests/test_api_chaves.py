@@ -94,3 +94,27 @@ def test_aba_chaves_de_api_na_configuracao() -> None:
     js = (raiz / "static" / "configuracao-api.js").read_text(encoding="utf-8")
     # A tabela mostra dados do banco: só textContent, nunca HTML em texto.
     assert "innerHTML" not in js and "window.carregarApiChaves" in js
+
+
+def test_wiki_lista_toda_consulta_que_a_chave_alcanca() -> None:
+    """Rota GET nova que a chave alcança e a wiki não cita é consulta escondida."""
+    from fastapi.routing import APIRoute
+
+    from app.main import app
+
+    def deps(d, acc):
+        for s in d.dependencies:
+            if s.call:
+                acc.add(getattr(s.call, "__name__", ""))
+            deps(s, acc)
+        return acc
+
+    wiki = (Path(__file__).resolve().parent.parent / "templates" / "wiki" / "api.html").read_text(encoding="utf-8")
+    faltam = []
+    for r in app.routes:
+        if not isinstance(r, APIRoute) or "GET" not in r.methods or not r.path.startswith("/api/"):
+            continue
+        ds = deps(r.dependant, set())
+        if "require_auth" in ds and "require_agent_or_admin" not in ds and f"<code>{r.path}</code>" not in wiki:
+            faltam.append(r.path)
+    assert not faltam, faltam

@@ -99,3 +99,11 @@
   .wiki-vizinhos { grid-template-columns: 1fr; }
   .wiki-vizinho--proximo { grid-column: 1; }
 }
+
+/* Blocos de código (API de leitura, 24/11/2026). */
+.wiki-artigo pre {
+  margin: var(--space-3) 0 var(--space-5); padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface-alt); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  overflow-x: auto; font-size: var(--text-sm); line-height: 1.5;
+}
+.wiki-artigo td code { white-space: nowrap; }
