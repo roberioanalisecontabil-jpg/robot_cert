@@ -3,48 +3,82 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% if atual %}{{ atual.titulo }} — {% endif %}Wiki — CertGuard Análise</title>
+  <title>{% if atual %}{{ atual.titulo }} — {{ tema.titulo }} — {% endif %}Wiki — CertGuard Análise</title>
   <link rel="icon" href="/favicon.ico?v=certguard-c-v1" type="image/x-icon" />
   <link rel="stylesheet" href="/static/aguia-fontes.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/style.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-tokens.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-components.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
-  <link rel="stylesheet" href="/static/wiki.css?v=wiki-leitura-2026-11-25" />
+  <link rel="stylesheet" href="/static/wiki.css?v=wiki-busca-2026-11-25" />
 </head>
 <body class="cg-aguia">
   <a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a>
   {% include "_sidebar.html" %}
 
+  {# Pesquisa: um GET simples, que funciona sem JS. A busca roda no servidor
+     (app/rotas/wiki.py, buscar) só nas páginas que a pessoa vê. #}
+  {% macro busca(id_campo) -%}
+    <form class="wiki-busca" role="search" action="/wiki-certguard" method="get">
+      <label class="wiki-busca__rotulo" for="{{ id_campo }}">Pesquisar na wiki</label>
+      <div class="wiki-busca__linha">
+        <input class="ag-input wiki-busca__campo" type="search" id="{{ id_campo }}" name="q" value="{{ q }}"
+               maxlength="200" autocomplete="off" placeholder="Escreva uma pergunta, ex.: como instalo um certificado?">
+        <button class="ag-btn ag-btn--primary" type="submit">Pesquisar</button>
+      </div>
+    </form>
+  {%- endmacro %}
+
   <main class="main-content cg-painel wiki" id="main-content">
     {% if atual %}
     <div class="wiki-layout">
       <div class="wiki-coluna">
+      {{ busca("wiki-q-topo") }}
       <nav class="wiki-trilha" aria-label="Você está em">
         <a href="/wiki-certguard">Wiki</a>
+        <span aria-hidden="true">›</span>
+        <a href="/wiki-certguard#tema-{{ tema.chave }}">{{ tema.titulo }}</a>
         <span aria-hidden="true">›</span>
         <span aria-current="page">{{ atual.titulo }}</span>
       </nav>
       <header class="ag-page__head">
-        <p class="ag-page__eyebrow">Wiki do CertGuard</p>
+        <p class="ag-page__eyebrow">{{ tema.titulo }}</p>
         <h1 class="ag-page__title">{{ atual.titulo }}</h1>
         <p class="ag-page__lead">{{ atual.resumo }}</p>
       </header>
 
-      <article class="wiki-artigo">
+      {# data-ancoras: âncora -> página do mesmo tema, para o link antigo
+         ?modulo=X#ancora chegar à página que tem a âncora (wiki.js). #}
+      <article class="wiki-artigo" data-ancoras='{{ ancoras|tojson }}'>
         {% include "wiki/" ~ atual.chave ~ ".html" %}
       </article>
 
-      <nav class="wiki-vizinhos" aria-label="Outros tutoriais">
+      {% if relacionadas %}
+      <section class="wiki-veja" aria-labelledby="wiki-veja-titulo">
+        <h2 class="wiki-veja__titulo" id="wiki-veja-titulo">Veja também</h2>
+        <ul class="wiki-veja__lista" role="list">
+          {% for p in relacionadas %}
+            <li>
+              <a class="wiki-veja__item" href="/wiki-certguard?pagina={{ p.chave }}">
+                <span class="wiki-veja__tema">{{ temas_por_chave[p.tema].titulo }}</span>
+                <span class="wiki-veja__pagina">{{ p.titulo }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      <nav class="wiki-vizinhos" aria-label="Outras páginas">
         {% if anterior %}
-          <a class="wiki-vizinho" href="/wiki-certguard?modulo={{ anterior.chave }}">
-            <span class="wiki-vizinho__rotulo">Anterior</span>
+          <a class="wiki-vizinho" href="/wiki-certguard?pagina={{ anterior.chave }}">
+            <span class="wiki-vizinho__rotulo">Anterior{% if anterior.tema != atual.tema %} · {{ temas_por_chave[anterior.tema].titulo }}{% endif %}</span>
             <span class="wiki-vizinho__titulo">{{ anterior.titulo }}</span>
           </a>
         {% else %}<span></span>{% endif %}
         {% if proximo %}
-          <a class="wiki-vizinho wiki-vizinho--proximo" href="/wiki-certguard?modulo={{ proximo.chave }}">
-            <span class="wiki-vizinho__rotulo">Próximo</span>
+          <a class="wiki-vizinho wiki-vizinho--proximo" href="/wiki-certguard?pagina={{ proximo.chave }}">
+            <span class="wiki-vizinho__rotulo">{% if proximo.tema != atual.tema %}Próximo tema · {{ temas_por_chave[proximo.tema].titulo }}{% else %}Próximo{% endif %}</span>
             <span class="wiki-vizinho__titulo">{{ proximo.titulo }}</span>
           </a>
         {% endif %}
@@ -66,25 +100,60 @@
       <header class="ag-page__head">
         <p class="ag-page__eyebrow">Wiki do CertGuard</p>
         <h1 class="ag-page__title">Como usar o portal</h1>
-        <p class="ag-page__lead">Um tutorial para cada parte do portal, com as telas de exemplo. Aparecem aqui só as partes que você usa.</p>
+        <p class="ag-page__lead">Um tutorial para cada tarefa do portal, com as telas de exemplo. Aparecem aqui só as partes que você usa.</p>
       </header>
+
+      {% if sem_permissoes %}
+        <div class="ag-alert ag-alert--warning" role="alert"><div class="ag-alert__corpo">Não deu para conferir suas permissões agora; tente de novo em instantes. Por enquanto aparecem só as partes que valem para todos.</div></div>
+      {% endif %}
+
+      {{ busca("wiki-q") }}
+
+      {% if q %}
+      <section class="wiki-resultados" aria-labelledby="wiki-resultados-titulo">
+        <h2 class="wiki-resultados__titulo" id="wiki-resultados-titulo">
+          {% if resultados %}{{ resultados|length }} {{ "resultado" if resultados|length == 1 else "resultados" }} para “{{ q }}”{% else %}Nada encontrado para “{{ q }}”{% endif %}
+        </h2>
+        {% if resultados %}
+        <ol class="wiki-resultados__lista" role="list">
+          {% for r in resultados %}
+            <li class="wiki-resultado">
+              <a class="wiki-resultado__link" href="{{ r.url }}">{{ r.pagina.titulo }}{% if r.secao %} <span aria-hidden="true">›</span> {{ r.secao }}{% endif %}</a>
+              <span class="wiki-resultado__tema">{{ r.tema.titulo }}</span>
+              {% if r.trecho %}<p class="wiki-resultado__trecho">{{ r.trecho }}</p>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="wiki-resultados__vazio">Tente outras palavras, mais curtas (por exemplo "instalar", "senha", "SIEG"), ou procure no índice abaixo.</p>
+        {% endif %}
+      </section>
+      {% endif %}
 
       {# Os prints usam dados de demonstração: empresas, pessoas e documentos
          inventados. Dizer isso evita alguém procurar "Padaria Pão Dourado" na
          lista de verdade. #}
-      {% if sem_permissoes %}
-        <div class="ag-alert ag-alert--warning" role="alert"><div class="ag-alert__corpo">Não deu para conferir suas permissões agora; tente de novo em instantes. Por enquanto aparecem só as partes que valem para todos.</div></div>
-      {% endif %}
       <p class="wiki-aviso">As telas dos tutoriais usam dados de demonstração: os nomes, CNPJs e CPFs que aparecem nelas são inventados.</p>
 
+      <nav class="wiki-temas-nav" aria-label="Temas">
+        <ul role="list">
+          {% for m, pags in temas %}<li><a href="#tema-{{ m.chave }}">{{ m.titulo }}</a></li>{% endfor %}
+        </ul>
+      </nav>
+
       <ol class="wiki-indice" role="list">
-        {% for m in modulos %}
-          <li>
-            <a class="ag-card wiki-cartao" href="/wiki-certguard?modulo={{ m.chave }}">
+        {% for m, pags in temas %}
+          <li class="ag-card wiki-tema" id="tema-{{ m.chave }}">
+            <h2 class="wiki-tema__titulo">
               <span class="wiki-cartao__numero" aria-hidden="true">{{ "%02d" % loop.index }}</span>
-              <span class="wiki-cartao__titulo">{{ m.titulo }}</span>
-              <span class="wiki-cartao__resumo">{{ m.resumo }}</span>
-            </a>
+              {{ m.titulo }}
+            </h2>
+            <p class="wiki-cartao__resumo">{{ m.resumo }}</p>
+            <ul class="wiki-tema__paginas" role="list">
+              {% for p in pags %}
+                <li><a href="/wiki-certguard?pagina={{ p.chave }}" title="{{ p.resumo }}">{{ p.titulo }}</a></li>
+              {% endfor %}
+            </ul>
           </li>
         {% endfor %}
       </ol>
@@ -92,6 +161,6 @@
   </main>
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=autenticador-2026-11-24"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/wiki.js?v=wiki-leitura-2026-11-25"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/wiki.js?v=wiki-busca-2026-11-25"></script>
 </body>
 </html>

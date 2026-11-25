@@ -1,0 +1,23 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="sieg">Aba SIEG</h2>
+<p>Liga o portal à conta do SIEG. Quando alguém liga o SIEG nos detalhes de um certificado, no Início, o portal envia o certificado ao SIEG. As tentativas ficam no <a href="/wiki-certguard?pagina=sieg-no-instalador">Instalador</a>, aba <strong>SIEG</strong>.</p>
+
+<h3 id="credenciais-sieg">Configurar as credenciais</h3>
+<ol>
+  <li>No SIEG, abra Minha conta e depois Integração API SIEG.</li>
+  <li>Copie <strong>Client ID</strong>, <strong>Secret Key</strong> e <strong>API Key</strong> para os campos de mesmo nome. A API Key é diferente da Secret Key. Os campos secretos aparecem vazios; a etiqueta <strong>Guardada</strong> indica que já existe valor, e <strong>Não informada</strong>, que ainda não.</li>
+  <li>Em <strong>Cadastro no SIEG</strong>, ajuste <strong>UF (código IBGE)</strong> (27 é Alagoas), <strong>Dias retroativos</strong> e <strong>Consulta de NFS-e</strong>, e marque as <strong>Consultas</strong> desejadas. Isso vale para todo certificado enviado.
+    {{ print("configuracao-sieg", "Aba SIEG com as credenciais, os campos secretos vazios com suas etiquetas e a grade de Consultas", "As credenciais e o cadastro no SIEG.") }}
+  </li>
+  <li>Clique em <strong>Salvar</strong>.</li>
+  <li>Clique em <strong>Testar conexão</strong> para conferir.</li>
+</ol>
+
+<h3 id="sincronizar-sieg">Acertar o que já está no SIEG</h3>
+<ol>
+  <li>Clique em <strong>Sincronizar com o SIEG</strong>. Os certificados que já estão na conta do SIEG ficam marcados como <strong>No SIEG</strong>. Nada é enviado.</li>
+</ol>
+
+{% call cuidado("Segredo não vai para print, e-mail ou chamado") %}<p>Nunca deixe uma senha ou um segredo à vista num print, num e-mail ou num chamado. Os campos de senha voltam vazios de propósito: deixe vazio para manter o valor atual.</p>{% endcall %}

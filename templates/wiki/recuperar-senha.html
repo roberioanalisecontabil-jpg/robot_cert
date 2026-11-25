@@ -1,0 +1,36 @@
+{% from "wiki/_macros.html" import print, video, papeis, cuidado, dica with context %}
+{{ papeis(["Todos"]) }}
+
+<h2 id="esqueci-a-senha">Esqueci minha senha</h2>
+<ol>
+  <li>Na tela de login, clique em <strong>Esqueci minha senha</strong>. O título muda para "Recuperação de senha".
+    {{ print("login-esqueci", "Tela Recuperação de senha com o campo E-mail e o botão Enviar código") }}
+  </li>
+  <li>Confira o <strong>E-mail</strong> e clique em <strong>Enviar código</strong>.</li>
+  <li>Digite o <strong>Código de 6 dígitos</strong> recebido e clique em <strong>Continuar</strong>. O código vale 15 minutos e aceita 3 tentativas.
+    {{ print("login-esqueci-codigo", "Tela Recuperação de senha pedindo o código de 6 dígitos, com o botão Continuar") }}
+  </li>
+  <li>Escolha a <strong>Nova senha</strong>, com no mínimo 12 caracteres, e clique em <strong>Salvar e entrar</strong>.
+    {{ print("login-nova-senha", "Tela Recuperação de senha com o campo Nova senha e o botão Salvar e entrar") }}
+  </li>
+  <li>A tela de login volta com "Senha alterada. Entre com a nova senha.".</li>
+  <li>Para desistir no meio, clique em <strong>Voltar para o login</strong>.</li>
+</ol>
+
+{% call dica("O código não chegou?") %}
+<p>A tela sempre diz que enviou o código, mesmo para um e-mail sem cadastro. Se nada chegar, confira o e-mail digitado e a caixa de spam.</p>
+{% endcall %}
+
+<h2 id="senha-provisoria">Primeiro acesso com senha provisória</h2>
+<p>Quando o administrador cria a sua senha, ela é provisória. Depois de entrar, abre a janela <strong>Defina sua senha</strong>, e o portal só funciona depois da troca.</p>
+<ol>
+  <li>Preencha <strong>Senha atual</strong> (a provisória), <strong>Nova senha</strong> (mínimo de 12 caracteres) e <strong>Repita a nova senha</strong>.
+    {{ print("senha-provisoria", "Janela Defina sua senha com os campos Senha atual, Nova senha e Repita a nova senha") }}
+  </li>
+  <li>Clique em <strong>Definir senha</strong>.</li>
+  <li>O portal volta para a tela de login. Entre com a nova senha.</li>
+</ol>
+
+{% call cuidado("Trocar a senha encerra a bandeja") %}
+<p>Trocar ou redefinir a senha encerra a sua sessão na bandeja <strong>CertGuard Análise</strong>. Entre de novo nela depois. Veja <a href="/wiki-certguard?pagina=bandeja-entrar">Bandeja CertGuard Análise</a>.</p>
+{% endcall %}

@@ -1,0 +1,31 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="configuracao">Aba Configuração</h2>
+<p>Dois ajustes. Campo em branco usa o padrão do sistema; o valor que vale aparece embaixo de cada campo, depois de <strong>Em vigor</strong>.</p>
+{{ print("instalador-configuracao", "Aba Configuração do Instalador com os campos Validade do token e Retenção da trilha e o valor em vigor de cada um", "Os dois ajustes do Instalador.") }}
+
+<h3 id="validade-pedido">Mudar a validade do pedido de instalação</h3>
+<ol>
+  <li>Clique na aba <strong>Configuração</strong>.</li>
+  <li>Em <strong>Validade do token</strong>, informe por quantos minutos um pedido de instalação continua valendo para a estação: de 1 a 1440. O padrão é 5.</li>
+  <li>Clique em <strong>Salvar configuração</strong>. Aparece a mensagem <strong>Configuração salva.</strong></li>
+</ol>
+
+<h3 id="retencao">Retenção da trilha</h3>
+<ol>
+  <li>Em <strong>Retenção da trilha</strong>, informe por quantos dias a trilha guarda o e-mail e o endereço da rede de quem instalou. Vazio quer dizer sem limite, que é a decisão em vigor desde 03/10/2026.</li>
+  <li>Clique em <strong>Salvar configuração</strong>.</li>
+</ol>
+
+<h3 id="expurgo">Expurgar a trilha</h3>
+<ol>
+  <li>Para uma limpeza pontual, clique em <strong>Expurgar log agora</strong>, embaixo do campo <strong>Retenção da trilha</strong>.</li>
+  <li>Abre a janela <strong>Expurgar a trilha</strong>, que conta quantos registros seriam apagados e até que data.
+    {{ print("instalador-expurgo-previa", "Janela Expurgar a trilha com a contagem de registros que seriam apagados, antes de confirmar", "A contagem antes de expurgar.") }}
+  </li>
+  <li>Se não houver retenção definida, a janela diz <strong>Nada a expurgar</strong> e o botão fica desligado.</li>
+  <li>Para apagar, clique no botão <strong>Expurgar</strong>, que mostra o número de registros. Para desistir, clique em <strong>Cancelar</strong>.</li>
+</ol>
+
+{% call cuidado("Expurgar a trilha é irreversível") %}<p>A trilha é a prova de quem instalou o quê, e a regra atual é não ter limite. Só expurgue com motivo.</p>{% endcall %}

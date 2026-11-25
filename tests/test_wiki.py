@@ -4,7 +4,10 @@ O que a página promete, e por isso o que se testa:
 - sem sessão, nada do conteúdo sai: vai para o login e volta depois;
 - cada papel vê os tutoriais dos módulos que alcança, pela matriz de
   permissões, e a URL de um módulo fora do alcance cai no índice;
-- todo módulo listado tem o seu arquivo de conteúdo.
+- todo módulo listado tem o seu arquivo de conteúdo;
+- (25/11/2026) os módulos viraram temas com páginas por tarefa: os links
+  antigos `?modulo=` redirecionam, a busca respeita a permissão e o "Veja
+  também" só mostra o que a pessoa vê.
 """
 import re
 from pathlib import Path
@@ -53,32 +56,43 @@ def test_sem_sessao_nao_entrega_conteudo(client_wiki: TestClient) -> None:
     assert "wiki-indice" not in r.text
 
 
+def _temas_no_indice(html: str) -> set[str]:
+    return {m.chave for m in wiki.MODULOS if f'id="tema-{m.chave}"' in html}
+
+
 def test_admin_ve_todos_os_modulos(client_wiki: TestClient) -> None:
     r = client_wiki.get("/wiki-certguard", headers=_cabecalho("admin"))
     assert r.status_code == 200
-    for m in wiki.MODULOS:
-        assert f"?modulo={m.chave}" in r.text, m.chave
+    assert _temas_no_indice(r.text) == {m.chave for m in wiki.MODULOS}
+    for p in wiki.PAGINAS:
+        assert f'?pagina={p.chave}"' in r.text, p.chave
 
 
 def test_colaborador_ve_so_o_que_alcanca(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     _matriz_user(monkeypatch, inicio=permissoes.NIVEL_LER, acompanhamento=permissoes.NIVEL_EDITAR)
     r = client_wiki.get("/wiki-certguard", headers=_cabecalho("user"))
     assert r.status_code == 200
-    visiveis = {m.chave for m in wiki.MODULOS if f"?modulo={m.chave}\"" in r.text}
-    assert visiveis == {"primeiros-passos", "inicio", "acompanhamento", "bandeja"}
+    assert _temas_no_indice(r.text) == {"primeiros-passos", "inicio", "acompanhamento", "bandeja"}
+    assert "?pagina=cadastrar-pessoas" not in r.text
 
 
 def test_modulo_fora_do_alcance_cai_no_indice(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     _matriz_user(monkeypatch, inicio=permissoes.NIVEL_LER)
-    r = client_wiki.get("/wiki-certguard?modulo=usuarios", headers=_cabecalho("user"), follow_redirects=False)
+    r = client_wiki.get("/wiki-certguard?pagina=cadastrar-pessoas", headers=_cabecalho("user"), follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/wiki-certguard"
+    # Pelo link antigo também: a primeira página do tema, e dela o índice.
+    r = client_wiki.get("/wiki-certguard?modulo=usuarios", headers=_cabecalho("user"), follow_redirects=False)
+    assert r.headers["location"] == "/wiki-certguard?pagina=cadastrar-pessoas"
+    r = client_wiki.get(r.headers["location"], headers=_cabecalho("user"), follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/wiki-certguard"
 
 
 def test_modulo_inexistente_cai_no_indice(client_wiki: TestClient) -> None:
-    r = client_wiki.get("/wiki-certguard?modulo=nao-existe", headers=_cabecalho("admin"), follow_redirects=False)
-    assert r.status_code == 303
-    assert r.headers["location"] == "/wiki-certguard"
+    for url in ("/wiki-certguard?modulo=nao-existe", "/wiki-certguard?pagina=nao-existe"):
+        r = client_wiki.get(url, headers=_cabecalho("admin"), follow_redirects=False)
+        assert r.status_code == 303
+        assert r.headers["location"] == "/wiki-certguard"
 
 
 def test_sem_matriz_mostra_so_o_que_vale_para_todos(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,16 +101,22 @@ def test_sem_matriz_mostra_so_o_que_vale_para_todos(client_wiki: TestClient, mon
 
     monkeypatch.setattr(permissoes, "matriz_para_papel", indisponivel)
     r = client_wiki.get("/wiki-certguard", headers=_cabecalho("user"))
-    visiveis = {m.chave for m in wiki.MODULOS if f"?modulo={m.chave}\"" in r.text}
-    assert visiveis == {m.chave for m in wiki.MODULOS if m.permissao is None}
+    assert _temas_no_indice(r.text) == {m.chave for m in wiki.MODULOS if m.permissao is None}
 
 
-@pytest.mark.parametrize("modulo", [m.chave for m in wiki.MODULOS])
-def test_cada_modulo_abre(client_wiki: TestClient, modulo: str) -> None:
-    assert (TEMPLATES / "wiki" / f"{modulo}.html").is_file()
-    r = client_wiki.get(f"/wiki-certguard?modulo={modulo}", headers=_cabecalho("admin"))
+@pytest.mark.parametrize("pagina", [p.chave for p in wiki.PAGINAS])
+def test_cada_pagina_abre(client_wiki: TestClient, pagina: str) -> None:
+    assert (TEMPLATES / "wiki" / f"{pagina}.html").is_file()
+    r = client_wiki.get(f"/wiki-certguard?pagina={pagina}", headers=_cabecalho("admin"))
     assert r.status_code == 200
     assert 'aria-current="page"' in r.text
+    assert 'class="wiki-busca"' in r.text  # a pesquisa também no tutorial
+
+
+def test_todo_tema_tem_pagina_e_todo_tutorial_tem_dono() -> None:
+    assert {p.tema for p in wiki.PAGINAS} == {m.chave for m in wiki.MODULOS}
+    arquivos = {f.stem for f in (TEMPLATES / "wiki").glob("*.html")} - {"_macros"}
+    assert arquivos == {p.chave for p in wiki.PAGINAS}
 
 
 VIDEO = re.compile(r'video\("([\w-]+)"')
@@ -114,7 +134,7 @@ def test_cada_video_embutido_tem_arquivo_e_capa() -> None:
 
 
 def test_pagina_com_video_mostra_o_player(client_wiki: TestClient) -> None:
-    r = client_wiki.get("/wiki-certguard?modulo=bandeja", headers=_cabecalho("admin"))
+    r = client_wiki.get("/wiki-certguard?pagina=bandeja-instalar", headers=_cabecalho("admin"))
     assert r.status_code == 200
     assert '<video controls preload="none"' in r.text
     assert 'src="/static/wiki/video-bandeja.mp4"' in r.text
@@ -149,7 +169,7 @@ def test_p9_2_sem_matriz_o_modulo_pedido_mostra_aviso_e_nao_redireciona(
         raise permissoes.PermissoesIndisponiveis("sem banco")
 
     monkeypatch.setattr(permissoes, "matriz_para_papel", indisponivel)
-    r = client_wiki.get("/wiki-certguard?modulo=inicio", headers=_cabecalho("user"), follow_redirects=False)
+    r = client_wiki.get("/wiki-certguard?pagina=achar-certificado", headers=_cabecalho("user"), follow_redirects=False)
     assert r.status_code == 200
     assert "Não deu para conferir suas permissões agora" in r.text
 
@@ -177,3 +197,140 @@ def test_print_de_modulo_alcancado_ou_de_todos_abre(client_wiki: TestClient, mon
     # Bandeja vale para todos; o manifesto não é de módulo nenhum.
     assert client_wiki.get("/static/wiki/video-bandeja.jpg", headers=cab).status_code == 200
     assert client_wiki.get("/static/wiki/prints.json", headers=cab).status_code == 200
+
+
+# Páginas por tarefa, links antigos, busca e "Veja também" (25/11/2026)
+
+@pytest.mark.parametrize("modulo", [m.chave for m in wiki.MODULOS])
+def test_link_antigo_do_modulo_vai_para_a_primeira_pagina_do_tema(client_wiki: TestClient, modulo: str) -> None:
+    r = client_wiki.get(f"/wiki-certguard?modulo={modulo}", headers=_cabecalho("admin"), follow_redirects=False)
+    assert r.status_code == 303
+    primeira = next(p for p in wiki.PAGINAS if p.tema == modulo)
+    assert r.headers["location"] == f"/wiki-certguard?pagina={primeira.chave}"
+
+
+# Âncoras que os links antigos usavam (?modulo=X#ancora) e as que os
+# tutoriais citavam entre si: o wiki.js leva da primeira página do tema à
+# página que tem a âncora, pelo mapa que a rota põe no artigo.
+@pytest.mark.parametrize("tema,ancora,pagina", [
+    ("inicio", "instalar", "instalar-certificado"),
+    ("inicio", "sieg", "incluir-no-sieg"),
+    ("primeiros-passos", "cadastrar-app", "app-autenticador"),
+    ("primeiros-passos", "codigo-nao-chegou", "entrar-no-portal"),
+    ("api", "bloqueadas", "api-consultas"),
+    ("configuracao", "forcar-leitura", "pastas-e-agente"),
+    ("usuarios", "departamentos", "departamentos"),
+])
+def test_ancora_antiga_aponta_a_pagina_nova(client_wiki: TestClient, tema: str, ancora: str, pagina: str) -> None:
+    assert f'id="{ancora}"' in (TEMPLATES / "wiki" / f"{pagina}.html").read_text(encoding="utf-8")
+    cab = _cabecalho("admin")
+    r = client_wiki.get(f"/wiki-certguard?modulo={tema}", headers=cab, follow_redirects=False)
+    r = client_wiki.get(r.headers["location"], headers=cab)
+    assert r.status_code == 200
+    assert f'"{ancora}": "{pagina}"' in r.text
+
+
+def test_toda_ancora_de_um_tema_tem_uma_pagina_so() -> None:
+    """Dentro de um tema as âncoras não se repetem (vieram de um arquivo só);
+    se duas páginas do mesmo tema tivessem a mesma, o link antigo ficaria ambíguo."""
+    for tema in {p.tema for p in wiki.PAGINAS}:
+        ids = [i for p in wiki.PAGINAS if p.tema == tema
+               for i in re.findall(r'<h[23] id="([^"]+)"', (TEMPLATES / "wiki" / f"{p.chave}.html").read_text(encoding="utf-8"))]
+        assert len(ids) == len(set(ids)), tema
+
+
+def test_links_internos_da_wiki_resolvem() -> None:
+    """Todo link entre tutoriais aponta uma página que existe e, com âncora,
+    uma âncora que está nela. Nenhum tutorial usa mais o ?modulo= antigo."""
+    for f in (TEMPLATES / "wiki").glob("*.html"):
+        texto = f.read_text(encoding="utf-8")
+        assert "?modulo=" not in texto, f.name
+        for pagina, ancora in re.findall(r'/wiki-certguard\?pagina=([\w-]+)(?:#([\w-]+))?', texto):
+            alvo = TEMPLATES / "wiki" / f"{pagina}.html"
+            assert alvo.is_file(), (f.name, pagina)
+            if ancora:
+                assert f'id="{ancora}"' in alvo.read_text(encoding="utf-8"), (f.name, pagina, ancora)
+        for ancora in re.findall(r'href="#([\w-]+)"', texto):
+            assert f'id="{ancora}"' in texto, (f.name, ancora)
+
+
+def _paginas_da_busca(pergunta: str, paginas=None) -> list[str]:
+    return [r["pagina"].chave for r in wiki.buscar(pergunta, list(paginas or wiki.PAGINAS))]
+
+
+def test_busca_responde_as_perguntas_de_exemplo() -> None:
+    assert _paginas_da_busca("como instalo um certificado?")[0] == "instalar-certificado"
+    r = wiki.buscar("não chega o código no e-mail", list(wiki.PAGINAS))[0]
+    assert r["pagina"].chave == "entrar-no-portal"
+    assert r["url"] == "/wiki-certguard?pagina=entrar-no-portal#codigo-nao-chegou"
+    assert r["secao"] == "O código não chegou ou expirou" and r["trecho"]
+
+
+def test_busca_ignora_acento_e_maiusculas() -> None:
+    assert _paginas_da_busca("CÓDIGO NÃO CHEGOU") == _paginas_da_busca("codigo nao chegou")
+    assert _paginas_da_busca("instalação")[:3] == _paginas_da_busca("INSTALACAO")[:3]
+    assert "custodia" in _paginas_da_busca("custodia")
+
+
+def test_busca_ignora_palavras_vazias() -> None:
+    assert wiki.buscar("como o de para que", list(wiki.PAGINAS)) == []
+
+
+def test_busca_usa_sinonimos() -> None:
+    """Os tutoriais não dizem "A1"; pelo sinônimo, a busca acha certificado
+    (e "baixar" acha instalar)."""
+    assert not any("a1" in s.pal_texto for s in wiki.SECOES)
+    assert _paginas_da_busca("baixar o a1 no computador")[0] == "instalar-certificado"
+    assert _paginas_da_busca("instalar pfx")[0] == "instalar-certificado"
+
+
+def test_busca_pontua_titulo_acima_do_texto() -> None:
+    r = wiki.buscar("departamento", list(wiki.PAGINAS))
+    assert r[0]["pagina"].chave == "departamentos"
+
+
+def test_busca_so_acha_o_que_a_pessoa_ve(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _matriz_user(monkeypatch, inicio=permissoes.NIVEL_LER)
+    r = client_wiki.get("/wiki-certguard?q=departamento+gestor", headers=_cabecalho("user"))
+    assert r.status_code == 200
+    assert "?pagina=departamentos" not in r.text and "?pagina=cadastrar-pessoas" not in r.text
+    # O admin acha a mesma coisa.
+    r = client_wiki.get("/wiki-certguard?q=departamento+gestor", headers=_cabecalho("admin"))
+    assert "/wiki-certguard?pagina=departamentos#" in r.text
+
+
+def test_busca_pela_pagina_mostra_titulo_secao_e_trecho(client_wiki: TestClient) -> None:
+    r = client_wiki.get("/wiki-certguard?q=n%C3%A3o+chega+o+c%C3%B3digo+no+e-mail", headers=_cabecalho("admin"))
+    assert r.status_code == 200
+    assert 'href="/wiki-certguard?pagina=entrar-no-portal#codigo-nao-chegou"' in r.text
+    assert "Entrar e sair do portal" in r.text and "O código não chegou ou expirou" in r.text
+    assert 'class="wiki-resultado__trecho"' in r.text
+    r = client_wiki.get("/wiki-certguard?q=zzzqqq", headers=_cabecalho("admin"))
+    assert "Nada encontrado" in r.text
+
+
+def test_busca_escapa_a_pergunta(client_wiki: TestClient) -> None:
+    r = client_wiki.get("/wiki-certguard?q=%3Cscript%3Ealert(1)%3C/script%3E", headers=_cabecalho("admin"))
+    assert "<script>alert(1)" not in r.text
+
+
+def test_veja_tambem_mesmo_tema_primeiro_e_so_o_visivel() -> None:
+    atual = next(p for p in wiki.PAGINAS if p.chave == "instalar-certificado")
+    rel = wiki.relacionadas(atual, list(wiki.PAGINAS))
+    assert len(rel) == 3 and all(p.tema == "inicio" for p in rel) and atual not in rel
+    # Página de tema com uma página só: completa por termos em comum, só do que vê.
+    historico = next(p for p in wiki.PAGINAS if p.chave == "historico")
+    visiveis = [p for p in wiki.PAGINAS if p.tema in {"historico", "vencidos", "primeiros-passos"}]
+    rel = wiki.relacionadas(historico, visiveis)
+    assert rel and all(p in visiveis for p in rel) and historico not in rel
+
+
+def test_pagina_mostra_veja_tambem_e_o_proximo_tema(client_wiki: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _matriz_user(monkeypatch, inicio=permissoes.NIVEL_LER)
+    r = client_wiki.get("/wiki-certguard?pagina=exportar-e-avisos", headers=_cabecalho("user"))
+    assert r.status_code == 200
+    assert "Veja também" in r.text
+    # Última página do Início para quem não vê Dashboard..Carteiras: o próximo é a Bandeja.
+    assert "Próximo tema · Bandeja CertGuard Análise" in r.text
+    assert "?pagina=bandeja-entrar" in r.text
+    assert "?pagina=ler-dashboard" not in r.text and "?pagina=departamentos" not in r.text

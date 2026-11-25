@@ -1,0 +1,23 @@
+{% from "wiki/_macros.html" import print, papeis, cuidado, dica with context %}
+{{ papeis(["Administrador"]) }}
+
+<h2 id="desativar">Alguém saiu da equipe</h2>
+<ol>
+  <li>Nos três pontos da linha, clique em <strong>Desativar</strong>.</li>
+  <li>Leia a confirmação. Ela diz quantos clientes da carteira da pessoa serão apagados e, se ela era gestora, que deixa de ser gestora.
+    {{ print("usuarios-desativar", "Janela Desativar usuário com o aviso sobre a carteira da pessoa, antes de confirmar", "A confirmação antes de desativar.") }}
+  </li>
+  <li>Confirme em <strong>Desativar</strong>, ou em <strong>Desativar e remover</strong> seguido do número de clientes, quando a pessoa tem carteira.</li>
+  <li>A pessoa perde o acesso na hora, inclusive a bandeja do computador.</li>
+</ol>
+
+{% call cuidado("Desativar apaga a carteira") %}<p>Não existe apagar usuário: desativar guarda o registro de quem instalou o quê. Mas desativar apaga a carteira da pessoa, e reativar devolve a conta com a carteira vazia.</p>{% endcall %}
+
+<h2 id="reativar">Alguém voltou</h2>
+<ol>
+  <li>Em <strong>Status</strong>, escolha <strong>Inativo</strong> ou <strong>Todos</strong>.</li>
+  <li>Nos três pontos da linha, clique em <strong>Reativar</strong> e confirme.</li>
+  <li>A conta volta com o mesmo nível, com duas exceções: quem era gestor volta como Operador, e a carteira volta vazia.</li>
+</ol>
+
+{% call dica("Sempre um administrador ativo") %}<p>O portal não deixa desativar nem rebaixar o último administrador ativo. Promova outro administrador antes.</p>{% endcall %}

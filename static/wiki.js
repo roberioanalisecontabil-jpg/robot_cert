@@ -1,11 +1,24 @@
-/* Wiki do CertGuard (25/11/2026): índice lateral, imagem em tela cheia e
-   botão de copiar nos blocos de código. Sem JS a página continua legível:
+/* Wiki do CertGuard (25/11/2026): índice lateral, imagem em tela cheia,
+   botão de copiar nos blocos de código e o salto dos links antigos com
+   âncora. A busca é do servidor (GET ?q=). Sem JS a página continua legível:
    o índice some, a imagem abre em outra aba pelo link e o código se copia
    à mão. */
 (function () {
   "use strict";
   const artigo = document.querySelector(".wiki-artigo");
   if (!artigo) return;
+
+  // ── Link antigo com âncora (?modulo=X#ancora) ───────────────────────
+  // O servidor mandou para a primeira página do tema e o navegador manteve
+  // o #ancora; se ela está noutra página do tema, vai até lá.
+  try {
+    const ancoras = JSON.parse(artigo.dataset.ancoras || "{}");
+    const alvo = decodeURIComponent(location.hash.slice(1));
+    if (alvo && !document.getElementById(alvo) && Object.prototype.hasOwnProperty.call(ancoras, alvo)) {
+      location.replace("/wiki-certguard?pagina=" + encodeURIComponent(ancoras[alvo]) + "#" + encodeURIComponent(alvo));
+      return;
+    }
+  } catch (_e) { /* âncora ou mapa ilegível: fica na página */ }
 
   // ── Índice "Nesta página": h2 e h3 do artigo ─────────────────────────
   const lista = document.getElementById("wiki-toc-lista");
