@@ -14,7 +14,7 @@ import threading
 import time
 import unicodedata
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,6 +32,7 @@ from app.alcance import (
     _recortar_pela_carteira,
 )
 from app.alert_state import trigger_all_alerts
+from app.cert_installer import so_digitos
 from app.cert_scanner import cert_to_public_dict, CertInfo, CertStatus, move_to_expired, scan_folder
 from app.comum import LISTAGEM_EXPORT_MAX
 from app.historico_agg_cache import get_or_build as _historico_cache_get_or_build
@@ -112,6 +113,96 @@ def _sieg_filtro_match(row: dict, filtro: str) -> bool:
     if f == "incluindo":
         return e in ("incluindo", "erro")
     return e == f
+
+
+# Resposta enxuta da API (25/11/2026): quem chama com chave de API recebe por
+# padrão só estes campos; a tela do portal continua com o item completo.
+_FUSO_BR = timezone(timedelta(hours=-3))  # Brasil sem horário de verão desde 2019
+CAMPOS_ENXUTOS = (
+    "nome", "documento", "documento_tipo", "status", "vence_em",
+    "dias_para_vencer", "emissor", "tipo_icp", "sieg_estado",
+)
+# O que mais pode ser pedido em `campos=`. Dado pessoal do titular não entra.
+CAMPOS_EXTRAS = (
+    "nome_exibicao", "nome_publico", "display_name", "documento_formatado",
+    "documento_numero", "documento_tipo_label", "emitido_em", "not_before",
+    "not_after", "organizacao", "issuer", "subject", "serial_number",
+    "fingerprint_sha256", "error_message", "instalavel", "pasta",
+)
+# Topo da resposta que só a tela usa; some quando os campos são recortados.
+_TOPO_SO_DA_TELA = ("source_dir", "expired_dir", "data_source", "machine_id", "alcance_vazio", "banco")
+
+
+def _campos_pedidos(campos: Optional[str], por_chave_de_api: bool) -> Optional[Tuple[str, ...]]:
+    """None = item completo. Padrão: enxuto para chave de API, completo para a tela."""
+    modo = (campos or "").strip().lower() or ("enxuto" if por_chave_de_api else "completo")
+    if modo == "completo":
+        return None
+    if modo == "enxuto":
+        return CAMPOS_ENXUTOS
+    pedidos = tuple(dict.fromkeys(c.strip() for c in modo.split(",") if c.strip()))
+    validos = CAMPOS_ENXUTOS + CAMPOS_EXTRAS
+    errados = [c for c in pedidos if c not in validos]
+    if errados or not pedidos:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Campo desconhecido em `campos`: {', '.join(errados) or '(vazio)'}. "
+            f"Use enxuto, completo ou uma lista entre: {', '.join(validos)}.",
+        )
+    return pedidos
+
+
+def _vencimento(row: dict) -> Optional[datetime]:
+    exp = _parse_iso_utc(str(row.get("not_after") or ""))
+    return None if exp == datetime.min.replace(tzinfo=timezone.utc) else exp
+
+
+def _situacao(row: dict) -> str:
+    """O status como a API mostra: a mesma regra dos cartões do Início."""
+    s = str(row.get("status") or "").lower()
+    if s == "erro":
+        return "erro"
+    if s == "fora_do_padrao":
+        return "fora_do_padrao"
+    if s == "expirado" or row.get("_isExpiredByDate"):
+        return "vencido"
+    if s == "ok":
+        return "prestes_vencer" if row.get("_isExpiringSoon") else "valido"
+    return s
+
+
+def _recortar(row: dict, campos: Tuple[str, ...], hoje: Any) -> dict:
+    exp = _vencimento(row)
+    ini = _parse_iso_utc(str(row.get("not_before") or ""))
+    vence = exp.astimezone(_FUSO_BR).date() if exp else None
+    derivados = {
+        "nome": row.get("nome"),
+        "documento": so_digitos(row.get("documento_numero")) or None,
+        "status": _situacao(row),
+        "vence_em": vence.isoformat() if vence else None,
+        "dias_para_vencer": (vence - hoje).days if vence else None,
+        "emitido_em": ini.astimezone(_FUSO_BR).date().isoformat() if ini.year > 1 else None,
+    }
+    return {c: derivados[c] if c in derivados else row.get(c) for c in campos}
+
+
+def _filtros_da_api(row: dict, documentos: Optional[set], documento_tipo: Optional[str],
+                    vence_em_dias: Optional[int], vence_de: Any, vence_ate: Any, hoje: Any) -> bool:
+    if documentos is not None and so_digitos(row.get("documento_numero")) not in documentos:
+        return False
+    if documento_tipo and (row.get("documento_tipo") or "").lower() != documento_tipo:
+        return False
+    if vence_em_dias is None and vence_de is None and vence_ate is None:
+        return True
+    exp = _vencimento(row)
+    if exp is None:
+        return False
+    vence = exp.astimezone(_FUSO_BR).date()
+    if vence_em_dias is not None and not (hoje <= vence <= hoje + timedelta(days=vence_em_dias)):
+        return False
+    if vence_de is not None and vence < vence_de:
+        return False
+    return vence_ate is None or vence <= vence_ate
 
 
 def _dashboard_filtro_status_match(row: dict, filtro: str) -> bool:
@@ -402,6 +493,15 @@ def listar_certificados(
         description="nome | status | emissao | vencimento | documento. Vazio = ordem alfabética por titular",
     ),
     direcao: str = Query("asc", description="asc | desc"),
+    campos: Optional[str] = Query(
+        None, max_length=1000,
+        description="enxuto | completo | lista separada por vírgula. Padrão: enxuto para chave de API, completo para a tela",
+    ),
+    documento: Optional[str] = Query(None, max_length=4000, description="CNPJ/CPF, um ou vários separados por vírgula"),
+    documento_tipo: Optional[str] = Query(None, pattern="^(cnpj|cpf)$"),
+    vence_em_dias: Optional[int] = Query(None, ge=0, le=3650, description="Vence de hoje até daqui a N dias"),
+    vence_de: Optional[date] = Query(None, description="Vencimento a partir de (AAAA-MM-DD)"),
+    vence_ate: Optional[date] = Query(None, description="Vencimento até (AAAA-MM-DD)"),
     token: auth.TokenData = Depends(require_auth),
 ) -> JSONResponse:
     """
@@ -413,6 +513,14 @@ def listar_certificados(
     Sem esses parâmetros, mantém o comportamento antigo: lista completa em ``itens``.
     """
     e_admin = (token.role or "").strip().lower() == "admin"
+    recorte = _campos_pedidos(campos, bool(token.api_chave_id))
+    documentos: Optional[set] = None
+    if documento is not None:
+        documentos = {d for d in (so_digitos(p) for p in documento.split(",")) if d}
+        if not documentos:
+            raise HTTPException(status_code=422, detail="`documento` sem nenhum CNPJ ou CPF.")
+    if vence_de and vence_ate and vence_de > vence_ate:
+        raise HTTPException(status_code=422, detail="`vence_de` depois de `vence_ate`.")
     # Vencidos entraram no Início em 23/10/2026 (a página Vencidos foi unida a
     # ele). Quem a matriz deixa sem o módulo Vencidos continua sem vê-los.
     if not e_admin and not permissoes.pode(token.role or "", "vencidos", permissoes.NIVEL_LER):
@@ -466,13 +574,13 @@ def listar_certificados(
         # Paginação por padrão (achado #29): sem `pagina`/`por_pagina` a rota
         # devolvia a lista inteira. A exportação continua pelo `todas_filtradas`,
         # que já tem o próprio teto.
-        if pagina is None and por_pagina is None and not todas_filtradas:
-            pagina, por_pagina = 1, 100
-        paged = pagina is not None and por_pagina is not None
-        if not paged and not todas_filtradas:
-            return JSONResponse({**base, "banco": banco_configurado()})
+        # Só um dos dois também pagina: antes, `pagina` sozinha devolvia a lista
+        # inteira sem passar pelos filtros.
+        if not todas_filtradas:
+            pagina, por_pagina = pagina or 1, por_pagina or 100
 
         now = datetime.now(timezone.utc)
+        hoje = now.astimezone(_FUSO_BR).date()
         thirty = now + timedelta(days=30)
         enriched = [_enrich_cert_item_dashboard_flags(it, now, thirty) for it in (base.get("itens") or [])]
         # Estado no SIEG por linha (selo e filtro do Início): uma consulta só,
@@ -496,6 +604,7 @@ def listar_certificados(
             and _dashboard_busca_match(it, busca or "")
             and not (ocultar_ilegiveis and _e_ilegivel(it))
             and _sieg_filtro_match(it, filtro_sieg)
+            and _filtros_da_api(it, documentos, documento_tipo, vence_em_dias, vence_de, vence_ate, hoje)
         ]
         # Vencidos fora da lista para quem não tem o módulo Vencidos (ver o
         # início da função); a contagem vai junto em `vencidos_ocultos`.
@@ -517,9 +626,16 @@ def listar_certificados(
 
         resumo = _dashboard_resumo_counts(filtered)
 
+        def _responder(corpo: dict) -> JSONResponse:
+            if recorte is not None:
+                corpo["itens"] = [_recortar(it, recorte, hoje) for it in corpo["itens"]]
+                for k in _TOPO_SO_DA_TELA:
+                    corpo.pop(k, None)
+            return JSONResponse(corpo)
+
         if todas_filtradas:
             lista_truncada = len(filtered) > LISTAGEM_EXPORT_MAX
-            return JSONResponse(
+            return _responder(
                 {
                     **base,
                     "itens": filtered[:LISTAGEM_EXPORT_MAX],
@@ -535,7 +651,7 @@ def listar_certificados(
         pagina_in = min(max(1, int(pagina or 1)), total_pags)
         off = (pagina_in - 1) * pp
         page_items = filtered[off : off + pp]
-        return JSONResponse(
+        return _responder(
             {
                 **base,
                 "itens": page_items,
