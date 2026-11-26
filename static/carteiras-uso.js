@@ -248,11 +248,6 @@
     $("uso-detalhe-corpo").hidden = false;
     $("uso-tit-cert").textContent = d.titular || fmtDoc(d.documento);
     $("uso-doc-cert").textContent = fmtDoc(d.documento);
-    const mini = $("uso-mini");
-    mini.replaceChildren();
-    [[d.usos, "usos no período"], [d.pessoas, d.pessoas === 1 ? "pessoa" : "pessoas"],
-     [d.maquinas, d.maquinas === 1 ? "máquina" : "máquinas"], [diaCurto(d.ultimo_em) + " " + hm(d.ultimo_em), "último uso"]]
-      .forEach(([v, t]) => { const div = document.createElement("div"); texto(div, "dt", t); texto(div, "dd", String(v)); mini.appendChild(div); });
     // Uma série só: o título nomeia, sem legenda; o valor de cada dia vai no title e no nome acessível.
     const vmax = Math.max(1, ...d.por_dia.map((p) => p.usos));
     const cols = $("uso-colunas");
