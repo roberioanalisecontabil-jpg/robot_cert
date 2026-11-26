@@ -274,10 +274,13 @@ body:has(#sec-uso:not([hidden])) .ag-page__lead { display: none; }
 .cg-uso-col > i { display: block; width: 100%; background: var(--gold-500); border-radius: 4px 4px 0 0; }
 .cg-uso-col:hover > i { background: var(--gold-700); }
 .cg-uso-eixo { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--text-caption); margin-top: var(--space-1); }
-/* Duas colunas: cinco pessoas em três linhas, mesma altura do gráfico. */
-.cg-uso-quem { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-4); }
-.cg-uso-quem li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cg-uso-quem li { display: flex; justify-content: space-between; gap: var(--space-3); padding: 1px 0; font-size: var(--text-xs); border-bottom: var(--bw-1) solid var(--border-subtle); }
+/* Pizza (conic-gradient) com a legenda ao lado; a legenda é a lista de quem usou. */
+.cg-uso-pizza-caixa { display: flex; align-items: center; gap: var(--space-4); }
+.cg-uso-pizza { flex: 0 0 auto; width: 96px; height: 96px; border-radius: var(--radius-circle); box-shadow: 0 0 0 var(--bw-1) var(--border-default); }
+.cg-uso-quem { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; }
+.cg-uso-quem li span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-uso-quem__cor { flex: 0 0 auto; width: 10px; height: 10px; border-radius: var(--radius-xs); }
+.cg-uso-quem li { display: flex; align-items: center; gap: var(--space-2); padding: 1px 0; font-size: var(--text-xs); border-bottom: var(--bw-1) solid var(--border-subtle); }
 .cg-uso-quem li span:last-child { font-variant-numeric: tabular-nums; text-align: end; }
 .cg-uso-semlogin { color: var(--warning-700); }
 #sec-uso .ag-table td { white-space: normal; }

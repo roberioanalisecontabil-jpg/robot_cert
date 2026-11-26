@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/aguia-ponte.css?v=aguia-2026-09" />
   <link rel="stylesheet" href="/static/aguia-listas.css?v=alinhamento-2026-11-23" />
   <link rel="stylesheet" href="/static/aguia-instalador.css?v=aguia-2026-10d" />
-  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=auditoria-2026-11-26" />
+  <link rel="stylesheet" href="/static/aguia-carteiras.css?v=pizza-2026-11-26" />
   <link rel="stylesheet" href="/static/fluidez.css?v=sino-direita-2026-11-25" />
 </head>
 <body class="cg-aguia">
@@ -216,7 +216,10 @@
               </div>
               <div>
                 <h3 class="cg-uso-sub">Quem usou</h3>
-                <ul class="cg-uso-quem" id="uso-quem"></ul>
+                <div class="cg-uso-pizza-caixa">
+                  <div class="cg-uso-pizza" id="uso-pizza" role="img"></div>
+                  <ul class="cg-uso-quem" id="uso-quem"></ul>
+                </div>
               </div>
             </div>
             <h3 class="cg-uso-sub">Histórico</h3>
@@ -275,7 +278,7 @@
   </dialog>
 
   <script nonce="{{ request.state.nonce }}" src="/static/ui-common.js?v=auditoria-2026-11-26"></script>
-  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=auditoria-2026-11-26"></script>
+  <script nonce="{{ request.state.nonce }}" src="/static/carteiras-uso.js?v=pizza-2026-11-26"></script>
   <script nonce="{{ request.state.nonce }}" src="/static/auditoria.js?v=auditoria-2026-11-26"></script>
 </body>
 </html>

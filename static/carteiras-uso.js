@@ -243,6 +243,10 @@
     else if (!vis.length) texto($("uso-certs"), "li", "Nenhum certificado com essa busca.", "cg-uso-fraco cg-uso-cab");
   }
 
+  // Ouro e grafite do Águia DS, alternados para fatias vizinhas se distinguirem;
+  // só tons médios, que aparecem no tema claro e no escuro (os números vão na legenda).
+  const CORES_PIZZA = ["var(--gold-500)", "var(--ink-500)", "var(--gold-300)", "var(--ink-300)", "var(--gold-700)", "var(--ink-400)"];
+
   function renderDetalhe(d) {
     $("uso-detalhe-vazio").hidden = true;
     $("uso-detalhe-corpo").hidden = false;
@@ -264,10 +268,26 @@
     const eixo = $("uso-eixo");
     eixo.replaceChildren();
     if (d.por_dia.length) { texto(eixo, "span", diaCurto(d.por_dia[0].dia)); texto(eixo, "span", diaCurto(d.por_dia[d.por_dia.length - 1].dia)); }
-    $("uso-quem").replaceChildren(...d.quem.map((q) => {
+    // Pizza: até 6 fatias; da 6ª pessoa em diante vira "Outros". A legenda é a lista.
+    const quem = d.quem.length > 6
+      ? [...d.quem.slice(0, 5), { nome: "Outros", usos: d.quem.slice(5).reduce((s, q) => s + q.usos, 0) }]
+      : d.quem;
+    const total = quem.reduce((s, q) => s + q.usos, 0) || 1;
+    let acc = 0;
+    const fatias = quem.map((q, i) => {
+      const ini = acc; acc += q.usos / total * 100;
+      return CORES_PIZZA[i] + " " + ini + "% " + acc + "%";
+    });
+    const pizza = $("uso-pizza");
+    pizza.style.background = quem.length ? "conic-gradient(" + fatias.join(", ") + ")" : "var(--bg-surface-alt)";
+    pizza.setAttribute("aria-label", "Quem usou: " + quem.map((q) => q.nome + " " + q.usos).join(", "));
+    $("uso-quem").replaceChildren(...quem.map((q, i) => {
       const li = document.createElement("li");
+      const cor = texto(li, "span", "", "cg-uso-quem__cor");
+      cor.style.background = CORES_PIZZA[i];
+      cor.setAttribute("aria-hidden", "true");
       texto(li, "span", q.sem_login ? q.nome + " (sem login)" : q.nome, q.sem_login ? "cg-uso-semlogin" : "");
-      texto(li, "span", String(q.usos));
+      texto(li, "span", q.usos + " (" + Math.round(q.usos / total * 100) + "%)");
       return li;
     }));
   }
