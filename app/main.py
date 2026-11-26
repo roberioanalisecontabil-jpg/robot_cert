@@ -797,13 +797,16 @@ app.include_router(_rotas_wiki)
 
 
 @app.get("/carteiras", response_class=HTMLResponse)
-def pagina_carteiras(request: Request) -> HTMLResponse:
+def pagina_carteiras(request: Request) -> Response:
     # O operador selecionado viaja na URL (?operador=<id>): cada item da
     # lista é um link, e no celular a tela vira duas etapas — só a lista
     # sem operador, só o detalhe com ele — por CSS, sem depender de JS.
     operador = (request.query_params.get("operador") or "").strip()[:64]
     aba = request.query_params.get("aba")
-    aba = aba if aba in ("pessoas", "certificados", "uso") else "pessoas"
+    if aba == "uso":  # foi para a Auditoria em 26/11/2026; links antigos continuam valendo
+        from urllib.parse import urlencode
+        return RedirectResponse("/auditoria?" + urlencode(dict(request.query_params)), status_code=303)
+    aba = aba if aba in ("pessoas", "certificados") else "pessoas"
     certificado = "".join(c for c in (request.query_params.get("certificado") or "") if c.isdigit())[:20]
     # Só muda o texto de abertura (ADR 0005); a regra vale nas rotas.
     try:
@@ -872,7 +875,7 @@ app.include_router(_rotas_perfil)
 # ── Página HTML do Instalador ─────────────────────────────────────────────
 
 @app.get("/instalador", response_class=HTMLResponse)
-def page_instalador(request: Request) -> HTMLResponse:
+def page_instalador(request: Request) -> Response:
     # Assinatura por keyword, igual às outras 8 rotas de página. A forma
     # posicional antiga — TemplateResponse(name, context) — quebra nesta versão
     # do Starlette com "TypeError: unhashable type: 'dict'", e a página do
@@ -883,9 +886,27 @@ def page_instalador(request: Request) -> HTMLResponse:
     aba = request.query_params.get("aba") or "diagnostico"
     if aba == "entrada":  # nome da aba até 02/10/2026; links antigos continuam valendo
         aba = "movimentos"
-    if aba not in ("diagnostico", "custodia", "movimentos", "trilha", "sieg", "configuracao"):
+    if aba in ("movimentos", "trilha"):  # foram para a Auditoria em 26/11/2026
+        from urllib.parse import urlencode
+
+        q = dict(request.query_params)
+        q["aba"] = aba
+        return RedirectResponse("/auditoria?" + urlencode(q), status_code=303)
+    if aba not in ("diagnostico", "custodia", "sieg", "configuracao"):
         aba = "diagnostico"
     return templates.TemplateResponse(
         request=request, name="instalador.html", context={"pagina_ativa": "instalador", "aba": aba}
+    )
+
+
+@app.get("/auditoria", response_class=HTMLResponse)
+def pagina_auditoria(request: Request) -> HTMLResponse:
+    # Movimentos e Trilha (do Instalador) e Uso (de Carteiras), 26/11/2026.
+    # As APIs são as de antes, com as guardas de antes; quem não é admin só
+    # enxerga a aba Uso (o JS esconde as outras).
+    aba = request.query_params.get("aba")
+    aba = aba if aba in ("movimentos", "trilha", "uso") else "movimentos"
+    return templates.TemplateResponse(
+        request=request, name="auditoria.html", context={"pagina_ativa": "auditoria", "aba": aba}
     )
 

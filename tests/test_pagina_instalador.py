@@ -106,13 +106,16 @@ def test_trilha_diz_quando_o_teto_cortou(client: TestClient, banco: _Fake, monke
 def test_tela_do_instalador_revisada() -> None:
     html = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
     assert "Fora da custódia" in html and "foraPorEstado" in html
-    assert '(parouAqui ? "is-feita" : "is-feita")' not in html and "is-falha" in html
+    # Trilha (etapas, falha, 90 dias, lista cortada) foi para static/auditoria.js em 26/11/2026.
+    aud = (RAIZ / "static" / "auditoria.js").read_text(encoding="utf-8")
+    assert '(parouAqui ? "is-feita" : "is-feita")' not in aud and "is-falha" in aud
     assert "enviado por e-mail" not in html
     assert "Retenção da trilha" in html and "Retenção do log" not in html
-    assert "Máquina: " not in html and ">Estação<" in html and "Servidor: " in html
+    tela_aud = (RAIZ / "templates" / "auditoria.html").read_text(encoding="utf-8")
+    assert "Máquina: " not in html and ">Estação<" in tela_aud and "Servidor: " in html
     assert "nesta máquina" not in html and "desta máquina" not in html
-    assert 'Number(dias) < 90' in html
-    assert "data.truncado" in html
+    assert 'Number(dias) < 90' in aud
+    assert "data.truncado" in aud
     assert "HTTP ${rOptin.status}" not in html
     assert "Oitava tela" not in html
     css = (RAIZ / "static" / "aguia-instalador.css").read_text(encoding="utf-8")

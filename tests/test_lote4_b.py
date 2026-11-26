@@ -20,9 +20,10 @@ ERRO_BANCO = 'LINE 1: SELECT * FROM "cert_pfx_store"'
 
 
 def _funcao_js(nome: str) -> str:
-    html = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
-    ini = html.index(f"async function {nome}(")
-    return html[ini: html.index("\n    }\n", ini)]
+    # Movimentos foi do Instalador para a Auditoria em 26/11/2026.
+    js = (RAIZ / "static" / "auditoria.js").read_text(encoding="utf-8")
+    ini = js.index(f"async function {nome}(")
+    return js[ini: js.index("\n  }\n", ini)]
 
 
 # ── P6-3: Movimentos corta em `limite` e precisa dizer que cortou ─────────

@@ -36,6 +36,7 @@ PAGINAS = [
     ("/duplicidades", "duplicidades", "/duplicidades"),
     ("/acompanhamento", "acompanhamento", "/acompanhamento"),
     ("/instalador", "instalador", "/instalador"),
+    ("/auditoria", "auditoria", "/auditoria"),
     ("/usuarios", "usuarios", "/usuarios"),
     ("/configuracao", "configuracao", "/configuracao"),
     ("/wiki-certguard", "wiki", "/wiki-certguard"),

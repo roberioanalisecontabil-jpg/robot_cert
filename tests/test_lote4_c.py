@@ -124,4 +124,4 @@ def test_mudanca_em_certificados_atualiza_a_aba_pessoas() -> None:
 
 def test_cache_buster_novo_da_aba_certificados() -> None:
     html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "/static/carteiras-certificados.js?v=alinhamento-2026-11-23" in html
+    assert "/static/carteiras-certificados.js?v=auditoria-2026-11-26" in html

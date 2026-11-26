@@ -132,6 +132,9 @@ function initSidebarPorPapel() {
       if (!el) continue;
       el.style.display = modulos[modulo] !== "nenhum" ? "flex" : "none";
     }
+    // Auditoria não é módulo da matriz: junta abas do Instalador e de Carteiras.
+    const aud = document.getElementById("nav-auditoria");
+    if (aud) aud.style.display = (modulos.carteiras || "nenhum") !== "nenhum" || (modulos.instalador || "nenhum") !== "nenhum" ? "flex" : "none";
   }
 
   // ── 1. Cache: sincrono, sem rede ────────────────────────────────────────

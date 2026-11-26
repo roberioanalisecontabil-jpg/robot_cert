@@ -371,19 +371,26 @@ def test_lista_fixa_de_destinatarios_substitui_os_administradores(client: TestCl
     assert sorted(e["to_email"] for e in enviados) == ["chefe@x.com", "ti@x.com"]
 
 
-def test_tela_do_instalador_tem_a_aba_movimentos(client: TestClient, banco: _Fake) -> None:
-    html = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
+def test_auditoria_tem_a_aba_movimentos(client: TestClient, banco: _Fake) -> None:
+    # Movimentos foi do Instalador para a Auditoria em 26/11/2026.
+    html = (RAIZ / "templates" / "auditoria.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "auditoria.js").read_text(encoding="utf-8")
     assert 'id="tab-movimentos"' in html and 'id="aba-movimentos"' in html
     assert 'id="tab-entrada"' not in html, "Q3: a aba Entrada virou Movimentos"
-    assert '"movimentos"' in html[html.index("const ABAS"):html.index("const ABAS") + 120]
-    assert "/api/cert-installer/entrada" in html and "loadEntrada()" in html
+    assert '"movimentos"' in js[js.index("const ABAS"):js.index("const ABAS") + 120]
+    assert "/api/cert-installer/entrada" in js and "loadEntrada()" in js
     assert "entradaPendentesAviso" in html, "pendências em destaque"
-    assert "vencido_preso" in html and "pasta_origem" in html
-    fonte = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
-    assert '"custodia", "movimentos", "trilha"' in fonte
-    # O link antigo continua abrindo a aba.
-    r = client.get("/instalador?aba=entrada", headers=_h(*ADMIN))
-    assert r.status_code == 200 and 'id="tab-movimentos" href="?aba=movimentos" aria-controls="aba-movimentos" data-aba="movimentos"\n         aria-selected="true"' in r.text
+    assert "vencido_preso" in js and "pasta_origem" in js
+    inst = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
+    assert 'id="tab-movimentos"' not in inst and 'id="tab-trilha"' not in inst
+    # Os links antigos (Entrada e Movimentos do Instalador) caem na Auditoria.
+    for antiga in ("entrada", "movimentos"):
+        r = client.get(f"/instalador?aba={antiga}", headers=_h(*ADMIN), follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/auditoria?aba=movimentos"
+    r = client.get("/instalador?aba=trilha&dias=90&falhas=1", headers=_h(*ADMIN), follow_redirects=False)
+    assert r.headers["location"] == "/auditoria?aba=trilha&dias=90&falhas=1"
+    r = client.get("/auditoria?aba=movimentos", headers=_h(*ADMIN))
+    assert r.status_code == 200 and re.search(r'data-aba="movimentos"\s+aria-selected="true"', r.text)
 
 
 def test_tela_de_configuracao_tem_as_pastas_e_a_chave_do_aviso() -> None:

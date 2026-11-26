@@ -1263,7 +1263,7 @@ def entrada_de_certificados(
     dias: int = Query(30, ge=1, le=365),
     limite: int = Query(500, ge=1, le=1000),
 ) -> dict:
-    """Instalador › Movimentos: as pendências abertas e os movimentos do período."""
+    """Auditoria › Movimentos: as pendências abertas e os movimentos do período."""
     return entrada_certificados.listar(dias=dias, limite=limite)
 
 

@@ -47,7 +47,9 @@ def test_colunas_secundarias_cedem_por_container():
 def test_texto_cortado_tem_title():
     html = (RAIZ / "templates" / "instalador.html").read_text(encoding="utf-8")
     assert '<summary class="ag-accordion__topo"><span title="${esc(l.mensagem || "")}">' in html
-    assert '<ol class="ag-etapas" aria-hidden="true" title="${esc(sr)}">' in html
+    # A Trilha foi para a Auditoria em 26/11/2026.
+    js = (RAIZ / "static" / "auditoria.js").read_text(encoding="utf-8")
+    assert '<ol class="ag-etapas" aria-hidden="true" title="${esc(sr)}">' in js
 
 
 def test_nenhuma_fonte_maior_nas_colunas():
@@ -57,6 +59,6 @@ def test_nenhuma_fonte_maior_nas_colunas():
 
 def test_versao_do_fluidez_nos_templates():
     usam = [p for p in (RAIZ / "templates").glob("*.html") if "/static/fluidez.css" in p.read_text(encoding="utf-8")]
-    assert len(usam) == 10  # Dashboard entrou em 23/11/2026; Meu perfil em 25/11/2026
+    assert len(usam) == 11  # Dashboard entrou em 23/11/2026; Meu perfil em 25/11/2026; Auditoria em 26/11/2026
     for p in usam:
         assert "fluidez.css?v=sino-direita-2026-11-25" in p.read_text(encoding="utf-8"), p.name
