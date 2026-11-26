@@ -90,10 +90,14 @@ def test_paginacao_traz_total_como_no_inicio(client: TestClient, banco) -> None:
 
 
 def test_aba_uso_existe_e_abre_pelo_link(client: TestClient) -> None:
-    html = client.get("/carteiras?aba=uso").text
+    # Uso foi de Carteiras para a Auditoria em 26/11/2026; o link antigo redireciona.
+    r = client.get("/carteiras?aba=uso", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/auditoria?aba=uso"
+    html = client.get("/auditoria?aba=uso").text
     assert 'id="sec-uso"' in html and "/static/carteiras-uso.js" in html
-    assert re.search(r'data-aba="uso" aria-selected="true"', html)
-    assert re.search(r'data-aba="pessoas" aria-selected="false"', html)
+    assert re.search(r'data-aba="uso"\s+aria-selected="true"', html)
+    assert re.search(r'data-aba="movimentos"\s+aria-selected="false"', html)
+    assert 'id="sec-uso"' not in client.get("/carteiras").text
 
 
 def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
@@ -105,8 +109,8 @@ def test_js_nunca_monta_html_com_dado_da_estacao() -> None:
 
 
 def test_cache_buster_do_js_subiu() -> None:
-    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
-    assert "carteiras-uso.js?v=listagem-2026-11-24" in html
+    html = (RAIZ / "templates" / "auditoria.html").read_text(encoding="utf-8")
+    assert "carteiras-uso.js?v=auditoria-2026-11-26" in html
 
 
 
@@ -208,7 +212,7 @@ def test_paginas_com_a_mesma_hora_nao_repetem_nem_perdem_linhas(client: TestClie
 def test_visao_por_certificado_com_historico_paginado() -> None:
     """Proposta B (21/11/2026): lista de certificados e detalhe pela rota de
     resumo; o Histórico abre com 10 por página e vai a 20, 50 ou 100."""
-    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    html = (RAIZ / "templates" / "auditoria.html").read_text(encoding="utf-8")
     opcoes = re.findall(r'<option value="(\d+)"( selected)?>\d+ por página</option>',
                         html.split('id="uso-por-pagina"')[1].split("</select>")[0])
     assert opcoes == [("10", " selected"), ("20", ""), ("50", ""), ("100", "")]
@@ -224,7 +228,7 @@ def test_historico_sem_coluna_de_sistema_nem_de_usos() -> None:
     """21/11/2026: cada linha já é um uso (uma página, para o admin); a coluna
     Usos confundia (contava assinaturas da chave). Sistema/Página fica só para
     o admin, e o nome abre o modal com as janelas do uso."""
-    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    html = (RAIZ / "templates" / "auditoria.html").read_text(encoding="utf-8")
     cab = html.split('aria-label="Histórico de uso do certificado"')[1].split("</thead>")[0]
     assert re.findall(r">([^<>]+)</th>", cab) == ["Quando", "Pessoa", "Máquina", "Sistema/Página"]
     assert 'id="uso-th-pagina" hidden' in cab
@@ -260,7 +264,7 @@ def test_coleta_traz_o_nome_da_maquina_mesmo_fora_da_pagina(client: TestClient, 
 def test_coleta_por_maquina_recolhe() -> None:
     """21/11/2026: o quadro abre recolhido; o resumo (com selo se houver
     problema) fica no título clicável."""
-    html = (RAIZ / "templates" / "carteiras.html").read_text(encoding="utf-8")
+    html = (RAIZ / "templates" / "auditoria.html").read_text(encoding="utf-8")
     quadro = html.split('id="uso-coletas-quadro"')[0].rsplit("<", 1)[1] + html.split('id="uso-coletas-quadro"')[1].split("</details>")[0]
     assert quadro.startswith("details") and " open" not in quadro.split(">")[0]
     assert "<summary" in quadro and 'id="uso-coletas-resumo"' in quadro.split("</summary>")[0]

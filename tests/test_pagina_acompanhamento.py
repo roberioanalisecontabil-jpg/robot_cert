@@ -149,7 +149,7 @@ def test_tela_de_acompanhamento_revisada() -> None:
     assert "aplicarNivel" in html and "soVer" in html
     assert "no dia do vencimento" not in html and "quando vencer" in html
     dash = (RAIZ / "templates" / "dashboard.html").read_text(encoding="utf-8")
-    assert 'href="/instalador?aba=trilha">Ver instalações' in dash
+    assert 'href="/auditoria?aba=trilha">Ver instalações' in dash
 
 
 # ── Leva C (06/10/2026): aba Escolher certificados no Águia ───────────────

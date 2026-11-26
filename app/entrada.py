@@ -214,7 +214,7 @@ def _montar_email(pendentes: List[Dict[str, Any]], pasta: str) -> tuple[str, str
             {linhas}
           </table>
           <p style="font-size:12px;color:#86868b;margin-top:24px;margin-bottom:0;">
-            Você recebe este aviso porque é administrador do portal. A lista completa está em Instalador › Movimentos.
+            Você recebe este aviso porque é administrador do portal. A lista completa está em Auditoria › Movimentos.
           </p>
         </div>
       </body>
